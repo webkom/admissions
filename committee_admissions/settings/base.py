@@ -15,10 +15,6 @@ ROOT_DIR = environ.Path(__file__) - 2  # (committee_admissions/settings/base.py 
 PUBLIC_ROOT = ROOT_DIR.path('public/')
 SETTINGS_DIR = environ.Path(__file__) - 1
 
-env = environ.Env()
-env_file = str(SETTINGS_DIR.path('.env'))
-env.read_env(env_file)
-
 # APP CONFIGURATION ===========================================================
 DJANGO_APPS = [
     'django.contrib.auth',
