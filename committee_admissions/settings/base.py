@@ -13,7 +13,7 @@ import environ
 # GENERAL CONFIGURATION ======================================================
 ROOT_DIR = environ.Path(__file__) - 2  # (committee_admissions/settings/base.py - 2 = committee_admissions/)
 PUBLIC_ROOT = ROOT_DIR.path('public/')
-SETTINGS_DIR = environ.Path(__file__) - 1
+
 
 # APP CONFIGURATION ===========================================================
 DJANGO_APPS = [
