@@ -29,6 +29,8 @@ THIRD_PARTY_APPS = [
 ]
 
 LOCAL_APPS = [
+    'committee_admissions.utils',
+    'committee_admissions.admissions',
 ]
 
 INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS
