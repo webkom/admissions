@@ -1,5 +1,5 @@
 # committee-admissions
-####opptak.abakus.no
+#### opptak.abakus.no
 Recruitment for Abakom.
 
 ## Setup project
@@ -27,9 +27,9 @@ $ ./manage.py migrate
 $ ./manage.py runserver
 ```
 
-##Requirements
+## Requirements
 We use the package [pip-tools](https://github.com/jazzband/pip-tools) to organize our requirements.
-###Adding a new requirement
+### Adding a new requirement
 Add the new package to either `base.in`, `development.in` or 
 `production.in` depending on best fit. Then generate a new requirements
 file by running
