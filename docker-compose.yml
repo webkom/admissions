@@ -1,0 +1,10 @@
+version: '3.5'
+
+services:
+
+  postgres:
+    image: postgres:9.5
+    ports:
+      - '127.0.0.1:5900:5432'
+    environment:
+      - POSTGRES_USER=admissions
