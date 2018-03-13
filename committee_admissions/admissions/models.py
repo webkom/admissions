@@ -4,7 +4,7 @@ from django.contrib.auth.models import User
 from committee_admissions.utils.models import TimeStampModel
 
 
-class Admission(TimeStampModel):
+class Admission(models.Model):
     title = models.CharField(max_length=255)
     open_from = models.DateTimeField()
     public_deadline = models.DateTimeField()
@@ -24,8 +24,9 @@ class Admission(TimeStampModel):
 
 class Committee(models.Model):
     name = models.CharField(max_length=50)
-    description = models.TextField()
-    response_label = models.TextField()
+    description = models.TextField(blank=True, max_length=200)
+    response_label = models.TextField(blank=True, max_length=200)
+    logo = models.ImageField(blank=True)
 
     class Meta:
         ordering = ['name']
@@ -38,11 +39,7 @@ class UserApplication(TimeStampModel):
     admission = models.ForeignKey(Admission, related_name='applications', on_delete=models.CASCADE)
     user = models.ForeignKey(User, on_delete=models.CASCADE)
     text = models.TextField(blank=True)
-
     time_sent = models.DateTimeField(editable=False, null=True)
-
-    #def delete(self, using=None, force=True): # If we want BasisModel (or maybe we want timestamp? Do we need time sent?)
-    #    super().delete(using, force)
 
     class Meta:
         unique_together = ('admission', 'user')
@@ -67,7 +64,7 @@ class UserApplication(TimeStampModel):
         return self.committee_applications.filter(committee=committee).exists()
 
 
-class CommitteeApplication(models.Model):
+class CommitteeApplication(TimeStampModel):
     application = models.ForeignKey(UserApplication, related_name='committee_applications', on_delete=models.CASCADE)
     committee = models.ForeignKey(Committee, related_name='applications', on_delete=models.CASCADE)
     text = models.TextField(blank=True)

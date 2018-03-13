@@ -12,7 +12,7 @@ import environ
 
 # GENERAL CONFIGURATION ======================================================
 ROOT_DIR = environ.Path(__file__) - 2  # (committee_admissions/settings/base.py - 2 = committee_admissions/)
-PUBLIC_ROOT = ROOT_DIR.path('public/')
+FILES_ROOT = ROOT_DIR.path('files/')
 
 
 # APP CONFIGURATION ===========================================================
@@ -92,14 +92,17 @@ USE_TZ = True
 
 
 # STATIC FILES & MEDIA CONFIGURATION =============================================
-STATIC_ROOT = PUBLIC_ROOT.path('static')()
+STATIC_ROOT = FILES_ROOT.path('static')()
 STATIC_URL = '/static/'
 STATICFILES_FINDERS = [
     'django.contrib.staticfiles.finders.FileSystemFinder',
     'django.contrib.staticfiles.finders.AppDirectoriesFinder',
 ]
+STATICFILES_DIRS = [
+    ROOT_DIR.path('assets')(),
+]
 
-MEDIA_ROOT = str(PUBLIC_ROOT.path('media')())
+MEDIA_ROOT = str(FILES_ROOT.path('media')())
 MEDIA_URL = '/media/'
 
 
