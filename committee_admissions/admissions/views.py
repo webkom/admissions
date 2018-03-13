@@ -1,6 +1,10 @@
 from django.shortcuts import render
 
 
-def home(request):
-    return render(request, 'admissions/home.html')
+def landing_page(request):
+    return render(request, 'admissions/landing_page.html')
+
+
+def dashboard(request):
+    return render(request, 'admissions/dashboard.html')
 

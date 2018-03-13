@@ -1,14 +1,15 @@
-{% load staticfiles %}
+{% load static %}
 
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <title>Opptak til Abakom</title>
-    <link rel="shortcut icon" href="{% static "assets/img/favicon.png" %}" type="image/png">
+    <link rel="shortcut icon" href="{% static "admissions/img/favicon.png" %}" type="image/png">
 
 </head>
 <body>
     <h1>Her kan du søke om å bli med i komitéer i Abakus!</h1>
+    <a id="to-overview" class="btn" href="{% url 'overview'%}" >Søk komité!</a>
 </body>
 </html>
