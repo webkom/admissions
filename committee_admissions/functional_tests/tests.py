@@ -21,19 +21,25 @@ class NewVisitorTest(StaticLiveServerTestCase):
         # He notices the page title mentions 'Opptak til Abakom'.
         self.assertIn('Opptak til Abakom', self.browser.title)
 
-        # He sees that the page has a title explaning the purpose of the site.
+        # He sees that the page has a text explaning the purpose of the site.
         self.assertIn('Her kan du søke om å bli med i komitéer i Abakus!',
                       self.browser.find_element_by_tag_name('h1').text)
 
+        # There is a button Odin can click on that redirects him to another page.
+        overview_btn = self.browser.find_element_by_id('to-overview')
+        overview_btn.click()
+
         # He sees his own application. It is empty.
+        applications = self.browser.find_elements_by_css_selector('.committee-application')
+        self.assertEqual(0, len(applications))
 
-        # He sees a button  to apply to different committees.
+        # He sees a button to apply to different committees and clicks it. He is redirected.
+        apply_committes_btn = self.browser.find_element_by_id('apply-committees')
+        apply_committes_btn.click()
 
-        # He clicks the button to apply to committees.
-
-        # He is redirected to a new page.
-
-        # On this page all the committees you can apply for are listed.
+        # On this page all the committees you can apply for are listed, along with a
+        # description of each.
+        self.fail("Finish the test")
 
         # Underneath the committee Webkom there is a button that says "Søk Webkom".
 
@@ -60,4 +66,3 @@ class NewVisitorTest(StaticLiveServerTestCase):
         # on the same page.
 
         # Odin is satisfied and goes to sleep.
-        self.fail("Finish the test")
