@@ -24,6 +24,7 @@ DJANGO_APPS = [
     'django.contrib.staticfiles',
     'django.contrib.admin',
 ]
+
 THIRD_PARTY_APPS = [
     'django_extensions',
 ]
@@ -93,14 +94,15 @@ USE_TZ = True
 
 # STATIC FILES & MEDIA CONFIGURATION =============================================
 STATIC_ROOT = FILES_ROOT.path('static')()
-STATIC_URL = '/static/'
 STATICFILES_FINDERS = [
     'django.contrib.staticfiles.finders.FileSystemFinder',
     'django.contrib.staticfiles.finders.AppDirectoriesFinder',
 ]
-STATICFILES_DIRS = [
-    ROOT_DIR.path('assets')(),
+STATICFILES_DIR = [
+    ROOT_DIR.path('assets')
 ]
+STATIC_URL = '/static/'
+
 
 MEDIA_ROOT = str(FILES_ROOT.path('media')())
 MEDIA_URL = '/media/'
