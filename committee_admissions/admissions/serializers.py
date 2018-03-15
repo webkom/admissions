@@ -1,5 +1,6 @@
 from rest_framework import serializers
 from committee_admissions.admissions.models import Admission, Committee, UserApplication, CommitteeApplication
+from django.contrib.auth.models import User
 
 
 class AdmissionSerializer(serializers.HyperlinkedModelSerializer):
@@ -25,3 +26,9 @@ class CommitteeApplicationSerializer(serializers.HyperlinkedModelSerializer):
     class Meta:
         model = CommitteeApplication
         fields = ('application', 'committee', 'text')
+
+
+class UserSerializer(serializers.HyperlinkedModelSerializer):
+    class Meta:
+        model = User
+        fields = ('username', 'first_name', 'last_name', 'email', 'is_staff')

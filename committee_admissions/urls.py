@@ -16,7 +16,7 @@ Including another URLconf
 from django.contrib import admin
 from django.urls import path, include
 from django.conf import settings
-from committee_admissions.admissions.views import (AdmissionViewSet, CommitteeViewSet,
+from committee_admissions.admissions.views import (AdmissionViewSet, CommitteeViewSet, UserViewSet,
                                                    UserApplicationViewSet, CommitteeApplicationViewSet)
 from rest_framework import routers
 
@@ -25,6 +25,7 @@ router.register(r'admission', AdmissionViewSet)
 router.register(r'committee', CommitteeViewSet)
 router.register(r'application', UserApplicationViewSet)
 router.register(r'committee-application', CommitteeApplicationViewSet)
+router.register(r'users', UserViewSet)
 
 
 urlpatterns = [
