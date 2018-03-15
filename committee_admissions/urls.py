@@ -16,12 +16,21 @@ Including another URLconf
 from django.contrib import admin
 from django.urls import path, include
 from django.conf import settings
-from committee_admissions.admissions import views
+from committee_admissions.admissions.views import (AdmissionViewSet, CommitteeViewSet,
+                                                   UserApplicationViewSet, CommitteeApplicationViewSet)
+from rest_framework import routers
+
+router = routers.DefaultRouter()
+router.register(r'admission', AdmissionViewSet)
+router.register(r'committee', CommitteeViewSet)
+router.register(r'application', UserApplicationViewSet)
+router.register(r'committee-application', CommitteeApplicationViewSet)
+
 
 urlpatterns = [
     path('admin/', admin.site.urls),
-    path('', views.landing_page, name="landing_page"),
-    path('dashboard', views.dashboard, name="dashboard"),
+    path('api-auth/', include('rest_framework.urls', namespace='rest_framework')),
+    path('', include(router.urls)),
 ]
 
 if settings.DEBUG:
@@ -29,3 +38,4 @@ if settings.DEBUG:
     urlpatterns += [
         path('__debug__/', include(debug_toolbar.urls)),
     ]
+
