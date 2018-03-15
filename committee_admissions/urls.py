@@ -30,7 +30,8 @@ router.register(r'committee-application', CommitteeApplicationViewSet)
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('api-auth/', include('rest_framework.urls', namespace='rest_framework')),
-    path('', include(router.urls)),
+    path('api/', include(router.urls)),
+    path('', include('social_django.urls', namespace='social'))
 ]
 
 if settings.DEBUG:

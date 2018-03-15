@@ -17,6 +17,12 @@ DATABASES = {
     }
 }
 
+SETTINGS_DIR = environ.Path(__file__) - 1
+
+env = environ.Env()
+env_file = str(SETTINGS_DIR.path('.env'))
+env.read_env(env_file)
+
 # APP CONFIGURATION ============================================================
 INSTALLED_APPS += [
     'debug_toolbar',
@@ -43,3 +49,12 @@ DEBUG_TOOLBAR_PANELS = [
 ]
 
 INTERNAL_IPS = ['127.0.0.1', ]
+
+AUTHENTICATION_BACKENDS = [
+    'committee_admissions.oauth.LegoOAuth2',
+] + AUTHENTICATION_BACKENDS
+
+SOCIAL_AUTH_LEGO_KEY = env('AUTH_LEGO_KEY')
+SOCIAL_AUTH_LEGO_SECRET = env('AUTH_LEGO_SECRET')
+SOCIAL_AUTH_LEGO_API_URL = env('AUTH_LEGO_API_URL')
+SOCIAL_AUTH_LEGO_REQUIRED_GROUP = env('AUTH_LEGO_REQUIRED_GROUP')

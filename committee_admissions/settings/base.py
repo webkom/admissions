@@ -28,6 +28,7 @@ DJANGO_APPS = [
 THIRD_PARTY_APPS = [
     'django_extensions',
     'rest_framework',
+    'social_django',
 ]
 
 LOCAL_APPS = [
@@ -123,3 +124,10 @@ MEDIA_URL = '/media/'
 WSGI_APPLICATION = 'committee_admissions.wsgi.application'
 ROOT_URLCONF = 'committee_admissions.urls'
 SHELL_PLUS = "ipython"
+
+LOGIN_REDIRECT_URL = '/'
+LOGIN_URL = '/login/lego/'
+
+AUTHENTICATION_BACKENDS = [
+    'django.contrib.auth.backends.ModelBackend',
+]
