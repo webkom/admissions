@@ -4,31 +4,36 @@ from django.contrib.auth.models import User
 
 
 class AdmissionSerializer(serializers.HyperlinkedModelSerializer):
+    applications = UserApplication.objects.all()
+
     class Meta:
         model = Admission
-        fields = ('title', 'open_from', 'public_deadline', 'application_deadline', 'is_closed', 'is_appliable')
+        fields = ('pk', 'title', 'open_from', 'public_deadline', 'application_deadline', 'is_closed', 'is_appliable',
+                  'applications')
 
 
 class CommitteeSerializer(serializers.HyperlinkedModelSerializer):
     class Meta:
         model = Committee
-        fields = ('name', 'description', 'response_label', 'logo')
-
-
-class UserApplicationSerializer(serializers.HyperlinkedModelSerializer):
-    class Meta:
-        model = UserApplication
-        fields = ('admission', 'user', 'text', 'time_sent', 'is_editable', 'is_sendable', 'applied_within_deadline',
-                  'sent', 'has_committee_application')
+        fields = ('pk', 'name', 'description', 'response_label', 'logo')
 
 
 class CommitteeApplicationSerializer(serializers.HyperlinkedModelSerializer):
     class Meta:
         model = CommitteeApplication
-        fields = ('application', 'committee', 'text')
+        fields = ('pk', 'application', 'committee', 'text')
+
+
+class UserApplicationSerializer(serializers.HyperlinkedModelSerializer):
+    committee_applications = CommitteeApplicationSerializer(many=True)
+
+    class Meta:
+        model = UserApplication
+        fields = ('pk', 'admission', 'user', 'text', 'time_sent', 'is_editable', 'is_sendable',
+                  'applied_within_deadline', 'sent', 'committee_applications')
 
 
 class UserSerializer(serializers.HyperlinkedModelSerializer):
     class Meta:
         model = User
-        fields = ('username', 'first_name', 'last_name', 'email', 'is_staff')
+        fields = ('pk', 'username', 'first_name', 'last_name', 'email', 'is_staff')

@@ -14,6 +14,8 @@ django-environ==0.4.4
 django-extensions==2.0.5
 django==2.0.3
 djangorestframework==3.7.7
+factory-boy==2.10.0
+faker==0.8.12             # via factory-boy
 first==2.0.1              # via pip-tools
 idna==2.6                 # via requests
 ipython-genutils==0.2.0   # via traitlets
@@ -29,15 +31,17 @@ psycopg2==2.7.3.2
 ptyprocess==0.5.2         # via pexpect
 pygments==2.2.0           # via ipython
 pyjwt==1.6.0              # via social-auth-core
+python-dateutil==2.7.0    # via faker
 python3-openid==3.1.0     # via social-auth-core
 pytz==2018.3              # via django
 requests-oauthlib==0.8.0  # via social-auth-core
 requests==2.18.4          # via requests-oauthlib, social-auth-core
 simplegeneric==0.8.1      # via ipython
-six==1.11.0               # via django-environ, django-extensions, pip-tools, prompt-toolkit, social-auth-app-django, social-auth-core, traitlets
+six==1.11.0               # via django-environ, django-extensions, faker, pip-tools, prompt-toolkit, python-dateutil, social-auth-app-django, social-auth-core, traitlets
 social-auth-app-django==2.1.0
 social-auth-core==1.7.0   # via social-auth-app-django
 sqlparse==0.2.4           # via django-debug-toolbar
+text-unidecode==1.2       # via faker
 traitlets==4.3.2          # via ipython
 urllib3==1.22             # via requests
 wcwidth==0.1.7            # via prompt-toolkit
