@@ -60,3 +60,4 @@ target/
 *.swp
 
 .env
+committee_admissions/files
