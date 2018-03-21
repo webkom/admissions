@@ -14,6 +14,10 @@ class Admission(models.Model):
         return self.title
 
     @property
+    def is_open(self):
+        return self.application_deadline > timezone.now() > self.open_from
+
+    @property
     def is_closed(self):
         return timezone.now() > self.application_deadline
 
