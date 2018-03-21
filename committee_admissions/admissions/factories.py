@@ -28,6 +28,7 @@ class RandomAdmissionFactory(factory.DjangoModelFactory):
 class RandomCommitteeFactory(factory.DjangoModelFactory):
     class Meta:
         model = Committee
+        django_get_or_create = ('name',)
 
     name = factory.Iterator(['Webkom', 'Arrkom', 'Bedkom', 'Fagkom', 'Koskom', 'LaBamba', 'readme', 'PR'])
     description = factory.Faker('text', max_nb_chars=200)
