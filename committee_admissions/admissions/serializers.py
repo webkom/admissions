@@ -7,7 +7,7 @@ class AdmissionPublicSerializer(serializers.HyperlinkedModelSerializer):
 
     class Meta:
         model = Admission
-        fields = ('title', 'is_open', 'open_from', 'public_deadline', 'application_deadline', 'is_closed')
+        fields = ('is_open', 'open_from', 'public_deadline', 'application_deadline', 'is_closed')
 
 
 class AdminAdmissionSerializer(serializers.HyperlinkedModelSerializer):
