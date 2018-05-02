@@ -1,10 +1,13 @@
-from rest_framework import viewsets
-from committee_admissions.admissions.models import Admission, Committee, UserApplication, CommitteeApplication
-from committee_admissions.admissions.serializers import (
-    AdmissionPublicSerializer, AdminAdmissionSerializer, CommitteeSerializer, UserSerializer,
-    UserApplicationSerializer, CommitteeApplicationSerializer
-)
 from django.contrib.auth.models import User
+from rest_framework import viewsets
+
+from committee_admissions.admissions.models import (
+    Admission, Committee, CommitteeApplication, UserApplication
+)
+from committee_admissions.admissions.serializers import (
+    AdminAdmissionSerializer, AdmissionPublicSerializer, CommitteeApplicationSerializer,
+    CommitteeSerializer, UserApplicationSerializer, UserSerializer
+)
 
 
 class AdmissionViewSet(viewsets.ModelViewSet):

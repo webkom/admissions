@@ -1,5 +1,8 @@
 from django.test import TestCase
-from committee_admissions.admissions.models import Committee, CommitteeApplication, UserApplication, Admission
+
+from committee_admissions.admissions.models import (
+    Admission, Committee, CommitteeApplication, UserApplication
+)
 
 
 class CommitteeTestCase(TestCase):

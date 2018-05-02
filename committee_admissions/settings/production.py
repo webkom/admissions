@@ -1,5 +1,6 @@
-from .base import *
 import environ
+
+from .base import *
 
 # GENERAL CONFIGURATION ======================================================
 SETTINGS_DIR = environ.Path(__file__) - 1

@@ -9,11 +9,11 @@ https://docs.djangoproject.com/en/2.0/ref/settings/
 """
 import environ
 
-
 # GENERAL CONFIGURATION ======================================================
-ROOT_DIR = environ.Path(__file__) - 2  # (committee_admissions/settings/base.py - 2 = committee_admissions/)
+ROOT_DIR = environ.Path(
+    __file__
+) - 2  # (committee_admissions/settings/base.py - 2 = committee_admissions/)
 FILES_ROOT = ROOT_DIR.path('files/')
-
 
 # APP CONFIGURATION ===========================================================
 DJANGO_APPS = [
@@ -39,7 +39,6 @@ LOCAL_APPS = [
 
 INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS
 
-
 # MIDDLEWARE CONFIGURATION =====================================================
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
@@ -52,16 +51,13 @@ MIDDLEWARE = [
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
 
-
 # DJANGO REST FRAMEWORK CONFIGURATION ==========================================
 REST_FRAMEWORK = {
     # Use Django's standard `django.contrib.auth` permissions,
     # or allow read-only access for unauthenticated users.
-    'DEFAULT_PERMISSION_CLASSES': [
-        'rest_framework.permissions.DjangoModelPermissionsOrAnonReadOnly'
-    ]
+    'DEFAULT_PERMISSION_CLASSES':
+    ['rest_framework.permissions.DjangoModelPermissionsOrAnonReadOnly']
 }
-
 
 # TEMPLATE CONFIGURATION =======================================================
 TEMPLATES = [
@@ -80,7 +76,6 @@ TEMPLATES = [
     },
 ]
 
-
 # PASSWORD VALIDATION ===========================================================
 AUTH_PASSWORD_VALIDATORS = [
     {
@@ -97,7 +92,6 @@ AUTH_PASSWORD_VALIDATORS = [
     },
 ]
 
-
 # INTERNATIONALIZATION ==========================================================
 LANGUAGE_CODE = 'en-us'
 TIME_ZONE = 'UTC'
@@ -105,27 +99,22 @@ USE_I18N = True
 USE_L10N = True
 USE_TZ = True
 
-
 # STATIC FILES & MEDIA CONFIGURATION =============================================
 STATIC_ROOT = FILES_ROOT.path('static')()
 STATICFILES_FINDERS = [
     'django.contrib.staticfiles.finders.FileSystemFinder',
     'django.contrib.staticfiles.finders.AppDirectoriesFinder',
 ]
-STATICFILES_DIR = [
-    ROOT_DIR.path('assets')
-]
+STATICFILES_DIR = [ROOT_DIR.path('assets')]
 STATIC_URL = '/static/'
-
 
 MEDIA_ROOT = str(FILES_ROOT.path('media')())
 MEDIA_URL = '/media/'
 
-
 # MISC CONFIGURATION ============================================================
 WSGI_APPLICATION = 'committee_admissions.wsgi.application'
 ROOT_URLCONF = 'committee_admissions.urls'
-SHELL_PLUS = "ipython"
+SHELL_PLUS = 'ipython'
 
 LOGIN_REDIRECT_URL = '/'
 LOGIN_URL = '/login/lego/'

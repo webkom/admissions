@@ -1,6 +1,5 @@
 from .base import *
 
-
 # GENERAL CONFIGURATION =======================================================
 DEBUG = True
 SECRET_KEY = 'secretkeythatisnotsosecret'
@@ -48,7 +47,9 @@ DEBUG_TOOLBAR_PANELS = [
     'debug_toolbar.panels.redirects.RedirectsPanel',
 ]
 
-INTERNAL_IPS = ['127.0.0.1', ]
+INTERNAL_IPS = [
+    '127.0.0.1',
+]
 
 AUTHENTICATION_BACKENDS = [
     'committee_admissions.oauth.LegoOAuth2',
@@ -59,4 +60,3 @@ SOCIAL_AUTH_LEGO_SECRET = env('AUTH_LEGO_SECRET')
 SOCIAL_AUTH_LEGO_API_URL = env('AUTH_LEGO_API_URL')
 
 CORS_ORIGIN_WHITELIST = ['127.0.0.1:3000', 'localhost:3000']
-

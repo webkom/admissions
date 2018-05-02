@@ -1,10 +1,12 @@
-from rest_framework import serializers
-from committee_admissions.admissions.models import Admission, Committee, UserApplication, CommitteeApplication
 from django.contrib.auth.models import User
+from rest_framework import serializers
+
+from committee_admissions.admissions.models import (
+    Admission, Committee, CommitteeApplication, UserApplication
+)
 
 
 class AdmissionPublicSerializer(serializers.HyperlinkedModelSerializer):
-
     class Meta:
         model = Admission
         fields = ('is_open', 'open_from', 'public_deadline', 'application_deadline', 'is_closed')
@@ -15,8 +17,10 @@ class AdminAdmissionSerializer(serializers.HyperlinkedModelSerializer):
 
     class Meta:
         model = Admission
-        fields = ('pk', 'title', 'open_from', 'public_deadline', 'application_deadline', 'is_closed', 'is_appliable',
-                  'applications', 'is_open')
+        fields = (
+            'pk', 'title', 'open_from', 'public_deadline', 'application_deadline', 'is_closed',
+            'is_appliable', 'applications', 'is_open'
+        )
 
 
 class CommitteeSerializer(serializers.HyperlinkedModelSerializer):
@@ -36,8 +40,10 @@ class UserApplicationSerializer(serializers.HyperlinkedModelSerializer):
 
     class Meta:
         model = UserApplication
-        fields = ('pk', 'admission', 'user', 'text', 'time_sent', 'is_editable', 'is_sendable',
-                  'applied_within_deadline', 'sent', 'committee_applications')
+        fields = (
+            'pk', 'admission', 'user', 'text', 'time_sent', 'is_editable', 'is_sendable',
+            'applied_within_deadline', 'sent', 'committee_applications'
+        )
 
 
 class UserSerializer(serializers.HyperlinkedModelSerializer):

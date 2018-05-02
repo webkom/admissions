@@ -1,6 +1,9 @@
 import factory
 from django.contrib.auth import models
-from committee_admissions.admissions.models import Admission, Committee, UserApplication, CommitteeApplication
+
+from committee_admissions.admissions.models import (
+    Admission, Committee, CommitteeApplication, UserApplication
+)
 
 
 class RandomUserFactory(factory.DjangoModelFactory):
@@ -28,9 +31,11 @@ class RandomAdmissionFactory(factory.DjangoModelFactory):
 class RandomCommitteeFactory(factory.DjangoModelFactory):
     class Meta:
         model = Committee
-        django_get_or_create = ('name',)
+        django_get_or_create = ('name', )
 
-    name = factory.Iterator(['Webkom', 'Arrkom', 'Bedkom', 'Fagkom', 'Koskom', 'LaBamba', 'readme', 'PR'])
+    name = factory.Iterator(
+        ['Webkom', 'Arrkom', 'Bedkom', 'Fagkom', 'Koskom', 'LaBamba', 'readme', 'PR']
+    )
     description = factory.Faker('text', max_nb_chars=200)
     response_label = factory.Faker('text', max_nb_chars=50)
     logo = factory.django.FileField(filename='committee.png')

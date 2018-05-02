@@ -13,12 +13,15 @@ Including another URLconf
     1. Import the include() function: from django.urls import include, path
     2. Add a URL to urlpatterns:  path('blog/', include('blog.urls'))
 """
-from django.contrib import admin
-from django.urls import path, include
 from django.conf import settings
-from committee_admissions.admissions.views import (AdmissionViewSet, CommitteeViewSet, UserViewSet,
-                                                   UserApplicationViewSet, CommitteeApplicationViewSet)
+from django.contrib import admin
+from django.urls import include, path
 from rest_framework import routers
+
+from committee_admissions.admissions.views import (
+    AdmissionViewSet, CommitteeApplicationViewSet, CommitteeViewSet, UserApplicationViewSet,
+    UserViewSet
+)
 
 router = routers.DefaultRouter()
 router.register(r'admission', AdmissionViewSet)
@@ -26,7 +29,6 @@ router.register(r'committee', CommitteeViewSet)
 router.register(r'application', UserApplicationViewSet)
 router.register(r'committee-application', CommitteeApplicationViewSet)
 router.register(r'users', UserViewSet)
-
 
 urlpatterns = [
     path('admin/', admin.site.urls),
@@ -40,4 +42,3 @@ if settings.DEBUG:
     urlpatterns += [
         path('__debug__/', include(debug_toolbar.urls)),
     ]
-

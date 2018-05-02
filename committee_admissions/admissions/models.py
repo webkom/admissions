@@ -1,6 +1,7 @@
+from django.contrib.auth.models import User
 from django.db import models
 from django.utils import timezone
-from django.contrib.auth.models import User
+
 from committee_admissions.utils.models import TimeStampModel
 
 
@@ -69,6 +70,8 @@ class UserApplication(TimeStampModel):
 
 
 class CommitteeApplication(TimeStampModel):
-    application = models.ForeignKey(UserApplication, related_name='committee_applications', on_delete=models.CASCADE)
+    application = models.ForeignKey(
+        UserApplication, related_name='committee_applications', on_delete=models.CASCADE
+    )
     committee = models.ForeignKey(Committee, related_name='applications', on_delete=models.CASCADE)
     text = models.TextField(blank=True)

@@ -28,15 +28,15 @@ class LegoOAuth2(BaseOAuth2):
     def get_user_details(self, response):
         """Return user details from Lego account"""
         fullname, first_name, last_name = self.get_user_names(
-            response.get('fullName'),
-            response.get('firstName'),
-            response.get('lastName')
+            response.get('fullName'), response.get('firstName'), response.get('lastName')
         )
-        return {'username': response.get('username'),
-                'email': response.get('email') or '',
-                'fullname': fullname,
-                'first_name': first_name,
-                'last_name': last_name}
+        return {
+            'username': response.get('username'),
+            'email': response.get('email') or '',
+            'fullname': fullname,
+            'first_name': first_name,
+            'last_name': last_name
+        }
 
     def user_data(self, access_token, *args, **kwargs):
         user_data = self._user_data(access_token)
