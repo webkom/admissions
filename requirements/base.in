@@ -5,6 +5,6 @@ djangorestframework==3.7.7
 django-cors-headers==2.2.0
 
 social-auth-app-django==2.1.0
-pip-tools==1.11.0
+pip-tools==2.0.2
 psycopg2==2.7.3.2
 ipython==6.2.1

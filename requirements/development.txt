@@ -7,6 +7,7 @@
 certifi==2018.1.18        # via requests
 chardet==3.0.4            # via requests
 click==6.7                # via pip-tools
+coverage==4.5.1
 decorator==4.2.1          # via ipython, traitlets
 defusedxml==0.5.0         # via python3-openid, social-auth-core
 django-cors-headers==2.2.0
@@ -21,15 +22,18 @@ first==2.0.1              # via pip-tools
 idna==2.6                 # via requests
 ipython-genutils==0.2.0   # via traitlets
 ipython==6.2.1
+isort==4.3.4
 jedi==0.11.1              # via ipython
 oauthlib==2.0.7           # via requests-oauthlib, social-auth-core
 parso==0.1.1              # via jedi
 pexpect==4.4.0            # via ipython
 pickleshare==0.7.4        # via ipython
-pip-tools==1.11.0
+pip-tools==2.0.2
+pluggy==0.6.0             # via tox
 prompt-toolkit==1.0.15    # via ipython
 psycopg2==2.7.3.2
 ptyprocess==0.5.2         # via pexpect
+py==1.5.3                 # via tox
 pygments==2.2.0           # via ipython
 pyjwt==1.6.1              # via social-auth-core
 python-dateutil==2.7.0    # via faker
@@ -38,11 +42,14 @@ pytz==2018.3              # via django
 requests-oauthlib==0.8.0  # via social-auth-core
 requests==2.18.4          # via requests-oauthlib, social-auth-core
 simplegeneric==0.8.1      # via ipython
-six==1.11.0               # via django-environ, django-extensions, faker, pip-tools, prompt-toolkit, python-dateutil, social-auth-app-django, social-auth-core, traitlets
+six==1.11.0               # via django-environ, django-extensions, faker, pip-tools, prompt-toolkit, python-dateutil, social-auth-app-django, social-auth-core, tox, traitlets
 social-auth-app-django==2.1.0
 social-auth-core==1.7.0   # via social-auth-app-django
 sqlparse==0.2.4           # via django-debug-toolbar
 text-unidecode==1.2       # via faker
+tox==3.0.0
 traitlets==4.3.2          # via ipython
 urllib3==1.22             # via requests
+virtualenv==15.2.0        # via tox
 wcwidth==0.1.7            # via prompt-toolkit
+yapf==0.21.0
