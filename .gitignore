@@ -63,3 +63,5 @@ target/
 committee_admissions/files
 node_modules
 main.js
+bundles/
+webpack-stats.json
