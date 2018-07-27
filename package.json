@@ -7,9 +7,8 @@
   "author": "cherrybeans <sigridkvamme@gmail.com>",
   "license": "MIT",
   "scripts": {
-    "dev": "node server.js",
-    "build": "webpack --config webpack.config.js --progress --colors --mode development",
-    "watch": "webpack --config webpack.config.js --watch --mode development"
+    "watch": "node server.js",
+    "build": "webpack --config webpack.config.js --progress --colors --mode development"
   },
   "devDependencies": {
     "babel-core": "^6.26.3",
