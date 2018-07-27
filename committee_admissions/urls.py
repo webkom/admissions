@@ -20,20 +20,21 @@ from rest_framework import routers
 
 from committee_admissions.admissions.views import (
     AdmissionViewSet, CommitteeApplicationViewSet, CommitteeViewSet, UserApplicationViewSet,
-    UserViewSet
+    UserViewSet, ApplicationViewSet, AppView
 )
 
 router = routers.DefaultRouter()
 router.register(r'admission', AdmissionViewSet)
 router.register(r'committee', CommitteeViewSet)
-router.register(r'application', UserApplicationViewSet)
+router.register(r'application', ApplicationViewSet)
 router.register(r'committee-application', CommitteeApplicationViewSet)
 router.register(r'users', UserViewSet)
 
 urlpatterns = [
-    path('admin/', admin.site.urls),
+    path('api/admin/', admin.site.urls),
     path('api-auth/', include('rest_framework.urls', namespace='rest_framework')),
     path('api/', include(router.urls)),
+    path('', AppView.as_view(), name="home"),
     path('', include('social_django.urls', namespace='social'))
 ]
 
@@ -42,3 +43,8 @@ if settings.DEBUG:
     urlpatterns += [
         path('__debug__/', include(debug_toolbar.urls)),
     ]
+
+    from django.contrib.staticfiles.urls import staticfiles_urlpatterns
+    urlpatterns += staticfiles_urlpatterns()
+
+

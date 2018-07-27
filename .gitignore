@@ -61,3 +61,5 @@ target/
 
 .env
 committee_admissions/files
+node_modules
+main.js

@@ -3,6 +3,7 @@ django-environ==0.4.4
 django-extensions==2.0.5
 djangorestframework==3.7.7
 django-cors-headers==2.2.0
+django-webpack-loader==0.6.0
 
 social-auth-app-django==2.1.0
 pip-tools==2.0.2
