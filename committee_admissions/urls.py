@@ -15,7 +15,7 @@ Including another URLconf
 """
 from django.conf import settings
 from django.contrib import admin
-from django.urls import include, path
+from django.urls import include, path, re_path
 from rest_framework import routers
 
 from committee_admissions.admissions.views import (
@@ -35,6 +35,7 @@ urlpatterns = [
     path('api-auth/', include('rest_framework.urls', namespace='rest_framework')),
     path('api/', include(router.urls)),
     path('', AppView.as_view(), name="home"),
+    re_path('(?:.*)/?', AppView.as_view(), name="home"),
     path('', include('social_django.urls', namespace='social'))
 ]
 
@@ -46,5 +47,3 @@ if settings.DEBUG:
 
     from django.contrib.staticfiles.urls import staticfiles_urlpatterns
     urlpatterns += staticfiles_urlpatterns()
-
-

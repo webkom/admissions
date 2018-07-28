@@ -119,12 +119,12 @@ STATICFILES_FINDERS = [
     'django.contrib.staticfiles.finders.FileSystemFinder',
     'django.contrib.staticfiles.finders.AppDirectoriesFinder',
 ]
-STATICFILES_DIR = [
-    BASE_PROJECT_DIR.path('frontend')(),
+
+STATICFILES_DIRS = [
+    BASE_PROJECT_DIR.path('assets')(),
     ROOT_DIR.path('assets')(),
-    '/home/cherry/code/committee-admissions/frontend',
-    '/home/cherry/code/committee-admissions-frontend/build'
 ]
+
 STATIC_URL = '/static/'
 
 MEDIA_ROOT = str(FILES_ROOT.path('media')())

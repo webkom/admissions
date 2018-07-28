@@ -1,0 +1,90 @@
+@import url("https://fonts.googleapis.com/css?family=Raleway");
+@import url("https://fonts.googleapis.com/css?family=Cardo");
+@import url("https://unpkg.com/ionicons@3.0.0/dist/css/ionicons.min.css");
+@import "./variables.css";
+
+* {
+  box-sizing: border-box;
+  -webkit-font-smoothing: antialiased;
+}
+
+html {
+  font-size: 1rem;
+}
+
+body {
+  line-height: 1.8;
+  font-family: Raleway, "Helvetica Neue", Arial, sans-serif;
+  background: var(--lego-background-color);
+  color: black;
+  position: relative;
+}
+
+a {
+  color: var(--lego-link-color);
+  cursor: pointer;
+  text-decoration: none;
+}
+
+p {
+  margin-bottom: 10px;
+}
+
+ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+h2,
+h3,
+h4 {
+  font-weight: 700;
+}
+
+h2 {
+  font-size: 24px;
+}
+
+h3 {
+  font-size: 22px;
+}
+
+button {
+  background-color: transparent;
+  border: 0;
+  outline: none;
+  cursor: pointer;
+
+  &:disabled {
+    cursor: initial;
+  }
+}
+
+i {
+  display: inline;
+}
+
+table {
+  border-collapse: collapse;
+}
+
+th {
+  padding: 5px 0;
+  border-top: 1px solid #aaa;
+  border-bottom: 1px solid #aaa !important;
+}
+
+th,
+td {
+  padding-left: 7px;
+  width: 140px;
+  border-bottom: 1px dashed #aaa;
+  text-align: left;
+  display: table-cell;
+}
+
+thead {
+  font-weight: bold;
+  background-color: #eee;
+}

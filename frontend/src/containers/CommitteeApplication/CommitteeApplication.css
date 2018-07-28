@@ -1,0 +1,30 @@
+.input-feedback {
+  color: gray;
+  margin-top: 0.25rem;
+}
+
+.textarea {
+  border: 1px solid rgba(0, 0, 0, 0.09);
+  border-radius: 3px;
+  color: black;
+  margin: 0.5rem 0;
+  padding: 1rem;
+  resize: none;
+  font-family: inherit;
+  font-size: 1rem;
+  width: 100%;
+  overflow: hidden;
+  min-height: 10rem;
+}
+
+.textarea:focus {
+  outline: none;
+}
+
+.response {
+  grid-area: response;
+}
+
+.input {
+  grid-area: input;
+}

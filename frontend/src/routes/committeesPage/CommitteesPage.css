@@ -1,0 +1,4 @@
+PageContainer > *,
+CommittesContainer > * {
+  max-width: 100%;
+}

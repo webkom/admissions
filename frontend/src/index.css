@@ -1,0 +1,16 @@
+html {
+  box-sizing: border-box;
+}
+
+*,
+*:before,
+*:after {
+  box-sizing: inherit;
+}
+
+body {
+  background: #eae9e8;
+  min-height: 100vh;
+  font-family: Raleway, "Helvetica Neue", Arial, sans-serif;
+  margin: 0;
+}

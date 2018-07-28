@@ -12,6 +12,5 @@ new WebpackDevServer(webpack(config), {
     if (err) {
         console.PluginError(err)
     }
-
     console.log('Webpack HMR listening on port 0.0.0.0:3000')
 })

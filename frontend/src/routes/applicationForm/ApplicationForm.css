@@ -1,0 +1,25 @@
+.form {
+  grid-area: form;
+}
+
+.submit-btn {
+  grid-area: button;
+}
+
+.committees {
+  grid-area: committees;
+  position: fixed;
+  top: 11em;
+  left: 90%;
+  transform: translateX(-90%);
+}
+
+.committees-mobile {
+  grid-area: committees;
+}
+
+.noChosen {
+  text-align: center;
+  font-style: italic;
+  font-size: 1.2em;
+}
