@@ -44,6 +44,7 @@ LOCAL_APPS = [
 INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS
 
 # MIDDLEWARE CONFIGURATION =====================================================
+
 MIDDLEWARE = [
     'corsheaders.middleware.CorsMiddleware',
     'django.middleware.common.BrokenLinkEmailsMiddleware',
@@ -135,8 +136,12 @@ WSGI_APPLICATION = 'committee_admissions.wsgi.application'
 ROOT_URLCONF = 'committee_admissions.urls'
 SHELL_PLUS = 'ipython'
 
-LOGIN_REDIRECT_URL = '/api/'
+LOGIN_REDIRECT_URL = '/'
 LOGIN_URL = '/login/lego/'
+
+# When using PostgreSQL, it’s recommended to use the built-in JSONB field to store the extracted extra_data.
+SOCIAL_AUTH_POSTGRES_JSONFIELD = True
+
 
 # WEBPACK =======================================================================
 WEBPACK_LOADER = {

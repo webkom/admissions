@@ -17,6 +17,9 @@ from django.conf import settings
 from django.contrib import admin
 from django.urls import include, path, re_path
 from rest_framework import routers
+from django.conf.urls import url
+from django.views.decorators.csrf import csrf_exempt
+
 
 from committee_admissions.admissions.views import (
     AdmissionViewSet, CommitteeApplicationViewSet, CommitteeViewSet, UserApplicationViewSet,
@@ -34,9 +37,9 @@ urlpatterns = [
     path('api/admin/', admin.site.urls),
     path('api-auth/', include('rest_framework.urls', namespace='rest_framework')),
     path('api/', include(router.urls)),
-    path('', AppView.as_view(), name="home"),
+    url('', include('social_django.urls', namespace='social')),
+    re_path(r'^$', AppView.as_view(), name="home"),
     re_path('(?:.*)/?', AppView.as_view(), name="home"),
-    path('', include('social_django.urls', namespace='social'))
 ]
 
 if settings.DEBUG:
@@ -47,3 +50,4 @@ if settings.DEBUG:
 
     from django.contrib.staticfiles.urls import staticfiles_urlpatterns
     urlpatterns += staticfiles_urlpatterns()
+

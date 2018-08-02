@@ -46,10 +46,20 @@ class ApplicationPortal extends Component {
       headers: new Headers({
         Accept: "application/json",
         "Content-Type": "application/json",
-        Authorization: "Token fe37584f85a9430be9e799bceddc62d8ee751016"
+        "Access-Control-Allow-Credentials": true
       }),
-      redirect: "follow"
+      redirect: "manual",
+      credentials: "include"
     })
+      .then(res => {
+        if (res.type === "opaqueredirect") {
+          window.location = `http://localhost:8000/login/lego/?next=${
+            window.location.pathname
+          }`;
+          throw res;
+        }
+        return res;
+      })
       .then(results => results.json())
       .then(
         data => {

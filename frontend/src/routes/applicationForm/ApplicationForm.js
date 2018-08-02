@@ -7,6 +7,7 @@ import SubmitButton from "./SubmitButton";
 import PageSubTitle from "./PageSubTitle";
 import ChooseCommitteesContainer from "./ChooseCommitteesContainer";
 import "./ApplicationForm.css";
+import CSRFToken from "./csrftoken";
 
 const ApplicationForm = ({
   hasSelected,
@@ -21,6 +22,7 @@ const ApplicationForm = ({
 
     <GridContainer>
       <Form className="form">
+        <CSRFToken />
         <PageSubTitle>Dine søknader</PageSubTitle>
         {hasSelected ? selectedComs : <h3>Du har ikke valgt noen komiteer.</h3>}
       </Form>

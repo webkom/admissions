@@ -39,6 +39,20 @@ class LegoOAuth2(BaseOAuth2):
         }
 
     def user_data(self, access_token, *args, **kwargs):
+        # user_data = self._user_data(access_token)
+        # groups = user_data.get('abakusGroups', [])
+        # required_group = self.setting('REQUIRED_GROUP')
+        # print(user_data)
+        #
+        # for group in groups:
+        #     gg = Group.objects.get_or_create(name=group.name)
+        #
+        # user_groups = [group for group in groups if group.get('name') == required_group]
+        # if not user_groups:
+        #     raise AuthFailed('Group membership required.')
+        #
+        # return user_data
+
         user_data = self._user_data(access_token)
 
         if not user_data.get('isStudent'):

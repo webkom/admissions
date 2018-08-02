@@ -1,6 +1,6 @@
 import React from "react";
 import ReactDOM from "react-dom";
-import { BrowserRouter as Router, Route } from "react-router-dom";
+import { BrowserRouter as Router, Route, Switch } from "react-router-dom";
 
 import NotFoundPage from "src/routes/NotFoundPage";
 import LandingPage from "src/routes/landingPage/LandingPage";
@@ -14,13 +14,15 @@ ReactDOM.render(
     <ScrollToTop>
       <div>
         <main>
-          <Route exact path="/" component={LandingPage} />
-          <Route
-            exact
-            path="/(committees|application)"
-            component={ApplicationPortal}
-          />
-          <Route component={NotFoundPage} />
+          <Switch>
+            <Route exact path="/" component={LandingPage} />
+            <Route
+              exact
+              path="/(committees|application)"
+              component={ApplicationPortal}
+            />
+            <Route component={NotFoundPage} />
+          </Switch>
         </main>
       </div>
     </ScrollToTop>

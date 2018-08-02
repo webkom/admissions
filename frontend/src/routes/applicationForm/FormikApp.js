@@ -1,6 +1,7 @@
 import { withFormik } from "formik";
 import Yup from "yup";
 import ApplicationFormContainer from "./ApplicationFormContainer";
+import Cookie from "js-cookie";
 
 const FormikApp = withFormik({
   mapPropsToValues() {
@@ -41,9 +42,11 @@ const FormikApp = withFormik({
       headers: new Headers({
         Accept: "application/json",
         "Content-Type": "application/json",
-        Authorization: "Token fe37584f85a9430be9e799bceddc62d8ee751016"
+        "Access-Control-Allow-Credentials": true,
+        "X-CSRFToken": Cookie.get("csrftoken")
       }),
       redirect: "follow",
+      credentials: "include",
       body: JSON.stringify(submission)
     })
       .then(res => {

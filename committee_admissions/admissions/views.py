@@ -1,5 +1,6 @@
 from django.contrib.auth.models import User
 from django.views.generic.base import TemplateView
+from django.contrib.auth.mixins import LoginRequiredMixin
 
 from rest_framework import viewsets, permissions
 
@@ -31,7 +32,7 @@ class AdmissionViewSet(viewsets.ModelViewSet):
         return AdmissionPublicSerializer
 
 
-class CommitteeViewSet(viewsets.ModelViewSet):
+class CommitteeViewSet(LoginRequiredMixin, viewsets.ModelViewSet):
     queryset = Committee.objects.all()
     serializer_class = CommitteeSerializer
 
@@ -55,6 +56,7 @@ class ApplicationViewSet(viewsets.ModelViewSet):
         return UserApplicationSerializer
 
     def perform_create(self, serializer):
+        print(self.request.user)
         serializer.save(user=self.request.user)
 
 

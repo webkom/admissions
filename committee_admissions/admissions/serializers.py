@@ -76,7 +76,6 @@ class ApplicationCreateUpdateSerializer(serializers.HyperlinkedModelSerializer):
         # What can I say, works for now
         applications = self.initial_data.pop("applications")
 
-        # Så, lag committee applications
         for committee_name, text in applications.items():
             print(committee_name, text)
 
