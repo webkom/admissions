@@ -4,6 +4,8 @@ import FormikApp from "src/routes/applicationForm/FormikApp";
 import CommitteesPage from "src/routes/committeesPage/CommitteesPage";
 import { media } from "src/styles/mediaQueries";
 import AbakusLogo from "src/components/AbakusLogo";
+import UserInfo from "src/components/UserInfo";
+import PageWrapper from "src/components/PageWrapper";
 
 class ApplicationPortal extends Component {
   constructor(props) {
@@ -107,9 +109,9 @@ class ApplicationPortal extends Component {
       return <div>Error: {error.message}</div>;
     } else {
       return (
-        <PageContainer>
+        <PageWrapper>
           <AbakusLogo size={"6em"} />
-          <h2>{user.name}</h2>
+          <UserInfo name={user.name} />
           <ContentContainer>
             {location.pathname.startsWith("/committees") ? (
               <CommitteesPage
@@ -124,7 +126,7 @@ class ApplicationPortal extends Component {
               />
             )}
           </ContentContainer>
-        </PageContainer>
+        </PageWrapper>
       );
     }
   }
@@ -132,15 +134,4 @@ class ApplicationPortal extends Component {
 const ContentContainer = styled.div`
   width: 100%;
 `;
-const PageContainer = styled.div`
-  display: flex;
-  flex-direction: column;
-  max-width: 70em;
-  margin: 0 auto;
-  min-height: 100vh;
-  ${media.handheld`
-    width: 95vw;
-    `};
-`;
-
 export default ApplicationPortal;

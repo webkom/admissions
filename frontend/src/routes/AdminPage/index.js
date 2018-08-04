@@ -1,20 +1,32 @@
 import React, { Component } from "react";
 import { Link } from "react-router-dom";
-
+import UserInfo from "src/components/UserInfo";
+import PageWrapper from "src/components/PageWrapper";
 import AbakusLogo from "src/components/AbakusLogo";
+import PageTitle from "src/components/PageTitle";
 
 class AdminPage extends Component {
-  render() {
-    console.log(this.props);
-    return (
-      <div className="container flex-center">
-        <div className="flex-center">
-          <AbakusLogo />
-          <h1>Admin Panel</h1>
+  constructor(props) {
+    super(props);
+    this.state = { user: { name: "" } };
+  }
 
-          <Link to="/">Gå til søknad</Link>
-        </div>
-      </div>
+  componentDidMount() {
+    this.setState({ user: { name: window.django.user.full_name } }, () =>
+      console.log(this.state)
+    );
+  }
+
+  render() {
+    const { user } = this.state;
+    return (
+      <PageWrapper>
+        <AbakusLogo size={"6em"} />
+        <UserInfo name={user.name} />
+        <PageTitle>Admin Panel</PageTitle>
+
+        <Link to="/">Gå til forside</Link>
+      </PageWrapper>
     );
   }
 }
