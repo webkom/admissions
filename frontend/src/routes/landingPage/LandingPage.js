@@ -7,21 +7,9 @@ import AbakusLogo from "src/components/AbakusLogo";
 import LinkButton from "src/components/LinkButton";
 import { Card, CardTitle, CardParagraph } from "src/components/Card";
 import { MainPageTitle } from "src/components/PageTitle";
+import LinkWrapper from "./LinkWrapper";
 
 import "./LandingPage.css";
-
-const Container = styled.div`
-  min-height: 100vh;
-  margin: 0;
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  align-items: center;
-  margin: 0 0.7em;
-  ${media.handheld`
-    margin: 0 0.7em 3em 0.7em;
-    `};
-`;
 
 Moment.globalLocale = "nb";
 
@@ -31,7 +19,8 @@ class LandingPage extends Component {
     this.state = {
       results: undefined,
       admission: [],
-      error: null
+      error: null,
+      adminPermissions: false
     };
 
     const hostname = window && window.location && window.location.hostname;
@@ -47,7 +36,7 @@ class LandingPage extends Component {
       method: "GET",
       headers: {
         Accept: "application/json",
-        "Content-Type": "application/json",
+        "Content-Type": "application/json"
       }
     })
       .then(results => results.json())
@@ -64,8 +53,7 @@ class LandingPage extends Component {
   }
 
   render() {
-    const { error, admission } = this.state;
-    console.log(admission);
+    const { error, admission, adminPermissions } = this.state;
     if (error) {
       return <div>Error: {error.message}</div>;
     } else {
@@ -97,7 +85,12 @@ class LandingPage extends Component {
               </b>.
             </CardParagraph>
           </Card>
-          <LinkButton to="/committees">Gå til søknad</LinkButton>
+          <LinkWrapper>
+            <LinkButton to="/committees">Gå til søknad</LinkButton>
+            {adminPermissions && (
+              <LinkButton to="/admin">Gå til admin panel</LinkButton>
+            )}
+          </LinkWrapper>
         </Container>
       );
     }
@@ -107,6 +100,19 @@ class LandingPage extends Component {
 const PageSubTitle = MainPageTitle.extend`
   color: gray;
   font-size: 2.5rem;
+`;
+
+const Container = styled.div`
+  min-height: 100vh;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  margin: 0 0.7em;
+  ${media.handheld`
+    margin: 0 0.7em 3em 0.7em;
+    `};
 `;
 
 export default LandingPage;
