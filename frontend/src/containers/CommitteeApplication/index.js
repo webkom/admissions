@@ -12,9 +12,16 @@ import { Card, CardParagraph, CardTitle } from "src/components/Card";
 const CommitteeApplication = ({
   responseLabel,
   committee,
-  field: { name, onChange, value, handleBlur },
-  form: { touched, errors }
+  field: { name, onChange, value },
+  form: { touched, errors, handleBlur }
 }) => {
+  const handleApplicationFieldBlur = e => {
+    handleBlur(e);
+    console.log(responseLabel, "values: ", value);
+    // do something
+    // saveUserForm(this.props.values);
+  };
+
   const error = touched[name] && errors[name];
   return (
     <Wrapper>
@@ -38,7 +45,7 @@ const CommitteeApplication = ({
           name={name}
           id={name}
           onChange={onChange}
-          onBlur={handleBlur}
+          onBlur={handleApplicationFieldBlur}
           placeholder="Skriv søknadstekst her..."
           value={value}
           rows="10"

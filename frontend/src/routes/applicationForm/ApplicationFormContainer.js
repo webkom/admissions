@@ -31,10 +31,34 @@ class ApplicationFormContainer extends Component {
     this.props.toggleCommittee(name.toLowerCase());
   };
 
+  persistState = () => {
+    var selectedCommitteesJSON = JSON.stringify(this.state.selectedCommittees);
+    sessionStorage.setItem("selectedCommittees", selectedCommitteesJSON);
+  };
+
+  initializeState = () => {
+    var selectedCommitteesJSON = sessionStorage.getItem("selectedCommittees");
+    var selectedCommittees = JSON.parse(selectedCommitteesJSON);
+    console.log(selectedCommittees);
+
+    if (selectedCommittees != null) {
+      this.setState({
+        selectedCommittees: selectedCommittees
+      });
+    }
+  };
+
+  handleApplicationFieldBlur = e => {
+    this.props.handleBlur(e);
+    console.log("event", e);
+    console.log("values", this.props.values);
+    // do something
+    // saveUserForm(this.props.values);
+  };
+
   render() {
     const { width } = this.state;
     const isMobile = width <= 500;
-    console.log(this.props);
     const {
       touched,
       errors,
@@ -69,6 +93,7 @@ class ApplicationFormContainer extends Component {
           responseLabel={response_label}
           error={touched[name.toLowerCase()] && errors[name.toLowerCase()]}
           key={`${name.toLowerCase()} ${index}`}
+          z
         />
       ));
 
