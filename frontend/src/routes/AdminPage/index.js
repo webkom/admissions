@@ -1,5 +1,6 @@
 import React, { Component } from "react";
 import { Link } from "react-router-dom";
+
 import UserInfo from "src/components/UserInfo";
 import PageWrapper from "src/components/PageWrapper";
 import AbakusLogo from "src/components/AbakusLogo";

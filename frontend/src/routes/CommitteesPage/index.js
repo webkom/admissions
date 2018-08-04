@@ -1,12 +1,12 @@
 import React, { Component } from "react";
 import styled from "styled-components";
+import { media } from "src/styles/mediaQueries";
 
 import LinkButton from "src/components/LinkButton";
 import CommitteeCard from "src/components/CommitteeCard";
 import { Card, CardParagraph } from "src/components/Card";
 import PageTitle from "src/components/PageTitle";
 
-import { media } from "src/styles/mediaQueries";
 import "./CommitteesPage.css";
 
 class CommitteesPage extends Component {

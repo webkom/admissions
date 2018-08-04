@@ -7,8 +7,6 @@ const ChooseCommittesContainer = styled.div`
   top: 11em;
   left: 90%;
   transform: translateX(-90%);
-  ${media.handheld`
-    `};
 `;
 
 export default ChooseCommittesContainer;

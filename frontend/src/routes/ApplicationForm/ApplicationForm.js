@@ -1,14 +1,17 @@
 import React from "react";
 import { Form } from "formik";
 
-import Button from "src/components/Button";
 import PageTitle from "src/components/PageTitle";
+
+import ChooseCommitteesContainer from "./ChooseCommitteesContainer";
 import GridContainer from "./GridContainer";
+import SubmitButton from "./SubmitButton";
 import PageSubTitle from "./PageSubTitle";
-import ChooseCommitteesContainerMobile from "./ChooseCommitteesContainerMobile";
+import CSRFToken from "./csrftoken";
+
 import "./ApplicationForm.css";
 
-const MobileApplicationForm = ({
+const ApplicationForm = ({
   hasSelected,
   selectedComs,
   chooseCommitteesItems,
@@ -21,22 +24,17 @@ const MobileApplicationForm = ({
 
     <GridContainer>
       <Form className="form">
+        <CSRFToken />
         <PageSubTitle>Dine søknader</PageSubTitle>
-        {hasSelected ? (
-          selectedComs
-        ) : (
-          <h3 className="noChosen">Du har ikke valgt noen komiteer.</h3>
-        )}
+        {hasSelected ? selectedComs : <h3>Du har ikke valgt noen komiteer.</h3>}
       </Form>
-      <div className="committees-mobile">
-        <PageSubTitle>Velg komiteer</PageSubTitle>
-        <ChooseCommitteesContainerMobile>
-          {chooseCommitteesItems}
-        </ChooseCommitteesContainerMobile>
-      </div>
+      <ChooseCommitteesContainer>
+        <PageSubTitle>Komiteer</PageSubTitle>
+        {chooseCommitteesItems}
+      </ChooseCommitteesContainer>
     </GridContainer>
     {hasSelected && (
-      <Button
+      <SubmitButton
         className="submit-btn"
         margin="0 auto 3em auto"
         onClick={handleSubmit}
@@ -45,9 +43,9 @@ const MobileApplicationForm = ({
         valid={isValid}
       >
         Submit
-      </Button>
+      </SubmitButton>
     )}
   </div>
 );
 
-export default MobileApplicationForm;
+export default ApplicationForm;

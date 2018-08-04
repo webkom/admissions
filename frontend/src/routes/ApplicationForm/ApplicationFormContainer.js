@@ -1,11 +1,11 @@
 import React, { Component } from "react";
 import { Field } from "formik";
 
-import MobileApplicationForm from "./MobileApplicationForm";
-import ApplicationForm from "./ApplicationForm";
-
 import ToggleCommitteeSmall from "src/components/ToggleCommitteeSmall";
 import CommitteeApplication from "src/containers/CommitteeApplication";
+
+import MobileApplicationForm from "./MobileApplicationForm";
+import ApplicationForm from "./ApplicationForm";
 
 class ApplicationFormContainer extends Component {
   constructor() {

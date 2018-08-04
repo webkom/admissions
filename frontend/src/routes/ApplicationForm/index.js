@@ -1,7 +1,8 @@
 import { withFormik } from "formik";
 import Yup from "yup";
-import ApplicationFormContainer from "./ApplicationFormContainer";
 import Cookie from "js-cookie";
+
+import ApplicationForm from "./ApplicationFormContainer";
 
 const FormikApp = withFormik({
   mapPropsToValues() {
@@ -72,6 +73,6 @@ const FormikApp = withFormik({
   },
   displayName: "ApplicationForm",
   validateOnChange: true
-})(ApplicationFormContainer);
+})(ApplicationForm);
 
 export default FormikApp;

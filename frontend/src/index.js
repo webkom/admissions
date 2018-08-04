@@ -3,7 +3,7 @@ import ReactDOM from "react-dom";
 import { BrowserRouter as Router, Route, Switch } from "react-router-dom";
 
 import NotFoundPage from "src/routes/NotFoundPage";
-import LandingPage from "src/routes/landingPage/LandingPage";
+import LandingPage from "src/routes/LandingPage/";
 import ApplicationPortal from "src/routes/ApplicationPortal";
 import AdminPage from "src/routes/AdminPage";
 

@@ -1,17 +1,18 @@
 import React, { Component } from "react";
-import Moment from "react-moment";
-import "moment/locale/nb";
 import styled from "styled-components";
 import { media } from "src/styles/mediaQueries";
+
+import Moment from "react-moment";
+import "moment/locale/nb";
+Moment.globalLocale = "nb";
+
 import AbakusLogo from "src/components/AbakusLogo";
 import LinkButton from "src/components/LinkButton";
 import { Card, CardTitle, CardParagraph } from "src/components/Card";
 import { MainPageTitle } from "src/components/PageTitle";
+
 import LinkWrapper from "./LinkWrapper";
-
 import "./LandingPage.css";
-
-Moment.globalLocale = "nb";
 
 class LandingPage extends Component {
   constructor(props) {
@@ -20,7 +21,7 @@ class LandingPage extends Component {
       results: undefined,
       admission: [],
       error: null,
-      adminPermissions: false
+      adminPermissions: true
     };
 
     const hostname = window && window.location && window.location.hostname;

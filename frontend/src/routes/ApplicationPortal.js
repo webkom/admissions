@@ -1,8 +1,10 @@
 import React, { Component } from "react";
 import styled from "styled-components";
-import FormikApp from "src/routes/applicationForm/FormikApp";
-import CommitteesPage from "src/routes/committeesPage/CommitteesPage";
 import { media } from "src/styles/mediaQueries";
+
+import ApplicationForm from "src/routes/ApplicationForm";
+import CommitteesPage from "src/routes/CommitteesPage";
+
 import AbakusLogo from "src/components/AbakusLogo";
 import UserInfo from "src/components/UserInfo";
 import PageWrapper from "src/components/PageWrapper";
@@ -119,7 +121,7 @@ class ApplicationPortal extends Component {
                 toggleCommittee={this.toggleCommittee}
               />
             ) : (
-              <FormikApp
+              <ApplicationForm
                 {...this.state}
                 apiRoot={this.API_ROOT}
                 toggleCommittee={this.toggleCommittee}
