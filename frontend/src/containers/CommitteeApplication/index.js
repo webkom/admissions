@@ -1,58 +1,29 @@
-import React from "react";
+import React, { Component } from "react";
+import { CommitteeApplication as Subcomponent } from "./CommitteeApplication";
 
-import "./CommitteeApplication.css";
-import Textarea from "react-textarea-autosize";
+class CommitteeApplication extends Component {
+  componentDidMount() {
+    this.initializeValue();
+  }
 
-import Wrapper from "./Wrapper";
-import InputFeedback from "./InputFeedback";
-import CommitteeName from "./CommitteeName";
-import CommitteeLogo from "./CommitteeLogo";
-import { Card, CardParagraph, CardTitle } from "src/components/Card";
+  initializeValue = () => {
+    var committee = this.props.committee.toLowerCase();
 
-const CommitteeApplication = ({
-  responseLabel,
-  committee,
-  field: { name, onChange, value },
-  form: { touched, errors, handleBlur }
-}) => {
-  const handleApplicationFieldBlur = e => {
-    handleBlur(e);
-    console.log(responseLabel, "values: ", value);
-    // do something
-    // saveUserForm(this.props.values);
+    var restoredApplicationText = JSON.parse(
+      sessionStorage.getItem("applicationText")
+    );
+
+    if (restoredApplicationText != null && restoredApplicationText[committee]) {
+      this.props.form.setFieldValue(
+        `${committee}`,
+        restoredApplicationText[committee]
+      );
+    }
   };
 
-  const error = touched[name] && errors[name];
-  return (
-    <Wrapper>
-      <CommitteeLogo logo={require(`assets/committee_logos/${name}.png`)} />
-      <CommitteeName name={committee} />
-
-      <Card className="response" margin="0.5rem 1rem">
-        <CardTitle margin="0.5rem" fontSize="0.8em">
-          Dette ønsker komiteen at du inkluderer
-        </CardTitle>
-        <CardParagraph margin="0.5rem">{responseLabel}</CardParagraph>
-      </Card>
-
-      <Card className="input" margin="0.5rem 1rem">
-        <CardTitle margin="0.5rem" fontSize="0.8em">
-          Skriv søknaden din her <InputFeedback error={error} />
-        </CardTitle>
-        <Textarea
-          className="textarea"
-          type="textarea"
-          name={name}
-          id={name}
-          onChange={onChange}
-          onBlur={handleApplicationFieldBlur}
-          placeholder="Skriv søknadstekst her..."
-          value={value}
-          rows="10"
-        />
-      </Card>
-    </Wrapper>
-  );
-};
+  render() {
+    return <Subcomponent {...this.props} />;
+  }
+}
 
 export default CommitteeApplication;
