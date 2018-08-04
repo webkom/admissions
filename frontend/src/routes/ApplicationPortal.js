@@ -12,7 +12,8 @@ class ApplicationPortal extends Component {
       results: undefined,
       committees: [],
       error: null,
-      selectedCommittees: {}
+      selectedCommittees: {},
+      user: { name: "" }
     };
 
     const hostname = window && window.location && window.location.hostname;
@@ -32,12 +33,31 @@ class ApplicationPortal extends Component {
   };
 
   toggleCommittee = name => {
-    this.setState(state => ({
-      selectedCommittees: {
-        ...state.selectedCommittees,
-        [name.toLowerCase()]: !state.selectedCommittees[name]
+    this.setState(
+      state => ({
+        selectedCommittees: {
+          ...state.selectedCommittees,
+          [name.toLowerCase()]: !state.selectedCommittees[name]
+        }
+      }),
+      () => {
+        this.persistState();
       }
-    }));
+    );
+  };
+
+  persistState = () => {
+    var selectedCommitteesJSON = JSON.stringify(this.state.selectedCommittees);
+    sessionStorage.setItem("selectedCommittees", selectedCommitteesJSON);
+  };
+
+  initializeState = () => {
+    var selectedCommitteesJSON = sessionStorage.getItem("selectedCommittees");
+    var selectedCommittees = JSON.parse(selectedCommitteesJSON);
+
+    this.setState({
+      selectedCommittees: selectedCommittees
+    });
   };
 
   componentDidMount() {
@@ -72,10 +92,13 @@ class ApplicationPortal extends Component {
           this.setState({ error });
         }
       );
+
+    this.setState({ user: { name: window.django.user.full_name } });
+    this.initializeState();
   }
 
   render() {
-    const { error } = this.state;
+    const { error, user } = this.state;
     const { location } = this.props;
     if (error) {
       return <div>Error: {error.message}</div>;
@@ -83,6 +106,7 @@ class ApplicationPortal extends Component {
       return (
         <PageContainer>
           <AbakusLogo size={"6em"} />
+          <h2>{user.name}</h2>
           <ContentContainer>
             {location.pathname.startsWith("/committees") ? (
               <CommitteesPage
