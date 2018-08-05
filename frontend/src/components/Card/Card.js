@@ -18,6 +18,7 @@ const Card = styled.div.attrs({
   padding: ${props => props.padding};
   width: ${props => props.width};
   max-width: ${props => props.maxWidth};
+
   ${media.handheld`
     margin: 0.3rem 0;
     padding: 0.5rem;

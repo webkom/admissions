@@ -14,7 +14,7 @@ const Card = styled.div`
   justify-content: center;
   align-items: center;
   box-sizing: border-box;
-  height: 590px;
+  height: 640px;
   max-width: 21rem;
   margin: 1em;
   padding: 2em 1em;
@@ -33,7 +33,7 @@ const CommitteeCardTitle = styled.h2`
 `;
 
 const CommitteeCardText = styled.p`
-  padding: 1em;
+  padding: 0 1em;
   flex: 1;
 `;
 
@@ -46,6 +46,11 @@ const ChooseButton = styled(Button)`
   background: ${props => (props.isChosen ? "#db3737" : "gray")};
 `;
 
+const LearnMoreLink = styled.a`
+  font-weight: bold;
+  margin: 1em;
+`;
+
 const CommitteeCard = props => {
   return (
     <Card className={props.className}>
@@ -54,6 +59,9 @@ const CommitteeCard = props => {
       />
       <CommitteeCardTitle>{props.name}</CommitteeCardTitle>
       <CommitteeCardText>{props.description}</CommitteeCardText>
+      <LearnMoreLink href={`${props.readMoreLink}`} target="_blank">
+        Les mer
+      </LearnMoreLink>
       <ChooseButton
         onClick={() => props.onToggle(props.name)}
         isChosen={props.isChosen}

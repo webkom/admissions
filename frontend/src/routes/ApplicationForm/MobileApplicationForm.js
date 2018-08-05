@@ -3,6 +3,7 @@ import { Form } from "formik";
 
 import Button from "src/components/Button";
 import PageTitle from "src/components/PageTitle";
+import PriorityTextField from "src/containers/PriorityTextField";
 
 import ChooseCommitteesContainerMobile from "./ChooseCommitteesContainerMobile";
 import GridContainer from "./GridContainer";
@@ -12,8 +13,8 @@ import "./ApplicationForm.css";
 
 const MobileApplicationForm = ({
   hasSelected,
-  selectedComs,
-  chooseCommitteesItems,
+  SelectedComs,
+  ChooseCommitteesItems,
   handleSubmit,
   isSubmitting,
   isValid
@@ -24,8 +25,9 @@ const MobileApplicationForm = ({
     <GridContainer>
       <Form className="form">
         <PageSubTitle>Dine søknader</PageSubTitle>
+        <Field component={PriorityTextField} name="priorityText" />
         {hasSelected ? (
-          selectedComs
+          SelectedComs
         ) : (
           <h3 className="noChosen">Du har ikke valgt noen komiteer.</h3>
         )}
@@ -33,7 +35,7 @@ const MobileApplicationForm = ({
       <div className="committees-mobile">
         <PageSubTitle>Velg komiteer</PageSubTitle>
         <ChooseCommitteesContainerMobile>
-          {chooseCommitteesItems}
+          {ChooseCommitteesItems}
         </ChooseCommitteesContainerMobile>
       </div>
     </GridContainer>

@@ -24,11 +24,11 @@
     <div id="root"></div>
     <script>
     window.django = {
-  user: {
-    full_name: "{{ request.user.get_full_name }}"
-  }
-};
-</script>
+      user: {
+        full_name: "{{ request.user.get_full_name }}"
+      }
+    };
+    </script>
     {% render_bundle 'main' %}
     <!--
       This HTML file is a template.

@@ -29,13 +29,14 @@ class CommitteesPage extends Component {
 
   render() {
     const { committees } = this.props;
-    const committeeCards = committees.map((committee, index) => (
+    const CommitteeCards = committees.map((committee, index) => (
       <CommitteeCard
         name={committee.name}
         description={committee.description}
         key={committee.name + "-" + index}
         onToggle={this.toggleCommittee}
         isChosen={!!this.props.selectedCommittees[committee.name.toLowerCase()]}
+        readMoreLink={committee.detail_link}
       />
     ));
     return (
@@ -52,7 +53,7 @@ class CommitteesPage extends Component {
           </CardParagraph>
         </Card>
         <CommittesContainer>
-          {committeeCards}
+          {CommitteeCards}
           <CardNextDiv>
             <NextButton
               bordercolor="gray"

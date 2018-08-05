@@ -14,7 +14,8 @@ const FormikApp = withFormik({
       labamba: "",
       koskom: "",
       arrkom: "",
-      pr: ""
+      pr: "",
+      priorityText: ""
     };
   },
   handleSubmit(
@@ -27,7 +28,7 @@ const FormikApp = withFormik({
     }
   ) {
     var submission = {
-      text: "Webkom først, så Arrkom takk. HOHOHO",
+      text: values.priorityText,
       applications: {}
     };
     Object.keys(values)

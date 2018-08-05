@@ -1,7 +1,8 @@
 import React from "react";
-import { Form } from "formik";
+import { Form, Field } from "formik";
 
 import PageTitle from "src/components/PageTitle";
+import PriorityTextField from "src/containers/PriorityTextField";
 
 import ChooseCommitteesContainer from "./ChooseCommitteesContainer";
 import GridContainer from "./GridContainer";
@@ -13,8 +14,8 @@ import "./ApplicationForm.css";
 
 const ApplicationForm = ({
   hasSelected,
-  selectedComs,
-  chooseCommitteesItems,
+  SelectedComs,
+  ChooseCommitteesItems,
   handleSubmit,
   isSubmitting,
   isValid
@@ -26,11 +27,12 @@ const ApplicationForm = ({
       <Form className="form">
         <CSRFToken />
         <PageSubTitle>Dine søknader</PageSubTitle>
-        {hasSelected ? selectedComs : <h3>Du har ikke valgt noen komiteer.</h3>}
+        <Field component={PriorityTextField} name="priorityText" />
+        {hasSelected ? SelectedComs : <h3>Du har ikke valgt noen komiteer.</h3>}
       </Form>
       <ChooseCommitteesContainer>
         <PageSubTitle>Komiteer</PageSubTitle>
-        {chooseCommitteesItems}
+        {ChooseCommitteesItems}
       </ChooseCommitteesContainer>
     </GridContainer>
     {hasSelected && (

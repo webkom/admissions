@@ -52,8 +52,6 @@ class ApplicationFormContainer extends Component {
     this.props.handleBlur(e);
     console.log("event", e);
     console.log("values", this.props.values);
-    // do something
-    // saveUserForm(this.props.values);
   };
 
   render() {
@@ -69,7 +67,7 @@ class ApplicationFormContainer extends Component {
       isValid
     } = this.props;
 
-    const chooseCommitteesItems = committees.map((committee, index) => (
+    const ChooseCommitteesItems = committees.map((committee, index) => (
       <ToggleCommitteeSmall
         name={committee.name}
         key={committee.name + "-" + index}
@@ -83,7 +81,7 @@ class ApplicationFormContainer extends Component {
         committee => selectedCommittees[committee.name.toLowerCase()]
       ).length >= 1;
 
-    const selectedComs = committees
+    const SelectedComs = committees
       .filter(committee => selectedCommittees[committee.name.toLowerCase()])
       .map(({ name, response_label }, index) => (
         <Field
@@ -93,7 +91,6 @@ class ApplicationFormContainer extends Component {
           responseLabel={response_label}
           error={touched[name.toLowerCase()] && errors[name.toLowerCase()]}
           key={`${name.toLowerCase()} ${index}`}
-          z
         />
       ));
 
@@ -101,22 +98,22 @@ class ApplicationFormContainer extends Component {
       return (
         <ApplicationForm
           hasSelected={hasSelected}
-          selectedComs={selectedComs}
+          SelectedComs={SelectedComs}
           isSubmitting={isSubmitting}
           isValid={isValid}
           handleSubmit={handleSubmit}
-          chooseCommitteesItems={chooseCommitteesItems}
+          ChooseCommitteesItems={ChooseCommitteesItems}
         />
       );
     } else {
       return (
         <MobileApplicationForm
           hasSelected={hasSelected}
-          selectedComs={selectedComs}
+          SelectedComs={SelectedComs}
           isSubmitting={isSubmitting}
           isValid={isValid}
           handleSubmit={handleSubmit}
-          chooseCommitteesItems={chooseCommitteesItems}
+          ChooseCommitteesItems={chooseCommitteesItems}
         />
       );
     }

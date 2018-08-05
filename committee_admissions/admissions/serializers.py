@@ -27,7 +27,13 @@ class AdminAdmissionSerializer(serializers.HyperlinkedModelSerializer):
 class CommitteeSerializer(serializers.HyperlinkedModelSerializer):
     class Meta:
         model = Committee
-        fields = ('url', 'pk', 'name', 'description', 'response_label', 'logo')
+        fields = ('url', 'pk', 'name', 'description', 'response_label', 'logo', 'detail_link')
+
+
+class ShortCommitteeSerializer(serializers.HyperlinkedModelSerializer):
+    class Meta:
+        model = Committee
+        fields = ('name',)
 
 
 class CommitteeApplicationSerializer(serializers.HyperlinkedModelSerializer):
@@ -36,14 +42,37 @@ class CommitteeApplicationSerializer(serializers.HyperlinkedModelSerializer):
         fields = ('url', 'pk', 'application', 'committee', 'text')
 
 
+class ShortCommitteeApplicationSerializer(serializers.HyperlinkedModelSerializer):
+    committee = ShortCommitteeSerializer()
+
+    class Meta:
+        model = CommitteeApplication
+        fields = ('committee', 'text')
+
+
+class ShortUserSerializer(serializers.HyperlinkedModelSerializer):
+    full_name = serializers.SerializerMethodField()
+
+    class Meta:
+        model = User
+
+    def get_full_name(self, obj):
+        return obj.get_full_name()
+
+    class Meta:
+        model = User
+        fields = ('username', 'full_name', 'email')
+
+
 class UserApplicationSerializer(serializers.HyperlinkedModelSerializer):
-    committee_applications = CommitteeApplicationSerializer(many=True)
+    committee_applications = ShortCommitteeApplicationSerializer(many=True)
+    user = ShortUserSerializer()
 
     class Meta:
         model = UserApplication
         fields = (
-            'url', 'pk', 'admission', 'user', 'text', 'time_sent', 'is_editable', 'is_sendable',
-            'applied_within_deadline', 'sent', 'committee_applications'
+            'url', 'user', 'text', 'time_sent', 'applied_within_deadline',
+            'committee_applications',
         )
 
 
@@ -65,15 +94,14 @@ class ApplicationCreateUpdateSerializer(serializers.HyperlinkedModelSerializer):
         user = validated_data.pop('user')
         print(user, vars(user))
 
-        priority_text = validated_data.pop('text')
+        text = validated_data.pop('text')
 
         admission = [obj for obj in Admission.objects.all() if obj.is_open][0]
 
         user_application, created = UserApplication.objects.update_or_create(admission=admission,
                                                                              user=user,
-                                                                             defaults={"text": priority_text})
-        # Hohohoho, makan til spagetti kode! Lukter krasj i lang vei nå vettu, null validation, security flaws delux <3
-        # What can I say, works for now
+                                                                             defaults={"text": text})
+        # The code smell is strong with this one, young padawan
         applications = self.initial_data.pop("applications")
 
         for committee_name, text in applications.items():

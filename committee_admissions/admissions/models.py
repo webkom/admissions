@@ -33,6 +33,7 @@ class Committee(models.Model):
     description = models.TextField(blank=True, max_length=200)
     response_label = models.TextField(blank=True, max_length=200)
     logo = models.FileField(blank=True, upload_to='committee-logos')
+    detail_link = models.CharField(max_length=150, default="")
 
     class Meta:
         ordering = ['name']
