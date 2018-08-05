@@ -9,6 +9,7 @@ import PageTitle from "src/components/PageTitle";
 import UserApplication from "src/containers/UserApplication";
 
 import Wrapper from "./Wrapper";
+import CSVExport from "./CSVExport";
 
 class AdminPage extends Component {
   constructor(props) {
@@ -18,7 +19,15 @@ class AdminPage extends Component {
       error: null,
       user: { name: "" },
       applications: [],
-      csvData: []
+      csvData: [],
+      headers: [
+        { label: "Full Name", key: "name" },
+        { label: "Prioriteringer", key: "priorityText" },
+        { label: "Komité", key: "committee" },
+        { label: "Søknadstekst", key: "committeeApplicationText" },
+        { label: "Email", key: "email" },
+        { label: "Username", key: "username" }
+      ]
     };
 
     const hostname = window && window.location && window.location.hostname;
@@ -91,7 +100,7 @@ class AdminPage extends Component {
   }
 
   render() {
-    const { error, user, applications, csvData } = this.state;
+    const { error, user, applications, csvData, headers } = this.state;
 
     const UserApplications = applications.map((userApplication, i) => {
       return (
@@ -102,14 +111,6 @@ class AdminPage extends Component {
         />
       );
     });
-    const headers = [
-      { label: "Full Name", key: "name" },
-      { label: "Prioriteringer", key: "priorityText" },
-      { label: "Komité", key: "committee" },
-      { label: "Søknadstekst", key: "committeeApplicationText" },
-      { label: "Email", key: "email" },
-      { label: "Username", key: "username" }
-    ];
 
     if (error) {
       return <div>Error: {error.message}</div>;
@@ -121,14 +122,14 @@ class AdminPage extends Component {
           <PageTitle>Admin Panel</PageTitle>
           <Link to="/">Gå til forside</Link>
           <Wrapper>
-            <CSVLink
+            <CSVExport
               data={csvData}
               headers={headers}
               filename={"applications.csv"}
               target="_blank"
             >
-              Download me
-            </CSVLink>
+              Eksporter som csv
+            </CSVExport>
             {UserApplications}
           </Wrapper>
         </PageWrapper>

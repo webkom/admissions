@@ -7245,6 +7245,12 @@ react-moment@^0.7.0:
   version "0.7.9"
   resolved "https://registry.yarnpkg.com/react-moment/-/react-moment-0.7.9.tgz#fc6b5bf8952d27f134a42abfd7f42df2c839c1d7"
 
+react-read-more@^1.0.0:
+  version "1.0.0"
+  resolved "https://registry.yarnpkg.com/react-read-more/-/react-read-more-1.0.0.tgz#86a9e8ac14fa37863d99187d8d500457ce32b840"
+  dependencies:
+    rimraf "^2.5.4"
+
 react-reconciler@^0.7.0:
   version "0.7.0"
   resolved "https://registry.yarnpkg.com/react-reconciler/-/react-reconciler-0.7.0.tgz#9614894103e5f138deeeb5eabaf3ee80eb1d026d"
