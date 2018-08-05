@@ -2,7 +2,7 @@ import React from "react";
 import { Form, Field } from "formik";
 
 import PageTitle from "src/components/PageTitle";
-import PriorityTextField from "src/containers/PriorityTextField";
+import PriorityTextField from "src/components/PriorityTextField";
 
 import ChooseCommitteesContainer from "./ChooseCommitteesContainer";
 import GridContainer from "./GridContainer";

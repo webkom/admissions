@@ -45,7 +45,8 @@ class AdminPage extends Component {
           name: name,
           email: email,
           username: username,
-          priorityText: priorityText,
+          priorityText:
+            priorityText != "" ? priorityText : "Ingen prioriteringer",
           committee: committee,
           committeeApplicationText: committeeApplicationText
         }
@@ -103,11 +104,11 @@ class AdminPage extends Component {
     });
     const headers = [
       { label: "Full Name", key: "name" },
-      { label: "Email", key: "email" },
-      { label: "Username", key: "username" },
       { label: "Prioriteringer", key: "priorityText" },
       { label: "Komité", key: "committee" },
-      { label: "Søknadstekst", key: "committeeApplicationText" }
+      { label: "Søknadstekst", key: "committeeApplicationText" },
+      { label: "Email", key: "email" },
+      { label: "Username", key: "username" }
     ];
 
     if (error) {

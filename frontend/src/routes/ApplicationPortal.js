@@ -58,7 +58,6 @@ class ApplicationPortal extends Component {
   initializeState = () => {
     var selectedCommitteesJSON = sessionStorage.getItem("selectedCommittees");
     var selectedCommittees = JSON.parse(selectedCommitteesJSON);
-    console.log(selectedCommittees);
 
     if (selectedCommittees != null) {
       this.setState({

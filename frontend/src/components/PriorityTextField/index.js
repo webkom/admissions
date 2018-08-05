@@ -14,7 +14,7 @@ const PriorityTextField = ({
     <Wrapper>
       <Card className="input" margin="0.5rem 1rem">
         <CardTitle margin="0.5rem" fontSize="0.8em">
-          Her kan du rangere komiteene om du ønsker, eller komme med andre
+          Her kan du rangere komiteer etter ønske, og komme med andre
           kommentarer.
         </CardTitle>
         <Textarea

@@ -18,6 +18,7 @@ const Wrapper = styled.div`
   padding: 0.2em;
   margin: 1em 0;
   border-radius: 10px;
+  cursor: default;
 
   ${media.handheld`
     width: 100%;

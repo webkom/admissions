@@ -3,7 +3,7 @@ import { Form } from "formik";
 
 import Button from "src/components/Button";
 import PageTitle from "src/components/PageTitle";
-import PriorityTextField from "src/containers/PriorityTextField";
+import PriorityTextField from "src/components/PriorityTextField";
 
 import ChooseCommitteesContainerMobile from "./ChooseCommitteesContainerMobile";
 import GridContainer from "./GridContainer";
