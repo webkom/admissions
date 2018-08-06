@@ -6,9 +6,11 @@ const PriorityTextField = ({ text }) => {
   return (
     <Card margin="1.5rem 0rem">
       <CardTitle margin="0.5rem" fontSize="0.8em">
-        Kommentarer{" "}
+        Prioriteringer og andre kommentarer
       </CardTitle>
-      <CardParagraph margin="0.5rem">{text}</CardParagraph>
+      <CardParagraph margin="0.5rem" fontSize="0.9em">
+        {text}
+      </CardParagraph>
     </Card>
   );
 };

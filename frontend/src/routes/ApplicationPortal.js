@@ -4,6 +4,7 @@ import { media } from "src/styles/mediaQueries";
 
 import ApplicationForm from "src/routes/ApplicationForm";
 import CommitteesPage from "src/routes/CommitteesPage";
+import AdminPage from "src/routes/AdminPage";
 
 import AbakusLogo from "src/components/AbakusLogo";
 import UserInfo from "src/components/UserInfo";
@@ -114,17 +115,21 @@ class ApplicationPortal extends Component {
           <AbakusLogo size={"6em"} />
           <UserInfo name={user.name} />
           <ContentContainer>
-            {location.pathname.startsWith("/committees") ? (
+            {location.pathname.startsWith("/committees") && (
               <CommitteesPage
                 {...this.state}
                 toggleCommittee={this.toggleCommittee}
               />
-            ) : (
+            )}
+            {location.pathname.startsWith("/application") && (
               <ApplicationForm
                 {...this.state}
                 apiRoot={this.API_ROOT}
                 toggleCommittee={this.toggleCommittee}
               />
+            )}
+            {location.pathname.startsWith("/admin") && (
+              <AdminPage {...this.state} apiRoot={this.API_ROOT} />
             )}
           </ContentContainer>
         </PageWrapper>

@@ -5,7 +5,6 @@ import { BrowserRouter as Router, Route, Switch } from "react-router-dom";
 import NotFoundPage from "src/routes/NotFoundPage";
 import LandingPage from "src/routes/LandingPage/";
 import ApplicationPortal from "src/routes/ApplicationPortal";
-import AdminPage from "src/routes/AdminPage";
 
 import ScrollToTop from "./scrollToTop";
 import "src/styles/globals.css";
@@ -20,10 +19,9 @@ ReactDOM.render(
             <Route exact path="/" component={LandingPage} />
             <Route
               exact
-              path="/(committees|application)"
+              path="/(committees|application|admin)"
               component={ApplicationPortal}
             />
-            <Route exact path="/admin" component={AdminPage} />
             <Route component={NotFoundPage} />
           </Switch>
         </main>

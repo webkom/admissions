@@ -26,7 +26,8 @@ class AdminPage extends Component {
         { label: "Komité", key: "committee" },
         { label: "Søknadstekst", key: "committeeApplicationText" },
         { label: "Email", key: "email" },
-        { label: "Username", key: "username" }
+        { label: "Username", key: "username" },
+        { label: "Tid sendt", key: "timeSent" }
       ]
     };
 
@@ -42,6 +43,7 @@ class AdminPage extends Component {
     name,
     email,
     username,
+    timeSent,
     priorityText,
     committee,
     committeeApplicationText
@@ -57,7 +59,8 @@ class AdminPage extends Component {
           priorityText:
             priorityText != "" ? priorityText : "Ingen prioriteringer",
           committee: committee,
-          committeeApplicationText: committeeApplicationText
+          committeeApplicationText: committeeApplicationText,
+          timeSent: timeSent
         }
       ]
     }));
@@ -101,7 +104,11 @@ class AdminPage extends Component {
 
   render() {
     const { error, user, applications, csvData, headers } = this.state;
-
+    applications.sort(function(a, b) {
+      if (a.user.full_name < b.user.full_name) return -1;
+      if (a.user.full_name > b.user.full_name) return 1;
+      return 0;
+    });
     const UserApplications = applications.map((userApplication, i) => {
       return (
         <UserApplication
@@ -117,8 +124,6 @@ class AdminPage extends Component {
     } else {
       return (
         <PageWrapper>
-          <AbakusLogo size="6em" />
-          <UserInfo name={user.name} />
           <PageTitle>Admin Panel</PageTitle>
           <Link to="/">Gå til forside</Link>
           <Wrapper>
