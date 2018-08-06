@@ -4,6 +4,7 @@ import "moment/locale/nb";
 Moment.globalLocale = "nb";
 
 import Application from "src/components/Application";
+import CollapseContainer from "src/containers/CollapseContainer";
 
 import Wrapper from "./Wrapper";
 import Name from "./Name";
@@ -57,28 +58,40 @@ class UserApplication extends Component {
     const { user, text, time_sent } = this.props;
     const { committeeApplications } = this.state;
     const numApplications = committeeApplications.length;
+    const priorityText = text ? text : <i>Ingen kommentarer.</i>;
     return (
       <Wrapper>
-        <Header>
-          <Name>{user.full_name}</Name>
-          <NumApplications>
-            {numApplications} {numApplications == 1 ? "søknad" : "søknader"}
-          </NumApplications>
-        </Header>
-        <Header>
-          <SmallDescriptionWrapper>
-            <SmallDescription> Brukernavn </SmallDescription> {user.username}
-          </SmallDescriptionWrapper>
-          <SmallDescriptionWrapper>
-            <SmallDescription> E-mail </SmallDescription> {user.email}
-          </SmallDescriptionWrapper>
-          <SmallDescriptionWrapper>
-            <SmallDescription> Sendt </SmallDescription>
-            <Moment format="dddd Do MMMM, \k\l. HH:mm">{time_sent}</Moment>
-          </SmallDescriptionWrapper>
-        </Header>
-        <PriorityText text={text} />
-        {committeeApplications}
+        <CollapseContainer
+          header={
+            <Header>
+              <Name>{user.full_name}</Name>
+              <NumApplications>
+                {numApplications} {numApplications == 1 ? "søknad" : "søknader"}
+              </NumApplications>
+            </Header>
+          }
+          content={
+            <div>
+              <Header>
+                <SmallDescriptionWrapper>
+                  <SmallDescription> Brukernavn </SmallDescription>
+                  {user.username}
+                </SmallDescriptionWrapper>
+                <SmallDescriptionWrapper>
+                  <SmallDescription> E-mail </SmallDescription> {user.email}
+                </SmallDescriptionWrapper>
+                <SmallDescriptionWrapper>
+                  <SmallDescription> Sendt </SmallDescription>
+                  <Moment format="dddd Do MMMM, \k\l. HH:mm">
+                    {time_sent}
+                  </Moment>
+                </SmallDescriptionWrapper>
+              </Header>
+              <PriorityText text={priorityText} />
+              {committeeApplications}
+            </div>
+          }
+        />
       </Wrapper>
     );
   }

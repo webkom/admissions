@@ -2,10 +2,13 @@ import styled from "styled-components";
 import { media } from "src/styles/mediaQueries";
 
 const Wrapper = styled.div`
-  background: #eee;
-  border-top: 5px solid #c0392b;
+  background: #eae9e8c7;
+  border-top: 4px solid #c0392b;
   padding: 1em 2em;
-  margin-bottom: 1em;
+
+  &: nth-child(odd) {
+    background: #d8d8d88a;
+  }
 `;
 
 export default Wrapper;

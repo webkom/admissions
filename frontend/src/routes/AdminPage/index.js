@@ -1,5 +1,4 @@
 import React, { Component } from "react";
-import { Link } from "react-router-dom";
 import { CSVLink } from "react-csv";
 
 import UserInfo from "src/components/UserInfo";
@@ -9,6 +8,7 @@ import PageTitle from "src/components/PageTitle";
 import UserApplication from "src/containers/UserApplication";
 
 import Wrapper from "./Wrapper";
+import LinkLink from "./LinkLink";
 import CSVExport from "./CSVExport";
 import Statistics from "./Statistics";
 import CommitteeStatistics from "./CommitteeStatistics";
@@ -136,7 +136,7 @@ class AdminPage extends Component {
       return (
         <PageWrapper>
           <PageTitle>Admin Panel</PageTitle>
-          <Link to="/">Gå til forside</Link>
+          <LinkLink to="/">Gå til forside</LinkLink>
           <Wrapper>
             <Statistics>
               <StatisticsWrapper>
