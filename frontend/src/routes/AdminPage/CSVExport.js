@@ -3,9 +3,11 @@ import { media } from "src/styles/mediaQueries";
 import { CSVLink } from "react-csv";
 
 const CSVExport = styled(CSVLink)`
-  margin: 0.5em;
+  padding: 1em 0;
   display: block;
   text-align: center;
+  border-top: 5px solid #c0392b;
+  width: 100%;
 `;
 
 export default CSVExport;

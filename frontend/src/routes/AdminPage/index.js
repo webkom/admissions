@@ -10,6 +10,10 @@ import UserApplication from "src/containers/UserApplication";
 
 import Wrapper from "./Wrapper";
 import CSVExport from "./CSVExport";
+import Statistics from "./Statistics";
+import CommitteeStatistics from "./CommitteeStatistics";
+import StatisticsName from "./StatisticsName";
+import StatisticsWrapper from "./StatisticsWrapper";
 
 class AdminPage extends Component {
   constructor(props) {
@@ -119,6 +123,13 @@ class AdminPage extends Component {
       );
     });
 
+    const numApplicants = applications.length;
+
+    var numApplications = 0;
+    applications.map(application => {
+      numApplications += application.committee_applications.length;
+    });
+
     if (error) {
       return <div>Error: {error.message}</div>;
     } else {
@@ -127,6 +138,50 @@ class AdminPage extends Component {
           <PageTitle>Admin Panel</PageTitle>
           <Link to="/">Gå til forside</Link>
           <Wrapper>
+            <Statistics>
+              <StatisticsWrapper>
+                <StatisticsName>Antall søkere</StatisticsName>
+                {numApplicants} {numApplicants == 1 ? "søker" : "søkere"}
+              </StatisticsWrapper>
+              <StatisticsWrapper>
+                <StatisticsName>Totalt antall søknader</StatisticsName>
+                {numApplications} {numApplications == 1 ? "søknad" : "søknader"}
+              </StatisticsWrapper>
+              <Statistics>
+                <CommitteeStatistics
+                  applications={applications}
+                  committee="Arrkom"
+                />
+                <CommitteeStatistics
+                  applications={applications}
+                  committee="Bedkom"
+                />
+                <CommitteeStatistics
+                  applications={applications}
+                  committee="Fagkom"
+                />
+                <CommitteeStatistics
+                  applications={applications}
+                  committee="Koskom"
+                />
+                <CommitteeStatistics
+                  applications={applications}
+                  committee="LaBamba"
+                />
+                <CommitteeStatistics
+                  applications={applications}
+                  committee="PR"
+                />
+                <CommitteeStatistics
+                  applications={applications}
+                  committee="readme"
+                />
+                <CommitteeStatistics
+                  applications={applications}
+                  committee="Webkom"
+                />
+              </Statistics>
+            </Statistics>
             <CSVExport
               data={csvData}
               headers={headers}

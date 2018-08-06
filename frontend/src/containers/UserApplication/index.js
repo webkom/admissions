@@ -57,7 +57,6 @@ class UserApplication extends Component {
     const { user, text, time_sent } = this.props;
     const { committeeApplications } = this.state;
     const numApplications = committeeApplications.length;
-    console.log("userprops", this.props);
     return (
       <Wrapper>
         <Header>
