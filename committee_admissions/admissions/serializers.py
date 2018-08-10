@@ -33,7 +33,7 @@ class CommitteeSerializer(serializers.HyperlinkedModelSerializer):
 class ShortCommitteeSerializer(serializers.HyperlinkedModelSerializer):
     class Meta:
         model = Committee
-        fields = ('name',)
+        fields = ('pk', 'name',)
 
 
 class CommitteeApplicationSerializer(serializers.HyperlinkedModelSerializer):
@@ -71,7 +71,7 @@ class UserApplicationSerializer(serializers.HyperlinkedModelSerializer):
     class Meta:
         model = UserApplication
         fields = (
-            'url', 'user', 'text', 'time_sent', 'applied_within_deadline',
+            'url', 'pk',  'user', 'text', 'time_sent', 'applied_within_deadline',
             'committee_applications',
         )
 

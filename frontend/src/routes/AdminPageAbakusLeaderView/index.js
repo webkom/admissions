@@ -5,7 +5,7 @@ import UserInfo from "src/components/UserInfo";
 import PageWrapper from "src/components/PageWrapper";
 import AbakusLogo from "src/components/AbakusLogo";
 import PageTitle from "src/components/PageTitle";
-import UserApplication from "src/containers/UserApplication";
+import UserApplicationAdminView from "src/containers/UserApplicationAdminView";
 
 import Wrapper from "./Wrapper";
 import LinkLink from "./LinkLink";
@@ -26,12 +26,13 @@ class AdminPage extends Component {
       csvData: [],
       headers: [
         { label: "Full Name", key: "name" },
-        { label: "Søknadstekst", key: "applicationText" },
+        { label: "Prioriteringer", key: "priorityText" },
+        { label: "Komité", key: "committee" },
+        { label: "Søknadstekst", key: "committeeApplicationText" },
         { label: "Email", key: "email" },
         { label: "Username", key: "username" },
         { label: "Tid sendt", key: "timeSent" }
-      ],
-      whichCommitteeLeader: "webkom"
+      ]
     };
 
     const hostname = window && window.location && window.location.hostname;
@@ -42,7 +43,15 @@ class AdminPage extends Component {
     }
   }
 
-  generateCSVData = (name, email, username, timeSent, applicationText) => {
+  generateCSVData = (
+    name,
+    email,
+    username,
+    timeSent,
+    priorityText,
+    committee,
+    committeeApplicationText
+  ) => {
     this.setState(prevState => ({
       ...prevState,
       csvData: [
@@ -51,7 +60,10 @@ class AdminPage extends Component {
           name: name,
           email: email,
           username: username,
-          applicationText: applicationText,
+          priorityText:
+            priorityText != "" ? priorityText : "Ingen prioriteringer",
+          committee: committee,
+          committeeApplicationText: committeeApplicationText,
           timeSent: timeSent
         }
       ]
@@ -101,13 +113,11 @@ class AdminPage extends Component {
       if (a.user.full_name > b.user.full_name) return 1;
       return 0;
     });
-
     const UserApplications = applications.map((userApplication, i) => {
       return (
-        <UserApplication
+        <UserApplicationAdminView
           key={i}
           {...userApplication}
-          whichCommitteeLeader={this.state.whichCommitteeLeader}
           generateCSVData={this.generateCSVData}
         />
       );
@@ -137,6 +147,40 @@ class AdminPage extends Component {
                 <StatisticsName>Totalt antall søknader</StatisticsName>
                 {numApplications} {numApplications == 1 ? "søknad" : "søknader"}
               </StatisticsWrapper>
+              <Statistics>
+                <CommitteeStatistics
+                  applications={applications}
+                  committee="Arrkom"
+                />
+                <CommitteeStatistics
+                  applications={applications}
+                  committee="Bedkom"
+                />
+                <CommitteeStatistics
+                  applications={applications}
+                  committee="Fagkom"
+                />
+                <CommitteeStatistics
+                  applications={applications}
+                  committee="Koskom"
+                />
+                <CommitteeStatistics
+                  applications={applications}
+                  committee="LaBamba"
+                />
+                <CommitteeStatistics
+                  applications={applications}
+                  committee="PR"
+                />
+                <CommitteeStatistics
+                  applications={applications}
+                  committee="readme"
+                />
+                <CommitteeStatistics
+                  applications={applications}
+                  committee="Webkom"
+                />
+              </Statistics>
             </Statistics>
             <CSVExport
               data={csvData}

@@ -3,7 +3,7 @@ import Moment from "react-moment";
 import "moment/locale/nb";
 Moment.globalLocale = "nb";
 
-import Application from "src/components/Application";
+import ApplicationAdminView from "src/components/ApplicationAdminView";
 import CollapseContainer from "src/containers/CollapseContainer";
 
 import Wrapper from "./Wrapper";
@@ -14,7 +14,7 @@ import SmallDescriptionWrapper from "./SmallDescriptionWrapper";
 import Header from "./Header";
 import NumApplications from "./NumApplications";
 
-class UserApplication extends Component {
+class UserApplicationAdminView extends Component {
   constructor(props) {
     super(props);
     this.state = {
@@ -23,49 +23,51 @@ class UserApplication extends Component {
   }
 
   componentWillMount() {
-    const {
-      user,
-      text,
-      committee_applications,
-      time_sent,
-      whichCommitteeLeader
-    } = this.props;
-
+    const { user, text, committee_applications, time_sent } = this.props;
+    committee_applications.sort(function(a, b) {
+      if (a.committee.name < b.committee.name) return -1;
+      if (a.committee.name > b.committee.name) return 1;
+      return 0;
+    });
     const CommitteeApplications = committee_applications.map(
       (application, i) => {
-        if (application.committee.name.toLowerCase() == whichCommitteeLeader) {
-          this.props.generateCSVData(
-            user.full_name,
-            user.email,
-            user.username,
-            time_sent,
-            application.text
-          );
+        this.props.generateCSVData(
+          user.full_name,
+          user.email,
+          user.username,
+          time_sent,
+          text,
+          application.committee.name,
+          application.text
+        );
 
-          return (
-            <Application
-              key={user.username + "-" + i}
-              text={application.text}
-            />
-          );
-        }
+        return (
+          <ApplicationAdminView
+            key={user.username + "-" + i}
+            committee={application.committee.name}
+            text={application.text}
+          />
+        );
       }
     );
 
     this.setState({ committeeApplications: CommitteeApplications });
   }
 
-  getCommitteeApplications(committee) {}
-
   render() {
     const { user, text, time_sent } = this.props;
     const { committeeApplications } = this.state;
+    const numApplications = committeeApplications.length;
+    const priorityText = text ? text : <i>Ingen kommentarer.</i>;
     return (
       <Wrapper>
         <CollapseContainer
           header={
             <Header>
               <Name>{user.full_name}</Name>
+              <NumApplications>
+                {numApplications} {numApplications == 1 ? "søknad" : "søknader"}
+              </NumApplications>
             </Header>
           }
           content={
@@ -85,6 +87,7 @@ class UserApplication extends Component {
                   </Moment>
                 </SmallDescriptionWrapper>
               </Header>
+              <PriorityText text={priorityText} />
               {committeeApplications}
             </div>
           }
@@ -94,4 +97,4 @@ class UserApplication extends Component {
   }
 }
 
-export default UserApplication;
+export default UserApplicationAdminView;

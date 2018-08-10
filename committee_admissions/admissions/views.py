@@ -13,10 +13,21 @@ from committee_admissions.admissions.serializers import (
 )
 
 from .permissions import IsOwnerOrReadOnly
+from django.http import JsonResponse
+from rest_framework.generics import get_object_or_404
 
 
 class AppView(TemplateView):
     template_name = 'index.html'
+
+
+def user_has_applied(request, user_application_id, committee_id):
+    user_application = get_object_or_404(UserApplication, id=user_application_id)
+    committee = get_object_or_404(Committee, id=committee_id)
+
+    query = user_application.has_committee_application(committee)
+
+    return JsonResponse({'has_committee_application': query.exists()})
 
 
 class AdmissionViewSet(viewsets.ModelViewSet):

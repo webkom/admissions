@@ -23,7 +23,7 @@ from django.views.decorators.csrf import csrf_exempt
 
 from committee_admissions.admissions.views import (
     AdmissionViewSet, CommitteeApplicationViewSet, CommitteeViewSet, UserApplicationViewSet,
-    UserViewSet, ApplicationViewSet, AppView
+    UserViewSet, ApplicationViewSet, AppView, user_has_applied
 )
 
 router = routers.DefaultRouter()
@@ -40,6 +40,7 @@ urlpatterns = [
     url('', include('social_django.urls', namespace='social')),
     re_path(r'^$', AppView.as_view(), name="home"),
     re_path('(?:.*)/?', AppView.as_view(), name="home"),
+    path('api/<int:applicationId>/<int:committeeId>/', user_has_applied, name="hasApplied"),
 ]
 
 if settings.DEBUG:
