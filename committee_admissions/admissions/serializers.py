@@ -1,9 +1,7 @@
-from django.contrib.auth.models import User
 from rest_framework import serializers
-from django.utils import timezone
 
 from committee_admissions.admissions.models import (
-    Admission, Committee, CommitteeApplication, UserApplication
+    Admission, Committee, CommitteeApplication, LegoUser, UserApplication
 )
 
 
@@ -19,8 +17,8 @@ class AdminAdmissionSerializer(serializers.HyperlinkedModelSerializer):
     class Meta:
         model = Admission
         fields = (
-            'url', 'pk', 'title', 'open_from', 'public_deadline', 'application_deadline', 'is_closed',
-            'is_appliable', 'applications', 'is_open'
+            'url', 'pk', 'title', 'open_from', 'public_deadline', 'application_deadline',
+            'is_closed', 'is_appliable', 'applications', 'is_open'
         )
 
 
@@ -33,7 +31,10 @@ class CommitteeSerializer(serializers.HyperlinkedModelSerializer):
 class ShortCommitteeSerializer(serializers.HyperlinkedModelSerializer):
     class Meta:
         model = Committee
-        fields = ('pk', 'name',)
+        fields = (
+            'pk',
+            'name',
+        )
 
 
 class CommitteeApplicationSerializer(serializers.HyperlinkedModelSerializer):
@@ -53,15 +54,12 @@ class ShortCommitteeApplicationSerializer(serializers.HyperlinkedModelSerializer
 class ShortUserSerializer(serializers.HyperlinkedModelSerializer):
     full_name = serializers.SerializerMethodField()
 
-    class Meta:
-        model = User
-
     def get_full_name(self, obj):
         return obj.get_full_name()
 
     class Meta:
-        model = User
-        fields = ('username', 'full_name', 'email')
+        model = LegoUser
+        fields = ('username', 'full_name', 'email', 'abakus_groups')
 
 
 class UserApplicationSerializer(serializers.HyperlinkedModelSerializer):
@@ -71,24 +69,28 @@ class UserApplicationSerializer(serializers.HyperlinkedModelSerializer):
     class Meta:
         model = UserApplication
         fields = (
-            'url', 'pk',  'user', 'text', 'time_sent', 'applied_within_deadline',
+            'url',
+            'pk',
+            'user',
+            'text',
+            'time_sent',
+            'applied_within_deadline',
             'committee_applications',
         )
 
 
 class UserSerializer(serializers.HyperlinkedModelSerializer):
     class Meta:
-        model = User
-        fields = ('url', 'pk', 'username', 'first_name', 'last_name', 'email', 'is_staff')
+        model = LegoUser
+        fields = (
+            'url', 'pk', 'username', 'first_name', 'last_name', 'email', 'is_staff', 'abakus_groups'
+        )
 
 
 class ApplicationCreateUpdateSerializer(serializers.HyperlinkedModelSerializer):
-
     class Meta:
         model = UserApplication
-        fields = (
-            'text',
-        )
+        fields = ('text', )
 
     def create(self, validated_data):
         user = validated_data.pop('user')
@@ -98,9 +100,9 @@ class ApplicationCreateUpdateSerializer(serializers.HyperlinkedModelSerializer):
 
         admission = [obj for obj in Admission.objects.all() if obj.is_open][0]
 
-        user_application, created = UserApplication.objects.update_or_create(admission=admission,
-                                                                             user=user,
-                                                                             defaults={"text": text})
+        user_application, created = UserApplication.objects.update_or_create(
+            admission=admission, user=user, defaults={"text": text}
+        )
         # The code smell is strong with this one, young padawan
         applications = self.initial_data.pop("applications")
 
@@ -108,11 +110,11 @@ class ApplicationCreateUpdateSerializer(serializers.HyperlinkedModelSerializer):
             print(committee_name, text)
 
             committee = Committee.objects.get(name__iexact=committee_name)
-            application, created = CommitteeApplication.objects.update_or_create(application=user_application, committee=committee,
-                                                          defaults={"text": text})
+            application, created = CommitteeApplication.objects.update_or_create(
+                application=user_application, committee=committee, defaults={"text": text}
+            )
             print(application.text, created)
 
         print(user_application.committee_applications)
 
         return user_application
-
