@@ -76,7 +76,7 @@
     "react-moment": "^0.7.0",
     "react-motion": "^0.5.2",
     "react-test-renderer": "^16.2.0",
-    "react-textarea-autosize": "^6.1.0",
+    "react-textarea-autosize": "^7.0.4",
     "style-loader": "0.22.1",
     "stylelint": "9.4.0",
     "stylelint-config-recommended": "2.1.0",
