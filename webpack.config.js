@@ -12,7 +12,7 @@ module.exports = {
   ], // entry point of our src. frontend/src/index.js should require other js modules and dependencies it needs
   devtool: "eval-source-map",
   output: {
-    path: path.resolve("/assets/bundles/"),
+    path: path.resolve("./assets/bundles/"),
     filename: "[name]-[hash].js",
     publicPath: "http://localhost:3000/static/bundles/" // Tell django to use this URL to load packages and not use STATIC_URL + bundle_name
   },

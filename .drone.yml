@@ -1,0 +1,85 @@
+pipeline:
+  build-frontend:
+    image: node:10
+    when:
+      event: push
+    environment:
+      - LANG=C.UTF-8
+    commands:
+      - yarn
+      - yarn build
+
+  missing-migrations:
+    image: abakus/lego-testbase
+    when:
+      event: push
+    environment:
+      - LANG=C.UTF-8
+      - DATABASE=database
+      - CACHE=cache
+    group: testing
+    commands:
+      - tox -e missing-migrations
+
+  tests:
+    image: abakus/lego-testbase
+    when:
+      event: push
+    environment:
+      - LANG=C.UTF-8
+      - DATABASE=database
+      - CACHE=cache
+    group: testing
+    commands:
+      - tox -e tests
+
+  isort:
+    image: abakus/lego-testbase
+    when:
+      event: push
+    environment:
+      - LANG=C.UTF-8
+    group: testing
+    commands:
+      - tox -e isort
+
+  yapf:
+    image: abakus/lego-testbase
+    pull: true
+    when:
+      event: push
+    environment:
+      - LANG=C.UTF-8
+    group: testing
+    commands:
+      - tox -e yapf
+
+  coverage:
+    image: abakus/lego-testbase
+    when:
+      event: push
+    environment:
+      - LANG=C.UTF-8
+    commands:
+      - tox -e coverage
+
+  docker:
+    image: plugins/docker
+    when:
+      branch:
+        - prod
+      status: success
+      event: push
+    registry: https://registry.abakus.no
+    repo: registry.abakus.no/webkom/lego
+    secrets: [ docker_username, docker_password ]
+    tags:
+      - ${DRONE_BRANCH}-${DRONE_COMMIT_SHA:0:7}
+    build_args:
+      - RELEASE=${DRONE_BRANCH}-${DRONE_COMMIT_SHA:0:7}
+
+services:
+  database:
+    image: postgres:9.5
+    environment:
+      - POSTGRES_USER=admissions
