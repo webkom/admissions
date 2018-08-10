@@ -1,6 +1,9 @@
+from django.contrib.auth.models import Group
 from six.moves.urllib.parse import urljoin
 from social_core.backends.oauth import BaseOAuth2
 from social_core.exceptions import AuthFailed
+
+from committee_admissions.admissions.models import Membership
 
 
 class LegoOAuth2(BaseOAuth2):
@@ -50,3 +53,27 @@ class LegoOAuth2(BaseOAuth2):
     def _user_data(self, access_token):
         url = urljoin(self.api_url(), 'api/v1/users/me/')
         return self.get_json(url, headers={'AUTHORIZATION': 'Bearer %s' % access_token})
+
+
+def update_custom_user_details(strategy, details, user=None, *args, **kwargs):
+    """ This will run after the social auth pipelies succeeds """
+    if not user:
+        return
+    groups = kwargs['response']['abakusGroups']
+
+    # Remove old memberships before creating the new ones
+    Membership.objects.filter(user=user).delete()
+
+    for group in groups:
+        if group['type'] != 'komite':
+            continue
+
+        group_object, _ = Group.objects.get_or_create(
+            pk=group['id'],
+            name=group['name'],
+        )
+        Membership.objects.create(
+            user=user,
+            abakus_group=group_object,
+            role='rip',
+        )

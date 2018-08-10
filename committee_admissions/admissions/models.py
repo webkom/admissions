@@ -1,7 +1,8 @@
-from django.contrib.auth.models import User
+from django.contrib.auth.models import Group, User
 from django.db import models
 from django.utils import timezone
 
+from committee_admissions.admissions import constants
 from committee_admissions.utils.models import TimeStampModel
 
 
@@ -113,3 +114,15 @@ class CommitteeApplication(TimeStampModel):
     )
     committee = models.ForeignKey(Committee, related_name='applications', on_delete=models.CASCADE)
     text = models.TextField(blank=True)
+
+
+class Membership(models.Model):
+    user = models.ForeignKey(User, on_delete=models.CASCADE)
+    abakus_group = models.ForeignKey(Group, on_delete=models.CASCADE)
+    role = models.CharField(max_length=30, choices=constants.ROLES, default=constants.MEMBER)
+
+    class Meta:
+        unique_together = ('user', 'abakus_group')
+
+    def __str__(self):
+        return f'{self.user} is in {self.abakus_group}'
