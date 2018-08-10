@@ -1,9 +1,45 @@
-from django.contrib.auth.models import User, Group
+from django.contrib.auth.models import User
 from django.db import models
 from django.utils import timezone
 
 from committee_admissions.utils.models import TimeStampModel
-from committee_admissions.admissions import constants
+
+
+class LegoUser(User):
+    class Meta:
+        proxy = True
+
+    @property
+    def abakus_groups(self):
+        """
+        This returns an array with the users group. These groups
+        are fetched from the LEGO API.
+
+        Format (array of dicts):
+        [{
+          'contactEmail': '',
+          'description': 'Webkom er ...',
+          'id': 12345,
+          'logo': None,
+          'name': 'webkom',
+          'parent': 12356,
+          'type': 'komite'
+        }]
+        """
+
+        if not self.lego_extra_data:
+            return None
+        return self.lego_extra_data['abakus_groups']
+
+    @property
+    def lego_extra_data(self):
+        if not self.lego_social_auth:
+            return None
+        return self.lego_social_auth.extra_data
+
+    @property
+    def lego_social_auth(self):
+        return self.social_auth.get(provider='lego')
 
 
 class Admission(models.Model):
@@ -44,7 +80,7 @@ class Committee(models.Model):
 
 class UserApplication(TimeStampModel):
     admission = models.ForeignKey(Admission, related_name='applications', on_delete=models.CASCADE)
-    user = models.ForeignKey(User, on_delete=models.CASCADE)
+    user = models.ForeignKey(LegoUser, on_delete=models.CASCADE)
     text = models.TextField(blank=True)
     time_sent = models.DateTimeField(editable=False, null=True, default=timezone.now)
 
@@ -77,15 +113,3 @@ class CommitteeApplication(TimeStampModel):
     )
     committee = models.ForeignKey(Committee, related_name='applications', on_delete=models.CASCADE)
     text = models.TextField(blank=True)
-
-
-class Membership(models.Model):
-    user = models.ForeignKey(User, on_delete=models.CASCADE)
-    abakus_group = models.ForeignKey(Group, on_delete=models.CASCADE)
-    role = models.CharField(max_length=30, choices=constants.ROLES, default=constants.MEMBER)
-
-    class Meta:
-        unique_together = ('user', 'abakus_group')
-
-    def __str__(self):
-        return f'{self.user} is in {self.abakus_group}'
