@@ -8,8 +8,9 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/2.0/ref/settings/
 """
 import environ
+
 # GENERAL CONFIGURATION ======================================================
-BASE_PROJECT_DIR = environ.Path( # manage.py level
+BASE_PROJECT_DIR = environ.Path(  # manage.py level
     __file__
 ) - 3
 ROOT_DIR = environ.Path(
@@ -65,9 +66,9 @@ REST_FRAMEWORK = {
         'rest_framework.authentication.SessionAuthentication',
         'rest_framework.authentication.TokenAuthentication',
     ],
-
-    'DEFAULT_PERMISSION_CLASSES':
-    ['rest_framework.permissions.IsAuthenticated',]
+    'DEFAULT_PERMISSION_CLASSES': [
+        'rest_framework.permissions.IsAuthenticated',
+    ]
 }
 
 # TEMPLATE CONFIGURATION =======================================================
@@ -141,7 +142,6 @@ LOGIN_URL = '/login/lego/'
 
 # When using PostgreSQL, it’s recommended to use the built-in JSONB field to store the extracted extra_data.
 SOCIAL_AUTH_POSTGRES_JSONFIELD = True
-
 
 # WEBPACK =======================================================================
 WEBPACK_LOADER = {
