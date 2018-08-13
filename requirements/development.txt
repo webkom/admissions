@@ -34,7 +34,7 @@ pluggy==0.6.0             # via tox
 prompt-toolkit==1.0.15    # via ipython
 psycopg2==2.7.3.2
 ptyprocess==0.5.2         # via pexpect
-py==1.5.3                 # via tox
+py==1.5.4                 # via tox
 pygments==2.2.0           # via ipython
 pyjwt==1.6.1              # via social-auth-core
 python-dateutil==2.7.0    # via faker
