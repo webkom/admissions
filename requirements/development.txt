@@ -33,7 +33,7 @@ pip-tools==2.0.2
 pluggy==0.6.0             # via tox
 prompt-toolkit==1.0.15    # via ipython
 psycopg2==2.7.3.2
-ptyprocess==0.5.2         # via pexpect
+ptyprocess==0.6.0         # via pexpect
 py==1.5.3                 # via tox
 pygments==2.2.0           # via ipython
 pyjwt==1.6.1              # via social-auth-core
