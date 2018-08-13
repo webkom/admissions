@@ -95,14 +95,32 @@ class AdminPage extends Component {
   }
 
   render() {
-    const { error, user, applications, csvData, headers } = this.state;
+    const {
+      error,
+      user,
+      applications,
+      csvData,
+      headers,
+      whichCommitteeLeader
+    } = this.state;
+
     applications.sort(function(a, b) {
       if (a.user.full_name < b.user.full_name) return -1;
       if (a.user.full_name > b.user.full_name) return 1;
       return 0;
     });
+    const filteredApplications = applications.filter(userApplication => {
+      var filteredComApp = userApplication.committee_applications.filter(
+        committeeApplication =>
+          committeeApplication.committee.name.toLowerCase() ==
+          whichCommitteeLeader
+      );
 
-    const UserApplications = applications.map((userApplication, i) => {
+      return filteredComApp.length > 0;
+    });
+    console.log(filteredApplications);
+    // Render applications from users
+    const UserApplications = filteredApplications.map((userApplication, i) => {
       return (
         <UserApplication
           key={i}
@@ -113,12 +131,7 @@ class AdminPage extends Component {
       );
     });
 
-    const numApplicants = applications.length;
-
-    var numApplications = 0;
-    applications.map(application => {
-      numApplications += application.committee_applications.length;
-    });
+    const numApplicants = filteredApplications.length;
 
     if (error) {
       return <div>Error: {error.message}</div>;
@@ -132,10 +145,6 @@ class AdminPage extends Component {
               <StatisticsWrapper>
                 <StatisticsName>Antall søkere</StatisticsName>
                 {numApplicants} {numApplicants == 1 ? "søker" : "søkere"}
-              </StatisticsWrapper>
-              <StatisticsWrapper>
-                <StatisticsName>Totalt antall søknader</StatisticsName>
-                {numApplications} {numApplications == 1 ? "søknad" : "søknader"}
               </StatisticsWrapper>
             </Statistics>
             <CSVExport
