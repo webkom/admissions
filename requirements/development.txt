@@ -51,6 +51,6 @@ text-unidecode==1.2       # via faker
 tox==3.0.0
 traitlets==4.3.2          # via ipython
 urllib3==1.22             # via requests
-virtualenv==15.2.0        # via tox
+virtualenv==16.0.0        # via tox
 wcwidth==0.1.7            # via prompt-toolkit
 yapf==0.21.0
