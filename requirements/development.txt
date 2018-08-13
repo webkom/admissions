@@ -37,7 +37,7 @@ ptyprocess==0.5.2         # via pexpect
 py==1.5.3                 # via tox
 pygments==2.2.0           # via ipython
 pyjwt==1.6.1              # via social-auth-core
-python-dateutil==2.7.0    # via faker
+python-dateutil==2.7.3    # via faker
 python3-openid==3.1.0     # via social-auth-core
 pytz==2018.3              # via django
 requests-oauthlib==0.8.0  # via social-auth-core
