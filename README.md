@@ -3,9 +3,13 @@
 Recruitment for Abakom.
 
 ## Setup project
-Running the backend requires Python 3.6 and a postgresql database. The frontend requires Node. We recommend using
-a virtual environment. The `docker-compose.yml` file provides a 
-postgres database with correct config with the command
+Running the backend requires Python 3.6 and a `postgresql` database. The frontend requires `Node`. We recommend using
+a virtual environment. Create a `venv` in root using
+```sh
+$ python3 -m venv venv
+```
+
+The `docker-compose.yml` file provides a `postgresql` database with correct config with the command
 ```sh
 $ docker-compose up -d
 ```
@@ -27,7 +31,7 @@ $ python manage.py migrate
 $ python manage.py runserver
 ```
 
-To properly setup and start the development frontend with React and Webpack, run 
+To properly setup and start the development frontend with `React` and `Webpack`, run 
 ```sh
 $ yarn
 $ yarn watch
@@ -36,7 +40,7 @@ $ yarn watch
 To populate the database with data for development, we have set up factories.
 ```sh
 $ python manage.py shell_plus
-$ import from committee_admissions.admissions.factories import RandomCommitteeApplicationFactory
+$ from committee_admissions.admissions.factories import RandomCommitteeApplicationFactory
 $ RandomCommitteeApplicationFactory.create_batch(size=30)
 ```
 
