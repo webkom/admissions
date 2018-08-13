@@ -24,7 +24,7 @@ idna==2.6                 # via requests
 ipython-genutils==0.2.0   # via traitlets
 ipython==6.2.1
 isort==4.3.4
-jedi==0.11.1              # via ipython
+jedi==0.12.1              # via ipython
 oauthlib==2.0.7           # via requests-oauthlib, social-auth-core
 parso==0.1.1              # via jedi
 pexpect==4.4.0            # via ipython
