@@ -8,4 +8,4 @@ django-webpack-loader==0.6.0
 social-auth-app-django==2.1.0
 pip-tools==2.0.2
 psycopg2==2.7.3.2
-ipython==6.2.1
+ipython==6.5.0
