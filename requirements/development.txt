@@ -40,7 +40,7 @@ pyjwt==1.6.1              # via social-auth-core
 python-dateutil==2.7.0    # via faker
 python3-openid==3.1.0     # via social-auth-core
 pytz==2018.3              # via django
-requests-oauthlib==0.8.0  # via social-auth-core
+requests-oauthlib==1.0.0  # via social-auth-core
 requests==2.18.4          # via requests-oauthlib, social-auth-core
 simplegeneric==0.8.1      # via ipython
 six==1.11.0               # via django-environ, django-extensions, faker, pip-tools, prompt-toolkit, python-dateutil, social-auth-app-django, social-auth-core, tox, traitlets
