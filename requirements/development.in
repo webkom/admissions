@@ -2,7 +2,7 @@
 
 django-debug-toolbar==1.9.1
 factory-boy==2.10.0
-tox==3.0.0
+tox==3.2.1
 
 -r isort.txt
 -r yapf.txt
