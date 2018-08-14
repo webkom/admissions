@@ -1,3 +1,5 @@
+from urllib.parse import urlparse
+
 from .base import *  # noqa
 
 env = environ.Env(DEBUG=(bool, False))
@@ -5,6 +7,7 @@ env = environ.Env(DEBUG=(bool, False))
 DEBUG = env('DEBUG')
 SECRET_KEY = env('SECRET_KEY')
 ALLOWED_HOSTS = env('ALLOWED_HOSTS')
+ALLOWED_HOSTS = env('FRONTEND_URL')
 ENVIRONMENT_NAME = env('ENVIRONMENT_NAME', default='production')
 
 # Database
@@ -79,3 +82,11 @@ LOGGING = {
         },
     },
 }
+
+CORS_FRONTEND_URL = urlparse(FRONTEND_URL).netloc
+CORS_ORIGIN_WHITELIST = list(
+    {
+        CORS_FRONTEND_URL, f'www.{CORS_FRONTEND_URL}', '127.0.0.1:8000', 'localhost:8000',
+        'localhost:3000', '127.0.0.1:3000'
+    }
+)
