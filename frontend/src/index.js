@@ -4,26 +4,35 @@ import { BrowserRouter as Router, Route, Switch } from "react-router-dom";
 
 import NotFoundPage from "src/routes/NotFoundPage";
 import LandingPage from "src/routes/LandingPage/";
+import ErrorBoundary from "src/containers/ErrorBoundary/";
 import ApplicationPortal from "src/routes/ApplicationPortal";
 
 import ScrollToTop from "./scrollToTop";
+import Raven from "raven-js";
 import "src/styles/globals.css";
 import "./index.css";
+
+Raven.config(process.env.RAVEN_DSN, {
+  release: config.release,
+  environment: config.environment
+}).install();
 
 ReactDOM.render(
   <Router>
     <ScrollToTop>
       <div>
         <main>
-          <Switch>
-            <Route exact path="/" component={LandingPage} />
-            <Route
-              exact
-              path="/(committees|application|admin)"
-              component={ApplicationPortal}
-            />
-            <Route component={NotFoundPage} />
-          </Switch>
+          <ErrorBoundary>
+            <Switch>
+              <Route exact path="/" component={LandingPage} />
+              <Route
+                exact
+                path="/(committees|application|admin)"
+                component={ApplicationPortal}
+              />
+              <Route component={NotFoundPage} />
+            </Switch>
+          </ErrorBoundary>
         </main>
       </div>
     </ScrollToTop>

@@ -1,5 +1,6 @@
 import React, { Component } from "react";
 import { CSVLink } from "react-csv";
+import Raven from "raven-js";
 
 import UserInfo from "src/components/UserInfo";
 import PageWrapper from "src/components/PageWrapper";

@@ -1,6 +1,7 @@
 import { withFormik } from "formik";
 import Yup from "yup";
 import Cookie from "js-cookie";
+import Raven from "raven-js";
 
 import ApplicationForm from "./ApplicationFormContainer";
 
@@ -50,13 +51,17 @@ const FormikApp = withFormik({
       redirect: "follow",
       credentials: "include",
       body: JSON.stringify(submission)
-    })
-      .then(res => {
+    }).then(
+      res => {
         console.log("Submit result", res);
         setSubmitting(false);
         return res;
-      })
-      .catch(err => console.log(err));
+      },
+      err => {
+        console.log(err);
+        Raven.captureException(err);
+      }
+    );
   },
   validationSchema: props => {
     return Yup.lazy(values => {

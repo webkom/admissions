@@ -6,6 +6,7 @@ import ApplicationForm from "src/routes/ApplicationForm";
 import CommitteesPage from "src/routes/CommitteesPage";
 import AdminPage from "src/routes/AdminPage";
 
+import Raven from "raven-js";
 import AbakusLogo from "src/components/AbakusLogo";
 import UserInfo from "src/components/UserInfo";
 import PageWrapper from "src/components/PageWrapper";
@@ -96,11 +97,14 @@ class ApplicationPortal extends Component {
         },
         error => {
           console.log(error);
+          Raven.captureException(error);
           this.setState({ error });
         }
       );
 
-    this.setState({ user: { name: window.django.user.full_name } });
+    const user = { name: window.django.user.full_name };
+    this.setState({ user });
+    Raven.setUserContext(user);
     this.initializeState();
   }
 

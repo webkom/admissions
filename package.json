@@ -18,6 +18,7 @@
     "babel-polyfill": "6.26.0",
     "intl": "1.2.5",
     "js-cookie": "^2.2.0",
+    "raven-js": "^3.26.4",
     "react": "^16.4.1",
     "react-csv": "^1.0.14",
     "react-dom": "^16.4.1",
@@ -95,6 +96,6 @@
     "yup": "^0.26.2"
   },
   "prettier": {
-      "singleQuote": false
+    "singleQuote": false
   }
 }

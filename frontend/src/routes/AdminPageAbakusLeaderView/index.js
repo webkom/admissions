@@ -1,5 +1,6 @@
 import React, { Component } from "react";
 import { CSVLink } from "react-csv";
+import Raven from "raven-js";
 
 import UserInfo from "src/components/UserInfo";
 import PageWrapper from "src/components/PageWrapper";
@@ -86,19 +87,20 @@ class AdminPage extends Component {
           window.location = `http://localhost:8000/login/lego/?next=${
             window.location.pathname
           }`;
-          throw res;
+          return null;
         }
-        return res;
+        return res.json();
       })
-      .then(results => results.json())
       .then(
         data => {
-          this.setState({
-            applications: data
-          });
+          data &&
+            this.setState({
+              applications: data
+            });
         },
         error => {
           console.log(error);
+          Raven.captureException(error);
           this.setState({ error });
         }
       );

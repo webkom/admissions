@@ -39,6 +39,7 @@ module.exports = {
       ? "/static/bundles/"
       : "http://localhost:3000/static/bundles/" // Use hot-reloading in DEV, otherwise hosted by django
   },
+  devtool: isProduction ? "source-map" : "cheap-module-eval-source-map",
   optimization: {
     splitChunks: {
       chunks: "all",
