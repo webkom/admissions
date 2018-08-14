@@ -13,8 +13,8 @@ import "src/styles/globals.css";
 import "./index.css";
 
 Raven.config(process.env.RAVEN_DSN, {
-  release: config.release,
-  environment: config.environment
+  release: process.env.RELEASE,
+  environment: process.env.ENVIRONMENT
 }).install();
 
 ReactDOM.render(

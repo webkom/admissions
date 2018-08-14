@@ -1,5 +1,5 @@
 import { withFormik } from "formik";
-import Yup from "yup";
+import * as Yup from "yup";
 import Cookie from "js-cookie";
 import Raven from "raven-js";
 

@@ -34,7 +34,7 @@ class ErrorBoundary extends React.Component {
     Raven.lastEventId() && Raven.showReportDialog({});
   };
 
-  componentWillReceiveProps(nextProps: Props) {
+  componentWillReceiveProps(nextProps) {
     const { resetOnChange } = this.props;
     const { error } = this.state;
     if (error && nextProps.resetOnChange !== resetOnChange) {
@@ -42,7 +42,7 @@ class ErrorBoundary extends React.Component {
     }
   }
 
-  componentDidCatch(error: Error, errorInfo: Object) {
+  componentDidCatch(error, errorInfo) {
     this.setState({ error });
     Raven.captureException(error, { extra: errorInfo });
     if (this.props.openReportDialog) {

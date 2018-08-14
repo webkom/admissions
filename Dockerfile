@@ -11,7 +11,7 @@ ARG RELEASE
 ENV NODE_ENV production
 ENV RELEASE ${RELEASE}
 
-RUN yarn webpack --config webpack.config.js --progress --mode production
+RUN yarn build
 
 FROM python:3.6
 MAINTAINER Abakus Webkom <webkom@abakus.no>
@@ -28,11 +28,10 @@ RUN mkdir /app
 COPY requirements /app/requirements
 WORKDIR /app
 
-RUN pip install --no-cache -r requirements/prod.txt
+RUN pip install --no-cache -r requirements/base.txt
 
 COPY . /app/
 COPY --from=frontend-builder /app/assets/bundles /app/assets/
 
 RUN set -e \
-    && touch commitee_admissions/settings/.env \
     && ENV_CONFIG=0 python manage.py collectstatic --noinput
