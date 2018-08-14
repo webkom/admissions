@@ -7,7 +7,7 @@ env = environ.Env(DEBUG=(bool, False))
 DEBUG = env('DEBUG')
 SECRET_KEY = env('SECRET_KEY')
 ALLOWED_HOSTS = env('ALLOWED_HOSTS')
-ALLOWED_HOSTS = env('FRONTEND_URL')
+FRONTEND_URL = env('FRONTEND_URL')
 ENVIRONMENT_NAME = env('ENVIRONMENT_NAME', default='production')
 
 # Database
