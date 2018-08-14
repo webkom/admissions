@@ -28,10 +28,11 @@ RUN mkdir /app
 COPY requirements /app/requirements
 WORKDIR /app
 
-RUN pip install --no-cache -r requirements/base.txt
+RUN pip install --no-cache -r requirements/production.txt
 
 COPY . /app/
-COPY --from=frontend-builder /app/assets/bundles /app/assets/
+COPY --from=frontend-builder /app/assets/bundles /app/assets/bundles
+COPY --from=frontend-builder /app/webpack-stats.json /app/
 
 RUN set -e \
     && ENV_CONFIG=0 python manage.py collectstatic --noinput
