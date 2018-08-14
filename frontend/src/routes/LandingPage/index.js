@@ -68,11 +68,13 @@ class LandingPage extends Component {
           <Card margin={"1em 1em 2.5em 1em"}>
             <CardTitle>Her kan du søke til komiteer i Abakus</CardTitle>
             <CardParagraph lineHeight="1em">
-              Søknadsfristen for ny søknad er <b>
+              Søknadsfristen for ny søknad er
+              <b>
                 <Moment format="dddd Do MMMM, \k\l. HH:mm">
                   {admission.public_deadline}
                 </Moment>
-              </b>.
+              </b>
+              .
             </CardParagraph>
             <CardParagraph lineHeight="1em">
               Søker du etter dette er du ikke garantert intervju.
@@ -83,7 +85,8 @@ class LandingPage extends Component {
                 <Moment format="dddd Do MMMM, \k\l. HH:mm">
                   {admission.application_deadline}
                 </Moment>
-              </b>.
+              </b>
+              .
             </CardParagraph>
           </Card>
           <LinkWrapper>

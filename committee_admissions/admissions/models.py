@@ -65,7 +65,7 @@ class Admission(models.Model):
 
 
 class Committee(models.Model):
-    name = models.CharField(max_length=50, unique=True)
+    name = models.CharField(max_length=50, unique=False)
     description = models.TextField(blank=True, max_length=200)
     response_label = models.TextField(blank=True, max_length=200)
     logo = models.FileField(blank=True, upload_to='committee-logos')

@@ -34,4 +34,5 @@ COPY . /app/
 COPY --from=frontend-builder /app/assets/bundles /app/assets/
 
 RUN set -e \
+    && touch commitee_admissions/settings/.env \
     && ENV_CONFIG=0 python manage.py collectstatic --noinput
