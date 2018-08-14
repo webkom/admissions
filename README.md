@@ -7,6 +7,7 @@ Running the backend requires Python 3.6 and a `postgresql` database. The fronten
 a virtual environment. Create a `venv` in root using
 ```sh
 $ python3 -m venv venv
+$ make dev_settings
 ```
 
 The `docker-compose.yml` file provides a `postgresql` database with correct config with the command

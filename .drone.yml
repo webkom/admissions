@@ -17,10 +17,9 @@ pipeline:
     environment:
       - LANG=C.UTF-8
       - DATABASE=database
-      - CACHE=cache
     group: testing
     commands:
-      - touch committee_admissions/settings/.env
+      - make ci_settings
       - tox -e missing-migrations
 
   tests:
@@ -30,7 +29,6 @@ pipeline:
     environment:
       - LANG=C.UTF-8
       - DATABASE=database
-      - CACHE=cache
     group: testing
     commands:
       - tox -e tests
@@ -55,15 +53,6 @@ pipeline:
     group: testing
     commands:
       - tox -e yapf
-
-  coverage:
-    image: abakus/lego-testbase
-    when:
-      event: push
-    environment:
-      - LANG=C.UTF-8
-    commands:
-      - tox -e coverage
 
   docker:
     image: plugins/docker
