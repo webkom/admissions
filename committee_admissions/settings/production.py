@@ -1,5 +1,3 @@
-import environ
-
 from .base import *  # noqa
 
 env = environ.Env(DEBUG=(bool, False))
@@ -7,9 +5,6 @@ env = environ.Env(DEBUG=(bool, False))
 DEBUG = env('DEBUG')
 SECRET_KEY = env('SECRET_KEY')
 ALLOWED_HOSTS = env('ALLOWED_HOSTS')
-SERVER_URL = env('SERVER_URL')
-FRONTEND_URL = env('FRONTEND_URL')
-SERVER_EMAIL = env('SERVER_EMAIL', default='Abakus <no-reply@abakus.no>')
 ENVIRONMENT_NAME = env('ENVIRONMENT_NAME', default='production')
 
 # Database
@@ -17,13 +12,13 @@ DATABASES = {'default': env.db()}
 
 SETTINGS_DIR = environ.Path(__file__) - 1
 
-AUTHENTICATION_BACKENDS = [
-    'committee_admissions.oauth.LegoOAuth2',
-] + AUTHENTICATION_BACKENDS  # noqa
-
 SOCIAL_AUTH_LEGO_KEY = env('AUTH_LEGO_KEY')
 SOCIAL_AUTH_LEGO_SECRET = env('AUTH_LEGO_SECRET')
 SOCIAL_AUTH_LEGO_API_URL = env('AUTH_LEGO_API_URL')
+
+AUTHENTICATION_BACKENDS = [
+    'committee_admissions.oauth.LegoOAuth2',
+] + AUTHENTICATION_BACKENDS  # noqa
 
 # Sentry
 SENTRY_CLIENT = 'raven.contrib.django.raven_compat.DjangoClient'
