@@ -1,5 +1,6 @@
 import { withFormik } from "formik";
 import * as Yup from "yup";
+import Cookie from "js-cookie";
 
 import ApplicationForm from "./ApplicationFormContainer";
 import callApi from "src/utils/callApi";

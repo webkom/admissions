@@ -59,13 +59,21 @@ def update_custom_user_details(strategy, details, user=None, *args, **kwargs):
     """ This will run after the social auth pipelies succeeds """
     if not user:
         return
-    groups = kwargs['response']['abakusGroups']
+    user_memberships = kwargs['response']['memberships']
+    abakus_groups = kwargs['response']['abakusGroups']
 
     # Remove old memberships before creating the new ones
     Membership.objects.filter(user=user).delete()
 
-    for group in groups:
-        if group['type'] != 'komite':
+    for membership in user_memberships:
+        group = list(
+            filter(
+                lambda abakusGroup: abakusGroup['id'] == membership['abakusGroup'], abakus_groups
+            )
+        )[0]
+
+        # We only care about groups with type komite, and HS
+        if group['type'] != 'komite' and group['name'] != 'Hovedstyret':
             continue
 
         group_object, _ = Group.objects.get_or_create(
@@ -75,5 +83,5 @@ def update_custom_user_details(strategy, details, user=None, *args, **kwargs):
         Membership.objects.create(
             user=user,
             abakus_group=group_object,
-            role='rip',
+            role=membership['role'],
         )
