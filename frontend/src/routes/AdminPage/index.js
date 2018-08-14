@@ -1,8 +1,11 @@
 import React, { Component } from "react";
 import { CSVLink } from "react-csv";
 import Raven from "raven-js";
-
 import callApi from "src/utils/callApi";
+import { withFormik, Formik, Field, Form } from "formik";
+import * as Yup from "yup";
+import Textarea from "react-textarea-autosize";
+import Cookie from "js-cookie";
 
 import UserInfo from "src/components/UserInfo";
 import PageWrapper from "src/components/PageWrapper";
@@ -10,6 +13,7 @@ import AbakusLogo from "src/components/AbakusLogo";
 import PageTitle from "src/components/PageTitle";
 import UserApplication from "src/containers/UserApplication";
 
+import CSRFToken from "./csrftoken";
 import Wrapper from "./Wrapper";
 import LinkLink from "./LinkLink";
 import CSVExport from "./CSVExport";
@@ -17,6 +21,7 @@ import Statistics from "./Statistics";
 import CommitteeStatistics from "./CommitteeStatistics";
 import StatisticsName from "./StatisticsName";
 import StatisticsWrapper from "./StatisticsWrapper";
+import SubmitButton from "./SubmitButton";
 
 class AdminPage extends Component {
   constructor(props) {
@@ -34,7 +39,17 @@ class AdminPage extends Component {
         { label: "Username", key: "username" },
         { label: "Tid sendt", key: "timeSent" }
       ],
-      whichCommitteeLeader: "webkom"
+      whichCommitteeLeader: "webkom",
+      committeeNames: {
+        webkom: "Webkom",
+        arrkom: "Arrkom",
+        bedkom: "Bedkom",
+        pr: "PR",
+        readme: "readme",
+        labamba: "LaBamba",
+        fagkom: "Fagkom",
+        koskom: "Koskom"
+      }
     };
   }
 
@@ -94,7 +109,6 @@ class AdminPage extends Component {
 
       return filteredComApp.length > 0;
     });
-    console.log(filteredApplications);
     // Render applications from users
     const UserApplications = filteredApplications.map((userApplication, i) => {
       return (
@@ -116,6 +130,13 @@ class AdminPage extends Component {
         <PageWrapper>
           <PageTitle>Admin Panel</PageTitle>
           <LinkLink to="/">Gå til forside</LinkLink>
+          {this.state.committeeNames[whichCommitteeLeader]}
+          <Wrapper>
+            <EditCommitteeForm
+              apiRoot={this.API_ROOT}
+              committee={this.state.whichCommitteeLeader}
+            />
+          </Wrapper>;
           <Wrapper>
             <Statistics>
               <StatisticsWrapper>
@@ -140,3 +161,95 @@ class AdminPage extends Component {
 }
 
 export default AdminPage;
+
+const MyInnerForm = props => {
+  const {
+    values,
+    touched,
+    errors,
+    dirty,
+    isSubmitting,
+    handleChange,
+    handleBlur,
+    handleSubmit,
+    handleReset
+  } = props;
+  return (
+    <Form>
+      <CSRFToken />
+
+      <Field name="replyText" placeholder="Edit the reply text" type="text" />
+      <Field
+        name="description"
+        placeholder="Edit the description of the committee"
+        type="text"
+      />
+
+      <SubmitButton
+        onClick={handleSubmit}
+        type="submit"
+        disabled={isSubmitting}
+      >
+        Submit
+      </SubmitButton>
+    </Form>
+  );
+};
+
+const EditCommitteeForm = withFormik({
+  mapPropsToValues() {
+    return {
+      replyText: "write reply text here",
+      description: "description here"
+    };
+  },
+  handleSubmit(
+    values,
+    {
+      props: { committee, apiRoot },
+      resetForm,
+      setSubmitting,
+      setFieldValue
+    }
+  ) {
+    const committeeNames = {
+      webkom: "Webkom",
+      arrkom: "Arrkom",
+      bedkom: "Bedkom",
+      pr: "PR",
+      readme: "readme",
+      labamba: "LaBamba",
+      fagkom: "Fagkom",
+      koskom: "Koskom"
+    };
+
+    const submission = {
+      name: committeeNames[committee],
+      description: values.description,
+      response_label: values.replyText
+    };
+
+    console.log(submission);
+
+    fetch(`${apiRoot}/api/committee/`, {
+      method: "POST",
+      headers: new Headers({
+        Accept: "application/json",
+        "Content-Type": "application/json",
+        "Access-Control-Allow-Credentials": true,
+        "X-CSRFToken": Cookie.get("csrftoken")
+      }),
+      redirect: "follow",
+      credentials: "include",
+      body: JSON.stringify(submission)
+    })
+      .then(res => {
+        console.log("UPDATE COMMITTEE: Submit result", res);
+        setSubmitting(false);
+        return res;
+      })
+      .catch(err => console.log("UPDATE COMMITTEE ERROR:", err));
+  }
+})(MyInnerForm);
+
+export { EditCommitteeForm };

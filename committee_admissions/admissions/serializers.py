@@ -25,7 +25,16 @@ class AdminAdmissionSerializer(serializers.HyperlinkedModelSerializer):
 class CommitteeSerializer(serializers.HyperlinkedModelSerializer):
     class Meta:
         model = Committee
-        fields = ('url', 'pk', 'name', 'description', 'response_label', 'logo', 'detail_link')
+        fields = ('url', 'pk', 'name', 'description', 'response_label', 'detail_link')
+
+    def create(self, validated_data):
+        committee, created = Committee.objects.update_or_create(
+            name=validated_data.get('name', None),
+            defaults={'response_label': validated_data.get('response_label', None),
+                      'description': validated_data.get('description', None)})
+
+        print("Made it!", committee)
+        return committee
 
 
 class ShortCommitteeSerializer(serializers.HyperlinkedModelSerializer):
