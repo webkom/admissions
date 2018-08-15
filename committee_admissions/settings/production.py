@@ -10,6 +10,7 @@ ALLOWED_HOSTS = env('ALLOWED_HOSTS')
 FRONTEND_URL = env('FRONTEND_URL')
 API_URL = env('API_URL')
 ENVIRONMENT_NAME = env('ENVIRONMENT_NAME', default='production')
+RELEASE = env('RELEASE')
 
 # Database
 DATABASES = {'default': env.db()}
@@ -27,11 +28,7 @@ AUTHENTICATION_BACKENDS = [
 # Sentry
 SENTRY_CLIENT = 'raven.contrib.django.raven_compat.DjangoClient'
 RAVEN_DSN = env('RAVEN_DSN')
-RAVEN_CONFIG = {
-    'dsn': RAVEN_DSN,
-    'release': env('RELEASE', default='latest'),
-    'environment': ENVIRONMENT_NAME
-}
+RAVEN_CONFIG = {'dsn': RAVEN_DSN, 'release': RELEASE, 'environment': ENVIRONMENT_NAME}
 INSTALLED_APPS += [  # noqa
     'raven.contrib.django.raven_compat',
 ]
