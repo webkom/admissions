@@ -28,6 +28,7 @@ AUTHENTICATION_BACKENDS = [
 # Sentry
 SENTRY_CLIENT = 'raven.contrib.django.raven_compat.DjangoClient'
 RAVEN_DSN = env('RAVEN_DSN')
+RAVEN_PUBLIC_DSN = env('RAVEN_PUBLIC_DSN')
 RAVEN_CONFIG = {'dsn': RAVEN_DSN, 'release': RELEASE, 'environment': ENVIRONMENT_NAME}
 INSTALLED_APPS += [  # noqa
     'raven.contrib.django.raven_compat',
