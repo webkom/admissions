@@ -14,16 +14,15 @@ Including another URLconf
     2. Add a URL to urlpatterns:  path('blog/', include('blog.urls'))
 """
 from django.conf import settings
+from django.conf.urls import url
 from django.contrib import admin
 from django.urls import include, path, re_path
-from rest_framework import routers
-from django.conf.urls import url
 from django.views.decorators.csrf import csrf_exempt
-
+from rest_framework import routers
 
 from committee_admissions.admissions.views import (
-    AdmissionViewSet, CommitteeApplicationViewSet, CommitteeViewSet, UserApplicationViewSet,
-    UserViewSet, ApplicationViewSet, AppView, user_has_applied
+    AdmissionViewSet, ApplicationViewSet, AppView, CommitteeApplicationViewSet, CommitteeViewSet,
+    UserApplicationViewSet, UserViewSet, user_has_applied
 )
 
 router = routers.DefaultRouter()
@@ -51,4 +50,3 @@ if settings.DEBUG:
 
     from django.contrib.staticfiles.urls import staticfiles_urlpatterns
     urlpatterns += staticfiles_urlpatterns()
-

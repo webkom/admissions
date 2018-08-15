@@ -1,24 +1,29 @@
-from django.contrib.auth.models import User
-from django.views.generic.base import TemplateView
+from django.conf import settings
 from django.contrib.auth.mixins import LoginRequiredMixin
-
-from rest_framework import viewsets, permissions
+from django.contrib.auth.models import User
+from django.http import JsonResponse
+from django.views.generic.base import TemplateView
+from rest_framework import permissions, viewsets
+from rest_framework.generics import get_object_or_404
 
 from committee_admissions.admissions.models import (
     Admission, Committee, CommitteeApplication, UserApplication
 )
 from committee_admissions.admissions.serializers import (
-    AdminAdmissionSerializer, AdmissionPublicSerializer, CommitteeApplicationSerializer,
-    CommitteeSerializer, UserApplicationSerializer, UserSerializer, ApplicationCreateUpdateSerializer
+    AdminAdmissionSerializer, AdmissionPublicSerializer, ApplicationCreateUpdateSerializer,
+    CommitteeApplicationSerializer, CommitteeSerializer, UserApplicationSerializer, UserSerializer
 )
 
 from .permissions import IsOwnerOrReadOnly
-from django.http import JsonResponse
-from rest_framework.generics import get_object_or_404
 
 
 class AppView(TemplateView):
     template_name = 'index.html'
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['settings'] = settings
+        return context
 
 
 def user_has_applied(request, user_application_id, committee_id):

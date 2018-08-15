@@ -28,8 +28,17 @@
         full_name: "{{ request.user.get_full_name }}"
       }
     };
+    window.__CONFIG__ = {
+        RAVEN_DSN: "{{ settings.RAVEN_DSN }}",
+        RAVEN_DSN: "{{ settings.RELEASE }}",
+        RAVEN_DSN: "{{ settings.ENVIRONMENT }}",
+        API_URL: "{{ settings.API_URL }}"
+    }
     </script>
-    {% render_bundle 'main' %}
+    {% render_bundle 'app' %}
+    {% render_bundle 'vendor' %}
+    {% render_bundle 'vendors~app' %}
+    {% render_bundle 'runtime~app' %}
     <!--
       This HTML file is a template.
       If you open it directly in the browser, you will see an empty page.

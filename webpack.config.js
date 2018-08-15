@@ -2,26 +2,66 @@ var path = require("path");
 var webpack = require("webpack");
 var BundleTracker = require("webpack-bundle-tracker");
 
+const isProduction = process.env.NODE_ENV === "production";
+
 module.exports = {
   context: __dirname,
-  mode: "development",
-  entry: [
-    "webpack-dev-server/client?http://localhost:3000",
-    "webpack/hot/only-dev-server",
-    "./frontend/src/index"
-  ], // entry point of our src. frontend/src/index.js should require other js modules and dependencies it needs
-  devtool: "eval-source-map",
+  entry: isProduction
+    ? {
+        app: ["babel-polyfill", "./frontend/src/index"],
+        vendor: [
+          "react",
+          "react-dom",
+          "reselect",
+          "styled-components",
+          "raven-js"
+        ]
+      }
+    : {
+        app: [
+          "babel-polyfill",
+          "webpack-dev-server/client?http://localhost:3000",
+          "webpack/hot/only-dev-server",
+          "./frontend/src/index"
+        ],
+        vendor: [
+          "react",
+          "react-dom",
+          "reselect",
+          "styled-components",
+          "raven-js"
+        ]
+      },
   output: {
-    path: path.resolve("/assets/bundles/"),
+    path: path.resolve("./assets/bundles/"),
+    chunkFilename: "[name]-[chunkhash].js",
     filename: "[name]-[hash].js",
-    publicPath: "http://localhost:3000/static/bundles/" // Tell django to use this URL to load packages and not use STATIC_URL + bundle_name
+    publicPath: isProduction
+      ? "/static/bundles/"
+      : "http://localhost:3000/static/bundles/" // Use hot-reloading in DEV, otherwise hosted by django
+  },
+  devtool: isProduction ? "source-map" : "cheap-module-eval-source-map",
+  optimization: {
+    splitChunks: {
+      chunks: "all",
+      cacheGroups: {
+        vendor: {
+          chunks: "initial",
+          name: "vendor",
+          test: "vendor",
+          enforce: true
+        }
+      }
+    },
+    runtimeChunk: true
   },
 
   plugins: [
     new BundleTracker({ filename: "./webpack-stats.json" }),
-    new webpack.HotModuleReplacementPlugin(),
-    new webpack.NamedModulesPlugin()
-  ],
+    !isProduction && new webpack.HotModuleReplacementPlugin(),
+    new webpack.NamedModulesPlugin(),
+    new webpack.IgnorePlugin(/^\.\/locale$/, /moment$/)
+  ].filter(Boolean),
 
   module: {
     rules: [

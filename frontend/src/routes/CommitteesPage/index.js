@@ -49,7 +49,8 @@ class CommitteesPage extends Component {
             til komitéen. Les mer om de forskjellige komiteene på{" "}
             <a href="https://abakus.no/pages/info/om-oss" target="blank">
               abakus.no
-            </a>.
+            </a>
+            .
           </CardParagraph>
         </Card>
         <CommittesContainer>
