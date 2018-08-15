@@ -1,3 +1,4 @@
+from django.conf import settings
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.contrib.auth.models import User
 from django.http import JsonResponse
@@ -18,6 +19,11 @@ from .permissions import IsOwnerOrReadOnly
 
 class AppView(TemplateView):
     template_name = 'index.html'
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['settings'] = settings
+        return context
 
 
 def user_has_applied(request, user_application_id, committee_id):

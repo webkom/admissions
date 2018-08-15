@@ -1,9 +1,8 @@
 import { withFormik } from "formik";
 import * as Yup from "yup";
-import Cookie from "js-cookie";
-import Raven from "raven-js";
 
 import ApplicationForm from "./ApplicationFormContainer";
+import callApi from "src/utils/callApi";
 
 const FormikApp = withFormik({
   mapPropsToValues() {
@@ -22,7 +21,7 @@ const FormikApp = withFormik({
   handleSubmit(
     values,
     {
-      props: { selectedCommittees, apiRoot },
+      props: { selectedCommittees },
       resetForm,
       setSubmitting,
       setFieldValue
@@ -39,17 +38,8 @@ const FormikApp = withFormik({
       });
 
     console.log(submission);
-
-    fetch(`${apiRoot}/api/application/`, {
+    callApi("/application/", {
       method: "POST",
-      headers: new Headers({
-        Accept: "application/json",
-        "Content-Type": "application/json",
-        "Access-Control-Allow-Credentials": true,
-        "X-CSRFToken": Cookie.get("csrftoken")
-      }),
-      redirect: "follow",
-      credentials: "include",
       body: JSON.stringify(submission)
     }).then(
       res => {
@@ -59,7 +49,6 @@ const FormikApp = withFormik({
       },
       err => {
         console.log(err);
-        Raven.captureException(err);
       }
     );
   },

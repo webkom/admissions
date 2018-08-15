@@ -11,10 +11,12 @@ import ScrollToTop from "./scrollToTop";
 import Raven from "raven-js";
 import "src/styles/globals.css";
 import "./index.css";
+import config from "src/utils/config";
+import "babel-polyfill";
 
-Raven.config(process.env.RAVEN_DSN, {
-  release: process.env.RELEASE,
-  environment: process.env.ENVIRONMENT
+Raven.config(config.RAVEN_DSN, {
+  release: config.RELEASE,
+  environment: config.ENVIRONMENT
 }).install();
 
 ReactDOM.render(

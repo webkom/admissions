@@ -2,6 +2,8 @@ import React, { Component } from "react";
 import styled from "styled-components";
 import { media } from "src/styles/mediaQueries";
 
+import callApi from "src/utils/callApi";
+
 import ApplicationForm from "src/routes/ApplicationForm";
 import CommitteesPage from "src/routes/CommitteesPage";
 import AdminPage from "src/routes/AdminPage";
@@ -21,13 +23,6 @@ class ApplicationPortal extends Component {
       selectedCommittees: {},
       user: { name: "" }
     };
-
-    const hostname = window && window.location && window.location.hostname;
-    if (hostname === "opptak.abakus.no") {
-      this.API_ROOT = "https://opptak.abakus.no";
-    } else {
-      this.API_ROOT = "http://localhost:8000";
-    }
   }
 
   startApplying = () => {
@@ -69,38 +64,17 @@ class ApplicationPortal extends Component {
   };
 
   componentDidMount() {
-    fetch(`${this.API_ROOT}/api/committee/`, {
-      method: "GET",
-      headers: new Headers({
-        Accept: "application/json",
-        "Content-Type": "application/json",
-        "Access-Control-Allow-Credentials": true
-      }),
-      redirect: "manual",
-      credentials: "include"
-    })
-      .then(res => {
-        if (res.type === "opaqueredirect") {
-          window.location = `http://localhost:8000/login/lego/?next=${
-            window.location.pathname
-          }`;
-          throw res;
-        }
-        return res;
-      })
-      .then(results => results.json())
-      .then(
-        data => {
-          this.setState({
-            committees: data
-          });
-        },
-        error => {
-          console.log(error);
-          Raven.captureException(error);
-          this.setState({ error });
-        }
-      );
+    callApi("/committee/").then(
+      ({ jsonData }) => {
+        this.setState({
+          committees: jsonData
+        });
+      },
+      error => {
+        console.log(error);
+        this.setState({ error });
+      }
+    );
 
     const user = { name: window.django.user.full_name };
     this.setState({ user });
@@ -128,12 +102,11 @@ class ApplicationPortal extends Component {
             {location.pathname.startsWith("/application") && (
               <ApplicationForm
                 {...this.state}
-                apiRoot={this.API_ROOT}
                 toggleCommittee={this.toggleCommittee}
               />
             )}
             {location.pathname.startsWith("/admin") && (
-              <AdminPage {...this.state} apiRoot={this.API_ROOT} />
+              <AdminPage {...this.state} />
             )}
           </ContentContainer>
         </PageWrapper>

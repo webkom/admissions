@@ -8,7 +8,7 @@ module.exports = {
   context: __dirname,
   entry: isProduction
     ? {
-        app: "./frontend/src/index",
+        app: ["babel-polyfill", "./frontend/src/index"],
         vendor: [
           "react",
           "react-dom",
@@ -19,6 +19,7 @@ module.exports = {
       }
     : {
         app: [
+          "babel-polyfill",
           "webpack-dev-server/client?http://localhost:3000",
           "webpack/hot/only-dev-server",
           "./frontend/src/index"
@@ -59,12 +60,6 @@ module.exports = {
     new BundleTracker({ filename: "./webpack-stats.json" }),
     !isProduction && new webpack.HotModuleReplacementPlugin(),
     new webpack.NamedModulesPlugin(),
-    new webpack.DefinePlugin({
-      "process.env.NODE_ENV": JSON.stringify(process.env.NODE_ENV),
-      "process.env.RELEASE": JSON.stringify(process.env.RELEASE),
-      "process.env.RAVEN_DSN": JSON.stringify(process.env.RAVEN_DSN),
-      "process.env.ENVIRONMENT": JSON.stringify(process.env.ENVIRONMENT)
-    }),
     new webpack.IgnorePlugin(/^\.\/locale$/, /moment$/)
   ].filter(Boolean),
 

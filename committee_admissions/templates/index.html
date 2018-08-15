@@ -28,6 +28,12 @@
         full_name: "{{ request.user.get_full_name }}"
       }
     };
+    window.__CONFIG__ = {
+        RAVEN_DSN: "{{ settings.RAVEN_DSN }}",
+        RAVEN_DSN: "{{ settings.RELEASE }}",
+        RAVEN_DSN: "{{ settings.ENVIRONMENT }}",
+        API_URL: "{{ settings.API_URL }}"
+    }
     </script>
     {% render_bundle 'app' %}
     {% render_bundle 'vendor' %}

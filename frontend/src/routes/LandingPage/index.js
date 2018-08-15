@@ -2,10 +2,12 @@ import React, { Component } from "react";
 import styled from "styled-components";
 import { media } from "src/styles/mediaQueries";
 
+import callApi from "src/utils/callApi";
 import Moment from "react-moment";
 import "moment/locale/nb";
 Moment.globalLocale = "nb";
 
+import config from "src/utils/config";
 import AbakusLogo from "src/components/AbakusLogo";
 import LinkButton from "src/components/LinkButton";
 import { Card, CardTitle, CardParagraph } from "src/components/Card";
@@ -23,34 +25,19 @@ class LandingPage extends Component {
       error: null,
       adminPermissions: true
     };
-
-    const hostname = window && window.location && window.location.hostname;
-    if (hostname === "opptak.abakus.no") {
-      this.API_ROOT = "https://opptak.abakus.no";
-    } else {
-      this.API_ROOT = "http://localhost:8000";
-    }
   }
 
   componentDidMount() {
-    fetch(`${this.API_ROOT}/api/admission/`, {
-      method: "GET",
-      headers: {
-        Accept: "application/json",
-        "Content-Type": "application/json"
+    callApi("/admission/").then(
+      ({ jsonData: data }) => {
+        this.setState({
+          admission: data[0]
+        });
+      },
+      error => {
+        this.setState({ error });
       }
-    })
-      .then(results => results.json())
-      .then(
-        data => {
-          this.setState({
-            admission: data[0]
-          });
-        },
-        error => {
-          this.setState({ error });
-        }
-      );
+    );
   }
 
   render() {

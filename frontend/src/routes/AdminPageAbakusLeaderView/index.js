@@ -1,6 +1,7 @@
 import React, { Component } from "react";
 import { CSVLink } from "react-csv";
 import Raven from "raven-js";
+import callApi from "src/utils/callApi";
 
 import UserInfo from "src/components/UserInfo";
 import PageWrapper from "src/components/PageWrapper";
@@ -35,13 +36,6 @@ class AdminPage extends Component {
         { label: "Tid sendt", key: "timeSent" }
       ]
     };
-
-    const hostname = window && window.location && window.location.hostname;
-    if (hostname === "opptak.abakus.no") {
-      this.API_ROOT = "https://opptak.abakus.no";
-    } else {
-      this.API_ROOT = "http://localhost:8000";
-    }
   }
 
   generateCSVData = (
@@ -72,38 +66,17 @@ class AdminPage extends Component {
   };
 
   componentDidMount() {
-    fetch(`${this.API_ROOT}/api/application/`, {
-      method: "GET",
-      headers: new Headers({
-        Accept: "application/json",
-        "Content-Type": "application/json",
-        "Access-Control-Allow-Credentials": true
-      }),
-      redirect: "manual",
-      credentials: "include"
-    })
-      .then(res => {
-        if (res.type === "opaqueredirect") {
-          window.location = `http://localhost:8000/login/lego/?next=${
-            window.location.pathname
-          }`;
-          return null;
-        }
-        return res.json();
-      })
-      .then(
-        data => {
-          data &&
-            this.setState({
-              applications: data
-            });
-        },
-        error => {
-          console.log(error);
-          Raven.captureException(error);
-          this.setState({ error });
-        }
-      );
+    callApi("/application/").then(
+      ({ jsonData }) => {
+        this.setState({
+          applications: jsonData
+        });
+      },
+      error => {
+        console.log(error);
+        this.setState({ error });
+      }
+    );
 
     this.setState({ user: { name: window.django.user.full_name } });
   }

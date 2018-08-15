@@ -16,6 +16,8 @@ DATABASES = {
     }
 }
 
+API_URL = "/api"
+
 SETTINGS_DIR = environ.Path(__file__) - 1
 
 env = environ.Env()
