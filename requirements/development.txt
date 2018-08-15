@@ -20,7 +20,7 @@ djangorestframework==3.7.7
 factory-boy==2.10.0
 faker==0.8.12             # via factory-boy
 first==2.0.1              # via pip-tools
-idna==2.6                 # via requests
+idna==2.7                 # via requests
 ipython-genutils==0.2.0   # via traitlets
 ipython==6.2.1
 isort==4.3.4
