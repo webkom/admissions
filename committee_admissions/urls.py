@@ -17,12 +17,11 @@ from django.conf import settings
 from django.conf.urls import url
 from django.contrib import admin
 from django.urls import include, path, re_path
-from django.views.decorators.csrf import csrf_exempt
 from rest_framework import routers
 
 from committee_admissions.admissions.views import (
     AdmissionViewSet, ApplicationViewSet, AppView, CommitteeApplicationViewSet, CommitteeViewSet,
-    UserApplicationViewSet, UserViewSet, user_has_applied
+    UserViewSet, user_has_applied
 )
 
 router = routers.DefaultRouter()
