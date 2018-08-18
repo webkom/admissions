@@ -54,7 +54,7 @@ const callApi = async (url, { method = "GET", body = null } = {}) => {
     // IE don't support body equal to null
     ...(body ? { body } : {})
   });
-  const res = await Promise.race([timeoutPromise(5000), fetch(request)]);
+  const res = await Promise.race([timeoutPromise(20000), fetch(request)]);
 
   // Redirect to login, if needed
   if (res.type === "opaqueredirect") {
