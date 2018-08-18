@@ -86,6 +86,8 @@ class AdminPage extends Component {
   }
 
   render() {
+    console.log(this.props.committees);
+
     const {
       error,
       user,
@@ -120,6 +122,12 @@ class AdminPage extends Component {
         />
       );
     });
+    const committee = this.props.committees.find(
+      committee =>
+        committee.name.toLowerCase() === this.state.whichCommitteeLeader
+    );
+
+    const committeeId = committee && committee.pk;
 
     const numApplicants = filteredApplications.length;
 
@@ -135,6 +143,7 @@ class AdminPage extends Component {
             <EditCommitteeForm
               apiRoot={this.API_ROOT}
               committee={this.state.whichCommitteeLeader}
+              committeeId={committeeId}
             />
           </Wrapper>;
           <Wrapper>
@@ -206,7 +215,7 @@ const EditCommitteeForm = withFormik({
   handleSubmit(
     values,
     {
-      props: { committee, apiRoot },
+      props: { committee, committeeId },
       resetForm,
       setSubmitting,
       setFieldValue
@@ -222,7 +231,6 @@ const EditCommitteeForm = withFormik({
       fagkom: "Fagkom",
       koskom: "Koskom"
     };
-
     const submission = {
       name: committeeNames[committee],
       description: values.description,
@@ -230,23 +238,14 @@ const EditCommitteeForm = withFormik({
     };
 
     console.log(submission);
-
-    fetch(`${apiRoot}/api/committee/`, {
-      method: "POST",
-      headers: new Headers({
-        Accept: "application/json",
-        "Content-Type": "application/json",
-        "Access-Control-Allow-Credentials": true,
-        "X-CSRFToken": Cookie.get("csrftoken")
-      }),
-      redirect: "follow",
-      credentials: "include",
+    callApi(`/committee/${committeeId}/`, {
+      method: "PATCH",
       body: JSON.stringify(submission)
     })
       .then(res => {
         console.log("UPDATE COMMITTEE: Submit result", res);
         setSubmitting(false);
-        return res;
+        return res.jsonData;
       })
       .catch(err => console.log("UPDATE COMMITTEE ERROR:", err));
   }
