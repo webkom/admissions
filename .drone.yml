@@ -54,6 +54,16 @@ pipeline:
     commands:
       - tox -e yapf
 
+  coverage:
+    image: abakus/lego-testbase
+    when:
+      event: push
+    environment:
+      - LANG=C.UTF-8
+      - DATABASE=database
+    commands:
+      - tox -e coverage
+
   docker:
     image: plugins/docker
     when:
