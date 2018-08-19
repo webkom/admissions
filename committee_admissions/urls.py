@@ -33,7 +33,6 @@ urlpatterns = [
     path('api/', include(router.urls)),
     url('', include('social_django.urls', namespace='social')),
     re_path(r'^$', AppView.as_view(), name="home"),
-    re_path('(?:.*)/?', AppView.as_view(), name="home"),
 ]
 
 if settings.DEBUG:
@@ -44,3 +43,7 @@ if settings.DEBUG:
 
     from django.contrib.staticfiles.urls import staticfiles_urlpatterns
     urlpatterns += staticfiles_urlpatterns()
+
+urlpatterns += [
+    re_path('(?:.*)/?', AppView.as_view(), name="home"),
+]

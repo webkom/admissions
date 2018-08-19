@@ -8,14 +8,14 @@ from .models import Membership
 def can_edit_committee(user, committee):
     return Membership.objects.filter(
         user=user, abakus_group__name=committee.name, role=constants.LEADER
-    ).count() == 1
+    ).exists()
 
 
 def can_edit_admission(user, committee):
     return Membership.objects.filter(
         user=user,
         abakus_group__name="Hovedstyret",
-    ).count() == 1
+    ).exists()
 
 
 class IsOwnerOrReadOnly(permissions.BasePermission):

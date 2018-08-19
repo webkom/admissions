@@ -73,7 +73,7 @@ class ShortUserSerializer(serializers.HyperlinkedModelSerializer):
 
     class Meta:
         model = LegoUser
-        fields = ('username', 'full_name', 'email', 'abakus_groups')
+        fields = ('username', 'full_name', 'email')
 
 
 class UserApplicationSerializer(serializers.ModelSerializer):
@@ -81,27 +81,14 @@ class UserApplicationSerializer(serializers.ModelSerializer):
     text = serializers.SerializerMethodField()
     user = ShortUserSerializer()
 
-    def get_text(self, obj, *args, **kwargs):
-        user = self.context['request'].user
-        if Membership.objects.filter(
-            user=user,
-            role=constants.LEADER,
-            abakus_group__name="Hovedstyret",
-        ).exists() or obj.user == user:
-            return obj.text
-        return None
+    def get_text(self, obj):
+        is_filtered = getattr(obj, 'committee_applications_filtered', False)
+        if is_filtered:
+            return None
+        return obj.text
 
-    def get_committee_applications(self, obj, *args, **kwargs):
-        user = self.context['request'].user
-        group = Membership.objects.filter(user=user, role=constants.LEADER).first().abakus_group
-        qs = obj.committee_applications.filter(committee__name=group.name)
-        if Membership.objects.filter(
-            user=user,
-            role=constants.LEADER,
-            abakus_group__name="Hovedstyret",
-        ).exists() or obj.user == user:
-            qs = obj.committee_applications
-
+    def get_committee_applications(self, obj):
+        qs = getattr(obj, 'committee_applications_filtered', obj.committee_applications)
         return ShortCommitteeApplicationSerializer(qs, many=True).data
 
     class Meta:

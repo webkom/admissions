@@ -1,6 +1,7 @@
 from django.conf import settings
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.contrib.auth.models import User
+from django.db.models import Prefetch
 from django.views.generic.base import TemplateView
 from rest_framework import permissions, viewsets
 from rest_framework.decorators import list_route
@@ -48,7 +49,7 @@ class CommitteeViewSet(viewsets.ModelViewSet):
 
 
 class ApplicationViewSet(LoginRequiredMixin, viewsets.ModelViewSet):
-    queryset = UserApplication.objects.all()
+    queryset = UserApplication.objects.all().select_related("admission", "user")
     serializer_class = ApplicationCreateUpdateSerializer
     permission_classes = [ApplicationPermissions]
 
@@ -59,11 +60,22 @@ class ApplicationViewSet(LoginRequiredMixin, viewsets.ModelViewSet):
             role=constants.LEADER,
             abakus_group__name="Hovedstyret",
         ).exists():
-            return super().get_queryset()
+            return super().get_queryset().prefetch_related(
+                'committee_applications', 'committee_applications__committee'
+            )
 
         group = Membership.objects.filter(user=user, role=constants.LEADER).first().abakus_group
 
-        return super().get_queryset().filter(committee_applications__committee__name=group.name)
+        qs = CommitteeApplication.objects.filter(committee__name=group.name
+                                                 ).select_related('committee')
+
+        return super().get_queryset().filter(committee_applications__committee__name=group.name
+                                             ).prefetch_related(
+                                                 Prefetch(
+                                                     'committee_applications', queryset=qs,
+                                                     to_attr='committee_applications_filtered'
+                                                 )
+                                             )
 
     def get_serializer_class(self):
         if self.action in ('create'):
