@@ -145,7 +145,8 @@ class AdminPage extends Component {
               committee={this.state.whichCommitteeLeader}
               committeeId={committeeId}
             />
-          </Wrapper>;
+          </Wrapper>
+          ;
           <Wrapper>
             <Statistics>
               <StatisticsWrapper>
