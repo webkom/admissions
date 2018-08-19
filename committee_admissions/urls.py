@@ -21,7 +21,7 @@ from rest_framework import routers
 
 from committee_admissions.admissions.views import (
     AdmissionViewSet, ApplicationViewSet, AppView, CommitteeApplicationViewSet, CommitteeViewSet,
-    UserViewSet, user_has_applied
+    UserViewSet
 )
 
 router = routers.DefaultRouter()
@@ -38,7 +38,6 @@ urlpatterns = [
     url('', include('social_django.urls', namespace='social')),
     re_path(r'^$', AppView.as_view(), name="home"),
     re_path('(?:.*)/?', AppView.as_view(), name="home"),
-    path('api/<int:applicationId>/<int:committeeId>/', user_has_applied, name="hasApplied"),
 ]
 
 if settings.DEBUG:

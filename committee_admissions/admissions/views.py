@@ -26,16 +26,7 @@ class AppView(TemplateView):
         return context
 
 
-def user_has_applied(request, user_application_id, committee_id):
-    user_application = get_object_or_404(UserApplication, id=user_application_id)
-    committee = get_object_or_404(Committee, id=committee_id)
-
-    query = user_application.has_committee_application(committee)
-
-    return JsonResponse({'has_committee_application': query.exists()})
-
-
-class AdmissionViewSet(viewsets.ModelViewSet):
+class AdmissionViewSet(LoginRequiredMixin, viewsets.ModelViewSet):
     queryset = Admission.objects.all()
     permission_classes = [permissions.AllowAny]
 
@@ -53,14 +44,14 @@ class CommitteeViewSet(LoginRequiredMixin, viewsets.ModelViewSet):
     serializer_class = CommitteeSerializer
 
 
-class UserApplicationViewSet(viewsets.ModelViewSet):
+class UserApplicationViewSet(LoginRequiredMixin, viewsets.ModelViewSet):
     queryset = UserApplication.objects.all()
     serializer_class = UserApplicationSerializer
     # authentication_classes = []
     permission_classes = [permissions.IsAuthenticatedOrReadOnly, IsOwnerOrReadOnly]
 
 
-class ApplicationViewSet(viewsets.ModelViewSet):
+class ApplicationViewSet(LoginRequiredMixin, viewsets.ModelViewSet):
     queryset = UserApplication.objects.all()
     serializer_class = ApplicationCreateUpdateSerializer
     # authentication_classes = []
@@ -76,11 +67,11 @@ class ApplicationViewSet(viewsets.ModelViewSet):
         serializer.save(user=self.request.user)
 
 
-class CommitteeApplicationViewSet(viewsets.ModelViewSet):
+class CommitteeApplicationViewSet(LoginRequiredMixin, viewsets.ModelViewSet):
     queryset = CommitteeApplication.objects.all()
     serializer_class = CommitteeApplicationSerializer
 
 
-class UserViewSet(viewsets.ModelViewSet):
+class UserViewSet(LoginRequiredMixin, viewsets.ModelViewSet):
     queryset = User.objects.all()
     serializer_class = UserSerializer
