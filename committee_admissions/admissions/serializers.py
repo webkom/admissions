@@ -87,7 +87,7 @@ class UserApplicationSerializer(serializers.ModelSerializer):
             user=user,
             role=constants.LEADER,
             abakus_group__name="Hovedstyret",
-        ).exists():
+        ).exists() or obj.user == user:
             return obj.text
         return None
 
@@ -99,7 +99,7 @@ class UserApplicationSerializer(serializers.ModelSerializer):
             user=user,
             role=constants.LEADER,
             abakus_group__name="Hovedstyret",
-        ).exists():
+        ).exists() or obj.user == user:
             qs = obj.committee_applications
 
         return ShortCommitteeApplicationSerializer(qs, many=True).data

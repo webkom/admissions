@@ -3,6 +3,8 @@ from django.contrib.auth.mixins import LoginRequiredMixin
 from django.contrib.auth.models import User
 from django.views.generic.base import TemplateView
 from rest_framework import permissions, viewsets
+from rest_framework.decorators import list_route
+from rest_framework.response import Response
 
 from committee_admissions.admissions import constants
 from committee_admissions.admissions.models import (
@@ -71,3 +73,9 @@ class ApplicationViewSet(LoginRequiredMixin, viewsets.ModelViewSet):
     def perform_create(self, serializer):
         print(self.request.user)
         serializer.save(user=self.request.user)
+
+    @list_route(methods=['GET'])
+    def my(self, request):
+        instance = UserApplication.objects.get(user=request.user)
+        serializer = self.get_serializer(instance)
+        return Response(serializer.data)
