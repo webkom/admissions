@@ -20,17 +20,13 @@ from django.urls import include, path, re_path
 from rest_framework import routers
 
 from committee_admissions.admissions.views import (
-    AdmissionViewSet, ApplicationViewSet, AppView, CommitteeApplicationViewSet, CommitteeViewSet,
-    UserViewSet
+    AdmissionViewSet, ApplicationViewSet, AppView, CommitteeViewSet
 )
 
 router = routers.DefaultRouter()
 router.register(r'admission', AdmissionViewSet)
 router.register(r'committee', CommitteeViewSet)
 router.register(r'application', ApplicationViewSet)
-router.register(r'committee-application', CommitteeApplicationViewSet)
-router.register(r'users', UserViewSet)
-
 urlpatterns = [
     path('api/admin/', admin.site.urls),
     path('api-auth/', include('rest_framework.urls', namespace='rest_framework')),

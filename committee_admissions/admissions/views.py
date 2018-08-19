@@ -4,6 +4,7 @@ from django.contrib.auth.models import User
 from django.views.generic.base import TemplateView
 from rest_framework import permissions, viewsets
 
+from committee_admissions.admissions import constants
 from committee_admissions.admissions.models import (
     Admission, Committee, CommitteeApplication, UserApplication
 )
@@ -11,6 +12,9 @@ from committee_admissions.admissions.serializers import (
     AdminAdmissionSerializer, AdmissionPublicSerializer, ApplicationCreateUpdateSerializer,
     CommitteeApplicationSerializer, CommitteeSerializer, UserApplicationSerializer, UserSerializer
 )
+
+from .models import Membership
+from .permissions import AdmissionPermissions, ApplicationPermissions, CommitteePermissions
 
 
 class AppView(TemplateView):
@@ -24,7 +28,7 @@ class AppView(TemplateView):
 
 class AdmissionViewSet(LoginRequiredMixin, viewsets.ModelViewSet):
     queryset = Admission.objects.all()
-    permission_classes = [permissions.AllowAny]
+    permission_classes = [AdmissionPermissions]
 
     def get_serializer_class(self):
         if self.action == 'list':
@@ -35,32 +39,35 @@ class AdmissionViewSet(LoginRequiredMixin, viewsets.ModelViewSet):
         return AdmissionPublicSerializer
 
 
-class CommitteeViewSet(LoginRequiredMixin, viewsets.ModelViewSet):
+class CommitteeViewSet(viewsets.ModelViewSet):
     queryset = Committee.objects.all()
     serializer_class = CommitteeSerializer
+    permission_classes = [CommitteePermissions]
 
 
 class ApplicationViewSet(LoginRequiredMixin, viewsets.ModelViewSet):
     queryset = UserApplication.objects.all()
     serializer_class = ApplicationCreateUpdateSerializer
-    # authentication_classes = []
-    permission_classes = [permissions.IsAuthenticatedOrReadOnly]
+    permission_classes = [ApplicationPermissions]
+
+    def get_queryset(self):
+        user = self.request.user
+        if Membership.objects.filter(
+            user=user,
+            role=constants.LEADER,
+            abakus_group__name="Hovedstyret",
+        ).exists():
+            return super().get_queryset()
+
+        group = Membership.objects.filter(user=user, role=constants.LEADER).first().abakus_group
+
+        return super().get_queryset().filter(committee_applications__committee__name=group.name)
 
     def get_serializer_class(self):
-        if self.action in ('create', 'update'):
+        if self.action in ('create'):
             return ApplicationCreateUpdateSerializer
         return UserApplicationSerializer
 
     def perform_create(self, serializer):
         print(self.request.user)
         serializer.save(user=self.request.user)
-
-
-class CommitteeApplicationViewSet(LoginRequiredMixin, viewsets.ModelViewSet):
-    queryset = CommitteeApplication.objects.all()
-    serializer_class = CommitteeApplicationSerializer
-
-
-class UserViewSet(LoginRequiredMixin, viewsets.ModelViewSet):
-    queryset = User.objects.all()
-    serializer_class = UserSerializer
