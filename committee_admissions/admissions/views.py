@@ -1,10 +1,8 @@
 from django.conf import settings
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.contrib.auth.models import User
-from django.http import JsonResponse
 from django.views.generic.base import TemplateView
 from rest_framework import permissions, viewsets
-from rest_framework.generics import get_object_or_404
 
 from committee_admissions.admissions.models import (
     Admission, Committee, CommitteeApplication, UserApplication
@@ -13,8 +11,6 @@ from committee_admissions.admissions.serializers import (
     AdminAdmissionSerializer, AdmissionPublicSerializer, ApplicationCreateUpdateSerializer,
     CommitteeApplicationSerializer, CommitteeSerializer, UserApplicationSerializer, UserSerializer
 )
-
-from .permissions import IsOwnerOrReadOnly
 
 
 class AppView(TemplateView):
@@ -44,18 +40,11 @@ class CommitteeViewSet(LoginRequiredMixin, viewsets.ModelViewSet):
     serializer_class = CommitteeSerializer
 
 
-class UserApplicationViewSet(LoginRequiredMixin, viewsets.ModelViewSet):
-    queryset = UserApplication.objects.all()
-    serializer_class = UserApplicationSerializer
-    # authentication_classes = []
-    permission_classes = [permissions.IsAuthenticatedOrReadOnly, IsOwnerOrReadOnly]
-
-
 class ApplicationViewSet(LoginRequiredMixin, viewsets.ModelViewSet):
     queryset = UserApplication.objects.all()
     serializer_class = ApplicationCreateUpdateSerializer
     # authentication_classes = []
-    permission_classes = [permissions.IsAuthenticatedOrReadOnly, IsOwnerOrReadOnly]
+    permission_classes = [permissions.IsAuthenticatedOrReadOnly]
 
     def get_serializer_class(self):
         if self.action in ('create', 'update'):

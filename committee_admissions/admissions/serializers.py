@@ -1,9 +1,7 @@
 from rest_framework import serializers
-from django.contrib.auth.models import User
-
 
 from committee_admissions.admissions.models import (
-    Admission, Committee, CommitteeApplication, UserApplication,
+    Admission, Committee, CommitteeApplication, LegoUser, UserApplication
 )
 
 
@@ -69,8 +67,8 @@ class ShortUserSerializer(serializers.HyperlinkedModelSerializer):
         return obj.get_full_name()
 
     class Meta:
-        model = User
-        fields = ('username', 'full_name', 'email')
+        model = LegoUser
+        fields = ('username', 'full_name', 'email', 'abakus_groups')
 
 
 class UserApplicationSerializer(serializers.HyperlinkedModelSerializer):
@@ -92,7 +90,7 @@ class UserApplicationSerializer(serializers.HyperlinkedModelSerializer):
 
 class UserSerializer(serializers.HyperlinkedModelSerializer):
     class Meta:
-        model = User
+        model = LegoUser
         fields = (
             'url', 'pk', 'username', 'first_name', 'last_name', 'email', 'is_staff', 'abakus_groups'
         )
