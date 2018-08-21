@@ -63,7 +63,7 @@ class ApplicationViewSet(LoginRequiredMixin, viewsets.ModelViewSet):
             return super().get_queryset().prefetch_related(
                 'committee_applications', 'committee_applications__committee'
             )
-
+        # Works, but crashes for normal users
         group = Membership.objects.filter(user=user, role=constants.LEADER).first().abakus_group
 
         qs = CommitteeApplication.objects.filter(committee__name=group.name
@@ -87,7 +87,7 @@ class ApplicationViewSet(LoginRequiredMixin, viewsets.ModelViewSet):
         serializer.save(user=self.request.user)
 
     @list_route(methods=['GET'])
-    def my(self, request):
+    def mine(self, request):
         instance = UserApplication.objects.get(user=request.user)
         serializer = self.get_serializer(instance)
         return Response(serializer.data)
