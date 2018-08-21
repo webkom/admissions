@@ -7,6 +7,7 @@ import callApi from "src/utils/callApi";
 import ApplicationForm from "src/routes/ApplicationForm";
 import CommitteesPage from "src/routes/CommitteesPage";
 import AdminPage from "src/routes/AdminPage";
+import AdminPageAbakusLeaderView from "src/routes/AdminPageAbakusLeaderView";
 
 import Raven from "raven-js";
 import AbakusLogo from "src/components/AbakusLogo";
@@ -106,7 +107,7 @@ class ApplicationPortal extends Component {
               />
             )}
             {location.pathname.startsWith("/admin") && (
-              <AdminPage {...this.state} />
+              <AdminPageAbakusLeaderView {...this.state} />
             )}
           </ContentContainer>
         </PageWrapper>

@@ -1,20 +1,21 @@
 from django.conf import settings
-from django.contrib.auth.mixins import LoginRequiredMixin
 from django.contrib.auth.models import User
-from django.http import JsonResponse
+from django.db.models import Prefetch
 from django.views.generic.base import TemplateView
 from rest_framework import permissions, viewsets
-from rest_framework.generics import get_object_or_404
+from rest_framework.decorators import list_route
+from rest_framework.response import Response
 
+from committee_admissions.admissions import constants
 from committee_admissions.admissions.models import (
     Admission, Committee, CommitteeApplication, UserApplication
 )
 from committee_admissions.admissions.serializers import (
     AdminAdmissionSerializer, AdmissionPublicSerializer, ApplicationCreateUpdateSerializer,
-    CommitteeApplicationSerializer, CommitteeSerializer, UserApplicationSerializer, UserSerializer
+    CommitteeSerializer, UserApplicationSerializer
 )
-
-from .permissions import IsOwnerOrReadOnly
+from .models import Membership
+from .permissions import AdmissionPermissions, ApplicationPermissions, CommitteePermissions
 
 
 class AppView(TemplateView):
@@ -26,18 +27,9 @@ class AppView(TemplateView):
         return context
 
 
-def user_has_applied(request, user_application_id, committee_id):
-    user_application = get_object_or_404(UserApplication, id=user_application_id)
-    committee = get_object_or_404(Committee, id=committee_id)
-
-    query = user_application.has_committee_application(committee)
-
-    return JsonResponse({'has_committee_application': query.exists()})
-
-
 class AdmissionViewSet(viewsets.ModelViewSet):
     queryset = Admission.objects.all()
-    permission_classes = [permissions.AllowAny]
+    permission_classes = [AdmissionPermissions]
 
     def get_serializer_class(self):
         if self.action == 'list':
@@ -48,26 +40,47 @@ class AdmissionViewSet(viewsets.ModelViewSet):
         return AdmissionPublicSerializer
 
 
-class CommitteeViewSet(LoginRequiredMixin, viewsets.ModelViewSet):
+class CommitteeViewSet(viewsets.ModelViewSet):
     queryset = Committee.objects.all()
     serializer_class = CommitteeSerializer
-
-
-class UserApplicationViewSet(viewsets.ModelViewSet):
-    queryset = UserApplication.objects.all()
-    serializer_class = UserApplicationSerializer
-    # authentication_classes = []
-    permission_classes = [permissions.IsAuthenticatedOrReadOnly, IsOwnerOrReadOnly]
+    permission_classes = [permissions.IsAuthenticated, CommitteePermissions]
 
 
 class ApplicationViewSet(viewsets.ModelViewSet):
-    queryset = UserApplication.objects.all()
+    queryset = UserApplication.objects.all().select_related("admission", "user")
     serializer_class = ApplicationCreateUpdateSerializer
-    # authentication_classes = []
-    permission_classes = [permissions.IsAuthenticatedOrReadOnly, IsOwnerOrReadOnly]
+    permission_classes = [permissions.IsAuthenticated, ApplicationPermissions]
+
+    def get_queryset(self):
+        user = self.request.user
+        if Membership.objects.filter(
+                user=user,
+                role=constants.LEADER,
+                abakus_group__name="Hovedstyret",
+        ).exists():
+            return super().get_queryset().prefetch_related(
+                'committee_applications', 'committee_applications__committee'
+            )
+
+        membership = Membership.objects.filter(user=user, role=constants.LEADER).first()
+        if not membership:
+            return User.objects.none()
+
+        group = membership.abakus_group
+
+        qs = CommitteeApplication.objects.filter(committee__name=group.name
+                                                 ).select_related('committee')
+
+        return super().get_queryset().filter(committee_applications__committee__name=group.name
+                                             ).prefetch_related(
+            Prefetch(
+                'committee_applications', queryset=qs,
+                to_attr='committee_applications_filtered'
+            )
+        )
 
     def get_serializer_class(self):
-        if self.action in ('create', 'update'):
+        if self.action in ('create'):
             return ApplicationCreateUpdateSerializer
         return UserApplicationSerializer
 
@@ -75,12 +88,8 @@ class ApplicationViewSet(viewsets.ModelViewSet):
         print(self.request.user)
         serializer.save(user=self.request.user)
 
-
-class CommitteeApplicationViewSet(viewsets.ModelViewSet):
-    queryset = CommitteeApplication.objects.all()
-    serializer_class = CommitteeApplicationSerializer
-
-
-class UserViewSet(viewsets.ModelViewSet):
-    queryset = User.objects.all()
-    serializer_class = UserSerializer
+    @list_route(methods=['GET'])
+    def mine(self, request):
+        instance = UserApplication.objects.get(user=request.user)
+        serializer = self.get_serializer(instance)
+        return Response(serializer.data)

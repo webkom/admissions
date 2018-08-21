@@ -32,6 +32,14 @@ $ python manage.py migrate
 $ python manage.py runserver
 ```
 
+The `.env` file with secret keys is not included. They can be found at abakus.no. The project will not run without setting these variables:
+
+```sh
+AUTH_LEGO_KEY="INSERT KEY"
+AUTH_LEGO_SECRET="INSERT SECRET"
+AUTH_LEGO_API_URL="https://lego.abakus.no"
+```
+
 To properly setup and start the development frontend with `React` and `Webpack`, run 
 ```sh
 $ yarn

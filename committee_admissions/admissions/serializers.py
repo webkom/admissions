@@ -1,8 +1,11 @@
 from rest_framework import serializers
 
+from committee_admissions.admissions import constants
 from committee_admissions.admissions.models import (
     Admission, Committee, CommitteeApplication, LegoUser, UserApplication
 )
+
+from .models import Membership
 
 
 class AdmissionPublicSerializer(serializers.HyperlinkedModelSerializer):
@@ -25,7 +28,18 @@ class AdminAdmissionSerializer(serializers.HyperlinkedModelSerializer):
 class CommitteeSerializer(serializers.HyperlinkedModelSerializer):
     class Meta:
         model = Committee
-        fields = ('url', 'pk', 'name', 'description', 'response_label', 'logo', 'detail_link')
+        fields = ('url', 'pk', 'name', 'description', 'response_label', 'detail_link')
+
+    def create(self, validated_data):
+        committee, created = Committee.objects.update_or_create(
+            name=validated_data.get('name', None), defaults={
+                'response_label': validated_data.get('response_label', None),
+                'description': validated_data.get('description', None)
+            }
+        )
+
+        print("Made it!", committee)
+        return committee
 
 
 class ShortCommitteeSerializer(serializers.HyperlinkedModelSerializer):
@@ -59,12 +73,23 @@ class ShortUserSerializer(serializers.HyperlinkedModelSerializer):
 
     class Meta:
         model = LegoUser
-        fields = ('username', 'full_name', 'email', 'abakus_groups')
+        fields = ('username', 'full_name', 'email')
 
 
-class UserApplicationSerializer(serializers.HyperlinkedModelSerializer):
-    committee_applications = ShortCommitteeApplicationSerializer(many=True)
+class UserApplicationSerializer(serializers.ModelSerializer):
+    committee_applications = serializers.SerializerMethodField()
+    text = serializers.SerializerMethodField()
     user = ShortUserSerializer()
+
+    def get_text(self, obj):
+        is_filtered = getattr(obj, 'committee_applications_filtered', False)
+        if is_filtered:
+            return None
+        return obj.text
+
+    def get_committee_applications(self, obj):
+        qs = getattr(obj, 'committee_applications_filtered', obj.committee_applications)
+        return ShortCommitteeApplicationSerializer(qs, many=True).data
 
     class Meta:
         model = UserApplication

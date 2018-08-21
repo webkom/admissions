@@ -20,25 +20,19 @@ from django.urls import include, path, re_path
 from rest_framework import routers
 
 from committee_admissions.admissions.views import (
-    AdmissionViewSet, ApplicationViewSet, AppView, CommitteeApplicationViewSet, CommitteeViewSet,
-    UserViewSet, user_has_applied
+    AdmissionViewSet, ApplicationViewSet, AppView, CommitteeViewSet
 )
 
 router = routers.DefaultRouter()
 router.register(r'admission', AdmissionViewSet)
 router.register(r'committee', CommitteeViewSet)
-router.register(r'application', ApplicationViewSet)
-router.register(r'committee-application', CommitteeApplicationViewSet)
-router.register(r'users', UserViewSet)
-
+router.register(r'application', ApplicationViewSet, base_name="application")
 urlpatterns = [
     path('api/admin/', admin.site.urls),
     path('api-auth/', include('rest_framework.urls', namespace='rest_framework')),
     path('api/', include(router.urls)),
     url('', include('social_django.urls', namespace='social')),
     re_path(r'^$', AppView.as_view(), name="home"),
-    re_path('(?:.*)/?', AppView.as_view(), name="home"),
-    path('api/<int:applicationId>/<int:committeeId>/', user_has_applied, name="hasApplied"),
 ]
 
 if settings.DEBUG:
@@ -49,3 +43,7 @@ if settings.DEBUG:
 
     from django.contrib.staticfiles.urls import staticfiles_urlpatterns
     urlpatterns += staticfiles_urlpatterns()
+
+urlpatterns += [
+    re_path('(?:.*)/?', AppView.as_view(), name="home"),
+]
