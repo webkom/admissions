@@ -29,7 +29,7 @@ class AppView(TemplateView):
         return context
 
 
-class AdmissionViewSet(LoginRequiredMixin, viewsets.ModelViewSet):
+class AdmissionViewSet(viewsets.ModelViewSet):
     queryset = Admission.objects.all()
     permission_classes = [AdmissionPermissions]
 
@@ -48,7 +48,7 @@ class CommitteeViewSet(viewsets.ModelViewSet):
     permission_classes = [CommitteePermissions]
 
 
-class ApplicationViewSet(LoginRequiredMixin, viewsets.ModelViewSet):
+class ApplicationViewSet(viewsets.ModelViewSet):
     queryset = UserApplication.objects.all().select_related("admission", "user")
     serializer_class = ApplicationCreateUpdateSerializer
     permission_classes = [ApplicationPermissions]
@@ -63,8 +63,12 @@ class ApplicationViewSet(LoginRequiredMixin, viewsets.ModelViewSet):
             return super().get_queryset().prefetch_related(
                 'committee_applications', 'committee_applications__committee'
             )
-        # Works, but crashes for normal users
-        group = Membership.objects.filter(user=user, role=constants.LEADER).first().abakus_group
+
+        membership = Membership.objects.filter(user=user, role=constants.LEADER).first()
+        if not membership:
+            return User.objects.none()
+
+        group = membership.abakus_group
 
         qs = CommitteeApplication.objects.filter(committee__name=group.name
                                                  ).select_related('committee')
