@@ -103,7 +103,6 @@ class EditAdmissionTestCase(APITestCase):
             'open_from': fake_time(2019, 1, 18)
         }
 
-    @skip
     def test_pleb_cannot_edit_admission(self):
         pleb = LegoUser.objects.create()
         self.client.force_authenticate(user=pleb)
@@ -114,7 +113,6 @@ class EditAdmissionTestCase(APITestCase):
 
         self.assertEqual(res.status_code, status.HTTP_403_FORBIDDEN)
 
-    @skip
     def test_committee_leader_cannot_edit_admission(self):
         webkom_leader = LegoUser.objects.create(username="webkomleader")
         webkom_group = Group.objects.create(name="Webkom")
@@ -130,7 +128,6 @@ class EditAdmissionTestCase(APITestCase):
 
         self.assertEqual(res.status_code, status.HTTP_403_FORBIDDEN)
 
-    @skip
     def test_committee_member_cannot_edit_admission(self):
         webkom_member = LegoUser.objects.create(username="webkommember")
         webkom_group = Group.objects.create(name="Webkom")
@@ -146,7 +143,6 @@ class EditAdmissionTestCase(APITestCase):
 
         self.assertEqual(res.status_code, status.HTTP_403_FORBIDDEN)
 
-    @skip
     def test_abakus_leader_can_edit_admission(self):
         abakus_leader = LegoUser.objects.create(username="bigsupremeleader")
         hovedstyret = Group.objects.create(name="Hovedstyret")
@@ -228,11 +224,10 @@ class ListApplicationsTestCase(APITestCase):
         self.assertEqual(res.status_code, status.HTTP_403_FORBIDDEN)
 
     # Should test for both application-mine and application-list unless editing current view
-
     def test_can_see_own_application(self):
         self.client.force_authenticate(user=self.pleb)
-
         res = self.client.get(reverse('application-mine'))
+
 
         self.assertEqual(res.status_code, status.HTTP_200_OK)
 

@@ -1,5 +1,4 @@
 from django.conf import settings
-from django.contrib.auth.mixins import LoginRequiredMixin
 from django.contrib.auth.models import User
 from django.db.models import Prefetch
 from django.views.generic.base import TemplateView
@@ -13,9 +12,8 @@ from committee_admissions.admissions.models import (
 )
 from committee_admissions.admissions.serializers import (
     AdminAdmissionSerializer, AdmissionPublicSerializer, ApplicationCreateUpdateSerializer,
-    CommitteeApplicationSerializer, CommitteeSerializer, UserApplicationSerializer, UserSerializer
+    CommitteeSerializer, UserApplicationSerializer
 )
-
 from .models import Membership
 from .permissions import AdmissionPermissions, ApplicationPermissions, CommitteePermissions
 
@@ -45,20 +43,20 @@ class AdmissionViewSet(viewsets.ModelViewSet):
 class CommitteeViewSet(viewsets.ModelViewSet):
     queryset = Committee.objects.all()
     serializer_class = CommitteeSerializer
-    permission_classes = [CommitteePermissions]
+    permission_classes = [permissions.IsAuthenticated, CommitteePermissions]
 
 
 class ApplicationViewSet(viewsets.ModelViewSet):
     queryset = UserApplication.objects.all().select_related("admission", "user")
     serializer_class = ApplicationCreateUpdateSerializer
-    permission_classes = [ApplicationPermissions]
+    permission_classes = [permissions.IsAuthenticated, ApplicationPermissions]
 
     def get_queryset(self):
         user = self.request.user
         if Membership.objects.filter(
-            user=user,
-            role=constants.LEADER,
-            abakus_group__name="Hovedstyret",
+                user=user,
+                role=constants.LEADER,
+                abakus_group__name="Hovedstyret",
         ).exists():
             return super().get_queryset().prefetch_related(
                 'committee_applications', 'committee_applications__committee'
@@ -75,11 +73,11 @@ class ApplicationViewSet(viewsets.ModelViewSet):
 
         return super().get_queryset().filter(committee_applications__committee__name=group.name
                                              ).prefetch_related(
-                                                 Prefetch(
-                                                     'committee_applications', queryset=qs,
-                                                     to_attr='committee_applications_filtered'
-                                                 )
-                                             )
+            Prefetch(
+                'committee_applications', queryset=qs,
+                to_attr='committee_applications_filtered'
+            )
+        )
 
     def get_serializer_class(self):
         if self.action in ('create'):
