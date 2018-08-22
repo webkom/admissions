@@ -1,15 +1,19 @@
 from rest_framework import permissions
 
+from .models import LegoUser
+
 
 def can_edit_committee(user, committee):
     if user.is_superuser:
         return True
-    return committee is user.leader_of_committee
+    user.__class__ = LegoUser
+    return committee == user.leader_of_committee
 
 
 def is_admin(user):
     if user.is_anonymous:
         return False
+    user.__class__ = LegoUser
     return user.is_board_member
 
 
@@ -37,13 +41,13 @@ class AdmissionPermissions(permissions.BasePermission):
         if request.method in permissions.SAFE_METHODS:
             return True
 
-        return is_admin(request.user)
+        return request.user.is_superuser
 
     def has_permission(self, request, view):
         if request.method in permissions.SAFE_METHODS:
             return True
 
-        return is_admin(request.user)
+        return request.user.is_superuser
 
 
 class ApplicationPermissions(permissions.BasePermission):

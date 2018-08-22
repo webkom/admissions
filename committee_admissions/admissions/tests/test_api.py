@@ -29,10 +29,7 @@ class EditCommitteeTestCase(APITestCase):
             response_label="Søk Arrkom fordi vi har det kult!"
         )
         self.webkom_leader = LegoUser.objects.create(username="webkom")
-        self.webkom_group = Group.objects.create(name="Webkom")
-        Membership.objects.create(
-            user=self.webkom_leader, role=LEADER, abakus_group=self.webkom_group
-        )
+        Membership.objects.create(user=self.webkom_leader, role=LEADER, committee=self.webkom)
 
         self.edit_committee_data = {
             'response_text': 'Halla, Webkom er ikke noe gucci',
@@ -68,9 +65,7 @@ class EditCommitteeTestCase(APITestCase):
         self.assertEqual(res.status_code, status.HTTP_200_OK)
 
     def test_abakus_leader_cannot_edit_committee(self):
-        abakus_leader = LegoUser.objects.create(username="bigsupremeleader")
-        hovedstyret = Group.objects.create(name="Hovedstyret")
-        Membership.objects.create(user=abakus_leader, role=LEADER, abakus_group=hovedstyret)
+        abakus_leader = LegoUser.objects.create(username="bigsupremeleader", is_superuser=True)
 
         self.client.force_authenticate(user=abakus_leader)
 
@@ -78,7 +73,7 @@ class EditCommitteeTestCase(APITestCase):
             reverse('committee-detail', kwargs={'pk': self.arrkom.pk}), self.edit_committee_data
         )
 
-        self.assertEqual(res.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
 
     # What about when not logged in aka. have a user? Rewrite api (remove LoginRequiredMixins
     # from views to stop from redirecting, and handle redirecting ourselves with permissions.
@@ -111,8 +106,8 @@ class EditAdmissionTestCase(APITestCase):
 
     def test_committee_leader_cannot_edit_admission(self):
         webkom_leader = LegoUser.objects.create(username="webkomleader")
-        webkom_group = Group.objects.create(name="Webkom")
-        Membership.objects.create(user=webkom_leader, role=LEADER, abakus_group=webkom_group)
+        webkom = Committee.objects.create(name="Webkom")
+        Membership.objects.create(user=webkom_leader, role=LEADER, committee=webkom)
 
         self.client.force_authenticate(user=webkom_leader)
 
@@ -124,8 +119,8 @@ class EditAdmissionTestCase(APITestCase):
 
     def test_committee_member_cannot_edit_admission(self):
         webkom_member = LegoUser.objects.create(username="webkommember")
-        webkom_group = Group.objects.create(name="Webkom")
-        Membership.objects.create(user=webkom_member, role=MEMBER, abakus_group=webkom_group)
+        webkom = Committee.objects.create(name="Webkom")
+        Membership.objects.create(user=webkom_member, role=MEMBER, committee=webkom)
 
         self.client.force_authenticate(user=webkom_member)
 
@@ -143,9 +138,7 @@ class EditAdmissionTestCase(APITestCase):
         self.assertEqual(res.status_code, status.HTTP_401_UNAUTHORIZED)
 
     def test_abakus_leader_can_edit_admission(self):
-        abakus_leader = LegoUser.objects.create(username="bigsupremeleader")
-        hovedstyret = Group.objects.create(name="Hovedstyret")
-        Membership.objects.create(user=abakus_leader, role=LEADER, abakus_group=hovedstyret)
+        abakus_leader = LegoUser.objects.create(username="bigsupremeleader", is_superuser=True)
 
         self.client.force_authenticate(user=abakus_leader)
 
@@ -217,10 +210,8 @@ class ListApplicationsTestCase(APITestCase):
         )
 
         self.webkom_leader = LegoUser.objects.create(username="webkomleader")
-        self.webkom_group = Group.objects.create(name="Webkom")
-        Membership.objects.create(
-            user=self.webkom_leader, role=LEADER, abakus_group=self.webkom_group
-        )
+        self.webkom = Committee.objects.create(name="Webkom")
+        Membership.objects.create(user=self.webkom_leader, role=LEADER, committee=self.webkom)
 
     def unauthorized_user_cannot_see_other_applications(self):
         """ Normal users should not be able to list applications """

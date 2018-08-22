@@ -27,7 +27,7 @@
       user: {
         full_name: "{{ request.user.get_full_name }}",
         is_superuser: "{{ request.user.is_superuser }}",
-        is_board_member: "{{ is_board_member }}"
+        is_board_member: "{{ request.user.is_board_member }}"
       }
     };
     window.__CONFIG__ = {

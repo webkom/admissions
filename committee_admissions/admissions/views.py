@@ -29,10 +29,7 @@ class AppView(TemplateView):
         context['settings'] = settings
         # :rip:
         # beacuse of proxy model
-        if self.request.user.is_authenticated:
-            context['is_board_member'] = LegoUser.objects.get(
-                pk=self.request.user.pk
-            ).is_board_member
+        self.request.user.__class__ = LegoUser
         return context
 
 
@@ -73,25 +70,19 @@ class ApplicationViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         user = self.request.user
-        if Membership.objects.filter(
-            user=user,
-            role=constants.LEADER,
-            abakus_group__name="Hovedstyret",
-        ).exists():
+        user.__class__ = LegoUser
+        if user.is_superuser:
             return super().get_queryset().prefetch_related(
                 'committee_applications', 'committee_applications__committee'
             )
 
-        membership = Membership.objects.filter(user=user, role=constants.LEADER).first()
-        if not membership:
+        if not user.is_board_member:
             return User.objects.none()
 
-        group = membership.abakus_group
+        committee = user.leader_of_committee
+        qs = CommitteeApplication.objects.filter(committee=committee).select_related('committee')
 
-        qs = CommitteeApplication.objects.filter(committee__name=group.name
-                                                 ).select_related('committee')
-
-        return super().get_queryset().filter(committee_applications__committee__name=group.name
+        return super().get_queryset().filter(committee_applications__committee=committee
                                              ).prefetch_related(
                                                  Prefetch(
                                                      'committee_applications', queryset=qs,

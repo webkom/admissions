@@ -12,11 +12,14 @@ class LegoUser(User):
 
     @property
     def is_board_member(self):
-        return self.is_superuser or self.leader_of_committee.exists()
+        return self.is_superuser or self.leader_of_committee
 
     @property
     def leader_of_committee(self):
-        return Membership.objects.filter(user=self, role=constants.LEADER)
+        membership = Membership.objects.filter(user=self, role=constants.LEADER).first()
+        if not membership:
+            return None
+        return membership.committee
 
 
 class Admission(models.Model):

@@ -104,9 +104,7 @@ class UserApplicationSerializer(serializers.ModelSerializer):
 class UserSerializer(serializers.HyperlinkedModelSerializer):
     class Meta:
         model = LegoUser
-        fields = (
-            'url', 'pk', 'username', 'first_name', 'last_name', 'email', 'is_staff', 'abakus_groups'
-        )
+        fields = ('url', 'pk', 'username', 'first_name', 'last_name', 'email', 'is_staff')
 
 
 class ApplicationCreateUpdateSerializer(serializers.HyperlinkedModelSerializer):
