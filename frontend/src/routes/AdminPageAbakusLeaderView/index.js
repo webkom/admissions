@@ -121,44 +121,49 @@ class AdminPage extends Component {
                 <StatisticsName>Antall søkere</StatisticsName>
                 {numApplicants} {numApplicants == 1 ? "søker" : "søkere"}
               </StatisticsWrapper>
-              <StatisticsWrapper>
-                <StatisticsName>Totalt antall søknader</StatisticsName>
-                {numApplications} {numApplications == 1 ? "søknad" : "søknader"}
-              </StatisticsWrapper>
-              <Statistics>
-                <CommitteeStatistics
-                  applications={applications}
-                  committee="Arrkom"
-                />
-                <CommitteeStatistics
-                  applications={applications}
-                  committee="Bedkom"
-                />
-                <CommitteeStatistics
-                  applications={applications}
-                  committee="Fagkom"
-                />
-                <CommitteeStatistics
-                  applications={applications}
-                  committee="Koskom"
-                />
-                <CommitteeStatistics
-                  applications={applications}
-                  committee="LaBamba"
-                />
-                <CommitteeStatistics
-                  applications={applications}
-                  committee="PR"
-                />
-                <CommitteeStatistics
-                  applications={applications}
-                  committee="readme"
-                />
-                <CommitteeStatistics
-                  applications={applications}
-                  committee="Webkom"
-                />
-              </Statistics>
+              {djangoData.is_superuser && (
+                <StatisticsWrapper>
+                  <StatisticsName>Totalt antall søknader</StatisticsName>
+                  {numApplications}{" "}
+                  {numApplications == 1 ? "søknad" : "søknader"}
+                </StatisticsWrapper>
+              )}
+              {djangoData.is_superuser && (
+                <Statistics>
+                  <CommitteeStatistics
+                    applications={applications}
+                    committee="Arrkom"
+                  />
+                  <CommitteeStatistics
+                    applications={applications}
+                    committee="Bedkom"
+                  />
+                  <CommitteeStatistics
+                    applications={applications}
+                    committee="Fagkom"
+                  />
+                  <CommitteeStatistics
+                    applications={applications}
+                    committee="Koskom"
+                  />
+                  <CommitteeStatistics
+                    applications={applications}
+                    committee="LaBamba"
+                  />
+                  <CommitteeStatistics
+                    applications={applications}
+                    committee="PR"
+                  />
+                  <CommitteeStatistics
+                    applications={applications}
+                    committee="readme"
+                  />
+                  <CommitteeStatistics
+                    applications={applications}
+                    committee="Webkom"
+                  />
+                </Statistics>
+              )}
             </Statistics>
             <CSVExport
               data={csvData}

@@ -3,6 +3,8 @@ import Moment from "react-moment";
 import "moment/locale/nb";
 Moment.globalLocale = "nb";
 
+import djangoData from "src/utils/djangoData";
+
 import ApplicationAdminView from "src/components/ApplicationAdminView";
 import CollapseContainer from "src/containers/CollapseContainer";
 
@@ -65,9 +67,12 @@ class UserApplicationAdminView extends Component {
           header={
             <Header>
               <Name>{user.full_name}</Name>
-              <NumApplications>
-                {numApplications} {numApplications == 1 ? "søknad" : "søknader"}
-              </NumApplications>
+              {djangoData.is_superuser && (
+                <NumApplications>
+                  {numApplications}{" "}
+                  {numApplications == 1 ? "søknad" : "søknader"}
+                </NumApplications>
+              )}
             </Header>
           }
           content={
@@ -87,7 +92,7 @@ class UserApplicationAdminView extends Component {
                   </Moment>
                 </SmallDescriptionWrapper>
               </Header>
-              <PriorityText text={priorityText} />
+              {djangoData.is_superuser && <PriorityText text={priorityText} />}
               {committeeApplications}
             </div>
           }
