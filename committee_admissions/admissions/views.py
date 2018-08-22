@@ -16,6 +16,7 @@ from committee_admissions.admissions.serializers import (
     CommitteeSerializer, UserApplicationSerializer
 )
 
+from .authentication import SessionAuthentication
 from .models import Membership
 from .permissions import AdmissionPermissions, ApplicationPermissions, CommitteePermissions
 
@@ -31,6 +32,7 @@ class AppView(TemplateView):
 
 class AdmissionViewSet(viewsets.ModelViewSet):
     queryset = Admission.objects.all()
+    authentication_classes = [SessionAuthentication]
     permission_classes = [AdmissionPermissions]
 
     def get_serializer_class(self):
@@ -45,11 +47,13 @@ class AdmissionViewSet(viewsets.ModelViewSet):
 class CommitteeViewSet(viewsets.ModelViewSet):
     queryset = Committee.objects.all()
     serializer_class = CommitteeSerializer
+    authentication_classes = [SessionAuthentication]
     permission_classes = [permissions.IsAuthenticated, CommitteePermissions]
 
 
 class ApplicationViewSet(viewsets.ModelViewSet):
     queryset = UserApplication.objects.all().select_related("admission", "user")
+    authentication_classes = [SessionAuthentication]
 
     def get_permissions(self):
         """

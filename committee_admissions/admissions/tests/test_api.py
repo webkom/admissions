@@ -1,8 +1,6 @@
 from unittest import skip
 
 from django.contrib.auth.models import Group
-from django.forms.models import model_to_dict
-from django.http import JsonResponse
 from django.urls import reverse
 from django.utils import timezone
 from rest_framework import status
@@ -137,6 +135,13 @@ class EditAdmissionTestCase(APITestCase):
 
         self.assertEqual(res.status_code, status.HTTP_403_FORBIDDEN)
 
+    def test_unauthorized_user_cannot_edit_admission(self):
+        res = self.client.patch(
+            reverse('admission-detail', kwargs={'pk': self.admission.pk}), self.edit_admission_data
+        )
+
+        self.assertEqual(res.status_code, status.HTTP_401_UNAUTHORIZED)
+
     def test_abakus_leader_can_edit_admission(self):
         abakus_leader = LegoUser.objects.create(username="bigsupremeleader")
         hovedstyret = Group.objects.create(name="Hovedstyret")
@@ -216,6 +221,14 @@ class ListApplicationsTestCase(APITestCase):
         Membership.objects.create(
             user=self.webkom_leader, role=LEADER, abakus_group=self.webkom_group
         )
+
+    def unauthorized_user_cannot_see_other_applications(self):
+        """ Normal users should not be able to list applications """
+        self.client.force_authenticate(user=self.pleb)
+
+        res = self.client.get(reverse('userapplication-list'))
+
+        self.assertEqual(res.status_code, status.HTTP_401_UNAUTHORIZED)
 
     def test_normal_user_cannot_see_other_applications(self):
         """ Normal users should not be able to list applications """
