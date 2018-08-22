@@ -7,7 +7,7 @@ import Moment from "react-moment";
 import "moment/locale/nb";
 Moment.globalLocale = "nb";
 
-import config from "src/utils/config";
+import djangoData from "src/utils/djangoData";
 import AbakusLogo from "src/components/AbakusLogo";
 import LinkButton from "src/components/LinkButton";
 import { Card, CardTitle, CardParagraph } from "src/components/Card";
@@ -88,7 +88,7 @@ class LandingPage extends Component {
             <LinkButton to={hasSubmitted ? "/myapplications" : "/committees"}>
               Gå til søknad
             </LinkButton>
-            {adminPermissions && (
+            {djangoData.user.is_board_member && (
               <LinkButton to="/admin">Gå til admin panel</LinkButton>
             )}
           </LinkWrapper>

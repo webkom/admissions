@@ -12,7 +12,7 @@ class LegoUser(User):
 
     @property
     def is_board_member(self):
-        return self.is_superuser or self.leader_of_committee
+        return bool(self.is_superuser or self.leader_of_committee)
 
     @property
     def leader_of_committee(self):
