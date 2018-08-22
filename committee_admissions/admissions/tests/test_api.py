@@ -9,7 +9,9 @@ from rest_framework import status
 from rest_framework.test import APITestCase
 
 from committee_admissions.admissions.constants import LEADER, MEMBER
-from committee_admissions.admissions.models import Admission, Committee, LegoUser, Membership
+from committee_admissions.admissions.models import (
+    Admission, Committee, LegoUser, Membership, UserApplication
+)
 
 
 def fake_time(y, m, d):
@@ -156,12 +158,13 @@ class CreateApplicationTestCase(APITestCase):
             title="Opptak 2018", open_from=fake_time(2018, 7, 11),
             public_deadline=fake_time(2018, 9, 1), application_deadline=fake_time(2018, 9, 7)
         )
+        self.webkom = Committee.objects.create(name="Webkom")
+        self.koskom = Committee.objects.create(name="Koskom")
 
         # Setup Anna
         self.pleb_anna = LegoUser.objects.create(username="Anna")
 
-        self.annas_application_data = {
-            # 'user': self.pleb_anna,
+        self.application_data = {
             'text': 'Ønsker Webkom mest',
             'applications': {
                 'webkom': "Hohohohohohohohohohooho webbis",
@@ -172,20 +175,30 @@ class CreateApplicationTestCase(APITestCase):
         # Setup Bob
         self.pleb_bob = LegoUser.objects.create(username="Bob")
 
-    # TESTS DONT WORK
-    @skip
     def test_cannot_apply_for_someone_else(self):
-        # Login as Bob, and try to apply as Anna
+        # Login as Bob, and try to apply as Anna. User should then be Bob
         self.client.force_authenticate(user=self.pleb_bob)
 
-        res = self.client.post(reverse('userapplication-list'), self.annas_application_data)
+        annas_application_data = self.application_data.copy()
 
-        self.assertEqual(res.status_code, status.HTTP_403_FORBIDDEN)
+        annas_application_data['user'] = self.pleb_anna.pk
 
-    @skip
+        res = self.client.post(
+            reverse('userapplication-list'), annas_application_data, format='json'
+        )
+
+        self.assertEqual(res.status_code, status.HTTP_201_CREATED)
+
+        pk_res = res.json()['pk']
+
+        # Application registered as bob
+        self.assertEqual(UserApplication.objects.get(pk=pk_res).user, self.pleb_bob)
+
     def test_can_apply(self):
         self.client.force_authenticate(user=self.pleb_anna)
-        res = self.client.post(reverse('userapplication-list'), self.annas_application_data)
+        res = self.client.post(
+            reverse('userapplication-list'), self.application_data, format='json'
+        )
 
         self.assertEqual(res.status_code, status.HTTP_201_CREATED)
 
@@ -193,6 +206,10 @@ class CreateApplicationTestCase(APITestCase):
 class ListApplicationsTestCase(APITestCase):
     def setUp(self):
         self.pleb = LegoUser.objects.create()
+        self.admission = Admission.objects.create(
+            title="Opptak 2018", open_from=fake_time(2018, 7, 11),
+            public_deadline=fake_time(2018, 9, 1), application_deadline=fake_time(2018, 9, 7)
+        )
 
         self.webkom_leader = LegoUser.objects.create(username="webkomleader")
         self.webkom_group = Group.objects.create(name="Webkom")
@@ -200,10 +217,8 @@ class ListApplicationsTestCase(APITestCase):
             user=self.webkom_leader, role=LEADER, abakus_group=self.webkom_group
         )
 
-    # Suggesting that the application endpoint list view is blocked for normal users to get from,
-    # but they have to post to it (unless changing application-mine to fit that purpose).
-    # TEST DOES NOT WORK
     def test_normal_user_cannot_see_other_applications(self):
+        """ Normal users should not be able to list applications """
         self.client.force_authenticate(user=self.pleb)
 
         res = self.client.get(reverse('userapplication-list'))
@@ -212,10 +227,18 @@ class ListApplicationsTestCase(APITestCase):
 
     # Should test for both application-mine and application-list unless editing current view
     def test_can_see_own_application(self):
+        UserApplication.objects.create(user=self.pleb, admission=self.admission)
+
         self.client.force_authenticate(user=self.pleb)
         res = self.client.get(reverse('userapplication-mine'))
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
 
-        self.assertEqual(res.status_code, status.HTTP_404_NOT_FOUND)
+    def test_cannot_get_application_by_pk(self):
+        application = UserApplication.objects.create(user=self.pleb, admission=self.admission)
+        self.client.force_authenticate(user=self.pleb)
+        res = self.client.get(reverse('userapplication-detail', kwargs={'pk': application.pk}))
+
+        self.assertEqual(res.status_code, status.HTTP_403_FORBIDDEN)
 
     # Not sure how to test
     @skip

@@ -50,7 +50,6 @@ class CommitteeViewSet(viewsets.ModelViewSet):
 
 class ApplicationViewSet(viewsets.ModelViewSet):
     queryset = UserApplication.objects.all().select_related("admission", "user")
-    serializer_class = ApplicationCreateUpdateSerializer
 
     def get_permissions(self):
         """
@@ -96,7 +95,6 @@ class ApplicationViewSet(viewsets.ModelViewSet):
         return UserApplicationSerializer
 
     def perform_create(self, serializer):
-        print(self.request.user)
         serializer.save(user=self.request.user)
 
     @list_route(methods=['GET'])
