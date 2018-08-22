@@ -3,6 +3,7 @@ import { CSVLink } from "react-csv";
 import Raven from "raven-js";
 import callApi from "src/utils/callApi";
 
+import djangoData from "src/utils/djangoData";
 import UserInfo from "src/components/UserInfo";
 import PageWrapper from "src/components/PageWrapper";
 import AbakusLogo from "src/components/AbakusLogo";
@@ -78,7 +79,9 @@ class AdminPage extends Component {
       }
     );
 
-    this.setState({ user: { name: window.django.user.full_name } });
+    this.setState({
+      user: { name: djangoData.user && djangoData.user.full_name }
+    });
   }
 
   render() {
