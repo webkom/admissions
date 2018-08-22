@@ -117,7 +117,7 @@ class ApplicationCreateUpdateSerializer(serializers.HyperlinkedModelSerializer):
 
         text = validated_data.pop('text')
 
-        admission = Admission.objects.filter(application_deadline__gt=timezone.now()).first()
+        admission = [obj for obj in Admission.objects.all() if obj.is_open][0]
 
         user_application, created = UserApplication.objects.update_or_create(
             admission=admission, user=user, defaults={"text": text}
