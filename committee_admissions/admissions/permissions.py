@@ -1,23 +1,16 @@
 from rest_framework import permissions
 
-from committee_admissions.admissions import constants
-
-from .models import Membership
-
 
 def can_edit_committee(user, committee):
-    return Membership.objects.filter(
-        user=user, abakus_group__name=committee.name, role=constants.LEADER
-    ).exists()
+    if user.is_superuser:
+        return True
+    return committee is user.leader_of_committee
 
 
 def is_admin(user):
     if user.is_anonymous:
         return False
-    return Membership.objects.filter(
-        user=user,
-        abakus_group__name="Hovedstyret",
-    ).exists()
+    return user.is_board_member
 
 
 class IsOwnerOrReadOnly(permissions.BasePermission):

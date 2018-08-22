@@ -9,7 +9,7 @@ from rest_framework.response import Response
 
 from committee_admissions.admissions import constants
 from committee_admissions.admissions.models import (
-    Admission, Committee, CommitteeApplication, UserApplication
+    Admission, Committee, CommitteeApplication, LegoUser, UserApplication
 )
 from committee_admissions.admissions.serializers import (
     AdminAdmissionSerializer, AdmissionPublicSerializer, ApplicationCreateUpdateSerializer,
@@ -27,6 +27,12 @@ class AppView(TemplateView):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context['settings'] = settings
+        # :rip:
+        # beacuse of proxy model
+        if self.request.user.is_authenticated:
+            context['is_board_member'] = LegoUser.objects.get(
+                pk=self.request.user.pk
+            ).is_board_member
         return context
 
 

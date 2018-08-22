@@ -11,36 +11,12 @@ class LegoUser(User):
         proxy = True
 
     @property
-    def abakus_groups(self):
-        """
-        This returns an array with the users group. These groups
-        are fetched from the LEGO API.
-
-        Format (array of dicts):
-        [{
-          'contactEmail': '',
-          'description': 'Webkom er ...',
-          'id': 12345,
-          'logo': None,
-          'name': 'webkom',
-          'parent': 12356,
-          'type': 'komite'
-        }]
-        """
-
-        if not self.lego_extra_data:
-            return None
-        return self.lego_extra_data['abakus_groups']
+    def is_board_member(self):
+        return self.is_superuser or self.leader_of_committee.exists()
 
     @property
-    def lego_extra_data(self):
-        if not self.lego_social_auth:
-            return None
-        return self.lego_social_auth.extra_data
-
-    @property
-    def lego_social_auth(self):
-        return self.social_auth.get(provider='lego')
+    def leader_of_committee(self):
+        return Membership.objects.filter(user=self, role=constants.LEADER)
 
 
 class Admission(models.Model):
@@ -118,11 +94,11 @@ class CommitteeApplication(TimeStampModel):
 
 class Membership(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE)
-    abakus_group = models.ForeignKey(Group, on_delete=models.CASCADE)
+    committee = models.ForeignKey(Committee, on_delete=models.CASCADE)
     role = models.CharField(max_length=30, choices=constants.ROLES, default=constants.MEMBER)
 
     class Meta:
-        unique_together = ('user', 'abakus_group')
+        unique_together = ('user', 'committee')
 
     def __str__(self):
-        return f'{self.user} is in {self.abakus_group}'
+        return f'{self.user} is in {self.committee}'
