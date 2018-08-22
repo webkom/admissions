@@ -69,6 +69,16 @@ LOGGING = {
             'handlers': ['console'],
             'propagate': False,
         },
+        'django': {
+            'level': 'DEBUG',
+            'propagate': True,
+            'filters': ['require_debug_true'],
+        },
+        'django.requests': {
+            'level': 'INFO',
+            'propagate': True,
+            'filters': ['require_debug_true'],
+        },
         'raven': {
             'level': 'DEBUG',
             'handlers': ['console'],
