@@ -4,6 +4,8 @@ from .models import LegoUser
 
 
 def can_edit_committee(user, committee):
+    if user.is_anonymous:
+        return False
     if user.is_superuser:
         return True
     user.__class__ = LegoUser

@@ -17,7 +17,6 @@ from committee_admissions.admissions.serializers import (
 )
 
 from .authentication import SessionAuthentication
-from .models import Membership
 from .permissions import AdmissionPermissions, ApplicationPermissions, CommitteePermissions
 
 
@@ -29,7 +28,8 @@ class AppView(TemplateView):
         context['settings'] = settings
         # :rip:
         # beacuse of proxy model
-        self.request.user.__class__ = LegoUser
+        if self.request.user.is_authenticated:
+            self.request.user.__class__ = LegoUser
         return context
 
 
@@ -70,14 +70,15 @@ class ApplicationViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         user = self.request.user
+        if user.is_anonymous:
+            return User.objects.none()
         user.__class__ = LegoUser
+        if not user.is_board_member:
+            return User.objects.none()
         if user.is_superuser:
             return super().get_queryset().prefetch_related(
                 'committee_applications', 'committee_applications__committee'
             )
-
-        if not user.is_board_member:
-            return User.objects.none()
 
         committee = user.leader_of_committee
         qs = CommitteeApplication.objects.filter(committee=committee).select_related('committee')
