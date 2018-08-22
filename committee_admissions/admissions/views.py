@@ -56,7 +56,7 @@ class ApplicationViewSet(viewsets.ModelViewSet):
         """
         Instantiates and returns the list of permissions that this view requires.
         """
-        if self.action == 'mine':
+        if self.action in ['mine', 'create']:
             permission_classes = [permissions.IsAuthenticated]
         else:
             permission_classes = [permissions.IsAuthenticated, ApplicationPermissions]
