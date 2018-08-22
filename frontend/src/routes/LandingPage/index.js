@@ -23,7 +23,8 @@ class LandingPage extends Component {
       results: undefined,
       admission: [],
       error: null,
-      adminPermissions: true
+      adminPermissions: true,
+      hasSubmitted: false
     };
   }
 
@@ -38,10 +39,17 @@ class LandingPage extends Component {
         this.setState({ error });
       }
     );
+    callApi("/application/mine/").then(
+      () =>
+        this.setState({
+          hasSubmitted: true
+        }),
+      () => this.setState({ hasSubmitted: false })
+    );
   }
 
   render() {
-    const { error, admission, adminPermissions } = this.state;
+    const { error, admission, adminPermissions, hasSubmitted } = this.state;
     if (error) {
       return <div>Error: {error.message}</div>;
     } else {
@@ -77,7 +85,9 @@ class LandingPage extends Component {
             </CardParagraph>
           </Card>
           <LinkWrapper>
-            <LinkButton to="/committees">Gå til søknad</LinkButton>
+            <LinkButton to={hasSubmitted ? "/myapplications" : "/committees"}>
+              Gå til søknad
+            </LinkButton>
             {adminPermissions && (
               <LinkButton to="/admin">Gå til admin panel</LinkButton>
             )}

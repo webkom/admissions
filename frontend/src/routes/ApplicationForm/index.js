@@ -46,7 +46,7 @@ const FormikApp = withFormik({
       res => {
         console.log("Submit result", res);
         setSubmitting(false);
-        return res;
+        window.location = "/myapplications";
       },
       err => {
         console.log(err);
