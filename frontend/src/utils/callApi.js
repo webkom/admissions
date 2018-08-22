@@ -61,6 +61,10 @@ const callApi = async (url, { method = "GET", body = null } = {}) => {
     window.location = `/login/lego/?next=${window.location.pathname}`;
     return null;
   }
+  if (res.status === 403) {
+    window.location = `/login/lego/?next=${window.location.pathname}`;
+    return null;
+  }
 
   return parseResponseBody(res).then(rejectOnHttpErrors);
 };
