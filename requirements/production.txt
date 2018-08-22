@@ -36,9 +36,10 @@ raven==6.9.0
 requests-oauthlib==1.0.0  # via social-auth-core
 requests==2.19.1          # via requests-oauthlib, social-auth-core
 simplegeneric==0.8.1      # via ipython
-six==1.11.0               # via django-environ, django-extensions, pip-tools, prompt-toolkit, social-auth-app-django, social-auth-core, traitlets
+six==1.11.0               # via django-environ, django-extensions, pip-tools, prompt-toolkit, social-auth-app-django, social-auth-core, structlog, traitlets
 social-auth-app-django==2.1.0
 social-auth-core==1.7.0   # via social-auth-app-django
+structlog==18.1.0
 traitlets==4.3.2          # via ipython
 urllib3==1.23             # via requests
 uwsgi==2.0.17.1

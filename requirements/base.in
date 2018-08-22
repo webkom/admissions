@@ -9,5 +9,6 @@ social-auth-app-django==2.1.0
 pip-tools==2.0.2
 psycopg2==2.7.3.2
 ipython==6.2.1
+structlog==18.1.0
 
 raven==6.9.0

@@ -11,6 +11,8 @@ import os
 
 import environ
 
+from .logging import *  # noqa
+
 # GENERAL CONFIGURATION ======================================================
 BASE_PROJECT_DIR = environ.Path(  # manage.py level
     __file__
@@ -58,6 +60,7 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    'committee_admissions.utils.middleware.LoggingMiddleware',
 ]
 
 # DJANGO REST FRAMEWORK CONFIGURATION ==========================================

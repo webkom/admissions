@@ -87,3 +87,4 @@ webpack-stats.json
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+committee_admissions/settings/local.py
