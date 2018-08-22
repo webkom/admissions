@@ -1,6 +1,7 @@
 from django.conf import settings
 from django.contrib.auth.models import User
 from django.db.models import Prefetch
+from django.http import Http404
 from django.views.generic.base import TemplateView
 from rest_framework import permissions, viewsets
 from rest_framework.decorators import list_route
@@ -14,6 +15,7 @@ from committee_admissions.admissions.serializers import (
     AdminAdmissionSerializer, AdmissionPublicSerializer, ApplicationCreateUpdateSerializer,
     CommitteeSerializer, UserApplicationSerializer
 )
+
 from .models import Membership
 from .permissions import AdmissionPermissions, ApplicationPermissions, CommitteePermissions
 
@@ -49,14 +51,23 @@ class CommitteeViewSet(viewsets.ModelViewSet):
 class ApplicationViewSet(viewsets.ModelViewSet):
     queryset = UserApplication.objects.all().select_related("admission", "user")
     serializer_class = ApplicationCreateUpdateSerializer
-    permission_classes = [permissions.IsAuthenticated, ApplicationPermissions]
+
+    def get_permissions(self):
+        """
+        Instantiates and returns the list of permissions that this view requires.
+        """
+        if self.action == 'mine':
+            permission_classes = [permissions.IsAuthenticated]
+        else:
+            permission_classes = [permissions.IsAuthenticated, ApplicationPermissions]
+        return [permission() for permission in permission_classes]
 
     def get_queryset(self):
         user = self.request.user
         if Membership.objects.filter(
-                user=user,
-                role=constants.LEADER,
-                abakus_group__name="Hovedstyret",
+            user=user,
+            role=constants.LEADER,
+            abakus_group__name="Hovedstyret",
         ).exists():
             return super().get_queryset().prefetch_related(
                 'committee_applications', 'committee_applications__committee'
@@ -73,11 +84,11 @@ class ApplicationViewSet(viewsets.ModelViewSet):
 
         return super().get_queryset().filter(committee_applications__committee__name=group.name
                                              ).prefetch_related(
-            Prefetch(
-                'committee_applications', queryset=qs,
-                to_attr='committee_applications_filtered'
-            )
-        )
+                                                 Prefetch(
+                                                     'committee_applications', queryset=qs,
+                                                     to_attr='committee_applications_filtered'
+                                                 )
+                                             )
 
     def get_serializer_class(self):
         if self.action in ('create'):
@@ -90,6 +101,9 @@ class ApplicationViewSet(viewsets.ModelViewSet):
 
     @list_route(methods=['GET'])
     def mine(self, request):
-        instance = UserApplication.objects.get(user=request.user)
-        serializer = self.get_serializer(instance)
-        return Response(serializer.data)
+        try:
+            instance = UserApplication.objects.get(user=request.user)
+            serializer = self.get_serializer(instance)
+            return Response(serializer.data)
+        except UserApplication.DoesNotExist:
+            raise Http404

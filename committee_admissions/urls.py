@@ -26,7 +26,7 @@ from committee_admissions.admissions.views import (
 router = routers.DefaultRouter()
 router.register(r'admission', AdmissionViewSet)
 router.register(r'committee', CommitteeViewSet)
-router.register(r'application', ApplicationViewSet, base_name="application")
+router.register(r'application', ApplicationViewSet)
 urlpatterns = [
     path('api/admin/', admin.site.urls),
     path('api-auth/', include('rest_framework.urls', namespace='rest_framework')),

@@ -1,16 +1,16 @@
 from unittest import skip
 
-from django.http import JsonResponse
-from django.forms.models import model_to_dict
 from django.contrib.auth.models import Group
+from django.forms.models import model_to_dict
+from django.http import JsonResponse
 from django.urls import reverse
 from django.utils import timezone
-
 from rest_framework import status
 from rest_framework.test import APITestCase
 
-from committee_admissions.admissions.models import Committee, LegoUser, Membership, Admission
 from committee_admissions.admissions.constants import LEADER, MEMBER
+from committee_admissions.admissions.models import Admission, Committee, LegoUser, Membership
+
 
 def fake_time(y, m, d):
     dt = timezone.datetime(y, m, d)
@@ -70,9 +70,7 @@ class EditCommitteeTestCase(APITestCase):
     def test_abakus_leader_cannot_edit_committee(self):
         abakus_leader = LegoUser.objects.create(username="bigsupremeleader")
         hovedstyret = Group.objects.create(name="Hovedstyret")
-        Membership.objects.create(
-            user=abakus_leader, role=LEADER, abakus_group=hovedstyret
-        )
+        Membership.objects.create(user=abakus_leader, role=LEADER, abakus_group=hovedstyret)
 
         self.client.force_authenticate(user=abakus_leader)
 
@@ -81,7 +79,6 @@ class EditCommitteeTestCase(APITestCase):
         )
 
         self.assertEqual(res.status_code, status.HTTP_403_FORBIDDEN)
-
 
     # What about when not logged in aka. have a user? Rewrite api (remove LoginRequiredMixins
     # from views to stop from redirecting, and handle redirecting ourselves with permissions.
@@ -93,11 +90,10 @@ class EditCommitteeTestCase(APITestCase):
 
 class EditAdmissionTestCase(APITestCase):
     def setUp(self):
-        self.admission = Admission.objects.create(title="Opptak 2018",
-                                                  open_from=fake_time(2018, 7, 11),
-                                                  public_deadline=fake_time(2018, 9, 1),
-                                                  application_deadline=fake_time(2018, 9, 7)
-                                                  )
+        self.admission = Admission.objects.create(
+            title="Opptak 2018", open_from=fake_time(2018, 7, 11),
+            public_deadline=fake_time(2018, 9, 1), application_deadline=fake_time(2018, 9, 7)
+        )
         self.edit_admission_data = {
             'title': 'Plebkom opptak 2018',
             'open_from': fake_time(2019, 1, 18)
@@ -116,9 +112,7 @@ class EditAdmissionTestCase(APITestCase):
     def test_committee_leader_cannot_edit_admission(self):
         webkom_leader = LegoUser.objects.create(username="webkomleader")
         webkom_group = Group.objects.create(name="Webkom")
-        Membership.objects.create(
-            user=webkom_leader, role=LEADER, abakus_group=webkom_group
-        )
+        Membership.objects.create(user=webkom_leader, role=LEADER, abakus_group=webkom_group)
 
         self.client.force_authenticate(user=webkom_leader)
 
@@ -131,9 +125,7 @@ class EditAdmissionTestCase(APITestCase):
     def test_committee_member_cannot_edit_admission(self):
         webkom_member = LegoUser.objects.create(username="webkommember")
         webkom_group = Group.objects.create(name="Webkom")
-        Membership.objects.create(
-            user=webkom_member, role=MEMBER, abakus_group=webkom_group
-        )
+        Membership.objects.create(user=webkom_member, role=MEMBER, abakus_group=webkom_group)
 
         self.client.force_authenticate(user=webkom_member)
 
@@ -146,9 +138,7 @@ class EditAdmissionTestCase(APITestCase):
     def test_abakus_leader_can_edit_admission(self):
         abakus_leader = LegoUser.objects.create(username="bigsupremeleader")
         hovedstyret = Group.objects.create(name="Hovedstyret")
-        Membership.objects.create(
-            user=abakus_leader, role=LEADER, abakus_group=hovedstyret
-        )
+        Membership.objects.create(user=abakus_leader, role=LEADER, abakus_group=hovedstyret)
 
         self.client.force_authenticate(user=abakus_leader)
 
@@ -160,14 +150,12 @@ class EditAdmissionTestCase(APITestCase):
 
 
 class CreateApplicationTestCase(APITestCase):
-
     def setUp(self):
         # Create admission and committee
-        self.admission = Admission.objects.create(title="Opptak 2018",
-                                                  open_from=fake_time(2018, 7, 11),
-                                                  public_deadline=fake_time(2018, 9, 1),
-                                                  application_deadline=fake_time(2018, 9, 7)
-                                                  )
+        self.admission = Admission.objects.create(
+            title="Opptak 2018", open_from=fake_time(2018, 7, 11),
+            public_deadline=fake_time(2018, 9, 1), application_deadline=fake_time(2018, 9, 7)
+        )
 
         # Setup Anna
         self.pleb_anna = LegoUser.objects.create(username="Anna")
@@ -184,26 +172,25 @@ class CreateApplicationTestCase(APITestCase):
         # Setup Bob
         self.pleb_bob = LegoUser.objects.create(username="Bob")
 
-
     # TESTS DONT WORK
     @skip
     def test_cannot_apply_for_someone_else(self):
         # Login as Bob, and try to apply as Anna
         self.client.force_authenticate(user=self.pleb_bob)
 
-        res = self.client.post(reverse('application-list'), self.annas_application_data)
+        res = self.client.post(reverse('userapplication-list'), self.annas_application_data)
 
         self.assertEqual(res.status_code, status.HTTP_403_FORBIDDEN)
+
     @skip
     def test_can_apply(self):
         self.client.force_authenticate(user=self.pleb_anna)
-        res = self.client.post(reverse('application-list'), self.annas_application_data)
+        res = self.client.post(reverse('userapplication-list'), self.annas_application_data)
 
         self.assertEqual(res.status_code, status.HTTP_201_CREATED)
 
 
 class ListApplicationsTestCase(APITestCase):
-
     def setUp(self):
         self.pleb = LegoUser.objects.create()
 
@@ -219,25 +206,22 @@ class ListApplicationsTestCase(APITestCase):
     def test_normal_user_cannot_see_other_applications(self):
         self.client.force_authenticate(user=self.pleb)
 
-        res = self.client.get(reverse('application-list'))
+        res = self.client.get(reverse('userapplication-list'))
 
         self.assertEqual(res.status_code, status.HTTP_403_FORBIDDEN)
 
     # Should test for both application-mine and application-list unless editing current view
     def test_can_see_own_application(self):
         self.client.force_authenticate(user=self.pleb)
-        res = self.client.get(reverse('application-mine'))
+        res = self.client.get(reverse('userapplication-mine'))
 
-
-        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.assertEqual(res.status_code, status.HTTP_404_NOT_FOUND)
 
     # Not sure how to test
     def test_abakus_leader_can_see_all_applications(self):
         abakus_leader = LegoUser.objects.create(username="bigsupremeleader")
         hovedstyret = Group.objects.create(name="Hovedstyret")
-        Membership.objects.create(
-            user=abakus_leader, role=LEADER, abakus_group=hovedstyret
-        )
+        Membership.objects.create(user=abakus_leader, role=LEADER, abakus_group=hovedstyret)
 
         self.client.force_authenticate(user=abakus_leader)
         self.fail("Not implemented")
@@ -247,10 +231,7 @@ class ListApplicationsTestCase(APITestCase):
         self.client.force_authenticate(user=self.webkom_leader)
         self.fail("Not implemented")
 
-
     # Not sure how to test
     def test_committee_leader_cannot_see_applications_for_other_committees(self):
         self.client.force_authenticate(user=self.webkom_leader)
         self.fail("Not implemented")
-
-

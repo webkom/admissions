@@ -11,7 +11,7 @@ def can_edit_committee(user, committee):
     ).exists()
 
 
-def can_edit_admission(user, committee):
+def can_edit_admission(user):
     return Membership.objects.filter(
         user=user,
         abakus_group__name="Hovedstyret",
@@ -42,9 +42,12 @@ class AdmissionPermissions(permissions.BasePermission):
         if request.method in permissions.SAFE_METHODS:
             return True
 
-        return can_edit_admission(request.user, obj)
+        return can_edit_admission(request.user)
 
 
 class ApplicationPermissions(permissions.BasePermission):
     def has_object_permission(self, request, view, obj):
         return False
+
+    def has_permission(self, request, view):
+        return can_edit_admission(request.user)
