@@ -4,31 +4,32 @@ import { Form, Field } from "formik";
 import PageTitle from "src/components/PageTitle";
 import PriorityTextField from "src/components/PriorityTextField";
 
-import ChooseCommitteesContainer from "./ChooseCommitteesContainer";
-import GridContainer from "./GridContainer";
-import SubmitButton from "./SubmitButton";
-import PageSubTitle from "./PageSubTitle";
-import CSRFToken from "./csrftoken";
+import {
+  Wrapper,
+  SubmitButton,
+  PageSubTitle,
+  ToggleCommitteeWrapper,
+  ToggleCommitteeWrapperMobile,
+  PhoneNumberField
+} from "./styles";
 
-import "./ApplicationForm.css";
-
-const ApplicationForm = ({
+const FormStructure = ({
   hasSelected,
   SelectedComs,
   ChooseCommitteesItems,
   handleSubmit,
   isSubmitting,
-  isValid
+  isValid,
+  isMobile
 }) => (
   <div>
     <PageTitle>Søknad til komiteer</PageTitle>
 
-    <GridContainer>
-      <Form className="form">
-        <CSRFToken />
+    <Wrapper>
+      <Form style={{ gridArea: "form" }}>
         <PageSubTitle>Dine søknader</PageSubTitle>
         <Field component={PriorityTextField} name="priorityText" />
-        <Field
+        <PhoneNumberField
           type="tel"
           name="phoneNumber"
           onBlur={e => sessionStorage.setItem("phoneNumber", e.target.value)}
@@ -37,15 +38,15 @@ const ApplicationForm = ({
 
         {hasSelected ? SelectedComs : <h3>Du har ikke valgt noen komiteer.</h3>}
       </Form>
-      <ChooseCommitteesContainer>
+
+      <ToggleCommitteeWrapper>
         <PageSubTitle>Komiteer</PageSubTitle>
         {ChooseCommitteesItems}
-      </ChooseCommitteesContainer>
-    </GridContainer>
+      </ToggleCommitteeWrapper>
+    </Wrapper>
+
     {hasSelected && (
       <SubmitButton
-        className="submit-btn"
-        margin="0 auto 3em auto"
         onClick={handleSubmit}
         type="submit"
         disabled={isSubmitting}
@@ -57,4 +58,4 @@ const ApplicationForm = ({
   </div>
 );
 
-export default ApplicationForm;
+export default FormStructure;

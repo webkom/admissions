@@ -14,18 +14,16 @@ import Name from "./Name";
 
 const ToggleCommitteeSmall = ({ name, toggleCommittee, isChosen }) => {
   return (
-    <Wrapper>
-      <button onClick={() => toggleCommittee(name.toLowerCase())}>
-        {isChosen ? (
-          <Icon color="#b11c11" icon="remove_circle" />
-        ) : (
-          <Icon icon="add_circle" />
-        )}
-      </button>{" "}
+    <Wrapper onClick={() => toggleCommittee(name.toLowerCase())}>
+      {isChosen ? (
+        <Icon color="#b11c11" icon="remove_circle" />
+      ) : (
+        <Icon icon="add_circle" />
+      )}
       <Logo
         logo={require(`assets/committee_logos/${name.toLowerCase()}.png`)}
       />{" "}
-      <Name>{name}</Name>
+      <Name>{name}</Name>{" "}
     </Wrapper>
   );
 };

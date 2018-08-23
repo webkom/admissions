@@ -6,7 +6,7 @@ const Wrapper = styled(Card)`
   margin: 0;
   padding: 1.5em;
   font-size: 0.9em;
-  font-family: Raleway, "Courier New", Arial, sans-serif;
+  font-family: Raleway, "Helvetica Neue", Arial, sans-serif;
 `;
 
 export default Wrapper;

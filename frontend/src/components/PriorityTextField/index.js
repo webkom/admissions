@@ -3,7 +3,6 @@ import Textarea from "react-textarea-autosize";
 
 import { Card, CardTitle } from "src/components/Card";
 
-import Wrapper from "./Wrapper";
 import "./style.css";
 
 class PriorityTextField extends Component {

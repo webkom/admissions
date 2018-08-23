@@ -7,10 +7,12 @@
 import styled from "styled-components";
 import { media } from "src/styles/mediaQueries";
 
-const Wrapper = styled.div`
+const Wrapper = styled.button`
   display: flex;
   align-items: center;
   margin: 0.5em;
+  font-family: Raleway, "Helvetica Neue", Arial, sans-serif;
+
   ${media.handheld`
       width: 50%;
       margin: 0;
