@@ -7,7 +7,6 @@ from committee_admissions.utils.models import TimeStampModel
 
 
 class LegoUser(User):
-
     class Meta:
         proxy = True
 

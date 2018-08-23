@@ -167,7 +167,8 @@ class CreateApplicationTestCase(APITestCase):
             'applications': {
                 'webkom': "Hohohohohohohohohohooho webbis",
                 'koskom': "Hahahahahahahahahahaha arris"
-            }
+            },
+            'phone_number': '12345678'
         }
 
         # Setup Bob

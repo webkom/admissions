@@ -91,14 +91,8 @@ class UserApplicationSerializer(serializers.ModelSerializer):
     class Meta:
         model = UserApplication
         fields = (
-            'url',
-            'pk',
-            'user',
-            'text',
-            'time_sent',
-            'applied_within_deadline',
-            'committee_applications',
-            'phone_number'
+            'url', 'pk', 'user', 'text', 'time_sent', 'applied_within_deadline',
+            'committee_applications', 'phone_number'
         )
 
 
@@ -121,7 +115,10 @@ class ApplicationCreateUpdateSerializer(serializers.HyperlinkedModelSerializer):
         admission = [obj for obj in Admission.objects.all() if obj.is_open][0]
 
         user_application, created = UserApplication.objects.update_or_create(
-            admission=admission, user=user, defaults={"text": text, "phone_number": phone_number}
+            admission=admission, user=user, defaults={
+                "text": text,
+                "phone_number": phone_number
+            }
         )
         # The code smell is strong with this one, young padawan
         applications = self.initial_data.pop("applications")
