@@ -7,7 +7,7 @@ import Moment from "react-moment";
 import "moment/locale/nb";
 Moment.globalLocale = "nb";
 
-import config from "src/utils/config";
+import djangoData from "src/utils/djangoData";
 import AbakusLogo from "src/components/AbakusLogo";
 import LinkButton from "src/components/LinkButton";
 import { Card, CardTitle, CardParagraph } from "src/components/Card";
@@ -39,13 +39,14 @@ class LandingPage extends Component {
         this.setState({ error });
       }
     );
-    callApi("/application/mine/").then(
-      () =>
-        this.setState({
-          hasSubmitted: true
-        }),
-      () => this.setState({ hasSubmitted: false })
-    );
+    djangoData.user.full_name &&
+      callApi("/application/mine/").then(
+        () =>
+          this.setState({
+            hasSubmitted: true
+          }),
+        () => this.setState({ hasSubmitted: false })
+      );
   }
 
   render() {
@@ -85,10 +86,24 @@ class LandingPage extends Component {
             </CardParagraph>
           </Card>
           <LinkWrapper>
-            <LinkButton to={hasSubmitted ? "/myapplications" : "/committees"}>
-              Gå til søknad
-            </LinkButton>
-            {adminPermissions && (
+            {djangoData.user.full_name ? (
+              <LinkButton to={hasSubmitted ? "/myapplications" : "/committees"}>
+                Gå til søknad
+              </LinkButton>
+            ) : (
+              <LinkButton
+                to="/"
+                onClick={e => {
+                  window.location = `/login/lego/?next=${
+                    window.location.pathname
+                  }`;
+                  e.preventDefault();
+                }}
+              >
+                Logg inn
+              </LinkButton>
+            )}
+            {djangoData.user.is_board_member && (
               <LinkButton to="/admin">Gå til admin panel</LinkButton>
             )}
           </LinkWrapper>

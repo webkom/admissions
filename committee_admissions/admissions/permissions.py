@@ -1,21 +1,22 @@
 from rest_framework import permissions
 
-from committee_admissions.admissions import constants
-
-from .models import Membership
+from .models import LegoUser
 
 
 def can_edit_committee(user, committee):
-    return Membership.objects.filter(
-        user=user, abakus_group__name=committee.name, role=constants.LEADER
-    ).exists()
+    if user.is_anonymous:
+        return False
+    if user.is_superuser:
+        return True
+    user.__class__ = LegoUser
+    return committee == user.leader_of_committee
 
 
-def can_edit_admission(user):
-    return Membership.objects.filter(
-        user=user,
-        abakus_group__name="Hovedstyret",
-    ).exists()
+def is_admin(user):
+    if user.is_anonymous:
+        return False
+    user.__class__ = LegoUser
+    return user.is_board_member
 
 
 class IsOwnerOrReadOnly(permissions.BasePermission):
@@ -42,7 +43,13 @@ class AdmissionPermissions(permissions.BasePermission):
         if request.method in permissions.SAFE_METHODS:
             return True
 
-        return can_edit_admission(request.user)
+        return request.user.is_superuser
+
+    def has_permission(self, request, view):
+        if request.method in permissions.SAFE_METHODS:
+            return True
+
+        return request.user.is_superuser
 
 
 class ApplicationPermissions(permissions.BasePermission):
@@ -50,4 +57,4 @@ class ApplicationPermissions(permissions.BasePermission):
         return False
 
     def has_permission(self, request, view):
-        return can_edit_admission(request.user)
+        return is_admin(request.user)

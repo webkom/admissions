@@ -8,7 +8,7 @@ export class HttpError extends Error {
 }
 
 function reportToSentry(error) {
-  Raven.captureException(error);
+  error && Raven.captureException(error);
   throw error;
 }
 function timeoutPromise(ms = 0) {
@@ -55,15 +55,9 @@ const callApi = async (url, { method = "GET", body = null } = {}) => {
     ...(body ? { body } : {})
   });
   const res = await Promise.race([timeoutPromise(20000), fetch(request)]);
-
-  // Redirect to login, if needed
-  if (res.type === "opaqueredirect") {
+  if (res.status === 401) {
     window.location = `/login/lego/?next=${window.location.pathname}`;
-    return null;
-  }
-  if (res.status === 403) {
-    window.location = `/login/lego/?next=${window.location.pathname}`;
-    return null;
+    throw null;
   }
 
   return parseResponseBody(res).then(rejectOnHttpErrors);

@@ -1,5 +1,6 @@
 import React, { Component } from "react";
 import { CSVLink } from "react-csv";
+import djangoData from "src/utils/djangoData";
 import Raven from "raven-js";
 import callApi from "src/utils/callApi";
 import { withFormik, Formik, Field, Form } from "formik";
@@ -82,7 +83,9 @@ class AdminPage extends Component {
       }
     );
 
-    this.setState({ user: { name: window.django.user.full_name } });
+    this.setState({
+      user: { name: djangoData.user && djangoData.user.full_name }
+    });
   }
 
   render() {

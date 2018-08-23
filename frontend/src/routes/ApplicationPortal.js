@@ -3,6 +3,7 @@ import styled from "styled-components";
 import { media } from "src/styles/mediaQueries";
 
 import callApi from "src/utils/callApi";
+import djangoData from "src/utils/djangoData";
 
 import ApplicationForm from "src/routes/ApplicationForm";
 import CommitteesPage from "src/routes/CommitteesPage";
@@ -77,7 +78,7 @@ class ApplicationPortal extends Component {
       }
     );
 
-    const user = { name: window.django.user.full_name };
+    const user = { name: djangoData.user && djangoData.user.full_name };
     this.setState({ user });
     Raven.setUserContext(user);
     this.initializeState();

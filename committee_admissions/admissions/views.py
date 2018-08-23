@@ -9,14 +9,14 @@ from rest_framework.response import Response
 
 from committee_admissions.admissions import constants
 from committee_admissions.admissions.models import (
-    Admission, Committee, CommitteeApplication, UserApplication
+    Admission, Committee, CommitteeApplication, LegoUser, UserApplication
 )
 from committee_admissions.admissions.serializers import (
     AdminAdmissionSerializer, AdmissionPublicSerializer, ApplicationCreateUpdateSerializer,
     CommitteeSerializer, UserApplicationSerializer
 )
 
-from .models import Membership
+from .authentication import SessionAuthentication
 from .permissions import AdmissionPermissions, ApplicationPermissions, CommitteePermissions
 
 
@@ -26,11 +26,16 @@ class AppView(TemplateView):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context['settings'] = settings
+        # :rip:
+        # beacuse of proxy model
+        if self.request.user.is_authenticated:
+            self.request.user.__class__ = LegoUser
         return context
 
 
 class AdmissionViewSet(viewsets.ModelViewSet):
     queryset = Admission.objects.all()
+    authentication_classes = [SessionAuthentication]
     permission_classes = [AdmissionPermissions]
 
     def get_serializer_class(self):
@@ -45,12 +50,13 @@ class AdmissionViewSet(viewsets.ModelViewSet):
 class CommitteeViewSet(viewsets.ModelViewSet):
     queryset = Committee.objects.all()
     serializer_class = CommitteeSerializer
+    authentication_classes = [SessionAuthentication]
     permission_classes = [permissions.IsAuthenticated, CommitteePermissions]
 
 
 class ApplicationViewSet(viewsets.ModelViewSet):
     queryset = UserApplication.objects.all().select_related("admission", "user")
-    serializer_class = ApplicationCreateUpdateSerializer
+    authentication_classes = [SessionAuthentication]
 
     def get_permissions(self):
         """
@@ -64,25 +70,20 @@ class ApplicationViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         user = self.request.user
-        if Membership.objects.filter(
-            user=user,
-            role=constants.LEADER,
-            abakus_group__name="Hovedstyret",
-        ).exists():
+        if user.is_anonymous:
+            return User.objects.none()
+        user.__class__ = LegoUser
+        if not user.is_board_member:
+            return User.objects.none()
+        if user.is_superuser:
             return super().get_queryset().prefetch_related(
                 'committee_applications', 'committee_applications__committee'
             )
 
-        membership = Membership.objects.filter(user=user, role=constants.LEADER).first()
-        if not membership:
-            return User.objects.none()
+        committee = user.leader_of_committee
+        qs = CommitteeApplication.objects.filter(committee=committee).select_related('committee')
 
-        group = membership.abakus_group
-
-        qs = CommitteeApplication.objects.filter(committee__name=group.name
-                                                 ).select_related('committee')
-
-        return super().get_queryset().filter(committee_applications__committee__name=group.name
+        return super().get_queryset().filter(committee_applications__committee=committee
                                              ).prefetch_related(
                                                  Prefetch(
                                                      'committee_applications', queryset=qs,
@@ -96,7 +97,6 @@ class ApplicationViewSet(viewsets.ModelViewSet):
         return UserApplicationSerializer
 
     def perform_create(self, serializer):
-        print(self.request.user)
         serializer.save(user=self.request.user)
 
     @list_route(methods=['GET'])

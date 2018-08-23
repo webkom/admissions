@@ -1,11 +1,9 @@
+from django.utils import timezone
 from rest_framework import serializers
 
-from committee_admissions.admissions import constants
 from committee_admissions.admissions.models import (
     Admission, Committee, CommitteeApplication, LegoUser, UserApplication
 )
-
-from .models import Membership
 
 
 class AdmissionPublicSerializer(serializers.HyperlinkedModelSerializer):
@@ -38,7 +36,6 @@ class CommitteeSerializer(serializers.HyperlinkedModelSerializer):
             }
         )
 
-        print("Made it!", committee)
         return committee
 
 
@@ -107,19 +104,16 @@ class UserApplicationSerializer(serializers.ModelSerializer):
 class UserSerializer(serializers.HyperlinkedModelSerializer):
     class Meta:
         model = LegoUser
-        fields = (
-            'url', 'pk', 'username', 'first_name', 'last_name', 'email', 'is_staff', 'abakus_groups'
-        )
+        fields = ('url', 'pk', 'username', 'first_name', 'last_name', 'email', 'is_staff')
 
 
 class ApplicationCreateUpdateSerializer(serializers.HyperlinkedModelSerializer):
     class Meta:
         model = UserApplication
-        fields = ('text', )
+        fields = ('text', 'pk')
 
     def create(self, validated_data):
         user = validated_data.pop('user')
-        print(user, vars(user))
 
         text = validated_data.pop('text')
 
@@ -132,14 +126,10 @@ class ApplicationCreateUpdateSerializer(serializers.HyperlinkedModelSerializer):
         applications = self.initial_data.pop("applications")
 
         for committee_name, text in applications.items():
-            print(committee_name, text)
 
             committee = Committee.objects.get(name__iexact=committee_name)
             application, created = CommitteeApplication.objects.update_or_create(
                 application=user_application, committee=committee, defaults={"text": text}
             )
-            print(application.text, created)
-
-        print(user_application.committee_applications)
 
         return user_application

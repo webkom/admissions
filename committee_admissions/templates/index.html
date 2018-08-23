@@ -23,9 +23,11 @@
     </noscript>
     <div id="root"></div>
     <script>
-    window.django = {
+    window.__DJANGO__ = {
       user: {
-        full_name: "{{ request.user.get_full_name }}"
+        full_name: "{{ request.user.get_full_name }}",
+        is_superuser: {{ request.user.is_superuser|yesno:"true,false" }},
+        is_board_member: {{ request.user.is_board_member|yesno:"true,false" }}
       }
     };
     window.__CONFIG__ = {
