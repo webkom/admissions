@@ -201,6 +201,37 @@ class CreateApplicationTestCase(APITestCase):
 
         self.assertEqual(res.status_code, status.HTTP_201_CREATED)
 
+    def test_editing_application_works_correctly(self):
+        self.client.force_authenticate(user=self.pleb_anna)
+
+        # Apply first with webkom and koskom
+        res = self.client.post(
+            reverse('userapplication-list'), self.application_data, format='json'
+        )
+
+        self.assertEqual(
+            2,
+            UserApplication.objects.get(user=self.pleb_anna).committee_applications.count()
+        )
+
+        self.application_data = {
+            'text': 'Ønsker Webkom mest',
+            'applications': {
+                'webkom': "Hohohohohohohohohohooho webbis",
+            },
+            'phone_number': '12345678'
+        }
+
+        # Apply then only with webkom, removing koskom
+        res = self.client.post(
+            reverse('userapplication-list'), self.application_data, format='json'
+        )
+
+        self.assertEqual(
+            1,
+            UserApplication.objects.get(user=self.pleb_anna).committee_applications.count()
+        )
+
 
 class ListApplicationsTestCase(APITestCase):
     def setUp(self):
