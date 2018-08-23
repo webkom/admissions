@@ -7,6 +7,7 @@ from committee_admissions.utils.models import TimeStampModel
 
 
 class LegoUser(User):
+
     class Meta:
         proxy = True
 
@@ -63,6 +64,7 @@ class UserApplication(TimeStampModel):
     user = models.ForeignKey(LegoUser, on_delete=models.CASCADE)
     text = models.TextField(blank=True)
     time_sent = models.DateTimeField(editable=False, null=True, default=timezone.now)
+    phone_number = models.CharField(max_length=20)
 
     class Meta:
         unique_together = ('admission', 'user')

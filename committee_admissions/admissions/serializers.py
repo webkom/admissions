@@ -98,6 +98,7 @@ class UserApplicationSerializer(serializers.ModelSerializer):
             'time_sent',
             'applied_within_deadline',
             'committee_applications',
+            'phone_number'
         )
 
 
@@ -110,17 +111,17 @@ class UserSerializer(serializers.HyperlinkedModelSerializer):
 class ApplicationCreateUpdateSerializer(serializers.HyperlinkedModelSerializer):
     class Meta:
         model = UserApplication
-        fields = ('text', 'pk')
+        fields = ('text', 'pk', 'phone_number')
 
     def create(self, validated_data):
         user = validated_data.pop('user')
-
         text = validated_data.pop('text')
+        phone_number = validated_data.pop('phone_number')
 
         admission = [obj for obj in Admission.objects.all() if obj.is_open][0]
 
         user_application, created = UserApplication.objects.update_or_create(
-            admission=admission, user=user, defaults={"text": text}
+            admission=admission, user=user, defaults={"text": text, "phone_number": phone_number}
         )
         # The code smell is strong with this one, young padawan
         applications = self.initial_data.pop("applications")

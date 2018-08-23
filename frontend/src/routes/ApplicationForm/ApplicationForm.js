@@ -28,6 +28,12 @@ const ApplicationForm = ({
         <CSRFToken />
         <PageSubTitle>Dine søknader</PageSubTitle>
         <Field component={PriorityTextField} name="priorityText" />
+        <Field
+          type="tel"
+          name="phoneNumber"
+          placeholder="Fyll inn ditt mobilnummer"
+        />
+
         {hasSelected ? SelectedComs : <h3>Du har ikke valgt noen komiteer.</h3>}
       </Form>
       <ChooseCommitteesContainer>
