@@ -111,7 +111,7 @@ class MyApplications extends Component {
       <PageWrapper>
         <Container>
           <AbakusLogo size={"6em"} />
-          <UserInfo name={user.username} />
+          <UserInfo name={user.full_name} />
           <Header text={text} time={time_sent} phoneNumber={phone_number} />
           <ApplicationList>
             {committee_applications.map(application => (

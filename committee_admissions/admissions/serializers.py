@@ -123,6 +123,8 @@ class ApplicationCreateUpdateSerializer(serializers.HyperlinkedModelSerializer):
         # The code smell is strong with this one, young padawan
         applications = self.initial_data.pop("applications")
 
+        CommitteeApplication.objects.filter(application=user_application).delete()
+
         for committee_name, text in applications.items():
 
             committee = Committee.objects.get(name__iexact=committee_name)

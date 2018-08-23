@@ -25,12 +25,20 @@ class UserApplicationAdminView extends Component {
   }
 
   componentWillMount() {
-    const { user, text, committee_applications, time_sent } = this.props;
+    const {
+      user,
+      text,
+      committee_applications,
+      time_sent,
+      phone_number
+    } = this.props;
+
     committee_applications.sort(function(a, b) {
       if (a.committee.name < b.committee.name) return -1;
       if (a.committee.name > b.committee.name) return 1;
       return 0;
     });
+
     const CommitteeApplications = committee_applications.map(
       (application, i) => {
         this.props.generateCSVData(
@@ -40,7 +48,8 @@ class UserApplicationAdminView extends Component {
           time_sent,
           text,
           application.committee.name,
-          application.text
+          application.text,
+          phone_number
         );
 
         return (
@@ -57,7 +66,6 @@ class UserApplicationAdminView extends Component {
   }
 
   render() {
-    console.log(this.props);
     const { user, text, time_sent, phone_number } = this.props;
     const { committeeApplications } = this.state;
     const numApplications = committeeApplications.length;
@@ -68,12 +76,9 @@ class UserApplicationAdminView extends Component {
           header={
             <Header>
               <Name>{user.full_name}</Name>
-              {djangoData.is_superuser && (
-                <NumApplications>
-                  {numApplications}{" "}
-                  {numApplications == 1 ? "søknad" : "søknader"}
-                </NumApplications>
-              )}
+              <NumApplications>
+                {numApplications} {numApplications == 1 ? "søknad" : "søknader"}
+              </NumApplications>
             </Header>
           }
           content={
@@ -96,7 +101,7 @@ class UserApplicationAdminView extends Component {
                   </Moment>
                 </SmallDescriptionWrapper>
               </Header>
-              {djangoData.is_superuser && <PriorityText text={priorityText} />}
+              <PriorityText text={priorityText} />
               {committeeApplications}
             </div>
           }
