@@ -3,6 +3,8 @@ import Moment from "react-moment";
 import "moment/locale/nb";
 Moment.globalLocale = "nb";
 
+import djangoData from "src/utils/djangoData";
+
 import Application from "src/components/Application";
 import CollapseContainer from "src/containers/CollapseContainer";
 
@@ -28,18 +30,22 @@ class UserApplication extends Component {
       text,
       committee_applications,
       time_sent,
-      whichCommitteeLeader
+      phone_number
     } = this.props;
 
     const CommitteeApplications = committee_applications.map(
       (application, i) => {
-        if (application.committee.name.toLowerCase() == whichCommitteeLeader) {
+        if (
+          application.committee.name.toLowerCase() ==
+          djangoData.user.leader_of_committee.toLowerCase()
+        ) {
           this.props.generateCSVData(
             user.full_name,
             user.email,
             user.username,
             time_sent,
-            application.text
+            application.text,
+            phone_number
           );
 
           return (

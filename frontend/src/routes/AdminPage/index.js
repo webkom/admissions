@@ -41,7 +41,6 @@ class AdminPage extends Component {
         { label: "Username", key: "username" },
         { label: "Tid sendt", key: "timeSent" }
       ],
-      whichCommitteeLeader: "webkom",
       committeeNames: {
         webkom: "Webkom",
         arrkom: "Arrkom",
@@ -55,7 +54,14 @@ class AdminPage extends Component {
     };
   }
 
-  generateCSVData = (name, email, username, timeSent, applicationText) => {
+  generateCSVData = (
+    name,
+    email,
+    username,
+    timeSent,
+    applicationText,
+    phoneNumber
+  ) => {
     this.setState(prevState => ({
       ...prevState,
       csvData: [
@@ -65,7 +71,8 @@ class AdminPage extends Component {
           email: email,
           username: username,
           applicationText: applicationText,
-          timeSent: timeSent
+          timeSent: timeSent,
+          phoneNumber: phoneNumber
         }
       ]
     }));
@@ -90,16 +97,7 @@ class AdminPage extends Component {
   }
 
   render() {
-    console.log(this.props.committees);
-
-    const {
-      error,
-      user,
-      applications,
-      csvData,
-      headers,
-      whichCommitteeLeader
-    } = this.state;
+    const { error, user, applications, csvData, headers } = this.state;
 
     applications.sort(function(a, b) {
       if (a.user.full_name < b.user.full_name) return -1;
@@ -110,25 +108,27 @@ class AdminPage extends Component {
       var filteredComApp = userApplication.committee_applications.filter(
         committeeApplication =>
           committeeApplication.committee.name.toLowerCase() ==
-          whichCommitteeLeader
+          djangoData.user.leader_of_committee.toLowerCase()
       );
 
       return filteredComApp.length > 0;
     });
+
     // Render applications from users
     const UserApplications = filteredApplications.map((userApplication, i) => {
       return (
         <UserApplication
           key={i}
           {...userApplication}
-          whichCommitteeLeader={this.state.whichCommitteeLeader}
+          whichCommitteeLeader={djangoData.user.leader_of_committee}
           generateCSVData={this.generateCSVData}
         />
       );
     });
     const committee = this.props.committees.find(
       committee =>
-        committee.name.toLowerCase() === this.state.whichCommitteeLeader
+        committee.name.toLowerCase() ===
+        djangoData.user.leader_of_committee.toLowerCase()
     );
 
     const committeeId = committee && committee.pk;
@@ -142,11 +142,11 @@ class AdminPage extends Component {
         <PageWrapper>
           <PageTitle>Admin Panel</PageTitle>
           <LinkLink to="/">Gå til forside</LinkLink>
-          {this.state.committeeNames[whichCommitteeLeader]}
+          {djangoData.user.leader_of_committee}
           <Wrapper>
             <EditCommitteeForm
               apiRoot={this.API_ROOT}
-              committee={this.state.whichCommitteeLeader}
+              committee={djangoData.user.leader_of_committee}
               committeeId={committeeId}
             />
           </Wrapper>
@@ -242,7 +242,6 @@ const EditCommitteeForm = withFormik({
       response_label: values.replyText
     };
 
-    console.log(submission);
     callApi(`/committee/${committeeId}/`, {
       method: "PATCH",
       body: JSON.stringify(submission)

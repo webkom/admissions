@@ -107,9 +107,12 @@ class ApplicationPortal extends Component {
                 toggleCommittee={this.toggleCommittee}
               />
             )}
-            {location.pathname.startsWith("/admin") && (
-              <AdminPageAbakusLeaderView {...this.state} />
-            )}
+            {location.pathname.startsWith("/admin") &&
+              (djangoData.user.is_superuser ? (
+                <AdminPageAbakusLeaderView {...this.state} />
+              ) : (
+                <AdminPage {...this.state} />
+              ))}
           </ContentContainer>
         </PageWrapper>
       );
