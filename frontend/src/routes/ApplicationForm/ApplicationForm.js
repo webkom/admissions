@@ -31,6 +31,7 @@ const ApplicationForm = ({
         <Field
           type="tel"
           name="phoneNumber"
+          onBlur={e => sessionStorage.setItem("phoneNumber", e.target.value)}
           placeholder="Fyll inn ditt mobilnummer"
         />
 

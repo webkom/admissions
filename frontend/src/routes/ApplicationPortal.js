@@ -8,6 +8,7 @@ import djangoData from "src/utils/djangoData";
 import ApplicationForm from "src/routes/ApplicationForm";
 import CommitteesPage from "src/routes/CommitteesPage";
 import AdminPage from "src/routes/AdminPage";
+import MyApplications from "src/components/MyApplications";
 import AdminPageAbakusLeaderView from "src/routes/AdminPageAbakusLeaderView";
 
 import Raven from "raven-js";
@@ -77,6 +78,14 @@ class ApplicationPortal extends Component {
         this.setState({ error });
       }
     );
+    callApi("/application/mine/").then(({ jsonData }) =>
+      this.setState({
+        myApplications: jsonData,
+        selectedCommittees: jsonData.committee_applications
+          .map(a => a.committee.name.toLowerCase())
+          .reduce((obj, a) => ({ ...obj, [a]: true }), {})
+      })
+    );
 
     const user = { name: djangoData.user && djangoData.user.full_name };
     this.setState({ user });
@@ -85,7 +94,7 @@ class ApplicationPortal extends Component {
   }
 
   render() {
-    const { error, user } = this.state;
+    const { error, user, myApplications } = this.state;
     const { location } = this.props;
     if (error) {
       return <div>Error: {error.message}</div>;
@@ -106,6 +115,9 @@ class ApplicationPortal extends Component {
                 {...this.state}
                 toggleCommittee={this.toggleCommittee}
               />
+            )}
+            {location.pathname.startsWith("/myapplications") && (
+              <MyApplications applications={myApplications} />
             )}
             {location.pathname.startsWith("/admin") &&
               (djangoData.user.is_superuser ? (

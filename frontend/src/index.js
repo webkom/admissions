@@ -5,7 +5,6 @@ import { BrowserRouter as Router, Route, Switch } from "react-router-dom";
 import NotFoundPage from "src/routes/NotFoundPage";
 import LandingPage from "src/routes/LandingPage/";
 import ErrorBoundary from "src/containers/ErrorBoundary/";
-import MyApplications from "src/components/MyApplications/";
 import ApplicationPortal from "src/routes/ApplicationPortal";
 
 import ScrollToTop from "./scrollToTop";
@@ -30,10 +29,9 @@ ReactDOM.render(
               <Route exact path="/" component={LandingPage} />
               <Route
                 exact
-                path="/(committees|application|admin)"
+                path="/(committees|application|myapplications|admin)"
                 component={ApplicationPortal}
               />
-              <Route exact path="/myapplications" component={MyApplications} />
               <Route component={NotFoundPage} />
             </Switch>
           </ErrorBoundary>

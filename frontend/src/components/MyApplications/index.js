@@ -1,13 +1,8 @@
-import React, { Component } from "react";
-
-import callApi from "src/utils/callApi";
+import React from "react";
 
 import styled from "styled-components";
 import { media } from "src/styles/mediaQueries";
 
-import PageWrapper from "src/components/PageWrapper";
-import AbakusLogo from "src/components/AbakusLogo";
-import UserInfo from "src/components/UserInfo";
 import Button from "src/components/Button";
 
 const Image = styled.img`
@@ -92,50 +87,37 @@ const ApplicationList = styled.div`
   flex-wrap: wrap;
 `;
 
-class MyApplications extends Component {
-  state = {};
-  componentDidMount() {
-    callApi("/application/mine/").then(({ jsonData }) =>
-      this.setState({ ...jsonData })
+const MyApplications = ({ applications }) => {
+  if (!applications) {
+    return (
+      <Container>
+        <h1>Du har ikke sendt inn søknad</h1>
+        <Button
+          onClick={() => {
+            window.location = "/application";
+          }}
+        >
+          Det kan du gjøre her!
+        </Button>
+      </Container>
     );
   }
-  render() {
-    const {
-      user,
-      text,
-      committee_applications,
-      time_sent,
-      phone_number
-    } = this.state;
-    return user ? (
-      <PageWrapper>
-        <Container>
-          <AbakusLogo size={"6em"} />
-          <UserInfo name={user.full_name} />
-          <Header text={text} time={time_sent} phoneNumber={phone_number} />
-          <ApplicationList>
-            {committee_applications.map(application => (
-              <Application key={application.committee.pk} {...application} />
-            ))}
-          </ApplicationList>
-        </Container>
-      </PageWrapper>
-    ) : (
-      <PageWrapper>
-        <Container>
-          <AbakusLogo size={"6em"} />
-          <h1>Du har ikke sendt inn søknad</h1>
-          <Button
-            onClick={() => {
-              window.location = "/application";
-            }}
-          >
-            Det kan du gjøre her!
-          </Button>
-        </Container>
-      </PageWrapper>
-    );
-  }
-}
+  const {
+    text,
+    committee_applications,
+    time_sent,
+    phone_number
+  } = applications;
+  return (
+    <Container>
+      <Header text={text} time={time_sent} phoneNumber={phone_number} />
+      <ApplicationList>
+        {committee_applications.map(application => (
+          <Application key={application.committee.pk} {...application} />
+        ))}
+      </ApplicationList>
+    </Container>
+  );
+};
 
 export default MyApplications;
