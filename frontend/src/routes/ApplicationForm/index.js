@@ -6,7 +6,12 @@ import ApplicationForm from "./ApplicationFormContainer";
 import callApi from "src/utils/callApi";
 
 const FormikApp = withFormik({
-  mapPropsToValues() {
+  mapPropsToValues({ myApplications = {} }) {
+    const {
+      text = sessionStorage.getItem("text") || "",
+      phone_number = sessionStorage.getItem("phoneNumber") || "",
+      committee_applications = []
+    } = myApplications;
     return {
       webkom: "",
       fagkom: "",
@@ -16,8 +21,12 @@ const FormikApp = withFormik({
       koskom: "",
       arrkom: "",
       pr: "",
-      priorityText: "",
-      phoneNumber: ""
+      priorityText: text,
+      phoneNumber: phone_number,
+      ...committee_applications.reduce(
+        (obj, a) => ({ ...obj, [a.committee.name.toLowerCase()]: a.text }),
+        {}
+      )
     };
   },
   handleSubmit(
@@ -70,7 +79,8 @@ const FormikApp = withFormik({
     });
   },
   displayName: "ApplicationForm",
-  validateOnChange: true
+  validateOnChange: true,
+  enableReinitialize: true
 })(ApplicationForm);
 
 export default FormikApp;

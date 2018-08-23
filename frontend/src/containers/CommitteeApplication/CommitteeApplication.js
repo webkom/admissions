@@ -18,21 +18,21 @@ const CommitteeApplication = ({
   const handleApplicationFieldBlur = e => {
     handleBlur(e);
 
-    var oldApplicationText = JSON.parse(
+    const oldApplicationText = JSON.parse(
       sessionStorage.getItem("applicationText")
     );
 
     if (oldApplicationText != null) {
-      var applicationText = {
+      const applicationText = {
         ...oldApplicationText,
         [committee.toLowerCase()]: value
       };
-      var applicationTextJSON = JSON.stringify(applicationText);
+      const applicationTextJSON = JSON.stringify(applicationText);
 
       sessionStorage.setItem("applicationText", applicationTextJSON);
     } else {
-      var applicationText = { [committee.toLowerCase()]: value };
-      var applicationTextJSON = JSON.stringify(applicationText);
+      const applicationText = { [committee.toLowerCase()]: value };
+      const applicationTextJSON = JSON.stringify(applicationText);
       sessionStorage.setItem("applicationText", applicationTextJSON);
     }
   };

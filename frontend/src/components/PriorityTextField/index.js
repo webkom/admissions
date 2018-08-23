@@ -23,7 +23,10 @@ const PriorityTextField = ({
           name={name}
           id={name}
           onChange={onChange}
-          onBlur={handleBlur}
+          onBlur={e => {
+            handleBlur(e);
+            sessionStorage.setItem("text", value);
+          }}
           placeholder="Skriv dine kommentarer her..."
           value={value}
           rows="10"
