@@ -33,6 +33,7 @@ class AdminPage extends Component {
         { label: "Komité", key: "committee" },
         { label: "Søknadstekst", key: "committeeApplicationText" },
         { label: "Email", key: "email" },
+        { label: "Mobilnummer", key: "phoneNumber" },
         { label: "Username", key: "username" },
         { label: "Tid sendt", key: "timeSent" }
       ]

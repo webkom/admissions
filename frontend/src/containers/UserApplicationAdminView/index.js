@@ -57,7 +57,8 @@ class UserApplicationAdminView extends Component {
   }
 
   render() {
-    const { user, text, time_sent } = this.props;
+    console.log(this.props);
+    const { user, text, time_sent, phone_number } = this.props;
     const { committeeApplications } = this.state;
     const numApplications = committeeApplications.length;
     const priorityText = text ? text : <i>Ingen kommentarer.</i>;
@@ -81,6 +82,9 @@ class UserApplicationAdminView extends Component {
                 <SmallDescriptionWrapper>
                   <SmallDescription> Brukernavn </SmallDescription>
                   {user.username}
+                </SmallDescriptionWrapper>
+                <SmallDescriptionWrapper>
+                  <SmallDescription> Tlf. </SmallDescription> {phone_number}
                 </SmallDescriptionWrapper>
                 <SmallDescriptionWrapper>
                   <SmallDescription> E-mail </SmallDescription> {user.email}

@@ -58,7 +58,7 @@ class UserApplication extends Component {
   getCommitteeApplications(committee) {}
 
   render() {
-    const { user, text, time_sent } = this.props;
+    const { user, text, time_sent, phone_number } = this.props;
     const { committeeApplications } = this.state;
     return (
       <Wrapper>
@@ -74,6 +74,9 @@ class UserApplication extends Component {
                 <SmallDescriptionWrapper>
                   <SmallDescription> Brukernavn </SmallDescription>
                   {user.username}
+                </SmallDescriptionWrapper>
+                <SmallDescriptionWrapper>
+                  <SmallDescription> Tlf. </SmallDescription> {phone_number}
                 </SmallDescriptionWrapper>
                 <SmallDescriptionWrapper>
                   <SmallDescription> E-mail </SmallDescription> {user.email}

@@ -36,6 +36,7 @@ class AdminPage extends Component {
       headers: [
         { label: "Full Name", key: "name" },
         { label: "Søknadstekst", key: "applicationText" },
+        { label: "Mobilnummer", key: "phoneNumber" },
         { label: "Email", key: "email" },
         { label: "Username", key: "username" },
         { label: "Tid sendt", key: "timeSent" }

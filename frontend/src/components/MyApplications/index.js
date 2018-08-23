@@ -62,7 +62,7 @@ const HeaderContainer = styled.div`
   padding: 20px;
 `;
 
-const Header = ({ text, time }) => (
+const Header = ({ text, time, phoneNumber }) => (
   <HeaderContainer>
     <h1>Søknaden din er registrert!</h1>
     <div>Søknad registrert: {new Date(time).toLocaleString("en-GB")}</div>
@@ -74,6 +74,10 @@ const Header = ({ text, time }) => (
       Endre søknad
     </Button>
     <ApplicationComment text={text} />
+    <div>
+      <h4>Oppgitt telefon nummer:</h4>
+      <div>{phoneNumber}</div>
+    </div>
   </HeaderContainer>
 );
 
@@ -96,13 +100,19 @@ class MyApplications extends Component {
     );
   }
   render() {
-    const { user, text, committee_applications, time_sent } = this.state;
+    const {
+      user,
+      text,
+      committee_applications,
+      time_sent,
+      phone_number
+    } = this.state;
     return user ? (
       <PageWrapper>
         <Container>
           <AbakusLogo size={"6em"} />
           <UserInfo name={user.username} />
-          <Header text={text} time={time_sent} />
+          <Header text={text} time={time_sent} phoneNumber={phone_number} />
           <ApplicationList>
             {committee_applications.map(application => (
               <Application key={application.committee.pk} {...application} />

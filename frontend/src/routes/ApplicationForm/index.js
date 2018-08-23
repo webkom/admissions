@@ -16,7 +16,8 @@ const FormikApp = withFormik({
       koskom: "",
       arrkom: "",
       pr: "",
-      priorityText: ""
+      priorityText: "",
+      phoneNumber: ""
     };
   },
   handleSubmit(
@@ -30,7 +31,8 @@ const FormikApp = withFormik({
   ) {
     var submission = {
       text: values.priorityText,
-      applications: {}
+      applications: {},
+      phone_number: values.phoneNumber
     };
     Object.keys(values)
       .filter(committee => selectedCommittees[committee])
