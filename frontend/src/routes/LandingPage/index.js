@@ -10,7 +10,6 @@ Moment.globalLocale = "nb";
 import djangoData from "src/utils/djangoData";
 import AbakusLogo from "src/components/AbakusLogo";
 import LinkButton from "src/components/LinkButton";
-import { Card, CardTitle, CardParagraph } from "src/components/Card";
 import { MainPageTitle } from "src/components/PageTitle";
 
 import { InfoBox, InfoBoxText, InfoBoxTitle } from "./styles";
@@ -51,7 +50,7 @@ class LandingPage extends Component {
   }
 
   render() {
-    const { error, admission, adminPermissions, hasSubmitted } = this.state;
+    const { error, admission, hasSubmitted } = this.state;
     if (error) {
       return <div>Error: {error.message}</div>;
     } else {

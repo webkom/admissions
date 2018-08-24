@@ -1,7 +1,6 @@
 import React, { Component } from "react";
 import { withFormik, Field } from "formik";
 import * as Yup from "yup";
-import Cookie from "js-cookie";
 import callApi from "src/utils/callApi";
 
 import CommitteeApplication from "src/containers/CommitteeApplication";
@@ -19,7 +18,7 @@ class FormContainer extends Component {
     };
   }
 
-  componentWillMount() {
+  componentDidMount() {
     this.setState({ isMobile: this.state.width <= 500 });
     window.addEventListener("resize", this.handleWindowSizeChange);
   }
@@ -44,7 +43,6 @@ class FormContainer extends Component {
   initializeState = () => {
     var selectedCommitteesJSON = sessionStorage.getItem("selectedCommittees");
     var selectedCommittees = JSON.parse(selectedCommitteesJSON);
-    console.log(selectedCommittees);
 
     if (selectedCommittees != null) {
       this.setState({
@@ -55,8 +53,6 @@ class FormContainer extends Component {
 
   handleApplicationFieldBlur = e => {
     this.props.handleBlur(e);
-    console.log("event", e);
-    console.log("values", this.props.values);
   };
 
   render() {
@@ -143,9 +139,7 @@ const ApplicationForm = withFormik({
     values,
     {
       props: { selectedCommittees },
-      resetForm,
-      setSubmitting,
-      setFieldValue
+      setSubmitting
     }
   ) {
     var submission = {
@@ -158,21 +152,13 @@ const ApplicationForm = withFormik({
       .forEach(name => {
         submission.applications[name] = values[name];
       });
-
-    console.log(submission);
     callApi("/application/", {
       method: "POST",
       body: JSON.stringify(submission)
-    }).then(
-      res => {
-        console.log("Submit result", res);
-        setSubmitting(false);
-        window.location = "/myapplications";
-      },
-      err => {
-        console.log(err);
-      }
-    );
+    }).then(() => {
+      setSubmitting(false);
+      window.location = "/myapplications";
+    });
   },
 
   validationSchema: props => {

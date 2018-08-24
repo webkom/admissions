@@ -21,9 +21,6 @@ const CommitteeStatistics = ({ applications, committee }) => {
   };
 
   const count = calculateNumCommitteeApplications(committee);
-
-  console.log(committee, count);
-
   return (
     <StatisticsWrapper smallerMargin>
       <StatisticsCommitteeLogo

@@ -3,14 +3,13 @@ import { Form, Field } from "formik";
 
 import PageTitle from "src/components/PageTitle";
 import PriorityTextField from "src/components/PriorityTextField";
-import { Card, CardTitle } from "src/components/Card";
+import { CardTitle } from "src/components/Card";
 import PhoneNumberField from "src/components/PhoneNumberField";
 
 import {
   Wrapper,
   SubmitButton,
   ToggleCommitteeWrapper,
-  ToggleCommitteeWrapperMobile,
   NoChosenCommittees,
   NoChosenCommitteesSmallInfo,
   SubTitle,
@@ -23,8 +22,7 @@ const FormStructure = ({
   ChooseCommitteesItems,
   handleSubmit,
   isSubmitting,
-  isValid,
-  isMobile
+  isValid
 }) => (
   <div>
     <Wrapper>

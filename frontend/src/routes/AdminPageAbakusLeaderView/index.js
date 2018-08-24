@@ -1,12 +1,8 @@
 import React, { Component } from "react";
-import { CSVLink } from "react-csv";
-import Raven from "raven-js";
 import callApi from "src/utils/callApi";
 
 import djangoData from "src/utils/djangoData";
-import UserInfo from "src/components/UserInfo";
 import PageWrapper from "src/components/PageWrapper";
-import AbakusLogo from "src/components/AbakusLogo";
 import PageTitle from "src/components/PageTitle";
 import UserApplicationAdminView from "src/containers/UserApplicationAdminView";
 
@@ -77,7 +73,6 @@ class AdminPage extends Component {
         });
       },
       error => {
-        console.log(error);
         this.setState({ error });
       }
     );
@@ -88,7 +83,7 @@ class AdminPage extends Component {
   }
 
   render() {
-    const { error, user, applications, csvData, headers } = this.state;
+    const { error, applications, csvData, headers } = this.state;
     applications.sort(function(a, b) {
       if (a.user.full_name < b.user.full_name) return -1;
       if (a.user.full_name > b.user.full_name) return 1;

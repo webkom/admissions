@@ -8,7 +8,6 @@
 import React from "react";
 
 import IconWrapper from "./IconWrapper";
-import Icon from "./Icon";
 import Logo from "./Logo";
 import Wrapper from "./Wrapper";
 import Name from "./Name";

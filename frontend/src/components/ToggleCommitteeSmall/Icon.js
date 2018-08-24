@@ -1,9 +1,3 @@
-/**
- *
- * Icon style
- *
- */
-
 import styled from "styled-components";
 
 const Icon = styled.span`

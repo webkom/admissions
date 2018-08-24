@@ -13,7 +13,7 @@ const Logo = styled.img`
 
   filter: inherit;
 
-  &:hover  {
+  &:hover {
     filter: inherit;
     opacity: 0.5;
   }

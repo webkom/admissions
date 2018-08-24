@@ -1,5 +1,4 @@
 import styled from "styled-components";
-import { media } from "src/styles/mediaQueries";
 import { Link } from "react-router-dom";
 
 const LinkLink = styled(Link)`

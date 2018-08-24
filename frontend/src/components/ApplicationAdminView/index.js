@@ -1,6 +1,5 @@
-import React, { Component } from "react";
+import React from "react";
 
-import { CardTitle, CardParagraph } from "src/components/Card";
 import ReadMore from "src/components/ReadMore";
 
 import Wrapper from "./Wrapper";
@@ -9,7 +8,7 @@ import CommitteeLogo from "./CommitteeLogo";
 import SmallDescription from "./SmallDescription";
 import SmallDescriptionWrapper from "./SmallDescriptionWrapper";
 
-const ApplicationAdminView = ({ committee, text, onChange }) => {
+const ApplicationAdminView = ({ committee, text }) => {
   const applicationText = text.split("\n").map((line, i, arr) => {
     const linee = <span key={i}>{line}</span>;
     if (i === arr.length - 1) {

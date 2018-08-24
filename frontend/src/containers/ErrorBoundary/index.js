@@ -34,12 +34,16 @@ class ErrorBoundary extends React.Component {
     Raven.lastEventId() && Raven.showReportDialog({});
   };
 
-  componentWillReceiveProps(nextProps) {
-    const { resetOnChange } = this.props;
-    const { error } = this.state;
-    if (error && nextProps.resetOnChange !== resetOnChange) {
-      this.setState({ error: null });
+  static getDerivedStateFromProps(nextProps, prevState) {
+    const { resetOnChange } = prevState;
+    if (nextProps.resetOnChange !== resetOnChange) {
+      return {
+        ...prevState,
+        resetOnChange,
+        error: null
+      };
     }
+    return null;
   }
 
   componentDidCatch(error, errorInfo) {

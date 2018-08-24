@@ -5,6 +5,7 @@
   border: 1px solid #bbb;
   background: #eee;
 }
+
 .ribbon {
   position: absolute;
   right: -5px;
@@ -15,6 +16,7 @@
   height: 75px;
   text-align: right;
 }
+
 .ribbon span {
   font-size: 10px;
   font-weight: bold;
@@ -33,10 +35,11 @@
   top: 19px;
   right: -21px;
 }
+
 .ribbon span::before {
   content: "";
   position: absolute;
-  left: 0px;
+  left: 0;
   top: 100%;
   z-index: -1;
   border-left: 3px solid rgba(226, 16, 23, 1);
@@ -44,10 +47,11 @@
   border-bottom: 3px solid transparent;
   border-top: 3px solid rgba(226, 16, 23, 1);
 }
+
 .ribbon span::after {
   content: "";
   position: absolute;
-  right: 0px;
+  right: 0;
   top: 100%;
   z-index: -1;
   border-left: 3px solid transparent;

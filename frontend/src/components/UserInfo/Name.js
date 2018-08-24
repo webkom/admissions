@@ -5,7 +5,6 @@
  */
 
 import styled from "styled-components";
-import { media } from "src/styles/mediaQueries";
 
 const Name = styled.span`
   color: #636363;

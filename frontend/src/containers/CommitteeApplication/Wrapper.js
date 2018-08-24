@@ -4,7 +4,6 @@
  *
  */
 
-import styled from "styled-components";
 import { media } from "src/styles/mediaQueries";
 import { Card } from "src/components/Card";
 

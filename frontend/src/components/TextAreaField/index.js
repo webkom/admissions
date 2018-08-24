@@ -1,4 +1,4 @@
-import React, { Component } from "react";
+import React from "react";
 
 import InputValidationFeedback from "src/components/InputValidationFeedback";
 import { CardTitle } from "src/components/Card";
@@ -9,7 +9,7 @@ const TextAreaField = ({
   placeholder,
   title,
   field: { name, onChange, value },
-  form: { touched, errors, handleBlur }
+  form: { touched, errors }
 }) => {
   const error = touched[name] && errors[name];
 

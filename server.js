@@ -1,3 +1,5 @@
+/* eslint-disable */
+
 var webpack = require("webpack");
 var WebpackDevServer = require("webpack-dev-server");
 var config = require("./webpack.config");
@@ -10,7 +12,7 @@ new WebpackDevServer(webpack(config), {
   inline: true,
   historyApiFallback: true,
   headers: { "Access-Control-Allow-Origin": "*" }
-}).listen(3000, "0.0.0.0", function(err, result) {
+}).listen(3000, "0.0.0.0", function(err) {
   if (err) {
     console.PluginError(err);
   }

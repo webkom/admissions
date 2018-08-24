@@ -1,6 +1,5 @@
 import styled from "styled-components";
 import { Field } from "formik";
-
 import { CardTitle } from "src/components/Card";
 
 export const StyledField = styled(Field)`

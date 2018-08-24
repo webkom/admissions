@@ -5,7 +5,6 @@
  */
 
 import styled from "styled-components";
-import { media } from "src/styles/mediaQueries";
 
 const IconWrapper = styled.div`
   width: 2.5em;
@@ -14,11 +13,11 @@ const IconWrapper = styled.div`
 
   filter: ${props => (props.isChosen ? "none" : "grayscale()")};
 
-  &:hover  {
+  &:hover {
     filter: none;
     opacity: 0.5;
   }
-  &:hover  > img {
+  &:hover > img {
     opacity: 0.5;
   }
 

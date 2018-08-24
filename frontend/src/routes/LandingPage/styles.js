@@ -1,4 +1,3 @@
-import styled from "styled-components";
 import { media } from "src/styles/mediaQueries";
 import { Card, CardParagraph, CardTitle } from "src/components/Card";
 

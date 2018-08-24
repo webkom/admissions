@@ -1,6 +1,4 @@
 import React from "react";
-import ReactDOM from "react-dom";
-import { presets } from "react-motion";
 import Collapse from "react-collapse";
 
 import Header from "./Header";
