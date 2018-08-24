@@ -3,8 +3,6 @@ import Moment from "react-moment";
 import "moment/locale/nb";
 Moment.globalLocale = "nb";
 
-import djangoData from "src/utils/djangoData";
-
 import ApplicationAdminView from "src/components/ApplicationAdminView";
 import CollapseContainer from "src/containers/CollapseContainer";
 
@@ -24,7 +22,7 @@ class UserApplicationAdminView extends Component {
     };
   }
 
-  componentWillMount() {
+  componentDidMount() {
     const {
       user,
       text,

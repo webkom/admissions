@@ -1,14 +1,11 @@
-import React, { Component } from "react";
+import React from "react";
 
 import InputValidationFeedback from "src/components/InputValidationFeedback";
 import { CardTitle } from "src/components/Card";
 
 import { StyledField, InfoText } from "./styles";
 
-const PhoneNumberField = ({
-  field: { name, onChange, value },
-  form: { touched, errors, handleBlur }
-}) => {
+const PhoneNumberField = ({ field: { name }, form: { touched, errors } }) => {
   const error = touched[name] && errors[name];
 
   return (

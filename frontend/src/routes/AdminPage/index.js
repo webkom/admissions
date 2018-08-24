@@ -1,16 +1,10 @@
 import React, { Component } from "react";
-import { CSVLink } from "react-csv";
 import djangoData from "src/utils/djangoData";
-import Raven from "raven-js";
 import callApi from "src/utils/callApi";
-import { withFormik, Formik, Field, Form } from "formik";
+import { withFormik, Field, Form } from "formik";
 import * as Yup from "yup";
-import Textarea from "react-textarea-autosize";
-import Cookie from "js-cookie";
 
-import UserInfo from "src/components/UserInfo";
 import PageWrapper from "src/components/PageWrapper";
-import AbakusLogo from "src/components/AbakusLogo";
 import PageTitle from "src/components/PageTitle";
 import TextAreaField from "src/components/TextAreaField";
 import UserApplication from "src/containers/UserApplication";
@@ -20,7 +14,6 @@ import Wrapper from "./Wrapper";
 import LinkLink from "./LinkLink";
 import CSVExport from "./CSVExport";
 import Statistics from "./Statistics";
-import CommitteeStatistics from "./CommitteeStatistics";
 import StatisticsName from "./StatisticsName";
 import StatisticsWrapper from "./StatisticsWrapper";
 import SubmitButton from "./SubmitButton";
@@ -88,7 +81,6 @@ class AdminPage extends Component {
         });
       },
       error => {
-        console.log(error);
         this.setState({ error });
       }
     );
@@ -99,7 +91,7 @@ class AdminPage extends Component {
   }
 
   render() {
-    const { error, user, applications, csvData, headers } = this.state;
+    const { error, applications, csvData, headers } = this.state;
 
     applications.sort(function(a, b) {
       if (a.user.full_name < b.user.full_name) return -1;
@@ -180,18 +172,7 @@ class AdminPage extends Component {
 export default AdminPage;
 
 const MyInnerForm = props => {
-  const {
-    values,
-    touched,
-    errors,
-    dirty,
-    isSubmitting,
-    handleChange,
-    handleBlur,
-    handleSubmit,
-    handleReset,
-    isValid
-  } = props;
+  const { isSubmitting, handleSubmit, isValid } = props;
   return (
     <Form>
       <FormWrapper>
@@ -234,9 +215,7 @@ const EditCommitteeForm = withFormik({
     values,
     {
       props: { committee, committeeId },
-      resetForm,
-      setSubmitting,
-      setFieldValue
+      setSubmitting
     }
   ) {
     const committeeNames = {
@@ -265,13 +244,12 @@ const EditCommitteeForm = withFormik({
         return res.jsonData;
       })
       .catch(err => {
-        console.log("UPDATE COMMITTEE ERROR:", err);
         alert("rip feil. Snakk med webkom");
         throw err;
       });
   },
-  validationSchema: props => {
-    return Yup.lazy(values => {
+  validationSchema: () => {
+    return Yup.lazy(() => {
       const schema = {};
 
       schema.description = Yup.string()

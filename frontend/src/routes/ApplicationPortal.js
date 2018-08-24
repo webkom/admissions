@@ -1,6 +1,5 @@
 import React, { Component } from "react";
 import styled from "styled-components";
-import { media } from "src/styles/mediaQueries";
 
 import callApi from "src/utils/callApi";
 import djangoData from "src/utils/djangoData";
@@ -74,7 +73,6 @@ class ApplicationPortal extends Component {
         });
       },
       error => {
-        console.log(error);
         this.setState({ error });
       }
     );

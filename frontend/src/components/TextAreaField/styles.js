@@ -1,8 +1,5 @@
 import styled from "styled-components";
 import Textarea from "react-textarea-autosize";
-import { media } from "src/styles/mediaQueries";
-
-import { CardTitle } from "src/components/Card";
 
 export const StyledTextarea = styled(Textarea)`
   border: 1px solid rgba(0, 0, 0, 0.09);

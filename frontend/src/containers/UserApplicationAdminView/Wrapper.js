@@ -1,5 +1,4 @@
 import styled from "styled-components";
-import { media } from "src/styles/mediaQueries";
 
 const Wrapper = styled.div`
   background: #eae9e8c7;

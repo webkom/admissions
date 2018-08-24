@@ -10,11 +10,9 @@ import CollapseContainer from "src/containers/CollapseContainer";
 
 import Wrapper from "./Wrapper";
 import Name from "./Name";
-import PriorityText from "./PriorityText";
 import SmallDescription from "./SmallDescription";
 import SmallDescriptionWrapper from "./SmallDescriptionWrapper";
 import Header from "./Header";
-import NumApplications from "./NumApplications";
 
 class UserApplication extends Component {
   constructor(props) {
@@ -24,10 +22,9 @@ class UserApplication extends Component {
     };
   }
 
-  componentWillMount() {
+  componentDidMount() {
     const {
       user,
-      text,
       committee_applications,
       time_sent,
       phone_number
@@ -61,10 +58,8 @@ class UserApplication extends Component {
     this.setState({ committeeApplications: CommitteeApplications });
   }
 
-  getCommitteeApplications(committee) {}
-
   render() {
-    const { user, text, time_sent, phone_number } = this.props;
+    const { user, time_sent, phone_number } = this.props;
     const { committeeApplications } = this.state;
     return (
       <Wrapper>

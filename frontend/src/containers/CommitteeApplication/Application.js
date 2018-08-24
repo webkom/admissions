@@ -2,7 +2,7 @@ import React, { Component } from "react";
 import Textarea from "react-textarea-autosize";
 
 import InputValidationFeedback from "src/components/InputValidationFeedback";
-import { Card, CardParagraph, CardTitle } from "src/components/Card";
+import { CardParagraph, CardTitle } from "src/components/Card";
 
 import {
   WriteApplicationWrapper,

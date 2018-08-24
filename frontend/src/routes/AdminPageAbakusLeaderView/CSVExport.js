@@ -1,5 +1,4 @@
 import styled from "styled-components";
-import { media } from "src/styles/mediaQueries";
 import { CSVLink } from "react-csv";
 
 const CSVExport = styled(CSVLink)`
