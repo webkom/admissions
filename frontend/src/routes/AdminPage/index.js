@@ -12,6 +12,7 @@ import UserInfo from "src/components/UserInfo";
 import PageWrapper from "src/components/PageWrapper";
 import AbakusLogo from "src/components/AbakusLogo";
 import PageTitle from "src/components/PageTitle";
+import TextAreaField from "src/components/TextAreaField";
 import UserApplication from "src/containers/UserApplication";
 
 import CSRFToken from "./csrftoken";
@@ -23,6 +24,7 @@ import CommitteeStatistics from "./CommitteeStatistics";
 import StatisticsName from "./StatisticsName";
 import StatisticsWrapper from "./StatisticsWrapper";
 import SubmitButton from "./SubmitButton";
+import FormWrapper from "./FormWrapper";
 
 class AdminPage extends Component {
   constructor(props) {
@@ -142,7 +144,7 @@ class AdminPage extends Component {
         <PageWrapper>
           <PageTitle>Admin Panel</PageTitle>
           <LinkLink to="/">Gå til forside</LinkLink>
-          {djangoData.user.leader_of_committee}
+          <h2>{djangoData.user.leader_of_committee}</h2>
           <Wrapper>
             <EditCommitteeForm
               apiRoot={this.API_ROOT}
@@ -188,26 +190,36 @@ const MyInnerForm = props => {
     handleChange,
     handleBlur,
     handleSubmit,
-    handleReset
+    handleReset,
+    isValid
   } = props;
   return (
     <Form>
-      <CSRFToken />
+      <FormWrapper>
+        <CSRFToken />
 
-      <Field name="replyText" placeholder="Edit the reply text" type="text" />
-      <Field
-        name="description"
-        placeholder="Edit the description of the committee"
-        type="text"
-      />
+        <Field
+          component={TextAreaField}
+          name="replyText"
+          placeholder="Edit the reply text"
+          title="Endre hva komitteen ønsker å høre om fra søkere"
+        />
+        <Field
+          component={TextAreaField}
+          title="Endre beskrivelsen av komiteen"
+          name="description"
+          placeholder="Edit the description of the committee"
+        />
 
-      <SubmitButton
-        onClick={handleSubmit}
-        type="submit"
-        disabled={isSubmitting}
-      >
-        Submit
-      </SubmitButton>
+        <SubmitButton
+          onClick={handleSubmit}
+          type="submit"
+          disabled={isSubmitting}
+          valid={isValid}
+        >
+          Submit
+        </SubmitButton>
+      </FormWrapper>
     </Form>
   );
 };
@@ -254,6 +266,21 @@ const EditCommitteeForm = withFormik({
         return res.jsonData;
       })
       .catch(err => console.log("UPDATE COMMITTEE ERROR:", err));
+  },
+  validationSchema: props => {
+    return Yup.lazy(values => {
+      const schema = {};
+
+      schema.description = Yup.string()
+        .min(30, "Skriv mer enn 30 tegn da!")
+        .max(250, "Nå er det nok!")
+        .required("Beskrivelsen kan ikke være tom!");
+      schema.replyText = Yup.string()
+        .min(30, "Skriv mer enn 30 tegn da!")
+        .max(250, "Nå er det nok!")
+        .required("Boksen kan ikke være tom!");
+      return Yup.object().shape(schema);
+    });
   },
   enableReinitialize: true
 })(MyInnerForm);

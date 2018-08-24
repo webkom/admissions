@@ -54,8 +54,7 @@ export const Name = styled.label`
 
 export const Logo = styled.img`
   object-fit: scale-down;
-  width: 100%;
-  height: 100%;
+  width: 50%;
   grid-area: logo;
   justify-content: center;
   align-self: center;
