@@ -147,6 +147,8 @@ class AdminPage extends Component {
             <EditCommitteeForm
               apiRoot={this.API_ROOT}
               committee={djangoData.user.leader_of_committee}
+              initialDescription={committee && committee.description}
+              initialReplyText={committee && committee.response_label}
               committeeId={committeeId}
             />
           </Wrapper>
@@ -211,10 +213,10 @@ const MyInnerForm = props => {
 };
 
 const EditCommitteeForm = withFormik({
-  mapPropsToValues() {
+  mapPropsToValues({ initialDescription, initialReplyText }) {
     return {
-      replyText: "write reply text here",
-      description: "description here"
+      replyText: initialReplyText || "",
+      description: initialDescription || ""
     };
   },
   handleSubmit(
@@ -252,7 +254,8 @@ const EditCommitteeForm = withFormik({
         return res.jsonData;
       })
       .catch(err => console.log("UPDATE COMMITTEE ERROR:", err));
-  }
+  },
+  enableReinitialize: true
 })(MyInnerForm);
 
 export { EditCommitteeForm };
