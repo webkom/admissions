@@ -23,7 +23,7 @@ const LinkButton = styled(Link).attrs({
   height: ${props => props.height};
   margin: ${props => props.margin};
   font-size: ${props => props.fontSize};
-  font-family: Raleway;
+  font-family: Raleway, "Helvetica Neue", Arial, sans-serif;
 `;
 
 export default LinkButton;

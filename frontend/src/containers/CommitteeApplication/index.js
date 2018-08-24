@@ -1,5 +1,5 @@
 import React, { Component } from "react";
-import { CommitteeApplication as Subcomponent } from "./CommitteeApplication";
+import Application from "./Application";
 
 class CommitteeApplication extends Component {
   componentDidMount() {
@@ -22,7 +22,7 @@ class CommitteeApplication extends Component {
   };
 
   render() {
-    return <Subcomponent {...this.props} />;
+    return <Application {...this.props} />;
   }
 }
 

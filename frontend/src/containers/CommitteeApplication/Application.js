@@ -1,15 +1,21 @@
 import React, { Component } from "react";
-
-import "./CommitteeApplication.css";
 import Textarea from "react-textarea-autosize";
 
-import Wrapper from "./Wrapper";
-import InputFeedback from "./InputFeedback";
-import CommitteeName from "./CommitteeName";
-import CommitteeLogo from "./CommitteeLogo";
+import InputValidationFeedback from "src/components/InputValidationFeedback";
 import { Card, CardParagraph, CardTitle } from "src/components/Card";
 
-class CommitteeApplication extends Component {
+import {
+  WriteApplicationWrapper,
+  ResponseLabelWrapper,
+  LogoNameWrapper,
+  Logo,
+  Name
+} from "./styles";
+import Wrapper from "./Wrapper";
+
+import "./Application.css";
+
+class Application extends Component {
   componentDidMount() {
     this.setState({
       timeout: setInterval(() => {
@@ -36,19 +42,21 @@ class CommitteeApplication extends Component {
     const error = touched[name] && errors[name];
     return (
       <Wrapper>
-        <CommitteeLogo logo={require(`assets/committee_logos/${name}.png`)} />
-        <CommitteeName name={committee} />
+        <LogoNameWrapper>
+          <Name htmlFor={name.toLowerCase()}>{committee}</Name>
+          <Logo src={require(`assets/committee_logos/${name}.png`)} />
+        </LogoNameWrapper>
 
-        <Card className="response" margin="0.5rem 1rem">
+        <ResponseLabelWrapper>
           <CardTitle margin="0.5rem" fontSize="0.8em">
             Dette ønsker komiteen at du inkluderer
           </CardTitle>
           <CardParagraph margin="0.5rem">{responseLabel}</CardParagraph>
-        </Card>
+        </ResponseLabelWrapper>
 
-        <Card className="input" margin="0.5rem 1rem">
+        <WriteApplicationWrapper>
           <CardTitle margin="0.5rem" fontSize="0.8em">
-            Skriv søknaden din her <InputFeedback error={error} />
+            Skriv søknaden din her <InputValidationFeedback error={error} />
           </CardTitle>
           <Textarea
             className="textarea"
@@ -61,10 +69,10 @@ class CommitteeApplication extends Component {
             value={value}
             rows="10"
           />
-        </Card>
+        </WriteApplicationWrapper>
       </Wrapper>
     );
   }
 }
 
-export { CommitteeApplication };
+export default Application;

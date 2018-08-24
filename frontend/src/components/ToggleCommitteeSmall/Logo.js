@@ -5,18 +5,18 @@
  */
 
 import styled from "styled-components";
-import React from "react";
-import { media } from "src/styles/mediaQueries";
 
-const UnstyledLogo = ({ className, logo }) => (
-  <img className={className} src={logo} alt="Logo" />
-);
-
-const Logo = styled(UnstyledLogo)`
+const Logo = styled.img`
   object-fit: scale-down;
-  width: 2.3em;
-  ${media.handheld`
-      display: none`};
+  width: 100%;
+  opacity: 0.8;
+
+  filter: inherit;
+
+  &:hover  {
+    filter: inherit;
+    opacity: 0.5;
+  }
 `;
 
 export default Logo;
