@@ -4,7 +4,7 @@
 #
 #    pip-compile --output-file requirements/base.txt requirements/base.in
 #
-certifi==2018.8.13        # via requests
+certifi==2018.8.24        # via requests
 chardet==3.0.4            # via requests
 click==6.7                # via pip-tools
 decorator==4.3.0          # via ipython, traitlets
