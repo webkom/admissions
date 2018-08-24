@@ -46,11 +46,18 @@ export const NextCard = styled.div`
 
 export const NextButton = styled(LinkButton)`
   background: white;
-  width: 50%;
+  width: 40%;
   color: black;
+  padding: 1em;
+  opacity: 0.9;
 
   &:hover {
     cursor: pointer;
     box-shadow: 0 1px 4px rgba(0, 0, 0, 0.2);
+    opacity: 1;
   }
+
+  ${media.handheld`
+    width: 90%;
+    `};
 `;

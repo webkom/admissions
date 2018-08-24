@@ -45,12 +45,7 @@ class CommitteesPage extends Component {
         <PageTitle>Velg komitéer å søke på</PageTitle>
         <CommitteeWrapper>{CommitteeCards}</CommitteeWrapper>
         <NextCard>
-          <NextButton
-            bordercolor="gray"
-            to="/application"
-            height="3em"
-            margin="auto"
-          >
+          <NextButton bordercolor="gray" to="/application" margin="auto">
             Gå videre med valgte komitéer
           </NextButton>
         </NextCard>

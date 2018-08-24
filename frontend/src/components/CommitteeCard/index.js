@@ -1,9 +1,15 @@
 import React from "react";
 import { Card, Title, Text, Logo, LearnMore, Mark } from "./styles";
+import "./style.css";
 
 const CommitteeCard = props => {
   return (
     <Card onClick={() => props.onToggle(props.name)} isChosen={props.isChosen}>
+      {props.isChosen && (
+        <div class="ribbon">
+          <span>Valgt</span>
+        </div>
+      )}
       <Logo
         src={require(`assets/committee_logos/${props.name.toLowerCase()}.png`)}
       />
