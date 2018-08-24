@@ -254,11 +254,11 @@ const EditCommitteeForm = withFormik({
 
       schema.description = Yup.string()
         .min(30, "Skriv mer enn 30 tegn da!")
-        .max(250, "Nå er det nok!")
+        .max(200, "Nå er det nok!")
         .required("Beskrivelsen kan ikke være tom!");
       schema.replyText = Yup.string()
         .min(30, "Skriv mer enn 30 tegn da!")
-        .max(250, "Nå er det nok!")
+        .max(200, "Nå er det nok!")
         .required("Boksen kan ikke være tom!");
       return Yup.object().shape(schema);
     });

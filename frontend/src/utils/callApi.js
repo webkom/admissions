@@ -7,6 +7,15 @@ export class HttpError extends Error {
 }
 
 function reportToSentry(error) {
+  try {
+    if (error.response) {
+      Raven.setExtraContext({
+        response: error.response
+      });
+    }
+  } catch (e) {
+    //
+  }
   Raven.captureException(error);
   throw error;
 }
