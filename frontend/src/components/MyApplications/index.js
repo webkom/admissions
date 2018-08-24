@@ -1,15 +1,18 @@
 import React from "react";
-
-import styled from "styled-components";
-import { media } from "src/styles/mediaQueries";
-
 import Button from "src/components/Button";
-
-const Image = styled.img`
-  height: 10em;
-  width: 10em;
-  margin: 30px;
-`;
+import {
+  Wrapper,
+  Image,
+  HeaderWrapper,
+  Container,
+  List,
+  HeaderText,
+  TimeStamp,
+  Phone,
+  ChangeButton,
+  AppHeader
+} from "./styles.js";
+import Card from "src/components/Card/Card";
 
 const Logo = ({ className, name }) => (
   <Image
@@ -19,73 +22,35 @@ const Logo = ({ className, name }) => (
   />
 );
 
-const ApplicationContainer = styled.div`
-  padding: 20px;
-  display: flex;
-  flex: 0.5 0.5 50%;
-  ${media.handheld`
-    flex: 1;
-    flex-direction: column;
-  `};
-`;
-
-const ApplicationTextContainer = styled.div`
-  min-width: 200px;
-  max-width: 400px;
-`;
-
 const Application = ({ committee, text }) => (
-  <ApplicationContainer>
-    <Logo name={committee.name} />
-    <ApplicationTextContainer>
-      <h2>{committee.name}</h2>
-      <h4>Din søknadstekst:</h4>
-      <div>{text}</div>
-    </ApplicationTextContainer>
-  </ApplicationContainer>
+  <Wrapper>
+    <Logo name={committee.name} style={{ gridArea: "logo" }} />
+    <AppHeader>{committee.name}</AppHeader>
+    <div style={{ gridArea: "appContent" }}>{text}</div>
+  </Wrapper>
 );
 
 const ApplicationComment = ({ text }) => (
   <div>
-    <h4>Din kommentar til søknaden:</h4>
-    <div>{text}</div>
+    <h4 style={{ textAlign: "center" }}>Din kommentar til søknaden</h4>
+    <div style={{ marginTop: "-1em" }}>{text}</div>
   </div>
 );
 
-const HeaderContainer = styled.div`
-  max-width: 550px;
-  padding: 20px;
-`;
-
-const Header = ({ text, time, phoneNumber }) => (
-  <HeaderContainer>
-    <h1>Søknaden din er registrert!</h1>
-    <div>Søknad registrert: {new Date(time).toLocaleString("en-GB")}</div>
-    <Button
-      onClick={() => {
-        window.location = "/application";
-      }}
-    >
-      Endre søknad
-    </Button>
+const Header = ({ text, time, phoneNumber, deadline }) => (
+  <HeaderWrapper>
+    <HeaderText>Søknaden din er registrert!</HeaderText>
+    <TimeStamp deadline={deadline}>
+      Søknad registrert: {new Date(time).toLocaleString("en-GB")}
+    </TimeStamp>
+    <Phone>
+      <span style={{ fontWeight: "bold" }}>Oppgitt telefon nummer: </span>
+      {phoneNumber}
+    </Phone>
+    <ChangeButton to="/application">Endre søknad</ChangeButton>
     <ApplicationComment text={text} />
-    <div>
-      <h4>Oppgitt telefon nummer:</h4>
-      <div>{phoneNumber}</div>
-    </div>
-  </HeaderContainer>
+  </HeaderWrapper>
 );
-
-const Container = styled.div`
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-`;
-
-const ApplicationList = styled.div`
-  display: flex;
-  flex-wrap: wrap;
-`;
 
 const MyApplications = ({ applications }) => {
   if (!applications) {
@@ -106,16 +71,24 @@ const MyApplications = ({ applications }) => {
     text,
     committee_applications,
     time_sent,
+    applied_within_deadline,
     phone_number
   } = applications;
   return (
     <Container>
-      <Header text={text} time={time_sent} phoneNumber={phone_number} />
-      <ApplicationList>
+      <Header
+        text={text}
+        time={time_sent}
+        phoneNumber={phone_number}
+        deadline={applied_within_deadline}
+      />
+      <List text={text} time={time_sent} phoneNumber={phone_number}>
         {committee_applications.map(application => (
-          <Application key={application.committee.pk} {...application} />
+          <Card key={application.committee.pk} width={"100"}>
+            <Application {...application} />
+          </Card>
         ))}
-      </ApplicationList>
+      </List>
     </Container>
   );
 };
