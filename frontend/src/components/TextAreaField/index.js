@@ -26,7 +26,7 @@ const TextAreaField = ({
         name={name}
         id={name}
         onChange={onChange}
-        onBlur={e => sessionStorage.setItem("phoneNumber", e.target.value)}
+        onBlur={handleBlur}
         placeholder={placeholder}
         value={value}
         rows="10"
