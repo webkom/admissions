@@ -28,6 +28,15 @@ export const SubTitle = PageTitle.extend`
 `;
 
 /*
+ * Small Subtitle
+ */
+
+export const SmallSubTitle = SubTitle.extend`
+  margin: 0.5em 0;
+  font-size: 1.1rem;
+`;
+
+/*
  * Submit button
  */
 
@@ -75,7 +84,7 @@ export const NoChosenCommitteesSmallInfo = styled.span`
 export const ToggleCommitteeWrapper = styled.div`
   display: flex;
   flex-wrap: wrap;
-  margin: 2em 8em;
+  margin: 0 8em 2em;
 
   ${media.handheld`
     width: 80%;

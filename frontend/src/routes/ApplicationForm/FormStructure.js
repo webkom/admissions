@@ -13,6 +13,7 @@ import {
   NoChosenCommittees,
   NoChosenCommitteesSmallInfo,
   SubTitle,
+  SmallSubTitle,
   GeneralInfoWrapper
 } from "./styles";
 
@@ -29,6 +30,7 @@ const FormStructure = ({
       <PageTitle>Søknad til komiteer</PageTitle>
 
       <Form>
+        <SmallSubTitle>Velg de komiteene du vil søke</SmallSubTitle>
         <ToggleCommitteeWrapper>{ChooseCommitteesItems}</ToggleCommitteeWrapper>
 
         {hasSelected ? (
@@ -53,7 +55,7 @@ const FormStructure = ({
               Du har ikke valgt noen komiteer.
             </NoChosenCommittees>
             <NoChosenCommitteesSmallInfo>
-              Gå tilbake til komitéoversikten eller velg over for å søke.
+              Bruk lista på toppen for å velge komiteer
             </NoChosenCommitteesSmallInfo>
           </div>
         )}
