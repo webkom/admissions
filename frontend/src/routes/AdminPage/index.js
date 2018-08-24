@@ -261,11 +261,15 @@ const EditCommitteeForm = withFormik({
       body: JSON.stringify(submission)
     })
       .then(res => {
-        console.log("UPDATE COMMITTEE: Submit result", res);
         setSubmitting(false);
+        alert("Komité oppdatert :D");
         return res.jsonData;
       })
-      .catch(err => console.log("UPDATE COMMITTEE ERROR:", err));
+      .catch(err => {
+        console.log("UPDATE COMMITTEE ERROR:", err);
+        alert("rip feil. Snakk med webkom");
+        throw err;
+      });
   },
   validationSchema: props => {
     return Yup.lazy(values => {
