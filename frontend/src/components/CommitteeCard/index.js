@@ -6,7 +6,7 @@ const CommitteeCard = props => {
   return (
     <Card onClick={() => props.onToggle(props.name)} isChosen={props.isChosen}>
       {props.isChosen && (
-        <div class="ribbon">
+        <div className="ribbon">
           <span>Valgt</span>
         </div>
       )}

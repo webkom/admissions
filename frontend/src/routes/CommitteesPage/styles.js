@@ -8,7 +8,7 @@ export const PageWrapper = styled.div`
   min-height: 100vh;
   display: flex;
   flex-direction: column;
-  justify-items: center;
+  justify-content: center;
   ${media.handheld`
     width: 95vw;
     `};
@@ -45,16 +45,21 @@ export const NextCard = styled.div`
 `;
 
 export const NextButton = styled(LinkButton)`
-  background: white;
+  background: #db3737;
   width: 40%;
-  color: black;
+  color: white;
   padding: 1em;
   opacity: 0.9;
+  border: 1px solid #a82a2a;
 
   &:hover {
     cursor: pointer;
     box-shadow: 0 1px 4px rgba(0, 0, 0, 0.2);
     opacity: 1;
+  }
+
+  &:active {
+    opacity: 0.9;
   }
 
   ${media.handheld`
