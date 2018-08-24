@@ -13,6 +13,7 @@ import LinkButton from "src/components/LinkButton";
 import { Card, CardTitle, CardParagraph } from "src/components/Card";
 import { MainPageTitle } from "src/components/PageTitle";
 
+import { InfoBox, InfoBoxText, InfoBoxTitle } from "./styles";
 import LinkWrapper from "./LinkWrapper";
 import "./LandingPage.css";
 
@@ -61,9 +62,9 @@ class LandingPage extends Component {
           <PageSubTitle>
             <Moment format="YYYY">{admission.public_deadline}</Moment>
           </PageSubTitle>
-          <Card margin={"1em 1em 2.5em 1em"}>
-            <CardTitle>Her kan du søke til komiteer i Abakus</CardTitle>
-            <CardParagraph lineHeight="1em">
+          <InfoBox>
+            <InfoBoxTitle>Her kan du søke til komiteer i Abakus</InfoBoxTitle>
+            <InfoBoxText lineHeight="1em">
               Søknadsfristen for ny søknad er{" "}
               <b>
                 <Moment format="dddd Do MMMM, \k\l. HH:mm">
@@ -71,11 +72,11 @@ class LandingPage extends Component {
                 </Moment>
               </b>
               .
-            </CardParagraph>
-            <CardParagraph lineHeight="1em">
+            </InfoBoxText>
+            <InfoBoxText lineHeight="1em">
               Søker du etter dette er du ikke garantert intervju.
-            </CardParagraph>
-            <CardParagraph lineHeight="1em">
+            </InfoBoxText>
+            <InfoBoxText lineHeight="1em">
               Fristen for å endre søknad er{" "}
               <b>
                 <Moment format="dddd Do MMMM, \k\l. HH:mm">
@@ -83,8 +84,8 @@ class LandingPage extends Component {
                 </Moment>
               </b>
               .
-            </CardParagraph>
-          </Card>
+            </InfoBoxText>
+          </InfoBox>
           <LinkWrapper>
             {djangoData.user.full_name ? (
               <LinkButton to={hasSubmitted ? "/myapplications" : "/committees"}>
@@ -127,7 +128,7 @@ const Container = styled.div`
   align-items: center;
   margin: 0 0.7em;
   ${media.handheld`
-    margin: 0 0.7em 3em 0.7em;
+    margin: 2em 1em 3em 1em;
     `};
 `;
 
