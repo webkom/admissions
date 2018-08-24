@@ -154,7 +154,6 @@ class AdminPage extends Component {
               committeeId={committeeId}
             />
           </Wrapper>
-          ;
           <Wrapper>
             <Statistics>
               <StatisticsWrapper>
