@@ -49,13 +49,13 @@ export const NextButton = styled(LinkButton)`
   width: 40%;
   color: white;
   padding: 1em;
-  opacity: 0.9;
+  opacity: 1;
   border: 1px solid #a82a2a;
 
   &:hover {
     cursor: pointer;
     box-shadow: 0 1px 4px rgba(0, 0, 0, 0.2);
-    opacity: 1;
+    opacity: 0.95;
   }
 
   &:active {
