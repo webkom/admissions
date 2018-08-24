@@ -9,7 +9,7 @@ const TextAreaField = ({
   placeholder,
   title,
   field: { name, onChange, value },
-  form: { touched, errors }
+  form: { touched, errors,handleBlur }
 }) => {
   const error = touched[name] && errors[name];
 
