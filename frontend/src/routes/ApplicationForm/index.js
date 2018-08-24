@@ -182,10 +182,13 @@ const ApplicationForm = withFormik({
       );
       const schema = {};
       selectedCommittees.forEach(name => {
-        schema[name] = Yup.string()
-          .min(20, "Det var da litt kort? 20 bokstaver klarer du iallefall :)")
-          .required("Søknadsteksten kan ikke være tom!");
+        schema[name] = Yup.string().required(
+          "Søknadsteksten kan ikke være tom!"
+        );
       });
+      schema.phoneNumber = Yup.number().required(
+        "Vennligst fyll inn ditt mobilnummer."
+      );
       return Yup.object().shape(schema);
     });
   },

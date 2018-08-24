@@ -11,6 +11,7 @@ const Name = styled.span`
   margin-left: 0.5em;
   font-family: Raleway, "Helvetica Neue", Arial, sans-serif;
   font-size: 1rem;
+  color: #303030;
 `;
 
 export default Name;

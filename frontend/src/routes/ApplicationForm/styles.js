@@ -1,25 +1,29 @@
 import styled from "styled-components";
 import { media } from "src/styles/mediaQueries";
 import Button from "src/components/Button";
-import { Field } from "formik";
+import PageTitle from "src/components/PageTitle";
 
 /*
- * The wrapper that makes the toggle committees stay on the right on scrolling
+ * Wrapper for content;
  */
 
 export const Wrapper = styled.div`
   width: 70%;
+  margin: auto;
   ${media.handheld`
      width: 100%;
   `};
 `;
 
 /*
- * Phone number field
+ * Subtitle
  */
 
-export const PhoneNumberField = styled(Field)`
-  font-size: 1em;
+export const SubTitle = PageTitle.extend`
+  font-size: 2rem;
+  margin-bottom: 1em;
+  color: gray;
+  font-weight: normal;
 `;
 
 /*
@@ -29,7 +33,6 @@ export const PhoneNumberField = styled(Field)`
 export const SubmitButton = Button.extend`
   background: ${props => (props.valid ? "#db3737" : "gray")};
   border: 1px solid ${props => (props.valid ? "#a82a2a" : "darkgray")};
-  grid-area: button;
   margin: 0 auto 3em auto;
 
   &:active {
@@ -38,21 +41,29 @@ export const SubmitButton = Button.extend`
 `;
 
 /*
- * Subtitle
+ * No chosen committees text
  */
 
-export const PageSubTitle = styled.h2`
+export const NoChosenCommittees = styled.span`
   font-size: 2rem;
-  margin: 0.6em 0;
-  line-height: 1.2em;
+  font-family: Raleway, "Helvetica Neue", Arial, sans-serif;
   color: gray;
-  font-size: 2rem;
+  text-align: center;
+  display: block;
+  margin-top: 2em;
+`;
 
-  ${media.handheld`
-    text-align: center;
-    margin: 0.3em;
-    font-size: 1.5rem;
-    `};
+/*
+ * No chosen committees text
+ */
+
+export const NoChosenCommitteesSmallInfo = styled.span`
+  font-size: 1.3rem;
+  font-family: Raleway, "Helvetica Neue", Arial, sans-serif;
+  color: gray;
+  text-align: center;
+  display: block;
+  padding-bottom: 2em;
 `;
 
 /*
@@ -60,13 +71,7 @@ export const PageSubTitle = styled.h2`
  */
 
 export const ToggleCommitteeWrapper = styled.div`
-  position: fixed;
-  top: 11em;
-  left: 90%;
-  transform: translateX(-90%);
-  ${media.handheld`
-     position: relative;
-     top: auto;
-     left: auto;
-  `};
+  display: flex;
+  flex-wrap: wrap;
+  margin: 2em 8em;
 `;

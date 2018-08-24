@@ -10,12 +10,12 @@ import { media } from "src/styles/mediaQueries";
 const Wrapper = styled.div`
   display: grid;
   margin: 0.5em;
-  grid-template-columns: 11em 1fr;
+  grid-template-columns: 1fr 14em;
   grid-template-rows: repeat(3, auto);
   grid-template-areas:
-    "logo committeeName"
-    "logo response"
-    ". input";
+    "response logoname"
+    "response logoname"
+    "input input";
   align-items: center;
 
   ${media.handheld`

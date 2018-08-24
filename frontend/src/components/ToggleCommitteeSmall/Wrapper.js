@@ -9,8 +9,9 @@ import { media } from "src/styles/mediaQueries";
 
 const Wrapper = styled.button`
   display: flex;
+  flex: 1 1 20%;
   align-items: center;
-  margin: 0.5em;
+  margin: 0.3em;
   font-family: Raleway, "Helvetica Neue", Arial, sans-serif;
 
   ${media.handheld`
