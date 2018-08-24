@@ -13,7 +13,8 @@ import {
   ToggleCommitteeWrapperMobile,
   NoChosenCommittees,
   NoChosenCommitteesSmallInfo,
-  SubTitle
+  SubTitle,
+  GeneralInfoWrapper
 } from "./styles";
 
 const FormStructure = ({
@@ -36,7 +37,7 @@ const FormStructure = ({
           <div>
             <SubTitle>Din søknad</SubTitle>
 
-            <Card className="input" margin="0.5rem 0rem">
+            <GeneralInfoWrapper className="input" margin="0.5rem 0rem">
               <Field name="phoneNumber" component={PhoneNumberField} />
 
               <CardTitle margin="0.5rem" fontSize="0.8em">
@@ -44,7 +45,7 @@ const FormStructure = ({
                 kommentarer.
               </CardTitle>
               <Field name="priorityText" component={PriorityTextField} />
-            </Card>
+            </GeneralInfoWrapper>
 
             {SelectedComs}
           </div>

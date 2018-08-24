@@ -15,8 +15,7 @@ const Wrapper = styled.button`
   font-family: Raleway, "Helvetica Neue", Arial, sans-serif;
 
   ${media.handheld`
-      width: 50%;
-      margin: 0;
+    flex: 1 1 45%;
     `};
 `;
 

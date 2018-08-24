@@ -24,8 +24,14 @@ export const LogoNameWrapper = styled.div`
   flex-direction: column;
   align-items: center;
   justify-content: center;
-
   margin: 0 2em;
+
+  ${media.handheld`
+    width: 100%;
+    flex-direction: row-reverse;
+    justify-content: flex-end;
+    margin: 1em;
+      `};
 `;
 
 export const Name = styled.label`
@@ -36,6 +42,7 @@ export const Name = styled.label`
 
   ${media.handheld`
     font-size: 1.3em;
+    margin-bottom: 0;
       `};
 `;
 
@@ -56,5 +63,6 @@ export const Logo = styled.img`
 
   ${media.handheld`
     padding: 0.3em;
+    width: 3em;
       `};
 `;

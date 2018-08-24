@@ -41,38 +41,36 @@ class Application extends Component {
     } = this.props;
     const error = touched[name] && errors[name];
     return (
-      <Card className="response" margin="2rem 0rem">
-        <Wrapper>
-          <LogoNameWrapper>
-            <Name htmlFor={name.toLowerCase()}>{committee}</Name>
-            <Logo src={require(`assets/committee_logos/${name}.png`)} />
-          </LogoNameWrapper>
+      <Wrapper>
+        <LogoNameWrapper>
+          <Name htmlFor={name.toLowerCase()}>{committee}</Name>
+          <Logo src={require(`assets/committee_logos/${name}.png`)} />
+        </LogoNameWrapper>
 
-          <ResponseLabelWrapper>
-            <CardTitle margin="0.5rem" fontSize="0.8em">
-              Dette ønsker komiteen at du inkluderer
-            </CardTitle>
-            <CardParagraph margin="0.5rem">{responseLabel}</CardParagraph>
-          </ResponseLabelWrapper>
+        <ResponseLabelWrapper>
+          <CardTitle margin="0.5rem" fontSize="0.8em">
+            Dette ønsker komiteen at du inkluderer
+          </CardTitle>
+          <CardParagraph margin="0.5rem">{responseLabel}</CardParagraph>
+        </ResponseLabelWrapper>
 
-          <WriteApplicationWrapper>
-            <CardTitle margin="0.5rem" fontSize="0.8em">
-              Skriv søknaden din her <InputValidationFeedback error={error} />
-            </CardTitle>
-            <Textarea
-              className="textarea"
-              type="textarea"
-              name={name}
-              id={name}
-              onChange={onChange}
-              onBlur={handleBlur}
-              placeholder="Skriv søknadstekst her..."
-              value={value}
-              rows="10"
-            />
-          </WriteApplicationWrapper>
-        </Wrapper>
-      </Card>
+        <WriteApplicationWrapper>
+          <CardTitle margin="0.5rem" fontSize="0.8em">
+            Skriv søknaden din her <InputValidationFeedback error={error} />
+          </CardTitle>
+          <Textarea
+            className="textarea"
+            type="textarea"
+            name={name}
+            id={name}
+            onChange={onChange}
+            onBlur={handleBlur}
+            placeholder="Skriv søknadstekst her..."
+            value={value}
+            rows="10"
+          />
+        </WriteApplicationWrapper>
+      </Wrapper>
     );
   }
 }

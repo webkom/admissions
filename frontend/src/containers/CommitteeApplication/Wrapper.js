@@ -6,10 +6,11 @@
 
 import styled from "styled-components";
 import { media } from "src/styles/mediaQueries";
+import { Card } from "src/components/Card";
 
-const Wrapper = styled.div`
+const Wrapper = Card.extend`
   display: grid;
-  margin: 0.5em;
+  margin: 2rem 0rem;
   grid-template-columns: 1fr 14em;
   grid-template-rows: repeat(3, auto);
   grid-template-areas:
@@ -19,13 +20,18 @@ const Wrapper = styled.div`
   align-items: center;
 
   ${media.handheld`
-    grid-template-columns: 1fr 5fr;
-    grid-template-rows: 3rem repeat(2, auto);
+    grid-template-columns: auto;
+    grid-template-rows: repeat(3, auto);
     grid-template-areas:
-      "logo committeeName"
-      "response response"
-      "input input";
+      "logoname"
+      "response"
+      "input";
+    margin: 1em 0;
     `};
+
+  &:last-of-type {
+    margin-bottom: 3em;
+  }
 `;
 
 export default Wrapper;
