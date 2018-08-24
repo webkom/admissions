@@ -12,9 +12,8 @@ const Wrapper = Card.extend`
   display: grid;
   margin: 2rem 0rem;
   grid-template-columns: 1fr 14em;
-  grid-template-rows: repeat(3, auto);
+  grid-template-rows: 10em auto;
   grid-template-areas:
-    "response logoname"
     "response logoname"
     "input input";
   align-items: center;
