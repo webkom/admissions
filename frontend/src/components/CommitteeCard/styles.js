@@ -2,8 +2,7 @@ import styled from "styled-components";
 import { media } from "src/styles/mediaQueries";
 
 export const Card = styled.div`
-  background: ${props =>
-    props.isChosen ? "linear-gradient(rgba(255,0,0,0.5), white)" : "white"};
+  background: white;
   box-shadow: ${props =>
     props.isChosen
       ? "0 1px 4px rgba(0, 0, 0, 0.8)"
@@ -21,7 +20,6 @@ export const Card = styled.div`
   margin: 1em;
   padding: 2em 1em;
   border-radius: 3px;
-  border: 1px solid rgba(0, 0, 0, 0.09);
   overflow: hidden;
 
   &:hover {
@@ -58,7 +56,7 @@ export const Text = styled.p`
   text-align: center;
   ${media.handheld`
     padding: 0;
-    font-size: 0.8em;
+    font-size: 1rem;
     margin-top: 1em;
     `};
 `;
