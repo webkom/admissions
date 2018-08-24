@@ -1,6 +1,7 @@
 import React, { Component } from "react";
 import djangoData from "src/utils/djangoData";
 import callApi from "src/utils/callApi";
+import Raven from "raven-js";
 import { withFormik, Field, Form } from "formik";
 import * as Yup from "yup";
 
@@ -88,6 +89,7 @@ class AdminPage extends Component {
     this.setState({
       user: { name: djangoData.user && djangoData.user.full_name }
     });
+    Raven.setUserContext(djangoData.user);
   }
 
   render() {
@@ -180,7 +182,7 @@ const MyInnerForm = props => {
 
         <Field
           component={TextAreaField}
-          name="replyText"
+          name="response_label"
           placeholder="Edit the reply text"
           title="Endre hva komitteen ønsker å høre om fra søkere"
         />
@@ -207,7 +209,7 @@ const MyInnerForm = props => {
 const EditCommitteeForm = withFormik({
   mapPropsToValues({ initialDescription, initialReplyText }) {
     return {
-      replyText: initialReplyText || "",
+      response_label: initialReplyText || "",
       description: initialDescription || ""
     };
   },
@@ -215,7 +217,8 @@ const EditCommitteeForm = withFormik({
     values,
     {
       props: { committee, committeeId },
-      setSubmitting
+      setSubmitting,
+      setErrors
     }
   ) {
     const committeeNames = {
@@ -231,10 +234,10 @@ const EditCommitteeForm = withFormik({
     const submission = {
       name: committeeNames[committee],
       description: values.description,
-      response_label: values.replyText
+      response_label: values.response_label
     };
 
-    callApi(`/committee/${committeeId}/`, {
+    return callApi(`/committee/${committeeId}/`, {
       method: "PATCH",
       body: JSON.stringify(submission)
     })
@@ -244,7 +247,13 @@ const EditCommitteeForm = withFormik({
         return res.jsonData;
       })
       .catch(err => {
-        alert("rip feil. Snakk med webkom");
+        setSubmitting(false);
+        let errors = {};
+        alert("Det skjedde en feil. Kontakt Webkom");
+        Object.keys(err.response.jsonData).forEach(key => {
+          errors[key] = err.response.jsonData[key][0];
+        });
+        setErrors(errors);
         throw err;
       });
   },
@@ -254,11 +263,11 @@ const EditCommitteeForm = withFormik({
 
       schema.description = Yup.string()
         .min(30, "Skriv mer enn 30 tegn da!")
-        .max(200, "Nå er det nok!")
+        .max(300, "Nå er det nok!")
         .required("Beskrivelsen kan ikke være tom!");
-      schema.replyText = Yup.string()
+      schema.response_label = Yup.string()
         .min(30, "Skriv mer enn 30 tegn da!")
-        .max(200, "Nå er det nok!")
+        .max(300, "Nå er det nok!")
         .required("Boksen kan ikke være tom!");
       return Yup.object().shape(schema);
     });

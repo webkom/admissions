@@ -33,6 +33,7 @@
         full_name: "{{ request.user.get_full_name }}",
         is_superuser: {{ request.user.is_superuser|yesno:"true,false" }},
         is_board_member: {{ request.user.is_board_member|yesno:"true,false" }},
+        has_application: {{ request.user.has_application|yesno:"true,false" }},
         leader_of_committee: "{{ request.user.leader_of_committee }}"
 
       }

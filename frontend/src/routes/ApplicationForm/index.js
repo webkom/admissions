@@ -152,13 +152,19 @@ const ApplicationForm = withFormik({
       .forEach(name => {
         submission.applications[name] = values[name];
       });
-    callApi("/application/", {
+    return callApi("/application/", {
       method: "POST",
       body: JSON.stringify(submission)
-    }).then(() => {
-      setSubmitting(false);
-      window.location = "/myapplications";
-    });
+    })
+      .then(() => {
+        setSubmitting(false);
+        window.location = "/myapplications";
+      })
+      .catch(err => {
+        alert("Det skjedde en feil.... ");
+        setSubmitting(false);
+        throw err;
+      });
   },
 
   validationSchema: props => {

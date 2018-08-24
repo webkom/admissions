@@ -21,6 +21,10 @@ class LegoUser(User):
             return None
         return membership.committee
 
+    @property
+    def has_application(self):
+        return UserApplication.objects.filter(user=self).exists()
+
 
 class Admission(models.Model):
     title = models.CharField(max_length=255)
@@ -46,8 +50,8 @@ class Admission(models.Model):
 
 class Committee(models.Model):
     name = models.CharField(max_length=50, unique=True)
-    description = models.TextField(blank=True, max_length=200)
-    response_label = models.TextField(blank=True, max_length=200)
+    description = models.TextField(blank=True, max_length=300)
+    response_label = models.TextField(blank=True, max_length=300)
     logo = models.FileField(blank=True, upload_to='committee-logos')
     detail_link = models.CharField(max_length=150, default="")
 

@@ -76,18 +76,20 @@ class ApplicationPortal extends Component {
         this.setState({ error });
       }
     );
-    callApi("/application/mine/").then(({ jsonData }) =>
-      this.setState({
-        myApplications: jsonData,
-        selectedCommittees: jsonData.committee_applications
-          .map(a => a.committee.name.toLowerCase())
-          .reduce((obj, a) => ({ ...obj, [a]: true }), {})
-      })
-    );
+    djangoData.user &&
+      djangoData.user.has_application &&
+      callApi("/application/mine/").then(({ jsonData }) =>
+        this.setState({
+          myApplications: jsonData,
+          selectedCommittees: jsonData.committee_applications
+            .map(a => a.committee.name.toLowerCase())
+            .reduce((obj, a) => ({ ...obj, [a]: true }), {})
+        })
+      );
 
     const user = { name: djangoData.user && djangoData.user.full_name };
     this.setState({ user });
-    Raven.setUserContext(user);
+    Raven.setUserContext(djangoData.user);
     this.initializeState();
   }
 
