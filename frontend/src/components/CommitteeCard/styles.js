@@ -33,6 +33,8 @@ export const Card = styled.div`
     grid-template-areas:
       "logo title readmore"
       "text text text";
+    margin: 1em 0.5em;
+    padding: 1.5em;
     `};
 `;
 
@@ -45,6 +47,7 @@ export const Title = styled.h2`
     padding: 0
     text-align: left;
     margin-left: 0.5em;
+    align-self: center;
     `};
 `;
 
@@ -58,6 +61,7 @@ export const Text = styled.p`
     padding: 0;
     font-size: 1rem;
     margin-top: 1em;
+    text-align: left;
     `};
 `;
 
@@ -68,7 +72,6 @@ export const Logo = styled.img`
   ${media.handheld`
     width: 80%;
     align-self: center;
-    justify-self: left;
     `};
 `;
 
