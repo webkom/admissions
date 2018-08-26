@@ -46,9 +46,6 @@ class LegoOAuth2(BaseOAuth2):
     def user_data(self, access_token, *args, **kwargs):
         user_data = self._user_data(access_token)
 
-        if not user_data.get('isStudent'):
-            raise AuthFailed('You must be a verified student.')
-
         if not Committee.objects.all().exists():
             self._create_initial_committees(access_token)
 
