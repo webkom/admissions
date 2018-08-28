@@ -49,8 +49,8 @@ $ yarn watch
 To populate the database with data for development, we have set up factories.
 ```sh
 $ python manage.py shell_plus
-$ from committee_admissions.admissions.factories import RandomCommitteeApplicationFactory
-$ RandomCommitteeApplicationFactory.create_batch(size=30)
+$ from committee_admissions.admissions.factories import RandomAdmissionFactory
+$ RandomAdmissionFactory.create()
 ```
 
 ## Requirements

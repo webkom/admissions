@@ -1,6 +1,4 @@
 import React, { Component } from "react";
-import styled from "styled-components";
-import { media } from "src/styles/mediaQueries";
 
 import callApi from "src/utils/callApi";
 import Moment from "react-moment";
@@ -12,9 +10,14 @@ import AbakusLogo from "src/components/AbakusLogo";
 import LinkButton from "src/components/LinkButton";
 import { MainPageTitle } from "src/components/PageTitle";
 
-import { InfoBox, InfoBoxText, InfoBoxTitle } from "./styles";
-import LinkWrapper from "./LinkWrapper";
-import "./LandingPage.css";
+import {
+  InfoBox,
+  InfoBoxText,
+  InfoBoxTitle,
+  PageSubTitle,
+  Container,
+  LinkWrapper
+} from "./styles";
 
 class LandingPage extends Component {
   constructor(props) {
@@ -64,21 +67,20 @@ class LandingPage extends Component {
           <InfoBox>
             <InfoBoxTitle>Her kan du søke til komiteer i Abakus</InfoBoxTitle>
             <InfoBoxText lineHeight="1em">
-              Søknadsfristen for ny søknad er{" "}
+              Søknadsfristen er{" "}
               <b>
                 <Moment format="dddd Do MMMM, \k\l. HH:mm">
                   {admission.public_deadline}
                 </Moment>
+                .
               </b>
-              .
             </InfoBoxText>
-            <InfoBoxText lineHeight="1em">
-              Søker du etter dette er du ikke garantert intervju.
-            </InfoBoxText>
-            <InfoBoxText lineHeight="1em">
-              Fristen for å endre søknad er{" "}
+            <InfoBoxText>
+              <b>Merk!</b> Du kan sende inn/endre din søknad etter fristen, men
+              du er verken garantert intervju eller at komiteen ser dine
+              endringer. Siste frist for dette er{" "}
               <b>
-                <Moment format="dddd Do MMMM, \k\l. HH:mm">
+                <Moment format="Do MMMM">
                   {admission.application_deadline}
                 </Moment>
               </b>
@@ -112,23 +114,5 @@ class LandingPage extends Component {
     }
   }
 }
-
-const PageSubTitle = MainPageTitle.extend`
-  color: gray;
-  font-size: 2.5rem;
-`;
-
-const Container = styled.div`
-  min-height: 100vh;
-  margin: 0;
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  align-items: center;
-  margin: 0 0.7em;
-  ${media.handheld`
-    margin: 2em 1em 3em 1em;
-    `};
-`;
 
 export default LandingPage;

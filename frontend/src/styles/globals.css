@@ -88,3 +88,7 @@ thead {
   font-weight: bold;
   background-color: #eee;
 }
+
+time {
+  white-space: nowrap;
+}
