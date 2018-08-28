@@ -8,7 +8,7 @@ module.exports = {
   context: __dirname,
   entry: isProduction
     ? {
-        app: ["babel-polyfill", "./frontend/src/index"],
+        app: ["babel-polyfill", "whatwg-fetch", "./frontend/src/index"],
         vendor: [
           "react",
           "react-dom",
@@ -20,6 +20,7 @@ module.exports = {
     : {
         app: [
           "babel-polyfill",
+          "whatwg-fetch",
           "webpack-dev-server/client?http://localhost:3000",
           "webpack/hot/only-dev-server",
           "./frontend/src/index"
