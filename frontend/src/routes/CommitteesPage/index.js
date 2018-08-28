@@ -42,11 +42,11 @@ class CommitteesPage extends Component {
 
     return (
       <PageWrapper>
-        <PageTitle>Velg komitéer å søke på</PageTitle>
+        <PageTitle>Velg komiteer å søke på</PageTitle>
         <CommitteeWrapper>{CommitteeCards}</CommitteeWrapper>
         <NextCard>
           <NextButton bordercolor="gray" to="/application" margin="auto">
-            Gå videre med valgte komitéer
+            Gå videre med valgte komiteer
           </NextButton>
         </NextCard>
       </PageWrapper>
