@@ -2,6 +2,7 @@ import { compose } from "recompose";
 import Cookie from "js-cookie";
 import Raven from "raven-js";
 import config from "src/utils/config";
+import "whatwg-fetch";
 
 export class HttpError extends Error {
   response: Response;
