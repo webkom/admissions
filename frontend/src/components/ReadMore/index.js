@@ -2,10 +2,7 @@ import React, { Component } from "react";
 import PropTypes from "prop-types";
 import Truncate from "react-truncate";
 
-import Wrapper from "./Wrapper";
-import EllipsisWrapper from "./EllipsisWrapper";
-import Ellipsis from "./Ellipsis";
-import EllipsisToggle from "./EllipsisToggle";
+import { Wrapper, EllipsisWrapper, Ellipsis, EllipsisToggle } from "./styles";
 
 class ReadMore extends Component {
   constructor(...args) {
