@@ -13,6 +13,8 @@ import {
   AppHeader
 } from "./styles.js";
 import Card from "src/components/Card/Card";
+import ConfirmModal from "src/components/ConfirmModal";
+import callApi from "src/utils/callApi";
 
 const Logo = ({ className, name }) => (
   <Image
@@ -44,7 +46,7 @@ const Header = ({ text, time, phoneNumber, deadline }) => (
       Søknad registrert: {new Date(time).toLocaleString("en-GB")}
     </TimeStamp>
     <Phone>
-      <span style={{ fontWeight: "bold" }}>Oppgitt telefon nummer: </span>
+      <span style={{ fontWeight: "bold" }}>Oppgitt telefonnummer: </span>
       {phoneNumber}
     </Phone>
     <ChangeButton to="/application">Endre søknad</ChangeButton>
@@ -84,11 +86,22 @@ const MyApplications = ({ applications }) => {
       />
       <List text={text} time={time_sent} phoneNumber={phone_number}>
         {committee_applications.map(application => (
-          <Card key={application.committee.pk} width={"100"}>
+          <Card key={application.committee.pk}>
             <Application {...application} />
           </Card>
         ))}
       </List>
+      <ConfirmModal
+        title="Slett søknad"
+        message="Er du sikker på at du vil slette søknaden din?"
+        onConfirm={() =>
+          callApi("/application/mine/", {
+            method: "DELETE"
+          }).then(() => {
+            window.location = "/";
+          })
+        }
+      />
     </Container>
   );
 };
