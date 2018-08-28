@@ -1,7 +1,8 @@
 import React from "react";
-import "./styles.css";
+
+import { InputFeedback } from "./styles";
 
 const InputValidationFeedback = ({ error }) =>
-  error ? <div className="input-feedback">{error}</div> : null;
+  error ? <InputFeedback>{error}</InputFeedback> : null;
 
 export default InputValidationFeedback;
