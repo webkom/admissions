@@ -1,6 +1,5 @@
 import { withFormik } from "formik";
 import * as Yup from "yup";
-import Cookie from "js-cookie";
 
 import ApplicationForm from "./ApplicationFormContainer";
 import callApi from "src/utils/callApi";
@@ -33,9 +32,7 @@ const FormikApp = withFormik({
     values,
     {
       props: { selectedCommittees },
-      resetForm,
-      setSubmitting,
-      setFieldValue
+      setSubmitting
     }
   ) {
     var submission = {
@@ -49,18 +46,13 @@ const FormikApp = withFormik({
         submission.applications[name] = values[name];
       });
 
-    console.log(submission);
     callApi("/application/", {
       method: "POST",
       body: JSON.stringify(submission)
     }).then(
-      res => {
-        console.log("Submit result", res);
+      () => {
         setSubmitting(false);
         window.location = "/myapplications";
-      },
-      err => {
-        console.log(err);
       }
     );
   },

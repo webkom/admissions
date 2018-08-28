@@ -3,7 +3,23 @@
 }
 
 .submit-btn {
-  grid-area: button;
+  grid-area: submit;
+  align-self: end;
+}
+
+.delete-btn {
+  grid-area: delete;
+  align-self: start;
+  justify-self: start;
+}
+
+.buttons-container {
+  grid-area: buttons;
+  display: grid;
+  grid-template-columns: 11em [first]0.5fr 0.5[end];
+  grid-template-rows: auto;
+  grid-template-areas: ". delete submit";
+  margin: 0.5em;
 }
 
 .committees {

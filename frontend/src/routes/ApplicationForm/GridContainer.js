@@ -7,7 +7,7 @@ const GridContainer = styled.div`
   width: 95%;
   grid-template-columns: 3fr 1fr;
   grid-template-rows: auto;
-  grid-template-areas: "form .";
+  grid-template-areas: "form ." "buttons .";
   ${media.handheld`
     grid-template-columns: 1fr;
     grid-template-rows: auto;

@@ -6,6 +6,7 @@ from django.views.generic.base import TemplateView
 from rest_framework import permissions, viewsets
 from rest_framework.decorators import list_route
 from rest_framework.response import Response
+from rest_framework import status
 
 from committee_admissions.admissions import constants
 from committee_admissions.admissions.models import (
@@ -99,11 +100,15 @@ class ApplicationViewSet(viewsets.ModelViewSet):
     def perform_create(self, serializer):
         serializer.save(user=self.request.user)
 
-    @list_route(methods=['GET'])
+    @list_route(methods=['GET', 'DELETE'])
     def mine(self, request):
         try:
-            instance = UserApplication.objects.get(user=request.user)
-            serializer = self.get_serializer(instance)
-            return Response(serializer.data)
+            if request.method == 'GET':
+                instance = UserApplication.objects.get(user=request.user)
+                serializer = self.get_serializer(instance)
+                return Response(serializer.data)
+            elif request.method == 'DELETE':
+                instance = UserApplication.objects.get(user=request.user).delete()
+                return Response(status=status.HTTP_204_NO_CONTENT)
         except UserApplication.DoesNotExist:
             raise Http404
