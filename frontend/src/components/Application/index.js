@@ -1,9 +1,7 @@
 import React from "react";
 
 import ReadMore from "src/components/ReadMore";
-
-import Wrapper from "./Wrapper";
-import CommitteeName from "./CommitteeName";
+import { Wrapper, CommitteeName } from "./styles";
 
 const Application = ({ text }) => {
   const applicationText = text.split("\n").map((line, i, arr) => {
