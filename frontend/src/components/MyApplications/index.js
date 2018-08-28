@@ -44,7 +44,7 @@ const Header = ({ text, time, phoneNumber, deadline }) => (
       Søknad registrert: {new Date(time).toLocaleString("en-GB")}
     </TimeStamp>
     <Phone>
-      <span style={{ fontWeight: "bold" }}>Oppgitt telefon nummer: </span>
+      <span style={{ fontWeight: "bold" }}>Oppgitt telefonnummer: </span>
       {phoneNumber}
     </Phone>
     <ChangeButton to="/application">Endre søknad</ChangeButton>
