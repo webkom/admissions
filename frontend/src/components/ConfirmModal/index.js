@@ -9,17 +9,7 @@ import {
   TriggerText
 } from "./styles.js";
 
-type Props = {
-  onConfirm: () => Promise<*>,
-  title: string,
-  message: string
-};
-
-type State = {
-  isOpen: boolean
-};
-
-class ConfirmModal extends Component<Props, State> {
+class ConfirmModal extends Component<> {
   state = { isOpen: false };
 
   hideModal = () => {

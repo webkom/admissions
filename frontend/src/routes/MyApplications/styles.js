@@ -75,7 +75,6 @@ export const DeleteButton = styled.div`
   font-size: 1em;
   justify-self: center;
   cursor: pointer;
-  font-family: Raleway, "Helvetica Neue", Arial, sans-serif;
   color: gray;
   font-weight: bold;
 

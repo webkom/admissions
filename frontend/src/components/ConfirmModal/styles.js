@@ -53,15 +53,12 @@ export const ActionButton = styled.button.attrs({
   border: ${props => props.border};
   padding: 10px 30px;
   border-radius: 4px;
-  font-family: Raleway, "Helvetica Neue", Arial, sans-serif;
   width: 100px;
 `;
 
 export const TriggerText = styled.div`
   cursor: pointer;
   font-size: 1em;
-  justify-self: center;
-  font-family: Raleway, "Helvetica Neue", Arial, sans-serif;
   color: gray;
   font-weight: bold;
 
