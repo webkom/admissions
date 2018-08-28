@@ -1,11 +1,10 @@
 import "src/styles/variables.css";
 import styled from "styled-components";
 
-
 export const Overlay = styled.div`
   min-width: 100%;
   min-height: 100%;
-  background: rgba(0,0,0,0.8);
+  background: rgba(0, 0, 0, 0.8);
   position: fixed;
   top: 0;
   bottom: 0;
@@ -62,7 +61,7 @@ export const TriggerText = styled.div`
   cursor: pointer;
   font-size: 1em;
   justify-self: center;
-  font-family: Raleway, "Helvetica Neue" ,Arial, sans-serif;
+  font-family: Raleway, "Helvetica Neue", Arial, sans-serif;
   color: gray;
   font-weight: bold;
 

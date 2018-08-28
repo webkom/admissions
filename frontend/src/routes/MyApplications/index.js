@@ -94,13 +94,13 @@ const MyApplications = ({ applications }) => {
       <ConfirmModal
         title="Slett søknad"
         message="Er du sikker på at du vil slette søknaden din?"
-        onConfirm={() => callApi("/application/mine/", {
-          method: "DELETE"
-        }).then(
-          () => {
+        onConfirm={() =>
+          callApi("/application/mine/", {
+            method: "DELETE"
+          }).then(() => {
             window.location = "/";
-          }
-        )}
+          })
+        }
       />
     </Container>
   );

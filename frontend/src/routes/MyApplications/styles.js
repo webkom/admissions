@@ -13,6 +13,7 @@ export const Wrapper = styled.div`
   ${media.handheld`
      `};
 `;
+
 export const Image = styled.img`
   height: 5em;
   width: 5em;
@@ -74,7 +75,7 @@ export const DeleteButton = styled.div`
   font-size: 1em;
   justify-self: center;
   cursor: pointer;
-  font-family: Raleway, "Helvetica Neue" ,Arial, sans-serif;
+  font-family: Raleway, "Helvetica Neue", Arial, sans-serif;
   color: gray;
   font-weight: bold;
 

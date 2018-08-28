@@ -3,10 +3,9 @@ from django.contrib.auth.models import User
 from django.db.models import Prefetch
 from django.http import Http404
 from django.views.generic.base import TemplateView
-from rest_framework import permissions, viewsets
+from rest_framework import permissions, status, viewsets
 from rest_framework.decorators import list_route
 from rest_framework.response import Response
-from rest_framework import status
 
 from committee_admissions.admissions import constants
 from committee_admissions.admissions.models import (
