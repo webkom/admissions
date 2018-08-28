@@ -10,9 +10,11 @@ import {
   TimeStamp,
   Phone,
   ChangeButton,
+  DeleteButton,
   AppHeader
 } from "./styles.js";
 import Card from "src/components/Card/Card";
+import callApi from "src/utils/callApi";
 
 const Logo = ({ className, name }) => (
   <Image
@@ -84,11 +86,20 @@ const MyApplications = ({ applications }) => {
       />
       <List text={text} time={time_sent} phoneNumber={phone_number}>
         {committee_applications.map(application => (
-          <Card key={application.committee.pk} width={"100"}>
+          <Card key={application.committee.pk}>
             <Application {...application} />
           </Card>
         ))}
       </List>
+      <DeleteButton to="/" onClick={() => callApi("/application/mine/", {
+        method: "DELETE"
+      }).then(
+        () => {
+          window.location = "/";
+        }
+      )}>
+        Slett søknad
+      </DeleteButton>
     </Container>
   );
 };
