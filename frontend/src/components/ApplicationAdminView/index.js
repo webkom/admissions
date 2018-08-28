@@ -1,12 +1,13 @@
 import React from "react";
 
 import ReadMore from "src/components/ReadMore";
-
-import Wrapper from "./Wrapper";
-import CommitteeName from "./CommitteeName";
-import CommitteeLogo from "./CommitteeLogo";
-import SmallDescription from "./SmallDescription";
-import SmallDescriptionWrapper from "./SmallDescriptionWrapper";
+import {
+  Wrapper,
+  CommitteeName,
+  CommitteeLogo,
+  SmallDescription,
+  SmallDescriptionWrapper
+} from "./styles";
 
 const ApplicationAdminView = ({ committee, text }) => {
   const applicationText = text.split("\n").map((line, i, arr) => {
