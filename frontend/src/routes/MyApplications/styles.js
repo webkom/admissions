@@ -13,6 +13,7 @@ export const Wrapper = styled.div`
   ${media.handheld`
      `};
 `;
+
 export const Image = styled.img`
   height: 5em;
   width: 5em;
@@ -68,6 +69,18 @@ export const ChangeButton = styled(LinkButton)`
   grid-area: Button;
   width: 50%;
   justify-self: center;
+`;
+
+export const DeleteButton = styled.div`
+  font-size: 1em;
+  justify-self: center;
+  cursor: pointer;
+  color: gray;
+  font-weight: bold;
+
+  &:hover {
+    text-shadow: 0.5px 0.5px darkgray;
+  }
 `;
 
 export const Container = styled.div`
