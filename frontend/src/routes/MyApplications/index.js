@@ -10,10 +10,10 @@ import {
   TimeStamp,
   Phone,
   ChangeButton,
-  DeleteButton,
   AppHeader
 } from "./styles.js";
 import Card from "src/components/Card/Card";
+import ConfirmModal from "src/components/ConfirmModal";
 import callApi from "src/utils/callApi";
 
 const Logo = ({ className, name }) => (
@@ -91,15 +91,17 @@ const MyApplications = ({ applications }) => {
           </Card>
         ))}
       </List>
-      <DeleteButton to="/" onClick={() => callApi("/application/mine/", {
-        method: "DELETE"
-      }).then(
-        () => {
-          window.location = "/";
-        }
-      )}>
-        Slett søknad
-      </DeleteButton>
+      <ConfirmModal
+        title="Slett søknad"
+        message="Er du sikker på at du vil slette søknaden din?"
+        onConfirm={() => callApi("/application/mine/", {
+          method: "DELETE"
+        }).then(
+          () => {
+            window.location = "/";
+          }
+        )}
+      />
     </Container>
   );
 };
