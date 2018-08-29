@@ -8,7 +8,6 @@ import ToggleCommitteeSmall from "src/components/ToggleCommitteeSmall";
 
 import FormStructure from "./FormStructure";
 
-// State of the form
 class FormContainer extends Component {
   constructor() {
     super();

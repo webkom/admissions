@@ -3,7 +3,7 @@ import callApi from "src/utils/callApi";
 
 import djangoData from "src/utils/djangoData";
 import PageWrapper from "src/components/PageWrapper";
-import PageTitle from "src/components/PageTitle";
+import Title from "src/components/Title";
 import UserApplicationAdminView from "src/containers/UserApplicationAdminView";
 
 import Wrapper from "./Wrapper";
@@ -111,7 +111,7 @@ class AdminPage extends Component {
     } else {
       return (
         <PageWrapper>
-          <PageTitle>Admin Panel</PageTitle>
+          <Title>Admin Panel</Title>
           <LinkLink to="/">Gå til forside</LinkLink>
           <Wrapper>
             <Statistics>

@@ -1,7 +1,7 @@
 import React from "react";
 import { Form, Field } from "formik";
 
-import PageTitle from "src/components/PageTitle";
+import Title from "src/components/Title";
 import PriorityTextField from "src/components/PriorityTextField";
 import { CardTitle } from "src/components/Card";
 import PhoneNumberField from "src/components/PhoneNumberField";
@@ -12,8 +12,6 @@ import {
   ToggleCommitteeWrapper,
   NoChosenCommittees,
   NoChosenCommitteesSmallInfo,
-  SubTitle,
-  SmallSubTitle,
   GeneralInfoWrapper
 } from "./styles";
 
@@ -27,15 +25,19 @@ const FormStructure = ({
 }) => (
   <div>
     <Wrapper>
-      <PageTitle>Søknad til komiteer</PageTitle>
+      <Title handheld={"1.7rem"} margin={"1em 0 0 0"}>
+        Søknad til komiteer
+      </Title>
 
       <Form>
-        <SmallSubTitle>Velg de komiteene du vil søke</SmallSubTitle>
+        <Title size={"3rem"} handheld={"1em"} color={"grey"}>
+          Velg de komiteene du vil søke
+        </Title>
         <ToggleCommitteeWrapper>{ChooseCommitteesItems}</ToggleCommitteeWrapper>
 
         {hasSelected ? (
           <div>
-            <SubTitle>Din søknad</SubTitle>
+            <Title>Din søknad</Title>
 
             <GeneralInfoWrapper className="input" margin="0.5rem 0rem">
               <Field name="phoneNumber" component={PhoneNumberField} />

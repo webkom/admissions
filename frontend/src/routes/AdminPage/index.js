@@ -6,7 +6,7 @@ import { withFormik, Field, Form } from "formik";
 import * as Yup from "yup";
 
 import PageWrapper from "src/components/PageWrapper";
-import PageTitle from "src/components/PageTitle";
+import Title from "src/components/Title";
 import TextAreaField from "src/components/TextAreaField";
 import UserApplication from "src/containers/UserApplication";
 
@@ -136,7 +136,7 @@ class AdminPage extends Component {
     } else {
       return (
         <PageWrapper>
-          <PageTitle>Admin Panel</PageTitle>
+          <Title>Admin Panel</Title>
           <LinkLink to="/">Gå til forside</LinkLink>
           <h2>{djangoData.user.leader_of_committee}</h2>
           <Wrapper>

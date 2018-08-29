@@ -8,13 +8,12 @@ Moment.globalLocale = "nb";
 import djangoData from "src/utils/djangoData";
 import AbakusLogo from "src/components/AbakusLogo";
 import LinkButton from "src/components/LinkButton";
-import { MainPageTitle } from "src/components/PageTitle";
+import Title from "src/components/Title";
 
 import {
   InfoBox,
   InfoBoxText,
   InfoBoxTitle,
-  PageSubTitle,
   Container,
   LinkWrapper
 } from "./styles";
@@ -60,10 +59,10 @@ class LandingPage extends Component {
       return (
         <Container>
           <AbakusLogo />
-          <MainPageTitle>Opptak til komiteer i Abakus</MainPageTitle>
-          <PageSubTitle>
+          <Title>Opptak til komiteer i Abakus</Title>
+          <Title>
             <Moment format="YYYY">{admission.public_deadline}</Moment>
-          </PageSubTitle>
+          </Title>
           <InfoBox>
             <InfoBoxTitle>Her kan du søke til komiteer i Abakus</InfoBoxTitle>
             <InfoBoxText lineHeight="1em">

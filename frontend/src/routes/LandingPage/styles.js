@@ -1,7 +1,6 @@
 import styled from "styled-components";
 import { media } from "src/styles/mediaQueries";
 import { Card, CardParagraph, CardTitle } from "src/components/Card";
-import { MainPageTitle } from "src/components/PageTitle";
 
 export const InfoBox = Card.extend`
   display: flex;
@@ -27,11 +26,6 @@ export const InfoBoxTitle = CardTitle.extend`
   margin-top: 0;
   ${media.handheld`
     `};
-`;
-
-export const PageSubTitle = MainPageTitle.extend`
-  color: gray;
-  font-size: 2.5rem;
 `;
 
 export const Container = styled.div`
