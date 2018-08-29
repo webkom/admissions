@@ -1,4 +1,5 @@
 import styled from "styled-components";
+import { media } from "src/styles/mediaQueries";
 
 const Wrapper = styled.div`
   background: #eae9e8c7;
@@ -8,6 +9,10 @@ const Wrapper = styled.div`
   &: nth-child(odd) {
     background: #d8d8d88a;
   }
+
+  ${media.handheld`
+     padding: 0 1em;
+  `};
 `;
 
 export default Wrapper;

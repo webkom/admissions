@@ -7,6 +7,7 @@ const Wrapper = styled(Card)`
   padding: 1.5em;
   font-size: 0.9em;
   font-family: Raleway, "Helvetica Neue", Arial, sans-serif;
+  width: 100%;
 `;
 
 export default Wrapper;
