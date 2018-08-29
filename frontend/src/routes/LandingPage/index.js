@@ -80,7 +80,7 @@ class LandingPage extends Component {
               du er verken garantert intervju eller at komiteen ser dine
               endringer. Siste frist for dette er{" "}
               <b>
-                <Moment format="Do MMMM">
+                <Moment format="dddd Do MMMM, \k\l. HH:mm">
                   {admission.application_deadline}
                 </Moment>
               </b>
