@@ -5,20 +5,26 @@ import Raven from "raven-js";
 import { withFormik, Field, Form } from "formik";
 import * as Yup from "yup";
 
+import UserApplication from "src/containers/UserApplication";
 import PageWrapper from "src/components/PageWrapper";
 import PageTitle from "src/components/PageTitle";
 import TextAreaField from "src/components/TextAreaField";
-import UserApplication from "src/containers/UserApplication";
 
 import CSRFToken from "./csrftoken";
-import Wrapper from "./Wrapper";
-import LinkLink from "./LinkLink";
-import CSVExport from "./CSVExport";
-import Statistics from "./Statistics";
-import StatisticsName from "./StatisticsName";
-import StatisticsWrapper from "./StatisticsWrapper";
-import SubmitButton from "./SubmitButton";
-import FormWrapper from "./FormWrapper";
+
+import {
+  EditCommitteeFormWrapper,
+  FormWrapper,
+  SubmitButton,
+  Wrapper,
+  LinkLink,
+  CSVExport,
+  Statistics,
+  StatisticsName,
+  StatisticsWrapper,
+  CommitteeLogo,
+  CommitteeLogoWrapper
+} from "./styles";
 
 class AdminPage extends Component {
   constructor(props) {
@@ -137,8 +143,14 @@ class AdminPage extends Component {
       return (
         <PageWrapper>
           <PageTitle>Admin Panel</PageTitle>
+          <CommitteeLogoWrapper>
+            <CommitteeLogo
+              src={require(`assets/committee_logos/${djangoData.user.leader_of_committee.toLowerCase()}.png`)}
+            />
+            <h2>{djangoData.user.leader_of_committee}</h2>
+          </CommitteeLogoWrapper>
           <LinkLink to="/">Gå til forside</LinkLink>
-          <h2>{djangoData.user.leader_of_committee}</h2>
+
           <Wrapper>
             <EditCommitteeForm
               apiRoot={this.API_ROOT}
@@ -179,20 +191,20 @@ const MyInnerForm = props => {
     <Form>
       <FormWrapper>
         <CSRFToken />
-
-        <Field
-          component={TextAreaField}
-          name="response_label"
-          placeholder="Edit the reply text"
-          title="Endre hva komitteen ønsker å høre om fra søkere"
-        />
-        <Field
-          component={TextAreaField}
-          title="Endre beskrivelsen av komiteen"
-          name="description"
-          placeholder="Edit the description of the committee"
-        />
-
+        <EditCommitteeFormWrapper>
+          <Field
+            component={TextAreaField}
+            title="Endre hva komitteen ønsker å høre om fra søkere"
+            name="response_label"
+            placeholder="Skriv hva komitteen ønsker å vite om søkeren..."
+          />
+          <Field
+            component={TextAreaField}
+            title="Endre beskrivelsen av komiteen"
+            name="description"
+            placeholder="Skriv en beskrivelse av komiteen..."
+          />
+        </EditCommitteeFormWrapper>
         <SubmitButton
           onClick={handleSubmit}
           type="submit"

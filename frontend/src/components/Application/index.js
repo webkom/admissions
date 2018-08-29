@@ -16,10 +16,12 @@ const Application = ({ text }) => {
   });
 
   return (
-    <Wrapper>
-      <CommitteeName>Søknad </CommitteeName>
-      <ReadMore lines={30}>{applicationText}</ReadMore>
-    </Wrapper>
+    <div>
+      <CommitteeName>Søknad</CommitteeName>
+      <Wrapper>
+        <ReadMore lines={200}>{applicationText}</ReadMore>
+      </Wrapper>
+    </div>
   );
 };
 
