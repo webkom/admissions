@@ -1,13 +1,16 @@
-/**
- *
- * Wrapper for the committee application
- *
- */
-
 import styled from "styled-components";
 import { media } from "src/styles/mediaQueries";
 
-const Wrapper = styled.div`
+export const Dash = styled.span`
+  margin-right: 0.3em;
+`;
+
+export const Name = styled.span`
+  color: #636363;
+  margin: 0 0.3em;
+`;
+
+export const Wrapper = styled.div`
   background: #d6d4d2;
   display: flex;
   flex-wrap: wrap;
@@ -24,5 +27,3 @@ const Wrapper = styled.div`
     width: 100%;
     `};
 `;
-
-export default Wrapper;

@@ -1,7 +1,6 @@
 import React from "react";
-import Wrapper from "./Wrapper";
-import Name from "./Name";
-import Dash from "./Dash";
+
+import { Wrapper, Name, Dash } from "./styles";
 
 const UserInfo = ({ name }) => {
   return (
