@@ -28,7 +28,7 @@
     "react-router-dom": "^4.3.1",
     "react-truncate": "^2.3.0",
     "recompose": "^0.29.0",
-    "reselect": "3.0.1",
+    "reselect": "4.0.0",
     "sanitize.css": "7.0.1",
     "styled-components": "3.4.2",
     "whatwg-fetch": "^2.0.4"
