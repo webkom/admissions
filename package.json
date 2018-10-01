@@ -62,7 +62,7 @@
     "eslint-plugin-flowtype": "^2.50.0",
     "eslint-plugin-import": "2.13.0",
     "eslint-plugin-jsx-a11y": "^6.1.1",
-    "eslint-plugin-prettier": "2.7.0",
+    "eslint-plugin-prettier": "3.0.0",
     "eslint-plugin-react": "7.11.0",
     "eslint-plugin-redux-saga": "0.9.0",
     "eventsource-polyfill": "0.9.6",
