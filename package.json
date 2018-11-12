@@ -30,7 +30,7 @@
     "recompose": "^0.29.0",
     "reselect": "3.0.1",
     "sanitize.css": "7.0.1",
-    "styled-components": "4.0.3",
+    "styled-components": "4.1.0",
     "whatwg-fetch": "^2.0.4"
   },
   "devDependencies": {
