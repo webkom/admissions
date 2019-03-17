@@ -4,7 +4,7 @@ from django.db.models import Prefetch
 from django.http import Http404
 from django.views.generic.base import TemplateView
 from rest_framework import permissions, status, viewsets
-from rest_framework.decorators import list_route
+from rest_framework.decorators import action
 from rest_framework.response import Response
 
 from committee_admissions.admissions import constants
@@ -121,7 +121,7 @@ class ApplicationViewSet(viewsets.ModelViewSet):
     def perform_create(self, serializer):
         serializer.save(user=self.request.user)
 
-    @list_route(methods=["GET", "DELETE"])
+    @action(detail=False, methods=["GET", "DELETE"])
     def mine(self, request):
         try:
             if request.method == "GET":

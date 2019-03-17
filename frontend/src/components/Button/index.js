@@ -1,10 +1,10 @@
 import styled from "styled-components";
 
-const Button = styled.button.attrs({
-  width: props => props.width || "auto",
-  fontSize: props => props.fontSize || "1em",
-  margin: props => props.margin || "0"
-})`
+const Button = styled.button.attrs(props => ({
+  width: props.width || "auto",
+  fontSize: props.fontSize || "1em",
+  margin: props.margin || "0"
+}))`
   color: #fff;
   font-weight: bold;
   background: gray;

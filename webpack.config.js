@@ -22,7 +22,6 @@ module.exports = {
           "babel-polyfill",
           "whatwg-fetch",
           "webpack-dev-server/client?http://localhost:3000",
-          "webpack/hot/only-dev-server",
           "./frontend/src/index"
         ],
         vendor: [
