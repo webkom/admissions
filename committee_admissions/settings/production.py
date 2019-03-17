@@ -3,6 +3,7 @@ from urllib.parse import urlparse
 from .base import *  # noqa
 
 env = environ.Env(DEBUG=(bool, False))
+environ.Env.read_env()
 
 DEBUG = env("DEBUG")
 SECRET_KEY = env("SECRET_KEY")

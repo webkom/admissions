@@ -8,9 +8,7 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/2.0/ref/settings/
 """
 import os
-
 import environ
-
 from .logging import *  # noqa
 
 # GENERAL CONFIGURATION ======================================================
@@ -137,9 +135,13 @@ WEBPACK_LOADER = {
         "STATS_FILE": BASE_PROJECT_DIR.path("webpack-stats.json")(),
     }
 }
+<<<<<<< HEAD
 SOCIAL_AUTH_LEGO_KEY = os.environ.get("AUTH_LEGO_KEY")
 SOCIAL_AUTH_LEGO_SECRET = os.environ.get("AUTH_LEGO_SECRET")
 SOCIAL_AUTH_LEGO_API_URL = os.environ.get("AUTH_LEGO_API_URL")
+=======
+
+>>>>>>> Update python dependencies
 SOCIAL_AUTH_PIPELINE = (
     # Default pipeline
     "social_core.pipeline.social_auth.social_details",

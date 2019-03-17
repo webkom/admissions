@@ -1,8 +1,8 @@
 -r base.in
 
-django-debug-toolbar==1.9.1
-factory-boy==2.10.0
-tox==3.0.0
+django-debug-toolbar==1.11
+factory-boy==2.11.1
+tox==3.7.0
 
 -r isort.txt
 -r black.txt

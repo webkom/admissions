@@ -1,5 +1,9 @@
 from .base import *
 
+env = environ.Env()
+# reading .env file
+environ.Env.read_env()
+
 # GENERAL CONFIGURATION =======================================================
 DEBUG = True
 SECRET_KEY = "secretkeythatisnotsosecret"
