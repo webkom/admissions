@@ -75,7 +75,7 @@
     "image-webpack-loader": "4.3.1",
     "imports-loader": "0.8.0",
     "moment": "^2.21.0",
-    "prettier": "1.14.2",
+    "prettier": "1.17.0",
     "prop-types": "^15.6.1",
     "react-collapse": "^4.0.3",
     "react-hot-loader": "^4.3.4",
