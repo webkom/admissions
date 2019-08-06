@@ -5,19 +5,17 @@ from django.db import migrations, models
 
 class Migration(migrations.Migration):
 
-    dependencies = [
-        ('admissions', '0013_userapplication_phone_number'),
-    ]
+    dependencies = [("admissions", "0013_userapplication_phone_number")]
 
     operations = [
         migrations.AlterField(
-            model_name='committee',
-            name='description',
+            model_name="committee",
+            name="description",
             field=models.TextField(blank=True, max_length=300),
         ),
         migrations.AlterField(
-            model_name='committee',
-            name='response_label',
+            model_name="committee",
+            name="response_label",
             field=models.TextField(blank=True, max_length=300),
         ),
     ]

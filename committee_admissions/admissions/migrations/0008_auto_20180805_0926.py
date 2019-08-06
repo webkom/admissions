@@ -5,14 +5,10 @@ from django.db import migrations
 
 class Migration(migrations.Migration):
 
-    dependencies = [
-        ('admissions', '0007_committee_detail_link'),
-    ]
+    dependencies = [("admissions", "0007_committee_detail_link")]
 
     operations = [
         migrations.RenameField(
-            model_name='userapplication',
-            old_name='priority_text',
-            new_name='text',
-        ),
+            model_name="userapplication", old_name="priority_text", new_name="text"
+        )
     ]

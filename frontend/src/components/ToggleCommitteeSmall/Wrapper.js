@@ -12,7 +12,7 @@ const Wrapper = styled.button`
   flex: 1 1 20%;
   align-items: center;
   margin: 0.3em;
-  font-family: Raleway, "Helvetica Neue", Arial, sans-serif;
+  font-family: var(--font-family);
 
   ${media.handheld`
     flex: 1 1 45%;

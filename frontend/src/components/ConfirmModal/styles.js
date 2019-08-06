@@ -44,8 +44,8 @@ export const ButtonGroup = styled.div`
 `;
 
 export const ActionButton = styled.button.attrs({
-  background: props => props.background || "var(--color-event-red)",
-  border: props => props.border || "1px solid var(--color-red-1)"
+  background: props => props.background || "var(--lego-red)",
+  border: props => props.border || "1px solid var(--abakus-red)"
 })`
   color: #fff;
   font-weight: bold;

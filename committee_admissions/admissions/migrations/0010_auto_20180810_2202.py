@@ -8,58 +8,69 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('auth', '0009_alter_user_last_name_max_length'),
+        ("auth", "0009_alter_user_last_name_max_length"),
         migrations.swappable_dependency(settings.AUTH_USER_MODEL),
-        ('admissions', '0009_auto_20180810_1953'),
+        ("admissions", "0009_auto_20180810_1953"),
     ]
 
     operations = [
         migrations.CreateModel(
-            name='Membership',
+            name="Membership",
             fields=[
                 (
-                    'id',
+                    "id",
                     models.AutoField(
-                        auto_created=True, primary_key=True, serialize=False, verbose_name='ID'
-                    )
+                        auto_created=True,
+                        primary_key=True,
+                        serialize=False,
+                        verbose_name="ID",
+                    ),
                 ),
                 (
-                    'role',
+                    "role",
                     models.CharField(
                         choices=[
-                            ('member', 'member'), ('leader', 'leader'), ('co-leader', 'co-leader'),
-                            ('treasurer',
-                             'treasurer'), ('recruiting',
-                                            'recruiting'), ('development',
-                                                            'development'), ('editor', 'editor'),
-                            ('retiree', 'retiree'), ('media_relations', 'media_relations'),
-                            ('active_retiree',
-                             'active_retiree'), ('alumni', 'alumni'), ('webmaster', 'webmaster'),
-                            ('interest_group_admin',
-                             'interest_group_admin'), ('alumni_admin', 'alumni_admin'),
-                            ('retiree_email',
-                             'retiree_email'), ('company_admin',
-                                                'company_admin'), ('dugnad_admin', 'dugnad_admin'),
-                            ('trip_admin',
-                             'trip_admin'), ('sponsor_admin',
-                                             'sponsor_admin'), ('social_admin', 'social_admin')
-                        ], default='member', max_length=30
-                    )
+                            ("member", "member"),
+                            ("leader", "leader"),
+                            ("co-leader", "co-leader"),
+                            ("treasurer", "treasurer"),
+                            ("recruiting", "recruiting"),
+                            ("development", "development"),
+                            ("editor", "editor"),
+                            ("retiree", "retiree"),
+                            ("media_relations", "media_relations"),
+                            ("active_retiree", "active_retiree"),
+                            ("alumni", "alumni"),
+                            ("webmaster", "webmaster"),
+                            ("interest_group_admin", "interest_group_admin"),
+                            ("alumni_admin", "alumni_admin"),
+                            ("retiree_email", "retiree_email"),
+                            ("company_admin", "company_admin"),
+                            ("dugnad_admin", "dugnad_admin"),
+                            ("trip_admin", "trip_admin"),
+                            ("sponsor_admin", "sponsor_admin"),
+                            ("social_admin", "social_admin"),
+                        ],
+                        default="member",
+                        max_length=30,
+                    ),
                 ),
                 (
-                    'abakus_group',
-                    models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, to='auth.Group')
-                ),
-                (
-                    'user',
+                    "abakus_group",
                     models.ForeignKey(
-                        on_delete=django.db.models.deletion.CASCADE, to=settings.AUTH_USER_MODEL
-                    )
+                        on_delete=django.db.models.deletion.CASCADE, to="auth.Group"
+                    ),
+                ),
+                (
+                    "user",
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.CASCADE,
+                        to=settings.AUTH_USER_MODEL,
+                    ),
                 ),
             ],
         ),
         migrations.AlterUniqueTogether(
-            name='membership',
-            unique_together={('user', 'abakus_group')},
+            name="membership", unique_together={("user", "abakus_group")}
         ),
     ]

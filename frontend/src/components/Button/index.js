@@ -14,7 +14,7 @@ const Button = styled.button.attrs({
   outline: none;
   display: block;
   font-size: ${props => props.fontSize};
-  font-family: Raleway, "Helvetica Neue", Arial, sans-serif;
+  font-family: var(--font-family);
   width: ${props => props.width};
   margin: ${props => props.margin};
 `;

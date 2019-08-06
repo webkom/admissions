@@ -11,7 +11,6 @@ import ScrollToTop from "./scrollToTop";
 import Raven from "raven-js";
 import "src/styles/globals.css";
 import "./index.css";
-import "./assets/fonts/style.css";
 import config from "src/utils/config";
 import "babel-polyfill";
 

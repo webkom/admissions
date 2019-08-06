@@ -5,7 +5,7 @@
   margin: 0.5rem 0;
   padding: 1rem;
   resize: none;
-  font-family: Raleway, "Helvetica Neue", Arial, sans-serif;
+  font-family: var(--font-family);
   font-size: 1rem;
   width: 100%;
   overflow: hidden;

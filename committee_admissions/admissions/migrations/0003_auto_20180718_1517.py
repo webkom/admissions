@@ -6,16 +6,14 @@ from django.db import migrations, models
 
 class Migration(migrations.Migration):
 
-    dependencies = [
-        ('admissions', '0002_auto_20180321_1407'),
-    ]
+    dependencies = [("admissions", "0002_auto_20180321_1407")]
 
     operations = [
         migrations.AlterField(
-            model_name='userapplication',
-            name='time_sent',
+            model_name="userapplication",
+            name="time_sent",
             field=models.DateTimeField(
                 default=django.utils.timezone.now, editable=False, null=True
             ),
-        ),
+        )
     ]

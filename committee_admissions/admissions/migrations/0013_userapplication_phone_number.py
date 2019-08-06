@@ -5,15 +5,13 @@ from django.db import migrations, models
 
 class Migration(migrations.Migration):
 
-    dependencies = [
-        ('admissions', '0012_remove_membership_abakus_group'),
-    ]
+    dependencies = [("admissions", "0012_remove_membership_abakus_group")]
 
     operations = [
         migrations.AddField(
-            model_name='userapplication',
-            name='phone_number',
-            field=models.CharField(default='900000000000', max_length=20),
+            model_name="userapplication",
+            name="phone_number",
+            field=models.CharField(default="900000000000", max_length=20),
             preserve_default=False,
-        ),
+        )
     ]

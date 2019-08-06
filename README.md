@@ -54,7 +54,6 @@ Now, you need two terminals to run this project, one for frontend and one for ba
 These are the start commands:
 
 ```sh
-$
 $ python manage.py runserver
 $ yarn watch
 ```
@@ -78,7 +77,7 @@ Add the new package to either `base.in`, `development.in` or
 file by running
 
 ```sh
-$ pip-compile requirements/base.in > requirements/base.txt
+$ pip-compile requirements/development.in > requirements/development.txt
 ```
 
 To sync your virtual environment with the requirements file, do
@@ -89,3 +88,21 @@ $ pip-sync requirements/development.txt
 
 This will install missing packages, install the correct version and
 remove excess packages.
+
+## Code Style
+
+This codebase uses the PEP 8 code style. We enforce this with isort, black & flake8.
+In addition to the standards outlined in PEP 8, we have a few guidelines
+(see `setup.cfg` for more info):
+
+Format the code with black & isort
+
+```bash
+$ make fixme
+```
+
+To check if it is formatted properly, run:
+
+```bash
+$ tox -e isort -e flake8 -e black
+```

@@ -5,14 +5,12 @@ from django.db import migrations, models
 
 class Migration(migrations.Migration):
 
-    dependencies = [
-        ('admissions', '0003_auto_20180718_1517'),
-    ]
+    dependencies = [("admissions", "0003_auto_20180718_1517")]
 
     operations = [
         migrations.AlterField(
-            model_name='committee',
-            name='logo',
-            field=models.FileField(blank=True, upload_to='committee-logos'),
-        ),
+            model_name="committee",
+            name="logo",
+            field=models.FileField(blank=True, upload_to="committee-logos"),
+        )
     ]

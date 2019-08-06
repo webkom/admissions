@@ -5,14 +5,12 @@ from django.db import migrations, models
 
 class Migration(migrations.Migration):
 
-    dependencies = [
-        ('admissions', '0001_initial'),
-    ]
+    dependencies = [("admissions", "0001_initial")]
 
     operations = [
         migrations.AlterField(
-            model_name='committee',
-            name='name',
+            model_name="committee",
+            name="name",
             field=models.CharField(max_length=50, unique=True),
-        ),
+        )
     ]

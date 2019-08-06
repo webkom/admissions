@@ -7,7 +7,7 @@
 
   --lego-red: #c0392b;
   --lego-gray: #394b59;
-  --lego-white: #ffffff;
+  --lego-white: #fff;
   --lego-gray-lightest: #f5f4f4;
   --lego-gray-light: #eae9e8;
   --lego-gray-medium: #dadada;
@@ -25,6 +25,8 @@
   --font-size: 16px;
   --font-size-small: 12px;
   --font-size-large: 18px;
+
+  --font-family: "Rawline", "Helvetica Neue", Arial, sans-serif;
 
   --lego-max-width: 1100px;
   --lego-default-padding: 2rem;

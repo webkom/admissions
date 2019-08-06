@@ -5,7 +5,7 @@ export const ResponseLabelWrapper = styled.div`
   grid-area: response;
 
   margin: 0.5em 1em;
-  font-family: Raleway, "Helvetica Neue", Arial, sans-serif;
+  font-family: var(--font-family);
   font-size: 0.95rem;
 `;
 
@@ -13,7 +13,7 @@ export const WriteApplicationWrapper = styled.div`
   grid-area: input;
 
   margin: 0.5em 1em;
-  font-family: Raleway, "Helvetica Neue", Arial, sans-serif;
+  font-family: var(--font-family);
   font-size: 1rem;
 `;
 
