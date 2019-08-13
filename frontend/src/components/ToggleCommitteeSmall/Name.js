@@ -9,7 +9,7 @@ import styled from "styled-components";
 const Name = styled.span`
   font-weight: bold;
   margin-left: 0.5em;
-  font-family: Raleway, "Helvetica Neue", Arial, sans-serif;
+  font-family: var(--font-family);
   font-size: 1rem;
   color: #303030;
 `;

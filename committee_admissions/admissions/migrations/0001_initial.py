@@ -10,123 +10,136 @@ class Migration(migrations.Migration):
 
     initial = True
 
-    dependencies = [
-        migrations.swappable_dependency(settings.AUTH_USER_MODEL),
-    ]
+    dependencies = [migrations.swappable_dependency(settings.AUTH_USER_MODEL)]
 
     operations = [
         migrations.CreateModel(
-            name='Admission',
+            name="Admission",
             fields=[
                 (
-                    'id',
+                    "id",
                     models.AutoField(
-                        auto_created=True, primary_key=True, serialize=False, verbose_name='ID'
-                    )
+                        auto_created=True,
+                        primary_key=True,
+                        serialize=False,
+                        verbose_name="ID",
+                    ),
                 ),
-                ('title', models.CharField(max_length=255)),
-                ('open_from', models.DateTimeField()),
-                ('public_deadline', models.DateTimeField()),
-                ('application_deadline', models.DateTimeField()),
+                ("title", models.CharField(max_length=255)),
+                ("open_from", models.DateTimeField()),
+                ("public_deadline", models.DateTimeField()),
+                ("application_deadline", models.DateTimeField()),
             ],
         ),
         migrations.CreateModel(
-            name='Committee',
+            name="Committee",
             fields=[
                 (
-                    'id',
+                    "id",
                     models.AutoField(
-                        auto_created=True, primary_key=True, serialize=False, verbose_name='ID'
-                    )
+                        auto_created=True,
+                        primary_key=True,
+                        serialize=False,
+                        verbose_name="ID",
+                    ),
                 ),
-                ('name', models.CharField(max_length=50)),
-                ('description', models.TextField(blank=True, max_length=200)),
-                ('response_label', models.TextField(blank=True, max_length=200)),
-                ('logo', models.FileField(blank=True, upload_to='')),
+                ("name", models.CharField(max_length=50)),
+                ("description", models.TextField(blank=True, max_length=200)),
+                ("response_label", models.TextField(blank=True, max_length=200)),
+                ("logo", models.FileField(blank=True, upload_to="")),
             ],
-            options={
-                'ordering': ['name'],
-            },
+            options={"ordering": ["name"]},
         ),
         migrations.CreateModel(
-            name='CommitteeApplication',
+            name="CommitteeApplication",
             fields=[
                 (
-                    'id',
+                    "id",
                     models.AutoField(
-                        auto_created=True, primary_key=True, serialize=False, verbose_name='ID'
-                    )
+                        auto_created=True,
+                        primary_key=True,
+                        serialize=False,
+                        verbose_name="ID",
+                    ),
                 ),
                 (
-                    'created_at',
+                    "created_at",
                     models.DateTimeField(
                         db_index=True, default=django.utils.timezone.now, editable=False
-                    )
+                    ),
                 ),
                 (
-                    'updated_at',
-                    models.DateTimeField(default=django.utils.timezone.now, editable=False)
+                    "updated_at",
+                    models.DateTimeField(
+                        default=django.utils.timezone.now, editable=False
+                    ),
                 ),
-                ('text', models.TextField(blank=True)),
+                ("text", models.TextField(blank=True)),
             ],
-            options={
-                'abstract': False,
-            },
+            options={"abstract": False},
         ),
         migrations.CreateModel(
-            name='UserApplication',
+            name="UserApplication",
             fields=[
                 (
-                    'id',
+                    "id",
                     models.AutoField(
-                        auto_created=True, primary_key=True, serialize=False, verbose_name='ID'
-                    )
+                        auto_created=True,
+                        primary_key=True,
+                        serialize=False,
+                        verbose_name="ID",
+                    ),
                 ),
                 (
-                    'created_at',
+                    "created_at",
                     models.DateTimeField(
                         db_index=True, default=django.utils.timezone.now, editable=False
-                    )
+                    ),
                 ),
                 (
-                    'updated_at',
-                    models.DateTimeField(default=django.utils.timezone.now, editable=False)
+                    "updated_at",
+                    models.DateTimeField(
+                        default=django.utils.timezone.now, editable=False
+                    ),
                 ),
-                ('text', models.TextField(blank=True)),
-                ('time_sent', models.DateTimeField(editable=False, null=True)),
+                ("text", models.TextField(blank=True)),
+                ("time_sent", models.DateTimeField(editable=False, null=True)),
                 (
-                    'admission',
+                    "admission",
                     models.ForeignKey(
-                        on_delete=django.db.models.deletion.CASCADE, related_name='applications',
-                        to='admissions.Admission'
-                    )
+                        on_delete=django.db.models.deletion.CASCADE,
+                        related_name="applications",
+                        to="admissions.Admission",
+                    ),
                 ),
                 (
-                    'user',
+                    "user",
                     models.ForeignKey(
-                        on_delete=django.db.models.deletion.CASCADE, to=settings.AUTH_USER_MODEL
-                    )
+                        on_delete=django.db.models.deletion.CASCADE,
+                        to=settings.AUTH_USER_MODEL,
+                    ),
                 ),
             ],
         ),
         migrations.AddField(
-            model_name='committeeapplication',
-            name='application',
+            model_name="committeeapplication",
+            name="application",
             field=models.ForeignKey(
-                on_delete=django.db.models.deletion.CASCADE, related_name='committee_applications',
-                to='admissions.UserApplication'
+                on_delete=django.db.models.deletion.CASCADE,
+                related_name="committee_applications",
+                to="admissions.UserApplication",
             ),
         ),
         migrations.AddField(
-            model_name='committeeapplication',
-            name='committee',
+            model_name="committeeapplication",
+            name="committee",
             field=models.ForeignKey(
-                on_delete=django.db.models.deletion.CASCADE, related_name='applications',
-                to='admissions.Committee'
+                on_delete=django.db.models.deletion.CASCADE,
+                related_name="applications",
+                to="admissions.Committee",
             ),
         ),
         migrations.AlterUniqueTogether(
-            name='userapplication',
-            unique_together={('admission', 'user')},
+            name="userapplication", unique_together={("admission", "user")}
         ),
     ]

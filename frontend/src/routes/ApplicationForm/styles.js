@@ -57,7 +57,7 @@ export const SubmitButton = Button.extend`
 
 export const NoChosenCommittees = styled.span`
   font-size: 2rem;
-  font-family: Raleway, "Helvetica Neue", Arial, sans-serif;
+  font-family: var(--font-family);
   color: gray;
   text-align: center;
   display: block;
@@ -70,7 +70,7 @@ export const NoChosenCommittees = styled.span`
 
 export const NoChosenCommitteesSmallInfo = styled.span`
   font-size: 1.3rem;
-  font-family: Raleway, "Helvetica Neue", Arial, sans-serif;
+  font-family: var(--font-family);
   color: gray;
   text-align: center;
   display: block;

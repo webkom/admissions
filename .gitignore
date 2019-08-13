@@ -89,3 +89,4 @@ yarn-debug.log*
 yarn-error.log*
 committee_admissions/settings/local.py
 package-lock.json
+.vscode

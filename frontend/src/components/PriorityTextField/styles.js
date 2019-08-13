@@ -9,7 +9,7 @@ export const StyledField = styled(Field)`
   margin: 0.3rem 0 0.5rem 0;
   padding: 0.6rem 1rem;
   resize: none;
-  font-family: Raleway, "Helvetica Neue", Arial, sans-serif;
+  font-family: var(--font-family);
   font-size: 1rem;
 
   width: 15em;

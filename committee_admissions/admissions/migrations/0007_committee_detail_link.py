@@ -5,14 +5,12 @@ from django.db import migrations, models
 
 class Migration(migrations.Migration):
 
-    dependencies = [
-        ('admissions', '0006_auto_20180804_1807'),
-    ]
+    dependencies = [("admissions", "0006_auto_20180804_1807")]
 
     operations = [
         migrations.AddField(
-            model_name='committee',
-            name='detail_link',
-            field=models.CharField(default='', max_length=150),
-        ),
+            model_name="committee",
+            name="detail_link",
+            field=models.CharField(default="", max_length=150),
+        )
     ]

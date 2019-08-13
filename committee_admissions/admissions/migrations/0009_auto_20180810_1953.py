@@ -8,43 +8,27 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('auth', '0009_alter_user_last_name_max_length'),
-        ('admissions', '0008_auto_20180805_0926'),
+        ("auth", "0009_alter_user_last_name_max_length"),
+        ("admissions", "0008_auto_20180805_0926"),
     ]
 
     operations = [
-        migrations.AlterUniqueTogether(
-            name='membership',
-            unique_together=set(),
-        ),
-        migrations.RemoveField(
-            model_name='membership',
-            name='abakus_group',
-        ),
-        migrations.RemoveField(
-            model_name='membership',
-            name='user',
-        ),
+        migrations.AlterUniqueTogether(name="membership", unique_together=set()),
+        migrations.RemoveField(model_name="membership", name="abakus_group"),
+        migrations.RemoveField(model_name="membership", name="user"),
         migrations.CreateModel(
-            name='LegoUser',
+            name="LegoUser",
             fields=[],
-            options={
-                'proxy': True,
-                'indexes': [],
-            },
-            bases=('auth.user', ),
-            managers=[
-                ('objects', django.contrib.auth.models.UserManager()),
-            ],
+            options={"proxy": True, "indexes": []},
+            bases=("auth.user",),
+            managers=[("objects", django.contrib.auth.models.UserManager())],
         ),
         migrations.AlterField(
-            model_name='userapplication',
-            name='user',
+            model_name="userapplication",
+            name="user",
             field=models.ForeignKey(
-                on_delete=django.db.models.deletion.CASCADE, to='admissions.LegoUser'
+                on_delete=django.db.models.deletion.CASCADE, to="admissions.LegoUser"
             ),
         ),
-        migrations.DeleteModel(
-            name='Membership',
-        ),
+        migrations.DeleteModel(name="Membership"),
     ]

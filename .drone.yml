@@ -43,7 +43,7 @@ pipeline:
     commands:
       - tox -e isort
 
-  yapf:
+  black:
     image: abakus/lego-testbase
     pull: true
     when:
@@ -52,7 +52,7 @@ pipeline:
       - LANG=C.UTF-8
     group: testing
     commands:
-      - tox -e yapf
+      - tox -e black
 
   coverage:
     image: abakus/lego-testbase
@@ -73,7 +73,7 @@ pipeline:
       event: push
     registry: https://registry.abakus.no
     repo: registry.abakus.no/webkom/committee-admissions
-    secrets: [ docker_username, docker_password ]
+    secrets: [docker_username, docker_password]
     tags:
       - ${DRONE_BRANCH}-${DRONE_COMMIT_SHA:0:7}
     build_args:

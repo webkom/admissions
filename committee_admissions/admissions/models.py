@@ -52,25 +52,27 @@ class Committee(models.Model):
     name = models.CharField(max_length=50, unique=True)
     description = models.TextField(blank=True, max_length=300)
     response_label = models.TextField(blank=True, max_length=300)
-    logo = models.FileField(blank=True, upload_to='committee-logos')
+    logo = models.FileField(blank=True, upload_to="committee-logos")
     detail_link = models.CharField(max_length=150, default="")
 
     class Meta:
-        ordering = ['name']
+        ordering = ["name"]
 
     def __str__(self):
         return self.name
 
 
 class UserApplication(TimeStampModel):
-    admission = models.ForeignKey(Admission, related_name='applications', on_delete=models.CASCADE)
+    admission = models.ForeignKey(
+        Admission, related_name="applications", on_delete=models.CASCADE
+    )
     user = models.ForeignKey(LegoUser, on_delete=models.CASCADE)
     text = models.TextField(blank=True)
     time_sent = models.DateTimeField(editable=False, null=True, default=timezone.now)
     phone_number = models.CharField(max_length=20)
 
     class Meta:
-        unique_together = ('admission', 'user')
+        unique_together = ("admission", "user")
 
     @property
     def is_editable(self):
@@ -94,19 +96,23 @@ class UserApplication(TimeStampModel):
 
 class CommitteeApplication(TimeStampModel):
     application = models.ForeignKey(
-        UserApplication, related_name='committee_applications', on_delete=models.CASCADE
+        UserApplication, related_name="committee_applications", on_delete=models.CASCADE
     )
-    committee = models.ForeignKey(Committee, related_name='applications', on_delete=models.CASCADE)
+    committee = models.ForeignKey(
+        Committee, related_name="applications", on_delete=models.CASCADE
+    )
     text = models.TextField(blank=True)
 
 
 class Membership(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE)
     committee = models.ForeignKey(Committee, on_delete=models.CASCADE)
-    role = models.CharField(max_length=30, choices=constants.ROLES, default=constants.MEMBER)
+    role = models.CharField(
+        max_length=30, choices=constants.ROLES, default=constants.MEMBER
+    )
 
     class Meta:
-        unique_together = ('user', 'committee')
+        unique_together = ("user", "committee")
 
     def __str__(self):
-        return f'{self.user} is in {self.committee}'
+        return f"{self.user} is in {self.committee}"

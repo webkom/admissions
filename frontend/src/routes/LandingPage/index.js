@@ -56,6 +56,15 @@ class LandingPage extends Component {
     const { error, admission, hasSubmitted } = this.state;
     if (error) {
       return <div>Error: {error.message}</div>;
+    } else if (!admission) {
+      return (
+        <Container>
+          <h1>Ingen aktive opptak for øyeblikket</h1>
+          <span>
+            <b>Kom tilbake litt senere!</b>
+          </span>
+        </Container>
+      );
     } else {
       return (
         <Container>
