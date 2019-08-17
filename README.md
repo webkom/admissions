@@ -34,7 +34,7 @@ $ pip install pip-tools
 $ pip-sync requirements/development.txt
 ```
 
-The `.env` file with secret keys is not included, and a copy of it must ble placed in `./committee-admissions/settings`. The values needed can be found at abakus.no after creating an application there. The project will not run without setting these variables:
+The `.env` file with secret keys is not included, but an `example.env` file has been provided in `./committe_admissions/settings`, so that you can simply rename the file and fill in the values. The secrets can be found at abakus.no after creating an application there. The project will not run without setting these variables.
 
 ```sh
 AUTH_LEGO_KEY="INSERT KEY"
@@ -49,7 +49,7 @@ $ python manage.py migrate
 $ yarn
 ```
 
-Now, you need two terminals to run this project, one for frontend and one for backend.
+Now, you need two terminals to run this project, one for frontend and one for backend. Make sure the backend one has activated the virtualenv.
 
 These are the start commands:
 
@@ -75,6 +75,15 @@ We use the package [pip-tools](https://github.com/jazzband/pip-tools) to organiz
 Add the new package to either `base.in`, `development.in` or
 `production.in` depending on best fit. Then generate a new requirements
 file by running
+
+We use [pip-tools](https://github.com/jazzband/pip-tools) to make the requirement files easy to understand and maintain.
+Run the following custom command to update `development.txt` and `production.txt`.
+
+```sh
+$ python manage.py compile_requirements
+```
+
+Or the manual way
 
 ```sh
 $ pip-compile requirements/development.in > requirements/development.txt
