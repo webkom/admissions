@@ -126,6 +126,7 @@ SHELL_PLUS = "ipython"
 
 LOGIN_REDIRECT_URL = "/"
 LOGIN_URL = "/login/lego/"
+LOGOUT_REDIRECT_URL = "/"
 
 # When using PostgreSQL, it’s recommended to use the built-in JSONB field to store the extracted extra_data.
 SOCIAL_AUTH_POSTGRES_JSONFIELD = True

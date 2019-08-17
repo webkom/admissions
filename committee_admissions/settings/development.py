@@ -57,8 +57,8 @@ SOCIAL_AUTH_LEGO_API_URL = env("AUTH_LEGO_API_URL", None)
 
 CORS_ALLOW_CREDENTIALS = True
 CORS_ORIGIN_WHITELIST = [
-    "127.0.0.1:3000",
-    "localhost:3000",
-    "localhost:8000",
-    "127.0.0.1:8000",
+    "http://127.0.0.1:3000",
+    "http://localhost:3000",
+    "http://localhost:8000",
+    "http://127.0.0.1:8000",
 ]

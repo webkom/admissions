@@ -1,14 +1,14 @@
-django==2.0.3
-django-environ==0.4.4
-django-extensions==2.0.5
-djangorestframework==3.7.7
-django-cors-headers==2.2.0
+django==2.2.4
+django-environ==0.4.5
+django-extensions==2.2.1
+djangorestframework==3.10.2
+django-cors-headers==3.1.0
 django-webpack-loader==0.6.0
 
-social-auth-app-django==2.1.0
-pip-tools==2.0.2
+social-auth-app-django==3.1.0
+pip-tools==4.0.0
 psycopg2-binary
-ipython==6.2.1
-structlog==18.1.0
+ipython==7.7.0
+structlog==19.1.0
 
-raven==6.9.0
+raven==6.10.0
