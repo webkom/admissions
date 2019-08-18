@@ -16,7 +16,8 @@
   },
   "rules": {
     "react/prop-types": 0,
-    "react/display-name": 2
+    "react/display-name": 2,
+    "require-atomic-updates": "off"
   },
   "settings": {
     "import/resolver": {

@@ -43,10 +43,10 @@ export const ButtonGroup = styled.div`
   padding: 0;
 `;
 
-export const ActionButton = styled.button.attrs({
-  background: props => props.background || "var(--lego-red)",
-  border: props => props.border || "1px solid var(--abakus-red)"
-})`
+export const ActionButton = styled.button.attrs(props => ({
+  background: props.background || "var(--lego-red)",
+  border: props.border || "1px solid var(--abakus-red)"
+}))`
   color: #fff;
   font-weight: bold;
   background: ${props => props.background};

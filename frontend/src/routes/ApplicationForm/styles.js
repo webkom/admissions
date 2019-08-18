@@ -20,7 +20,7 @@ export const Wrapper = styled.div`
  * Subtitle
  */
 
-export const SubTitle = PageTitle.extend`
+export const SubTitle = styled(PageTitle)`
   font-size: 2rem;
   margin-bottom: 1em;
   color: gray;
@@ -31,7 +31,7 @@ export const SubTitle = PageTitle.extend`
  * Small Subtitle
  */
 
-export const SmallSubTitle = SubTitle.extend`
+export const SmallSubTitle = styled(SubTitle)`
   margin: 0.5em 0;
   font-size: 1.1rem;
 `;
@@ -40,7 +40,7 @@ export const SmallSubTitle = SubTitle.extend`
  * Submit button
  */
 
-export const SubmitButton = Button.extend`
+export const SubmitButton = styled(Button)`
   background: ${props => (props.valid ? "#db3737" : "gray")};
   border: 1px solid ${props => (props.valid ? "#a82a2a" : "darkgray")};
   margin: 0 auto 3em auto;
@@ -98,7 +98,7 @@ export const ToggleCommitteeWrapper = styled.div`
  *
  */
 
-export const GeneralInfoWrapper = Card.extend`
+export const GeneralInfoWrapper = styled(Card)`
   margin: 0.5em 0em;
 
   ${media.handheld`

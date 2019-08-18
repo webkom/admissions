@@ -15,7 +15,7 @@ export const Wrapper = styled(Card)`
   `};
 `;
 
-export const SubmitButton = Button.extend`
+export const SubmitButton = styled(Button)`
   background: ${props => (props.valid ? "#db3737" : "gray")};
   border: 1px solid ${props => (props.valid ? "#a82a2a" : "darkgray")};
   width: 10em;

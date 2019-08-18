@@ -1,15 +1,15 @@
 import styled from "styled-components";
 import { Link } from "react-router-dom";
 
-const LinkButton = styled(Link).attrs({
-  width: props => props.width || "auto",
-  height: props => props.height || "auto",
-  margin: props => props.margin || "0",
-  fontSize: props => props.fontSize || "1.1em",
-  background: props => props.background || "#db3737",
-  color: props => props.color || "#fff",
-  bordercolor: props => props.bordercolor || "#a82a2a"
-})`
+const LinkButton = styled(Link).attrs(props => ({
+  width: props.width || "auto",
+  height: props.height || "auto",
+  margin: props.margin || "0",
+  fontSize: props.fontSize || "1.1em",
+  background: props.background || "#db3737",
+  color: props.color || "#fff",
+  bordercolor: props.bordercolor || "#a82a2a"
+}))`
   color: ${props => props.color};
   font-weight: bold;
   background: ${props => props.background};

@@ -6,8 +6,9 @@
 
 import { media } from "src/styles/mediaQueries";
 import { Card } from "src/components/Card";
+import styled from "styled-components";
 
-const Wrapper = Card.extend`
+const Wrapper = styled(Card)`
   display: grid;
   margin: 2rem 0rem;
   grid-template-columns: 1fr 14em;
