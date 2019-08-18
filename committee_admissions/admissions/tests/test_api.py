@@ -26,7 +26,9 @@ def fake_timedelta(days=0):
 def create_admission():
     base_date = timezone.now().replace(hour=23, minute=59, second=59, microsecond=59)
 
-    open_date = base_date.replace(hour=12, minute=15, second=0, microsecond=0)
+    open_date = base_date.replace(
+        hour=12, minute=15, second=0, microsecond=0
+    ) - timedelta(days=1)
     public_deadline_date = base_date + timedelta(days=7)
     application_deadline_date = base_date + timedelta(days=9)
 
