@@ -59,14 +59,13 @@ class ReadMore extends Component {
           >
             {children}
           </Truncate>
-          {!truncated &&
-            expanded && (
-              <EllipsisWrapper>
-                <EllipsisToggle href="#" onClick={this.toggleLines}>
-                  {less}
-                </EllipsisToggle>
-              </EllipsisWrapper>
-            )}
+          {!truncated && expanded && (
+            <EllipsisWrapper>
+              <EllipsisToggle href="#" onClick={this.toggleLines}>
+                {less}
+              </EllipsisToggle>
+            </EllipsisWrapper>
+          )}
         </div>
       </Wrapper>
     );

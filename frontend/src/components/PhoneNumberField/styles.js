@@ -16,7 +16,7 @@ export const StyledField = styled(Field)`
   overflow: hidden;
 `;
 
-export const InfoText = CardTitle.withComponent("div").extend`
+export const InfoText = styled(CardTitle.withComponent("div"))`
   font-size: 0.8rem;
   margin: 0.5em 0 0 0;
   color: gray;
