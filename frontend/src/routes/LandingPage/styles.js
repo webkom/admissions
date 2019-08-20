@@ -1,7 +1,6 @@
 import styled from "styled-components";
 import { media } from "src/styles/mediaQueries";
 import { Card, CardParagraph, CardTitle } from "src/components/Card";
-import { MainPageTitle } from "src/components/PageTitle";
 
 export const InfoBox = styled(Card)`
   display: flex;
@@ -29,7 +28,7 @@ export const InfoBoxTitle = styled(CardTitle)`
     `};
 `;
 
-export const PageSubTitle = styled(MainPageTitle)`
+export const PageSubTitle = styled.h1`
   color: gray;
   font-size: 2.5rem;
 `;
