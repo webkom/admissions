@@ -102,7 +102,9 @@ class ApplicationPortal extends Component {
       <div>Error: {error.message}</div>
     ) : (
       <PageWrapper>
-        <AbakusLogo size={"6em"} />
+        <BrandContainer>
+          <AbakusLogo />
+        </BrandContainer>
         <UserInfo name={user.name} />
         <ContentContainer>
           {location.pathname.startsWith("/committees") && (
@@ -132,7 +134,15 @@ class ApplicationPortal extends Component {
   }
 }
 
+export default ApplicationPortal;
+
+/** Styles **/
+
 const ContentContainer = styled.div`
   width: 100%;
 `;
-export default ApplicationPortal;
+
+const BrandContainer = styled.div`
+  max-width: 300px;
+  margin: 2rem;
+`;

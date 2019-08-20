@@ -1,6 +1,10 @@
 :root {
   /* COLORS */
-  --lego-background-color: linear-gradient(0deg, #f4f4f4, #eae9e8);
+  --lego-background: linear-gradient(
+    180deg,
+    #eae9e8 0%,
+    rgba(244, 244, 244, 0) 100%
+  );
   --lego-font-color: #394b59;
   --lego-link-color: #c0392b;
   --lego-card-color: #f5f4f4;
