@@ -58,13 +58,13 @@ $ python manage.py runserver
 $ yarn watch
 ```
 
-To populate the database with data for development, we have set up factories.
+To populate the database with data for development, we use a custom command for creating an admission.
 
 ```sh
-$ python manage.py shell_plus
-$ from committee_admissions.admissions.factories import RandomAdmissionFactory
-$ RandomAdmissionFactory.create()
+$ python manage.py create_admission
 ```
+
+If coding over long periods of time, you want to update the dates that the admission is open (since it will eventually close). Either do it manually from shell, or simply flush the db (`python manage.py flush`) and run the above command again.
 
 ## Requirements
 
