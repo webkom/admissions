@@ -21,11 +21,10 @@ export default LandingPageSkeleton;
 /** Styles **/
 
 export const Container = styled.div`
-  min-height: 100vh;
   display: flex;
   flex-direction: column;
   align-items: center;
-  margin: 130px auto 2rem auto;
+  margin: 6rem auto 2rem auto;
   max-width: var(--lego-max-width);
   ${media.handheld`
     margin: 2em 1em 3em 1em;
@@ -33,12 +32,16 @@ export const Container = styled.div`
 `;
 
 const BrandContainer = styled.div`
-  max-width: 600px;
+  max-width: 500px;
+
+  ${media.handheld`
+    margin: 1rem 1rem 0 1rem;;
+    `};
 `;
 
 const Title = styled.h1`
-  font-size: 4rem;
-  margin-top: 30px;
+  font-size: 3.2rem;
+  margin-top: 20px;
   ${media.handheld`
     font-size: 2.5rem;
   `};
