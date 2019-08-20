@@ -24,11 +24,12 @@ env = environ.Env()
 env_file = str(SETTINGS_DIR.path(".env"))
 env.read_env(env_file)
 
+# Uncomment app config and middleware config to enable debug toolbar
 # APP CONFIGURATION ============================================================
-INSTALLED_APPS += ["debug_toolbar"]
+# INSTALLED_APPS += ["debug_toolbar"]
 
 # MIDDLEWARE CONFIGURATION =====================================================
-MIDDLEWARE += ["debug_toolbar.middleware.DebugToolbarMiddleware"]
+# MIDDLEWARE += ["debug_toolbar.middleware.DebugToolbarMiddleware"]
 
 # DEBUG-TOOLBAR CONFIGURATION ==================================================
 DEBUG_TOOLBAR_PANELS = [
