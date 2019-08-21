@@ -3,7 +3,7 @@ import styled from "styled-components";
 import { media } from "src/styles/mediaQueries";
 
 import DecorativeLine from "src/components/DecorativeLine";
-import Icon from "src/components/Icon";
+import LegoButton from "src/components/LegoButton";
 import LandingPageSkeleton from "./LandingPageSkeleton";
 
 const LandingPageNoAdmission = () => {
@@ -29,14 +29,14 @@ const LandingPageNoAdmission = () => {
           for kunngjøringer!
         </p>
       </InfoBox>
-      <FancyLink
+      <LegoButton
         href="https://abakus.no"
-        target="_blank"
-        rel="noopener noreferrer"
+        icon="arrow-forward"
+        iconPrefix="ios"
+        buttonStyle="secondary"
       >
-        <FancyLinkText>Gå til abakus.no</FancyLinkText>
-        <Icon name="arrow-forward" prefix="ios" />
-      </FancyLink>
+        Gå til abakus.no
+      </LegoButton>
     </LandingPageSkeleton>
   );
 };
@@ -61,6 +61,7 @@ const SubTitle = styled.h2`
 const InfoBox = styled.div`
   display: flex;
   max-width: 420px;
+  margin-bottom: 2rem;
 
   > p {
     margin: 0 0 0 1rem;
@@ -78,51 +79,5 @@ const InfoBox = styled.div`
     > p {
     font-size: 1rem;
     line-height: 1.5rem;
-  `};
-`;
-
-const FancyLink = styled.a`
-  display: flex;
-  margin-top: 2.5rem;
-  align-items: center;
-
-  > i {
-    margin-left: 20px;
-    font-size: 2.2rem;
-  }
-
-  &:hover {
-    opacity: 0.7;
-  }
-
-  ${media.handheld`
-    margin-top: 1.5rem;
-    
-    > i {
-    margin-left: 15px;
-    font-size: 1.6rem;
-  }
-  `};
-`;
-
-const FancyLinkText = styled.span`
-  font-weight: 600;
-  font-size: 1.4rem;
-  display: inline-block;
-  padding-bottom: 8px;
-  position: relative;
-
-  &:before {
-    content: "";
-    position: absolute;
-    width: 85%;
-    border-bottom: 2px solid var(--lego-red);
-    bottom: 0;
-    left: 7.5%;
-  }
-
-  ${media.handheld`
-    font-size: 1.1rem;
-    padding-bottom: 6px;
   `};
 `;
