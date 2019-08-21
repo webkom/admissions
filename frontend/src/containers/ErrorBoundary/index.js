@@ -3,28 +3,6 @@ import Raven from "raven-js";
 import awSnap from "assets/sentry-aw-snap.svg";
 import styled from "styled-components";
 
-const Container = styled("div")`
-  display: flex;
-  justify-content: center;
-`;
-const Snap = styled("div")`
-  border: 1px red dashed;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  margin: 10px;
-  padding: 10px;
-
-  img {
-    height: 100px;
-    width: 100px;
-  }
-`;
-
-const Message = styled("div")`
-  margin-left: 10px;
-`;
-
 class ErrorBoundary extends React.Component {
   state = {
     error: null
@@ -88,3 +66,30 @@ class ErrorBoundary extends React.Component {
 }
 
 export default ErrorBoundary;
+
+/** Styles **/
+
+const Container = styled.div`
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 50vh;
+`;
+
+const Snap = styled.div`
+  border: 1px red dashed;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  margin: 10px;
+  padding: 2rem;
+
+  img {
+    height: 100px;
+    width: 100px;
+  }
+`;
+
+const Message = styled.div`
+  margin-left: 20px;
+`;
