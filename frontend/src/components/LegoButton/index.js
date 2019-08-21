@@ -12,6 +12,7 @@ const LegoButton = ({
   children,
   to,
   icon,
+  disabled,
   iconPrefix = "md",
   onClick
 }) => {
@@ -32,6 +33,7 @@ const LegoButton = ({
         to={to}
         buttonstyle={getButtonStyle(buttonStyle)}
         onClick={onClick}
+        disabled={disabled}
       >
         <Text buttonstyle={getButtonStyle(buttonStyle)}>{children}</Text>
         {icon && <Icon name={icon} prefix={iconPrefix} />}
@@ -45,6 +47,7 @@ const LegoButton = ({
         rel="noopener noreferrer"
         buttonstyle={getButtonStyle(buttonStyle)}
         onClick={onClick}
+        disabled={disabled}
       >
         <Text buttonstyle={getButtonStyle(buttonStyle)}>{children}</Text>
         {icon && <Icon name={icon} prefix={iconPrefix} />}
@@ -53,7 +56,11 @@ const LegoButton = ({
   }
 
   return (
-    <ILegoButton buttonstyle={getButtonStyle(buttonStyle)} onClick={onClick}>
+    <ILegoButton
+      buttonstyle={getButtonStyle(buttonStyle)}
+      onClick={onClick}
+      disabled={disabled}
+    >
       <Text buttonstyle={getButtonStyle(buttonStyle)}>{children}</Text>
       {icon && <Icon name={icon} prefix={iconPrefix} />}
     </ILegoButton>
@@ -90,6 +97,14 @@ const ILegoRouterLink = styled(Link)`
         margin-left: 25px;
         font-size: 1.8rem;
       }
+      ${props =>
+        props.disabled &&
+        css`
+          background: var(--lego-gray-medium);
+          border: 1px solid var(--lego-gray-dark);
+          color: var(--lego-gray-dark);
+          box-shadow: 0px 4px 4px rgba(0, 0, 0, 0.1);
+        `}
     `}
 
   /** Secondary style **/
@@ -124,7 +139,7 @@ const Text = styled.span`
     props.buttonstyle === "primary" &&
     css`
       font-size: 1.2rem;
-      margin-bottom: 2px;
+      margin-bottom: 3px;
     `}
 
   /** Secondary style **/
