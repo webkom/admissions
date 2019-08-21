@@ -107,6 +107,7 @@ class LandingPage extends Component {
                 to={hasSubmitted ? "/myapplications" : "/committees"}
                 icon="arrow-forward"
                 iconPrefix="ios"
+                disabled={!admission.is_open}
               >
                 Gå til søknad
               </LegoButton>
@@ -117,6 +118,7 @@ class LandingPage extends Component {
                 to="/"
                 icon="arrow-forward"
                 iconPrefix="ios"
+                disabled={!admission.is_open}
                 onClick={e => {
                   window.location = `/login/lego/?next=${
                     window.location.pathname

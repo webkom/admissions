@@ -33,6 +33,10 @@ a {
   text-decoration: none;
 }
 
+a[disabled] {
+  pointer-events: none;
+}
+
 p {
   margin-bottom: 10px;
 }
