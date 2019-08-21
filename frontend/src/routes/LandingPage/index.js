@@ -20,7 +20,6 @@ class LandingPage extends Component {
       results: undefined,
       admission: null,
       error: null,
-      adminPermissions: true,
       hasSubmitted: false
     };
   }

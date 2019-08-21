@@ -11,9 +11,8 @@ import MyApplications from "src/routes/MyApplications";
 import AdminPageAbakusLeaderView from "src/routes/AdminPageAbakusLeaderView";
 
 import Raven from "raven-js";
-import AbakusLogo from "src/components/AbakusLogo";
-import UserInfo from "src/components/UserInfo";
 import PageWrapper from "src/components/PageWrapper";
+import NavBar from "src/components/NavBar";
 
 class ApplicationPortal extends Component {
   constructor(props) {
@@ -23,7 +22,8 @@ class ApplicationPortal extends Component {
       committees: [],
       error: null,
       selectedCommittees: {},
-      user: { name: "" }
+      user: null,
+      isEditingApplication: false
     };
   }
 
@@ -88,24 +88,24 @@ class ApplicationPortal extends Component {
             .reduce((obj, a) => ({ ...obj, [a]: true }), {})
         })
       );
-
-    const user = { name: djangoData.user && djangoData.user.full_name };
-    this.setState({ user });
+    this.setState({ user: djangoData.user });
     Raven.setUserContext(djangoData.user);
     this.initializeState();
   }
 
   render() {
-    const { error, user, myApplications } = this.state;
+    const { error, user, myApplications, isEditingApplication } = this.state;
     const { location } = this.props;
+
+    if (!user) {
+      return null;
+    }
+
     return error ? (
       <div>Error: {error.message}</div>
     ) : (
       <PageWrapper>
-        <BrandContainer>
-          <AbakusLogo />
-        </BrandContainer>
-        <UserInfo name={user.name} />
+        <NavBar user={user} isEditing={isEditingApplication} />
         <ContentContainer>
           {location.pathname.startsWith("/committees") && (
             <CommitteesPage
@@ -123,7 +123,7 @@ class ApplicationPortal extends Component {
             <MyApplications applications={myApplications} />
           )}
           {location.pathname.startsWith("/admin") &&
-            (djangoData.user.is_superuser ? (
+            (user.is_superuser ? (
               <AdminPageAbakusLeaderView {...this.state} />
             ) : (
               <AdminPage {...this.state} />
@@ -140,9 +140,4 @@ export default ApplicationPortal;
 
 const ContentContainer = styled.div`
   width: 100%;
-`;
-
-const BrandContainer = styled.div`
-  max-width: 300px;
-  margin: 2rem;
 `;

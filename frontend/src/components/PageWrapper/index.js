@@ -5,8 +5,6 @@ const PageWrapper = styled.div`
   display: flex;
   flex-direction: column;
   align-items: center;
-  max-width: 70em;
-  margin: 1em auto;
   min-height: 100vh;
 
   ${media.portrait`
