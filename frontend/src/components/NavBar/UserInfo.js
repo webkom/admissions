@@ -26,6 +26,11 @@ const Container = styled.div`
   margin: 10px;
   margin-right: 5rem;
 
+  ${media.portrait`        
+    margin-right: 1rem;
+    margin-left: 2rem;
+  `}
+
   ${media.handheld`        
     order: 2;
     display: inline;
@@ -43,13 +48,23 @@ const NameLogOutWrapper = styled.div`
     order: 2;
     display: inline-flex;
     flex-direction: row;
+    align-items: center;
   `}
 `;
 
 const Name = styled.span`
   font-weight: 600;
+  line-height: 0.8rem;
+
+  ${media.portrait`        
+    font-size: 0.8rem;
+    text-align: right;
+    margin-bottom: 5px;
+  `}
+
   ${media.handheld`        
     margin-right: 1rem;
+    margin-bottom: 0;
     font-size: 0.8rem;
   `}
 `;
@@ -72,6 +87,11 @@ const ProfilePicture = styled.img`
   height: 50px;
   border-radius: 50%;
   margin-left: 1rem;
+
+  ${media.portrait`        
+    width: 40px;
+    margin-left: 0.5rem;
+  `}
 
   ${media.handheld`        
     display: none;
