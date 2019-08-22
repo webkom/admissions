@@ -114,14 +114,11 @@ class LandingPage extends Component {
           ) : (
             <li>
               <LegoButton
-                to="/"
                 icon="arrow-forward"
                 iconPrefix="ios"
                 disabled={!admission.is_open}
                 onClick={e => {
-                  window.location = `/login/lego/?next=${
-                    window.location.pathname
-                  }`;
+                  window.location = `/login/lego/?next=/committees`;
                   e.preventDefault();
                 }}
               >

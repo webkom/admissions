@@ -1,8 +1,8 @@
 import React, { Component } from "react";
+import styled from "styled-components";
 import callApi from "src/utils/callApi";
 
 import djangoData from "src/utils/djangoData";
-import PageWrapper from "src/components/PageWrapper";
 import PageTitle from "src/components/PageTitle";
 import UserApplicationAdminView from "src/containers/UserApplicationAdminView";
 
@@ -176,3 +176,12 @@ class AdminPage extends Component {
 }
 
 export default AdminPage;
+
+/** Styles **/
+
+export const PageWrapper = styled.div`
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-height: 100vh;
+`;

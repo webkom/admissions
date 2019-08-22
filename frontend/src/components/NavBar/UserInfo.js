@@ -3,7 +3,6 @@ import styled from "styled-components";
 import { media } from "src/styles/mediaQueries";
 
 const UserInfo = ({ user }) => {
-  console.log(user);
   return (
     <Container>
       <NameLogOutWrapper>

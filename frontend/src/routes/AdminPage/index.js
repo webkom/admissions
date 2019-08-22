@@ -1,12 +1,12 @@
 import React, { Component } from "react";
-import djangoData from "src/utils/djangoData";
-import callApi from "src/utils/callApi";
+import styled from "styled-components";
 import Raven from "raven-js";
 import { withFormik, Field, Form } from "formik";
 import * as Yup from "yup";
+import djangoData from "src/utils/djangoData";
+import callApi from "src/utils/callApi";
 
 import UserApplication from "src/containers/UserApplication";
-import PageWrapper from "src/components/PageWrapper";
 import PageTitle from "src/components/PageTitle";
 import TextAreaField from "src/components/TextAreaField";
 
@@ -288,3 +288,12 @@ const EditCommitteeForm = withFormik({
 })(MyInnerForm);
 
 export { EditCommitteeForm };
+
+/** Styles **/
+
+export const PageWrapper = styled.div`
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-height: 100vh;
+`;
