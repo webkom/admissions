@@ -1,5 +1,6 @@
 import React from "react";
 import styled from "styled-components";
+import { media } from "src/styles/mediaQueries";
 
 const UserInfo = ({ user }) => {
   console.log(user);
@@ -25,16 +26,33 @@ const Container = styled.div`
   align-items: center;
   margin: 10px;
   margin-right: 5rem;
+
+  ${media.handheld`        
+    order: 2;
+    display: inline;
+    margin: 0;
+    margin-bottom: 10px;
+  `}
 `;
 
 const NameLogOutWrapper = styled.div`
   display: flex;
   flex-direction: column;
   align-items: flex-end;
+
+  ${media.handheld`        
+    order: 2;
+    display: inline-flex;
+    flex-direction: row;
+  `}
 `;
 
 const Name = styled.span`
   font-weight: 600;
+  ${media.handheld`        
+    margin-right: 1rem;
+    font-size: 0.8rem;
+  `}
 `;
 
 const LogoutBtn = styled.a`
@@ -55,4 +73,8 @@ const ProfilePicture = styled.img`
   height: 50px;
   border-radius: 50%;
   margin-left: 1rem;
+
+  ${media.handheld`        
+    display: none;
+  `}
 `;
