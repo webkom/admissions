@@ -11,7 +11,6 @@ import MyApplications from "src/routes/MyApplications";
 import AdminPageAbakusLeaderView from "src/routes/AdminPageAbakusLeaderView";
 
 import Raven from "raven-js";
-import PageWrapper from "src/components/PageWrapper";
 import NavBar from "src/components/NavBar";
 
 class ApplicationPortal extends Component {
@@ -26,14 +25,6 @@ class ApplicationPortal extends Component {
       isEditingApplication: false
     };
   }
-
-  startApplying = () => {
-    const { selectedCommittees } = this.state;
-    const committees = Object.keys(selectedCommittees).filter(
-      committee => selectedCommittees[committee]
-    );
-    this.props.startApplying(committees);
-  };
 
   toggleCommittee = name => {
     this.setState(
@@ -140,4 +131,13 @@ export default ApplicationPortal;
 
 const ContentContainer = styled.div`
   width: 100%;
+`;
+
+/** Styles **/
+
+export const PageWrapper = styled.div`
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-height: 100vh;
 `;

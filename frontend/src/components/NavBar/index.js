@@ -52,11 +52,12 @@ const BrandContainer = styled.div`
 
 const NavItemsContainer = styled.ul`
   display: flex;
+  margin-left: 7rem;
   ${media.handheld`        
     order: 3;
     margin-bottom: 1rem;
+    margin-left: 0;
     padding-top: 0.5rem;
     border-top: 1px solid var(--lego-gray-medium);
-
   `}
 `;

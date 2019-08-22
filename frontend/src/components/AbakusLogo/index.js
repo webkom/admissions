@@ -5,7 +5,7 @@ import styled from "styled-components";
 import darkLogo from "assets/logo-dark.png";
 
 const AbakusLogo = () => (
-  <Link to="/" title="Go home" exact>
+  <Link to="/" title="Go home">
     <Logo src={darkLogo} />
   </Link>
 );
