@@ -20,6 +20,7 @@ export default withRouter(NavItem);
 const Item = styled(NavLink)`
   font-weight: 600;
   color: var(--lego-font-color);
+  white-space: nowrap;
 
   &:nth-child(2n) {
     margin-right: 2rem;
