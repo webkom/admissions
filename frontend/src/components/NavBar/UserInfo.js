@@ -54,12 +54,13 @@ const NameLogOutWrapper = styled.div`
 
 const Name = styled.span`
   font-weight: 600;
-  line-height: 0.8rem;
+  line-height: 1.7rem;
+  text-align: right;
 
   ${media.portrait`        
     font-size: 0.8rem;
-    text-align: right;
     margin-bottom: 5px;
+    line-height: 0.8rem;
   `}
 
   ${media.handheld`        

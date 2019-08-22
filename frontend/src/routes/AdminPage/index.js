@@ -5,9 +5,9 @@ import { withFormik, Field, Form } from "formik";
 import * as Yup from "yup";
 import djangoData from "src/utils/djangoData";
 import callApi from "src/utils/callApi";
+import { media } from "src/styles/mediaQueries";
 
 import UserApplication from "src/containers/UserApplication";
-import PageTitle from "src/components/PageTitle";
 import TextAreaField from "src/components/TextAreaField";
 
 import CSRFToken from "./csrftoken";
@@ -296,4 +296,11 @@ export const PageWrapper = styled.div`
   flex-direction: column;
   align-items: center;
   min-height: 100vh;
+`;
+
+const PageTitle = styled.h1`
+  ${media.handheld`
+    margin: 0 1em 0 1em;
+    font-size: 2.5rem;
+  `};
 `;

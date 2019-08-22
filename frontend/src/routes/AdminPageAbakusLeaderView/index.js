@@ -3,8 +3,8 @@ import styled from "styled-components";
 import callApi from "src/utils/callApi";
 
 import djangoData from "src/utils/djangoData";
-import PageTitle from "src/components/PageTitle";
 import UserApplicationAdminView from "src/containers/UserApplicationAdminView";
+import { media } from "src/styles/mediaQueries";
 
 import Wrapper from "./Wrapper";
 import LinkLink from "./LinkLink";
@@ -184,4 +184,11 @@ export const PageWrapper = styled.div`
   flex-direction: column;
   align-items: center;
   min-height: 100vh;
+`;
+
+const PageTitle = styled.h1`
+  ${media.handheld`
+    margin: 0 1em 0 1em;
+    font-size: 2.5rem;
+  `};
 `;

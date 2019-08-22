@@ -80,7 +80,7 @@ class FormContainer extends Component {
         committee => selectedCommittees[committee.name.toLowerCase()]
       ).length >= 1;
 
-    const SelectedComs = committees
+    const SelectedCommitteItems = committees
       .filter(committee => selectedCommittees[committee.name.toLowerCase()])
       .map(({ name, response_label }, index) => (
         <Field
@@ -97,7 +97,7 @@ class FormContainer extends Component {
     return (
       <FormStructure
         hasSelected={hasSelected}
-        SelectedComs={SelectedComs}
+        SelectedCommitteItems={SelectedCommitteItems}
         isSubmitting={isSubmitting}
         isValid={isValid}
         handleSubmit={handleSubmit}
@@ -174,13 +174,14 @@ const ApplicationForm = withFormik({
       );
       const schema = {};
       selectedCommittees.forEach(name => {
-        schema[name] = Yup.string().required(
-          "Søknadsteksten kan ikke være tom!"
-        );
+        schema[name] = Yup.string().required("Søknadsteksten må fylles ut");
       });
-      schema.phoneNumber = Yup.number().required(
-        "Vennligst fyll inn ditt mobilnummer."
-      );
+      schema.phoneNumber = Yup.string("Skriv inn et norsk telefonnummer")
+        .matches(
+          /^(0047|\+47|47)?(?:\s*\d){8}$/,
+          "Skriv inn et gyldig norsk telefonnummer"
+        )
+        .required("Skriv inn et gyldig norsk telefonnummer");
       return Yup.object().shape(schema);
     });
   },

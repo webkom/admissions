@@ -65,9 +65,6 @@ export const PageWrapper = styled.div`
   display: flex;
   flex-direction: column;
   justify-content: center;
-  ${media.handheld`
-    width: 95vw;
-    `};
 `;
 
 export const Title = styled.h1`
