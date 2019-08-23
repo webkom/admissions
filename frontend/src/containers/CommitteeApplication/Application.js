@@ -30,7 +30,8 @@ class Application extends Component {
       responseLabel,
       committee,
       field: { name, onChange, value },
-      form: { touched, errors, handleBlur }
+      form: { touched, errors, handleBlur },
+      disabled
     } = this.props;
     const error = touched[name] && errors[name];
     return (
@@ -55,6 +56,7 @@ class Application extends Component {
             value={value}
             error={error}
             rows="10"
+            disabled={disabled}
           />
           <InputValidationFeedback error={error} />
         </InputWrapper>

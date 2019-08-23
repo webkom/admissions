@@ -28,7 +28,7 @@ ReactDOM.render(
               <Route exact path="/" component={LandingPage} />
               <Route
                 exact
-                path="/(committees|application|myapplications|admin)"
+                path="/(velg-komiteer|min-soknad|admin)"
                 component={ApplicationPortal}
               />
               <Route component={NotFoundPage} />

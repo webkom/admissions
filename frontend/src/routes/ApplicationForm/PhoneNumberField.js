@@ -9,7 +9,8 @@ import { media } from "src/styles/mediaQueries";
 
 const PhoneNumberField = ({
   field: { name },
-  form: { touched, errors, handleBlur }
+  form: { touched, errors, handleBlur },
+  disabled
 }) => {
   const error = touched[name] && errors[name];
 
@@ -20,6 +21,7 @@ const PhoneNumberField = ({
       <StyledField
         type="tel"
         name={name}
+        disabled={disabled}
         id={name}
         onBlur={e => {
           sessionStorage.setItem("phoneNumber", e.target.value);

@@ -35,7 +35,7 @@ const CommitteesPage = ({
       <CommitteesWrapper>{CommitteeCards}</CommitteesWrapper>
       <NextButtonWrapper>
         <LegoButton
-          to="/application"
+          to="/min-soknad"
           icon="arrow-forward"
           iconPrefix="ios"
           disabled={!hasSelectedAnything()}
