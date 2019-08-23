@@ -20,6 +20,8 @@ class LegoOAuth2(BaseOAuth2):
     ]
 
     def get_scope(self):
+        if not Committee.objects.all().exists():
+            return ["all"]
         return ["user"]
 
     def api_url(self):
