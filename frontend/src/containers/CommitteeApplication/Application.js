@@ -1,19 +1,12 @@
 import React, { Component } from "react";
-import Textarea from "react-textarea-autosize";
-
-import InputValidationFeedback from "src/components/InputValidationFeedback";
-import { CardParagraph, CardTitle } from "src/components/Card";
-
+import styled from "styled-components";
+import { media } from "src/styles/mediaQueries";
 import {
-  WriteApplicationWrapper,
-  ResponseLabelWrapper,
-  LogoNameWrapper,
-  Logo,
-  Name
-} from "./styles";
-import Wrapper from "./Wrapper";
-
-import "./Application.css";
+  FieldLabel,
+  InputValidationFeedback,
+  StyledTextAreaField
+} from "src/components/styledFields";
+import readmeIfy from "src/components/ReadmeLogo";
 
 class Application extends Component {
   componentDidMount() {
@@ -41,24 +34,17 @@ class Application extends Component {
     } = this.props;
     const error = touched[name] && errors[name];
     return (
-      <Wrapper>
+      <Container>
         <LogoNameWrapper>
-          <Name htmlFor={name.toLowerCase()}>{committee}</Name>
           <Logo src={require(`assets/committee_logos/${name}.png`)} />
+          <Name>{readmeIfy(committee)}</Name>
         </LogoNameWrapper>
-
-        <ResponseLabelWrapper>
-          <CardTitle margin="0.5rem" fontSize="0.8em">
-            Dette ønsker komiteen at du inkluderer
-          </CardTitle>
-          <CardParagraph margin="0.5rem">{responseLabel}</CardParagraph>
-        </ResponseLabelWrapper>
-
-        <WriteApplicationWrapper>
-          <CardTitle margin="0.5rem" fontSize="0.8em">
-            Skriv søknaden din her <InputValidationFeedback error={error} />
-          </CardTitle>
-          <Textarea
+        {responseLabel && (
+          <ResponseLabel>{readmeIfy(responseLabel, true)}</ResponseLabel>
+        )}
+        <InputWrapper>
+          <FieldLabel htmlFor={name.toLowerCase()}>Søknadstekst</FieldLabel>
+          <InputArea
             className="textarea"
             type="textarea"
             name={name}
@@ -67,12 +53,93 @@ class Application extends Component {
             onBlur={handleBlur}
             placeholder="Skriv søknadstekst her..."
             value={value}
+            error={error}
             rows="10"
           />
-        </WriteApplicationWrapper>
-      </Wrapper>
+          <InputValidationFeedback error={error} />
+        </InputWrapper>
+      </Container>
     );
   }
 }
 
 export default Application;
+
+/** Styles **/
+
+const Container = styled.div`
+  display: grid;
+  grid-template-areas:
+    "logoname"
+    "responselabel"
+    "input";
+  grid-gap: 0.7rem;
+  align-items: center;
+  margin: 2rem 0rem;
+  padding-bottom: 2rem;
+  border-bottom: 1px solid var(--lego-gray-medium);
+
+  &:last-of-type {
+    border-bottom: 0;
+    padding-bottom: 0;
+  }
+
+  ${media.portrait`
+    margin: 1em 0;
+    `};
+`;
+
+export const LogoNameWrapper = styled.div`
+  grid-area: logoname;
+  display: flex;
+  align-items: center;
+`;
+
+export const Name = styled.h3`
+  grid-area: name;
+  margin: 0;
+  font-size: 1.5rem;
+  line-height: 2rem;
+  letter-spacing: 0.7px;
+
+  ${media.portrait`
+    font-size: 1.3rem;
+    padding: 0
+    text-align: left;
+    align-self: center;
+    `};
+`;
+
+export const Logo = styled.img`
+  grid-area: logo;
+  justify-self: start;
+  object-fit: scale-down;
+  max-width: 45px;
+  margin-right: 1rem;
+`;
+
+export const ResponseLabel = styled.div`
+  grid-area: responselabel;
+  background: linear-gradient(
+    180deg,
+    rgba(234, 233, 232, 0.76) 0%,
+    rgba(218, 218, 218, 0.56) 100%
+  );
+  background-repeat: repeat;
+  border: 1px solid rgba(53, 138, 204, 0.22);
+  border-radius: 13px;
+  padding: 1rem;
+  font-size: 0.8rem;
+  line-height: 1rem;
+  color: rgba(57, 75, 89, 0.8);
+`;
+
+export const InputWrapper = styled.div`
+  grid-area: input;
+  font-family: var(--font-family);
+  font-size: 1rem;
+`;
+
+const InputArea = styled(StyledTextAreaField)`
+  min-height: 10rem;
+`;

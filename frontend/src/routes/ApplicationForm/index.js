@@ -4,7 +4,6 @@ import * as Yup from "yup";
 import callApi from "src/utils/callApi";
 
 import CommitteeApplication from "src/containers/CommitteeApplication";
-import ToggleCommitteeSmall from "src/components/ToggleCommitteeSmall";
 
 import FormStructure from "./FormStructure";
 
@@ -57,30 +56,23 @@ class FormContainer extends Component {
 
   render() {
     const {
+      admission,
       touched,
       errors,
       isSubmitting,
       committees,
       selectedCommittees,
       handleSubmit,
-      isValid
+      isValid,
+      toggleCommittee
     } = this.props;
-
-    const ChooseCommitteesItems = committees.map((committee, index) => (
-      <ToggleCommitteeSmall
-        name={committee.name}
-        key={committee.name + "-" + index}
-        isChosen={!!this.props.selectedCommittees[committee.name.toLowerCase()]}
-        toggleCommittee={this.toggleCommittee}
-      />
-    ));
 
     const hasSelected =
       committees.filter(
         committee => selectedCommittees[committee.name.toLowerCase()]
       ).length >= 1;
 
-    const SelectedComs = committees
+    const SelectedCommitteItems = committees
       .filter(committee => selectedCommittees[committee.name.toLowerCase()])
       .map(({ name, response_label }, index) => (
         <Field
@@ -96,13 +88,16 @@ class FormContainer extends Component {
     // This is where the actual form structure comes in.
     return (
       <FormStructure
+        admission={admission}
         hasSelected={hasSelected}
-        SelectedComs={SelectedComs}
+        SelectedCommitteItems={SelectedCommitteItems}
         isSubmitting={isSubmitting}
         isValid={isValid}
         handleSubmit={handleSubmit}
-        ChooseCommitteesItems={ChooseCommitteesItems}
         isMobile={this.state.isMobile}
+        committees={committees}
+        selectedCommittees={selectedCommittees}
+        toggleCommittee={toggleCommittee}
       />
     );
   }
@@ -174,13 +169,14 @@ const ApplicationForm = withFormik({
       );
       const schema = {};
       selectedCommittees.forEach(name => {
-        schema[name] = Yup.string().required(
-          "Søknadsteksten kan ikke være tom!"
-        );
+        schema[name] = Yup.string().required("Søknadsteksten må fylles ut");
       });
-      schema.phoneNumber = Yup.number().required(
-        "Vennligst fyll inn ditt mobilnummer."
-      );
+      schema.phoneNumber = Yup.string("Skriv inn et norsk telefonnummer")
+        .matches(
+          /^(0047|\+47|47)?(?:\s*\d){8}$/,
+          "Skriv inn et gyldig norsk telefonnummer"
+        )
+        .required("Skriv inn et gyldig norsk telefonnummer");
       return Yup.object().shape(schema);
     });
   },

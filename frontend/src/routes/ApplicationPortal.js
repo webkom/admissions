@@ -17,6 +17,7 @@ class ApplicationPortal extends Component {
   constructor(props) {
     super(props);
     this.state = {
+      admission: null,
       results: undefined,
       committees: [],
       error: null,
@@ -82,6 +83,17 @@ class ApplicationPortal extends Component {
     this.setState({ user: djangoData.user });
     Raven.setUserContext(djangoData.user);
     this.initializeState();
+
+    callApi("/admission/").then(
+      ({ jsonData: data }) => {
+        this.setState({
+          admission: data[0]
+        });
+      },
+      error => {
+        this.setState({ error });
+      }
+    );
   }
 
   render() {

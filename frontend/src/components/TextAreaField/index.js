@@ -1,9 +1,6 @@
 import React from "react";
-
 import InputValidationFeedback from "src/components/InputValidationFeedback";
-import { CardTitle } from "src/components/Card";
-
-import { StyledTextarea } from "./styles";
+import { FieldLabel, StyledTextAreaField } from "src/components/styledFields";
 
 const TextAreaField = ({
   placeholder,
@@ -15,13 +12,12 @@ const TextAreaField = ({
 
   return (
     <div>
-      <CardTitle margin="0.5rem" fontSize="0.8em">
+      <FieldLabel>
         {title}
         <InputValidationFeedback error={error} />
-      </CardTitle>
+      </FieldLabel>
 
-      <StyledTextarea
-        className="textarea"
+      <StyledTextAreaField
         type="textarea"
         name={name}
         id={name}

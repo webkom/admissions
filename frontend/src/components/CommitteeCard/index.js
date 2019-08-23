@@ -1,6 +1,7 @@
 import React from "react";
 import styled from "styled-components";
 import { media } from "src/styles/mediaQueries";
+import readmeIfy from "src/components/ReadmeLogo";
 
 const CommitteeCard = ({
   onToggle,
@@ -12,14 +13,14 @@ const CommitteeCard = ({
   return (
     <Card onClick={() => onToggle(name)} isChosen={isChosen}>
       <Logo src={require(`assets/committee_logos/${name.toLowerCase()}.png`)} />
-      <Name>{name}</Name>
-      <Description>{description}</Description>
+      <Name>{readmeIfy(name)}</Name>
+      <Description>{readmeIfy(description, true)}</Description>
       <LearnMoreLink href={`${readMoreLink}`} target="_blank">
         Les mer på abakus.no
       </LearnMoreLink>
       <SelectedMark isChosen={isChosen}>
         {isChosen ? (
-          <SelectedMarkText>
+          <SelectedMarkText isChosen={isChosen}>
             Valgt <span>- klikk for å fjerne</span>
           </SelectedMarkText>
         ) : (
@@ -144,7 +145,8 @@ export const SelectedMark = styled.div`
 `;
 
 const SelectedMarkText = styled.span`
-  color: var(--lego-gray-light);
+  color: ${props =>
+    props.isChosen ? "var(--lego-white);" : "var(--lego-gray-light);"};
   font-size: 1rem;
   font-weight: bold;
   line-height: 1.2rrem;
@@ -153,7 +155,7 @@ const SelectedMarkText = styled.span`
   align-items: center;
 
   span {
-    color: rgba(234, 233, 232, 0.6);
+    color: rgba(255, 255, 255, 0.6);
     font-size: 0.8rem;
     margin-left: 4px;
   }
