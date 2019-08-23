@@ -12,7 +12,7 @@ import LegoButton from "src/components/LegoButton";
 import LandingPageSkeleton from "./LandingPageSkeleton";
 import LandingPageNoAdmission from "./LandingPageNoAdmission";
 import { media } from "src/styles/mediaQueries";
-import AdmissionCountDown from "../../components/CountDown";
+import AdmissionCountDown from "../../components/AdmissionCountDown";
 
 class LandingPage extends Component {
   constructor(props) {
