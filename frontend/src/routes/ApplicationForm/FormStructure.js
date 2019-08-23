@@ -7,16 +7,19 @@ import "moment/locale/nb";
 Moment.globalLocale = "nb";
 
 import Icon from "src/components/Icon";
+import LegoButton from "src/components/LegoButton";
 import PriorityTextField from "./PriorityTextField";
 import PhoneNumberField from "./PhoneNumberField";
+import ToggleCommittees from "./ToggleCommittees";
 import ErrorFocus from "./ErrorFocus";
-import LegoButton from "src/components/LegoButton";
 
 const FormStructure = ({
   admission,
+  committees,
+  selectedCommittees,
+  toggleCommittee,
   hasSelected,
   SelectedCommitteItems,
-  ChooseCommitteeItems,
   handleSubmit,
   isSubmitting,
   isValid
@@ -48,17 +51,22 @@ const FormStructure = ({
       </GeneralInfoSection>
       <SeparatorLine />
       <CommitteesSection>
-        <SectionHeader>Komiteer</SectionHeader>
-        <HelpText>
-          <Icon name="information-circle-outline" />
-          Her skriver du søknaden til komiteen(e) du har valgt. Hver komité kan
-          kun se søknaden til sin egen komité.
-        </HelpText>
+        <Sidebar>
+          <div>
+            <SectionHeader>Komiteer</SectionHeader>
+            <HelpText>
+              <Icon name="information-circle-outline" />
+              Her skriver du søknaden til komiteen(e) du har valgt. Hver komité
+              kan kun se søknaden til sin egen komité.
+            </HelpText>
 
-        <ToggleCommitteesWrapper>
-          {ChooseCommitteeItems}
-        </ToggleCommitteesWrapper>
-
+            <ToggleCommittees
+              committees={committees}
+              selectedCommittees={selectedCommittees}
+              toggleCommittee={toggleCommittee}
+            />
+          </div>
+        </Sidebar>
         {hasSelected ? (
           <Applications>{SelectedCommitteItems}</Applications>
         ) : (
@@ -214,34 +222,28 @@ const HelpText = styled.span`
 const CommitteesSection = styled.div`
   display: grid;
   grid-template-columns: 1fr 1.5fr;
-  grid-template-areas:
-    "header header"
-    "info applications"
-    "togglecommittees applications";
+  grid-template-areas: "sidebar applications";
   grid-gap: 1rem 2rem;
   max-width: 750px;
-
-  h2 {
-    grid-area: header;
-    margin-bottom: -1.5rem;
-  }
-
-  span {
-    grid-area: info;
-    margin-top: calc(1rem + 16px);
-  }
 `;
 
-const ToggleCommitteesWrapper = styled.div`
-  grid-area: togglecommittees;
-  display: flex;
-  flex-wrap: wrap;
-  margin: 0 8em 2em;
+const Sidebar = styled.div`
+  grid-area: sidebar;
+  margin-bottom: 2rem;
 
-  ${media.handheld`
-    width: 80%;
-    margin: 2em auto;
-    `};
+  > div {
+    position: sticky;
+    top: 2rem;
+
+    h2 {
+      margin-bottom: -1.5rem;
+    }
+
+    span {
+      margin-top: calc(1rem + 16px);
+      margin-bottom: 2rem;
+    }
+  }
 `;
 
 const Applications = styled.div`

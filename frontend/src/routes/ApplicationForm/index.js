@@ -4,7 +4,7 @@ import * as Yup from "yup";
 import callApi from "src/utils/callApi";
 
 import CommitteeApplication from "src/containers/CommitteeApplication";
-import ToggleCommitteeSmall from "src/components/ToggleCommitteeSmall";
+import MiniToggleCommittee from "./MiniToggleCommittee";
 
 import FormStructure from "./FormStructure";
 
@@ -64,17 +64,9 @@ class FormContainer extends Component {
       committees,
       selectedCommittees,
       handleSubmit,
-      isValid
+      isValid,
+      toggleCommittee
     } = this.props;
-
-    const ChooseCommitteesItems = committees.map((committee, index) => (
-      <ToggleCommitteeSmall
-        name={committee.name}
-        key={committee.name + "-" + index}
-        isChosen={!!this.props.selectedCommittees[committee.name.toLowerCase()]}
-        toggleCommittee={this.toggleCommittee}
-      />
-    ));
 
     const hasSelected =
       committees.filter(
@@ -88,7 +80,9 @@ class FormContainer extends Component {
           component={CommitteeApplication}
           committee={name}
           name={name.toLowerCase()}
-          responseLabel={response_label}
+          responseLabel={
+            "Fortell litt om deg selv og hvorfor du søker Bedkom. Vi vil bli kjent med deg!"
+          }
           error={touched[name.toLowerCase()] && errors[name.toLowerCase()]}
           key={`${name.toLowerCase()} ${index}`}
         />
@@ -103,8 +97,10 @@ class FormContainer extends Component {
         isSubmitting={isSubmitting}
         isValid={isValid}
         handleSubmit={handleSubmit}
-        ChooseCommitteesItems={ChooseCommitteesItems}
         isMobile={this.state.isMobile}
+        committees={committees}
+        selectedCommittees={selectedCommittees}
+        toggleCommittee={toggleCommittee}
       />
     );
   }

@@ -41,6 +41,8 @@ class PriorityTextField extends Component {
 
 export default PriorityTextField;
 
+/** Styles **/
+
 const Optional = styled.span`
   font-size: 0.8rem;
   color: rgba(57, 75, 89, 0.75);

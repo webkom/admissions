@@ -1,6 +1,7 @@
 import React from "react";
 import styled from "styled-components";
 import { media } from "src/styles/mediaQueries";
+import readmeIfy from "src/components/ReadmeLogo";
 
 const CommitteeCard = ({
   onToggle,
@@ -12,7 +13,7 @@ const CommitteeCard = ({
   return (
     <Card onClick={() => onToggle(name)} isChosen={isChosen}>
       <Logo src={require(`assets/committee_logos/${name.toLowerCase()}.png`)} />
-      <Name>{name}</Name>
+      <Name>{readmeIfy(name)}</Name>
       <Description>{description}</Description>
       <LearnMoreLink href={`${readMoreLink}`} target="_blank">
         Les mer på abakus.no
