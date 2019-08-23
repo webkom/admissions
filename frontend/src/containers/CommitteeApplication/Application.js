@@ -39,7 +39,9 @@ class Application extends Component {
           <Logo src={require(`assets/committee_logos/${name}.png`)} />
           <Name>{readmeIfy(committee)}</Name>
         </LogoNameWrapper>
-        {responseLabel && <ResponseLabel>{responseLabel}</ResponseLabel>}
+        {responseLabel && (
+          <ResponseLabel>{readmeIfy(responseLabel, true)}</ResponseLabel>
+        )}
         <InputWrapper>
           <FieldLabel htmlFor={name.toLowerCase()}>Søknadstekst</FieldLabel>
           <InputArea

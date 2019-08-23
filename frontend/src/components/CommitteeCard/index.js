@@ -14,7 +14,7 @@ const CommitteeCard = ({
     <Card onClick={() => onToggle(name)} isChosen={isChosen}>
       <Logo src={require(`assets/committee_logos/${name.toLowerCase()}.png`)} />
       <Name>{readmeIfy(name)}</Name>
-      <Description>{description}</Description>
+      <Description>{readmeIfy(description, true)}</Description>
       <LearnMoreLink href={`${readMoreLink}`} target="_blank">
         Les mer på abakus.no
       </LearnMoreLink>

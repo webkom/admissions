@@ -4,7 +4,6 @@ import * as Yup from "yup";
 import callApi from "src/utils/callApi";
 
 import CommitteeApplication from "src/containers/CommitteeApplication";
-import MiniToggleCommittee from "./MiniToggleCommittee";
 
 import FormStructure from "./FormStructure";
 
@@ -80,9 +79,7 @@ class FormContainer extends Component {
           component={CommitteeApplication}
           committee={name}
           name={name.toLowerCase()}
-          responseLabel={
-            "Fortell litt om deg selv og hvorfor du søker Bedkom. Vi vil bli kjent med deg!"
-          }
+          responseLabel={response_label}
           error={touched[name.toLowerCase()] && errors[name.toLowerCase()]}
           key={`${name.toLowerCase()} ${index}`}
         />

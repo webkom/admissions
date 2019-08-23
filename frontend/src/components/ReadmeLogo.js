@@ -2,15 +2,25 @@ import React from "react";
 import styled from "styled-components";
 
 const ReadmeLogo = () => <Readme>readme</Readme>;
+const ReadmeLogoBody = () => <ReadmeBody>readme</ReadmeBody>;
 
-const readmeIfy = text =>
+const readmeIfy = (text, isBodyText = false) =>
   text && (
     <span>
       {text
         .split(/readme/)
         .reduce(
           (prev, current, i) =>
-            i ? prev.concat(<ReadmeLogo key={current} />, current) : [current],
+            i
+              ? prev.concat(
+                  isBodyText ? (
+                    <ReadmeLogoBody key={current} />
+                  ) : (
+                    <ReadmeLogo key={current} />
+                  ),
+                  current
+                )
+              : [current],
           []
         )}
     </span>
@@ -25,3 +35,5 @@ const Readme = styled.div`
   font-weight: 400;
   text-transform: lowercase;
 `;
+
+const ReadmeBody = Readme.withComponent("span");

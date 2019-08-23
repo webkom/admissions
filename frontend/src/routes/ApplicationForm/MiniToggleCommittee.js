@@ -7,7 +7,6 @@
 
 import React from "react";
 import styled from "styled-components";
-import { media } from "src/styles/mediaQueries";
 
 const MiniToggleCommittee = ({ name, toggleCommittee, isChosen }) => {
   return (
