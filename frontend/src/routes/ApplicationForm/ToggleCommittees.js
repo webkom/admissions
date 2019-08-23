@@ -47,6 +47,18 @@ const Wrapper = styled.div`
   border: 2px solid #ece3e3;
   border-radius: 13px;
   padding: 2rem;
+  max-width: 290px;
+
+  ${media.portrait`
+    max-width: 100%;
+    padding: 1.5rem 2rem;
+
+  `};
+
+  ${media.handheld`
+     margin: auto;
+     max-width: 290px;
+  `};
 `;
 
 const Title = styled.h4`
@@ -69,6 +81,14 @@ const IconsWrapper = styled.div`
   grid-template-rows: auto;
   grid-gap: 5px 10px;
   padding: 5px 10px;
+
+  ${media.portrait`
+    grid-template-columns: repeat(8, 40px);
+  `};
+
+  ${media.handheld`
+    grid-template-columns: repeat(4, 40px);
+  `};
 `;
 
 const LinkToOverview = styled(Link)`
@@ -79,4 +99,5 @@ const LinkToOverview = styled(Link)`
   font-size: 0.8rem;
   text-align: center;
   font-weight: 500;
+  width: 100%;
 `;

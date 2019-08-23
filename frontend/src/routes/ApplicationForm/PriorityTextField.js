@@ -1,6 +1,7 @@
 import React, { Component } from "react";
 import { FieldLabel, StyledTextAreaField } from "src/components/styledFields";
 import styled from "styled-components";
+import { media } from "src/styles/mediaQueries";
 
 class PriorityTextField extends Component {
   componentDidMount() {
@@ -21,9 +22,11 @@ class PriorityTextField extends Component {
       form: { handleBlur }
     } = this.props;
     return (
-      <div>
-        <FieldLabel>{label}</FieldLabel>
-        {optional && <Optional>(valgfritt)</Optional>}
+      <Wrapper>
+        <LabelWrapper>
+          <FieldLabel htmlFor={name}>{label}</FieldLabel>
+          {optional && <Optional>(valgfritt)</Optional>}
+        </LabelWrapper>
         <StyledTextAreaField
           type="textarea"
           name={name}
@@ -34,7 +37,7 @@ class PriorityTextField extends Component {
           value={value}
           rows="5"
         />
-      </div>
+      </Wrapper>
     );
   }
 }
@@ -42,6 +45,23 @@ class PriorityTextField extends Component {
 export default PriorityTextField;
 
 /** Styles **/
+
+const Wrapper = styled.div`
+  grid-area: prioritytext;
+
+  ${media.portrait`
+    margin-top: 0.5rem;
+  `};
+`;
+
+const LabelWrapper = styled.span`
+  display: flex;
+
+  ${media.handheld`
+    flex-direction: column;
+    margin-bottom: 5px;
+  `};
+`;
 
 const Optional = styled.span`
   font-size: 0.8rem;

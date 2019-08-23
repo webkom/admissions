@@ -70,14 +70,15 @@ const FormStructure = ({
         {hasSelected ? (
           <Applications>{SelectedCommitteItems}</Applications>
         ) : (
-          <div>
-            <NoChosenCommittees>
-              Du har ikke valgt noen komiteer.
-            </NoChosenCommittees>
-            <NoChosenCommitteesSmallInfo>
-              Bruk lista på toppen for å velge komiteer
-            </NoChosenCommitteesSmallInfo>
-          </div>
+          <NoChosenCommitteesWrapper>
+            <NoChosenTitle>Du har ikke valgt noen komiteer.</NoChosenTitle>
+            <NoChosenSubTitle>
+              Velg i sidemargen eller gå til komiteoversikten
+            </NoChosenSubTitle>
+            <LegoButton icon="arrow-forward" iconPrefix="ios" to="/committees">
+              Velg komiteer
+            </LegoButton>
+          </NoChosenCommitteesWrapper>
         )}
       </CommitteesSection>
       <SeparatorLine />
@@ -158,6 +159,18 @@ const PageWrapper = styled.div`
   display: flex;
   flex-direction: column;
   align-items: center;
+
+  form {
+    max-width: 100%;
+  }
+
+  ${media.portrait`
+    max-width: 500px;
+  `};
+
+  ${media.handheld`
+    max-width: 100%;
+  `};
 `;
 
 const Title = styled.h1`
@@ -179,24 +192,49 @@ const SeparatorLine = styled.div`
   height: 1px;
 `;
 
+/* General info section, mobile number, priorities */
 const GeneralInfoSection = styled.div`
   display: grid;
   grid-template-columns: 1fr 1.5fr;
   grid-template-areas:
     "header header"
-    "input input";
+    "phonenumberinfo phonenumber"
+    "prioritytextinfo prioritytext";
   grid-gap: 1rem 2rem;
   max-width: 750px;
   margin-bottom: 1.5rem;
 
-  h2 {
+  > h2 {
     grid-area: header;
     margin-bottom: -1.5rem;
   }
 
-  span {
+  > span {
     margin-top: calc(1rem + 16px);
   }
+
+  span:nth-of-type(1) {
+    grid-area: phonenumberinfo;
+  }
+
+  span:nth-of-type(2) {
+    grid-area: prioritytextinfo;
+  }
+
+  ${media.portrait`
+    grid-template-columns: 100%;
+    grid-template-areas:
+    "header"
+    "phonenumber"
+    "phonenumberinfo"
+    "prioritytext"
+    "prioritytextinfo";
+    grid-gap: 0.5rem ;
+
+    > span {
+      margin-top: 0;
+    }
+  `};
 `;
 
 const SectionHeader = styled.h2`
@@ -217,7 +255,20 @@ const HelpText = styled.span`
     font-size: 1.6rem;
     margin-right: 1rem;
   }
+
+  ${media.portrait`
+    margin-left: 0;
+    font-size: 0.8rem;
+
+    i {
+      margin-right: 0.5rem;
+      font-size: 1.3rem;
+
+    }
+  `};
 `;
+
+/* Committees section */
 
 const CommitteesSection = styled.div`
   display: grid;
@@ -225,6 +276,18 @@ const CommitteesSection = styled.div`
   grid-template-areas: "sidebar applications";
   grid-gap: 1rem 2rem;
   max-width: 750px;
+
+  ${media.portrait`
+    grid-template-columns: 100%;
+    grid-template-areas:
+      "sidebar"
+      "applications";
+    grid-gap: 0.5rem ;
+
+    > span {
+      margin-top: 1.5rem;;
+    }
+  `};
 `;
 
 const Sidebar = styled.div`
@@ -235,20 +298,30 @@ const Sidebar = styled.div`
     position: sticky;
     top: 2rem;
 
-    h2 {
+    > h2 {
       margin-bottom: -1.5rem;
     }
 
-    span {
+    > span {
       margin-top: calc(1rem + 16px);
       margin-bottom: 2rem;
     }
   }
+  ${media.portrait`
+    margin-bottom: 1rem;
+    > div {
+      > span {
+        margin-bottom: 1.5rem;
+      }
+    }
+  `};
 `;
 
 const Applications = styled.div`
   grid-area: applications;
 `;
+
+/* Submit section, privacy and data notice */
 
 const SubmitSection = styled.div`
   display: grid;
@@ -256,6 +329,14 @@ const SubmitSection = styled.div`
   max-width: 750px;
   margin-top: 2rem;
   align-items: center;
+
+  ${media.portrait`
+    grid-template-columns: 100%;
+
+    button {
+      margin-top: 2rem;
+    }
+  `};
 `;
 
 const StyledSpan = styled.span.attrs(props => ({
@@ -277,30 +358,39 @@ const SubmitInfo = styled.p`
   color: rgba(57, 75, 89, 0.75);
   line-height: 1.3rem;
   padding-right: 3rem;
+
+  ${media.portrait`
+    padding-right: 0;
+  `};
 `;
 
-/*
- * No chosen committees text
- */
+/* (Committees section) No chosen committes */
 
-const NoChosenCommittees = styled.span`
-  font-size: 2rem;
-  font-family: var(--font-family);
-  color: gray;
+const NoChosenCommitteesWrapper = styled.div`
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin-top: 5rem;
   text-align: center;
-  display: block;
-  margin-top: 2em;
+
+  ${media.portrait`
+    margin: 0 0 4rem 0;
+  `};
 `;
 
-/*
- * No chosen committees text
- */
+const NoChosenTitle = Title.withComponent("h3");
 
-const NoChosenCommitteesSmallInfo = styled.span`
-  font-size: 1.3rem;
+const NoChosenSubTitle = styled.span`
+  font-size: 1rem;
   font-family: var(--font-family);
-  color: gray;
+  font-weight: 500;
+  color: rgba(129, 129, 129, 0.4);
+  max-width: 50%;
   text-align: center;
-  display: block;
-  padding-bottom: 2em;
+  line-height: 1rem;
+  margin-bottom: 3rem;
+
+  ${media.portrait`
+    margin-bottom: 2rem;
+  `};
 `;

@@ -35,8 +35,10 @@ class Application extends Component {
     const error = touched[name] && errors[name];
     return (
       <Container>
-        <Name>{readmeIfy(committee)}</Name>
-        <Logo src={require(`assets/committee_logos/${name}.png`)} />
+        <LogoNameWrapper>
+          <Logo src={require(`assets/committee_logos/${name}.png`)} />
+          <Name>{readmeIfy(committee)}</Name>
+        </LogoNameWrapper>
         {responseLabel && <ResponseLabel>{responseLabel}</ResponseLabel>}
         <InputWrapper>
           <FieldLabel htmlFor={name.toLowerCase()}>Søknadstekst</FieldLabel>
@@ -65,11 +67,10 @@ export default Application;
 
 const Container = styled.div`
   display: grid;
-  grid-template-columns: 4rem 1fr;
   grid-template-areas:
-    "logo name"
-    "responselabel responselabel"
-    "input input";
+    "logoname"
+    "responselabel"
+    "input";
   grid-gap: 0.7rem;
   align-items: center;
   margin: 2rem 0rem;
@@ -81,15 +82,15 @@ const Container = styled.div`
     padding-bottom: 0;
   }
 
-  ${media.handheld`
-    grid-template-columns: auto;
-    grid-template-rows: repeat(3, auto);
-    grid-template-areas:
-      "logoname"
-      "response"
-      "input";
+  ${media.portrait`
     margin: 1em 0;
     `};
+`;
+
+export const LogoNameWrapper = styled.div`
+  grid-area: logoname;
+  display: flex;
+  align-items: center;
 `;
 
 export const Name = styled.h3`
@@ -99,7 +100,7 @@ export const Name = styled.h3`
   line-height: 2rem;
   letter-spacing: 0.7px;
 
-  ${media.handheld`
+  ${media.portrait`
     font-size: 1.3rem;
     padding: 0
     text-align: left;
@@ -111,7 +112,8 @@ export const Logo = styled.img`
   grid-area: logo;
   justify-self: start;
   object-fit: scale-down;
-  max-width: 60px;
+  max-width: 45px;
+  margin-right: 1rem;
 `;
 
 export const ResponseLabel = styled.div`

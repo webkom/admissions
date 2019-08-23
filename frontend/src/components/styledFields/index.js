@@ -51,6 +51,8 @@ export const StyledTextAreaField = styled(Textarea)`
 export const FieldLabel = styled.label`
   font-weight: 500;
   font-size: 0.95rem;
+  line-height: 1.2rem;
+  display: inline-block;
 `;
 
 export const InputValidationFeedback = ({ error }) =>
