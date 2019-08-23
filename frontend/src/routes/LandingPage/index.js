@@ -62,37 +62,7 @@ class LandingPage extends Component {
         </YearOfAdmission>
         <InfoBox>
           <DecorativeLine vertical red />
-          <div>
-            <p>
-              Siste frist for å{" "}
-              <StyledSpan bold>legge inn en søknad</StyledSpan> er{" "}
-              <StyledSpan bold red>
-                <Moment format="dddd Do MMMM">
-                  {admission.public_deadline}
-                </Moment>
-              </StyledSpan>
-              <StyledSpan red>
-                <Moment format=", \k\l. HH:mm:ss">
-                  {admission.public_deadline}
-                </Moment>
-              </StyledSpan>
-              .
-            </p>
-            <p>
-              Etter å ha lagt inn en søknad kan du{" "}
-              <StyledSpan bold>endre eller slette den</StyledSpan> frem til{" "}
-              <StyledSpan bold red>
-                <Moment format="dddd Do MMMM">
-                  {admission.application_deadline}
-                </Moment>
-              </StyledSpan>
-              <StyledSpan red>
-                <Moment format=", \k\l. HH:mm:ss">
-                  {admission.application_deadline}
-                </Moment>
-              </StyledSpan>
-            </p>
-          </div>
+          <ApplicationDateInfo admission={admission} />
         </InfoBox>
         <Notice>
           <StyledSpan bold>Merk:</StyledSpan> Oppdateringer etter
@@ -147,7 +117,36 @@ class LandingPage extends Component {
 
 export default LandingPage;
 
-export const YearOfAdmission = styled.h1`
+const ApplicationDateInfo = ({ admission }) => (
+  <div>
+    <p>
+      Siste frist for å <StyledSpan bold>legge inn en søknad</StyledSpan> er{" "}
+      <StyledSpan bold red>
+        <Moment format="dddd Do MMMM">{admission.public_deadline}</Moment>
+      </StyledSpan>
+      <StyledSpan red>
+        <Moment format=", \k\l. HH:mm:ss">{admission.public_deadline}</Moment>
+      </StyledSpan>
+      .
+    </p>
+    <p>
+      Etter å ha lagt inn en søknad kan du{" "}
+      <StyledSpan bold>endre den</StyledSpan> frem til{" "}
+      <StyledSpan bold red>
+        <Moment format="dddd Do MMMM">{admission.application_deadline}</Moment>
+      </StyledSpan>
+      <StyledSpan red>
+        <Moment format=", \k\l. HH:mm:ss">
+          {admission.application_deadline}
+        </Moment>
+      </StyledSpan>
+    </p>
+  </div>
+);
+
+/** Styles **/
+
+const YearOfAdmission = styled.h1`
   color: #aeaeae;
   font-size: 2.5rem;
   font-weight: 500;
@@ -174,7 +173,7 @@ const InfoBox = styled.div`
   `};
 `;
 
-export const StyledSpan = styled.span.attrs(props => ({
+const StyledSpan = styled.span.attrs(props => ({
   red: props.red ? true : false,
   bold: props.bold ? "600" : "normal"
 }))`
@@ -182,7 +181,7 @@ export const StyledSpan = styled.span.attrs(props => ({
   font-weight: ${props => props.bold};
 `;
 
-export const Notice = styled.p`
+const Notice = styled.p`
   font-style: italic;
   font-size: 1rem;
   max-width: 600px;
@@ -196,7 +195,7 @@ export const Notice = styled.p`
   `}
 `;
 
-export const LinkWrapper = styled.ul`
+const LinkWrapper = styled.ul`
   margin-top: 1.5rem;
   margin-bottom: 4rem;
   display: flex;

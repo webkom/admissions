@@ -14,7 +14,8 @@ const LegoButton = ({
   icon,
   disabled,
   iconPrefix = "md",
-  onClick
+  onClick,
+  type = "button"
 }) => {
   const getButtonStyle = style => {
     switch (style) {
@@ -22,6 +23,8 @@ const LegoButton = ({
         return "primary";
       case "secondary":
         return "secondary";
+      case "tertiary":
+        return "tertiary";
     }
     console.warn(`Style ${style} not found -- fallback to primary`);
     return "primary";
@@ -60,6 +63,7 @@ const LegoButton = ({
       buttonstyle={getButtonStyle(buttonStyle)}
       onClick={onClick}
       disabled={disabled}
+      type={type}
     >
       <Text buttonstyle={getButtonStyle(buttonStyle)}>{children}</Text>
       {icon && <Icon name={icon} prefix={iconPrefix} />}
@@ -82,9 +86,9 @@ const ILegoRouterLink = styled(Link)`
     opacity: 0.7;
   }
 
-  /** Primary style **/
+  /** Primary style (also base for tertiary) **/
   ${props =>
-    props.buttonstyle === "primary" &&
+    (props.buttonstyle === "primary" || props.buttonstyle === "tertiary") &&
     css`
       background: var(--lego-red);
       color: var(--lego-white);
@@ -97,14 +101,6 @@ const ILegoRouterLink = styled(Link)`
         margin-left: 25px;
         font-size: 1.8rem;
       }
-      ${props =>
-        props.disabled &&
-        css`
-          background: var(--lego-gray-medium);
-          border: 1px solid var(--lego-gray-dark);
-          color: var(--lego-gray-dark);
-          box-shadow: 0px 4px 4px rgba(0, 0, 0, 0.1);
-        `}
     `}
 
   /** Secondary style **/
@@ -125,6 +121,25 @@ const ILegoRouterLink = styled(Link)`
          }
       `}
     `}
+
+  /** Tertiary style **/
+  ${props =>
+    props.buttonstyle === "tertiary" &&
+    css`
+      background: var(--lego-font-color);
+      border: 1px solid var(--lego-font-color);
+    `}
+
+  /** Disabled primary & tertiary style **/
+  ${props =>
+    props.disabled &&
+    (props.buttonstyle === "primary" || props.buttonstyle === "tertiary") &&
+    css`
+      background: var(--lego-gray-medium);
+      border: 1px solid var(--lego-gray-dark);
+      color: var(--lego-gray-dark);
+      box-shadow: 0px 4px 4px rgba(0, 0, 0, 0.1);
+    `}
 `;
 
 const Text = styled.span`
@@ -134,9 +149,9 @@ const Text = styled.span`
   white-space: nowrap;
   font-family: var(--font-family);
 
-  /** Primary style **/
+  /** Primary style & Tertiary style **/
   ${props =>
-    props.buttonstyle === "primary" &&
+    (props.buttonstyle === "primary" || props.buttonstyle === "tertiary") &&
     css`
       font-size: 1.2rem;
       margin-bottom: 3px;

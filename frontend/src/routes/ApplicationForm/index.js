@@ -57,6 +57,7 @@ class FormContainer extends Component {
 
   render() {
     const {
+      admission,
       touched,
       errors,
       isSubmitting,
@@ -96,6 +97,7 @@ class FormContainer extends Component {
     // This is where the actual form structure comes in.
     return (
       <FormStructure
+        admission={admission}
         hasSelected={hasSelected}
         SelectedCommitteItems={SelectedCommitteItems}
         isSubmitting={isSubmitting}

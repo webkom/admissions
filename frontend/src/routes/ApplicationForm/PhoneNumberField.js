@@ -5,17 +5,23 @@ import {
   StyledField
 } from "src/components/styledFields";
 
-const PhoneNumberField = ({ field: { name }, form: { touched, errors } }) => {
+const PhoneNumberField = ({
+  field: { name },
+  form: { touched, errors, handleBlur }
+}) => {
   const error = touched[name] && errors[name];
 
   return (
     <div>
-      <FieldLabel>Mobilnummer</FieldLabel>
+      <FieldLabel htmlFor={name}>Mobilnummer</FieldLabel>
 
       <StyledField
         type="tel"
         name={name}
-        onBlur={e => sessionStorage.setItem("phoneNumber", e.target.value)}
+        onBlur={e => {
+          sessionStorage.setItem("phoneNumber", e.target.value);
+          handleBlur();
+        }}
         placeholder="Fyll inn mobilnummer..."
         error={error}
       />
