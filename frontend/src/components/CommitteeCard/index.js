@@ -19,7 +19,7 @@ const CommitteeCard = ({
       </LearnMoreLink>
       <SelectedMark isChosen={isChosen}>
         {isChosen ? (
-          <SelectedMarkText>
+          <SelectedMarkText isChosen={isChosen}>
             Valgt <span>- klikk for å fjerne</span>
           </SelectedMarkText>
         ) : (
@@ -144,7 +144,8 @@ export const SelectedMark = styled.div`
 `;
 
 const SelectedMarkText = styled.span`
-  color: var(--lego-gray-light);
+  color: ${props =>
+    props.isChosen ? "var(--lego-white);" : "var(--lego-gray-light);"};
   font-size: 1rem;
   font-weight: bold;
   line-height: 1.2rrem;
@@ -153,7 +154,7 @@ const SelectedMarkText = styled.span`
   align-items: center;
 
   span {
-    color: rgba(234, 233, 232, 0.6);
+    color: rgba(255, 255, 255, 0.6);
     font-size: 0.8rem;
     margin-left: 4px;
   }

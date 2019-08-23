@@ -9,6 +9,7 @@ Moment.globalLocale = "nb";
 import Icon from "src/components/Icon";
 import PriorityTextField from "./PriorityTextField";
 import PhoneNumberField from "./PhoneNumberField";
+import ErrorFocus from "./ErrorFocus";
 import LegoButton from "src/components/LegoButton";
 
 const FormStructure = ({
@@ -132,6 +133,7 @@ const FormStructure = ({
           </LegoButton>
         )}
       </SubmitSection>
+      <ErrorFocus />
     </Form>
   </PageWrapper>
 );
