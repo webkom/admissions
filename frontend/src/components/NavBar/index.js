@@ -10,12 +10,16 @@ const NavBar = ({ user, isEditing }) => (
     <BrandContainer>
       <AbakusLogo />
     </BrandContainer>
-    <NavItemsContainer>
-      {(!user.has_application || isEditing) && (
-        <NavItem to="/committees" text="Velg komiteer" />
-      )}
-      <NavItem to="/application" text="Min søknad" />
-    </NavItemsContainer>
+    {!user.has_application || isEditing ? (
+      <NavItemsContainer>
+        <NavItem to="/velg-komiteer" text="Velg komiteer" />
+        <NavItem to="/min-soknad" text="Min søknad" />
+      </NavItemsContainer>
+    ) : (
+      <NavItemsContainer>
+        <NavItem to="/min-soknad" text="Min søknad" />
+      </NavItemsContainer>
+    )}
 
     <UserInfo user={user} />
   </Container>
@@ -55,9 +59,7 @@ const NavItemsContainer = styled.ul`
   margin-left: 7rem;
 
   ${media.portrait`  
-  margin-left: 0;
-
-        
+    margin-left: 0;
   `}
 
   ${media.handheld`        

@@ -32,7 +32,7 @@ const ToggleCommittees = ({
         Klikk på logoene til komiteene for å legge til/fjerne de fra søknaden.
       </Tooltip>
       <IconsWrapper>{ChooseCommitteesItems}</IconsWrapper>
-      <LinkToOverview to="/committees">
+      <LinkToOverview to="/velg-komiteer">
         Eller gå tilbake til oversikten for å lese mer
       </LinkToOverview>
     </Wrapper>

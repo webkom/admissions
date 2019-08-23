@@ -34,9 +34,22 @@ class FormContainer extends Component {
     this.props.toggleCommittee(name.toLowerCase());
   };
 
+  onDeleteApplication = () => {
+    callApi("/application/mine/", {
+      method: "DELETE"
+    }).then(() => {
+      this.props.toggleIsEditing();
+      window.location = "/";
+    });
+  };
+
   persistState = () => {
     var selectedCommitteesJSON = JSON.stringify(this.state.selectedCommittees);
     sessionStorage.setItem("selectedCommittees", selectedCommitteesJSON);
+    sessionStorage.setItem(
+      "isEditingApplication",
+      this.props.isEditingApplication
+    );
   };
 
   initializeState = () => {
@@ -64,14 +77,17 @@ class FormContainer extends Component {
       selectedCommittees,
       handleSubmit,
       isValid,
-      toggleCommittee
+      toggleCommittee,
+      toggleIsEditing,
+      myApplication,
+      isEditingApplication
     } = this.props;
 
     const hasSelected =
       committees.filter(
         committee => selectedCommittees[committee.name.toLowerCase()]
       ).length >= 1;
-
+    console.log(isEditingApplication);
     const SelectedCommitteItems = committees
       .filter(committee => selectedCommittees[committee.name.toLowerCase()])
       .map(({ name, response_label }, index) => (
@@ -82,6 +98,7 @@ class FormContainer extends Component {
           responseLabel={response_label}
           error={touched[name.toLowerCase()] && errors[name.toLowerCase()]}
           key={`${name.toLowerCase()} ${index}`}
+          disabled={!isEditingApplication}
         />
       ));
 
@@ -98,6 +115,10 @@ class FormContainer extends Component {
         committees={committees}
         selectedCommittees={selectedCommittees}
         toggleCommittee={toggleCommittee}
+        toggleIsEditing={toggleIsEditing}
+        isEditing={isEditingApplication}
+        myApplication={myApplication}
+        onDeleteApplication={this.onDeleteApplication}
       />
     );
   }
@@ -106,12 +127,12 @@ class FormContainer extends Component {
 // Highest order component for application form.
 // Handles form values, submit post and form validation.
 const ApplicationForm = withFormik({
-  mapPropsToValues({ myApplications = {} }) {
+  mapPropsToValues({ myApplication = {} }) {
     const {
       text = sessionStorage.getItem("text") || "",
       phone_number = sessionStorage.getItem("phoneNumber") || "",
       committee_applications = []
-    } = myApplications;
+    } = myApplication;
 
     return {
       webkom: "",
@@ -133,7 +154,7 @@ const ApplicationForm = withFormik({
   handleSubmit(
     values,
     {
-      props: { selectedCommittees },
+      props: { selectedCommittees, toggleIsEditing },
       setSubmitting
     }
   ) {
@@ -153,7 +174,7 @@ const ApplicationForm = withFormik({
     })
       .then(() => {
         setSubmitting(false);
-        window.location = "/myapplications";
+        toggleIsEditing();
       })
       .catch(err => {
         alert("Det skjedde en feil.... ");

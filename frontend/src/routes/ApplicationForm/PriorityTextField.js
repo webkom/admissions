@@ -19,7 +19,8 @@ class PriorityTextField extends Component {
       label,
       optional = false,
       field: { name, onChange, value },
-      form: { handleBlur }
+      form: { handleBlur },
+      disabled
     } = this.props;
     return (
       <Wrapper>
@@ -31,6 +32,7 @@ class PriorityTextField extends Component {
           type="textarea"
           name={name}
           id={name}
+          disabled={disabled}
           onChange={onChange}
           onBlur={handleBlur}
           placeholder="Skriv dine kommentarer her..."

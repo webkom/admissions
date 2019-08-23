@@ -73,7 +73,7 @@ class LandingPage extends Component {
           {djangoData.user.full_name ? (
             <li>
               <LegoButton
-                to={hasSubmitted ? "/myapplications" : "/committees"}
+                to={hasSubmitted ? "/min-soknad" : "/velg-komiteer"}
                 icon="arrow-forward"
                 iconPrefix="ios"
                 disabled={!admission.is_open}
@@ -88,7 +88,9 @@ class LandingPage extends Component {
                 iconPrefix="ios"
                 disabled={!admission.is_open}
                 onClick={e => {
-                  window.location = `/login/lego/?next=/committees`;
+                  window.location = `/login/lego/?next=/${
+                    hasSubmitted ? "/min-soknad" : "/velg-komiteer"
+                  }`;
                   e.preventDefault();
                 }}
               >

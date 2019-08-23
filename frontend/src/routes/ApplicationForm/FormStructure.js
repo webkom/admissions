@@ -8,6 +8,7 @@ Moment.globalLocale = "nb";
 
 import Icon from "src/components/Icon";
 import LegoButton from "src/components/LegoButton";
+import ConfirmModal from "src/components/ConfirmModal";
 import PriorityTextField from "./PriorityTextField";
 import PhoneNumberField from "./PhoneNumberField";
 import ToggleCommittees from "./ToggleCommittees";
@@ -18,14 +19,67 @@ const FormStructure = ({
   committees,
   selectedCommittees,
   toggleCommittee,
+  toggleIsEditing,
   hasSelected,
   SelectedCommitteItems,
   handleSubmit,
   isSubmitting,
-  isValid
+  isValid,
+  isEditing,
+  myApplication,
+  onDeleteApplication
 }) => (
   <PageWrapper>
-    <Title>Skriv din søknad og send inn!</Title>
+    {!isEditing && (
+      <RecieptInfo>
+        <Title>Kvittering for sendt søknad</Title>
+        <RecievedApplicationBanner>
+          Vi har mottatt søknaden din!
+        </RecievedApplicationBanner>
+        <TimeStamp>
+          <Icon name="time" />
+          Søknaden ble sist registrert
+          {myApplication && (
+            <StyledSpan bold>
+              <Moment format="dddd Do MMMM , \k\l. HH:mm:ss">
+                {myApplication.time_sent}
+              </Moment>
+            </StyledSpan>
+          )}
+        </TimeStamp>
+        <LegoButton
+          icon="arrow-forward"
+          iconPrefix="ios"
+          onClick={toggleIsEditing}
+        >
+          Endre søknad
+        </LegoButton>
+        <p>
+          Du kan
+          <StyledSpan bold> endre søknaden</StyledSpan> din frem til{" "}
+          {admission && (
+            <StyledSpan bold red>
+              <Moment format="dddd Do MMMM">
+                {admission.application_deadline}
+              </Moment>
+            </StyledSpan>
+          )}
+        </p>
+        <HelpText>
+          Du kan endre en søknad så mange ganger du vil, og komiteene vil kun se
+          de siste endringene.
+        </HelpText>
+
+        <ConfirmModal
+          title="Slett søknad"
+          message="Er du sikker på at du vil slette søknaden din?"
+          onConfirm={() => onDeleteApplication()}
+        />
+      </RecieptInfo>
+    )}
+    <Title>
+      {isEditing ? "Skriv din søknad og send inn!" : "Innsendt data"}
+    </Title>
     <Form>
       <SeparatorLine />
       <GeneralInfoSection>
@@ -35,7 +89,11 @@ const FormStructure = ({
           Mobilnummeret vil bli brukt til å kalle deg inn på intervju av
           komitéledere.
         </HelpText>
-        <Field name="phoneNumber" component={PhoneNumberField} />
+        <Field
+          name="phoneNumber"
+          component={PhoneNumberField}
+          disabled={!isEditing}
+        />
 
         <HelpText>
           <Icon name="information-circle-outline" />
@@ -47,6 +105,7 @@ const FormStructure = ({
           component={PriorityTextField}
           label="Prioriteringer, og andre kommentarer"
           optional
+          disabled={!isEditing}
         />
       </GeneralInfoSection>
       <SeparatorLine />
@@ -60,11 +119,13 @@ const FormStructure = ({
               kan kun se søknaden til sin egen komité.
             </HelpText>
 
-            <ToggleCommittees
-              committees={committees}
-              selectedCommittees={selectedCommittees}
-              toggleCommittee={toggleCommittee}
-            />
+            {isEditing && (
+              <ToggleCommittees
+                committees={committees}
+                selectedCommittees={selectedCommittees}
+                toggleCommittee={toggleCommittee}
+              />
+            )}
           </div>
         </Sidebar>
         {hasSelected ? (
@@ -75,7 +136,11 @@ const FormStructure = ({
             <NoChosenSubTitle>
               Velg i sidemargen eller gå til komiteoversikten
             </NoChosenSubTitle>
-            <LegoButton icon="arrow-forward" iconPrefix="ios" to="/committees">
+            <LegoButton
+              icon="arrow-forward"
+              iconPrefix="ios"
+              to="/velg-komiteer"
+            >
               Velg komiteer
             </LegoButton>
           </NoChosenCommitteesWrapper>
@@ -83,65 +148,67 @@ const FormStructure = ({
       </CommitteesSection>
       <SeparatorLine />
 
-      <SubmitSection>
-        <div>
-          {admission && (
-            <div>
-              <ApplicationDateInfo>
-                <StyledSpan bold>Søknadsfristen</StyledSpan> er{" "}
-                <StyledSpan bold red>
-                  <Moment format="dddd Do MMMM">
-                    {admission.public_deadline}
-                  </Moment>
-                </StyledSpan>
-                <StyledSpan red>
-                  <Moment format=", \k\l. HH:mm:ss">
-                    {admission.public_deadline}
-                  </Moment>
-                </StyledSpan>
-                .
-              </ApplicationDateInfo>
-              <ApplicationDateInfo>
-                Etter dette kan du <StyledSpan bold>endre den</StyledSpan> frem
-                til{" "}
-                <StyledSpan bold red>
-                  <Moment format="dddd Do MMMM">
-                    {admission.application_deadline}
-                  </Moment>
-                </StyledSpan>
-                <StyledSpan red>
-                  <Moment format=", \k\l. HH:mm:ss">
-                    {admission.application_deadline}
-                  </Moment>
-                </StyledSpan>
-              </ApplicationDateInfo>
-            </div>
+      {isEditing && (
+        <SubmitSection>
+          <div>
+            {admission && (
+              <div>
+                <ApplicationDateInfo>
+                  <StyledSpan bold>Søknadsfristen</StyledSpan> er{" "}
+                  <StyledSpan bold red>
+                    <Moment format="dddd Do MMMM">
+                      {admission.public_deadline}
+                    </Moment>
+                  </StyledSpan>
+                  <StyledSpan red>
+                    <Moment format=", \k\l. HH:mm:ss">
+                      {admission.public_deadline}
+                    </Moment>
+                  </StyledSpan>
+                  .
+                </ApplicationDateInfo>
+                <ApplicationDateInfo>
+                  Etter dette kan du <StyledSpan bold>endre den</StyledSpan>{" "}
+                  frem til{" "}
+                  <StyledSpan bold red>
+                    <Moment format="dddd Do MMMM">
+                      {admission.application_deadline}
+                    </Moment>
+                  </StyledSpan>
+                  <StyledSpan red>
+                    <Moment format=", \k\l. HH:mm:ss">
+                      {admission.application_deadline}
+                    </Moment>
+                  </StyledSpan>
+                </ApplicationDateInfo>
+              </div>
+            )}
+            <SubmitInfo>
+              Oppdateringer etter endringsfristen kan ikke garanteres å bli sett
+              av komiteen(e) du søker deg til.
+            </SubmitInfo>
+            <SubmitInfo>
+              Din søknad til hver komité kan kun ses av den aktuelle komiteen og
+              leder av Abakus. All søknadsinformasjon slettes etter opptaket er
+              gjennomført.
+            </SubmitInfo>
+            <SubmitInfo>Du kan når som helst trekke søknaden din.</SubmitInfo>
+          </div>
+          {hasSelected && (
+            <LegoButton
+              icon="arrow-forward"
+              iconPrefix="ios"
+              onClick={handleSubmit}
+              type="submit"
+              disabled={isSubmitting}
+              valid={isValid}
+              buttonStyle="tertiary"
+            >
+              Send inn søknad
+            </LegoButton>
           )}
-          <SubmitInfo>
-            Oppdateringer etter endringsfristen kan ikke garanteres å bli sett
-            av komiteen(e) du søker deg til.
-          </SubmitInfo>
-          <SubmitInfo>
-            Din søknad til hver komité kan kun ses av den aktuelle komiteen og
-            leder av Abakus. All søknadsinformasjon slettes etter opptaket er
-            gjennomført.
-          </SubmitInfo>
-          <SubmitInfo>Du kan når som helst trekke søknaden din.</SubmitInfo>
-        </div>
-        {hasSelected && (
-          <LegoButton
-            icon="arrow-forward"
-            iconPrefix="ios"
-            onClick={handleSubmit}
-            type="submit"
-            disabled={isSubmitting}
-            valid={isValid}
-            buttonStyle="tertiary"
-          >
-            Send inn søknad
-          </LegoButton>
-        )}
-      </SubmitSection>
+        </SubmitSection>
+      )}
       <ErrorFocus />
     </Form>
   </PageWrapper>
@@ -392,5 +459,55 @@ const NoChosenSubTitle = styled.span`
 
   ${media.portrait`
     margin-bottom: 2rem;
+  `};
+`;
+
+/* Reciept info (in top of page after sending in application) */
+
+const RecieptInfo = styled.div`
+  display: flex;
+  align-items: center;
+  flex-direction: column;
+`;
+
+const RecievedApplicationBanner = styled.div`
+  background: linear-gradient(
+    180deg,
+    rgba(203, 232, 128, 0.97) 0%,
+    #a1c34a 100%
+  );
+  border: 1px solid #809e33;
+  border-radius: 13px;
+  padding: 0.8rem 2rem;
+  color: var(--lego-white);
+  font-weight: 600;
+  font-size: 1.2rem;
+
+  ${media.handheld`
+  font-size: 1rem;
+  `};
+`;
+
+const TimeStamp = styled.p`
+  text-align: center;
+  display: flex;
+  align-items: center;
+  font-size: 1.1rem;
+
+  span {
+    margin-left: 0.3rem;
+  }
+
+  i {
+    margin-right: 1rem;
+    font-size: 1.4rem;
+  }
+
+  ${media.handheld`
+    flex-direction: column;
+    margin-bottom: 2rem;
+    i {
+      display: none;
+    }
   `};
 `;
