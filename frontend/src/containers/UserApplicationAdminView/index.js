@@ -5,6 +5,7 @@ Moment.globalLocale = "nb";
 
 import ApplicationAdminView from "src/components/ApplicationAdminView";
 import CollapseContainer from "src/containers/CollapseContainer";
+import Icon from "src/components/Icon";
 
 import Wrapper from "./Wrapper";
 import Name from "./Name";
@@ -27,7 +28,9 @@ class UserApplicationAdminView extends Component {
       user,
       text,
       committee_applications,
-      time_sent,
+      created_at,
+      updated_at,
+      applied_within_deadline,
       phone_number
     } = this.props;
 
@@ -43,7 +46,9 @@ class UserApplicationAdminView extends Component {
           user.full_name,
           user.email,
           user.username,
-          time_sent,
+          created_at,
+          updated_at,
+          applied_within_deadline,
           text,
           application.committee.name,
           application.text,
@@ -64,7 +69,14 @@ class UserApplicationAdminView extends Component {
   }
 
   render() {
-    const { user, text, time_sent, phone_number } = this.props;
+    const {
+      user,
+      text,
+      created_at,
+      updated_at,
+      applied_within_deadline,
+      phone_number
+    } = this.props;
     const { committeeApplications } = this.state;
     const numApplications = committeeApplications.length;
     const priorityText = text ? text : <i>Ingen kommentarer.</i>;
@@ -75,6 +87,16 @@ class UserApplicationAdminView extends Component {
             <Header>
               <Name>{user.full_name}</Name>
               <NumApplications>
+                {!applied_within_deadline && (
+                  <Icon
+                    name="stopwatch"
+                    iconPrefix="ios"
+                    size="1.5rem"
+                    title="Søkte etter fristen"
+                    color="#c0392b"
+                    padding="0 10px 0 0"
+                  />
+                )}
                 {numApplications} {numApplications == 1 ? "søknad" : "søknader"}
               </NumApplications>
             </Header>
@@ -93,10 +115,18 @@ class UserApplicationAdminView extends Component {
                   <SmallDescription> E-mail </SmallDescription> {user.email}
                 </SmallDescriptionWrapper>
                 <SmallDescriptionWrapper>
-                  <SmallDescription> Sendt </SmallDescription>
-                  <Moment format="dddd Do MMMM, \k\l. HH:mm">
-                    {time_sent}
-                  </Moment>
+                  <div>
+                    <SmallDescription> Sendt </SmallDescription>
+                    <Moment format="dddd Do MMMM, \k\l. HH:mm">
+                      {created_at}
+                    </Moment>
+                  </div>
+                  <div>
+                    <SmallDescription> Oppdatert </SmallDescription>
+                    <Moment format="dddd Do MMMM, \k\l. HH:mm">
+                      {updated_at}
+                    </Moment>
+                  </div>
                 </SmallDescriptionWrapper>
               </Header>
               <PriorityText text={priorityText} />

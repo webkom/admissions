@@ -68,7 +68,6 @@ class UserApplication(TimeStampModel):
     )
     user = models.ForeignKey(LegoUser, on_delete=models.CASCADE)
     text = models.TextField(blank=True)
-    time_sent = models.DateTimeField(editable=False, null=True, default=timezone.now)
     phone_number = models.CharField(max_length=20)
 
     class Meta:
@@ -84,11 +83,11 @@ class UserApplication(TimeStampModel):
 
     @property
     def applied_within_deadline(self):
-        return self.time_sent < self.admission.public_deadline
+        return self.created_at < self.admission.public_deadline
 
     @property
     def sent(self):
-        return bool(self.time_sent)
+        return bool(self.created_at)
 
     def has_committee_application(self, committee):
         return self.committee_applications.filter(committee=committee).exists()

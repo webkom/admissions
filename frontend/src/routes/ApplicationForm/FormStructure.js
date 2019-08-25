@@ -42,7 +42,7 @@ const FormStructure = ({
           {myApplication && (
             <StyledSpan bold>
               <Moment format="dddd Do MMMM , \k\l. HH:mm:ss">
-                {myApplication.time_sent}
+                {myApplication.created_at}
               </Moment>
             </StyledSpan>
           )}
