@@ -1,5 +1,9 @@
 import React, { Component } from "react";
 import styled from "styled-components";
+import Moment from "react-moment";
+import "moment/locale/nb";
+Moment.globalLocale = "nb";
+
 import callApi from "src/utils/callApi";
 
 import djangoData from "src/utils/djangoData";
@@ -23,6 +27,7 @@ class AdminPage extends Component {
       error: null,
       isFetching: true,
       user: { name: "" },
+      admission: null,
       applications: [],
       csvData: [],
       headers: [
@@ -68,17 +73,26 @@ class AdminPage extends Component {
   };
 
   componentDidMount() {
-    callApi("/application/").then(
-      ({ jsonData }) => {
+    Promise.all([callApi("/application/"), callApi("/admission/")])
+      .then(data => {
+        data.map(({ url, jsonData }) => {
+          if (url.includes("/application/")) {
+            this.setState({
+              applications: jsonData
+            });
+          } else if (url.includes("/admission/")) {
+            this.setState({
+              admission: jsonData[0]
+            });
+          }
+        });
         this.setState({
-          applications: jsonData,
           isFetching: false
         });
-      },
-      error => {
+      })
+      .catch(error => {
         this.setState({ error, isFetching: false });
-      }
-    );
+      });
 
     this.setState({
       user: { name: djangoData.user && djangoData.user.full_name }
@@ -86,7 +100,14 @@ class AdminPage extends Component {
   }
 
   render() {
-    const { error, isFetching, applications, csvData, headers } = this.state;
+    const {
+      error,
+      isFetching,
+      admission,
+      applications,
+      csvData,
+      headers
+    } = this.state;
     applications.sort(function(a, b) {
       if (a.user.full_name < b.user.full_name) return -1;
       if (a.user.full_name > b.user.full_name) return 1;
@@ -119,6 +140,26 @@ class AdminPage extends Component {
           <PageTitle>Admin Panel</PageTitle>
           <LinkLink to="/">Gå til forside</LinkLink>
           <Wrapper>
+            <Statistics>
+              <StatisticsWrapper>
+                <StatisticsName>Søknader åpner</StatisticsName>
+                <Moment format="HH:mm:ss dddd Do MMMM">
+                  {admission.open_from}
+                </Moment>
+              </StatisticsWrapper>
+              <StatisticsWrapper>
+                <StatisticsName>Søknadsfrist</StatisticsName>
+                <Moment format="HH:mm:ss dddd Do MMMM">
+                  {admission.public_deadline}
+                </Moment>
+              </StatisticsWrapper>
+              <StatisticsWrapper>
+                <StatisticsName>Redigeringsfrist</StatisticsName>
+                <Moment format="HH:mm:ss dddd Do MMMM">
+                  {admission.application_deadline}
+                </Moment>
+              </StatisticsWrapper>
+            </Statistics>
             <Statistics>
               <StatisticsWrapper>
                 <StatisticsName>Antall søkere</StatisticsName>
