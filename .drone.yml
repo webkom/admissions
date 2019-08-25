@@ -82,5 +82,7 @@ pipeline:
 services:
   database:
     image: postgres:9.5
+    ports:
+      - 5433
     environment:
       - POSTGRES_USER=admissions
