@@ -1,7 +1,7 @@
 from django.conf import settings
 from django.contrib.auth.models import User
 from django.db.models import Prefetch
-from django.http import Http404
+from django.http import HttpResponse
 from django.views.generic.base import TemplateView
 from rest_framework import permissions, status, viewsets
 from rest_framework.decorators import action
@@ -132,4 +132,5 @@ class ApplicationViewSet(viewsets.ModelViewSet):
                 instance = UserApplication.objects.get(user=request.user).delete()
                 return Response(status=status.HTTP_204_NO_CONTENT)
         except UserApplication.DoesNotExist:
-            raise Http404
+            # HTTP 204 No Content
+            return HttpResponse(status=204)
