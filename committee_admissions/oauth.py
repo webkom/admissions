@@ -82,7 +82,6 @@ class LegoOAuth2(BaseOAuth2):
 def parse_group_data(response):
     """ This will parse group data,
     and return a [(group, membership),] structure"""
-    print(response)
     user_memberships = response["memberships"]
     abakus_groups = response["abakusGroups"]
     group_data = []

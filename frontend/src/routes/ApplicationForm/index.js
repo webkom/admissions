@@ -87,7 +87,6 @@ class FormContainer extends Component {
       committees.filter(
         committee => selectedCommittees[committee.name.toLowerCase()]
       ).length >= 1;
-    console.log(isEditingApplication);
     const SelectedCommitteItems = committees
       .filter(committee => selectedCommittees[committee.name.toLowerCase()])
       .map(({ name, response_label }, index) => (

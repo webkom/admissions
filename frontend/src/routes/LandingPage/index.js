@@ -13,6 +13,8 @@ import LandingPageSkeleton from "./LandingPageSkeleton";
 import LandingPageNoAdmission from "./LandingPageNoAdmission";
 import { media } from "src/styles/mediaQueries";
 
+import LoadingBall from "src/components/LoadingBall";
+
 class LandingPage extends Component {
   constructor(props) {
     super(props);
@@ -20,6 +22,7 @@ class LandingPage extends Component {
       results: undefined,
       admission: null,
       error: null,
+      isLoading: true,
       hasSubmitted: false
     };
   }
@@ -28,7 +31,8 @@ class LandingPage extends Component {
     callApi("/admission/").then(
       ({ jsonData: data }) => {
         this.setState({
-          admission: data[0]
+          admission: data[0],
+          isLoading: false
         });
       },
       error => {
@@ -39,16 +43,21 @@ class LandingPage extends Component {
       callApi("/application/mine/").then(
         () =>
           this.setState({
-            hasSubmitted: true
+            hasSubmitted: true,
+            isLoading: false
           }),
         () => this.setState({ hasSubmitted: false })
       );
   }
 
   render() {
-    const { error, admission, hasSubmitted } = this.state;
+    const { error, isLoading, admission, hasSubmitted } = this.state;
     if (error) {
       return <div>Error: {error.message}</div>;
+    }
+
+    if (isLoading) {
+      return <LoadingBall />;
     }
 
     if (!admission) {

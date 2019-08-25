@@ -9,6 +9,8 @@ import CommitteesPage from "src/routes/CommitteesPage";
 import AdminPage from "src/routes/AdminPage";
 import AdminPageAbakusLeaderView from "src/routes/AdminPageAbakusLeaderView";
 
+import LoadingBall from "src/components/LoadingBall";
+
 import Raven from "raven-js";
 import NavBar from "src/components/NavBar";
 
@@ -20,6 +22,7 @@ class ApplicationPortal extends Component {
       results: undefined,
       committees: [],
       error: null,
+      isFetching: true,
       myApplication: undefined,
       selectedCommittees: {},
       user: null,
@@ -84,11 +87,12 @@ class ApplicationPortal extends Component {
     callApi("/committee/").then(
       ({ jsonData }) => {
         this.setState({
-          committees: jsonData
+          committees: jsonData,
+          isFetching: false
         });
       },
       error => {
-        this.setState({ error });
+        this.setState({ error, isFetching: false });
       }
     );
     djangoData.user &&
@@ -118,41 +122,43 @@ class ApplicationPortal extends Component {
   }
 
   render() {
-    const { error, user, isEditingApplication } = this.state;
+    const { error, isFetching, user, isEditingApplication } = this.state;
     const { location } = this.props;
 
     if (!user) {
       return null;
+    } else if (error) {
+      return <div>Error: {error.message}</div>;
+    } else if (isFetching) {
+      return <LoadingBall />;
+    } else {
+      return (
+        <PageWrapper>
+          <NavBar user={user} isEditing={isEditingApplication} />
+          <ContentContainer>
+            {location.pathname.startsWith("/velg-komiteer") && (
+              <CommitteesPage
+                {...this.state}
+                toggleCommittee={this.toggleCommittee}
+              />
+            )}
+            {location.pathname.startsWith("/min-soknad") && (
+              <ApplicationForm
+                {...this.state}
+                toggleCommittee={this.toggleCommittee}
+                toggleIsEditing={this.toggleIsEditing}
+              />
+            )}
+            {location.pathname.startsWith("/admin") &&
+              (user.is_superuser ? (
+                <AdminPageAbakusLeaderView {...this.state} />
+              ) : (
+                <AdminPage {...this.state} />
+              ))}
+          </ContentContainer>
+        </PageWrapper>
+      );
     }
-
-    return error ? (
-      <div>Error: {error.message}</div>
-    ) : (
-      <PageWrapper>
-        <NavBar user={user} isEditing={isEditingApplication} />
-        <ContentContainer>
-          {location.pathname.startsWith("/velg-komiteer") && (
-            <CommitteesPage
-              {...this.state}
-              toggleCommittee={this.toggleCommittee}
-            />
-          )}
-          {location.pathname.startsWith("/min-soknad") && (
-            <ApplicationForm
-              {...this.state}
-              toggleCommittee={this.toggleCommittee}
-              toggleIsEditing={this.toggleIsEditing}
-            />
-          )}
-          {location.pathname.startsWith("/admin") &&
-            (user.is_superuser ? (
-              <AdminPageAbakusLeaderView {...this.state} />
-            ) : (
-              <AdminPage {...this.state} />
-            ))}
-        </ContentContainer>
-      </PageWrapper>
-    );
   }
 }
 
