@@ -51,6 +51,14 @@ class ApplicationPortal extends Component {
       }),
       () => {
         this.persistState();
+        callApi("/application/mine/").then(({ jsonData }) =>
+          this.setState({
+            myApplication: jsonData,
+            selectedCommittees: jsonData.committee_applications
+              .map(a => a.committee.name.toLowerCase())
+              .reduce((obj, a) => ({ ...obj, [a]: true }), {})
+          })
+        );
       }
     );
   };
