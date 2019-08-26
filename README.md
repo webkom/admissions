@@ -39,7 +39,7 @@ The `.env` file with secret keys is not included, but an `example.env` file has 
 ```sh
 AUTH_LEGO_KEY="INSERT KEY"
 AUTH_LEGO_SECRET="INSERT SECRET"
-AUTH_LEGO_API_URL="https://lego.abakus.no"
+AUTH_LEGO_API_URL="https://lego-staging.abakus.no"
 ```
 
 Now migrate the database and install frontend dependencies:
