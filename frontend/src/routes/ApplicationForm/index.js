@@ -39,6 +39,7 @@ class FormContainer extends Component {
       method: "DELETE"
     }).then(() => {
       this.props.toggleIsEditing();
+      sessionStorage.clear();
       window.location = "/";
     });
   };
