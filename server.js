@@ -12,9 +12,9 @@ new WebpackDevServer(webpack(config), {
   inline: true,
   historyApiFallback: true,
   headers: { "Access-Control-Allow-Origin": "*" }
-}).listen(3000, "0.0.0.0", function(err) {
+}).listen(5001, "0.0.0.0", function(err) {
   if (err) {
     console.PluginError(err);
   }
-  console.log("Webpack HMR listening on port 0.0.0.0:3000");
+  console.log("Webpack HMR listening on port 5001");
 });

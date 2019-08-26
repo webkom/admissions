@@ -21,7 +21,7 @@ module.exports = {
         app: [
           "babel-polyfill",
           "whatwg-fetch",
-          "webpack-dev-server/client?http://localhost:3000",
+          "webpack-dev-server/client?http://127.0.0.1:5001",
           "webpack/hot/only-dev-server",
           "./frontend/src/index"
         ],
@@ -39,7 +39,7 @@ module.exports = {
     filename: "[name]-[hash].js",
     publicPath: isProduction
       ? "/static/bundles/"
-      : "http://localhost:3000/static/bundles/" // Use hot-reloading in DEV, otherwise hosted by django
+      : "http://127.0.0.1:5001/static/bundles/" // Use hot-reloading in DEV, otherwise hosted by django
   },
   devtool: isProduction ? "source-map" : "cheap-module-eval-source-map",
   optimization: {
