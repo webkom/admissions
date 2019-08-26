@@ -1,7 +1,10 @@
 import React from "react";
 import Collapse from "react-collapse";
 
+import Icon from "src/components/Icon";
+
 import Header from "./Header";
+import DropDownIcon from "./DropDownIcon";
 import CollapseButton from "./CollapseButton";
 import Wrapper from "./Wrapper";
 import HeaderWrapper from "./HeaderWrapper";
@@ -26,7 +29,16 @@ class CollapseContainer extends React.PureComponent {
       <Wrapper>
         <CollapseButton key="btn" onClick={() => this.toggleView()}>
           <HeaderWrapper>
-            <Header transform="uppercase">{header}</Header>
+            <HeaderWrapper>
+              <Header transform="uppercase">{header}</Header>
+            </HeaderWrapper>
+            <DropDownIcon>
+              <Icon
+                name={isOpened ? "arrow-dropup" : "arrow-dropdown"}
+                iconPrefix="ios"
+                size="1.5rem"
+              />
+            </DropDownIcon>
           </HeaderWrapper>
         </CollapseButton>
         <Collapse key="container" isOpened={isOpened}>

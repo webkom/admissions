@@ -43,7 +43,9 @@ class AdminPage extends Component {
         { label: "Mobilnummer", key: "phoneNumber" },
         { label: "Email", key: "email" },
         { label: "Username", key: "username" },
-        { label: "Tid sendt", key: "timeSent" }
+        { label: "Søkt innen frist", key: "appliedWithinDeadline" },
+        { label: "Tid sendt", key: "createdAt" },
+        { label: "Tid oppdatert", key: "updatedAt" }
       ],
       committeeNames: {
         webkom: "Webkom",
@@ -62,7 +64,9 @@ class AdminPage extends Component {
     name,
     email,
     username,
-    timeSent,
+    createdAt,
+    updatedAt,
+    appliedWithinDeadline,
     applicationText,
     phoneNumber
   ) => {
@@ -71,12 +75,14 @@ class AdminPage extends Component {
       csvData: [
         ...prevState.csvData,
         {
-          name: name,
-          email: email,
-          username: username,
-          applicationText: applicationText,
-          timeSent: timeSent,
-          phoneNumber: phoneNumber
+          name,
+          email,
+          username,
+          applicationText,
+          createdAt,
+          updatedAt,
+          appliedWithinDeadline,
+          phoneNumber
         }
       ]
     }));

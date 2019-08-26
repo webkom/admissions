@@ -5,6 +5,7 @@ Moment.globalLocale = "nb";
 
 import djangoData from "src/utils/djangoData";
 
+import Icon from "src/components/Icon";
 import Application from "src/components/Application";
 import CollapseContainer from "src/containers/CollapseContainer";
 
@@ -26,7 +27,9 @@ class UserApplication extends Component {
     const {
       user,
       committee_applications,
-      time_sent,
+      created_at,
+      updated_at,
+      applied_within_deadline,
       phone_number
     } = this.props;
 
@@ -40,7 +43,9 @@ class UserApplication extends Component {
             user.full_name,
             user.email,
             user.username,
-            time_sent,
+            created_at,
+            updated_at,
+            applied_within_deadline,
             application.text,
             phone_number
           );
@@ -59,7 +64,13 @@ class UserApplication extends Component {
   }
 
   render() {
-    const { user, time_sent, phone_number } = this.props;
+    const {
+      user,
+      created_at,
+      updated_at,
+      applied_within_deadline,
+      phone_number
+    } = this.props;
     const { committeeApplications } = this.state;
     return (
       <Wrapper>
@@ -67,6 +78,16 @@ class UserApplication extends Component {
           header={
             <Header>
               <Name>{user.full_name}</Name>
+              {!applied_within_deadline && (
+                <Icon
+                  name="stopwatch"
+                  iconPrefix="ios"
+                  size="1.5rem"
+                  title="Søkte etter fristen"
+                  color="#c0392b"
+                  padding="0 10px 0 0"
+                />
+              )}
             </Header>
           }
           content={
@@ -83,10 +104,18 @@ class UserApplication extends Component {
                   <SmallDescription> E-mail </SmallDescription> {user.email}
                 </SmallDescriptionWrapper>
                 <SmallDescriptionWrapper>
-                  <SmallDescription> Sendt </SmallDescription>
-                  <Moment format="dddd Do MMMM, \k\l. HH:mm">
-                    {time_sent}
-                  </Moment>
+                  <div>
+                    <SmallDescription> Sendt </SmallDescription>
+                    <Moment format="dddd Do MMMM, \k\l. HH:mm">
+                      {created_at}
+                    </Moment>
+                  </div>
+                  <div>
+                    <SmallDescription> Oppdatert </SmallDescription>
+                    <Moment format="dddd Do MMMM, \k\l. HH:mm">
+                      {updated_at}
+                    </Moment>
+                  </div>
                 </SmallDescriptionWrapper>
               </Header>
               {committeeApplications}

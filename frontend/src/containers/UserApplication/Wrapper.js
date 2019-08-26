@@ -3,8 +3,8 @@ import { media } from "src/styles/mediaQueries";
 
 const Wrapper = styled.div`
   background: #eae9e8c7;
-  border-top: 4px solid #c0392b;
-  padding: 1em 2em;
+  border: 2px solid #c0392b;
+  margin-bottom: 10px;
 
   &: nth-child(odd) {
     background: #d8d8d88a;

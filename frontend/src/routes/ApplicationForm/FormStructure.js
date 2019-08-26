@@ -38,11 +38,11 @@ const FormStructure = ({
         </RecievedApplicationBanner>
         <TimeStamp>
           <Icon name="time" />
-          Søknaden ble sist registrert
+          Søknaden ble sist oppdatert
           {myApplication && (
             <StyledSpan bold>
               <Moment format="dddd Do MMMM , \k\l. HH:mm:ss">
-                {myApplication.time_sent}
+                {myApplication.updated_at}
               </Moment>
             </StyledSpan>
           )}

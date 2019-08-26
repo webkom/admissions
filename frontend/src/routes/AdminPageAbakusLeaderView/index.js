@@ -38,7 +38,9 @@ class AdminPage extends Component {
         { label: "Email", key: "email" },
         { label: "Mobilnummer", key: "phoneNumber" },
         { label: "Username", key: "username" },
-        { label: "Tid sendt", key: "timeSent" }
+        { label: "Søkt innen frist", key: "appliedWithinDeadline" },
+        { label: "Tid sendt", key: "createdAt" },
+        { label: "Tid oppdatert", key: "updatedAt" }
       ]
     };
   }
@@ -47,7 +49,9 @@ class AdminPage extends Component {
     name,
     email,
     username,
-    timeSent,
+    createdAt,
+    updatedAt,
+    appliedWithinDeadline,
     priorityText,
     committee,
     committeeApplicationText,
@@ -58,15 +62,17 @@ class AdminPage extends Component {
       csvData: [
         ...prevState.csvData,
         {
-          name: name,
-          email: email,
-          username: username,
+          name,
+          email,
+          username,
+          createdAt,
+          updatedAt,
+          appliedWithinDeadline,
           priorityText:
             priorityText != "" ? priorityText : "Ingen prioriteringer",
-          committee: committee,
-          committeeApplicationText: committeeApplicationText,
-          timeSent: timeSent,
-          phoneNumber: phoneNumber
+          committee,
+          committeeApplicationText,
+          phoneNumber
         }
       ]
     }));
