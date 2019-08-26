@@ -12,6 +12,7 @@ import LegoButton from "src/components/LegoButton";
 import LandingPageSkeleton from "./LandingPageSkeleton";
 import LandingPageNoAdmission from "./LandingPageNoAdmission";
 import { media } from "src/styles/mediaQueries";
+import AdmissionCountDown from "../../components/AdmissionCountDown";
 
 import LoadingBall from "src/components/LoadingBall";
 
@@ -121,6 +122,9 @@ class LandingPage extends Component {
             </li>
           )}
         </LinkWrapper>
+        {!admission.is_open && (
+          <AdmissionCountDown endTime={admission.open_from} />
+        )}
       </LandingPageSkeleton>
     );
   }
@@ -208,7 +212,7 @@ const Notice = styled.p`
 
 const LinkWrapper = styled.ul`
   margin-top: 1.5rem;
-  margin-bottom: 4rem;
+  margin-bottom: 1rem;
   display: flex;
   flex-direction: column;
   align-items: center;

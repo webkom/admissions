@@ -19,6 +19,7 @@
     "babel-polyfill": "^6.26.0",
     "intl": "1.2.5",
     "js-cookie": "^2.2.0",
+    "moment-timezone": "^0.5.26",
     "raven-js": "^3.26.4",
     "react": "^16.9.0",
     "react-csv": "^1.0.14",
