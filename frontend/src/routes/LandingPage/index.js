@@ -141,7 +141,7 @@ class LandingPage extends Component {
             </li>
           )}
         </LinkWrapper>
-        {admission.is_open && (
+        {!admission.is_open && (
           <AdmissionCountDown endTime={admission.open_from} />
         )}
       </LandingPageSkeleton>
