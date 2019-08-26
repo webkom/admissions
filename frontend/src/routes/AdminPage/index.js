@@ -9,6 +9,7 @@ import { media } from "src/styles/mediaQueries";
 
 import UserApplication from "src/containers/UserApplication";
 import TextAreaField from "src/components/TextAreaField";
+import LoadingBall from "src/components/LoadingBall";
 
 import CSRFToken from "./csrftoken";
 
@@ -35,6 +36,7 @@ class AdminPage extends Component {
       user: { name: "" },
       applications: [],
       csvData: [],
+      isFetching: true,
       headers: [
         { label: "Full Name", key: "name" },
         { label: "Søknadstekst", key: "applicationText" },
@@ -84,11 +86,12 @@ class AdminPage extends Component {
     callApi("/application/").then(
       ({ jsonData }) => {
         this.setState({
-          applications: jsonData
+          applications: jsonData,
+          isFetching: false
         });
       },
       error => {
-        this.setState({ error });
+        this.setState({ error, isFetching: false });
       }
     );
 
@@ -99,7 +102,7 @@ class AdminPage extends Component {
   }
 
   render() {
-    const { error, applications, csvData, headers } = this.state;
+    const { error, isFetching, applications, csvData, headers } = this.state;
 
     applications.sort(function(a, b) {
       if (a.user.full_name < b.user.full_name) return -1;
@@ -139,6 +142,8 @@ class AdminPage extends Component {
 
     if (error) {
       return <div>Error: {error.message}</div>;
+    } else if (isFetching) {
+      return <LoadingBall />;
     } else {
       return (
         <PageWrapper>

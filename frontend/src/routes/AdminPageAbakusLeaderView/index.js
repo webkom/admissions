@@ -6,6 +6,7 @@ import djangoData from "src/utils/djangoData";
 import UserApplicationAdminView from "src/containers/UserApplicationAdminView";
 import { media } from "src/styles/mediaQueries";
 
+import LoadingBall from "src/components/LoadingBall";
 import Wrapper from "./Wrapper";
 import LinkLink from "./LinkLink";
 import CSVExport from "./CSVExport";
@@ -20,6 +21,7 @@ class AdminPage extends Component {
     this.state = {
       results: undefined,
       error: null,
+      isFetching: true,
       user: { name: "" },
       applications: [],
       csvData: [],
@@ -69,11 +71,12 @@ class AdminPage extends Component {
     callApi("/application/").then(
       ({ jsonData }) => {
         this.setState({
-          applications: jsonData
+          applications: jsonData,
+          isFetching: false
         });
       },
       error => {
-        this.setState({ error });
+        this.setState({ error, isFetching: false });
       }
     );
 
@@ -83,7 +86,7 @@ class AdminPage extends Component {
   }
 
   render() {
-    const { error, applications, csvData, headers } = this.state;
+    const { error, isFetching, applications, csvData, headers } = this.state;
     applications.sort(function(a, b) {
       if (a.user.full_name < b.user.full_name) return -1;
       if (a.user.full_name > b.user.full_name) return 1;
@@ -108,6 +111,8 @@ class AdminPage extends Component {
 
     if (error) {
       return <div>Error: {error.message}</div>;
+    } else if (isFetching) {
+      return <LoadingBall />;
     } else {
       return (
         <PageWrapper>
