@@ -6,17 +6,17 @@ Recruitment for Abakom.
 
 ## Runnings LEGO and this repository in parallel
 
-> When working in development you want to have LEGO running (both frontend and backend). This allows you to create a oAuth application from the settings menu in the webapp.
+> When working in development you want to have LEGO running (both frontend and backend). This allows you to create an OAuth2 application from the settings menu in the webapp.
 
 You need a total of **4 terminals**(or shells if you like).
 
 ### Terminal 1
 
-Run LEGO by following the [README here](https://github.com/webkom/lego/blob/master/README.md)
+Run LEGO by following the [README here](https://github.com/webkom/lego#readme)
 
 ### Terminal 2
 
-Run LEGO-WEBAPP by following the [README here](https://github.com/webkom/lego-webapp/blob/master/README.md)
+Run LEGO-WEBAPP by following the [README here](https://github.com/webkom/lego-webapp#readme)
 
 ### Terminal 3
 
@@ -31,7 +31,7 @@ $ source venv/bin/activate
 $ make dev_settings
 ```
 
-The `docker-compose.yml` file provides a `postgresql` database. This uses a different port then LEGO, so you can run it in parallel.
+The `docker-compose.yml` file provides a `postgresql` database. This uses a different port than LEGO, so you can run it in parallel.
 
 ```sh
 $ docker-compose up -d
@@ -50,26 +50,28 @@ $ pip install pip-tools
 $ pip-sync requirements/development.txt
 ```
 
-The `.env` file with secret keys is not included, but an `example.env` file has been provided in `./committe_admissions/settings`, so that you can simply rename the file and fill in the values. The secrets can be found at **localhost:3000** in the user settings menu after creating an application there. The project will not run without setting these variables.
+The `.env` file with secret keys is not included, but an `example.env` file has been provided in `./committe_admissions/settings`, so that you can simply rename the file and fill in the values.
+
+The secrets can be found at **localhost:3000** in the user settings menu after creating an OAuth2 app there. In the form enter `http://127.0.0.1:5000/complete/lego/` as the redirect url.
 
 ```sh
 # Create a copy of the example env file (run from the root of the project)
 $ cp /committee_admissions/settings/example.env /committee_admissions/settings/.env
 
 # Edit the file and change the KEY and SECRET
-AUTH_LEGO_KEY="Client ID from oAuth"
-AUTH_LEGO_SECRET="Client Secret from oAuth"
+AUTH_LEGO_KEY="Client ID from OAuth2"
+AUTH_LEGO_SECRET="Client Secret from OAuth2"
 AUTH_LEGO_API_URL="http://localhost:8000/"
 ```
 
-Now you are ready to create some fixtures, migrate the database and run the server.
+Now you are ready to migrate the database, create some fixtures, and run the server.
 
 ```sh
-# Create a custom admission for development
-$ python manage.py create_admission
-
 # Migrate the database migrations
 $ python manage.py migrate
+
+# Create a custom admission for development
+$ python manage.py create_admission
 
 # Run the Django server
 $ python manage.py runserver
@@ -88,6 +90,8 @@ $ yarn
 # Start the dev-server
 $ yarn watch
 ```
+
+> Now you are ready, go to 127.0.0.1:5000
 
 ## Requirements
 

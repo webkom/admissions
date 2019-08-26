@@ -1,12 +1,11 @@
+from django.core.management.commands.runserver import Command as runserver
+
 from .base import *
 
 # GENERAL CONFIGURATION =======================================================
 DEBUG = True
-if DEBUG:
-    # Override default port for `runserver` command
-    from django.core.management.commands.runserver import Command as runserver
-    runserver.default_port = "5000"
 SECRET_KEY = "secretkeythatisnotsosecret"
+runserver.default_port = "5000"
 
 # DATABASE CONFIGURATION ======================================================
 DATABASES = {
