@@ -4,7 +4,23 @@
 
 Recruitment for Abakom.
 
-## Setup project
+## Runnings LEGO and this repository in parallel
+
+> When working in development you want to have LEGO running (both frontend and backend). This allows you to create an OAuth2 application from the settings menu in the webapp.
+
+You need a total of **4 terminals**(or shells if you like).
+
+### Terminal 1
+
+Run LEGO by following the [README here](https://github.com/webkom/lego#readme)
+
+### Terminal 2
+
+Run LEGO-WEBAPP by following the [README here](https://github.com/webkom/lego-webapp#readme)
+
+### Terminal 3
+
+Run the committe_admissions backend by doing the following:
 
 Running the backend requires Python 3.6 and a `postgresql` database. The frontend requires `Node`. We recommend using
 a virtual environment. Create a `venv` in root using
@@ -15,7 +31,7 @@ $ source venv/bin/activate
 $ make dev_settings
 ```
 
-The `docker-compose.yml` file provides a `postgresql` database with correct config with the command
+The `docker-compose.yml` file provides a `postgresql` database. This uses a different port than LEGO, so you can run it in parallel.
 
 ```sh
 $ docker-compose up -d
@@ -34,37 +50,48 @@ $ pip install pip-tools
 $ pip-sync requirements/development.txt
 ```
 
-The `.env` file with secret keys is not included, but an `example.env` file has been provided in `./committe_admissions/settings`, so that you can simply rename the file and fill in the values. The secrets can be found at abakus.no after creating an application there. The project will not run without setting these variables.
+The `.env` file with secret keys is not included, but an `example.env` file has been provided in `./committe_admissions/settings`, so that you can simply rename the file and fill in the values.
+
+The secrets can be found at **localhost:3000** in the user settings menu after creating an OAuth2 app there. In the form enter `http://127.0.0.1:5000/complete/lego/` as the redirect url.
 
 ```sh
-AUTH_LEGO_KEY="INSERT KEY"
-AUTH_LEGO_SECRET="INSERT SECRET"
-AUTH_LEGO_API_URL="https://lego-staging.abakus.no"
+# Create a copy of the example env file (run from the root of the project)
+$ cp /committee_admissions/settings/example.env /committee_admissions/settings/.env
+
+# Edit the file and change the KEY and SECRET
+AUTH_LEGO_KEY="Client ID from OAuth2"
+AUTH_LEGO_SECRET="Client Secret from OAuth2"
+AUTH_LEGO_API_URL="http://localhost:8000/"
 ```
 
-Now migrate the database and install frontend dependencies:
+Now you are ready to migrate the database, create some fixtures, and run the server.
 
 ```sh
+# Migrate the database migrations
 $ python manage.py migrate
-$ yarn
+
+# Create a custom admission for development
+$ python manage.py create_admission
+
+# Run the Django server
+$ python manage.py runserver
 ```
 
-Now, you need two terminals to run this project, one for frontend and one for backend. Make sure the backend one has activated the virtualenv.
+> If coding over long periods of time, simply flush the db with `python manage.py flush` and run the server again.
 
-These are the start commands:
+### Terminal 4
+
+In the last terminal you are ready to start the frontend. Simply install the requirement and run the dev-server.
 
 ```sh
-$ python manage.py runserver
+# Install dependencies
+$ yarn
+
+# Start the dev-server
 $ yarn watch
 ```
 
-To populate the database with data for development, we use a custom command for creating an admission.
-
-```sh
-$ python manage.py create_admission
-```
-
-If coding over long periods of time, you want to update the dates that the admission is open (since it will eventually close). Either do it manually from shell, or simply flush the db (`python manage.py flush`) and run the above command again.
+> Now you are ready, go to 127.0.0.1:5000
 
 ## Requirements
 
