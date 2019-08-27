@@ -3,7 +3,7 @@ import Application from "./Application";
 
 class CommitteeApplication extends Component {
   componentDidMount() {
-    this.initializeValue();
+    setTimeout(this.initializeValue, 0);
   }
 
   initializeValue = () => {
@@ -15,7 +15,7 @@ class CommitteeApplication extends Component {
 
     if (restoredApplicationText != null && restoredApplicationText[committee]) {
       this.props.form.setFieldValue(
-        `${committee}`,
+        committee,
         restoredApplicationText[committee]
       );
     }
