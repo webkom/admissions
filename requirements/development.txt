@@ -19,7 +19,7 @@ django-debug-toolbar==2.0
 django-environ==0.4.5
 django-extensions==2.2.1
 django-webpack-loader==0.6.0
-django==2.2.4
+django==2.2.8
 djangorestframework==3.10.2
 entrypoints==0.3          # via flake8
 factory-boy==2.12.0
@@ -70,4 +70,4 @@ wcwidth==0.1.7            # via prompt-toolkit
 zipp==0.5.2               # via importlib-metadata
 
 # The following packages are considered to be unsafe in a requirements file:
-# setuptools==41.1.0        # via ipython
+# setuptools
