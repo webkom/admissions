@@ -8,3 +8,4 @@ services:
       - '127.0.0.1:5433:5432'
     environment:
       - POSTGRES_USER=admissions
+      - POSTGRES_HOST_AUTH_METHOD=trust

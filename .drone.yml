@@ -59,6 +59,8 @@ steps:
     image: abakus/lego-testbase
     when:
       event: push
+    depends_on:
+      - tests
     environment:
       LANG: C.UTF-8
       DATABASE: database
