@@ -11,6 +11,6 @@ DATABASES = {
         "USER": "admissions",
         "PASSWORD": "",
         "HOST": os.environ.get("DATABASE") or "127.0.0.1",
-        "PORT": "5432",
+        "PORT": os.environ.get("DATABASE_PORT") or "5432",
     }
 }
