@@ -140,5 +140,5 @@ $ make fixme
 To check if it is formatted properly, run:
 
 ```bash
-$ tox -e isort -e flake8 -e black
+$ DATABASE_PORT=5433 tox -e isort -e flake8 -e black
 ```
