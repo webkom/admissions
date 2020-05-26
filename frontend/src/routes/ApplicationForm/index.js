@@ -34,6 +34,11 @@ class FormContainer extends Component {
     this.props.toggleCommittee(name.toLowerCase());
   };
 
+  onCancelEdit = () => {
+    this.props.toggleIsEditing();
+    this.props.handleReset();
+  };
+
   onDeleteApplication = () => {
     callApi("/application/mine/", {
       method: "DELETE"
@@ -119,6 +124,7 @@ class FormContainer extends Component {
         isEditing={isEditingApplication}
         myApplication={myApplication}
         onDeleteApplication={this.onDeleteApplication}
+        onCancel={this.onCancelEdit}
       />
     );
   }

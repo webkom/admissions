@@ -27,7 +27,8 @@ const FormStructure = ({
   isValid,
   isEditing,
   myApplication,
-  onDeleteApplication
+  onDeleteApplication,
+  onCancel
 }) => (
   <PageWrapper>
     {!isEditing && (
@@ -195,17 +196,28 @@ const FormStructure = ({
             <SubmitInfo>Du kan når som helst trekke søknaden din.</SubmitInfo>
           </div>
           {hasSelected && (
-            <LegoButton
-              icon="arrow-forward"
-              iconPrefix="ios"
-              onClick={handleSubmit}
-              type="submit"
-              disabled={isSubmitting}
-              valid={isValid}
-              buttonStyle="tertiary"
-            >
-              Send inn søknad
-            </LegoButton>
+            <div>
+              <LegoButton
+                icon="arrow-forward"
+                iconPrefix="ios"
+                onClick={handleSubmit}
+                type="submit"
+                disabled={isSubmitting}
+                valid={isValid}
+                buttonStyle="tertiary"
+              >
+                Send inn søknad
+              </LegoButton>
+              <LegoButton
+                icon="arrow-back"
+                iconPrefix="ios"
+                onClick={onCancel}
+                valid={isValid}
+                buttonStyle="tertiary"
+              >
+                Avbryt
+              </LegoButton>
+            </div>
           )}
         </SubmitSection>
       )}
