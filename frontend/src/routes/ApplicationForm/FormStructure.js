@@ -78,9 +78,24 @@ const FormStructure = ({
         />
       </RecieptInfo>
     )}
-    <Title>
-      {isEditing ? "Skriv din søknad og send inn!" : "Innsendt data"}
-    </Title>
+    <FormHeader>
+      <Title>
+        {isEditing ? "Skriv din søknad og send inn!" : "Innsendt data"}
+      </Title>
+      {isEditing && (
+        <CancelButtonContainer>
+          <LegoButton
+            icon="arrow-back"
+            iconPrefix="ios"
+            onClick={onCancel}
+            valid={isValid}
+            buttonStyle="primary"
+          >
+            Avbryt
+          </LegoButton>
+        </CancelButtonContainer>
+      )}
+    </FormHeader>
     <Form>
       <SeparatorLine />
       <GeneralInfoSection>
@@ -208,15 +223,6 @@ const FormStructure = ({
               >
                 Send inn søknad
               </LegoButton>
-              <LegoButton
-                icon="arrow-back"
-                iconPrefix="ios"
-                onClick={onCancel}
-                valid={isValid}
-                buttonStyle="tertiary"
-              >
-                Avbryt
-              </LegoButton>
             </div>
           )}
         </SubmitSection>
@@ -269,6 +275,26 @@ const SeparatorLine = styled.div`
   display: block;
   background: var(--lego-gray-medium);
   height: 1px;
+`;
+
+const FormHeader = styled.div`
+  display: flex;
+  justify-content: space-between;
+  width: 750px;
+  margin: 1em 0 1em 0;
+
+  ${media.handheld`
+    max-width: 100%;
+    margin-bottom: 1em;
+    flex-direction: column;
+  `};
+`;
+
+const CancelButtonContainer = styled.div`
+  display: flex;
+  align-items: center;
+  ${media.handheld`
+  justify-content: center;`};
 `;
 
 /* General info section, mobile number, priorities */
