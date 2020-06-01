@@ -30,7 +30,7 @@
     "react-truncate": "^2.3.0",
     "recompose": "^0.30.0",
     "reselect": "3.0.1",
-    "sanitize.css": "10.0.0",
+    "sanitize.css": "11.0.1",
     "styled-components": "4.3.2",
     "whatwg-fetch": "^2.0.4"
   },
