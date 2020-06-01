@@ -13,6 +13,7 @@ import PriorityTextField from "./PriorityTextField";
 import PhoneNumberField from "./PhoneNumberField";
 import ToggleCommittees from "./ToggleCommittees";
 import ErrorFocus from "./ErrorFocus";
+import djangoData from "src/utils/djangoData";
 
 const FormStructure = ({
   admission,
@@ -82,7 +83,7 @@ const FormStructure = ({
       <Title>
         {isEditing ? "Skriv din søknad og send inn!" : "Innsendt data"}
       </Title>
-      {isEditing && (
+      {isEditing && djangoData.user.has_application && (
         <CancelButtonContainer>
           <LegoButton
             icon="arrow-back"

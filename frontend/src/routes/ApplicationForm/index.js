@@ -181,6 +181,7 @@ const ApplicationForm = withFormik({
       .then(() => {
         setSubmitting(false);
         toggleIsEditing();
+        window.__DJANGO__.user.has_application = true;
       })
       .catch(err => {
         alert("Det skjedde en feil.... ");
