@@ -34,6 +34,11 @@ class FormContainer extends Component {
     this.props.toggleCommittee(name.toLowerCase());
   };
 
+  onCancelEdit = () => {
+    this.props.toggleIsEditing();
+    this.props.handleReset();
+  };
+
   onDeleteApplication = () => {
     callApi("/application/mine/", {
       method: "DELETE"
@@ -119,6 +124,7 @@ class FormContainer extends Component {
         isEditing={isEditingApplication}
         myApplication={myApplication}
         onDeleteApplication={this.onDeleteApplication}
+        onCancel={this.onCancelEdit}
       />
     );
   }
@@ -175,6 +181,7 @@ const ApplicationForm = withFormik({
       .then(() => {
         setSubmitting(false);
         toggleIsEditing();
+        window.__DJANGO__.user.has_application = true;
       })
       .catch(err => {
         alert("Det skjedde en feil.... ");

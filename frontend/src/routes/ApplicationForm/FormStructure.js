@@ -13,6 +13,7 @@ import PriorityTextField from "./PriorityTextField";
 import PhoneNumberField from "./PhoneNumberField";
 import ToggleCommittees from "./ToggleCommittees";
 import ErrorFocus from "./ErrorFocus";
+import djangoData from "src/utils/djangoData";
 
 const FormStructure = ({
   admission,
@@ -27,7 +28,8 @@ const FormStructure = ({
   isValid,
   isEditing,
   myApplication,
-  onDeleteApplication
+  onDeleteApplication,
+  onCancel
 }) => (
   <PageWrapper>
     {!isEditing && (
@@ -77,9 +79,24 @@ const FormStructure = ({
         />
       </RecieptInfo>
     )}
-    <Title>
-      {isEditing ? "Skriv din søknad og send inn!" : "Innsendt data"}
-    </Title>
+    <FormHeader>
+      <Title>
+        {isEditing ? "Skriv din søknad og send inn!" : "Innsendt data"}
+      </Title>
+      {isEditing && djangoData.user.has_application && (
+        <CancelButtonContainer>
+          <LegoButton
+            icon="arrow-back"
+            iconPrefix="ios"
+            onClick={onCancel}
+            valid={isValid}
+            buttonStyle="primary"
+          >
+            Avbryt
+          </LegoButton>
+        </CancelButtonContainer>
+      )}
+    </FormHeader>
     <Form>
       <SeparatorLine />
       <GeneralInfoSection>
@@ -195,17 +212,19 @@ const FormStructure = ({
             <SubmitInfo>Du kan når som helst trekke søknaden din.</SubmitInfo>
           </div>
           {hasSelected && (
-            <LegoButton
-              icon="arrow-forward"
-              iconPrefix="ios"
-              onClick={handleSubmit}
-              type="submit"
-              disabled={isSubmitting}
-              valid={isValid}
-              buttonStyle="tertiary"
-            >
-              Send inn søknad
-            </LegoButton>
+            <div>
+              <LegoButton
+                icon="arrow-forward"
+                iconPrefix="ios"
+                onClick={handleSubmit}
+                type="submit"
+                disabled={isSubmitting}
+                valid={isValid}
+                buttonStyle="tertiary"
+              >
+                Send inn søknad
+              </LegoButton>
+            </div>
           )}
         </SubmitSection>
       )}
@@ -257,6 +276,26 @@ const SeparatorLine = styled.div`
   display: block;
   background: var(--lego-gray-medium);
   height: 1px;
+`;
+
+const FormHeader = styled.div`
+  display: flex;
+  justify-content: space-between;
+  width: 750px;
+  margin: 1em 0 1em 0;
+
+  ${media.handheld`
+    max-width: 100%;
+    margin-bottom: 1em;
+    flex-direction: column;
+  `};
+`;
+
+const CancelButtonContainer = styled.div`
+  display: flex;
+  align-items: center;
+  ${media.handheld`
+  justify-content: center;`};
 `;
 
 /* General info section, mobile number, priorities */
