@@ -82,8 +82,8 @@ steps:
       - black
       - coverage
     settings:
-      registry: https://registry.abakus.no
-      repo: registry.abakus.no/webkom/committee-admissions
+      registry: https://registry.webkom.dev
+      repo: registry.webkom.dev/webkom/committee-admissions
       username:
         from_secret: docker_username
       password:
