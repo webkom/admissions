@@ -19,7 +19,7 @@ django-debug-toolbar==2.0  # via -r requirements/development.in
 django-environ==0.4.5     # via -r requirements/base.in
 django-extensions==2.2.1  # via -r requirements/base.in
 django-webpack-loader==0.6.0  # via -r requirements/base.in
-django==2.2.10            # via -r requirements/base.in, django-cors-headers, django-debug-toolbar
+django==2.2.13            # via -r requirements/base.in, django-cors-headers, django-debug-toolbar
 djangorestframework==3.10.2  # via -r requirements/base.in
 entrypoints==0.3          # via flake8
 factory-boy==2.12.0       # via -r requirements/development.in
