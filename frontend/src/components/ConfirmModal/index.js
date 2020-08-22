@@ -9,7 +9,7 @@ import {
   TriggerText
 } from "./styles.js";
 
-class ConfirmModal extends Component<> {
+class ConfirmModal extends Component {
   state = { isOpen: false };
 
   hideModal = () => {
