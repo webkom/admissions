@@ -3,9 +3,7 @@ import Raven from "raven-js";
 import config from "src/utils/config";
 import "whatwg-fetch";
 
-export class HttpError extends Error {
-  response: Response;
-}
+export class HttpError extends Error {}
 
 function reportToSentry(error) {
   try {

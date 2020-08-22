@@ -1,6 +1,7 @@
 var path = require("path");
 var webpack = require("webpack");
 var BundleTracker = require("webpack-bundle-tracker");
+const CircularDependencyPlugin = require("circular-dependency-plugin");
 
 const isProduction = process.env.NODE_ENV === "production";
 
@@ -8,7 +9,7 @@ module.exports = {
   context: __dirname,
   entry: isProduction
     ? {
-        app: ["babel-polyfill", "whatwg-fetch", "./frontend/src/index"],
+        app: ["@babel/polyfill", "whatwg-fetch", "./frontend/src/index"],
         vendor: [
           "react",
           "react-dom",
@@ -19,7 +20,7 @@ module.exports = {
       }
     : {
         app: [
-          "babel-polyfill",
+          "@babel/polyfill",
           "whatwg-fetch",
           "webpack-dev-server/client?http://127.0.0.1:5001",
           "webpack/hot/only-dev-server",
@@ -61,7 +62,13 @@ module.exports = {
     new BundleTracker({ filename: "./webpack-stats.json" }),
     !isProduction && new webpack.HotModuleReplacementPlugin(),
     new webpack.NamedModulesPlugin(),
-    new webpack.IgnorePlugin(/^\.\/locale$/, /moment$/)
+    new webpack.IgnorePlugin(/^\.\/locale$/, /moment$/),
+    !isProduction &&
+      new CircularDependencyPlugin({
+        exclude: /a\.js|node_modules/,
+        failOnError: false,
+        cwd: process.cwd()
+      })
   ].filter(Boolean),
 
   module: {

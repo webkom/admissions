@@ -3,8 +3,9 @@ import styled from "styled-components";
 import Raven from "raven-js";
 import { withFormik, Field, Form } from "formik";
 import * as Yup from "yup";
-import djangoData from "src/utils/djangoData";
+
 import callApi from "src/utils/callApi";
+import djangoData from "src/utils/djangoData";
 import { media } from "src/styles/mediaQueries";
 
 import UserApplication from "src/containers/UserApplication";
@@ -26,6 +27,17 @@ import {
   CommitteeLogo,
   CommitteeLogoWrapper
 } from "./styles";
+
+const committee_logos = {
+  webkom: require("assets/committee_logos/webkom.png"),
+  arrkom: require("assets/committee_logos/arrkom.png"),
+  bedkom: require("assets/committee_logos/bedkom.png"),
+  pr: require("assets/committee_logos/pr.png"),
+  readme: require("assets/committee_logos/readme.png"),
+  labamba: require("assets/committee_logos/labamba.png"),
+  fagkom: require("assets/committee_logos/fagkom.png"),
+  koskom: require("assets/committee_logos/koskom.png")
+};
 
 class AdminPage extends Component {
   constructor(props) {
@@ -156,7 +168,11 @@ class AdminPage extends Component {
           <PageTitle>Admin Panel</PageTitle>
           <CommitteeLogoWrapper>
             <CommitteeLogo
-              src={require(`assets/committee_logos/${djangoData.user.leader_of_committee.toLowerCase()}.png`)}
+              src={
+                committee_logos[
+                  djangoData.user.leader_of_committee.toLowerCase()
+                ]
+              }
             />
             <h2>{djangoData.user.leader_of_committee}</h2>
           </CommitteeLogoWrapper>
