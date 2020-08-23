@@ -30,7 +30,8 @@ class UserApplication extends Component {
       created_at,
       updated_at,
       applied_within_deadline,
-      phone_number
+      phone_number,
+      pk
     } = this.props;
 
     const CommitteeApplications = committee_applications.map(
@@ -52,6 +53,7 @@ class UserApplication extends Component {
 
           return (
             <Application
+              applicationId={pk}
               key={user.username + "-" + i}
               text={application.text}
             />

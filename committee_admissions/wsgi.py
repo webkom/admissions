@@ -11,8 +11,8 @@ import os
 
 from django.core.wsgi import get_wsgi_application
 
-from raven.contrib.django.raven_compat.middleware.wsgi import Sentry
+from sentry_sdk.integrations.wsgi import SentryWsgiMiddleware
 
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "committee_admissions.settings")
 
-application = Sentry(get_wsgi_application())
+application = SentryWsgiMiddleware(get_wsgi_application())

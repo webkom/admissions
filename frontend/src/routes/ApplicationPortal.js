@@ -11,7 +11,7 @@ import AdminPageAbakusLeaderView from "src/routes/AdminPageAbakusLeaderView";
 
 import LoadingBall from "src/components/LoadingBall";
 
-import Raven from "raven-js";
+import * as Sentry from "@sentry/browser";
 import NavBar from "src/components/NavBar";
 
 class ApplicationPortal extends Component {
@@ -114,7 +114,7 @@ class ApplicationPortal extends Component {
         })
       );
     this.setState({ user: djangoData.user });
-    Raven.setUserContext(djangoData.user);
+    Sentry.setUser(djangoData.user);
     this.initializeState();
 
     callApi("/admission/").then(

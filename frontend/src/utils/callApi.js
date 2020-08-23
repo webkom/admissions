@@ -1,23 +1,21 @@
 import Cookie from "js-cookie";
-import Raven from "raven-js";
+import * as Sentry from "@sentry/browser";
 import config from "src/utils/config";
 import "whatwg-fetch";
 
-export class HttpError extends Error {
-  response: Response;
-}
+export class HttpError extends Error {}
 
 function reportToSentry(error) {
   try {
     if (error.response) {
-      Raven.setExtraContext({
+      Sentry.setContext("response", {
         response: error.response
       });
     }
   } catch (e) {
     //
   }
-  Raven.captureException(error);
+  Sentry.captureException(error);
   throw error;
 }
 function timeoutPromise(ms = 0) {

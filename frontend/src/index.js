@@ -8,15 +8,25 @@ import ErrorBoundary from "src/containers/ErrorBoundary/";
 import ApplicationPortal from "src/routes/ApplicationPortal";
 
 import ScrollToTop from "./scrollToTop";
-import Raven from "raven-js";
+import * as Sentry from "@sentry/browser";
 import "src/styles/globals.css";
 import config from "src/utils/config";
-import "babel-polyfill";
+import "@babel/polyfill";
 
-Raven.config(config.RAVEN_DSN, {
+Sentry.init({
+  dsn: config.SENTRY_DSN,
   release: config.RELEASE,
-  environment: config.ENVIRONMENT
-}).install();
+  environment: config.ENVIRONMENT,
+  beforeSend(event) {
+    if (event.body?.applications) {
+      delete event.body.applications;
+    }
+    if (event.body?.text) {
+      delete event.body.text;
+    }
+    return event;
+  }
+});
 
 ReactDOM.render(
   <Router>
