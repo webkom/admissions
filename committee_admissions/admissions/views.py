@@ -27,6 +27,7 @@ from .authentication import SessionAuthentication
 from .permissions import (
     AdmissionPermissions,
     ApplicationPermissions,
+    CommitteeApplicationPermissions,
     CommitteePermissions,
 )
 
@@ -76,7 +77,7 @@ class ApplicationViewSet(viewsets.ModelViewSet):
         if self.action in ["mine", "create"]:
             permission_classes = [permissions.IsAuthenticated]
         elif self.action in ["delete_committee_application"]:
-            permission_classes = [permissions.IsAuthenticated, CommitteePermissions]
+            permission_classes = [CommitteeApplicationPermissions]
         else:
             permission_classes = [permissions.IsAuthenticated, ApplicationPermissions]
         return [permission() for permission in permission_classes]
@@ -123,7 +124,7 @@ class ApplicationViewSet(viewsets.ModelViewSet):
     def perform_create(self, serializer):
         serializer.save(user=self.request.user)
 
-    @action(detail=True, methods=["DELETE"])
+    @action(detail=True, methods=["DELETE"], url_name="delete_committee_application")
     def delete_committee_application(self, request, pk=None):
         try:
             self.request.user.__class__ = LegoUser

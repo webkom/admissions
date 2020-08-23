@@ -11,6 +11,7 @@ from committee_admissions.admissions.constants import LEADER, MEMBER
 from committee_admissions.admissions.models import (
     Admission,
     Committee,
+    CommitteeApplication,
     LegoUser,
     Membership,
     UserApplication,
@@ -337,3 +338,85 @@ class ListApplicationsTestCase(APITestCase):
     def test_committee_leader_cannot_see_applications_for_other_committees(self):
         self.client.force_authenticate(user=self.webkom_leader)
         self.fail("Not implemented")
+
+
+class DeleteComitteeApplicationsTestCase(APITestCase):
+    """
+    Tests for api endpoint allowing leader of committee / opptaksansvarlig and abakus_leader to delete committee
+    applications
+
+    leader_of_committee can only delete applications to their own committee. abakus_leader can
+    delete any committee applications.
+
+    Users can delete their own applications with the /mine endpoint
+    """
+
+    def setUp(self):
+        self.pleb = LegoUser.objects.create()
+        self.admission = create_admission()
+
+        self.webkom_leader = LegoUser.objects.create(username="webkomleader")
+        self.webkom = Committee.objects.create(name="Webkom")
+        self.arrkom = Committee.objects.create(name="Arrkom")
+        Membership.objects.create(
+            user=self.webkom_leader, role=LEADER, committee=self.webkom
+        )
+        self.abakus_leader = LegoUser.objects.create(
+            username="bigsupremeleader", is_superuser=True
+        )
+
+    def unauthorized_user_cannot_delete_application(self):
+        """ Normal users should not be able to delete committee applications """
+        self.client.force_authenticate(user=self.pleb)
+
+        res = self.client.delete(
+            reverse("userapplication-delete_committee_application", kwargs={"pk": 1})
+        )
+
+        self.assertEqual(res.status_code, status.HTTP_401_UNAUTHORIZED)
+
+    def test_can_not_delete_own_committee_application(self):
+        application = UserApplication.objects.create(
+            user=self.pleb, admission=self.admission
+        )
+
+        self.client.force_authenticate(user=self.pleb)
+        res = self.client.delete(
+            reverse(
+                "userapplication-delete_committee_application",
+                kwargs={"pk": application.pk},
+            )
+        )
+        self.assertEqual(res.status_code, status.HTTP_403_FORBIDDEN)
+
+    def leader_can_delete_committee_application(self):
+        application = UserApplication.objects.create(
+            user=self.pleb, admission=self.admission
+        )
+        arrkomAppliction = CommitteeApplication.objects.create(
+            application=application.pk,
+            committee=self.arrkom,
+            text="Some application text",
+        )
+        CommitteeApplication.objects.create(
+            application=application.pk,
+            committee=self.webkom,
+            text="Some application text",
+        )
+        self.client.force_authenticate(user=self.webkom_leader)
+        res = self.client.delete(
+            reverse(
+                "userapplication-delete_committee_application",
+                kwargs={"pk": application.pk},
+            )
+        )
+
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.assertTrue(UserApplication.filter(application.pk).exists())
+        self.assertEqual(
+            CommitteeApplication.objects.filter(application=application.pk).count(), 1
+        )
+        self.assertEqual(
+            CommitteeApplication.objects.get(application=application.pk),
+            arrkomAppliction,
+        )
