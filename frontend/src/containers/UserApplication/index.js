@@ -51,8 +51,6 @@ class UserApplication extends Component {
             phone_number
           );
 
-          console.log(application);
-
           return (
             <Application
               applicationId={pk}
