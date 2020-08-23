@@ -22,9 +22,6 @@ class CommitteePermissions(permissions.BasePermission):
         user = request.user
         user.__class__ = LegoUser
 
-        if user.is_superuser:
-            return True
-
         # Here obj will be the name of the committee
         if obj == user.leader_of_committee or user.is_superuser:
             return True

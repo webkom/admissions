@@ -452,8 +452,9 @@ class ListApplicationsTestCase(APITestCase):
         )
 
         # Auth user as AbakusLeader
-        abakus_leader = LegoUser.objects.create(username="abakus_leader")
-        abakus_leader.is_superuser = True
+        abakus_leader = LegoUser.objects.create(
+            username="abakus_leader", is_superuser=True
+        )
 
         self.client.force_authenticate(user=abakus_leader)
         res = self.client.get(reverse("userapplication-list"))
