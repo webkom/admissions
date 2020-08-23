@@ -4,8 +4,9 @@ import ReadMore from "src/components/ReadMore";
 
 import Wrapper from "./Wrapper";
 import CommitteeName from "./CommitteeName";
+import DeleteApplication from "./DeleteApplication";
 
-const Application = ({ text }) => {
+const Application = ({ text, applicationId }) => {
   const applicationText = text.split("\n").map((line, i, arr) => {
     const linee = <span key={i}>{line}</span>;
     if (i === arr.length - 1) {
@@ -20,6 +21,7 @@ const Application = ({ text }) => {
       <CommitteeName>Søknad</CommitteeName>
       <Wrapper>
         <ReadMore lines={200}>{applicationText}</ReadMore>
+        <DeleteApplication id={applicationId} />
       </Wrapper>
     </div>
   );

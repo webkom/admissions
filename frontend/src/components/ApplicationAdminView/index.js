@@ -8,7 +8,9 @@ import CommitteeLogo from "./CommitteeLogo";
 import SmallDescription from "./SmallDescription";
 import SmallDescriptionWrapper from "./SmallDescriptionWrapper";
 
-const ApplicationAdminView = ({ committee, text }) => {
+import DeleteApplication from "src/components/Application/DeleteApplication";
+
+const ApplicationAdminView = ({ committee, text, applicationId }) => {
   const applicationText = text.split("\n").map((line, i, arr) => {
     const linee = <span key={i}>{line}</span>;
     if (i === arr.length - 1) {
@@ -26,6 +28,7 @@ const ApplicationAdminView = ({ committee, text }) => {
       <SmallDescriptionWrapper>
         <SmallDescription>Søknad til ...</SmallDescription>
         <CommitteeName>{committee} </CommitteeName>
+        <DeleteApplication id={applicationId} committee={committee} />
       </SmallDescriptionWrapper>
 
       <ReadMore lines={3}>{applicationText}</ReadMore>
