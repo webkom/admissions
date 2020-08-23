@@ -75,6 +75,8 @@ class ApplicationViewSet(viewsets.ModelViewSet):
         """
         if self.action in ["mine", "create"]:
             permission_classes = [permissions.IsAuthenticated]
+        elif self.action in ["delete_committee_application"]:
+            permission_classes = [permissions.IsAuthenticated, CommitteePermissions]
         else:
             permission_classes = [permissions.IsAuthenticated, ApplicationPermissions]
         return [permission() for permission in permission_classes]
@@ -120,6 +122,33 @@ class ApplicationViewSet(viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         serializer.save(user=self.request.user)
+
+    @action(detail=True, methods=["DELETE"])
+    def delete_committee_application(self, request, pk=None):
+        try:
+            self.request.user.__class__ = LegoUser
+            committee = None
+            if request.user.is_superuser:
+                committee_name = request.query_params.get("committee", None)
+                committee = Committee.objects.get(name=committee_name)
+            else:
+                committee = request.user.leader_of_committee
+            if committee is None:
+                return Response(status=status.HTTP_400_BAD_REQUEST)
+
+            CommitteeApplication.objects.get(
+                application=pk, committee=committee
+            ).delete()
+
+            if not CommitteeApplication.objects.filter(application=pk).exists():
+                # If this is the only application the user had left, we can
+                # delete the entire userApplication
+                UserApplication.objects.get(pk=pk).delete()
+            return Response(status=status.HTTP_200_OK)
+
+        except UserApplication.DoesNotExist:
+            # HTTP 204 No Content
+            return HttpResponse(status=204)
 
     @action(detail=False, methods=["GET", "DELETE"])
     def mine(self, request):

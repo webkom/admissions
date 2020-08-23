@@ -23,8 +23,13 @@ class ConfirmModal extends Component {
       isOpen: true
     });
   };
+
+  confirmAction = () => {
+    this.props.onConfirm();
+    this.hideModal();
+  };
   render() {
-    const { onConfirm, title, message } = this.props;
+    const { title, message, Component } = this.props;
     const { isOpen } = this.state;
 
     return isOpen ? (
@@ -40,10 +45,12 @@ class ConfirmModal extends Component {
             >
               Cancel
             </ActionButton>
-            <ActionButton onClick={onConfirm}>Ja</ActionButton>
+            <ActionButton onClick={this.confirmAction}>Ja</ActionButton>
           </ButtonGroup>
         </ConfirmBox>
       </Overlay>
+    ) : Component ? (
+      <Component onClick={this.showModal} />
     ) : (
       <TriggerText onClick={this.showModal}>{title}</TriggerText>
     );

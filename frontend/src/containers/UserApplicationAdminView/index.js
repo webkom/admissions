@@ -31,7 +31,8 @@ class UserApplicationAdminView extends Component {
       created_at,
       updated_at,
       applied_within_deadline,
-      phone_number
+      phone_number,
+      pk
     } = this.props;
 
     committee_applications.sort(function(a, b) {
@@ -59,6 +60,7 @@ class UserApplicationAdminView extends Component {
           <ApplicationAdminView
             key={user.username + "-" + i}
             committee={application.committee.name}
+            applicationId={pk}
             text={application.text}
           />
         );
