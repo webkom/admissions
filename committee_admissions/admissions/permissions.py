@@ -3,22 +3,6 @@ from rest_framework import permissions
 from .models import CommitteeApplication, LegoUser, UserApplication
 
 
-def can_edit_committee(user, committee):
-    if user.is_anonymous:
-        return False
-    if user.is_superuser:
-        return True
-    user.__class__ = LegoUser
-    return committee == user.leader_of_committee
-
-
-def is_admin(user):
-    if user.is_anonymous:
-        return False
-    user.__class__ = LegoUser
-    return user.is_board_member
-
-
 class IsOwnerOrReadOnly(permissions.BasePermission):
     """
     Custom permission to only allow owners of an object to edit it.
@@ -35,7 +19,14 @@ class CommitteePermissions(permissions.BasePermission):
         if request.method in permissions.SAFE_METHODS:
             return True
 
-        return can_edit_committee(request.user, obj)
+        user = request.user
+        user.__class__ = LegoUser
+
+        # Here obj will be the name of the committee
+        if obj == user.leader_of_committee or user.is_superuser:
+            return True
+
+        return False
 
 
 class AdmissionPermissions(permissions.BasePermission):
@@ -43,12 +34,14 @@ class AdmissionPermissions(permissions.BasePermission):
         if request.method in permissions.SAFE_METHODS:
             return True
 
+        # If the user is AbakusLeader -> give access
         return request.user.is_superuser
 
     def has_permission(self, request, view):
         if request.method in permissions.SAFE_METHODS:
             return True
 
+        # If the user is AbakusLeader -> give access
         return request.user.is_superuser
 
 
@@ -57,7 +50,9 @@ class ApplicationPermissions(permissions.BasePermission):
         return False
 
     def has_permission(self, request, view):
-        return is_admin(request.user)
+        user = request.user
+        user.__class__ = LegoUser
+        return user.is_privileged
 
 
 class CommitteeApplicationPermissions(permissions.BasePermission):
@@ -70,5 +65,4 @@ class CommitteeApplicationPermissions(permissions.BasePermission):
 
     def has_permission(self, request, view):
         request.user.__class__ = LegoUser
-        # return request.user.is_privileged
-        return is_admin(request.user)
+        return request.user.is_privileged

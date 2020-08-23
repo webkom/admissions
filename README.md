@@ -125,6 +125,15 @@ $ pip-sync requirements/development.txt
 This will install missing packages, install the correct version and
 remove excess packages.
 
+## Run tests
+
+Run django tests using tox. Note that we point at the committee_admissions database running at :5433 if we are running lego and admissions
+in parallel
+
+```bash
+$ DATABASE_PORT=5433 tox -e tests
+```
+
 ## Code Style
 
 This codebase uses the PEP 8 code style. We enforce this with isort, black & flake8.

@@ -42,11 +42,19 @@ class LandingPage extends Component {
     );
     djangoData.user.full_name &&
       callApi("/application/mine/").then(
-        () =>
-          this.setState({
-            hasSubmitted: true,
-            isLoading: false
-          }),
+        res => {
+          // HTTP 204 will return no content, but the promise is still Fulfilled
+          if (res && res.status == 204) {
+            this.setState({
+              hasSubmitted: false
+            });
+          } else {
+            this.setState({
+              hasSubmitted: true,
+              isLoading: false
+            });
+          }
+        },
         () => this.setState({ hasSubmitted: false })
       );
   }
@@ -107,7 +115,7 @@ class LandingPage extends Component {
             </li>
           )}
 
-          {djangoData.user.is_board_member && (
+          {djangoData.user.is_privileged && (
             <li>
               <LegoButton
                 to="/admin"

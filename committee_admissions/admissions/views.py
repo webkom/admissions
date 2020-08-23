@@ -87,7 +87,7 @@ class ApplicationViewSet(viewsets.ModelViewSet):
         if user.is_anonymous:
             return User.objects.none()
         user.__class__ = LegoUser
-        if not user.is_board_member:
+        if not user.is_privileged:
             return User.objects.none()
         if user.is_superuser:
             return (
