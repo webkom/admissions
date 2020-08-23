@@ -7,10 +7,11 @@ from django.utils import timezone
 from rest_framework import status
 from rest_framework.test import APITestCase
 
-from committee_admissions.admissions.constants import LEADER, MEMBER
+from committee_admissions.admissions.constants import LEADER, MEMBER, RECRUITING
 from committee_admissions.admissions.models import (
     Admission,
     Committee,
+    CommitteeApplication,
     LegoUser,
     Membership,
     UserApplication,
@@ -52,9 +53,15 @@ class EditCommitteeTestCase(APITestCase):
             description="Arrkom arrangerer ting",
             response_label="Søk Arrkom fordi vi har det kult!",
         )
-        self.webkom_leader = LegoUser.objects.create(username="webkom")
+
+        self.pleb = LegoUser.objects.create()
+        self.webkom_leader = LegoUser.objects.create(username="webkom_leader")
         Membership.objects.create(
             user=self.webkom_leader, role=LEADER, committee=self.webkom
+        )
+        self.webkom_recruiter = LegoUser.objects.create(username="webkom_recruiter")
+        Membership.objects.create(
+            user=self.webkom_recruiter, role=RECRUITING, committee=self.webkom
         )
 
         self.edit_committee_data = {
@@ -63,8 +70,7 @@ class EditCommitteeTestCase(APITestCase):
         }
 
     def test_pleb_cannot_edit_committee(self):
-        pleb = LegoUser.objects.create()
-        self.client.force_authenticate(user=pleb)
+        self.client.force_authenticate(user=self.pleb)
 
         res = self.client.patch(
             reverse("committee-detail", kwargs={"pk": self.arrkom.pk}),
@@ -93,11 +99,20 @@ class EditCommitteeTestCase(APITestCase):
 
         self.assertEqual(res.status_code, status.HTTP_200_OK)
 
+    def test_committee_recruiter_can_edit_committee(self):
+        self.client.force_authenticate(user=self.webkom_recruiter)
+
+        res = self.client.patch(
+            reverse("committee-detail", kwargs={"pk": self.webkom.pk}),
+            self.edit_committee_data,
+        )
+
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+
     def test_abakus_leader_cannot_edit_committee(self):
         abakus_leader = LegoUser.objects.create(
             username="bigsupremeleader", is_superuser=True
         )
-
         self.client.force_authenticate(user=abakus_leader)
 
         res = self.client.patch(
@@ -119,7 +134,7 @@ class EditAdmissionTestCase(APITestCase):
     def setUp(self):
         self.admission = create_admission()
         self.edit_admission_data = {
-            "title": "Plebkom opptak 2018",
+            "title": "Plebkom opptak 2020",
             "open_from": fake_timedelta(days=10),
         }
 
@@ -159,7 +174,6 @@ class EditAdmissionTestCase(APITestCase):
             reverse("admission-detail", kwargs={"pk": self.admission.pk}),
             self.edit_admission_data,
         )
-
         self.assertEqual(res.status_code, status.HTTP_403_FORBIDDEN)
 
     def test_unauthorized_user_cannot_edit_admission(self):
@@ -274,10 +288,36 @@ class ListApplicationsTestCase(APITestCase):
         self.admission = create_admission()
 
         self.webkom_leader = LegoUser.objects.create(username="webkomleader")
+        self.webkom_rec = LegoUser.objects.create(username="webkomrec")
+
         self.webkom = Committee.objects.create(name="Webkom")
+
         Membership.objects.create(
             user=self.webkom_leader, role=LEADER, committee=self.webkom
         )
+        Membership.objects.create(
+            user=self.webkom_rec, role=RECRUITING, committee=self.webkom
+        )
+
+        self.bedkom_leader = LegoUser.objects.create(username="bedkomleader")
+        self.bedkom_rec = LegoUser.objects.create(username="bedkomrec")
+
+        self.bedkom = Committee.objects.create(name="Bedkom")
+
+        Membership.objects.create(
+            user=self.bedkom_leader, role=LEADER, committee=self.bedkom
+        )
+        Membership.objects.create(
+            user=self.bedkom_rec, role=RECRUITING, committee=self.bedkom
+        )
+        self.application_data = {
+            "text": "testtest",
+            "applications": {
+                "webkom": "Webkom application",
+                "bedkom": "Bedkom application",
+            },
+            "phone_number": "00000000",
+        }
 
     def unauthorized_user_cannot_see_other_applications(self):
         """ Normal users should not be able to list applications """
@@ -314,26 +354,111 @@ class ListApplicationsTestCase(APITestCase):
 
         self.assertEqual(res.status_code, status.HTTP_403_FORBIDDEN)
 
-    # Not sure how to test
-    @skip
-    def test_abakus_leader_can_see_all_applications(self):
-        abakus_leader = LegoUser.objects.create(username="bigsupremeleader")
-        hovedstyret = Group.objects.create(name="Hovedstyret")
-        Membership.objects.create(
-            user=abakus_leader, role=LEADER, abakus_group=hovedstyret
+    def test_committee_leader_can_see_applications_for_own_committee(self):
+        self.client.force_authenticate(user=self.pleb)
+        application_data = {
+            "text": "testtest",
+            "applications": {"webkom": "Webkom application"},
+            "phone_number": "00000000",
+        }
+        self.client.post(
+            reverse("userapplication-list"), application_data, format="json"
         )
 
+        # Re-Auth as webkom_leader
+        self.client.force_authenticate(user=self.webkom_leader)
+        res = self.client.get(reverse("userapplication-list"))
+        json = res.json()
+        # Should return with 200
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        # Should only return one UserApplication
+        self.assertEqual(len(json), 1)
+        # The UserApplication should only have one CommitteeApplication
+        self.assertEqual(len(json[0]["committee_applications"]), 1)
+        # This CommitteeApplication should be to webkom
+        self.assertEqual(
+            json[0]["committee_applications"][0]["committee"]["name"], "Webkom"
+        )
+
+    def test_committee_recruiter_can_see_applications_for_own_committee(self):
+        self.client.force_authenticate(user=self.pleb)
+        self.client.post(
+            reverse("userapplication-list"), self.application_data, format="json"
+        )
+
+        # Re-Auth as webkom_rec
+        self.client.force_authenticate(user=self.webkom_rec)
+        res = self.client.get(reverse("userapplication-list"))
+        json = res.json()
+        # Should return with 200
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        # Should only return one UserApplication
+        self.assertEqual(len(json), 1)
+        # The UserApplication should only have one CommitteeApplication
+        self.assertEqual(len(json[0]["committee_applications"]), 1)
+        # This CommitteeApplication should be to webkom
+        self.assertEqual(
+            json[0]["committee_applications"][0]["committee"]["name"], "Webkom"
+        )
+
+    def test_committee_leader_cannot_see_applications_for_other_committee(self):
+        self.client.force_authenticate(user=self.pleb)
+        self.client.post(
+            reverse("userapplication-list"), self.application_data, format="json"
+        )
+
+        # Re-Auth as webkom_leader
+        self.client.force_authenticate(user=self.webkom_leader)
+        res = self.client.get(reverse("userapplication-list"))
+        json = res.json()
+        # There should not be a committee application for bedkom here
+        for committee_application in json[0]["committee_applications"]:
+            self.assertNotEqual(committee_application["committee"]["name"], "Bedkom")
+
+        # Re-Auth as bedkom_leader
+        self.client.force_authenticate(user=self.bedkom_leader)
+        res = self.client.get(reverse("userapplication-list"))
+        json = res.json()
+        # There should not be a committee application for bedkom here
+        for committee_application in json[0]["committee_applications"]:
+            self.assertNotEqual(committee_application["committee"]["name"], "Webkom")
+
+    def test_committee_recruiter_cannot_see_applications_for_other_committee(self):
+        self.client.force_authenticate(user=self.pleb)
+        self.client.post(
+            reverse("userapplication-list"), self.application_data, format="json"
+        )
+
+        # Re-Auth as webkom_rec
+        self.client.force_authenticate(user=self.webkom_rec)
+        res = self.client.get(reverse("userapplication-list"))
+        json = res.json()
+        # There should not be a committee application for bedkom here
+        for committee_application in json[0]["committee_applications"]:
+            self.assertNotEqual(committee_application["committee"]["name"], "Bedkom")
+
+        # Re-Auth as bedkom_rec
+        self.client.force_authenticate(user=self.bedkom_rec)
+        res = self.client.get(reverse("userapplication-list"))
+        json = res.json()
+        # There should not be a committee application for bedkom here
+        for committee_application in json[0]["committee_applications"]:
+            self.assertNotEqual(committee_application["committee"]["name"], "Webkom")
+
+    def test_abakus_leader_can_see_all_applications(self):
+        self.client.force_authenticate(user=self.pleb)
+        self.client.post(
+            reverse("userapplication-list"), self.application_data, format="json"
+        )
+
+        # Auth user as AbakusLeader
+        abakus_leader = LegoUser.objects.create(username="abakus_leader")
+        abakus_leader.is_superuser = True
+
         self.client.force_authenticate(user=abakus_leader)
-        self.fail("Not implemented")
+        res = self.client.get(reverse("userapplication-list"))
+        apps = res.json()[0]["committee_applications"]
 
-    # Not sure how to test
-    @skip
-    def test_committee_leader_can_see_applications_for_own_committee(self):
-        self.client.force_authenticate(user=self.webkom_leader)
-        self.fail("Not implemented")
-
-    # Not sure how to test
-    @skip
-    def test_committee_leader_cannot_see_applications_for_other_committees(self):
-        self.client.force_authenticate(user=self.webkom_leader)
-        self.fail("Not implemented")
+        # Ensure that the leader can see both the webkom and the bedkom application
+        self.assertEqual(apps[0]["committee"]["name"], "Webkom")
+        self.assertEqual(apps[1]["committee"]["name"], "Bedkom")

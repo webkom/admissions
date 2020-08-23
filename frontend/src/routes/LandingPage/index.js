@@ -115,7 +115,7 @@ class LandingPage extends Component {
             </li>
           )}
 
-          {djangoData.user.is_board_member && (
+          {djangoData.user.is_privileged && (
             <li>
               <LegoButton
                 to="/admin"

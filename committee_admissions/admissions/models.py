@@ -1,5 +1,6 @@
 from django.contrib.auth.models import Group, User
 from django.db import models
+from django.db.models import Q
 from django.utils import timezone
 
 from committee_admissions.admissions import constants
@@ -11,18 +12,45 @@ class LegoUser(User):
         proxy = True
 
     @property
-    def is_board_member(self):
-        return bool(self.is_superuser or self.leader_of_committee)
+    def is_privileged(self):
+        """
+        Return true if the user has admission privileges
+        """
+        return bool(self.is_superuser or self.admission_privileges)
+
+    @property
+    def admission_privileges(self):
+        """
+        Return true if the user has the role of LEADER or RECRUTING
+        """
+        correct_role = (
+            Membership.objects.filter(user=self)
+            .filter(Q(role=constants.LEADER) | Q(role=constants.RECRUITING))
+            .first()
+        )
+        if not correct_role:
+            return False
+        return True
 
     @property
     def leader_of_committee(self):
-        membership = Membership.objects.filter(user=self, role=constants.LEADER).first()
+        """
+        Return the name of the committee this user is the leader for
+        """
+        membership = (
+            Membership.objects.filter(user=self)
+            .filter(Q(role=constants.LEADER) | Q(role=constants.RECRUITING))
+            .first()
+        )
         if not membership:
             return None
         return membership.committee
 
     @property
     def has_application(self):
+        """
+        Return true if this user has a registrered application
+        """
         return UserApplication.objects.filter(user=self).exists()
 
 
