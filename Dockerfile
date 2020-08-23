@@ -13,7 +13,7 @@ ENV RELEASE ${RELEASE}
 
 RUN yarn build
 
-FROM python:3.6
+FROM python:3.7
 MAINTAINER Abakus Webkom <webkom@abakus.no>
 
 ARG RELEASE
