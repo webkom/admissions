@@ -1,6 +1,6 @@
 import React, { Component } from "react";
 import styled from "styled-components";
-import Raven from "raven-js";
+import * as Sentry from "@sentry/browser";
 import { withFormik, Field, Form } from "formik";
 import * as Yup from "yup";
 
@@ -116,7 +116,7 @@ class AdminPage extends Component {
     this.setState({
       user: { name: djangoData.user && djangoData.user.full_name }
     });
-    Raven.setUserContext(djangoData.user);
+    Sentry.setUser(djangoData.user);
   }
 
   render() {
