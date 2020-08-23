@@ -23,14 +23,11 @@ class LegoUser(User):
         """
         Return true if the user has the role of LEADER or RECRUTING
         """
-        correct_role = (
+        return (
             Membership.objects.filter(user=self)
             .filter(Q(role=constants.LEADER) | Q(role=constants.RECRUITING))
-            .first()
+            .exists()
         )
-        if not correct_role:
-            return False
-        return True
 
     @property
     def leader_of_committee(self):
