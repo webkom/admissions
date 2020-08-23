@@ -1,5 +1,10 @@
 from urllib.parse import urlparse
 
+import sentry_sdk
+from sentry_sdk.integrations.django import DjangoIntegration
+
+from committee_admissions.utils.sentry import remove_sensitive_data
+
 from .base import *  # noqa
 
 env = environ.Env(DEBUG=(bool, False))
@@ -26,14 +31,15 @@ AUTHENTICATION_BACKENDS = [
 ] + AUTHENTICATION_BACKENDS  # noqa
 
 # Sentry
-SENTRY_CLIENT = "raven.contrib.django.raven_compat.DjangoClient"
-RAVEN_DSN = env("RAVEN_DSN")
-RAVEN_PUBLIC_DSN = env("RAVEN_PUBLIC_DSN")
-RAVEN_CONFIG = {"dsn": RAVEN_DSN, "release": RELEASE, "environment": ENVIRONMENT_NAME}
-INSTALLED_APPS += ["raven.contrib.django.raven_compat"]  # noqa
-MIDDLEWARE = [
-    "raven.contrib.django.raven_compat.middleware.SentryResponseErrorIdMiddleware"
-] + MIDDLEWARE  # noqa
+SENTRY_DSN = env("RAVEN_DSN")
+sentry_sdk.init(
+    dsn=SENTRY_DSN,
+    release=RELEASE,
+    environment=ENVIRONMENT_NAME,
+    integrations=[DjangoIntegration()],
+    before_send=remove_sensitive_data,
+)
+
 
 CORS_FRONTEND_URL = urlparse(FRONTEND_URL).netloc
 CORS_ORIGIN_WHITELIST = list(

@@ -15,7 +15,7 @@ module.exports = {
           "react-dom",
           "reselect",
           "styled-components",
-          "raven-js"
+          "@sentry/browser"
         ]
       }
     : {
@@ -31,7 +31,7 @@ module.exports = {
           "react-dom",
           "reselect",
           "styled-components",
-          "raven-js"
+          "@sentry/browser"
         ]
       },
   output: {
