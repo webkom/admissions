@@ -73,7 +73,7 @@
     "babel-plugin-dynamic-import-node": "2.0.0",
     "babel-plugin-react-intl": "3.2.0",
     "babel-plugin-react-transform": "3.0.0",
-    "babel-plugin-styled-components": "1.5.1",
+    "babel-plugin-styled-components": "1.11.1",
     "babel-plugin-transform-react-remove-prop-types": "0.4.14",
     "circular-dependency-plugin": "5.0.2",
     "coveralls": "3.0.4",
