@@ -40,7 +40,7 @@
     "reselect": "3.0.1",
     "sanitize.css": "10.0.0",
     "styled-components": "4.3.2",
-    "whatwg-fetch": "^2.0.4"
+    "whatwg-fetch": "^3.4.1"
   },
   "devDependencies": {
     "@babel/cli": "^7.0.0",
