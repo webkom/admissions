@@ -4,46 +4,107 @@
 #
 #    pip-compile requirements/production.in
 #
-backcall==0.1.0           # via ipython
-certifi==2018.8.13        # via requests, sentry-sdk
-chardet==3.0.4            # via requests
-click==6.7                # via pip-tools
-decorator==4.3.0          # via ipython, traitlets
-defusedxml==0.5.0         # via python3-openid, social-auth-core
+backcall==0.1.0
+    # via ipython
+certifi==2018.8.13
+    # via
+    #   requests
+    #   sentry-sdk
+chardet==3.0.4
+    # via requests
+click==6.7
+    # via pip-tools
+decorator==4.3.0
+    # via
+    #   ipython
+    #   traitlets
+defusedxml==0.5.0
+    # via
+    #   python3-openid
+    #   social-auth-core
 django-cors-headers==3.1.0
+    # via -r base.in
 django-environ==0.4.5
+    # via -r base.in
 django-extensions==2.2.1
+    # via -r base.in
 django-webpack-loader==0.6.0
-django==2.2.13
+    # via -r base.in
+django==2.2.22
+    # via
+    #   -r base.in
+    #   django-cors-headers
 djangorestframework==3.10.2
-idna==2.7                 # via requests
-ipython-genutils==0.2.0   # via traitlets
+    # via -r base.in
+idna==2.7
+    # via requests
+ipython-genutils==0.2.0
+    # via traitlets
 ipython==7.17.0
-jedi==0.17.2              # via ipython
-oauthlib==3.1.0           # via requests-oauthlib, social-auth-core
-parso==0.7.1              # via jedi
-pexpect==4.6.0            # via ipython
-pickleshare==0.7.4        # via ipython
+    # via -r base.in
+jedi==0.17.2
+    # via ipython
+oauthlib==3.1.0
+    # via
+    #   requests-oauthlib
+    #   social-auth-core
+parso==0.7.1
+    # via jedi
+pexpect==4.6.0
+    # via ipython
+pickleshare==0.7.4
+    # via ipython
 pip-tools==4.0.0
-prompt-toolkit==2.0.9     # via ipython
+    # via -r base.in
+prompt-toolkit==2.0.9
+    # via ipython
 psycopg2-binary==2.8.3
-ptyprocess==0.6.0         # via pexpect
-pygments==2.2.0           # via ipython
-pyjwt==1.6.4              # via social-auth-core
-python3-openid==3.1.0     # via social-auth-core
-pytz==2018.5              # via django
-requests-oauthlib==1.2.0  # via social-auth-core
-requests==2.22.0          # via requests-oauthlib, social-auth-core
+    # via -r base.in
+ptyprocess==0.6.0
+    # via pexpect
+pygments==2.2.0
+    # via ipython
+pyjwt==1.6.4
+    # via social-auth-core
+python3-openid==3.1.0
+    # via social-auth-core
+pytz==2018.5
+    # via django
+requests-oauthlib==1.2.0
+    # via social-auth-core
+requests==2.22.0
+    # via
+    #   requests-oauthlib
+    #   social-auth-core
 sentry-sdk==0.16.5
-six==1.11.0               # via django-extensions, pip-tools, prompt-toolkit, social-auth-app-django, social-auth-core, structlog, traitlets
+    # via -r base.in
+six==1.11.0
+    # via
+    #   django-extensions
+    #   pip-tools
+    #   prompt-toolkit
+    #   social-auth-app-django
+    #   social-auth-core
+    #   structlog
+    #   traitlets
 social-auth-app-django==3.1.0
-social-auth-core==3.2.0   # via social-auth-app-django
-sqlparse==0.3.0           # via django
+    # via -r base.in
+social-auth-core==3.2.0
+    # via social-auth-app-django
+sqlparse==0.3.0
+    # via django
 structlog==19.1.0
-traitlets==4.3.2          # via ipython
-urllib3==1.25.3           # via requests, sentry-sdk
+    # via -r base.in
+traitlets==4.3.2
+    # via ipython
+urllib3==1.25.3
+    # via
+    #   requests
+    #   sentry-sdk
 uwsgi==2.0.17.1
-wcwidth==0.1.7            # via prompt-toolkit
+    # via -r production.in
+wcwidth==0.1.7
+    # via prompt-toolkit
 
 # The following packages are considered to be unsafe in a requirements file:
-# setuptools==49.6.0        # via ipython
+# setuptools
