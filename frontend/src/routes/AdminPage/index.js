@@ -221,15 +221,15 @@ const MyInnerForm = props => {
         <EditCommitteeFormWrapper>
           <Field
             component={TextAreaField}
-            title="Endre hva komitteen ønsker å høre om fra søkere"
-            name="response_label"
-            placeholder="Skriv hva komitteen ønsker å vite om søkeren..."
-          />
-          <Field
-            component={TextAreaField}
             title="Endre beskrivelsen av komiteen"
             name="description"
             placeholder="Skriv en beskrivelse av komiteen..."
+          />
+          <Field
+            component={TextAreaField}
+            title="Endre hva komitteen ønsker å høre om fra søkere"
+            name="response_label"
+            placeholder="Skriv hva komitteen ønsker å vite om søkeren..."
           />
         </EditCommitteeFormWrapper>
         <SubmitButton
