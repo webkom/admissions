@@ -22,6 +22,10 @@ defusedxml==0.5.0
     # via
     #   python3-openid
     #   social-auth-core
+django==2.2.24
+    # via
+    #   -r base.in
+    #   django-cors-headers
 django-cors-headers==3.1.0
     # via -r base.in
 django-environ==0.4.5
@@ -30,18 +34,14 @@ django-extensions==2.2.1
     # via -r base.in
 django-webpack-loader==0.6.0
     # via -r base.in
-django==2.2.13
-    # via
-    #   -r base.in
-    #   django-cors-headers
 djangorestframework==3.10.2
     # via -r base.in
 idna==2.7
     # via requests
-ipython-genutils==0.2.0
-    # via traitlets
 ipython==7.17.0
     # via -r base.in
+ipython-genutils==0.2.0
+    # via traitlets
 jedi==0.17.2
     # via ipython
 oauthlib==3.1.0
@@ -70,12 +70,12 @@ python3-openid==3.1.0
     # via social-auth-core
 pytz==2018.5
     # via django
-requests-oauthlib==1.2.0
-    # via social-auth-core
 requests==2.22.0
     # via
     #   requests-oauthlib
     #   social-auth-core
+requests-oauthlib==1.2.0
+    # via social-auth-core
 sentry-sdk==0.16.5
     # via -r base.in
 six==1.11.0
