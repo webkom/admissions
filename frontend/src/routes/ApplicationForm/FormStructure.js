@@ -36,19 +36,31 @@ const FormStructure = ({
       <RecieptInfo>
         <Title>Kvittering for sendt søknad</Title>
         <RecievedApplicationBanner>
+          <Icon name="checkmark-circle-outline" size="5rem" />
+          <br />
           Vi har mottatt søknaden din!
+          <TimeStamp>
+            <Icon name="time" />
+            Sist oppdatert
+            {myApplication && (
+              <StyledSpan bold>
+                <Moment format="dddd Do MMMM , \k\l. HH:mm:ss">
+                  {myApplication.updated_at}
+                </Moment>
+              </StyledSpan>
+            )}
+          </TimeStamp>
         </RecievedApplicationBanner>
-        <TimeStamp>
-          <Icon name="time" />
-          Søknaden ble sist oppdatert
-          {myApplication && (
-            <StyledSpan bold>
-              <Moment format="dddd Do MMMM , \k\l. HH:mm:ss">
-                {myApplication.updated_at}
-              </Moment>
+        <p>
+          Du kan
+          <StyledSpan bold> fritt endre søknaden</StyledSpan> din frem til{" "}
+          {admission && (
+            <StyledSpan bold red>
+              <Moment format="dddd Do MMMM">{admission.public_deadline}</Moment>
             </StyledSpan>
-          )}
-        </TimeStamp>
+          )}{" "}
+          og komiteene vil kun se den siste versjonen.
+        </p>
         <LegoButton
           icon="arrow-forward"
           iconPrefix="ios"
@@ -56,22 +68,10 @@ const FormStructure = ({
         >
           Endre søknad
         </LegoButton>
-        <p>
-          Du kan
-          <StyledSpan bold> endre søknaden</StyledSpan> din frem til{" "}
-          {admission && (
-            <StyledSpan bold red>
-              <Moment format="dddd Do MMMM">
-                {admission.application_deadline}
-              </Moment>
-            </StyledSpan>
-          )}
-        </p>
-        <HelpText>
-          Du kan endre en søknad så mange ganger du vil, og komiteene vil kun se
-          de siste endringene.
-        </HelpText>
-
+        <Notice>
+          <StyledSpan bold>Merk:</StyledSpan> Oppdateringer etter søknadsfristen
+          kan ikke garanteres å bli sett av komiteen(e) du søker deg til.
+        </Notice>
         <ConfirmModal
           title="Slett søknad"
           message="Er du sikker på at du vil slette søknaden din?"
@@ -79,6 +79,7 @@ const FormStructure = ({
         />
       </RecieptInfo>
     )}
+
     <FormHeader>
       <Title>
         {isEditing ? "Skriv din søknad og send inn!" : "Innsendt data"}
@@ -349,6 +350,19 @@ const SectionHeader = styled.h2`
   letter-spacing: 1px;
 `;
 
+const Notice = styled.p`
+  font-style: italic;
+  font-size: 1rem;
+  line-height: 1.4rem;
+
+  ${media.handheld`
+    margin: 0 0;
+    font-size: 0.9rem;
+    line-height: 1.1rem;
+    max-width: 300px;
+  `}
+`;
+
 const HelpText = styled.span`
   color: rgba(57, 75, 89, 0.75);
   font-size: 0.9rem;
@@ -510,11 +524,8 @@ const RecieptInfo = styled.div`
 `;
 
 const RecievedApplicationBanner = styled.div`
-  background: linear-gradient(
-    180deg,
-    rgba(203, 232, 128, 0.97) 0%,
-    #a1c34a 100%
-  );
+  text-align: center;
+  background: #b1d651;
   border: 1px solid #809e33;
   border-radius: 13px;
   padding: 0.8rem 2rem;
