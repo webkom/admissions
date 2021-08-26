@@ -23,7 +23,7 @@ class CommitteePermissions(permissions.BasePermission):
         user.__class__ = LegoUser
 
         # Here obj will be the name of the committee
-        if obj == user.leader_of_committee or user.is_superuser:
+        if obj == user.representative_of_committee or user.is_superuser:
             return True
 
         return False
@@ -59,7 +59,7 @@ class CommitteeApplicationPermissions(permissions.BasePermission):
     def has_object_permission(self, request, view, obj):
         if isinstance(obj, CommitteeApplication):
             request.user.__class__ = LegoUser
-            return obj.committee == request.user.leader_of_committee
+            return obj.committee == request.user.representative_of_committee
         if isinstance(obj, UserApplication):
             return CommitteeApplication.objects.filter(application=obj).count() == 0
 

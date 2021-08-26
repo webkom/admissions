@@ -35,7 +35,7 @@
         is_superuser: {{ request.user.is_superuser|yesno:"true,false" }},
         is_privileged: {{ request.user.is_privileged|yesno:"true,false" }},
         has_application: {{ request.user.has_application|yesno:"true,false" }},
-        leader_of_committee: "{{ request.user.leader_of_committee }}"
+        representative_of_committee: "{{ request.user.representative_of_committee }}"
 
       }
     };

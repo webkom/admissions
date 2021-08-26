@@ -7,7 +7,6 @@ from rest_framework import permissions, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
 
-from committee_admissions.admissions import constants
 from committee_admissions.admissions.models import (
     Admission,
     Committee,
@@ -98,7 +97,7 @@ class ApplicationViewSet(viewsets.ModelViewSet):
                 )
             )
 
-        committee = user.leader_of_committee
+        committee = user.representative_of_committee
         qs = CommitteeApplication.objects.filter(committee=committee).select_related(
             "committee"
         )
@@ -133,7 +132,7 @@ class ApplicationViewSet(viewsets.ModelViewSet):
                 committee_name = request.query_params.get("committee", None)
                 committee = Committee.objects.get(name=committee_name)
             else:
-                committee = request.user.leader_of_committee
+                committee = request.user.representative_of_committee
             if committee is None:
                 return Response(status=status.HTTP_400_BAD_REQUEST)
 
