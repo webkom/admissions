@@ -138,6 +138,9 @@ WEBPACK_LOADER = {
         "STATS_FILE": BASE_PROJECT_DIR.path("webpack-stats.json")(),
     }
 }
+
+AUTH_USER_MODEL = "admissions.LegoUser"
+
 SOCIAL_AUTH_LEGO_KEY = os.environ.get("AUTH_LEGO_KEY")
 SOCIAL_AUTH_LEGO_SECRET = os.environ.get("AUTH_LEGO_SECRET")
 SOCIAL_AUTH_LEGO_API_URL = os.environ.get("AUTH_LEGO_API_URL")

@@ -9,7 +9,9 @@ const UserInfo = ({ user }) => {
         <Name>{user.full_name}</Name>
         <LogoutBtn href="/logout/">Logg ut</LogoutBtn>
       </NameLogOutWrapper>
-      <ProfilePicture src={require("assets/avatar.png")} />
+      <ProfilePicture
+        src={user.profile_picture || require("assets/avatar.png")}
+      />
     </Container>
   );
 };

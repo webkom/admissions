@@ -1,4 +1,5 @@
-from django.contrib.auth.models import Group, User
+from django.conf import settings
+from django.contrib.auth.models import AbstractUser, Group
 from django.db import models
 from django.db.models import Q
 from django.utils import timezone
@@ -7,9 +8,8 @@ from committee_admissions.admissions import constants
 from committee_admissions.utils.models import TimeStampModel
 
 
-class LegoUser(User):
-    class Meta:
-        proxy = True
+class LegoUser(AbstractUser):
+    profile_picture = models.URLField(null=True, blank=True)
 
     @property
     def is_privileged(self):
@@ -129,7 +129,7 @@ class CommitteeApplication(TimeStampModel):
 
 
 class Membership(models.Model):
-    user = models.ForeignKey(User, on_delete=models.CASCADE)
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
     committee = models.ForeignKey(Committee, on_delete=models.CASCADE)
     role = models.CharField(
         max_length=30, choices=constants.ROLES, default=constants.MEMBER

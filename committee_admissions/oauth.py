@@ -17,6 +17,7 @@ class LegoOAuth2(BaseOAuth2):
         ("id", "id"),
         ("expires_in", "expires_in"),
         ("abakusGroups", "abakus_groups"),
+        ("profilePicture", "profile_picture"),
     ]
 
     def get_scope(self):
@@ -128,3 +129,6 @@ def update_custom_user_details(strategy, details, user=None, *args, **kwargs):
             )
 
         user.save()
+
+    user.profile_picture = kwargs["response"]["profilePicture"]
+    user.save()
