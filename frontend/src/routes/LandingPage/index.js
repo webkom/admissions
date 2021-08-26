@@ -83,9 +83,8 @@ class LandingPage extends Component {
           <ApplicationDateInfo admission={admission} />
         </InfoBox>
         <Notice>
-          <StyledSpan bold>Merk:</StyledSpan> Oppdateringer etter
-          endringsfristen kan ikke garanteres å bli sett av komiteen(e) du søker
-          deg til.
+          <StyledSpan bold>Merk:</StyledSpan> Oppdateringer etter søknadsfristen
+          kan ikke garanteres å bli sett av komiteen(e) du søker deg til.
         </Notice>
         <LinkWrapper>
           {djangoData.user.full_name ? (
@@ -149,18 +148,6 @@ const ApplicationDateInfo = ({ admission }) => (
         <Moment format=", \k\l. HH:mm:ss">{admission.public_deadline}</Moment>
       </StyledSpan>
       .
-    </p>
-    <p>
-      Etter å ha lagt inn en søknad kan du{" "}
-      <StyledSpan bold>endre den</StyledSpan> frem til{" "}
-      <StyledSpan bold red>
-        <Moment format="dddd Do MMMM">{admission.application_deadline}</Moment>
-      </StyledSpan>
-      <StyledSpan red>
-        <Moment format=", \k\l. HH:mm:ss">
-          {admission.application_deadline}
-        </Moment>
-      </StyledSpan>
     </p>
   </div>
 );
