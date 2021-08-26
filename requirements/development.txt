@@ -34,6 +34,11 @@ defusedxml==0.6.0
     # via
     #   python3-openid
     #   social-auth-core
+django==2.2.13
+    # via
+    #   -r base.in
+    #   django-cors-headers
+    #   django-debug-toolbar
 django-cors-headers==3.1.0
     # via -r base.in
 django-debug-toolbar==2.0
@@ -44,11 +49,6 @@ django-extensions==2.2.1
     # via -r base.in
 django-webpack-loader==0.6.0
     # via -r base.in
-django==2.2.13
-    # via
-    #   -r base.in
-    #   django-cors-headers
-    #   django-debug-toolbar
 djangorestframework==3.10.2
     # via -r base.in
 entrypoints==0.3
@@ -67,10 +67,10 @@ importlib-metadata==0.19
     # via
     #   pluggy
     #   tox
-ipython-genutils==0.2.0
-    # via traitlets
 ipython==7.17.0
     # via -r base.in
+ipython-genutils==0.2.0
+    # via traitlets
 isort==4.3.21
     # via -r isort.txt
 jedi==0.14.1
@@ -99,7 +99,7 @@ psycopg2-binary==2.8.3
     # via -r base.in
 ptyprocess==0.6.0
     # via pexpect
-py==1.8.0
+py==1.10.0
     # via tox
 pycodestyle==2.5.0
     # via flake8
@@ -117,12 +117,12 @@ python3-openid==3.1.0
     # via social-auth-core
 pytz==2019.2
     # via django
-requests-oauthlib==1.2.0
-    # via social-auth-core
 requests==2.22.0
     # via
     #   requests-oauthlib
     #   social-auth-core
+requests-oauthlib==1.2.0
+    # via social-auth-core
 sentry-sdk==0.16.5
     # via -r base.in
 six==1.12.0
