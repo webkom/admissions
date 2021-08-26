@@ -56,7 +56,7 @@ The secrets can be found at **localhost:3000** in the user settings menu after c
 
 ```sh
 # Create a copy of the example env file (run from the root of the project)
-$ cp /committee_admissions/settings/example.env /committee_admissions/settings/.env
+$ cp committee_admissions/settings/example.env committee_admissions/settings/.env
 
 # Edit the file and change the KEY and SECRET
 AUTH_LEGO_KEY="Client ID from OAuth2"
