@@ -185,24 +185,10 @@ const FormStructure = ({
                   </StyledSpan>
                   .
                 </ApplicationDateInfo>
-                <ApplicationDateInfo>
-                  Etter dette kan du <StyledSpan bold>endre den</StyledSpan>{" "}
-                  frem til{" "}
-                  <StyledSpan bold red>
-                    <Moment format="dddd Do MMMM">
-                      {admission.application_deadline}
-                    </Moment>
-                  </StyledSpan>
-                  <StyledSpan red>
-                    <Moment format=", \k\l. HH:mm:ss">
-                      {admission.application_deadline}
-                    </Moment>
-                  </StyledSpan>
-                </ApplicationDateInfo>
               </div>
             )}
             <SubmitInfo>
-              Oppdateringer etter endringsfristen kan ikke garanteres å bli sett
+              Oppdateringer etter søknadsfristen kan ikke garanteres å bli sett
               av komiteen(e) du søker deg til.
             </SubmitInfo>
             <SubmitInfo>
