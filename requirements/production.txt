@@ -63,7 +63,7 @@ psycopg2-binary==2.8.3
     # via -r base.in
 ptyprocess==0.6.0
     # via pexpect
-pygments==2.2.0
+pygments==2.7.4
     # via ipython
 pyjwt==1.6.4
     # via social-auth-core
