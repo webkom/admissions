@@ -26,6 +26,7 @@ django==2.2.24
     # via
     #   -r base.in
     #   django-cors-headers
+    #   djangorestframework
 django-cors-headers==3.1.0
     # via -r base.in
 django-environ==0.4.5
@@ -34,7 +35,7 @@ django-extensions==2.2.1
     # via -r base.in
 django-webpack-loader==0.6.0
     # via -r base.in
-djangorestframework==3.10.2
+djangorestframework==3.11.2
     # via -r base.in
 idna==2.7
     # via requests
