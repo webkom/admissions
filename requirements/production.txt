@@ -12,7 +12,7 @@ certifi==2018.8.13
     #   sentry-sdk
 chardet==3.0.4
     # via requests
-click==6.7
+click==8.0.1
     # via pip-tools
 decorator==4.3.0
     # via
@@ -24,23 +24,23 @@ defusedxml==0.5.0
     #   social-auth-core
 django==2.2.24
     # via
-    #   -r base.in
+    #   -r requirements/base.in
     #   django-cors-headers
     #   djangorestframework
 django-cors-headers==3.1.0
-    # via -r base.in
+    # via -r requirements/base.in
 django-environ==0.4.5
-    # via -r base.in
+    # via -r requirements/base.in
 django-extensions==2.2.1
-    # via -r base.in
+    # via -r requirements/base.in
 django-webpack-loader==0.6.0
-    # via -r base.in
+    # via -r requirements/base.in
 djangorestframework==3.11.2
-    # via -r base.in
+    # via -r requirements/base.in
 idna==2.7
     # via requests
 ipython==7.17.0
-    # via -r base.in
+    # via -r requirements/base.in
 ipython-genutils==0.2.0
     # via traitlets
 jedi==0.17.2
@@ -51,16 +51,18 @@ oauthlib==3.1.0
     #   social-auth-core
 parso==0.7.1
     # via jedi
+pep517==0.11.0
+    # via pip-tools
 pexpect==4.6.0
     # via ipython
 pickleshare==0.7.4
     # via ipython
-pip-tools==4.0.0
-    # via -r base.in
+pip-tools==6.3.0
+    # via -r requirements/base.in
 prompt-toolkit==2.0.9
     # via ipython
 psycopg2-binary==2.8.3
-    # via -r base.in
+    # via -r requirements/base.in
 ptyprocess==0.6.0
     # via pexpect
 pygments==2.7.4
@@ -78,24 +80,25 @@ requests==2.22.0
 requests-oauthlib==1.2.0
     # via social-auth-core
 sentry-sdk==0.16.5
-    # via -r base.in
+    # via -r requirements/base.in
 six==1.11.0
     # via
     #   django-extensions
-    #   pip-tools
     #   prompt-toolkit
     #   social-auth-app-django
     #   social-auth-core
     #   structlog
     #   traitlets
 social-auth-app-django==3.1.0
-    # via -r base.in
+    # via -r requirements/base.in
 social-auth-core==3.2.0
     # via social-auth-app-django
 sqlparse==0.3.0
     # via django
 structlog==19.1.0
-    # via -r base.in
+    # via -r requirements/base.in
+tomli==1.2.1
+    # via pep517
 traitlets==4.3.2
     # via ipython
 urllib3==1.25.8
@@ -103,9 +106,12 @@ urllib3==1.25.8
     #   requests
     #   sentry-sdk
 uwsgi==2.0.17.1
-    # via -r production.in
+    # via -r requirements/production.in
 wcwidth==0.1.7
     # via prompt-toolkit
+wheel==0.37.0
+    # via pip-tools
 
 # The following packages are considered to be unsafe in a requirements file:
+# pip
 # setuptools
