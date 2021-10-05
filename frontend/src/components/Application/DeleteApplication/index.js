@@ -38,15 +38,15 @@ const DeleteApplication = ({ id, committee }) => {
   return (
     <DeleteWrapper>
       <ConfirmModal
-      title="Slett søknad"
-      Component={({ onClick }) => (
-        <LegoButton icon="trash" onClick={onClick}>
-          Slett søknad
-        </LegoButton>
-      )}
-      message="Er du sikker på at du vil slette denne søknaden?"
-      onConfirm={() => performDelete(id, committee)}
-    />
+        title="Slett søknad"
+        Component={({ onClick }) => (
+          <LegoButton icon="trash" onClick={onClick}>
+            Slett søknad
+          </LegoButton>
+        )}
+        message="Er du sikker på at du vil slette denne søknaden?"
+        onConfirm={() => performDelete(id, committee)}
+      />
     </DeleteWrapper>
   );
 };
