@@ -51,7 +51,7 @@ const FormStructure = ({
             )}
           </TimeStamp>
         </RecievedApplicationBanner>
-        <p>
+        <Text>
           Du kan
           <StyledSpan bold> fritt endre søknaden</StyledSpan> din frem til{" "}
           {admission && (
@@ -60,7 +60,7 @@ const FormStructure = ({
             </StyledSpan>
           )}{" "}
           og komiteene vil kun se den siste versjonen.
-        </p>
+        </Text>
         <LegoButton
           icon="arrow-forward"
           iconPrefix="ios"
@@ -74,6 +74,11 @@ const FormStructure = ({
         </Notice>
         <ConfirmModal
           title="Slett søknad"
+          Component={({ onClick }) => (
+            <LegoButton icon="trash" onClick={onClick}>
+              Slett søknad
+            </LegoButton>
+          )}
           message="Er du sikker på at du vil slette søknaden din?"
           onConfirm={() => onDeleteApplication()}
         />
@@ -345,7 +350,17 @@ const Notice = styled.p`
   line-height: 1.4rem;
 
   ${media.handheld`
-    margin: 0 0;
+    font-size: 0.9rem;
+    line-height: 1.1rem;
+    max-width: 300px;
+  `}
+`;
+
+const Text = styled.p`
+  font-size: 1rem;
+  line-height: 1.4rem;
+
+  ${media.handheld`
     font-size: 0.9rem;
     line-height: 1.1rem;
     max-width: 300px;
@@ -514,7 +529,7 @@ const RecieptInfo = styled.div`
 
 const RecievedApplicationBanner = styled.div`
   text-align: center;
-  background: #b1d651;
+  background: var(--lego-green);
   border: 1px solid #809e33;
   border-radius: 13px;
   padding: 0.8rem 2rem;
