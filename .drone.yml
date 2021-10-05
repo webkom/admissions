@@ -89,9 +89,33 @@ steps:
       password:
         from_secret: docker_password
       tags:
-        - ${DRONE_BRANCH}-${DRONE_COMMIT_SHA:0:7}
+        - latest
+        - version-${DRONE_COMMIT_SHA:0:7}
       build_args:
         RELEASE: ${DRONE_BRANCH}-${DRONE_COMMIT_SHA:0:7}
+
+  - name: Deploy
+    image: abakus/ansible-deploy
+    depends_on:
+      - docker
+    when:
+      branch:
+        - prod
+      event: push
+      status: success
+    settings:
+      playbook: /infrastructure/esas/playbooks/deploy.yml
+      repository:
+        from_secret: infra_repository
+      tags:
+        - admissions
+      limit: esas
+      extra_vars: admissions_version=version-${DRONE_COMMIT_SHA:0:7}
+      inventory: /infrastructure/inventory
+      vault_password:
+        from_secret: ansible_vault_password
+      private_key:
+        from_secret: infra_deploy_key
 
 services:
   - name: database
