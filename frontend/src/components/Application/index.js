@@ -21,8 +21,8 @@ const Application = ({ text, applicationId }) => {
       <CommitteeName>Søknad</CommitteeName>
       <Wrapper>
         <ReadMore lines={200}>{applicationText}</ReadMore>
-        <DeleteApplication id={applicationId} />
       </Wrapper>
+      <DeleteApplication id={applicationId} />
     </div>
   );
 };
