@@ -69,9 +69,14 @@ class AdminPage extends Component {
           updatedAt,
           appliedWithinDeadline,
           priorityText:
-            priorityText != "" ? priorityText : "Ingen prioriteringer",
+            priorityText != ""
+              ? priorityText.replaceAll('"', "'")
+              : "Ingen prioriteringer",
           committee,
-          committeeApplicationText,
+          committeeApplicationText: committeeApplicationText.replaceAll(
+            '"',
+            "'"
+          ),
           phoneNumber
         }
       ]

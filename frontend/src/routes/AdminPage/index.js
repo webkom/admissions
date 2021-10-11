@@ -90,7 +90,7 @@ class AdminPage extends Component {
           name,
           email,
           username,
-          applicationText,
+          applicationText: applicationText.replaceAll('"', "'"),
           createdAt,
           updatedAt,
           appliedWithinDeadline,
