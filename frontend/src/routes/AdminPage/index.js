@@ -14,6 +14,8 @@ import LoadingBall from "src/components/LoadingBall";
 
 import CSRFToken from "./csrftoken";
 
+import { replaceQuotationMarks } from "../../utils/replaceQuotationMarks";
+
 import {
   EditCommitteeFormWrapper,
   FormWrapper,
@@ -90,7 +92,7 @@ class AdminPage extends Component {
           name,
           email,
           username,
-          applicationText,
+          applicationText: replaceQuotationMarks(applicationText),
           createdAt,
           updatedAt,
           appliedWithinDeadline,

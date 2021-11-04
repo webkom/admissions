@@ -18,6 +18,7 @@ import Statistics from "./Statistics";
 import CommitteeStatistics from "./CommitteeStatistics";
 import StatisticsName from "./StatisticsName";
 import StatisticsWrapper from "./StatisticsWrapper";
+import { replaceQuotationMarks } from "../../utils/replaceQuotationMarks";
 
 class AdminPage extends Component {
   constructor(props) {
@@ -69,9 +70,13 @@ class AdminPage extends Component {
           updatedAt,
           appliedWithinDeadline,
           priorityText:
-            priorityText != "" ? priorityText : "Ingen prioriteringer",
+            priorityText != ""
+              ? replaceQuotationMarks(priorityText)
+              : "Ingen prioriteringer",
           committee,
-          committeeApplicationText,
+          committeeApplicationText: replaceQuotationMarks(
+            committeeApplicationText
+          ),
           phoneNumber
         }
       ]
