@@ -2,7 +2,6 @@ from django.db import transaction
 
 from six.moves.urllib.parse import urljoin
 from social_core.backends.oauth import BaseOAuth2
-from social_core.exceptions import AuthFailed
 
 from committee_admissions.admissions import constants
 from committee_admissions.admissions.models import Committee, Membership
@@ -108,7 +107,8 @@ def update_custom_user_details(strategy, details, user=None, *args, **kwargs):
         Membership.objects.filter(user=user).delete()
         user.is_superuser = False
         for group, membership in group_data:
-
+            # This check finds the leader of Abakus by looking at the group leader
+            # of Hovedstyret. This is the only superuser of this application.
             if (
                 group["name"] == "Hovedstyret"
                 and membership["role"] == constants.LEADER
@@ -123,7 +123,8 @@ def update_custom_user_details(strategy, details, user=None, *args, **kwargs):
                 continue
 
             committee = Committee.objects.get(pk=group["id"])
-
+            # For all other committee memebers their role is set
+            # This is used later on when we check if they are Leader or Recruitment
             Membership.objects.create(
                 user=user, committee=committee, role=membership["role"]
             )

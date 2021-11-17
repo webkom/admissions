@@ -38,7 +38,7 @@ class UserApplication extends Component {
       (application, i) => {
         if (
           application.committee.name.toLowerCase() ==
-          djangoData.user.leader_of_committee.toLowerCase()
+          djangoData.user.representative_of_committee.toLowerCase()
         ) {
           this.props.generateCSVData(
             user.full_name,

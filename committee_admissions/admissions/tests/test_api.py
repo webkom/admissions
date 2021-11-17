@@ -1,7 +1,5 @@
 from datetime import timedelta
-from unittest import skip
 
-from django.contrib.auth.models import Group
 from django.urls import reverse
 from django.utils import timezone
 from rest_framework import status
@@ -470,7 +468,7 @@ class DeleteComitteeApplicationsTestCase(APITestCase):
     Tests for api endpoint allowing leader of committee / opptaksansvarlig and abakus_leader to delete committee
     applications
 
-    leader_of_committee can only delete applications to their own committee. abakus_leader can
+    representative_of_committee can only delete applications to their own committee. abakus_leader can
     delete any committee applications.
 
     Users can delete their own applications with the /mine endpoint

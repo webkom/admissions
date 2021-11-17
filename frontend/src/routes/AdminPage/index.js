@@ -133,7 +133,7 @@ class AdminPage extends Component {
       var filteredComApp = userApplication.committee_applications.filter(
         committeeApplication =>
           committeeApplication.committee.name.toLowerCase() ==
-          djangoData.user.leader_of_committee.toLowerCase()
+          djangoData.user.representative_of_committee.toLowerCase()
       );
 
       return filteredComApp.length > 0;
@@ -145,7 +145,7 @@ class AdminPage extends Component {
         <UserApplication
           key={i}
           {...userApplication}
-          whichCommitteeLeader={djangoData.user.leader_of_committee}
+          whichCommitteeLeader={djangoData.user.representative_of_committe}
           generateCSVData={this.generateCSVData}
         />
       );
@@ -153,7 +153,7 @@ class AdminPage extends Component {
     const committee = this.props.committees.find(
       committee =>
         committee.name.toLowerCase() ===
-        djangoData.user.leader_of_committee.toLowerCase()
+        djangoData.user.representative_of_committee.toLowerCase()
     );
 
     const committeeId = committee && committee.pk;
@@ -172,18 +172,18 @@ class AdminPage extends Component {
             <CommitteeLogo
               src={
                 committee_logos[
-                  djangoData.user.leader_of_committee.toLowerCase()
+                  djangoData.user.representative_of_committee.toLowerCase()
                 ]
               }
             />
-            <h2>{djangoData.user.leader_of_committee}</h2>
+            <h2>{djangoData.user.representative_of_committee}</h2>
           </CommitteeLogoWrapper>
           <LinkLink to="/">Gå til forside</LinkLink>
 
           <Wrapper>
             <EditCommitteeForm
               apiRoot={this.API_ROOT}
-              committee={djangoData.user.leader_of_committee}
+              committee={djangoData.user.representative_of_committee}
               initialDescription={committee && committee.description}
               initialReplyText={committee && committee.response_label}
               committeeId={committeeId}

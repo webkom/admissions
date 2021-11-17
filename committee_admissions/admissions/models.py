@@ -14,7 +14,7 @@ class LegoUser(AbstractUser):
     @property
     def is_privileged(self):
         """
-        Return true if the user has admission privileges
+        Return true if the user is Abakus Leader or has admission privileges
         """
         return bool(self.is_superuser or self.admission_privileges)
 
@@ -30,9 +30,9 @@ class LegoUser(AbstractUser):
         )
 
     @property
-    def leader_of_committee(self):
+    def representative_of_committee(self):
         """
-        Return the name of the committee this user is the leader for
+        Return the name of the committee this user is the representative for
         """
         membership = (
             Membership.objects.filter(user=self)
