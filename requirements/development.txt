@@ -13,7 +13,7 @@ attrs==19.1.0
 backcall==0.1.0
     # via ipython
 black==19.3b0
-    # via -r black.txt
+    # via -r requirements/black.txt
 certifi==2019.6.16
     # via
     #   requests
@@ -25,7 +25,7 @@ click==7.0
     #   black
     #   pip-tools
 coverage==4.5.4
-    # via -r coverage.txt
+    # via -r requirements/coverage.txt
 decorator==4.4.0
     # via
     #   ipython
@@ -36,32 +36,32 @@ defusedxml==0.6.0
     #   social-auth-core
 django==2.2.24
     # via
-    #   -r base.in
+    #   -r requirements/base.in
     #   django-cors-headers
     #   django-debug-toolbar
     #   djangorestframework
 django-cors-headers==3.1.0
-    # via -r base.in
+    # via -r requirements/base.in
 django-debug-toolbar==2.2.1
-    # via -r development.in
+    # via -r requirements/development.in
 django-environ==0.4.5
-    # via -r base.in
+    # via -r requirements/base.in
 django-extensions==2.2.1
-    # via -r base.in
+    # via -r requirements/base.in
 django-webpack-loader==0.6.0
-    # via -r base.in
+    # via -r requirements/base.in
 djangorestframework==3.11.2
-    # via -r base.in
+    # via -r requirements/base.in
 entrypoints==0.3
     # via flake8
 factory-boy==2.12.0
-    # via -r development.in
+    # via -r requirements/development.in
 faker==2.0.0
     # via factory-boy
 filelock==3.0.12
     # via tox
 flake8==3.7.8
-    # via -r flake8.txt
+    # via -r requirements/flake8.txt
 idna==2.8
     # via requests
 importlib-metadata==0.19
@@ -69,11 +69,11 @@ importlib-metadata==0.19
     #   pluggy
     #   tox
 ipython==7.17.0
-    # via -r base.in
+    # via -r requirements/base.in
 ipython-genutils==0.2.0
     # via traitlets
 isort==4.3.21
-    # via -r isort.txt
+    # via -r requirements/isort.txt
 jedi==0.14.1
     # via ipython
 mccabe==0.6.1
@@ -91,13 +91,13 @@ pexpect==4.7.0
 pickleshare==0.7.5
     # via ipython
 pip-tools==4.0.0
-    # via -r base.in
+    # via -r requirements/base.in
 pluggy==0.12.0
     # via tox
 prompt-toolkit==2.0.9
     # via ipython
 psycopg2-binary==2.8.3
-    # via -r base.in
+    # via -r requirements/base.in
 ptyprocess==0.6.0
     # via pexpect
 py==1.10.0
@@ -124,8 +124,8 @@ requests==2.22.0
     #   social-auth-core
 requests-oauthlib==1.2.0
     # via social-auth-core
-sentry-sdk==0.16.5
-    # via -r base.in
+sentry-sdk==1.5.6
+    # via -r requirements/base.in
 six==1.12.0
     # via
     #   django-extensions
@@ -140,7 +140,7 @@ six==1.12.0
     #   tox
     #   traitlets
 social-auth-app-django==3.1.0
-    # via -r base.in
+    # via -r requirements/base.in
 social-auth-core==3.2.0
     # via social-auth-app-django
 sqlparse==0.3.0
@@ -148,7 +148,7 @@ sqlparse==0.3.0
     #   django
     #   django-debug-toolbar
 structlog==19.1.0
-    # via -r base.in
+    # via -r requirements/base.in
 text-unidecode==1.2
     # via faker
 toml==0.10.0
@@ -156,7 +156,7 @@ toml==0.10.0
     #   black
     #   tox
 tox==3.13.2
-    # via -r development.in
+    # via -r requirements/development.in
 traitlets==4.3.2
     # via ipython
 urllib3==1.25.8
