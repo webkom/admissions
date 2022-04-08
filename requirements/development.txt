@@ -34,7 +34,7 @@ defusedxml==0.6.0
     # via
     #   python3-openid
     #   social-auth-core
-django==2.2.24
+django==2.2.27
     # via
     #   -r base.in
     #   django-cors-headers
@@ -72,7 +72,7 @@ ipython==7.31.1
     # via -r base.in
 ipython-genutils==0.2.0
     # via traitlets
-isort==4.3.21
+isort==5.10.1
     # via -r isort.txt
 jedi==0.18.1
     # via ipython
