@@ -318,7 +318,7 @@ class ListApplicationsTestCase(APITestCase):
         }
 
     def unauthorized_user_cannot_see_other_applications(self):
-        """ Normal users should not be able to list applications """
+        """Normal users should not be able to list applications"""
         self.client.force_authenticate(user=self.pleb)
 
         res = self.client.get(reverse("userapplication-list"))
@@ -326,7 +326,7 @@ class ListApplicationsTestCase(APITestCase):
         self.assertEqual(res.status_code, status.HTTP_401_UNAUTHORIZED)
 
     def test_normal_user_cannot_see_other_applications(self):
-        """ Normal users should not be able to list applications """
+        """Normal users should not be able to list applications"""
         self.client.force_authenticate(user=self.pleb)
 
         res = self.client.get(reverse("userapplication-list"))
@@ -489,7 +489,7 @@ class DeleteComitteeApplicationsTestCase(APITestCase):
         )
 
     def unauthorized_user_cannot_delete_application(self):
-        """ Normal users should not be able to delete committee applications """
+        """Normal users should not be able to delete committee applications"""
         self.client.force_authenticate(user=self.pleb)
 
         res = self.client.delete(

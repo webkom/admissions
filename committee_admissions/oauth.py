@@ -80,7 +80,7 @@ class LegoOAuth2(BaseOAuth2):
 
 
 def parse_group_data(response):
-    """ This will parse group data,
+    """This will parse group data,
     and return a [(group, membership),] structure"""
     user_memberships = response["memberships"]
     abakus_groups = response["abakusGroups"]
@@ -97,7 +97,7 @@ def parse_group_data(response):
 
 
 def update_custom_user_details(strategy, details, user=None, *args, **kwargs):
-    """ This will run after the social auth pipelies succeeds """
+    """This will run after the social auth pipelies succeeds"""
     if not user:
         return
 
