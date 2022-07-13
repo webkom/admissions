@@ -188,6 +188,10 @@ class AdminPage extends Component {
                 />
                 <CommitteeStatistics
                   applications={applications}
+                  committee="Bankkom"
+                />
+                <CommitteeStatistics
+                  applications={applications}
                   committee="Bedkom"
                 />
                 <CommitteeStatistics

@@ -148,6 +148,7 @@ const ApplicationForm = withFormik({
       labamba: "",
       koskom: "",
       arrkom: "",
+      bankkom: "",
       pr: "",
       priorityText: text,
       phoneNumber: phone_number,
