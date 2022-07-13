@@ -40,7 +40,17 @@ class RandomCommitteeFactory(factory.DjangoModelFactory):
         django_get_or_create = ("name",)
 
     name = factory.Iterator(
-        ["Webkom", "Arrkom", "Bedkom", "Fagkom", "Koskom", "LaBamba", "readme", "PR"]
+        [
+            "Webkom",
+            "Arrkom",
+            "Bankkom",
+            "Bedkom",
+            "Fagkom",
+            "Koskom",
+            "LaBamba",
+            "readme",
+            "PR",
+        ]
     )
     description = factory.Faker("text", max_nb_chars=200)
     response_label = factory.Faker("text", max_nb_chars=50)

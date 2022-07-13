@@ -33,6 +33,7 @@ import {
 const committee_logos = {
   webkom: require("assets/committee_logos/webkom.png"),
   arrkom: require("assets/committee_logos/arrkom.png"),
+  bankkom: require("assets/committee_logos/bankkom.png"),
   bedkom: require("assets/committee_logos/bedkom.png"),
   pr: require("assets/committee_logos/pr.png"),
   readme: require("assets/committee_logos/readme.png"),
@@ -64,6 +65,7 @@ class AdminPage extends Component {
       committeeNames: {
         webkom: "Webkom",
         arrkom: "Arrkom",
+        bankkom: "Bankkom",
         bedkom: "Bedkom",
         pr: "PR",
         readme: "readme",
@@ -265,6 +267,7 @@ const EditCommitteeForm = withFormik({
     const committeeNames = {
       webkom: "Webkom",
       arrkom: "Arrkom",
+      bankkom: "Bankkom",
       bedkom: "Bedkom",
       pr: "PR",
       readme: "readme",
