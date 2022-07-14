@@ -92,7 +92,6 @@ six==1.11.0
     #   django-extensions
     #   pip-tools
     #   prompt-toolkit
-    #   structlog
     #   traitlets
 social-auth-app-django==5.0.0
     # via -r requirements/base.in
@@ -100,7 +99,7 @@ social-auth-core==4.2.0
     # via social-auth-app-django
 sqlparse==0.3.0
     # via django
-structlog==19.1.0
+structlog==21.5.0
     # via -r requirements/base.in
 traitlets==4.3.2
     # via
