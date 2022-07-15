@@ -40,11 +40,11 @@ django==2.2.28
     #   django-cors-headers
     #   django-debug-toolbar
     #   djangorestframework
-django-cors-headers==3.1.0
+django-cors-headers==3.11.0
     # via -r requirements/base.in
 django-debug-toolbar==2.2.1
     # via -r requirements/development.in
-django-environ==0.4.5
+django-environ==0.9.0
     # via -r requirements/base.in
 django-extensions==2.2.1
     # via -r requirements/base.in
