@@ -52,8 +52,6 @@ django-webpack-loader==1.6.0
     # via -r requirements/base.in
 djangorestframework==3.13.1
     # via -r requirements/base.in
-entrypoints==0.3
-    # via flake8
 factory-boy==2.12.0
     # via -r requirements/development.in
 faker==2.0.0
@@ -68,7 +66,7 @@ importlib-metadata==0.19
     # via
     #   pluggy
     #   tox
-ipython==7.31.1
+ipython==7.34.0
     # via -r requirements/base.in
 ipython-genutils==0.2.0
     # via traitlets

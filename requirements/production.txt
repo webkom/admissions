@@ -43,7 +43,7 @@ djangorestframework==3.13.1
     # via -r requirements/base.in
 idna==2.7
     # via requests
-ipython==7.31.1
+ipython==7.34.0
     # via -r requirements/base.in
 ipython-genutils==0.2.0
     # via traitlets
