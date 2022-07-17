@@ -22,7 +22,7 @@ Run LEGO-WEBAPP by following the [README here](https://github.com/webkom/lego-we
 
 Run the committe_admissions backend by doing the following:
 
-Running the backend requires Python 3.6 and a `postgresql` database. The frontend requires `Node`. We recommend using
+Running the backend requires Python 3.9 and a `postgresql` database. The frontend requires `Node`. We recommend using
 a virtual environment. Create a `venv` in root using
 
 ```sh
