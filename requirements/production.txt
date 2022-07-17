@@ -72,7 +72,7 @@ pip-tools==6.8.0
     # via -r requirements/base.in
 prompt-toolkit==3.0.30
     # via ipython
-psycopg2-binary==2.8.6
+psycopg2-binary==2.9.3
     # via -r requirements/base.in
 ptyprocess==0.7.0
     # via pexpect

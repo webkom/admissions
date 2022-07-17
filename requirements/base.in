@@ -7,7 +7,7 @@ django-webpack-loader==1.6.0
 
 social-auth-app-django==5.0.0
 pip-tools>=4.0.0
-psycopg2-binary==2.8.6            # Do not update past 2.8.6 before django is > 2.2.28
+psycopg2-binary==2.9.3            # Do not update past 2.8.6 before django is > 2.2.28
 ipython==8.4.0
 structlog==21.5.0
 
