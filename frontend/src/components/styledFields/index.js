@@ -13,7 +13,7 @@ export const StyledField = styled(Field)`
   font-family: var(--font-family);
   color: var(--lego-font-color);
   border: 2px solid
-    ${props => (props.error ? "var(--lego-red)" : "var(--lego-gray-medium)")};
+    ${(props) => (props.error ? "var(--lego-red)" : "var(--lego-gray-medium)")};
   border-radius: 13px;
   box-shadow: inset 0px 4px 4px rgba(129, 129, 129, 0.1);
   resize: none;
@@ -38,7 +38,7 @@ export const StyledTextAreaField = styled(Textarea)`
   font-family: var(--font-family);
   color: var(--lego-font-color);
   border: 2px solid
-    ${props => (props.error ? "var(--lego-red)" : "var(--lego-gray-medium)")};
+    ${(props) => (props.error ? "var(--lego-red)" : "var(--lego-gray-medium)")};
   border-radius: 13px;
   box-shadow: inset 0px 4px 4px rgba(129, 129, 129, 0.1);
   overflow: hidden;

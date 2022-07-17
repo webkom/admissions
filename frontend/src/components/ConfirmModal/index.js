@@ -6,7 +6,7 @@ import {
   Message,
   ButtonGroup,
   ActionButton,
-  TriggerText
+  TriggerText,
 } from "./styles.js";
 
 class ConfirmModal extends Component {
@@ -14,13 +14,13 @@ class ConfirmModal extends Component {
 
   hideModal = () => {
     this.setState({
-      isOpen: false
+      isOpen: false,
     });
   };
 
   showModal = () => {
     this.setState({
-      isOpen: true
+      isOpen: true,
     });
   };
 

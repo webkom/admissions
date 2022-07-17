@@ -4,7 +4,7 @@ import { media } from "src/styles/mediaQueries";
 import {
   FieldLabel,
   InputValidationFeedback,
-  StyledTextAreaField
+  StyledTextAreaField,
 } from "src/components/styledFields";
 import readmeIfy from "src/components/ReadmeLogo";
 
@@ -16,10 +16,10 @@ class Application extends Component {
           "applicationText",
           JSON.stringify({
             ...JSON.parse(sessionStorage.getItem("applicationText")),
-            [this.props.committee.toLowerCase()]: this.props.field.value
+            [this.props.committee.toLowerCase()]: this.props.field.value,
           })
         );
-      }, 4000)
+      }, 4000),
     });
   }
   componentWillUnmount() {
@@ -31,7 +31,7 @@ class Application extends Component {
       committee,
       field: { name, onChange, value },
       form: { touched, errors, handleBlur },
-      disabled
+      disabled,
     } = this.props;
     const error = touched[name] && errors[name];
     return (

@@ -1,5 +1,5 @@
-@import url("https://fonts.googleapis.com/css?family=Cardo");
-@import url("https://unpkg.com/ionicons@4.5.10-0/dist/css/ionicons.min.css");
+@import "https://fonts.googleapis.com/css?family=Cardo";
+@import "https://unpkg.com/ionicons@4.5.10-0/dist/css/ionicons.min.css";
 @import "./variables.css";
 @import "./fonts.css";
 
@@ -19,7 +19,7 @@ html {
 body {
   margin: 0;
   line-height: 1.8;
-  font-family: "Rawline", "Helvetica Neue", Arial, sans-serif;
+  font-family: Rawline, "Helvetica Neue", Arial, sans-serif;
   background: var(--lego-background);
   color: var(--lego-font-color);
   position: relative;
@@ -50,7 +50,7 @@ ul {
 h1 {
   font-size: 3rem;
   text-align: center;
-  margin: 0.2em 0 0 0;
+  margin: 0.2em 0 0;
   line-height: 1.2em;
 }
 

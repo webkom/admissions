@@ -24,11 +24,11 @@ const performDelete = (id, committee) => {
       committee ? `?committee=${committee}` : ""
     }`,
     {
-      method: "DELETE"
+      method: "DELETE",
     }
   )
     .then(() => location.reload())
-    .catch(err => {
+    .catch((err) => {
       alert("Det skjedde en feil.... ");
       throw err;
     });

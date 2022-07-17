@@ -10,5 +10,5 @@ export const media = {
     @media screen and (max-width: 1000px) {
       ${css(...args)};
     }
-  `
+  `,
 };

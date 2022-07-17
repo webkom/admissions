@@ -27,7 +27,7 @@ import {
   StatisticsName,
   StatisticsWrapper,
   CommitteeLogo,
-  CommitteeLogoWrapper
+  CommitteeLogoWrapper,
 } from "./styles";
 
 const committee_logos = {
@@ -39,7 +39,7 @@ const committee_logos = {
   readme: require("assets/committee_logos/readme.png"),
   labamba: require("assets/committee_logos/labamba.png"),
   fagkom: require("assets/committee_logos/fagkom.png"),
-  koskom: require("assets/committee_logos/koskom.png")
+  koskom: require("assets/committee_logos/koskom.png"),
 };
 
 class AdminPage extends Component {
@@ -60,7 +60,7 @@ class AdminPage extends Component {
         { label: "Username", key: "username" },
         { label: "Søkt innen frist", key: "appliedWithinDeadline" },
         { label: "Tid sendt", key: "createdAt" },
-        { label: "Tid oppdatert", key: "updatedAt" }
+        { label: "Tid oppdatert", key: "updatedAt" },
       ],
       committeeNames: {
         webkom: "Webkom",
@@ -71,8 +71,8 @@ class AdminPage extends Component {
         readme: "readme",
         labamba: "LaBamba",
         fagkom: "Fagkom",
-        koskom: "Koskom"
-      }
+        koskom: "Koskom",
+      },
     };
   }
 
@@ -86,7 +86,7 @@ class AdminPage extends Component {
     applicationText,
     phoneNumber
   ) => {
-    this.setState(prevState => ({
+    this.setState((prevState) => ({
       ...prevState,
       csvData: [
         ...prevState.csvData,
@@ -98,9 +98,9 @@ class AdminPage extends Component {
           createdAt,
           updatedAt,
           appliedWithinDeadline,
-          phoneNumber
-        }
-      ]
+          phoneNumber,
+        },
+      ],
     }));
   };
 
@@ -109,16 +109,16 @@ class AdminPage extends Component {
       ({ jsonData }) => {
         this.setState({
           applications: jsonData,
-          isFetching: false
+          isFetching: false,
         });
       },
-      error => {
+      (error) => {
         this.setState({ error, isFetching: false });
       }
     );
 
     this.setState({
-      user: { name: djangoData.user && djangoData.user.full_name }
+      user: { name: djangoData.user && djangoData.user.full_name },
     });
     Sentry.setUser(djangoData.user);
   }
@@ -126,14 +126,14 @@ class AdminPage extends Component {
   render() {
     const { error, isFetching, applications, csvData, headers } = this.state;
 
-    applications.sort(function(a, b) {
+    applications.sort(function (a, b) {
       if (a.user.full_name < b.user.full_name) return -1;
       if (a.user.full_name > b.user.full_name) return 1;
       return 0;
     });
-    const filteredApplications = applications.filter(userApplication => {
+    const filteredApplications = applications.filter((userApplication) => {
       var filteredComApp = userApplication.committee_applications.filter(
-        committeeApplication =>
+        (committeeApplication) =>
           committeeApplication.committee.name.toLowerCase() ==
           djangoData.user.representative_of_committee.toLowerCase()
       );
@@ -153,7 +153,7 @@ class AdminPage extends Component {
       );
     });
     const committee = this.props.committees.find(
-      committee =>
+      (committee) =>
         committee.name.toLowerCase() ===
         djangoData.user.representative_of_committee.toLowerCase()
     );
@@ -216,7 +216,7 @@ class AdminPage extends Component {
 
 export default AdminPage;
 
-const MyInnerForm = props => {
+const MyInnerForm = (props) => {
   const { isSubmitting, handleSubmit, isValid } = props;
   return (
     <Form>
@@ -253,16 +253,12 @@ const EditCommitteeForm = withFormik({
   mapPropsToValues({ initialDescription, initialReplyText }) {
     return {
       response_label: initialReplyText || "",
-      description: initialDescription || ""
+      description: initialDescription || "",
     };
   },
   handleSubmit(
     values,
-    {
-      props: { committee, committeeId },
-      setSubmitting,
-      setErrors
-    }
+    { props: { committee, committeeId }, setSubmitting, setErrors }
   ) {
     const committeeNames = {
       webkom: "Webkom",
@@ -273,28 +269,28 @@ const EditCommitteeForm = withFormik({
       readme: "readme",
       labamba: "LaBamba",
       fagkom: "Fagkom",
-      koskom: "Koskom"
+      koskom: "Koskom",
     };
     const submission = {
       name: committeeNames[committee],
       description: values.description,
-      response_label: values.response_label
+      response_label: values.response_label,
     };
 
     return callApi(`/committee/${committeeId}/`, {
       method: "PATCH",
-      body: JSON.stringify(submission)
+      body: JSON.stringify(submission),
     })
-      .then(res => {
+      .then((res) => {
         setSubmitting(false);
         alert("Komité oppdatert :D");
         return res.jsonData;
       })
-      .catch(err => {
+      .catch((err) => {
         setSubmitting(false);
         let errors = {};
         alert("Det skjedde en feil. Kontakt Webkom");
-        Object.keys(err.response.jsonData).forEach(key => {
+        Object.keys(err.response.jsonData).forEach((key) => {
           errors[key] = err.response.jsonData[key][0];
         });
         setErrors(errors);
@@ -316,7 +312,7 @@ const EditCommitteeForm = withFormik({
       return Yup.object().shape(schema);
     });
   },
-  enableReinitialize: true
+  enableReinitialize: true,
 })(MyInnerForm);
 
 export { EditCommitteeForm };

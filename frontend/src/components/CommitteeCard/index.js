@@ -8,7 +8,7 @@ const CommitteeCard = ({
   isChosen,
   name,
   description,
-  readMoreLink
+  readMoreLink,
 }) => {
   return (
     <Card onClick={() => onToggle(name)} isChosen={isChosen}>
@@ -45,7 +45,7 @@ export const Card = styled.div`
     ". readmore";
   grid-gap: 10px 20px;
   background: var(--lego-white);
-  box-shadow: ${props =>
+  box-shadow: ${(props) =>
     props.isChosen
       ? "1px 3px 5px rgba(129, 129, 129, 0.5)"
       : "1px 3px 5px rgba(129, 129, 129, 0.3)"};
@@ -137,7 +137,7 @@ export const SelectedMark = styled.div`
   display: flex;
   justify-content: center;
   align-items: center;
-  background: ${props =>
+  background: ${(props) =>
     props.isChosen
       ? "linear-gradient(180deg, #C0392B 0%, #BD1C1C 100%)"
       : "linear-gradient(180deg, #394B59 0%, #283642 100%)"};
@@ -145,7 +145,7 @@ export const SelectedMark = styled.div`
 `;
 
 const SelectedMarkText = styled.span`
-  color: ${props =>
+  color: ${(props) =>
     props.isChosen ? "var(--lego-white);" : "var(--lego-gray-light);"};
   font-size: 1rem;
   font-weight: bold;

@@ -1,9 +1,9 @@
 import styled from "styled-components";
 
-const Button = styled.button.attrs(props => ({
+const Button = styled.button.attrs((props) => ({
   width: props.width || "auto",
   fontSize: props.fontSize || "1em",
-  margin: props.margin || "0"
+  margin: props.margin || "0",
 }))`
   color: #fff;
   font-weight: bold;
@@ -13,10 +13,10 @@ const Button = styled.button.attrs(props => ({
   border-radius: 4px;
   outline: none;
   display: block;
-  font-size: ${props => props.fontSize};
+  font-size: ${(props) => props.fontSize};
   font-family: var(--font-family);
-  width: ${props => props.width};
-  margin: ${props => props.margin};
+  width: ${(props) => props.width};
+  margin: ${(props) => props.margin};
 `;
 
 export default Button;

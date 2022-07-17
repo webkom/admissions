@@ -16,8 +16,8 @@ class CollapseContainer extends React.PureComponent {
   }
 
   toggleView = () => {
-    this.setState(prevState => ({
-      isOpened: !prevState.isOpened
+    this.setState((prevState) => ({
+      isOpened: !prevState.isOpened,
     }));
   };
 

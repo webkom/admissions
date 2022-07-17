@@ -15,8 +15,8 @@ module.exports = {
           "react-dom",
           "reselect",
           "styled-components",
-          "@sentry/browser"
-        ]
+          "@sentry/browser",
+        ],
       }
     : {
         app: [
@@ -24,15 +24,15 @@ module.exports = {
           "whatwg-fetch",
           "webpack-dev-server/client?http://127.0.0.1:5001",
           "webpack/hot/only-dev-server",
-          "./frontend/src/index"
+          "./frontend/src/index",
         ],
         vendor: [
           "react",
           "react-dom",
           "reselect",
           "styled-components",
-          "@sentry/browser"
-        ]
+          "@sentry/browser",
+        ],
       },
   output: {
     path: path.resolve("./assets/bundles/"),
@@ -40,7 +40,7 @@ module.exports = {
     filename: "[name]-[hash].js",
     publicPath: isProduction
       ? "/static/bundles/"
-      : "http://127.0.0.1:5001/static/bundles/" // Use hot-reloading in DEV, otherwise hosted by django
+      : "http://127.0.0.1:5001/static/bundles/", // Use hot-reloading in DEV, otherwise hosted by django
   },
   devtool: isProduction ? "source-map" : "cheap-module-eval-source-map",
   optimization: {
@@ -51,11 +51,11 @@ module.exports = {
           chunks: "initial",
           name: "vendor",
           test: "vendor",
-          enforce: true
-        }
-      }
+          enforce: true,
+        },
+      },
     },
-    runtimeChunk: true
+    runtimeChunk: true,
   },
 
   plugins: [
@@ -67,8 +67,8 @@ module.exports = {
       new CircularDependencyPlugin({
         exclude: /a\.js|node_modules/,
         failOnError: false,
-        cwd: process.cwd()
-      })
+        cwd: process.cwd(),
+      }),
   ].filter(Boolean),
 
   module: {
@@ -76,7 +76,7 @@ module.exports = {
       {
         test: /\.jsx?$/,
         exclude: /node_modules/,
-        use: [{ loader: "babel-loader" }]
+        use: [{ loader: "babel-loader" }],
       },
       {
         // Preprocess our own .css files
@@ -84,13 +84,13 @@ module.exports = {
         // for a list of loaders, see https://webpack.js.org/loaders/#styling
         test: /\.css$/,
         exclude: /node_modules/,
-        use: ["style-loader", "css-loader"]
+        use: ["style-loader", "css-loader"],
       },
       {
         // Preprocess 3rd party .css files located in node_modules
         test: /\.css$/,
         include: /node_modules/,
-        use: ["style-loader", "css-loader"]
+        use: ["style-loader", "css-loader"],
       },
       {
         test: /\.(jpg|png|gif)$/,
@@ -101,32 +101,32 @@ module.exports = {
               // Inline files smaller than 10 kB
               limit: 10 * 1024,
               name: "[path][name].[hash].[ext]",
-              emit: false
-            }
+              emit: false,
+            },
           },
           {
             loader: "image-webpack-loader",
             options: {
               mozjpeg: {
-                enabled: false
+                enabled: false,
                 // NOTE: mozjpeg is disabled as it causes errors in some Linux environments
                 // Try enabling it in your environment by switching the config to:
                 // enabled: true,
                 // progressive: true,
               },
               gifsicle: {
-                interlaced: false
+                interlaced: false,
               },
               optipng: {
-                optimizationLevel: 7
+                optimizationLevel: 7,
               },
               pngquant: {
                 quality: [0.6, 0.95],
-                speed: 4
-              }
-            }
-          }
-        ]
+                speed: 4,
+              },
+            },
+          },
+        ],
       },
       {
         test: /\.(woff(2)?|ttf|eot|svg)(\?v=\d+\.\d+\.\d+)?$/,
@@ -135,19 +135,19 @@ module.exports = {
             loader: "file-loader",
             options: {
               name: "[name].[ext]",
-              outputPath: "assets/"
-            }
-          }
-        ]
-      }
-    ]
+              outputPath: "assets/",
+            },
+          },
+        ],
+      },
+    ],
   },
 
   resolve: {
     alias: {
-      assets: path.resolve(__dirname, "assets")
+      assets: path.resolve(__dirname, "assets"),
     },
     modules: [path.resolve(__dirname, "frontend"), "node_modules"],
-    extensions: [".js", ".jsx"]
-  }
+    extensions: [".js", ".jsx"],
+  },
 };

@@ -14,7 +14,7 @@ import { media } from "src/styles/mediaQueries";
 const ToggleCommittees = ({
   committees,
   selectedCommittees,
-  toggleCommittee
+  toggleCommittee,
 }) => {
   const ChooseCommitteesItems = committees.map((committee, index) => (
     <MiniToggleCommittee

@@ -41,8 +41,8 @@ class AdminPage extends Component {
         { label: "Username", key: "username" },
         { label: "Søkt innen frist", key: "appliedWithinDeadline" },
         { label: "Tid sendt", key: "createdAt" },
-        { label: "Tid oppdatert", key: "updatedAt" }
-      ]
+        { label: "Tid oppdatert", key: "updatedAt" },
+      ],
     };
   }
 
@@ -58,7 +58,7 @@ class AdminPage extends Component {
     committeeApplicationText,
     phoneNumber
   ) => {
-    this.setState(prevState => ({
+    this.setState((prevState) => ({
       ...prevState,
       csvData: [
         ...prevState.csvData,
@@ -77,49 +77,43 @@ class AdminPage extends Component {
           committeeApplicationText: replaceQuotationMarks(
             committeeApplicationText
           ),
-          phoneNumber
-        }
-      ]
+          phoneNumber,
+        },
+      ],
     }));
   };
 
   componentDidMount() {
     Promise.all([callApi("/application/"), callApi("/admission/")])
-      .then(data => {
+      .then((data) => {
         data.map(({ url, jsonData }) => {
           if (url.includes("/application/")) {
             this.setState({
-              applications: jsonData
+              applications: jsonData,
             });
           } else if (url.includes("/admission/")) {
             this.setState({
-              admission: jsonData[0]
+              admission: jsonData[0],
             });
           }
         });
         this.setState({
-          isFetching: false
+          isFetching: false,
         });
       })
-      .catch(error => {
+      .catch((error) => {
         this.setState({ error, isFetching: false });
       });
 
     this.setState({
-      user: { name: djangoData.user && djangoData.user.full_name }
+      user: { name: djangoData.user && djangoData.user.full_name },
     });
   }
 
   render() {
-    const {
-      error,
-      isFetching,
-      admission,
-      applications,
-      csvData,
-      headers
-    } = this.state;
-    applications.sort(function(a, b) {
+    const { error, isFetching, admission, applications, csvData, headers } =
+      this.state;
+    applications.sort(function (a, b) {
       if (a.user.full_name < b.user.full_name) return -1;
       if (a.user.full_name > b.user.full_name) return 1;
       return 0;
@@ -137,7 +131,7 @@ class AdminPage extends Component {
     const numApplicants = applications.length;
 
     var numApplications = 0;
-    applications.map(application => {
+    applications.map((application) => {
       numApplications += application.committee_applications.length;
     });
 

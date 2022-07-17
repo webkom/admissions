@@ -24,7 +24,7 @@ class LandingPage extends Component {
       admission: null,
       error: null,
       isLoading: true,
-      hasSubmitted: false
+      hasSubmitted: false,
     };
   }
 
@@ -33,25 +33,25 @@ class LandingPage extends Component {
       ({ jsonData: data }) => {
         this.setState({
           admission: data[0],
-          isLoading: false
+          isLoading: false,
         });
       },
-      error => {
+      (error) => {
         this.setState({ error });
       }
     );
     djangoData.user.full_name &&
       callApi("/application/mine/").then(
-        res => {
+        (res) => {
           // HTTP 204 will return no content, but the promise is still Fulfilled
           if (res && res.status == 204) {
             this.setState({
-              hasSubmitted: false
+              hasSubmitted: false,
             });
           } else {
             this.setState({
               hasSubmitted: true,
-              isLoading: false
+              isLoading: false,
             });
           }
         },
@@ -104,7 +104,7 @@ class LandingPage extends Component {
                 icon="arrow-forward"
                 iconPrefix="ios"
                 disabled={!admission.is_open}
-                onClick={e => {
+                onClick={(e) => {
                   window.location = "/login/lego/";
                   e.preventDefault();
                 }}
@@ -181,12 +181,12 @@ const InfoBox = styled.div`
   `};
 `;
 
-const StyledSpan = styled.span.attrs(props => ({
+const StyledSpan = styled.span.attrs((props) => ({
   red: props.red ? true : false,
-  bold: props.bold ? "600" : "normal"
+  bold: props.bold ? "600" : "normal",
 }))`
-  color: ${props => (props.red ? "var(--lego-red)" : "inherit")};
-  font-weight: ${props => props.bold};
+  color: ${(props) => (props.red ? "var(--lego-red)" : "inherit")};
+  font-weight: ${(props) => props.bold};
 `;
 
 const Notice = styled.p`

@@ -5,10 +5,10 @@ import StatisticsWrapper from "./StatisticsWrapper";
 import StatisticsCommitteeLogo from "./StatisticsCommitteeLogo";
 
 const CommitteeStatistics = ({ applications, committee }) => {
-  const calculateNumCommitteeApplications = committee => {
+  const calculateNumCommitteeApplications = (committee) => {
     var sum = 0;
-    applications.map(application => {
-      application.committee_applications.map(committeeApplication => {
+    applications.map((application) => {
+      application.committee_applications.map((committeeApplication) => {
         if (
           committeeApplication.committee.name.toLowerCase() ===
           committee.toLowerCase()

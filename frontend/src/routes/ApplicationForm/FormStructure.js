@@ -29,7 +29,7 @@ const FormStructure = ({
   isEditing,
   myApplication,
   onDeleteApplication,
-  onCancel
+  onCancel,
 }) => (
   <PageWrapper>
     {!isEditing && (
@@ -463,12 +463,12 @@ const SubmitSection = styled.div`
   `};
 `;
 
-const StyledSpan = styled.span.attrs(props => ({
+const StyledSpan = styled.span.attrs((props) => ({
   red: props.red ? true : false,
-  bold: props.bold ? "600" : "normal"
+  bold: props.bold ? "600" : "normal",
 }))`
-  color: ${props => (props.red ? "var(--lego-red)" : "inherit")};
-  font-weight: ${props => props.bold};
+  color: ${(props) => (props.red ? "var(--lego-red)" : "inherit")};
+  font-weight: ${(props) => props.bold};
 `;
 
 const ApplicationDateInfo = styled.p`

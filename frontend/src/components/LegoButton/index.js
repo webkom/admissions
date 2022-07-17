@@ -15,9 +15,9 @@ const LegoButton = ({
   disabled,
   iconPrefix = "md",
   onClick,
-  type = "button"
+  type = "button",
 }) => {
-  const getButtonStyle = style => {
+  const getButtonStyle = (style) => {
     switch (style) {
       case "primary":
         return "primary";
@@ -87,7 +87,7 @@ const ILegoRouterLink = styled(Link)`
   }
 
   /** Primary style (also base for tertiary) **/
-  ${props =>
+  ${(props) =>
     (props.buttonstyle === "primary" || props.buttonstyle === "tertiary") &&
     css`
       background: var(--lego-red);
@@ -104,7 +104,7 @@ const ILegoRouterLink = styled(Link)`
     `}
 
   /** Secondary style **/
-  ${props =>
+  ${(props) =>
     props.buttonstyle === "secondary" &&
     css`
       color: var(--lego-red);
@@ -123,7 +123,7 @@ const ILegoRouterLink = styled(Link)`
     `}
 
   /** Tertiary style **/
-  ${props =>
+  ${(props) =>
     props.buttonstyle === "tertiary" &&
     css`
       background: var(--lego-font-color);
@@ -131,7 +131,7 @@ const ILegoRouterLink = styled(Link)`
     `}
 
   /** Disabled primary & tertiary style **/
-  ${props =>
+  ${(props) =>
     props.disabled &&
     (props.buttonstyle === "primary" || props.buttonstyle === "tertiary") &&
     css`
@@ -150,7 +150,7 @@ const Text = styled.span`
   font-family: var(--font-family);
 
   /** Primary style & Tertiary style **/
-  ${props =>
+  ${(props) =>
     (props.buttonstyle === "primary" || props.buttonstyle === "tertiary") &&
     css`
       font-size: 1.2rem;
@@ -158,7 +158,7 @@ const Text = styled.span`
     `}
 
   /** Secondary style **/
-  ${props =>
+  ${(props) =>
     props.buttonstyle === "secondary" &&
     css`
       font-size: 1.1rem;
