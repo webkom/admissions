@@ -16,7 +16,7 @@ steps:
       - yarn build
 
   - name: missing-migrations
-    image: abakus/lego-testbase
+    image: abakus/lego-testbase:python3.9
     when:
       event: push
     environment:
@@ -27,7 +27,7 @@ steps:
       - tox -e missing-migrations
 
   - name: tests
-    image: abakus/lego-testbase
+    image: abakus/lego-testbase:python3.9
     when:
       event: push
     environment:
@@ -37,7 +37,7 @@ steps:
       - tox -e tests
 
   - name: isort
-    image: abakus/lego-testbase
+    image: abakus/lego-testbase:python3.9
     when:
       event: push
     environment:
@@ -46,7 +46,7 @@ steps:
       - tox -e isort
 
   - name: black
-    image: abakus/lego-testbase
+    image: abakus/lego-testbase:python3.9
     pull: true
     when:
       event: push
@@ -56,7 +56,7 @@ steps:
       - tox -e black
 
   - name: coverage
-    image: abakus/lego-testbase
+    image: abakus/lego-testbase:python3.9
     when:
       event: push
     depends_on:
