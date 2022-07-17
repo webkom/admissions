@@ -60,7 +60,7 @@ faker==2.0.0
     # via factory-boy
 filelock==3.0.12
     # via tox
-flake8==3.7.8
+flake8==4.0.1
     # via -r requirements/flake8.txt
 idna==2.8
     # via requests
@@ -110,11 +110,11 @@ ptyprocess==0.6.0
     # via pexpect
 py==1.10.0
     # via tox
-pycodestyle==2.5.0
+pycodestyle==2.8.0
     # via flake8
 pycparser==2.21
     # via cffi
-pyflakes==2.1.1
+pyflakes==2.4.0
     # via flake8
 pygments==2.7.4
     # via ipython
