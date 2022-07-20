@@ -161,7 +161,7 @@ sqlparse==0.4.2
     #   django-debug-toolbar
 stack-data==0.3.0
     # via ipython
-structlog==21.5.0
+structlog==22.1.0
     # via -r requirements/base.in
 toml==0.10.2
     # via tox
@@ -176,8 +176,6 @@ traitlets==5.3.0
     # via
     #   ipython
     #   matplotlib-inline
-typing-extensions==4.3.0
-    # via black
 urllib3==1.26.10
     # via
     #   requests

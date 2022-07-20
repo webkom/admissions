@@ -110,7 +110,7 @@ sqlparse==0.4.2
     # via django
 stack-data==0.3.0
     # via ipython
-structlog==21.5.0
+structlog==22.1.0
     # via -r requirements/base.in
 tomli==2.0.1
     # via
