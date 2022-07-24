@@ -1,6 +1,6 @@
 import React from "react";
-import ReactDOM from "react-dom";
 import { BrowserRouter as Router, Route, Switch } from "react-router-dom";
+import { createRoot } from "react-dom/client";
 
 import NotFoundPage from "src/routes/NotFoundPage";
 import LandingPage from "src/routes/LandingPage/";
@@ -28,7 +28,10 @@ Sentry.init({
   },
 });
 
-ReactDOM.render(
+const container = document.getElementById("root");
+const root = createRoot(container);
+
+root.render(
   <Router>
     <ScrollToTop>
       <div>
@@ -47,8 +50,7 @@ ReactDOM.render(
         </main>
       </div>
     </ScrollToTop>
-  </Router>,
-  document.getElementById("root")
+  </Router>
 );
 
 if (module.hot) {
