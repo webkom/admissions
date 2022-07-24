@@ -8,9 +8,9 @@ import { media } from "src/styles/mediaQueries";
 const CommitteesPage = ({
   committees,
   selectedCommittees,
-  toggleCommittee
+  toggleCommittee,
 }) => {
-  const handleToggleCommittee = name => {
+  const handleToggleCommittee = (name) => {
     toggleCommittee(name.toLowerCase());
   };
 
@@ -26,7 +26,7 @@ const CommitteesPage = ({
   ));
 
   const hasSelectedAnything = () => {
-    return Object.values(selectedCommittees).filter(a => a).length;
+    return Object.values(selectedCommittees).filter((a) => a).length;
   };
 
   return (

@@ -17,13 +17,13 @@ export default Icon;
 
 /** Styles **/
 
-const Ionicon = styled.i.attrs(props => ({
+const Ionicon = styled.i.attrs((props) => ({
   size: props.size || "2rem",
   color: props.color || "inherit",
-  padding: props.padding || "0"
+  padding: props.padding || "0",
 }))`
-  font-size: ${props => props.size};
+  font-size: ${(props) => props.size};
   line-height: 1;
-  color: ${props => props.color};
-  padding: ${props => props.padding};
+  color: ${(props) => props.color};
+  padding: ${(props) => props.padding};
 `;

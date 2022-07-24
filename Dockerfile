@@ -1,4 +1,4 @@
-FROM node:10 as frontend-builder
+FROM node:16 as frontend-builder
 
 RUN mkdir /app
 WORKDIR /app

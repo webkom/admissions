@@ -13,7 +13,7 @@ class FormContainer extends Component {
     super();
     this.state = {
       width: window.innerWidth,
-      isMobile: false
+      isMobile: false,
     };
   }
 
@@ -30,7 +30,7 @@ class FormContainer extends Component {
     this.setState({ width: window.innerWidth });
   };
 
-  toggleCommittee = name => {
+  toggleCommittee = (name) => {
     this.props.toggleCommittee(name.toLowerCase());
   };
 
@@ -41,7 +41,7 @@ class FormContainer extends Component {
 
   onDeleteApplication = () => {
     callApi("/application/mine/", {
-      method: "DELETE"
+      method: "DELETE",
     }).then(() => {
       this.props.toggleIsEditing();
       sessionStorage.clear();
@@ -64,12 +64,12 @@ class FormContainer extends Component {
 
     if (selectedCommittees != null) {
       this.setState({
-        selectedCommittees: selectedCommittees
+        selectedCommittees: selectedCommittees,
       });
     }
   };
 
-  handleApplicationFieldBlur = e => {
+  handleApplicationFieldBlur = (e) => {
     this.props.handleBlur(e);
   };
 
@@ -86,15 +86,15 @@ class FormContainer extends Component {
       toggleCommittee,
       toggleIsEditing,
       myApplication,
-      isEditingApplication
+      isEditingApplication,
     } = this.props;
 
     const hasSelected =
       committees.filter(
-        committee => selectedCommittees[committee.name.toLowerCase()]
+        (committee) => selectedCommittees[committee.name.toLowerCase()]
       ).length >= 1;
     const SelectedCommitteItems = committees
-      .filter(committee => selectedCommittees[committee.name.toLowerCase()])
+      .filter((committee) => selectedCommittees[committee.name.toLowerCase()])
       .map(({ name, response_label }, index) => (
         <Field
           component={CommitteeApplication}
@@ -137,7 +137,7 @@ const ApplicationForm = withFormik({
     const {
       text = sessionStorage.getItem("text") || "",
       phone_number = sessionStorage.getItem("phoneNumber") || "",
-      committee_applications = []
+      committee_applications = [],
     } = myApplication;
 
     return {
@@ -155,49 +155,46 @@ const ApplicationForm = withFormik({
       ...committee_applications.reduce(
         (obj, a) => ({ ...obj, [a.committee.name.toLowerCase()]: a.text }),
         {}
-      )
+      ),
     };
   },
   handleSubmit(
     values,
-    {
-      props: { selectedCommittees, toggleIsEditing },
-      setSubmitting
-    }
+    { props: { selectedCommittees, toggleIsEditing }, setSubmitting }
   ) {
     var submission = {
       text: values.priorityText,
       applications: {},
-      phone_number: values.phoneNumber
+      phone_number: values.phoneNumber,
     };
     Object.keys(values)
-      .filter(committee => selectedCommittees[committee])
-      .forEach(name => {
+      .filter((committee) => selectedCommittees[committee])
+      .forEach((name) => {
         submission.applications[name] = values[name];
       });
     return callApi("/application/", {
       method: "POST",
-      body: JSON.stringify(submission)
+      body: JSON.stringify(submission),
     })
       .then(() => {
         setSubmitting(false);
         toggleIsEditing();
         window.__DJANGO__.user.has_application = true;
       })
-      .catch(err => {
+      .catch((err) => {
         alert("Det skjedde en feil.... ");
         setSubmitting(false);
         throw err;
       });
   },
 
-  validationSchema: props => {
-    return Yup.lazy(values => {
+  validationSchema: (props) => {
+    return Yup.lazy((values) => {
       var selectedCommittees = Object.keys(values).filter(
-        committee => props.selectedCommittees[committee]
+        (committee) => props.selectedCommittees[committee]
       );
       const schema = {};
-      selectedCommittees.forEach(name => {
+      selectedCommittees.forEach((name) => {
         schema[name] = Yup.string().required("Søknadsteksten må fylles ut");
       });
       schema.phoneNumber = Yup.string("Skriv inn et norsk telefonnummer")
@@ -211,7 +208,7 @@ const ApplicationForm = withFormik({
   },
   displayName: "ApplicationForm",
   validateOnChange: true,
-  enableReinitialize: true
+  enableReinitialize: true,
 })(FormContainer);
 
 export default ApplicationForm;

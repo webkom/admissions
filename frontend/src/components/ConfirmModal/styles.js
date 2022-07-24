@@ -43,14 +43,14 @@ export const ButtonGroup = styled.div`
   padding: 0;
 `;
 
-export const ActionButton = styled.button.attrs(props => ({
+export const ActionButton = styled.button.attrs((props) => ({
   background: props.background || "var(--lego-red)",
-  border: props.border || "1px solid var(--abakus-red)"
+  border: props.border || "1px solid var(--abakus-red)",
 }))`
   color: #fff;
   font-weight: bold;
-  background: ${props => props.background};
-  border: ${props => props.border};
+  background: ${(props) => props.background};
+  border: ${(props) => props.border};
   padding: 10px 30px;
   border-radius: 4px;
   width: 100px;

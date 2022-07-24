@@ -13,7 +13,7 @@ class ReadMore extends Component {
 
     this.state = {
       expanded: false,
-      truncated: false
+      truncated: false,
     };
 
     this.handleTruncate = this.handleTruncate.bind(this);
@@ -23,7 +23,7 @@ class ReadMore extends Component {
   handleTruncate(truncated) {
     if (this.state.truncated !== truncated) {
       this.setState({
-        truncated
+        truncated,
       });
     }
   }
@@ -32,7 +32,7 @@ class ReadMore extends Component {
     event.preventDefault();
 
     this.setState({
-      expanded: !this.state.expanded
+      expanded: !this.state.expanded,
     });
   }
 
@@ -75,13 +75,13 @@ class ReadMore extends Component {
 ReadMore.defaultProps = {
   lines: 3,
   more: "Utvid",
-  less: "Vis mindre"
+  less: "Vis mindre",
 };
 
 ReadMore.propTypes = {
   children: PropTypes.node.isRequired,
   text: PropTypes.node,
-  lines: PropTypes.number
+  lines: PropTypes.number,
 };
 
 export default ReadMore;

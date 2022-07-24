@@ -25,7 +25,7 @@ Sentry.init({
       delete event.body.text;
     }
     return event;
-  }
+  },
 });
 
 ReactDOM.render(

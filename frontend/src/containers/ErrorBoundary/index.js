@@ -6,7 +6,7 @@ import styled from "styled-components";
 class ErrorBoundary extends React.Component {
   state = {
     error: null,
-    lastEventId: null
+    lastEventId: null,
   };
 
   openDialog = () => {
@@ -17,7 +17,7 @@ class ErrorBoundary extends React.Component {
         title: "Det skjedde en feil :(",
         subtitle: "Webkom har fått beskjed.",
         subtitle2:
-          "Gjerne beskriv hva som skjedde, så kan vi fikse problemet kjappere."
+          "Gjerne beskriv hva som skjedde, så kan vi fikse problemet kjappere.",
       });
   };
 
@@ -31,7 +31,7 @@ class ErrorBoundary extends React.Component {
 
   componentDidCatch(error, errorInfo) {
     this.setState({ error });
-    Sentry.withScope(scope => {
+    Sentry.withScope((scope) => {
       scope.setExtras(errorInfo);
       const lastEventId = Sentry.captureException(error);
       this.setState({ lastEventId }, () => {
@@ -45,7 +45,7 @@ class ErrorBoundary extends React.Component {
     const { lastEventId } = this.state;
 
     if (!this.state.error) {
-      return React.Children.map(children, child =>
+      return React.Children.map(children, (child) =>
         React.cloneElement(child, { ...rest })
       );
     }

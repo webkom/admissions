@@ -12,8 +12,8 @@ new WebpackDevServer(webpack(config), {
   inline: true,
   historyApiFallback: true,
   sockPort: "5001",
-  headers: { "Access-Control-Allow-Origin": "*" }
-}).listen(5001, "0.0.0.0", function(err) {
+  headers: { "Access-Control-Allow-Origin": "*" },
+}).listen(5001, "0.0.0.0", function (err) {
   if (err) {
     console.PluginError(err);
   }

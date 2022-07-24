@@ -1,23 +1,17 @@
 {
-  "parser": "babel-eslint",
-  "extends": [
-    "eslint:recommended",
-    "plugin:react/recommended",
-    "prettier",
-    "prettier/react"
-  ],
-  "plugins": [
-    "react"
-  ],
+  "parser": "@babel/eslint-parser",
+  "extends": ["eslint:recommended", "plugin:react/recommended", "prettier"],
+  "plugins": ["react", "prettier"],
   "globals": {
-      "process",
-      "module",
-      "__dirname",
+    "process": false,
+    "module": false,
+    "__dirname": false
   },
   "rules": {
     "react/prop-types": 0,
     "react/display-name": 2,
-    "require-atomic-updates": "off"
+    "require-atomic-updates": "off",
+    "prettier/prettier": "error"
   },
   "settings": {
     "import/resolver": {
@@ -33,8 +27,8 @@
   },
   "parserOptions": {
     "ecmaFeatures": {
-        "jsx": true,
-        "modules": true
+      "jsx": true,
+      "modules": true
     }
   }
 }

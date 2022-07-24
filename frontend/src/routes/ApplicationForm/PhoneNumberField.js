@@ -2,7 +2,7 @@ import React from "react";
 import {
   FieldLabel,
   InputValidationFeedback,
-  StyledField
+  StyledField,
 } from "src/components/styledFields";
 import styled from "styled-components";
 import { media } from "src/styles/mediaQueries";
@@ -10,7 +10,7 @@ import { media } from "src/styles/mediaQueries";
 const PhoneNumberField = ({
   field: { name },
   form: { touched, errors, handleBlur },
-  disabled
+  disabled,
 }) => {
   const error = touched[name] && errors[name];
 
@@ -23,7 +23,7 @@ const PhoneNumberField = ({
         name={name}
         disabled={disabled}
         id={name}
-        onBlur={e => {
+        onBlur={(e) => {
           sessionStorage.setItem("phoneNumber", e.target.value);
           handleBlur();
         }}

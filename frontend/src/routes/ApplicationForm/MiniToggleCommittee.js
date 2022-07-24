@@ -28,7 +28,7 @@ const Wrapper = styled.button`
   padding: 0;
   width: 40px;
   font-family: var(--font-family);
-  opacity: ${props => (props.isChosen ? "1" : "0.2")};
+  opacity: ${(props) => (props.isChosen ? "1" : "0.2")};
 `;
 
 const Logo = styled.img`

@@ -5,7 +5,7 @@ class AdmissionCountDown extends Component {
   constructor(props) {
     super(props);
     this.state = {
-      timeDiff: this.calcTimeDiff()
+      timeDiff: this.calcTimeDiff(),
     };
   }
 
@@ -16,7 +16,7 @@ class AdmissionCountDown extends Component {
     this.counterInterval = setInterval(
       () =>
         this.setState({
-          timeDiff: this.calcTimeDiff()
+          timeDiff: this.calcTimeDiff(),
         }),
       1000
     );
@@ -31,9 +31,7 @@ class AdmissionCountDown extends Component {
     const time = now.to(this.endTime);
 
     // If it's 1 day left we would like to say 'i morgen' and not 1 day
-    const isTomorrow = moment()
-      .add("1", "day")
-      .isSame(this.endTime, "day");
+    const isTomorrow = moment().add("1", "day").isSame(this.endTime, "day");
     return isTomorrow ? "i morgen" : time;
   }
 

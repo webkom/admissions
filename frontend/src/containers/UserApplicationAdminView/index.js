@@ -19,7 +19,7 @@ class UserApplicationAdminView extends Component {
   constructor(props) {
     super(props);
     this.state = {
-      committeeApplications: []
+      committeeApplications: [],
     };
   }
 
@@ -32,10 +32,10 @@ class UserApplicationAdminView extends Component {
       updated_at,
       applied_within_deadline,
       phone_number,
-      pk
+      pk,
     } = this.props;
 
-    committee_applications.sort(function(a, b) {
+    committee_applications.sort(function (a, b) {
       if (a.committee.name < b.committee.name) return -1;
       if (a.committee.name > b.committee.name) return 1;
       return 0;
@@ -77,7 +77,7 @@ class UserApplicationAdminView extends Component {
       created_at,
       updated_at,
       applied_within_deadline,
-      phone_number
+      phone_number,
     } = this.props;
     const { committeeApplications } = this.state;
     const numApplications = committeeApplications.length;

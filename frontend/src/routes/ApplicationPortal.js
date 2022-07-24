@@ -26,17 +26,17 @@ class ApplicationPortal extends Component {
       myApplication: undefined,
       selectedCommittees: {},
       user: null,
-      isEditingApplication: true
+      isEditingApplication: true,
     };
   }
 
-  toggleCommittee = name => {
+  toggleCommittee = (name) => {
     this.setState(
-      state => ({
+      (state) => ({
         selectedCommittees: {
           ...state.selectedCommittees,
-          [name.toLowerCase()]: !state.selectedCommittees[name]
-        }
+          [name.toLowerCase()]: !state.selectedCommittees[name],
+        },
       }),
       () => {
         this.persistState();
@@ -46,8 +46,8 @@ class ApplicationPortal extends Component {
 
   toggleIsEditing = () => {
     this.setState(
-      state => ({
-        isEditingApplication: !state.isEditingApplication
+      (state) => ({
+        isEditingApplication: !state.isEditingApplication,
       }),
       () => {
         this.persistState();
@@ -55,8 +55,8 @@ class ApplicationPortal extends Component {
           this.setState({
             myApplication: jsonData,
             selectedCommittees: jsonData.committee_applications
-              .map(a => a.committee.name.toLowerCase())
-              .reduce((obj, a) => ({ ...obj, [a]: true }), {})
+              .map((a) => a.committee.name.toLowerCase())
+              .reduce((obj, a) => ({ ...obj, [a]: true }), {}),
           })
         );
       }
@@ -86,7 +86,7 @@ class ApplicationPortal extends Component {
     if (selectedCommittees != null) {
       this.setState({
         selectedCommittees: selectedCommittees,
-        isEditingApplication: isEditingApplication
+        isEditingApplication: isEditingApplication,
       });
     }
   };
@@ -96,10 +96,10 @@ class ApplicationPortal extends Component {
       ({ jsonData }) => {
         this.setState({
           committees: jsonData,
-          isFetching: false
+          isFetching: false,
         });
       },
-      error => {
+      (error) => {
         this.setState({ error, isFetching: false });
       }
     );
@@ -109,8 +109,8 @@ class ApplicationPortal extends Component {
         this.setState({
           myApplication: jsonData,
           selectedCommittees: jsonData.committee_applications
-            .map(a => a.committee.name.toLowerCase())
-            .reduce((obj, a) => ({ ...obj, [a]: true }), {})
+            .map((a) => a.committee.name.toLowerCase())
+            .reduce((obj, a) => ({ ...obj, [a]: true }), {}),
         })
       );
     this.setState({ user: djangoData.user });
@@ -120,10 +120,10 @@ class ApplicationPortal extends Component {
     callApi("/admission/").then(
       ({ jsonData: data }) => {
         this.setState({
-          admission: data[0]
+          admission: data[0],
         });
       },
-      error => {
+      (error) => {
         this.setState({ error });
       }
     );

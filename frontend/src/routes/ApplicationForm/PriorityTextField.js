@@ -8,7 +8,7 @@ class PriorityTextField extends Component {
     this.setState({
       timeout: setInterval(() => {
         sessionStorage.setItem("text", this.props.field.value);
-      }, 4000)
+      }, 4000),
     });
   }
   componentWillUnmount() {
@@ -20,7 +20,7 @@ class PriorityTextField extends Component {
       optional = false,
       field: { name, onChange, value },
       form: { handleBlur },
-      disabled
+      disabled,
     } = this.props;
     return (
       <Wrapper>

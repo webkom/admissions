@@ -19,7 +19,7 @@ class UserApplication extends Component {
   constructor(props) {
     super(props);
     this.state = {
-      committeeApplications: []
+      committeeApplications: [],
     };
   }
 
@@ -31,7 +31,7 @@ class UserApplication extends Component {
       updated_at,
       applied_within_deadline,
       phone_number,
-      pk
+      pk,
     } = this.props;
 
     const CommitteeApplications = committee_applications.map(
@@ -71,7 +71,7 @@ class UserApplication extends Component {
       created_at,
       updated_at,
       applied_within_deadline,
-      phone_number
+      phone_number,
     } = this.props;
     const { committeeApplications } = this.state;
     return (

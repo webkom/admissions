@@ -3,7 +3,7 @@
   --lego-background: linear-gradient(
     180deg,
     #eae9e8 0%,
-    rgba(244, 244, 244, 0) 100%
+    rgb(244 244 244 / 0%) 100%
   );
   --lego-font-color: #394b59;
   --lego-link-color: #c0392b;
@@ -30,7 +30,7 @@
   --font-size-small: 12px;
   --font-size-large: 18px;
 
-  --font-family: "Rawline", "Helvetica Neue", Arial, sans-serif;
+  --font-family: "Rawline", "Helvetica Neue", arial, sans-serif;
 
   --lego-max-width: 1100px;
   --lego-default-padding: 2rem;

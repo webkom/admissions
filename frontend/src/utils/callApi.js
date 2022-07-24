@@ -9,7 +9,7 @@ function reportToSentry(error) {
   try {
     if (error.response) {
       Sentry.setContext("response", {
-        response: error.response
+        response: error.response,
       });
     }
   } catch (e) {
@@ -19,7 +19,7 @@ function reportToSentry(error) {
   throw error;
 }
 function timeoutPromise(ms = 0) {
-  return new Promise(resolve => {
+  return new Promise((resolve) => {
     setTimeout(resolve, ms);
   }).then(() => {
     throw new Error("HTTP request timed out.");
@@ -54,12 +54,12 @@ const callApi = async (url, { method = "GET", body = null } = {}) => {
       Accept: "application/json",
       "Content-Type": "application/json",
       "X-CSRFToken": Cookie.get("csrftoken"),
-      "Access-Control-Allow-Credentials": true
+      "Access-Control-Allow-Credentials": true,
     }),
     redirect: "manual",
     credentials: "include",
     // IE don't support body equal to null
-    ...(body ? { body } : {})
+    ...(body ? { body } : {}),
   });
   const res = await Promise.race([timeoutPromise(20000), fetch(request)]);
   if (res.status === 401) {
