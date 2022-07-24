@@ -24,7 +24,7 @@
     "moment": "^2.29.4",
     "moment-timezone": "^0.5.34",
     "react": "^18.2.0",
-    "react-collapse": "^4.0.3",
+    "react-collapse": "^5.1.1",
     "react-csv": "^1.0.14",
     "react-dom": "^16.4.1",
     "react-image": "^2.1.3",
