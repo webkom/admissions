@@ -1,4 +1,4 @@
-import React, { Component } from "react";
+import React, { useEffect, useState } from "react";
 import styled from "styled-components";
 
 import callApi from "src/utils/callApi";
@@ -13,68 +13,39 @@ import LoadingBall from "src/components/LoadingBall";
 
 import * as Sentry from "@sentry/browser";
 import NavBar from "src/components/NavBar";
+import { useLocation } from "react-router-dom";
 
-class ApplicationPortal extends Component {
-  constructor(props) {
-    super(props);
-    this.state = {
-      admission: null,
-      results: undefined,
-      committees: [],
-      error: null,
-      isFetching: true,
-      myApplication: undefined,
-      selectedCommittees: {},
-      user: null,
-      isEditingApplication: true,
-    };
-  }
+const ApplicationPortal = () => {
+  const [admission, setAdmission] = useState(null);
+  const [results] = useState(undefined);
+  const [committees, setCommittees] = useState([]);
+  const [error, setError] = useState(null);
+  const [isFetching, setIsFetching] = useState(true);
+  const [myApplication, setMyApplication] = useState(undefined);
+  const [selectedCommittees, setSelectedCommittees] = useState({});
+  const [user, setUser] = useState(null);
+  const [isEditingApplication, setIsEditingApplication] = useState(true);
 
-  toggleCommittee = (name) => {
-    this.setState(
-      (state) => ({
-        selectedCommittees: {
-          ...state.selectedCommittees,
-          [name.toLowerCase()]: !state.selectedCommittees[name],
-        },
-      }),
-      () => {
-        this.persistState();
-      }
-    );
+  const location = useLocation();
+
+  const toggleCommittee = (name) => {
+    setSelectedCommittees({
+      ...selectedCommittees,
+      [name.toLowerCase()]: !selectedCommittees[name],
+    });
   };
 
-  toggleIsEditing = () => {
-    this.setState(
-      (state) => ({
-        isEditingApplication: !state.isEditingApplication,
-      }),
-      () => {
-        this.persistState();
-        callApi("/application/mine/").then(({ jsonData }) =>
-          this.setState({
-            myApplication: jsonData,
-            selectedCommittees: jsonData.committee_applications
-              .map((a) => a.committee.name.toLowerCase())
-              .reduce((obj, a) => ({ ...obj, [a]: true }), {}),
-          })
-        );
-      }
-    );
+  const toggleIsEditing = () => {
+    setIsEditingApplication(!isEditingApplication);
   };
 
-  persistState = () => {
-    const selectedCommitteesJSON = JSON.stringify(
-      this.state.selectedCommittees
-    );
+  const persistState = () => {
+    const selectedCommitteesJSON = JSON.stringify(selectedCommittees);
     sessionStorage.setItem("selectedCommittees", selectedCommitteesJSON);
-    sessionStorage.setItem(
-      "isEditingApplication",
-      this.state.isEditingApplication
-    );
+    sessionStorage.setItem("isEditingApplication", isEditingApplication);
   };
 
-  initializeState = () => {
+  const initializeState = () => {
     const selectedCommitteesJSON = sessionStorage.getItem("selectedCommittees");
     const isEditingApplicationJSON = sessionStorage.getItem(
       "isEditingApplication",
@@ -84,91 +55,133 @@ class ApplicationPortal extends Component {
     const isEditingApplication = JSON.parse(isEditingApplicationJSON);
 
     if (selectedCommittees != null) {
-      this.setState({
-        selectedCommittees: selectedCommittees,
-        isEditingApplication: isEditingApplication,
-      });
+      setSelectedCommittees(selectedCommittees);
+      setIsEditingApplication(isEditingApplication);
     }
   };
 
-  componentDidMount() {
+  useEffect(() => {
     callApi("/committee/").then(
       ({ jsonData }) => {
-        this.setState({
-          committees: jsonData,
-          isFetching: false,
-        });
+        setCommittees(jsonData);
+        setIsFetching(false);
       },
       (error) => {
-        this.setState({ error, isFetching: false });
+        setError(error);
+        setIsFetching(false);
       }
     );
     djangoData.user &&
       djangoData.user.has_application &&
-      callApi("/application/mine/").then(({ jsonData }) =>
-        this.setState({
-          myApplication: jsonData,
-          selectedCommittees: jsonData.committee_applications
+      callApi("/application/mine/").then(({ jsonData }) => {
+        setMyApplication(jsonData);
+        setSelectedCommittees(
+          jsonData.committee_applications
             .map((a) => a.committee.name.toLowerCase())
-            .reduce((obj, a) => ({ ...obj, [a]: true }), {}),
-        })
-      );
-    this.setState({ user: djangoData.user });
+            .reduce((obj, a) => ({ ...obj, [a]: true }), {})
+        );
+      });
+    setUser(djangoData.user);
     Sentry.setUser(djangoData.user);
-    this.initializeState();
+    initializeState();
 
     callApi("/admission/").then(
       ({ jsonData: data }) => {
-        this.setState({
-          admission: data[0],
-        });
+        setAdmission(data[0]);
       },
       (error) => {
-        this.setState({ error });
+        setError(error);
       }
     );
-  }
+  }, []);
 
-  render() {
-    const { error, isFetching, user, isEditingApplication } = this.state;
-    const { location } = this.props;
+  useEffect(() => {
+    persistState();
+  }, [selectedCommittees]);
 
-    if (!user) {
-      return null;
-    } else if (error) {
-      return <div>Error: {error.message}</div>;
-    } else if (isFetching) {
-      return <LoadingBall />;
-    } else {
-      return (
-        <PageWrapper>
-          <NavBar user={user} isEditing={isEditingApplication} />
-          <ContentContainer>
-            {location.pathname.startsWith("/velg-komiteer") && (
-              <CommitteesPage
-                {...this.state}
-                toggleCommittee={this.toggleCommittee}
-              />
-            )}
-            {location.pathname.startsWith("/min-soknad") && (
-              <ApplicationForm
-                {...this.state}
-                toggleCommittee={this.toggleCommittee}
-                toggleIsEditing={this.toggleIsEditing}
-              />
-            )}
-            {location.pathname.startsWith("/admin") &&
-              (user.is_superuser ? (
-                <AdminPageAbakusLeaderView {...this.state} />
-              ) : (
-                <AdminPage {...this.state} />
-              ))}
-          </ContentContainer>
-        </PageWrapper>
+  useEffect(() => {
+    persistState();
+    callApi("/application/mine/").then(({ jsonData }) => {
+      setMyApplication(jsonData);
+      setSelectedCommittees(
+        jsonData.committee_applications
+          .map((a) => a.committee.name.toLowerCase())
+          .reduce((obj, a) => ({ ...obj, [a]: true }), {})
       );
-    }
+    });
+  }, [isEditingApplication]);
+
+  if (!user) {
+    return null;
+  } else if (error) {
+    return <div>Error: {error.message}</div>;
+  } else if (isFetching) {
+    return <LoadingBall />;
+  } else {
+    return (
+      <PageWrapper>
+        <NavBar user={user} isEditing={isEditingApplication} />
+        <ContentContainer>
+          {location.pathname.startsWith("/velg-komiteer") && (
+            <CommitteesPage
+              toggleCommittee={toggleCommittee}
+              admission={admission}
+              results={results}
+              committees={committees}
+              error={error}
+              isFetching={isFetching}
+              myApplication={myApplication}
+              selectedCommittees={selectedCommittees}
+              user={user}
+              isEditingApplication={isEditingApplication}
+            />
+          )}
+          {location.pathname.startsWith("/min-soknad") && (
+            <ApplicationForm
+              toggleCommittee={toggleCommittee}
+              toggleIsEditing={toggleIsEditing}
+              admission={admission}
+              results={results}
+              committees={committees}
+              error={error}
+              isFetching={isFetching}
+              myApplication={myApplication}
+              selectedCommittees={selectedCommittees}
+              user={user}
+              isEditingApplication={isEditingApplication}
+            />
+          )}
+          {location.pathname.startsWith("/admin") &&
+            (user.is_superuser ? (
+              <AdminPageAbakusLeaderView
+                admission={admission}
+                results={results}
+                committees={committees}
+                error={error}
+                isFetching={isFetching}
+                myApplication={myApplication}
+                selectedCommittees={selectedCommittees}
+                user={user}
+                isEditingApplication={isEditingApplication}
+              />
+            ) : (
+              <AdminPage
+                admission={admission}
+                results={results}
+                committees={committees}
+                error={error}
+                isFetching={isFetching}
+                myApplication={myApplication}
+                selectedCommittees={selectedCommittees}
+                user={user}
+                isEditingApplication={isEditingApplication}
+              />
+            ))}
+        </ContentContainer>
+      </PageWrapper>
+    );
   }
-}
+};
 
 export default ApplicationPortal;
 

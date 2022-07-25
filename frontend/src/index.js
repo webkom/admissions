@@ -1,5 +1,5 @@
 import React from "react";
-import { BrowserRouter as Router, Route, Switch } from "react-router-dom";
+import { BrowserRouter as Router, useRoutes } from "react-router-dom";
 import { createRoot } from "react-dom/client";
 
 import NotFoundPage from "src/routes/NotFoundPage";
@@ -31,21 +31,22 @@ Sentry.init({
 const container = document.getElementById("root");
 const root = createRoot(container);
 
+const AppRoutes = () =>
+  useRoutes([
+    { path: "/", element: <LandingPage /> },
+    { path: "/velg-komiteer", element: <ApplicationPortal /> },
+    { path: "/min-soknad", element: <ApplicationPortal /> },
+    { path: "/admin", element: <ApplicationPortal /> },
+    { path: "*", element: <NotFoundPage /> },
+  ]);
+
 root.render(
   <Router>
     <ScrollToTop>
       <div>
         <main>
           <ErrorBoundary>
-            <Switch>
-              <Route exact path="/" component={LandingPage} />
-              <Route
-                exact
-                path="/(velg-komiteer|min-soknad|admin)"
-                component={ApplicationPortal}
-              />
-              <Route component={NotFoundPage} />
-            </Switch>
+            <AppRoutes />
           </ErrorBoundary>
         </main>
       </div>

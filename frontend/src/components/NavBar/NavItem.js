@@ -1,19 +1,19 @@
 import React from "react";
 import styled from "styled-components";
-import { NavLink } from "react-router-dom";
+import { NavLink, useMatch } from "react-router-dom";
 import DecorativeLine from "src/components/DecorativeLine";
-import { withRouter } from "react-router-dom";
 
-const NavItem = ({ to, text, match }) => {
+const NavItem = ({ to, text }) => {
+  const match = useMatch(to + "/*");
   return (
     <Container>
       <Item to={to}>{text}</Item>
-      <DecorativeLine red={match.url === to} />
+      <DecorativeLine red={match} />
     </Container>
   );
 };
 
-export default withRouter(NavItem);
+export default NavItem;
 
 /** Styles **/
 
