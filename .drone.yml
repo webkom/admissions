@@ -119,7 +119,7 @@ steps:
 
 services:
   - name: database
-    image: postgres:9.5
+    image: postgres:14.4
     environment:
       POSTGRES_USER: admissions
       POSTGRES_HOST_AUTH_METHOD: trust
