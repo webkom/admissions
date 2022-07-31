@@ -22,9 +22,7 @@ const ApplicationAdminView = ({ committee, text, applicationId }) => {
 
   return (
     <Wrapper>
-      <CommitteeLogo
-        src={require(`assets/committee_logos/${committee.toLowerCase()}.png`)}
-      />
+      <CommitteeLogo src={committee.logo} />
       <SmallDescriptionWrapper>
         <SmallDescription>Søknad til ...</SmallDescription>
         <CommitteeName>{committee} </CommitteeName>

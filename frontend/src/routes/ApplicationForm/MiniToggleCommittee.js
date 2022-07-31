@@ -8,14 +8,14 @@
 import React from "react";
 import styled from "styled-components";
 
-const MiniToggleCommittee = ({ name, toggleCommittee, isChosen }) => {
+const MiniToggleCommittee = ({ name, logo, toggleCommittee, isChosen }) => {
   return (
     <Wrapper
       type="button"
       onClick={() => toggleCommittee(name.toLowerCase())}
       isChosen={isChosen}
     >
-      <Logo src={require(`assets/committee_logos/${name.toLowerCase()}.png`)} />
+      <Logo src={logo} />
     </Wrapper>
   );
 };

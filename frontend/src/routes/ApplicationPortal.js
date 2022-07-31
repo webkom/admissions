@@ -103,11 +103,13 @@ const ApplicationPortal = () => {
     persistState();
     callApi("/application/mine/").then(({ jsonData }) => {
       setMyApplication(jsonData);
-      setSelectedCommittees(
-        jsonData.committee_applications
-          .map((a) => a.committee.name.toLowerCase())
-          .reduce((obj, a) => ({ ...obj, [a]: true }), {})
-      );
+      if (jsonData !== undefined) {
+        setSelectedCommittees(
+          jsonData.committee_applications
+            .map((a) => a.committee.name.toLowerCase())
+            .reduce((obj, a) => ({ ...obj, [a]: true }), {})
+        );
+      }
     });
   }, [isEditingApplication]);
 

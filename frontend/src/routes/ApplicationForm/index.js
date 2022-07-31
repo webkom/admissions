@@ -95,14 +95,17 @@ class FormContainer extends Component {
       ).length >= 1;
     const SelectedCommitteItems = committees
       .filter((committee) => selectedCommittees[committee.name.toLowerCase()])
-      .map(({ name, response_label }, index) => (
+      .map((committee, index) => (
         <Field
           component={CommitteeApplication}
-          committee={name}
-          name={name.toLowerCase()}
-          responseLabel={response_label}
-          error={touched[name.toLowerCase()] && errors[name.toLowerCase()]}
-          key={`${name.toLowerCase()} ${index}`}
+          committee={committee}
+          name={committee.name.toLowerCase()}
+          responseLabel={committee.response_label}
+          error={
+            touched[committee.name.toLowerCase()] &&
+            errors[committee.name.toLowerCase()]
+          }
+          key={`${committee.name.toLowerCase()} ${index}`}
           disabled={!isEditingApplication}
         />
       ));
@@ -133,29 +136,31 @@ class FormContainer extends Component {
 // Highest order component for application form.
 // Handles form values, submit post and form validation.
 const ApplicationForm = withFormik({
-  mapPropsToValues({ myApplication = {} }) {
+  mapPropsToValues({ myApplication = {}, selectedCommittees = {} }) {
     const {
       text = sessionStorage.getItem("text") || "",
       phone_number = sessionStorage.getItem("phoneNumber") || "",
       committee_applications = [],
     } = myApplication;
 
+    const blankCommitteApplications = {};
+    Object.keys(selectedCommittees).forEach((committee) => {
+      blankCommitteApplications[committee] = "";
+    });
+
+    const committeeApplications = committee_applications.reduce(
+      (obj, application) => ({
+        ...obj,
+        [application.committee.name.toLowerCase()]: application.text,
+      }),
+      {}
+    );
+
     return {
-      webkom: "",
-      fagkom: "",
-      bedkom: "",
-      readme: "",
-      labamba: "",
-      koskom: "",
-      arrkom: "",
-      bankkom: "",
-      pr: "",
       priorityText: text,
       phoneNumber: phone_number,
-      ...committee_applications.reduce(
-        (obj, a) => ({ ...obj, [a.committee.name.toLowerCase()]: a.text }),
-        {}
-      ),
+      ...blankCommitteApplications,
+      ...committeeApplications,
     };
   },
   handleSubmit(

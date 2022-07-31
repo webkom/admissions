@@ -9,10 +9,11 @@ const CommitteeCard = ({
   name,
   description,
   readMoreLink,
+  logo,
 }) => {
   return (
     <Card onClick={() => onToggle(name)} isChosen={isChosen}>
-      <Logo src={require(`assets/committee_logos/${name.toLowerCase()}.png`)} />
+      <Logo src={logo} />
       <Name>{readmeIfy(name)}</Name>
       <Description>{readmeIfy(description, true)}</Description>
       <LearnMoreLink href={`${readMoreLink}`} target="_blank">

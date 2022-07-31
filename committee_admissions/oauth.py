@@ -19,6 +19,18 @@ class LegoOAuth2(BaseOAuth2):
         ("profilePicture", "profile_picture"),
     ]
 
+    LEGO_GROUP_NAMES = [
+        "Arrkom",
+        "Bankkom",
+        "Bedkom",
+        "Fagkom",
+        "Koskom",
+        "LaBamba",
+        "readme",
+        "PR",
+        "Webkom",
+    ]
+
     def get_scope(self):
         if not Committee.objects.all().exists():
             return ["all"]
@@ -64,19 +76,29 @@ class LegoOAuth2(BaseOAuth2):
         return self.get_json(url, headers={"AUTHORIZATION": "Bearer %s" % access_token})
 
     def _create_initial_committees(self, access_token):
-        url = urljoin(self.api_url(), "api/v1/groups/?type=komite")
+        url = urljoin(self.api_url(), "api/v1/groups/")
         data = self.get_json(url, headers={"AUTHORIZATION": "Bearer %s" % access_token})
         with transaction.atomic():
-            for komite in data["results"]:
-                name = komite["name"]
-                if name == "backup":
+            for committee in data["results"]:
+                name = committee["name"]
+                if name not in self.LEGO_GROUP_NAMES:
                     continue
-                pk = komite["id"]
-                description = komite["description"]
+                pk = committee["id"]
+                description = committee["description"]
+                logo = committee["logo"]
                 detail_link = f"https://abakus.no/pages/komiteer/{pk}"
                 Committee.objects.create(
-                    pk=pk, description=description, name=name, detail_link=detail_link
+                    pk=pk,
+                    description=description,
+                    name=name,
+                    detail_link=detail_link,
+                    logo=logo,
                 )
+        if len(self.LEGO_GROUP_NAMES) != Committee.objects.count():
+            raise ImportError(
+                "All %s groups were not fetched from the api"
+                % len(self.LEGO_GROUP_NAMES)
+            )
 
 
 def parse_group_data(response):
@@ -116,13 +138,12 @@ def update_custom_user_details(strategy, details, user=None, *args, **kwargs):
                 user.is_superuser = True
                 continue
 
-            if group["type"] != "komite":
+            try:
+                committee = Committee.objects.get(pk=group["id"])
+            except Committee.DoesNotExist:
+                # Do not save the membership if the group is not part of this admission
                 continue
 
-            if group["name"] == "backup":
-                continue
-
-            committee = Committee.objects.get(pk=group["id"])
             # For all other committee memebers their role is set
             # This is used later on when we check if they are Leader or Recruitment
             Membership.objects.create(

@@ -18,6 +18,7 @@ const CommitteesPage = ({
     <CommitteeCard
       name={committee.name}
       description={committee.description}
+      logo={committee.logo}
       key={committee.name + "-" + index}
       onToggle={handleToggleCommittee}
       isChosen={!!selectedCommittees[committee.name.toLowerCase()]}

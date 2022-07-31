@@ -7,16 +7,19 @@ class CommitteeApplication extends Component {
   }
 
   initializeValue = () => {
-    var committee = this.props.committee.toLowerCase();
+    var committeeName = this.props.committee.name.toLowerCase();
 
     var restoredApplicationText = JSON.parse(
       sessionStorage.getItem("applicationText")
     );
 
-    if (restoredApplicationText != null && restoredApplicationText[committee]) {
+    if (
+      restoredApplicationText != null &&
+      restoredApplicationText[committeeName]
+    ) {
       this.props.form.setFieldValue(
-        committee,
-        restoredApplicationText[committee]
+        committeeName,
+        restoredApplicationText[committeeName]
       );
     }
   };

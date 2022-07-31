@@ -19,6 +19,7 @@ const ToggleCommittees = ({
   const ChooseCommitteesItems = committees.map((committee, index) => (
     <MiniToggleCommittee
       name={committee.name}
+      logo={committee.logo}
       key={committee.name + "-" + index}
       isChosen={!!selectedCommittees[committee.name.toLowerCase()]}
       toggleCommittee={toggleCommittee}

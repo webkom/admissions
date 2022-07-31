@@ -30,18 +30,6 @@ import {
   CommitteeLogoWrapper,
 } from "./styles";
 
-const committee_logos = {
-  webkom: require("assets/committee_logos/webkom.png"),
-  arrkom: require("assets/committee_logos/arrkom.png"),
-  bankkom: require("assets/committee_logos/bankkom.png"),
-  bedkom: require("assets/committee_logos/bedkom.png"),
-  pr: require("assets/committee_logos/pr.png"),
-  readme: require("assets/committee_logos/readme.png"),
-  labamba: require("assets/committee_logos/labamba.png"),
-  fagkom: require("assets/committee_logos/fagkom.png"),
-  koskom: require("assets/committee_logos/koskom.png"),
-};
-
 class AdminPage extends Component {
   constructor(props) {
     super(props);
@@ -62,17 +50,6 @@ class AdminPage extends Component {
         { label: "Tid sendt", key: "createdAt" },
         { label: "Tid oppdatert", key: "updatedAt" },
       ],
-      committeeNames: {
-        webkom: "Webkom",
-        arrkom: "Arrkom",
-        bankkom: "Bankkom",
-        bedkom: "Bedkom",
-        pr: "PR",
-        readme: "readme",
-        labamba: "LaBamba",
-        fagkom: "Fagkom",
-        koskom: "Koskom",
-      },
     };
   }
 
@@ -152,13 +129,11 @@ class AdminPage extends Component {
         />
       );
     });
-    const committee = this.props.committees.find(
+    const group = this.props.committees.find(
       (committee) =>
         committee.name.toLowerCase() ===
         djangoData.user.representative_of_committee.toLowerCase()
     );
-
-    const committeeId = committee && committee.pk;
 
     const numApplicants = filteredApplications.length;
 
@@ -171,13 +146,7 @@ class AdminPage extends Component {
         <PageWrapper>
           <PageTitle>Admin Panel</PageTitle>
           <CommitteeLogoWrapper>
-            <CommitteeLogo
-              src={
-                committee_logos[
-                  djangoData.user.representative_of_committee.toLowerCase()
-                ]
-              }
-            />
+            <CommitteeLogo src={group.logo} />
             <h2>{djangoData.user.representative_of_committee}</h2>
           </CommitteeLogoWrapper>
           <LinkLink to="/">Gå til forside</LinkLink>
@@ -185,10 +154,9 @@ class AdminPage extends Component {
           <Wrapper>
             <EditCommitteeForm
               apiRoot={this.API_ROOT}
-              committee={djangoData.user.representative_of_committee}
-              initialDescription={committee && committee.description}
-              initialReplyText={committee && committee.response_label}
-              committeeId={committeeId}
+              initialDescription={group && group.description}
+              initialReplyText={group && group.response_label}
+              group={group}
             />
           </Wrapper>
           <Wrapper>
@@ -256,34 +224,20 @@ const EditCommitteeForm = withFormik({
       description: initialDescription || "",
     };
   },
-  handleSubmit(
-    values,
-    { props: { committee, committeeId }, setSubmitting, setErrors }
-  ) {
-    const committeeNames = {
-      webkom: "Webkom",
-      arrkom: "Arrkom",
-      bankkom: "Bankkom",
-      bedkom: "Bedkom",
-      pr: "PR",
-      readme: "readme",
-      labamba: "LaBamba",
-      fagkom: "Fagkom",
-      koskom: "Koskom",
-    };
+  handleSubmit(values, { props: { group }, setSubmitting, setErrors }) {
     const submission = {
-      name: committeeNames[committee],
+      name: group.name,
       description: values.description,
       response_label: values.response_label,
     };
 
-    return callApi(`/committee/${committeeId}/`, {
+    return callApi(`/committee/${group.pk}/`, {
       method: "PATCH",
       body: JSON.stringify(submission),
     })
       .then((res) => {
         setSubmitting(false);
-        alert("Komité oppdatert :D");
+        alert("Gruppe oppdatert :D");
         return res.jsonData;
       })
       .catch((err) => {

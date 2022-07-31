@@ -4,7 +4,11 @@ import StatisticsName from "./StatisticsName";
 import StatisticsWrapper from "./StatisticsWrapper";
 import StatisticsCommitteeLogo from "./StatisticsCommitteeLogo";
 
-const CommitteeStatistics = ({ applications, committee }) => {
+const CommitteeStatistics = ({
+  applications,
+  committeeName,
+  committeeLogo,
+}) => {
   const calculateNumCommitteeApplications = (committee) => {
     var sum = 0;
     applications.map((application) => {
@@ -20,13 +24,11 @@ const CommitteeStatistics = ({ applications, committee }) => {
     return sum;
   };
 
-  const count = calculateNumCommitteeApplications(committee);
+  const count = calculateNumCommitteeApplications(committeeName);
   return (
     <StatisticsWrapper smallerMargin>
-      <StatisticsCommitteeLogo
-        src={require(`assets/committee_logos/${committee.toLowerCase()}.png`)}
-      />
-      <StatisticsName capitalize>{committee}</StatisticsName>
+      <StatisticsCommitteeLogo src={committeeLogo} />
+      <StatisticsName capitalize>{committeeName}</StatisticsName>
       {count} stk
     </StatisticsWrapper>
   );
