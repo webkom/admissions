@@ -18,10 +18,10 @@ const DeleteWrapper = styled.div`
     `};
 `;
 
-const performDelete = (id, group) => {
+const performDelete = (id, groupName) => {
   callApi(
     `/application/${id}/delete_group_application/${
-      group ? `?group=${group}` : ""
+      groupName ? `?group=${groupName}` : ""
     }`,
     {
       method: "DELETE",
@@ -34,7 +34,7 @@ const performDelete = (id, group) => {
     });
 };
 
-const DeleteApplication = ({ id, group }) => {
+const DeleteApplication = ({ id, groupName }) => {
   return (
     <DeleteWrapper>
       <ConfirmModal
@@ -45,7 +45,7 @@ const DeleteApplication = ({ id, group }) => {
           </LegoButton>
         )}
         message="Er du sikker på at du vil slette denne søknaden?"
-        onConfirm={() => performDelete(id, group)}
+        onConfirm={() => performDelete(id, groupName)}
       />
     </DeleteWrapper>
   );

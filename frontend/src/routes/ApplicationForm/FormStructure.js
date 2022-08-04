@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect } from "react";
 import styled from "styled-components";
 import { Form, Field } from "formik";
 import { media } from "src/styles/mediaQueries";
@@ -14,6 +14,8 @@ import PhoneNumberField from "./PhoneNumberField";
 import ToggleGroups from "./ToggleGroups";
 import ErrorFocus from "./ErrorFocus";
 import djangoData from "src/utils/djangoData";
+import { useDeleteApplicationMutation } from "../../query/mutations";
+import { useNavigate } from "react-router-dom";
 
 const FormStructure = ({
   admission,
@@ -28,217 +30,234 @@ const FormStructure = ({
   isValid,
   isEditing,
   myApplication,
-  onDeleteApplication,
   onCancel,
-}) => (
-  <PageWrapper>
-    {!isEditing && (
-      <RecieptInfo>
-        <Title>Kvittering for sendt søknad</Title>
-        <RecievedApplicationBanner>
-          <span>Vi har mottatt søknaden din!</span>
-          <Icon name="checkmark" size="1.8rem" />
-        </RecievedApplicationBanner>
-        <TimeStamp>
-          <Icon name="time" />
-          Søknaden ble sist registrert
-          {myApplication && (
-            <StyledSpan bold>
-              <Moment format="dddd Do MMMM, \k\l. HH:mm:ss">
-                {myApplication.updated_at}
-              </Moment>
-            </StyledSpan>
-          )}
-        </TimeStamp>
-        <EditWrapper>
-          <EditInfo>
-            <Text>
-              Du kan
-              <StyledSpan bold> fritt endre søknaden</StyledSpan> din frem til{" "}
-              {admission && (
-                <StyledSpan bold red>
-                  <Moment format="dddd Do MMMM">
-                    {admission.public_deadline}
-                  </Moment>
-                </StyledSpan>
-              )}{" "}
-              og komiteene vil kun se den siste versjonen.
-            </Text>
-            <Notice>
-              <StyledSpan bold>Merk:</StyledSpan> Oppdateringer etter
-              søknadsfristen kan ikke garanteres å bli sett av komiteen(e) du
-              søker deg til.
-            </Notice>
-          </EditInfo>
-          <EditActions>
-            <LegoButton
-              icon="arrow-forward"
-              iconPrefix="ios"
-              onClick={toggleIsEditing}
-            >
-              Endre søknad
-            </LegoButton>
-            <ConfirmModal
-              title="Slett søknad"
-              Component={({ onClick }) => (
-                <LegoButton
-                  onClick={onClick}
-                  buttonStyle="secondary"
-                  size="medium"
-                >
-                  Slett søknad
-                </LegoButton>
-              )}
-              message="Er du sikker på at du vil slette søknaden din?"
-              onConfirm={() => onDeleteApplication()}
-            />
-          </EditActions>
-        </EditWrapper>
-      </RecieptInfo>
-    )}
+}) => {
+  const navigate = useNavigate();
+  const deleteApplicationMutation = useDeleteApplicationMutation();
 
-    <FormHeader>
-      <Title>
-        {isEditing ? "Skriv din søknad og send inn!" : "Innsendt data"}
-      </Title>
-      {isEditing && djangoData.user.has_application && (
-        <CancelButtonContainer>
-          <LegoButton
-            icon="arrow-back"
-            iconPrefix="ios"
-            onClick={onCancel}
-            valid={isValid}
-            buttonStyle="primary"
-          >
-            Avbryt
-          </LegoButton>
-        </CancelButtonContainer>
-      )}
-    </FormHeader>
-    <Form>
-      <SeparatorLine />
-      <GeneralInfoSection>
-        <SectionHeader>Generelt</SectionHeader>
-        <HelpText>
-          <Icon name="information-circle-outline" />
-          Mobilnummeret vil bli brukt til å kalle deg inn på intervju av
-          komitéledere.
-        </HelpText>
-        <Field
-          name="phoneNumber"
-          component={PhoneNumberField}
-          disabled={!isEditing}
-        />
+  useEffect(() => {
+    if (!deleteApplicationMutation.isSuccess) return;
+    toggleIsEditing();
+    sessionStorage.clear();
+    navigate("/");
+  }, [deleteApplicationMutation.isSuccess]);
 
-        <HelpText>
-          <Icon name="information-circle-outline" />
-          Kun leder av Abakus kan se det du skriver inn i prioriterings- og
-          kommentarfeltet.
-          <Icon name="information-circle-outline" />
-          Det er ikke sikkert prioriteringslisten vil bli tatt hensyn til. Ikke
-          søk på en komite du ikke ønsker å bli med i.
-        </HelpText>
-        <Field
-          name="priorityText"
-          component={PriorityTextField}
-          label="Prioriteringer, og andre kommentarer"
-          optional
-          disabled={!isEditing}
-        />
-      </GeneralInfoSection>
-      <SeparatorLine />
-      <GroupsSection>
-        <Sidebar>
-          <div>
-            <SectionHeader>Komiteer</SectionHeader>
-            <HelpText>
-              <Icon name="information-circle-outline" />
-              Her skriver du søknaden til komiteen(e) du har valgt. Hver komité
-              kan kun se søknaden til sin egen komité.
-            </HelpText>
-
-            {isEditing && (
-              <ToggleGroups
-                groups={groups}
-                selectedGroups={selectedGroups}
-                toggleGroup={toggleGroup}
-              />
+  return (
+    <PageWrapper>
+      {!isEditing && (
+        <RecieptInfo>
+          <Title>Kvittering for sendt søknad</Title>
+          <RecievedApplicationBanner>
+            <span>Vi har mottatt søknaden din!</span>
+            <Icon name="checkmark" size="1.8rem" />
+          </RecievedApplicationBanner>
+          <TimeStamp>
+            <Icon name="time" />
+            Søknaden ble sist registrert
+            {myApplication && (
+              <StyledSpan bold>
+                <Moment format="dddd Do MMMM, \k\l. HH:mm:ss">
+                  {myApplication.updated_at}
+                </Moment>
+              </StyledSpan>
             )}
-          </div>
-        </Sidebar>
-        {hasSelected ? (
-          <Applications>{SelectedGroupItems}</Applications>
-        ) : (
-          <NoChosenGroupsWrapper>
-            <NoChosenTitle>Du har ikke valgt noen komiteer.</NoChosenTitle>
-            <NoChosenSubTitle>
-              Velg i sidemargen eller gå til komiteoversikten
-            </NoChosenSubTitle>
-            <LegoButton
-              icon="arrow-forward"
-              iconPrefix="ios"
-              to="/velg-komiteer"
-            >
-              Velg komiteer
-            </LegoButton>
-          </NoChosenGroupsWrapper>
-        )}
-      </GroupsSection>
-      <SeparatorLine />
-
-      {isEditing && (
-        <SubmitSection>
-          <div>
-            {admission && (
-              <div>
-                <ApplicationDateInfo>
-                  <StyledSpan bold>Søknadsfristen</StyledSpan> er{" "}
+          </TimeStamp>
+          <EditWrapper>
+            <EditInfo>
+              <Text>
+                Du kan
+                <StyledSpan bold> fritt endre søknaden</StyledSpan> din frem til{" "}
+                {admission && (
                   <StyledSpan bold red>
                     <Moment format="dddd Do MMMM">
                       {admission.public_deadline}
                     </Moment>
                   </StyledSpan>
-                  <StyledSpan red>
-                    <Moment format=", \k\l. HH:mm:ss">
-                      {admission.public_deadline}
-                    </Moment>
-                  </StyledSpan>
-                  .
-                </ApplicationDateInfo>
-              </div>
-            )}
-            <SubmitInfo>
-              Oppdateringer etter søknadsfristen kan ikke garanteres å bli sett
-              av komiteen(e) du søker deg til.
-            </SubmitInfo>
-            <SubmitInfo>
-              Din søknad til hver komité kan kun ses av den aktuelle komiteen og
-              leder av Abakus. All søknadsinformasjon slettes etter opptaket er
-              gjennomført.
-            </SubmitInfo>
-            <SubmitInfo>Du kan når som helst trekke søknaden din.</SubmitInfo>
-          </div>
-          {hasSelected && (
-            <div>
+                )}{" "}
+                og komiteene vil kun se den siste versjonen.
+              </Text>
+              <Notice>
+                <StyledSpan bold>Merk:</StyledSpan> Oppdateringer etter
+                søknadsfristen kan ikke garanteres å bli sett av komiteen(e) du
+                søker deg til.
+              </Notice>
+            </EditInfo>
+            <EditActions>
               <LegoButton
                 icon="arrow-forward"
                 iconPrefix="ios"
-                onClick={handleSubmit}
-                type="submit"
-                disabled={isSubmitting}
-                valid={isValid}
-                buttonStyle="tertiary"
+                onClick={toggleIsEditing}
               >
-                Send inn søknad
+                Endre søknad
               </LegoButton>
-            </div>
-          )}
-        </SubmitSection>
+              <ConfirmModal
+                title="Slett søknad"
+                Component={({ onClick }) => (
+                  <LegoButton
+                    onClick={onClick}
+                    buttonStyle="secondary"
+                    size="medium"
+                  >
+                    {deleteApplicationMutation.isLoading
+                      ? "Sletter søknad..."
+                      : deleteApplicationMutation.isError
+                      ? "Klarte ikke slette søknad"
+                      : deleteApplicationMutation.isSuccess
+                      ? "Søknad slettet!"
+                      : "Slett søknad"}
+                  </LegoButton>
+                )}
+                message="Er du sikker på at du vil slette søknaden din?"
+                onConfirm={() => deleteApplicationMutation.mutate()}
+              />
+            </EditActions>
+          </EditWrapper>
+        </RecieptInfo>
       )}
-      <ErrorFocus />
-    </Form>
-  </PageWrapper>
-);
+
+      <FormHeader>
+        <Title>
+          {isEditing ? "Skriv din søknad og send inn!" : "Innsendt data"}
+        </Title>
+        {isEditing && djangoData.user.has_application && (
+          <CancelButtonContainer>
+            <LegoButton
+              icon="arrow-back"
+              iconPrefix="ios"
+              onClick={onCancel}
+              valid={isValid}
+              buttonStyle="primary"
+            >
+              Avbryt
+            </LegoButton>
+          </CancelButtonContainer>
+        )}
+      </FormHeader>
+      <Form>
+        <SeparatorLine />
+        <GeneralInfoSection>
+          <SectionHeader>Generelt</SectionHeader>
+          <HelpText>
+            <Icon name="information-circle-outline" />
+            Mobilnummeret vil bli brukt til å kalle deg inn på intervju av
+            komitéledere.
+          </HelpText>
+          <Field
+            name="phoneNumber"
+            component={PhoneNumberField}
+            disabled={!isEditing}
+          />
+
+          <HelpText>
+            <Icon name="information-circle-outline" />
+            Kun leder av Abakus kan se det du skriver inn i prioriterings- og
+            kommentarfeltet.
+            <Icon name="information-circle-outline" />
+            Det er ikke sikkert prioriteringslisten vil bli tatt hensyn til.
+            Ikke søk på en komite du ikke ønsker å bli med i.
+          </HelpText>
+          <Field
+            name="priorityText"
+            component={PriorityTextField}
+            label="Prioriteringer, og andre kommentarer"
+            optional
+            disabled={!isEditing}
+          />
+        </GeneralInfoSection>
+        <SeparatorLine />
+        <GroupsSection>
+          <Sidebar>
+            <div>
+              <SectionHeader>Komiteer</SectionHeader>
+              <HelpText>
+                <Icon name="information-circle-outline" />
+                Her skriver du søknaden til komiteen(e) du har valgt. Hver
+                komité kan kun se søknaden til sin egen komité.
+              </HelpText>
+
+              {isEditing && (
+                <ToggleGroups
+                  groups={groups}
+                  selectedGroups={selectedGroups}
+                  toggleGroup={toggleGroup}
+                />
+              )}
+            </div>
+          </Sidebar>
+          {hasSelected ? (
+            <Applications>{SelectedGroupItems}</Applications>
+          ) : (
+            <NoChosenGroupsWrapper>
+              <NoChosenTitle>Du har ikke valgt noen komiteer.</NoChosenTitle>
+              <NoChosenSubTitle>
+                Velg i sidemargen eller gå til komiteoversikten
+              </NoChosenSubTitle>
+              <LegoButton
+                icon="arrow-forward"
+                iconPrefix="ios"
+                to="/velg-komiteer"
+              >
+                Velg komiteer
+              </LegoButton>
+            </NoChosenGroupsWrapper>
+          )}
+        </GroupsSection>
+        <SeparatorLine />
+
+        {isEditing && (
+          <SubmitSection>
+            <div>
+              {admission && (
+                <div>
+                  <ApplicationDateInfo>
+                    <StyledSpan bold>Søknadsfristen</StyledSpan> er{" "}
+                    <StyledSpan bold red>
+                      <Moment format="dddd Do MMMM">
+                        {admission.public_deadline}
+                      </Moment>
+                    </StyledSpan>
+                    <StyledSpan red>
+                      <Moment format=", \k\l. HH:mm:ss">
+                        {admission.public_deadline}
+                      </Moment>
+                    </StyledSpan>
+                    .
+                  </ApplicationDateInfo>
+                </div>
+              )}
+              <SubmitInfo>
+                Oppdateringer etter søknadsfristen kan ikke garanteres å bli
+                sett av komiteen(e) du søker deg til.
+              </SubmitInfo>
+              <SubmitInfo>
+                Din søknad til hver komité kan kun ses av den aktuelle komiteen
+                og leder av Abakus. All søknadsinformasjon slettes etter
+                opptaket er gjennomført.
+              </SubmitInfo>
+              <SubmitInfo>Du kan når som helst trekke søknaden din.</SubmitInfo>
+            </div>
+            {hasSelected && (
+              <div>
+                <LegoButton
+                  icon="arrow-forward"
+                  iconPrefix="ios"
+                  onClick={handleSubmit}
+                  type="submit"
+                  disabled={isSubmitting}
+                  valid={isValid}
+                  buttonStyle="tertiary"
+                >
+                  Send inn søknad
+                </LegoButton>
+              </div>
+            )}
+          </SubmitSection>
+        )}
+        <ErrorFocus />
+      </Form>
+    </PageWrapper>
+  );
+};
 
 export default FormStructure;
 

@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import styled from "styled-components";
+import { useAdmission, useMyApplication } from "../../query/hooks";
 
-import callApi from "src/utils/callApi";
 import Moment from "react-moment";
 import "moment/locale/nb";
 Moment.globalLocale = "nb";
@@ -17,41 +17,33 @@ import AdmissionCountDown from "../../components/AdmissionCountDown";
 import LoadingBall from "src/components/LoadingBall";
 
 const LandingPage = () => {
-  const [admission, setAdmission] = useState(null);
-  const [error, setError] = useState(null);
-  const [isLoading, setIsLoading] = useState(true);
   const [hasSubmitted, setHasSubmitted] = useState(false);
 
-  useEffect(() => {
-    callApi("/admission/").then(
-      ({ jsonData: data }) => {
-        setAdmission(data[0]);
-        setIsLoading(false);
-      },
-      (error) => {
-        setError(error);
-      }
-    );
-    djangoData.user.full_name &&
-      callApi("/application/mine/").then(
-        (res) => {
-          // HTTP 204 will return no content, but the promise is still Fulfilled
-          if (res && res.status == 204) {
-            setHasSubmitted(false);
-          } else {
-            setHasSubmitted(true);
-            setIsLoading(false);
-          }
-        },
-        () => setHasSubmitted(false)
-      );
-  }, []);
+  const {
+    data: admission,
+    error: admissionError,
+    isFetching: admissionIsFetching,
+  } = useAdmission();
+  const {
+    data: myApplication,
+    error: myApplicationError,
+    isFetching: myApplicationIsFetching,
+  } = useMyApplication();
 
-  if (error) {
-    return <div>Error: {error.message}</div>;
+  useEffect(() => {
+    if (!myApplication) return;
+    setHasSubmitted(myApplication !== null);
+  }, [myApplication]);
+
+  if (admissionError || myApplicationError) {
+    return (
+      <div>
+        Error: {admissionError} {myApplicationError}
+      </div>
+    );
   }
 
-  if (isLoading) {
+  if (admissionIsFetching || myApplicationIsFetching) {
     return <LoadingBall />;
   }
 

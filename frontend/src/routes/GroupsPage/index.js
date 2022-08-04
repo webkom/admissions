@@ -4,8 +4,11 @@ import LegoButton from "src/components/LegoButton";
 import Icon from "src/components/Icon";
 import styled from "styled-components";
 import { media } from "src/styles/mediaQueries";
+import { useGroups } from "../../query/hooks";
 
-const GroupsPage = ({ groups, selectedGroups, toggleGroup }) => {
+const GroupsPage = ({ selectedGroups, toggleGroup }) => {
+  const { data: groups } = useGroups();
+
   const handleToggleGroup = (name) => {
     toggleGroup(name.toLowerCase());
   };

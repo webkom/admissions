@@ -5,6 +5,7 @@ import { withFormik, Field, Form } from "formik";
 import * as Yup from "yup";
 
 import callApi from "src/utils/callApi";
+import { useApplications, useGroups } from "../../query/hooks";
 import djangoData from "src/utils/djangoData";
 import { media } from "src/styles/mediaQueries";
 
@@ -30,11 +31,9 @@ import {
   GroupLogoWrapper,
 } from "./styles";
 
-const AdminPage = ({ groups }) => {
-  const [error, setError] = useState(null);
+const AdminPage = () => {
   const [sortedApplications, setSortedApplications] = useState([]);
   const [csvData, setCsvData] = useState([]);
-  const [isFetching, setIsFetching] = useState(true);
 
   const csvHeaders = [
     { label: "Full Name", key: "name" },
@@ -47,26 +46,23 @@ const AdminPage = ({ groups }) => {
     { label: "Tid oppdatert", key: "updatedAt" },
   ];
 
-  useEffect(() => {
-    callApi("/application/").then(
-      ({ jsonData }) => {
-        setSortedApplications(
-          [...jsonData].sort((a, b) => {
-            if (a.user.full_name < b.user.full_name) return -1;
-            if (a.user.full_name > b.user.full_name) return 1;
-            return 0;
-          })
-        );
-        setIsFetching(false);
-      },
-      (error) => {
-        setError(error);
-        setIsFetching(false);
-      }
-    );
+  const { data: applications, isFetching, error } = useApplications();
+  const { data: groups } = useGroups();
 
+  useEffect(() => {
     Sentry.setUser(djangoData.user);
   }, []);
+
+  useEffect(() => {
+    if (!applications) return;
+    setSortedApplications(
+      [...applications].sort((a, b) => {
+        if (a.user.full_name < b.user.full_name) return -1;
+        if (a.user.full_name > b.user.full_name) return 1;
+        return 0;
+      })
+    );
+  }, [applications]);
 
   useEffect(() => {
     // Push all the individual applications into csvData with the right format

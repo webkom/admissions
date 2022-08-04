@@ -1,6 +1,8 @@
 import React from "react";
 import { BrowserRouter as Router, useRoutes } from "react-router-dom";
 import { createRoot } from "react-dom/client";
+import { QueryClient, QueryClientProvider } from "react-query";
+import { defaultQueryFn } from "./query/queries";
 
 import NotFoundPage from "src/routes/NotFoundPage";
 import LandingPage from "src/routes/LandingPage/";
@@ -28,6 +30,17 @@ Sentry.init({
   },
 });
 
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      retry: process.env.NODE_ENV === "production",
+      refetchOnWindowFocus: process.env.NODE_ENV === "production",
+      queryFn: defaultQueryFn,
+      staleTime: 60000,
+    },
+  },
+});
+
 const container = document.getElementById("root");
 const root = createRoot(container);
 
@@ -41,17 +54,17 @@ const AppRoutes = () =>
   ]);
 
 root.render(
-  <Router>
-    <ScrollToTop>
-      <div>
+  <QueryClientProvider client={queryClient}>
+    <Router>
+      <ScrollToTop>
         <main>
           <ErrorBoundary>
             <AppRoutes />
           </ErrorBoundary>
         </main>
-      </div>
-    </ScrollToTop>
-  </Router>
+      </ScrollToTop>
+    </Router>
+  </QueryClientProvider>
 );
 
 if (module.hot) {
