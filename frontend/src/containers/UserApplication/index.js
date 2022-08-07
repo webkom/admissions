@@ -19,14 +19,14 @@ class UserApplication extends Component {
   constructor(props) {
     super(props);
     this.state = {
-      committeeApplications: [],
+      groupApplications: [],
     };
   }
 
   componentDidMount() {
     const {
       user,
-      committee_applications,
+      group_applications,
       created_at,
       updated_at,
       applied_within_deadline,
@@ -34,35 +34,33 @@ class UserApplication extends Component {
       pk,
     } = this.props;
 
-    const CommitteeApplications = committee_applications.map(
-      (application, i) => {
-        if (
-          application.committee.name.toLowerCase() ==
-          djangoData.user.representative_of_committee.toLowerCase()
-        ) {
-          this.props.generateCSVData(
-            user.full_name,
-            user.email,
-            user.username,
-            created_at,
-            updated_at,
-            applied_within_deadline,
-            application.text,
-            phone_number
-          );
+    const GroupApplications = group_applications.map((application, i) => {
+      if (
+        application.group.name.toLowerCase() ==
+        djangoData.user.representative_of_group.toLowerCase()
+      ) {
+        this.props.generateCSVData(
+          user.full_name,
+          user.email,
+          user.username,
+          created_at,
+          updated_at,
+          applied_within_deadline,
+          application.text,
+          phone_number
+        );
 
-          return (
-            <Application
-              applicationId={pk}
-              key={user.username + "-" + i}
-              text={application.text}
-            />
-          );
-        }
+        return (
+          <Application
+            applicationId={pk}
+            key={user.username + "-" + i}
+            text={application.text}
+          />
+        );
       }
-    );
+    });
 
-    this.setState({ committeeApplications: CommitteeApplications });
+    this.setState({ groupApplications: GroupApplications });
   }
 
   render() {
@@ -73,7 +71,7 @@ class UserApplication extends Component {
       applied_within_deadline,
       phone_number,
     } = this.props;
-    const { committeeApplications } = this.state;
+    const { groupApplications } = this.state;
     return (
       <Wrapper>
         <CollapseContainer
@@ -120,7 +118,7 @@ class UserApplication extends Component {
                   </div>
                 </SmallDescriptionWrapper>
               </Header>
-              {committeeApplications}
+              {groupApplications}
             </div>
           }
         />

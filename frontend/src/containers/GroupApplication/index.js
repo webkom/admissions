@@ -1,25 +1,22 @@
 import React, { Component } from "react";
 import Application from "./Application";
 
-class CommitteeApplication extends Component {
+class GroupApplication extends Component {
   componentDidMount() {
     setTimeout(this.initializeValue, 0);
   }
 
   initializeValue = () => {
-    var committeeName = this.props.committee.name.toLowerCase();
+    var groupName = this.props.group.name.toLowerCase();
 
     var restoredApplicationText = JSON.parse(
       sessionStorage.getItem("applicationText")
     );
 
-    if (
-      restoredApplicationText != null &&
-      restoredApplicationText[committeeName]
-    ) {
+    if (restoredApplicationText != null && restoredApplicationText[groupName]) {
       this.props.form.setFieldValue(
-        committeeName,
-        restoredApplicationText[committeeName]
+        groupName,
+        restoredApplicationText[groupName]
       );
     }
   };
@@ -29,4 +26,4 @@ class CommitteeApplication extends Component {
   }
 }
 
-export default CommitteeApplication;
+export default GroupApplication;

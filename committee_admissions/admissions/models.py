@@ -30,9 +30,9 @@ class LegoUser(AbstractUser):
         )
 
     @property
-    def representative_of_committee(self):
+    def representative_of_group(self):
         """
-        Return the name of the committee this user is the representative for
+        Return the name of the group this user is the representative for
         """
         membership = (
             Membership.objects.filter(user=self)
@@ -41,7 +41,7 @@ class LegoUser(AbstractUser):
         )
         if not membership:
             return None
-        return membership.committee
+        return membership.group
 
     @property
     def has_application(self):
@@ -73,7 +73,7 @@ class Admission(models.Model):
         return self.public_deadline > timezone.now() > self.open_from
 
 
-class Committee(models.Model):
+class Group(models.Model):
     name = models.CharField(max_length=50, unique=True)
     description = models.TextField(blank=True, max_length=300)
     response_label = models.TextField(blank=True, max_length=300)
@@ -104,7 +104,7 @@ class UserApplication(TimeStampModel):
 
     @property
     def is_sendable(self):
-        return self.is_editable and self.committee_applications.exists()
+        return self.is_editable and self.group_applications.exists()
 
     @property
     def applied_within_deadline(self):
@@ -114,29 +114,29 @@ class UserApplication(TimeStampModel):
     def sent(self):
         return bool(self.created_at)
 
-    def has_committee_application(self, committee):
-        return self.committee_applications.filter(committee=committee).exists()
+    def has_group_application(self, group):
+        return self.group_applications.filter(group=group).exists()
 
 
-class CommitteeApplication(TimeStampModel):
+class GroupApplication(TimeStampModel):
     application = models.ForeignKey(
-        UserApplication, related_name="committee_applications", on_delete=models.CASCADE
+        UserApplication, related_name="group_applications", on_delete=models.CASCADE
     )
-    committee = models.ForeignKey(
-        Committee, related_name="applications", on_delete=models.CASCADE
+    group = models.ForeignKey(
+        Group, related_name="applications", on_delete=models.CASCADE
     )
     text = models.TextField(blank=True)
 
 
 class Membership(models.Model):
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
-    committee = models.ForeignKey(Committee, on_delete=models.CASCADE)
+    group = models.ForeignKey(Group, on_delete=models.CASCADE)
     role = models.CharField(
         max_length=30, choices=constants.ROLES, default=constants.MEMBER
     )
 
     class Meta:
-        unique_together = ("user", "committee")
+        unique_together = ("user", "group")
 
     def __str__(self):
-        return f"{self.user} is in {self.committee}"
+        return f"{self.user} is in {self.group}"

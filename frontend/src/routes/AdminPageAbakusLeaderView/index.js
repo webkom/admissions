@@ -15,7 +15,7 @@ import Wrapper from "./Wrapper";
 import LinkLink from "./LinkLink";
 import CSVExport from "./CSVExport";
 import Statistics from "./Statistics";
-import CommitteeStatistics from "./CommitteeStatistics";
+import GroupStatistics from "./GroupStatistics";
 import StatisticsName from "./StatisticsName";
 import StatisticsWrapper from "./StatisticsWrapper";
 import { replaceQuotationMarks } from "../../utils/replaceQuotationMarks";
@@ -35,8 +35,8 @@ class AdminPage extends Component {
       headers: [
         { label: "Full Name", key: "name" },
         { label: "Prioriteringer", key: "priorityText" },
-        { label: "Komité", key: "committee" },
-        { label: "Søknadstekst", key: "committeeApplicationText" },
+        { label: "Komité", key: "group" },
+        { label: "Søknadstekst", key: "groupApplicationText" },
         { label: "Email", key: "email" },
         { label: "Mobilnummer", key: "phoneNumber" },
         { label: "Username", key: "username" },
@@ -55,8 +55,8 @@ class AdminPage extends Component {
     updatedAt,
     appliedWithinDeadline,
     priorityText,
-    committee,
-    committeeApplicationText,
+    group,
+    groupApplicationText,
     phoneNumber
   ) => {
     this.setState((prevState) => ({
@@ -74,10 +74,8 @@ class AdminPage extends Component {
             priorityText != ""
               ? replaceQuotationMarks(priorityText)
               : "Ingen prioriteringer",
-          committee,
-          committeeApplicationText: replaceQuotationMarks(
-            committeeApplicationText
-          ),
+          group,
+          groupApplicationText: replaceQuotationMarks(groupApplicationText),
           phoneNumber,
         },
       ],
@@ -88,7 +86,7 @@ class AdminPage extends Component {
     Promise.all([
       callApi("/application/"),
       callApi("/admission/"),
-      callApi("/committee/"),
+      callApi("/group/"),
     ])
       .then((data) => {
         data.map(({ url, jsonData }) => {
@@ -100,7 +98,7 @@ class AdminPage extends Component {
             this.setState({
               admission: jsonData[0],
             });
-          } else if (url.includes("/committee/")) {
+          } else if (url.includes("/group/")) {
             this.setState({
               groups: jsonData,
             });
@@ -148,7 +146,7 @@ class AdminPage extends Component {
 
     var numApplications = 0;
     applications.map((application) => {
-      numApplications += application.committee_applications.length;
+      numApplications += application.group_applications.length;
     });
 
     if (error) {
@@ -195,11 +193,11 @@ class AdminPage extends Component {
                 {groups
                   .sort((a, b) => a.name.localeCompare(b.name))
                   .map((group) => (
-                    <CommitteeStatistics
+                    <GroupStatistics
                       key={group.pk}
                       applications={applications}
-                      committeeName={group.name}
-                      committeeLogo={group.logo}
+                      groupName={group.name}
+                      groupLogo={group.logo}
                     />
                   ))}
               </Statistics>

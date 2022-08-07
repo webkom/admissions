@@ -3,7 +3,7 @@ import { withFormik, Field } from "formik";
 import * as Yup from "yup";
 import callApi from "src/utils/callApi";
 
-import CommitteeApplication from "src/containers/CommitteeApplication";
+import GroupApplication from "src/containers/GroupApplication";
 
 import FormStructure from "./FormStructure";
 
@@ -30,8 +30,8 @@ class FormContainer extends Component {
     this.setState({ width: window.innerWidth });
   };
 
-  toggleCommittee = (name) => {
-    this.props.toggleCommittee(name.toLowerCase());
+  toggleGroup = (name) => {
+    this.props.toggleGroup(name.toLowerCase());
   };
 
   onCancelEdit = () => {
@@ -50,8 +50,8 @@ class FormContainer extends Component {
   };
 
   persistState = () => {
-    var selectedCommitteesJSON = JSON.stringify(this.state.selectedCommittees);
-    sessionStorage.setItem("selectedCommittees", selectedCommitteesJSON);
+    var selectedGroupsJSON = JSON.stringify(this.state.selectedGroups);
+    sessionStorage.setItem("selectedGroups", selectedGroupsJSON);
     sessionStorage.setItem(
       "isEditingApplication",
       this.props.isEditingApplication
@@ -59,12 +59,12 @@ class FormContainer extends Component {
   };
 
   initializeState = () => {
-    var selectedCommitteesJSON = sessionStorage.getItem("selectedCommittees");
-    var selectedCommittees = JSON.parse(selectedCommitteesJSON);
+    var selectedGroupsJSON = sessionStorage.getItem("selectedGroups");
+    var selectedGroups = JSON.parse(selectedGroupsJSON);
 
-    if (selectedCommittees != null) {
+    if (selectedGroups != null) {
       this.setState({
-        selectedCommittees: selectedCommittees,
+        selectedGroups: selectedGroups,
       });
     }
   };
@@ -79,33 +79,32 @@ class FormContainer extends Component {
       touched,
       errors,
       isSubmitting,
-      committees,
-      selectedCommittees,
+      groups,
+      selectedGroups,
       handleSubmit,
       isValid,
-      toggleCommittee,
+      toggleGroup,
       toggleIsEditing,
       myApplication,
       isEditingApplication,
     } = this.props;
 
     const hasSelected =
-      committees.filter(
-        (committee) => selectedCommittees[committee.name.toLowerCase()]
-      ).length >= 1;
-    const SelectedCommitteItems = committees
-      .filter((committee) => selectedCommittees[committee.name.toLowerCase()])
-      .map((committee, index) => (
+      groups.filter((group) => selectedGroups[group.name.toLowerCase()])
+        .length >= 1;
+    const SelectedGroupItems = groups
+      .filter((group) => selectedGroups[group.name.toLowerCase()])
+      .map((group, index) => (
         <Field
-          component={CommitteeApplication}
-          committee={committee}
-          name={committee.name.toLowerCase()}
-          responseLabel={committee.response_label}
+          component={GroupApplication}
+          group={group}
+          name={group.name.toLowerCase()}
+          responseLabel={group.response_label}
           error={
-            touched[committee.name.toLowerCase()] &&
-            errors[committee.name.toLowerCase()]
+            touched[group.name.toLowerCase()] &&
+            errors[group.name.toLowerCase()]
           }
-          key={`${committee.name.toLowerCase()} ${index}`}
+          key={`${group.name.toLowerCase()} ${index}`}
           disabled={!isEditingApplication}
         />
       ));
@@ -115,14 +114,14 @@ class FormContainer extends Component {
       <FormStructure
         admission={admission}
         hasSelected={hasSelected}
-        SelectedCommitteItems={SelectedCommitteItems}
+        SelectedGroupItems={SelectedGroupItems}
         isSubmitting={isSubmitting}
         isValid={isValid}
         handleSubmit={handleSubmit}
         isMobile={this.state.isMobile}
-        committees={committees}
-        selectedCommittees={selectedCommittees}
-        toggleCommittee={toggleCommittee}
+        groups={groups}
+        selectedGroups={selectedGroups}
+        toggleGroup={toggleGroup}
         toggleIsEditing={toggleIsEditing}
         isEditing={isEditingApplication}
         myApplication={myApplication}
@@ -136,22 +135,22 @@ class FormContainer extends Component {
 // Highest order component for application form.
 // Handles form values, submit post and form validation.
 const ApplicationForm = withFormik({
-  mapPropsToValues({ myApplication = {}, selectedCommittees = {} }) {
+  mapPropsToValues({ myApplication = {}, selectedGroups = {} }) {
     const {
       text = sessionStorage.getItem("text") || "",
       phone_number = sessionStorage.getItem("phoneNumber") || "",
-      committee_applications = [],
+      group_applications = [],
     } = myApplication;
 
-    const blankCommitteApplications = {};
-    Object.keys(selectedCommittees).forEach((committee) => {
-      blankCommitteApplications[committee] = "";
+    const blankGroupApplications = {};
+    Object.keys(selectedGroups).forEach((group) => {
+      blankGroupApplications[group] = "";
     });
 
-    const committeeApplications = committee_applications.reduce(
+    const groupApplications = group_applications.reduce(
       (obj, application) => ({
         ...obj,
-        [application.committee.name.toLowerCase()]: application.text,
+        [application.group.name.toLowerCase()]: application.text,
       }),
       {}
     );
@@ -159,13 +158,13 @@ const ApplicationForm = withFormik({
     return {
       priorityText: text,
       phoneNumber: phone_number,
-      ...blankCommitteApplications,
-      ...committeeApplications,
+      ...blankGroupApplications,
+      ...groupApplications,
     };
   },
   handleSubmit(
     values,
-    { props: { selectedCommittees, toggleIsEditing }, setSubmitting }
+    { props: { selectedGroups, toggleIsEditing }, setSubmitting }
   ) {
     var submission = {
       text: values.priorityText,
@@ -173,7 +172,7 @@ const ApplicationForm = withFormik({
       phone_number: values.phoneNumber,
     };
     Object.keys(values)
-      .filter((committee) => selectedCommittees[committee])
+      .filter((group) => selectedGroups[group])
       .forEach((name) => {
         submission.applications[name] = values[name];
       });
@@ -195,11 +194,11 @@ const ApplicationForm = withFormik({
 
   validationSchema: (props) => {
     return Yup.lazy((values) => {
-      var selectedCommittees = Object.keys(values).filter(
-        (committee) => props.selectedCommittees[committee]
+      var selectedGroups = Object.keys(values).filter(
+        (group) => props.selectedGroups[group]
       );
       const schema = {};
-      selectedCommittees.forEach((name) => {
+      selectedGroups.forEach((name) => {
         schema[name] = Yup.string().required("Søknadsteksten må fylles ut");
       });
       schema.phoneNumber = Yup.string("Skriv inn et norsk telefonnummer")

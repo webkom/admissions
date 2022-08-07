@@ -8,7 +8,7 @@ const Wrapper = styled.div`
   grid-template-columns: 6em 1fr;
   grid-template-rows: repeat(3, auto);
   grid-template-areas:
-    "logo committeeName"
+    "logo groupName"
     "logo ."
     "logo applicationText";
   align-items: center;

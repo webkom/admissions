@@ -16,7 +16,7 @@ class Application extends Component {
           "applicationText",
           JSON.stringify({
             ...JSON.parse(sessionStorage.getItem("applicationText")),
-            [this.props.committee.name.toLowerCase()]: this.props.field.value,
+            [this.props.group.name.toLowerCase()]: this.props.field.value,
           })
         );
       }, 4000),
@@ -28,7 +28,7 @@ class Application extends Component {
   render() {
     const {
       responseLabel,
-      committee,
+      group,
       field: { name, onChange, value },
       form: { touched, errors, handleBlur },
       disabled,
@@ -37,14 +37,14 @@ class Application extends Component {
     return (
       <Container>
         <LogoNameWrapper>
-          <Logo src={committee.logo} />
-          <Name>{readmeIfy(committee.name)}</Name>
+          <Logo src={group.logo} />
+          <Name>{readmeIfy(group.name)}</Name>
         </LogoNameWrapper>
         {responseLabel && (
           <ResponseLabel>{readmeIfy(responseLabel, true)}</ResponseLabel>
         )}
         <InputWrapper>
-          <FieldLabel htmlFor={committee.name.toLowerCase()}>
+          <FieldLabel htmlFor={group.name.toLowerCase()}>
             Søknadstekst
           </FieldLabel>
           <InputArea

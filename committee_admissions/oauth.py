@@ -4,7 +4,7 @@ from six.moves.urllib.parse import urljoin
 from social_core.backends.oauth import BaseOAuth2
 
 from committee_admissions.admissions import constants
-from committee_admissions.admissions.models import Committee, Membership
+from committee_admissions.admissions.models import Group, Membership
 
 
 class LegoOAuth2(BaseOAuth2):
@@ -32,7 +32,7 @@ class LegoOAuth2(BaseOAuth2):
     ]
 
     def get_scope(self):
-        if not Committee.objects.all().exists():
+        if not Group.objects.all().exists():
             return ["all"]
         return ["user"]
 
@@ -66,8 +66,8 @@ class LegoOAuth2(BaseOAuth2):
     def user_data(self, access_token, *args, **kwargs):
         user_data = self._user_data(access_token)
 
-        if not Committee.objects.all().exists():
-            self._create_initial_committees(access_token)
+        if not Group.objects.all().exists():
+            self._create_initial_groups(access_token)
 
         return user_data
 
@@ -75,26 +75,26 @@ class LegoOAuth2(BaseOAuth2):
         url = urljoin(self.api_url(), "api/v1/users/oauth2_userdata/")
         return self.get_json(url, headers={"AUTHORIZATION": "Bearer %s" % access_token})
 
-    def _create_initial_committees(self, access_token):
+    def _create_initial_groups(self, access_token):
         url = urljoin(self.api_url(), "api/v1/groups/")
         data = self.get_json(url, headers={"AUTHORIZATION": "Bearer %s" % access_token})
         with transaction.atomic():
-            for committee in data["results"]:
-                name = committee["name"]
+            for group in data["results"]:
+                name = group["name"]
                 if name not in self.LEGO_GROUP_NAMES:
                     continue
-                pk = committee["id"]
-                description = committee["description"]
-                logo = committee["logo"]
+                pk = group["id"]
+                description = group["description"]
+                logo = group["logo"]
                 detail_link = f"https://abakus.no/pages/komiteer/{pk}"
-                Committee.objects.create(
+                Group.objects.create(
                     pk=pk,
                     description=description,
                     name=name,
                     detail_link=detail_link,
                     logo=logo,
                 )
-        if len(self.LEGO_GROUP_NAMES) != Committee.objects.count():
+        if len(self.LEGO_GROUP_NAMES) != Group.objects.count():
             raise ImportError(
                 "All %s groups were not fetched from the api"
                 % len(self.LEGO_GROUP_NAMES)
@@ -139,16 +139,14 @@ def update_custom_user_details(strategy, details, user=None, *args, **kwargs):
                 continue
 
             try:
-                committee = Committee.objects.get(pk=group["id"])
-            except Committee.DoesNotExist:
+                group = Group.objects.get(pk=group["id"])
+            except Group.DoesNotExist:
                 # Do not save the membership if the group is not part of this admission
                 continue
 
-            # For all other committee memebers their role is set
+            # For all other group memebers their role is set
             # This is used later on when we check if they are Leader or Recruitment
-            Membership.objects.create(
-                user=user, committee=committee, role=membership["role"]
-            )
+            Membership.objects.create(user=user, group=group, role=membership["role"])
 
         user.save()
 

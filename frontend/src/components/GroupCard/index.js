@@ -3,7 +3,7 @@ import styled from "styled-components";
 import { media } from "src/styles/mediaQueries";
 import readmeIfy from "src/components/ReadmeLogo";
 
-const CommitteeCard = ({
+const GroupCard = ({
   onToggle,
   isChosen,
   name,
@@ -32,7 +32,7 @@ const CommitteeCard = ({
   );
 };
 
-export default CommitteeCard;
+export default GroupCard;
 
 /** Styles **/
 

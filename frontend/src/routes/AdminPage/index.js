@@ -17,7 +17,7 @@ import CSRFToken from "./csrftoken";
 import { replaceQuotationMarks } from "../../utils/replaceQuotationMarks";
 
 import {
-  EditCommitteeFormWrapper,
+  EditGroupFormWrapper,
   FormWrapper,
   SubmitButton,
   Wrapper,
@@ -26,8 +26,8 @@ import {
   Statistics,
   StatisticsName,
   StatisticsWrapper,
-  CommitteeLogo,
-  CommitteeLogoWrapper,
+  GroupLogo,
+  GroupLogoWrapper,
 } from "./styles";
 
 class AdminPage extends Component {
@@ -109,10 +109,10 @@ class AdminPage extends Component {
       return 0;
     });
     const filteredApplications = applications.filter((userApplication) => {
-      var filteredComApp = userApplication.committee_applications.filter(
-        (committeeApplication) =>
-          committeeApplication.committee.name.toLowerCase() ==
-          djangoData.user.representative_of_committee.toLowerCase()
+      var filteredComApp = userApplication.group_applications.filter(
+        (groupApplication) =>
+          groupApplication.group.name.toLowerCase() ==
+          djangoData.user.representative_of_group.toLowerCase()
       );
 
       return filteredComApp.length > 0;
@@ -124,15 +124,15 @@ class AdminPage extends Component {
         <UserApplication
           key={i}
           {...userApplication}
-          whichCommitteeLeader={djangoData.user.representative_of_committe}
+          whichGroupLeader={djangoData.user.representative_of_group}
           generateCSVData={this.generateCSVData}
         />
       );
     });
-    const group = this.props.committees.find(
-      (committee) =>
-        committee.name.toLowerCase() ===
-        djangoData.user.representative_of_committee.toLowerCase()
+    const group = this.props.groups.find(
+      (group) =>
+        group.name.toLowerCase() ===
+        djangoData.user.representative_of_group.toLowerCase()
     );
 
     const numApplicants = filteredApplications.length;
@@ -145,14 +145,14 @@ class AdminPage extends Component {
       return (
         <PageWrapper>
           <PageTitle>Admin Panel</PageTitle>
-          <CommitteeLogoWrapper>
-            <CommitteeLogo src={group.logo} />
-            <h2>{djangoData.user.representative_of_committee}</h2>
-          </CommitteeLogoWrapper>
+          <GroupLogoWrapper>
+            <GroupLogo src={group.logo} />
+            <h2>{djangoData.user.representative_of_group}</h2>
+          </GroupLogoWrapper>
           <LinkLink to="/">Gå til forside</LinkLink>
 
           <Wrapper>
-            <EditCommitteeForm
+            <EditGroupForm
               apiRoot={this.API_ROOT}
               initialDescription={group && group.description}
               initialReplyText={group && group.response_label}
@@ -190,7 +190,7 @@ const MyInnerForm = (props) => {
     <Form>
       <FormWrapper>
         <CSRFToken />
-        <EditCommitteeFormWrapper>
+        <EditGroupFormWrapper>
           <Field
             component={TextAreaField}
             title="Endre beskrivelsen av komiteen"
@@ -203,7 +203,7 @@ const MyInnerForm = (props) => {
             name="response_label"
             placeholder="Skriv hva komitteen ønsker å vite om søkeren..."
           />
-        </EditCommitteeFormWrapper>
+        </EditGroupFormWrapper>
         <SubmitButton
           onClick={handleSubmit}
           type="submit"
@@ -217,7 +217,7 @@ const MyInnerForm = (props) => {
   );
 };
 
-const EditCommitteeForm = withFormik({
+const EditGroupForm = withFormik({
   mapPropsToValues({ initialDescription, initialReplyText }) {
     return {
       response_label: initialReplyText || "",
@@ -231,7 +231,7 @@ const EditCommitteeForm = withFormik({
       response_label: values.response_label,
     };
 
-    return callApi(`/committee/${group.pk}/`, {
+    return callApi(`/group/${group.pk}/`, {
       method: "PATCH",
       body: JSON.stringify(submission),
     })
@@ -269,7 +269,7 @@ const EditCommitteeForm = withFormik({
   enableReinitialize: true,
 })(MyInnerForm);
 
-export { EditCommitteeForm };
+export { EditGroupForm };
 
 /** Styles **/
 

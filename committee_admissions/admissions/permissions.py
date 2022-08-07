@@ -1,6 +1,6 @@
 from rest_framework import permissions
 
-from .models import CommitteeApplication, LegoUser, UserApplication
+from .models import GroupApplication, LegoUser, UserApplication
 
 
 class IsOwnerOrReadOnly(permissions.BasePermission):
@@ -14,7 +14,7 @@ class IsOwnerOrReadOnly(permissions.BasePermission):
         return obj.user == request.user
 
 
-class CommitteePermissions(permissions.BasePermission):
+class GroupPermissions(permissions.BasePermission):
     def has_object_permission(self, request, view, obj):
         if request.method in permissions.SAFE_METHODS:
             return True
@@ -22,8 +22,8 @@ class CommitteePermissions(permissions.BasePermission):
         user = request.user
         user.__class__ = LegoUser
 
-        # Here obj will be the name of the committee
-        if obj == user.representative_of_committee or user.is_superuser:
+        # Here obj will be the name of the group
+        if obj == user.representative_of_group or user.is_superuser:
             return True
 
         return False
@@ -55,13 +55,13 @@ class ApplicationPermissions(permissions.BasePermission):
         return user.is_privileged
 
 
-class CommitteeApplicationPermissions(permissions.BasePermission):
+class GroupApplicationPermissions(permissions.BasePermission):
     def has_object_permission(self, request, view, obj):
-        if isinstance(obj, CommitteeApplication):
+        if isinstance(obj, GroupApplication):
             request.user.__class__ = LegoUser
-            return obj.committee == request.user.representative_of_committee
+            return obj.group == request.user.representative_of_group
         if isinstance(obj, UserApplication):
-            return CommitteeApplication.objects.filter(application=obj).count() == 0
+            return GroupApplication.objects.filter(application=obj).count() == 0
 
     def has_permission(self, request, view):
         request.user.__class__ = LegoUser

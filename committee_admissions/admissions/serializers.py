@@ -3,8 +3,8 @@ from rest_framework import serializers
 
 from committee_admissions.admissions.models import (
     Admission,
-    Committee,
-    CommitteeApplication,
+    Group,
+    GroupApplication,
     LegoUser,
     UserApplication,
 )
@@ -41,9 +41,9 @@ class AdminAdmissionSerializer(serializers.HyperlinkedModelSerializer):
         )
 
 
-class CommitteeSerializer(serializers.HyperlinkedModelSerializer):
+class GroupSerializer(serializers.HyperlinkedModelSerializer):
     class Meta:
-        model = Committee
+        model = Group
         fields = (
             "url",
             "pk",
@@ -55,7 +55,7 @@ class CommitteeSerializer(serializers.HyperlinkedModelSerializer):
         )
 
     def create(self, validated_data):
-        committee, created = Committee.objects.update_or_create(
+        group, created = Group.objects.update_or_create(
             name=validated_data.get("name", None),
             defaults={
                 "response_label": validated_data.get("response_label", None),
@@ -63,27 +63,27 @@ class CommitteeSerializer(serializers.HyperlinkedModelSerializer):
             },
         )
 
-        return committee
+        return group
 
 
-class ShortCommitteeSerializer(serializers.HyperlinkedModelSerializer):
+class ShortGroupSerializer(serializers.HyperlinkedModelSerializer):
     class Meta:
-        model = Committee
+        model = Group
         fields = ("pk", "name")
 
 
-class CommitteeApplicationSerializer(serializers.HyperlinkedModelSerializer):
+class GroupApplicationSerializer(serializers.HyperlinkedModelSerializer):
     class Meta:
-        model = CommitteeApplication
-        fields = ("url", "pk", "application", "committee", "text")
+        model = GroupApplication
+        fields = ("url", "pk", "application", "group", "text")
 
 
-class ShortCommitteeApplicationSerializer(serializers.HyperlinkedModelSerializer):
-    committee = ShortCommitteeSerializer()
+class ShortGroupApplicationSerializer(serializers.HyperlinkedModelSerializer):
+    group = ShortGroupSerializer()
 
     class Meta:
-        model = CommitteeApplication
-        fields = ("committee", "text")
+        model = GroupApplication
+        fields = ("group", "text")
 
 
 class ShortUserSerializer(serializers.HyperlinkedModelSerializer):
@@ -98,19 +98,19 @@ class ShortUserSerializer(serializers.HyperlinkedModelSerializer):
 
 
 class UserApplicationSerializer(serializers.ModelSerializer):
-    committee_applications = serializers.SerializerMethodField()
+    group_applications = serializers.SerializerMethodField()
     text = serializers.SerializerMethodField()
     user = ShortUserSerializer()
 
     def get_text(self, obj):
-        is_filtered = getattr(obj, "committee_applications_filtered", False)
+        is_filtered = getattr(obj, "group_applications_filtered", False)
         if is_filtered:
             return None
         return obj.text
 
-    def get_committee_applications(self, obj):
-        qs = getattr(obj, "committee_applications_filtered", obj.committee_applications)
-        return ShortCommitteeApplicationSerializer(qs, many=True).data
+    def get_group_applications(self, obj):
+        qs = getattr(obj, "group_applications_filtered", obj.group_applications)
+        return ShortGroupApplicationSerializer(qs, many=True).data
 
     class Meta:
         model = UserApplication
@@ -122,7 +122,7 @@ class UserApplicationSerializer(serializers.ModelSerializer):
             "created_at",
             "updated_at",
             "applied_within_deadline",
-            "committee_applications",
+            "group_applications",
             "phone_number",
         )
 
@@ -161,14 +161,14 @@ class ApplicationCreateUpdateSerializer(serializers.HyperlinkedModelSerializer):
         # The code smell is strong with this one, young padawan
         applications = self.initial_data.pop("applications")
 
-        CommitteeApplication.objects.filter(application=user_application).delete()
+        GroupApplication.objects.filter(application=user_application).delete()
 
-        for committee_name, text in applications.items():
+        for group_name, text in applications.items():
 
-            committee = Committee.objects.get(name__iexact=committee_name)
-            application, created = CommitteeApplication.objects.update_or_create(
+            group = Group.objects.get(name__iexact=group_name)
+            application, created = GroupApplication.objects.update_or_create(
                 application=user_application,
-                committee=committee,
+                group=group,
                 defaults={"text": text},
             )
 

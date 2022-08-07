@@ -1,39 +1,35 @@
 import React from "react";
-import CommitteeCard from "src/components/CommitteeCard";
+import GroupCard from "src/components/GroupCard";
 import LegoButton from "src/components/LegoButton";
 import Icon from "src/components/Icon";
 import styled from "styled-components";
 import { media } from "src/styles/mediaQueries";
 
-const CommitteesPage = ({
-  committees,
-  selectedCommittees,
-  toggleCommittee,
-}) => {
-  const handleToggleCommittee = (name) => {
-    toggleCommittee(name.toLowerCase());
+const GroupsPage = ({ groups, selectedGroups, toggleGroup }) => {
+  const handleToggleGroup = (name) => {
+    toggleGroup(name.toLowerCase());
   };
 
-  const CommitteeCards = committees.map((committee, index) => (
-    <CommitteeCard
-      name={committee.name}
-      description={committee.description}
-      logo={committee.logo}
-      key={committee.name + "-" + index}
-      onToggle={handleToggleCommittee}
-      isChosen={!!selectedCommittees[committee.name.toLowerCase()]}
-      readMoreLink={committee.detail_link}
+  const GroupCards = groups.map((group, index) => (
+    <GroupCard
+      name={group.name}
+      description={group.description}
+      logo={group.logo}
+      key={group.name + "-" + index}
+      onToggle={handleToggleGroup}
+      isChosen={!!selectedGroups[group.name.toLowerCase()]}
+      readMoreLink={group.detail_link}
     />
   ));
 
   const hasSelectedAnything = () => {
-    return Object.values(selectedCommittees).filter((a) => a).length;
+    return Object.values(selectedGroups).filter((a) => a).length;
   };
 
   return (
     <PageWrapper>
       <Title>Velg de komiteene du vil søke på og gå videre</Title>
-      <CommitteesWrapper>{CommitteeCards}</CommitteesWrapper>
+      <GroupsWrapper>{GroupCards}</GroupsWrapper>
       <NextButtonWrapper>
         <LegoButton
           to="/min-soknad"
@@ -54,7 +50,7 @@ const CommitteesPage = ({
   );
 };
 
-export default CommitteesPage;
+export default GroupsPage;
 
 /** Styles **/
 
@@ -81,7 +77,7 @@ export const Title = styled.h1`
   `};
 `;
 
-export const CommitteesWrapper = styled.div`
+export const GroupsWrapper = styled.div`
   display: grid;
   max-width: calc(460px + 460px + 2rem);
   grid-template-columns: 1fr 1fr;

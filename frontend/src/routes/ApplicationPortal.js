@@ -5,7 +5,7 @@ import callApi from "src/utils/callApi";
 import djangoData from "src/utils/djangoData";
 
 import ApplicationForm from "src/routes/ApplicationForm";
-import CommitteesPage from "src/routes/CommitteesPage";
+import GroupsPage from "src/routes/GroupsPage";
 import AdminPage from "src/routes/AdminPage";
 import AdminPageAbakusLeaderView from "src/routes/AdminPageAbakusLeaderView";
 
@@ -18,20 +18,20 @@ import { useLocation } from "react-router-dom";
 const ApplicationPortal = () => {
   const [admission, setAdmission] = useState(null);
   const [results] = useState(undefined);
-  const [committees, setCommittees] = useState([]);
+  const [groups, setGroups] = useState([]);
   const [error, setError] = useState(null);
   const [isFetching, setIsFetching] = useState(true);
   const [myApplication, setMyApplication] = useState(undefined);
-  const [selectedCommittees, setSelectedCommittees] = useState({});
+  const [selectedGroups, setSelectedGroups] = useState({});
   const [user, setUser] = useState(null);
   const [isEditingApplication, setIsEditingApplication] = useState(true);
 
   const location = useLocation();
 
-  const toggleCommittee = (name) => {
-    setSelectedCommittees({
-      ...selectedCommittees,
-      [name.toLowerCase()]: !selectedCommittees[name],
+  const toggleGroup = (name) => {
+    setSelectedGroups({
+      ...selectedGroups,
+      [name.toLowerCase()]: !selectedGroups[name],
     });
   };
 
@@ -40,30 +40,30 @@ const ApplicationPortal = () => {
   };
 
   const persistState = () => {
-    const selectedCommitteesJSON = JSON.stringify(selectedCommittees);
-    sessionStorage.setItem("selectedCommittees", selectedCommitteesJSON);
+    const selectedGroupsJSON = JSON.stringify(selectedGroups);
+    sessionStorage.setItem("selectedGroups", selectedGroupsJSON);
     sessionStorage.setItem("isEditingApplication", isEditingApplication);
   };
 
   const initializeState = () => {
-    const selectedCommitteesJSON = sessionStorage.getItem("selectedCommittees");
+    const selectedGroupsJSON = sessionStorage.getItem("selectedGroups");
     const isEditingApplicationJSON = sessionStorage.getItem(
       "isEditingApplication",
       true
     );
-    const selectedCommittees = JSON.parse(selectedCommitteesJSON);
+    const selectedGroups = JSON.parse(selectedGroupsJSON);
     const isEditingApplication = JSON.parse(isEditingApplicationJSON);
 
-    if (selectedCommittees != null) {
-      setSelectedCommittees(selectedCommittees);
+    if (selectedGroups != null) {
+      setSelectedGroups(selectedGroups);
       setIsEditingApplication(isEditingApplication);
     }
   };
 
   useEffect(() => {
-    callApi("/committee/").then(
+    callApi("/group/").then(
       ({ jsonData }) => {
-        setCommittees(jsonData);
+        setGroups(jsonData);
         setIsFetching(false);
       },
       (error) => {
@@ -75,9 +75,9 @@ const ApplicationPortal = () => {
       djangoData.user.has_application &&
       callApi("/application/mine/").then(({ jsonData }) => {
         setMyApplication(jsonData);
-        setSelectedCommittees(
-          jsonData.committee_applications
-            .map((a) => a.committee.name.toLowerCase())
+        setSelectedGroups(
+          jsonData.group_applications
+            .map((a) => a.group.name.toLowerCase())
             .reduce((obj, a) => ({ ...obj, [a]: true }), {})
         );
       });
@@ -97,16 +97,16 @@ const ApplicationPortal = () => {
 
   useEffect(() => {
     persistState();
-  }, [selectedCommittees]);
+  }, [selectedGroups]);
 
   useEffect(() => {
     persistState();
     callApi("/application/mine/").then(({ jsonData }) => {
       setMyApplication(jsonData);
       if (jsonData !== undefined) {
-        setSelectedCommittees(
-          jsonData.committee_applications
-            .map((a) => a.committee.name.toLowerCase())
+        setSelectedGroups(
+          jsonData.group_applications
+            .map((a) => a.group.name.toLowerCase())
             .reduce((obj, a) => ({ ...obj, [a]: true }), {})
         );
       }
@@ -125,30 +125,30 @@ const ApplicationPortal = () => {
         <NavBar user={user} isEditing={isEditingApplication} />
         <ContentContainer>
           {location.pathname.startsWith("/velg-komiteer") && (
-            <CommitteesPage
-              toggleCommittee={toggleCommittee}
+            <GroupsPage
+              toggleGroup={toggleGroup}
               admission={admission}
               results={results}
-              committees={committees}
+              groups={groups}
               error={error}
               isFetching={isFetching}
               myApplication={myApplication}
-              selectedCommittees={selectedCommittees}
+              selectedGroups={selectedGroups}
               user={user}
               isEditingApplication={isEditingApplication}
             />
           )}
           {location.pathname.startsWith("/min-soknad") && (
             <ApplicationForm
-              toggleCommittee={toggleCommittee}
+              toggleGroup={toggleGroup}
               toggleIsEditing={toggleIsEditing}
               admission={admission}
               results={results}
-              committees={committees}
+              groups={groups}
               error={error}
               isFetching={isFetching}
               myApplication={myApplication}
-              selectedCommittees={selectedCommittees}
+              selectedGroups={selectedGroups}
               user={user}
               isEditingApplication={isEditingApplication}
             />
@@ -158,11 +158,11 @@ const ApplicationPortal = () => {
               <AdminPageAbakusLeaderView
                 admission={admission}
                 results={results}
-                committees={committees}
+                groups={groups}
                 error={error}
                 isFetching={isFetching}
                 myApplication={myApplication}
-                selectedCommittees={selectedCommittees}
+                selectedGroups={selectedGroups}
                 user={user}
                 isEditingApplication={isEditingApplication}
               />
@@ -170,11 +170,11 @@ const ApplicationPortal = () => {
               <AdminPage
                 admission={admission}
                 results={results}
-                committees={committees}
+                groups={groups}
                 error={error}
                 isFetching={isFetching}
                 myApplication={myApplication}
-                selectedCommittees={selectedCommittees}
+                selectedGroups={selectedGroups}
                 user={user}
                 isEditingApplication={isEditingApplication}
               />

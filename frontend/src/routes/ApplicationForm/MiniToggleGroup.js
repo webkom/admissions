@@ -1,6 +1,6 @@
 /**
  *
- * A small toggle (add/remove) for the small committee toggle on the
+ * A small toggle (add/remove) for the small group toggle on the
  * application form page.
  *
  */
@@ -8,11 +8,11 @@
 import React from "react";
 import styled from "styled-components";
 
-const MiniToggleCommittee = ({ name, logo, toggleCommittee, isChosen }) => {
+const MiniToggleGroup = ({ name, logo, toggleGroup, isChosen }) => {
   return (
     <Wrapper
       type="button"
-      onClick={() => toggleCommittee(name.toLowerCase())}
+      onClick={() => toggleGroup(name.toLowerCase())}
       isChosen={isChosen}
     >
       <Logo src={logo} />
@@ -20,7 +20,7 @@ const MiniToggleCommittee = ({ name, logo, toggleCommittee, isChosen }) => {
   );
 };
 
-export default MiniToggleCommittee;
+export default MiniToggleGroup;
 
 /** Styles **/
 
