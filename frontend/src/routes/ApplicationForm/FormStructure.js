@@ -36,52 +36,64 @@ const FormStructure = ({
       <RecieptInfo>
         <Title>Kvittering for sendt søknad</Title>
         <RecievedApplicationBanner>
-          <Icon name="checkmark-circle-outline" size="5rem" />
-          <br />
-          Vi har mottatt søknaden din!
-          <TimeStamp>
-            <Icon name="time" />
-            Sist oppdatert
-            {myApplication && (
-              <StyledSpan bold>
-                <Moment format="dddd Do MMMM , \k\l. HH:mm:ss">
-                  {myApplication.updated_at}
-                </Moment>
-              </StyledSpan>
-            )}
-          </TimeStamp>
+          <span>Vi har mottatt søknaden din!</span>
+          <Icon name="checkmark" size="1.8rem" />
         </RecievedApplicationBanner>
-        <Text>
-          Du kan
-          <StyledSpan bold> fritt endre søknaden</StyledSpan> din frem til{" "}
-          {admission && (
-            <StyledSpan bold red>
-              <Moment format="dddd Do MMMM">{admission.public_deadline}</Moment>
+        <TimeStamp>
+          <Icon name="time" />
+          Søknaden ble sist registrert
+          {myApplication && (
+            <StyledSpan bold>
+              <Moment format="dddd Do MMMM, \k\l. HH:mm:ss">
+                {myApplication.updated_at}
+              </Moment>
             </StyledSpan>
-          )}{" "}
-          og komiteene vil kun se den siste versjonen.
-        </Text>
-        <LegoButton
-          icon="arrow-forward"
-          iconPrefix="ios"
-          onClick={toggleIsEditing}
-        >
-          Endre søknad
-        </LegoButton>
-        <Notice>
-          <StyledSpan bold>Merk:</StyledSpan> Oppdateringer etter søknadsfristen
-          kan ikke garanteres å bli sett av komiteen(e) du søker deg til.
-        </Notice>
-        <ConfirmModal
-          title="Slett søknad"
-          Component={({ onClick }) => (
-            <LegoButton icon="trash" onClick={onClick}>
-              Slett søknad
-            </LegoButton>
           )}
-          message="Er du sikker på at du vil slette søknaden din?"
-          onConfirm={() => onDeleteApplication()}
-        />
+        </TimeStamp>
+        <EditWrapper>
+          <EditInfo>
+            <Text>
+              Du kan
+              <StyledSpan bold> fritt endre søknaden</StyledSpan> din frem til{" "}
+              {admission && (
+                <StyledSpan bold red>
+                  <Moment format="dddd Do MMMM">
+                    {admission.public_deadline}
+                  </Moment>
+                </StyledSpan>
+              )}{" "}
+              og komiteene vil kun se den siste versjonen.
+            </Text>
+            <Notice>
+              <StyledSpan bold>Merk:</StyledSpan> Oppdateringer etter
+              søknadsfristen kan ikke garanteres å bli sett av komiteen(e) du
+              søker deg til.
+            </Notice>
+          </EditInfo>
+          <EditActions>
+            <LegoButton
+              icon="arrow-forward"
+              iconPrefix="ios"
+              onClick={toggleIsEditing}
+            >
+              Endre søknad
+            </LegoButton>
+            <ConfirmModal
+              title="Slett søknad"
+              Component={({ onClick }) => (
+                <LegoButton
+                  onClick={onClick}
+                  buttonStyle="secondary"
+                  size="medium"
+                >
+                  Slett søknad
+                </LegoButton>
+              )}
+              message="Er du sikker på at du vil slette søknaden din?"
+              onConfirm={() => onDeleteApplication()}
+            />
+          </EditActions>
+        </EditWrapper>
       </RecieptInfo>
     )}
 
@@ -246,7 +258,8 @@ const PageWrapper = styled.div`
   }
 
   ${media.portrait`
-    max-width: 500px;
+    max-width: 80%;
+    width: 600px;
   `};
 
   ${media.handheld`
@@ -276,7 +289,7 @@ const SeparatorLine = styled.div`
 const FormHeader = styled.div`
   display: flex;
   justify-content: space-between;
-  width: 750px;
+  max-width: 750px;
   margin: 1em 0 1em 0;
 
   ${media.handheld`
@@ -528,33 +541,71 @@ const RecieptInfo = styled.div`
 `;
 
 const RecievedApplicationBanner = styled.div`
-  text-align: center;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  align-items: space-between;
   background: var(--lego-green);
   border: 1px solid #809e33;
   border-radius: 13px;
   padding: 0.8rem 2rem;
   color: var(--lego-white);
   font-weight: 600;
-  font-size: 1.2rem;
+  font-size: 1.1rem;
+
+  > span {
+    margin-right: 1rem;
+  }
 
   ${media.handheld`
   font-size: 1rem;
   `};
 `;
 
+const EditWrapper = styled.div`
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+  max-width: 750px;
+`;
+
+const EditInfo = styled.div`
+  flex-basis: 60%;
+
+  ${media.portrait`
+  flex-basis: 100%;
+  `}
+`;
+
+const EditActions = styled.div`
+  display: flex;
+  flex-direction: column;
+  flex-basis: 40%;
+  justify-content: center;
+
+  > button {
+    margin: 0.4rem auto;
+  }
+
+  ${media.portrait`
+  flex-basis: 100%;
+  `}
+`;
+
 const TimeStamp = styled.p`
   text-align: center;
-  display: flex;
-  align-items: center;
   font-size: 1.1rem;
+  line-height: 1.8rem;
 
   span {
     margin-left: 0.3rem;
   }
 
   i {
-    margin-right: 1rem;
+    margin-right: 0.7rem;
     font-size: 1.4rem;
+    vertical-align: top;
+    line-height: inherit;
   }
 
   ${media.handheld`
