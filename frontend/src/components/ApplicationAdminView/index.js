@@ -3,14 +3,14 @@ import React from "react";
 import ReadMore from "src/components/ReadMore";
 
 import Wrapper from "./Wrapper";
-import CommitteeName from "./CommitteeName";
-import CommitteeLogo from "./CommitteeLogo";
+import GroupName from "./GroupName";
+import GroupLogo from "./GroupLogo";
 import SmallDescription from "./SmallDescription";
 import SmallDescriptionWrapper from "./SmallDescriptionWrapper";
 
 import DeleteApplication from "src/components/Application/DeleteApplication";
 
-const ApplicationAdminView = ({ committee, text, applicationId }) => {
+const ApplicationAdminView = ({ group, text, applicationId }) => {
   const applicationText = text.split("\n").map((line, i, arr) => {
     const linee = <span key={i}>{line}</span>;
     if (i === arr.length - 1) {
@@ -22,13 +22,11 @@ const ApplicationAdminView = ({ committee, text, applicationId }) => {
 
   return (
     <Wrapper>
-      <CommitteeLogo
-        src={require(`assets/committee_logos/${committee.toLowerCase()}.png`)}
-      />
+      <GroupLogo src={group.logo} />
       <SmallDescriptionWrapper>
         <SmallDescription>Søknad til ...</SmallDescription>
-        <CommitteeName>{committee} </CommitteeName>
-        <DeleteApplication id={applicationId} committee={committee} />
+        <GroupName>{group} </GroupName>
+        <DeleteApplication id={applicationId} group={group} />
       </SmallDescriptionWrapper>
 
       <ReadMore lines={3}>{applicationText}</ReadMore>

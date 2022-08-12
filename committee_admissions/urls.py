@@ -23,12 +23,12 @@ from committee_admissions.admissions.views import (
     AdmissionViewSet,
     ApplicationViewSet,
     AppView,
-    CommitteeViewSet,
+    GroupViewSet,
 )
 
 router = routers.DefaultRouter()
 router.register(r"admission", AdmissionViewSet)
-router.register(r"committee", CommitteeViewSet)
+router.register(r"group", GroupViewSet)
 router.register(r"application", ApplicationViewSet)
 urlpatterns = [
     re_path(r"logout/$", auth_views.LogoutView.as_view(), name="logout"),

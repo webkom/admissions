@@ -17,7 +17,7 @@ import CSRFToken from "./csrftoken";
 import { replaceQuotationMarks } from "../../utils/replaceQuotationMarks";
 
 import {
-  EditCommitteeFormWrapper,
+  EditGroupFormWrapper,
   FormWrapper,
   SubmitButton,
   Wrapper,
@@ -26,21 +26,9 @@ import {
   Statistics,
   StatisticsName,
   StatisticsWrapper,
-  CommitteeLogo,
-  CommitteeLogoWrapper,
+  GroupLogo,
+  GroupLogoWrapper,
 } from "./styles";
-
-const committee_logos = {
-  webkom: require("assets/committee_logos/webkom.png"),
-  arrkom: require("assets/committee_logos/arrkom.png"),
-  bankkom: require("assets/committee_logos/bankkom.png"),
-  bedkom: require("assets/committee_logos/bedkom.png"),
-  pr: require("assets/committee_logos/pr.png"),
-  readme: require("assets/committee_logos/readme.png"),
-  labamba: require("assets/committee_logos/labamba.png"),
-  fagkom: require("assets/committee_logos/fagkom.png"),
-  koskom: require("assets/committee_logos/koskom.png"),
-};
 
 class AdminPage extends Component {
   constructor(props) {
@@ -62,17 +50,6 @@ class AdminPage extends Component {
         { label: "Tid sendt", key: "createdAt" },
         { label: "Tid oppdatert", key: "updatedAt" },
       ],
-      committeeNames: {
-        webkom: "Webkom",
-        arrkom: "Arrkom",
-        bankkom: "Bankkom",
-        bedkom: "Bedkom",
-        pr: "PR",
-        readme: "readme",
-        labamba: "LaBamba",
-        fagkom: "Fagkom",
-        koskom: "Koskom",
-      },
     };
   }
 
@@ -132,10 +109,10 @@ class AdminPage extends Component {
       return 0;
     });
     const filteredApplications = applications.filter((userApplication) => {
-      var filteredComApp = userApplication.committee_applications.filter(
-        (committeeApplication) =>
-          committeeApplication.committee.name.toLowerCase() ==
-          djangoData.user.representative_of_committee.toLowerCase()
+      var filteredComApp = userApplication.group_applications.filter(
+        (groupApplication) =>
+          groupApplication.group.name.toLowerCase() ==
+          djangoData.user.representative_of_group.toLowerCase()
       );
 
       return filteredComApp.length > 0;
@@ -147,18 +124,16 @@ class AdminPage extends Component {
         <UserApplication
           key={i}
           {...userApplication}
-          whichCommitteeLeader={djangoData.user.representative_of_committe}
+          whichGroupLeader={djangoData.user.representative_of_group}
           generateCSVData={this.generateCSVData}
         />
       );
     });
-    const committee = this.props.committees.find(
-      (committee) =>
-        committee.name.toLowerCase() ===
-        djangoData.user.representative_of_committee.toLowerCase()
+    const group = this.props.groups.find(
+      (group) =>
+        group.name.toLowerCase() ===
+        djangoData.user.representative_of_group.toLowerCase()
     );
-
-    const committeeId = committee && committee.pk;
 
     const numApplicants = filteredApplications.length;
 
@@ -170,25 +145,18 @@ class AdminPage extends Component {
       return (
         <PageWrapper>
           <PageTitle>Admin Panel</PageTitle>
-          <CommitteeLogoWrapper>
-            <CommitteeLogo
-              src={
-                committee_logos[
-                  djangoData.user.representative_of_committee.toLowerCase()
-                ]
-              }
-            />
-            <h2>{djangoData.user.representative_of_committee}</h2>
-          </CommitteeLogoWrapper>
+          <GroupLogoWrapper>
+            <GroupLogo src={group.logo} />
+            <h2>{djangoData.user.representative_of_group}</h2>
+          </GroupLogoWrapper>
           <LinkLink to="/">Gå til forside</LinkLink>
 
           <Wrapper>
-            <EditCommitteeForm
+            <EditGroupForm
               apiRoot={this.API_ROOT}
-              committee={djangoData.user.representative_of_committee}
-              initialDescription={committee && committee.description}
-              initialReplyText={committee && committee.response_label}
-              committeeId={committeeId}
+              initialDescription={group && group.description}
+              initialReplyText={group && group.response_label}
+              group={group}
             />
           </Wrapper>
           <Wrapper>
@@ -222,7 +190,7 @@ const MyInnerForm = (props) => {
     <Form>
       <FormWrapper>
         <CSRFToken />
-        <EditCommitteeFormWrapper>
+        <EditGroupFormWrapper>
           <Field
             component={TextAreaField}
             title="Endre beskrivelsen av komiteen"
@@ -235,7 +203,7 @@ const MyInnerForm = (props) => {
             name="response_label"
             placeholder="Skriv hva komitteen ønsker å vite om søkeren..."
           />
-        </EditCommitteeFormWrapper>
+        </EditGroupFormWrapper>
         <SubmitButton
           onClick={handleSubmit}
           type="submit"
@@ -249,41 +217,27 @@ const MyInnerForm = (props) => {
   );
 };
 
-const EditCommitteeForm = withFormik({
+const EditGroupForm = withFormik({
   mapPropsToValues({ initialDescription, initialReplyText }) {
     return {
       response_label: initialReplyText || "",
       description: initialDescription || "",
     };
   },
-  handleSubmit(
-    values,
-    { props: { committee, committeeId }, setSubmitting, setErrors }
-  ) {
-    const committeeNames = {
-      webkom: "Webkom",
-      arrkom: "Arrkom",
-      bankkom: "Bankkom",
-      bedkom: "Bedkom",
-      pr: "PR",
-      readme: "readme",
-      labamba: "LaBamba",
-      fagkom: "Fagkom",
-      koskom: "Koskom",
-    };
+  handleSubmit(values, { props: { group }, setSubmitting, setErrors }) {
     const submission = {
-      name: committeeNames[committee],
+      name: group.name,
       description: values.description,
       response_label: values.response_label,
     };
 
-    return callApi(`/committee/${committeeId}/`, {
+    return callApi(`/group/${group.pk}/`, {
       method: "PATCH",
       body: JSON.stringify(submission),
     })
       .then((res) => {
         setSubmitting(false);
-        alert("Komité oppdatert :D");
+        alert("Gruppe oppdatert :D");
         return res.jsonData;
       })
       .catch((err) => {
@@ -315,7 +269,7 @@ const EditCommitteeForm = withFormik({
   enableReinitialize: true,
 })(MyInnerForm);
 
-export { EditCommitteeForm };
+export { EditGroupForm };
 
 /** Styles **/
 

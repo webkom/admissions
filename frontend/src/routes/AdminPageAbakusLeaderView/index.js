@@ -15,7 +15,7 @@ import Wrapper from "./Wrapper";
 import LinkLink from "./LinkLink";
 import CSVExport from "./CSVExport";
 import Statistics from "./Statistics";
-import CommitteeStatistics from "./CommitteeStatistics";
+import GroupStatistics from "./GroupStatistics";
 import StatisticsName from "./StatisticsName";
 import StatisticsWrapper from "./StatisticsWrapper";
 import { replaceQuotationMarks } from "../../utils/replaceQuotationMarks";
@@ -30,12 +30,13 @@ class AdminPage extends Component {
       user: { name: "" },
       admission: null,
       applications: [],
+      groups: [],
       csvData: [],
       headers: [
         { label: "Full Name", key: "name" },
         { label: "Prioriteringer", key: "priorityText" },
-        { label: "Komité", key: "committee" },
-        { label: "Søknadstekst", key: "committeeApplicationText" },
+        { label: "Komité", key: "group" },
+        { label: "Søknadstekst", key: "groupApplicationText" },
         { label: "Email", key: "email" },
         { label: "Mobilnummer", key: "phoneNumber" },
         { label: "Username", key: "username" },
@@ -54,8 +55,8 @@ class AdminPage extends Component {
     updatedAt,
     appliedWithinDeadline,
     priorityText,
-    committee,
-    committeeApplicationText,
+    group,
+    groupApplicationText,
     phoneNumber
   ) => {
     this.setState((prevState) => ({
@@ -73,10 +74,8 @@ class AdminPage extends Component {
             priorityText != ""
               ? replaceQuotationMarks(priorityText)
               : "Ingen prioriteringer",
-          committee,
-          committeeApplicationText: replaceQuotationMarks(
-            committeeApplicationText
-          ),
+          group,
+          groupApplicationText: replaceQuotationMarks(groupApplicationText),
           phoneNumber,
         },
       ],
@@ -84,7 +83,11 @@ class AdminPage extends Component {
   };
 
   componentDidMount() {
-    Promise.all([callApi("/application/"), callApi("/admission/")])
+    Promise.all([
+      callApi("/application/"),
+      callApi("/admission/"),
+      callApi("/group/"),
+    ])
       .then((data) => {
         data.map(({ url, jsonData }) => {
           if (url.includes("/application/")) {
@@ -94,6 +97,10 @@ class AdminPage extends Component {
           } else if (url.includes("/admission/")) {
             this.setState({
               admission: jsonData[0],
+            });
+          } else if (url.includes("/group/")) {
+            this.setState({
+              groups: jsonData,
             });
           }
         });
@@ -111,8 +118,15 @@ class AdminPage extends Component {
   }
 
   render() {
-    const { error, isFetching, admission, applications, csvData, headers } =
-      this.state;
+    const {
+      error,
+      isFetching,
+      admission,
+      groups,
+      applications,
+      csvData,
+      headers,
+    } = this.state;
     applications.sort(function (a, b) {
       if (a.user.full_name < b.user.full_name) return -1;
       if (a.user.full_name > b.user.full_name) return 1;
@@ -132,7 +146,7 @@ class AdminPage extends Component {
 
     var numApplications = 0;
     applications.map((application) => {
-      numApplications += application.committee_applications.length;
+      numApplications += application.group_applications.length;
     });
 
     if (error) {
@@ -176,42 +190,16 @@ class AdminPage extends Component {
               </StatisticsWrapper>
 
               <Statistics>
-                <CommitteeStatistics
-                  applications={applications}
-                  committee="Arrkom"
-                />
-                <CommitteeStatistics
-                  applications={applications}
-                  committee="Bankkom"
-                />
-                <CommitteeStatistics
-                  applications={applications}
-                  committee="Bedkom"
-                />
-                <CommitteeStatistics
-                  applications={applications}
-                  committee="Fagkom"
-                />
-                <CommitteeStatistics
-                  applications={applications}
-                  committee="Koskom"
-                />
-                <CommitteeStatistics
-                  applications={applications}
-                  committee="LaBamba"
-                />
-                <CommitteeStatistics
-                  applications={applications}
-                  committee="PR"
-                />
-                <CommitteeStatistics
-                  applications={applications}
-                  committee="readme"
-                />
-                <CommitteeStatistics
-                  applications={applications}
-                  committee="Webkom"
-                />
+                {groups
+                  .sort((a, b) => a.name.localeCompare(b.name))
+                  .map((group) => (
+                    <GroupStatistics
+                      key={group.pk}
+                      applications={applications}
+                      groupName={group.name}
+                      groupLogo={group.logo}
+                    />
+                  ))}
               </Statistics>
             </Statistics>
             <CSVExport

@@ -1,11 +1,11 @@
-- model: admissions.Committee
+- model: admissions.Group
   pk: 1
   fields:
     name: Webkom
     description: Vi er en morsom gjeng som progger.
     response_label: Skriv litt om din motivasjon og kunnskaper
 
-- model: admissions.Committee
+- model: admissions.Group
   pk: 2
   fields:
     name: Arrkom

@@ -3,7 +3,7 @@ import React from "react";
 import ReadMore from "src/components/ReadMore";
 
 import Wrapper from "./Wrapper";
-import CommitteeName from "./CommitteeName";
+import GroupName from "./GroupName";
 import DeleteApplication from "./DeleteApplication";
 
 const Application = ({ text, applicationId }) => {
@@ -18,7 +18,7 @@ const Application = ({ text, applicationId }) => {
 
   return (
     <div>
-      <CommitteeName>Søknad</CommitteeName>
+      <GroupName>Søknad</GroupName>
       <Wrapper>
         <ReadMore lines={200}>{applicationText}</ReadMore>
       </Wrapper>

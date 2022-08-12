@@ -9,8 +9,8 @@ from rest_framework.response import Response
 
 from committee_admissions.admissions.models import (
     Admission,
-    Committee,
-    CommitteeApplication,
+    Group,
+    GroupApplication,
     LegoUser,
     UserApplication,
 )
@@ -18,7 +18,7 @@ from committee_admissions.admissions.serializers import (
     AdminAdmissionSerializer,
     AdmissionPublicSerializer,
     ApplicationCreateUpdateSerializer,
-    CommitteeSerializer,
+    GroupSerializer,
     UserApplicationSerializer,
 )
 
@@ -26,8 +26,8 @@ from .authentication import SessionAuthentication
 from .permissions import (
     AdmissionPermissions,
     ApplicationPermissions,
-    CommitteeApplicationPermissions,
-    CommitteePermissions,
+    GroupApplicationPermissions,
+    GroupPermissions,
 )
 
 
@@ -58,11 +58,11 @@ class AdmissionViewSet(viewsets.ModelViewSet):
         return AdmissionPublicSerializer
 
 
-class CommitteeViewSet(viewsets.ModelViewSet):
-    queryset = Committee.objects.all()
-    serializer_class = CommitteeSerializer
+class GroupViewSet(viewsets.ModelViewSet):
+    queryset = Group.objects.all()
+    serializer_class = GroupSerializer
     authentication_classes = [SessionAuthentication]
-    permission_classes = [permissions.IsAuthenticated, CommitteePermissions]
+    permission_classes = [permissions.IsAuthenticated, GroupPermissions]
 
 
 class ApplicationViewSet(viewsets.ModelViewSet):
@@ -75,8 +75,8 @@ class ApplicationViewSet(viewsets.ModelViewSet):
         """
         if self.action in ["mine", "create"]:
             permission_classes = [permissions.IsAuthenticated]
-        elif self.action in ["delete_committee_application"]:
-            permission_classes = [CommitteeApplicationPermissions]
+        elif self.action in ["delete_group_application"]:
+            permission_classes = [GroupApplicationPermissions]
         else:
             permission_classes = [permissions.IsAuthenticated, ApplicationPermissions]
         return [permission() for permission in permission_classes]
@@ -92,25 +92,21 @@ class ApplicationViewSet(viewsets.ModelViewSet):
             return (
                 super()
                 .get_queryset()
-                .prefetch_related(
-                    "committee_applications", "committee_applications__committee"
-                )
+                .prefetch_related("group_applications", "group_applications__group")
             )
 
-        committee = user.representative_of_committee
-        qs = CommitteeApplication.objects.filter(committee=committee).select_related(
-            "committee"
-        )
+        group = user.representative_of_group
+        qs = GroupApplication.objects.filter(group=group).select_related("group")
 
         return (
             super()
             .get_queryset()
-            .filter(committee_applications__committee=committee)
+            .filter(group_applications__group=group)
             .prefetch_related(
                 Prefetch(
-                    "committee_applications",
+                    "group_applications",
                     queryset=qs,
-                    to_attr="committee_applications_filtered",
+                    to_attr="group_applications_filtered",
                 )
             )
         )
@@ -123,24 +119,22 @@ class ApplicationViewSet(viewsets.ModelViewSet):
     def perform_create(self, serializer):
         serializer.save(user=self.request.user)
 
-    @action(detail=True, methods=["DELETE"], url_name="delete_committee_application")
-    def delete_committee_application(self, request, pk=None):
+    @action(detail=True, methods=["DELETE"], url_name="delete_group_application")
+    def delete_group_application(self, request, pk=None):
         try:
             self.request.user.__class__ = LegoUser
-            committee = None
+            group = None
             if request.user.is_superuser:
-                committee_name = request.query_params.get("committee", None)
-                committee = Committee.objects.get(name=committee_name)
+                group_name = request.query_params.get("group", None)
+                group = Group.objects.get(name=group_name)
             else:
-                committee = request.user.representative_of_committee
-            if committee is None:
+                group = request.user.representative_of_group
+            if group is None:
                 return Response(status=status.HTTP_400_BAD_REQUEST)
 
-            CommitteeApplication.objects.get(
-                application=pk, committee=committee
-            ).delete()
+            GroupApplication.objects.get(application=pk, group=group).delete()
 
-            if not CommitteeApplication.objects.filter(application=pk).exists():
+            if not GroupApplication.objects.filter(application=pk).exists():
                 # If this is the only application the user had left, we can
                 # delete the entire userApplication
                 UserApplication.objects.get(pk=pk).delete()

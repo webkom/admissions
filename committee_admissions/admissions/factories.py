@@ -4,8 +4,8 @@ import factory
 
 from committee_admissions.admissions.models import (
     Admission,
-    Committee,
-    CommitteeApplication,
+    Group,
+    GroupApplication,
     UserApplication,
 )
 
@@ -34,9 +34,9 @@ class RandomAdmissionFactory(factory.DjangoModelFactory):
     )
 
 
-class RandomCommitteeFactory(factory.DjangoModelFactory):
+class RandomGroupFactory(factory.DjangoModelFactory):
     class Meta:
-        model = Committee
+        model = Group
         django_get_or_create = ("name",)
 
     name = factory.Iterator(
@@ -54,7 +54,7 @@ class RandomCommitteeFactory(factory.DjangoModelFactory):
     )
     description = factory.Faker("text", max_nb_chars=200)
     response_label = factory.Faker("text", max_nb_chars=50)
-    logo = factory.django.FileField(filename="committee.png")
+    logo = factory.django.FileField(filename="group.png")
 
 
 class RandomUserApplicationFactory(factory.DjangoModelFactory):
@@ -67,10 +67,10 @@ class RandomUserApplicationFactory(factory.DjangoModelFactory):
     time_sent = factory.Faker("past_datetime", start_date="-0d", tzinfo=None)
 
 
-class RandomCommitteeApplicationFactory(factory.DjangoModelFactory):
+class RandomGroupApplicationFactory(factory.DjangoModelFactory):
     class Meta:
-        model = CommitteeApplication
+        model = GroupApplication
 
     application = factory.SubFactory(RandomUserApplicationFactory)
-    committee = factory.SubFactory(RandomCommitteeFactory)
+    group = factory.SubFactory(RandomGroupFactory)
     text = factory.Faker("text", max_nb_chars=200)

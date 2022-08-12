@@ -11,18 +11,18 @@ import LegoButton from "src/components/LegoButton";
 import ConfirmModal from "src/components/ConfirmModal";
 import PriorityTextField from "./PriorityTextField";
 import PhoneNumberField from "./PhoneNumberField";
-import ToggleCommittees from "./ToggleCommittees";
+import ToggleGroups from "./ToggleGroups";
 import ErrorFocus from "./ErrorFocus";
 import djangoData from "src/utils/djangoData";
 
 const FormStructure = ({
   admission,
-  committees,
-  selectedCommittees,
-  toggleCommittee,
+  groups,
+  selectedGroups,
+  toggleGroup,
   toggleIsEditing,
   hasSelected,
-  SelectedCommitteItems,
+  SelectedGroupItems,
   handleSubmit,
   isSubmitting,
   isValid,
@@ -147,7 +147,7 @@ const FormStructure = ({
         />
       </GeneralInfoSection>
       <SeparatorLine />
-      <CommitteesSection>
+      <GroupsSection>
         <Sidebar>
           <div>
             <SectionHeader>Komiteer</SectionHeader>
@@ -158,18 +158,18 @@ const FormStructure = ({
             </HelpText>
 
             {isEditing && (
-              <ToggleCommittees
-                committees={committees}
-                selectedCommittees={selectedCommittees}
-                toggleCommittee={toggleCommittee}
+              <ToggleGroups
+                groups={groups}
+                selectedGroups={selectedGroups}
+                toggleGroup={toggleGroup}
               />
             )}
           </div>
         </Sidebar>
         {hasSelected ? (
-          <Applications>{SelectedCommitteItems}</Applications>
+          <Applications>{SelectedGroupItems}</Applications>
         ) : (
-          <NoChosenCommitteesWrapper>
+          <NoChosenGroupsWrapper>
             <NoChosenTitle>Du har ikke valgt noen komiteer.</NoChosenTitle>
             <NoChosenSubTitle>
               Velg i sidemargen eller gå til komiteoversikten
@@ -181,9 +181,9 @@ const FormStructure = ({
             >
               Velg komiteer
             </LegoButton>
-          </NoChosenCommitteesWrapper>
+          </NoChosenGroupsWrapper>
         )}
-      </CommitteesSection>
+      </GroupsSection>
       <SeparatorLine />
 
       {isEditing && (
@@ -405,9 +405,9 @@ const HelpText = styled.span`
   `};
 `;
 
-/* Committees section */
+/* Groups section */
 
-const CommitteesSection = styled.div`
+const GroupsSection = styled.div`
   display: grid;
   grid-template-columns: 1fr 1.5fr;
   grid-template-areas: "sidebar applications";
@@ -501,9 +501,9 @@ const SubmitInfo = styled.p`
   `};
 `;
 
-/* (Committees section) No chosen committes */
+/* (Groups section) No chosen groups */
 
-const NoChosenCommitteesWrapper = styled.div`
+const NoChosenGroupsWrapper = styled.div`
   display: flex;
   flex-direction: column;
   align-items: center;

@@ -1,6 +1,6 @@
 /**
  *
- * A small toggle (add/remove) for the small committee toggle on the
+ * A small toggle (add/remove) for the small group toggle on the
  * application form page.
  *
  */
@@ -8,20 +8,17 @@
 import React from "react";
 import styled from "styled-components";
 import { Link } from "react-router-dom";
-import MiniToggleCommittee from "./MiniToggleCommittee";
+import MiniToggleGroup from "./MiniToggleGroup";
 import { media } from "src/styles/mediaQueries";
 
-const ToggleCommittees = ({
-  committees,
-  selectedCommittees,
-  toggleCommittee,
-}) => {
-  const ChooseCommitteesItems = committees.map((committee, index) => (
-    <MiniToggleCommittee
-      name={committee.name}
-      key={committee.name + "-" + index}
-      isChosen={!!selectedCommittees[committee.name.toLowerCase()]}
-      toggleCommittee={toggleCommittee}
+const ToggleGroups = ({ groups, selectedGroups, toggleGroup }) => {
+  const ChooseGroupsItems = groups.map((group, index) => (
+    <MiniToggleGroup
+      name={group.name}
+      logo={group.logo}
+      key={group.name + "-" + index}
+      isChosen={!!selectedGroups[group.name.toLowerCase()]}
+      toggleGroup={toggleGroup}
     />
   ));
 
@@ -31,7 +28,7 @@ const ToggleCommittees = ({
       <Tooltip>
         Klikk på logoene til komiteene for å legge til/fjerne de fra søknaden.
       </Tooltip>
-      <IconsWrapper>{ChooseCommitteesItems}</IconsWrapper>
+      <IconsWrapper>{ChooseGroupsItems}</IconsWrapper>
       <LinkToOverview to="/velg-komiteer">
         Eller gå tilbake til oversikten for å lese mer
       </LinkToOverview>
@@ -39,7 +36,7 @@ const ToggleCommittees = ({
   );
 };
 
-export default ToggleCommittees;
+export default ToggleGroups;
 
 /** Styles **/
 
@@ -75,7 +72,7 @@ const Tooltip = styled.p`
 `;
 
 const IconsWrapper = styled.div`
-  grid-area: togglecommittees;
+  grid-area: togglegroups;
   display: grid;
   grid-template-columns: repeat(4, 40px);
   grid-template-rows: auto;

@@ -8,8 +8,8 @@ from rest_framework.test import APITestCase
 from committee_admissions.admissions.constants import LEADER, MEMBER, RECRUITING
 from committee_admissions.admissions.models import (
     Admission,
-    Committee,
-    CommitteeApplication,
+    Group,
+    GroupApplication,
     LegoUser,
     Membership,
     UserApplication,
@@ -39,14 +39,14 @@ def create_admission():
     )
 
 
-class EditCommitteeTestCase(APITestCase):
+class EditGroupTestCase(APITestCase):
     def setUp(self):
-        self.webkom = Committee.objects.create(
+        self.webkom = Group.objects.create(
             name="Webkom",
             description="Webkom styrer tekniske ting",
             response_label="Søk Webkom fordi du lærer deg nyttige ting!",
         )
-        self.arrkom = Committee.objects.create(
+        self.arrkom = Group.objects.create(
             name="Arrkom",
             description="Arrkom arrangerer ting",
             response_label="Søk Arrkom fordi vi har det kult!",
@@ -55,67 +55,67 @@ class EditCommitteeTestCase(APITestCase):
         self.pleb = LegoUser.objects.create()
         self.webkom_leader = LegoUser.objects.create(username="webkom_leader")
         Membership.objects.create(
-            user=self.webkom_leader, role=LEADER, committee=self.webkom
+            user=self.webkom_leader, role=LEADER, group=self.webkom
         )
         self.webkom_recruiter = LegoUser.objects.create(username="webkom_recruiter")
         Membership.objects.create(
-            user=self.webkom_recruiter, role=RECRUITING, committee=self.webkom
+            user=self.webkom_recruiter, role=RECRUITING, group=self.webkom
         )
 
-        self.edit_committee_data = {
+        self.edit_group_data = {
             "response_text": "Halla, Webkom er ikke noe gucci",
             "description": "Webkoms maskott er en ku(le)",
         }
 
-    def test_pleb_cannot_edit_committee(self):
+    def test_pleb_cannot_edit_group(self):
         self.client.force_authenticate(user=self.pleb)
 
         res = self.client.patch(
-            reverse("committee-detail", kwargs={"pk": self.arrkom.pk}),
-            self.edit_committee_data,
+            reverse("group-detail", kwargs={"pk": self.arrkom.pk}),
+            self.edit_group_data,
         )
 
         self.assertEqual(res.status_code, status.HTTP_403_FORBIDDEN)
 
-    def test_wrong_committee_leader_cannot_edit_other_committee(self):
+    def test_wrong_group_leader_cannot_edit_other_group(self):
         self.client.force_authenticate(user=self.webkom_leader)
 
         res = self.client.patch(
-            reverse("committee-detail", kwargs={"pk": self.arrkom.pk}),
-            self.edit_committee_data,
+            reverse("group-detail", kwargs={"pk": self.arrkom.pk}),
+            self.edit_group_data,
         )
 
         self.assertEqual(res.status_code, status.HTTP_403_FORBIDDEN)
 
-    def test_committee_leader_can_edit_committee(self):
+    def test_group_leader_can_edit_group(self):
         self.client.force_authenticate(user=self.webkom_leader)
 
         res = self.client.patch(
-            reverse("committee-detail", kwargs={"pk": self.webkom.pk}),
-            self.edit_committee_data,
+            reverse("group-detail", kwargs={"pk": self.webkom.pk}),
+            self.edit_group_data,
         )
 
         self.assertEqual(res.status_code, status.HTTP_200_OK)
 
-    def test_committee_recruiter_can_edit_committee(self):
+    def test_group_recruiter_can_edit_group(self):
         self.client.force_authenticate(user=self.webkom_recruiter)
 
         res = self.client.patch(
-            reverse("committee-detail", kwargs={"pk": self.webkom.pk}),
-            self.edit_committee_data,
+            reverse("group-detail", kwargs={"pk": self.webkom.pk}),
+            self.edit_group_data,
         )
 
         self.assertEqual(res.status_code, status.HTTP_200_OK)
 
-    def test_abakus_leader_cannot_edit_committee(self):
+    def test_abakus_leader_cannot_edit_group(self):
         abakus_leader = LegoUser.objects.create(
             username="bigsupremeleader", is_superuser=True
         )
         self.client.force_authenticate(user=abakus_leader)
 
         res = self.client.patch(
-            reverse("committee-detail", kwargs={"pk": self.arrkom.pk}),
-            self.edit_committee_data,
+            reverse("group-detail", kwargs={"pk": self.arrkom.pk}),
+            self.edit_group_data,
         )
 
         self.assertEqual(res.status_code, status.HTTP_200_OK)
@@ -147,10 +147,10 @@ class EditAdmissionTestCase(APITestCase):
 
         self.assertEqual(res.status_code, status.HTTP_403_FORBIDDEN)
 
-    def test_committee_leader_cannot_edit_admission(self):
+    def test_group_leader_cannot_edit_admission(self):
         webkom_leader = LegoUser.objects.create(username="webkomleader")
-        webkom = Committee.objects.create(name="Webkom")
-        Membership.objects.create(user=webkom_leader, role=LEADER, committee=webkom)
+        webkom = Group.objects.create(name="Webkom")
+        Membership.objects.create(user=webkom_leader, role=LEADER, group=webkom)
 
         self.client.force_authenticate(user=webkom_leader)
 
@@ -161,10 +161,10 @@ class EditAdmissionTestCase(APITestCase):
 
         self.assertEqual(res.status_code, status.HTTP_403_FORBIDDEN)
 
-    def test_committee_member_cannot_edit_admission(self):
+    def test_group_member_cannot_edit_admission(self):
         webkom_member = LegoUser.objects.create(username="webkommember")
-        webkom = Committee.objects.create(name="Webkom")
-        Membership.objects.create(user=webkom_member, role=MEMBER, committee=webkom)
+        webkom = Group.objects.create(name="Webkom")
+        Membership.objects.create(user=webkom_member, role=MEMBER, group=webkom)
 
         self.client.force_authenticate(user=webkom_member)
 
@@ -199,10 +199,10 @@ class EditAdmissionTestCase(APITestCase):
 
 class CreateApplicationTestCase(APITestCase):
     def setUp(self):
-        # Create admission and committee
+        # Create admission and group
         self.admission = create_admission()
-        self.webkom = Committee.objects.create(name="Webkom")
-        self.koskom = Committee.objects.create(name="Koskom")
+        self.webkom = Group.objects.create(name="Webkom")
+        self.koskom = Group.objects.create(name="Koskom")
 
         # Setup Anna
         self.pleb_anna = LegoUser.objects.create(username="Anna")
@@ -256,9 +256,7 @@ class CreateApplicationTestCase(APITestCase):
 
         self.assertEqual(
             2,
-            UserApplication.objects.get(
-                user=self.pleb_anna
-            ).committee_applications.count(),
+            UserApplication.objects.get(user=self.pleb_anna).group_applications.count(),
         )
 
         self.application_data = {
@@ -274,9 +272,7 @@ class CreateApplicationTestCase(APITestCase):
 
         self.assertEqual(
             1,
-            UserApplication.objects.get(
-                user=self.pleb_anna
-            ).committee_applications.count(),
+            UserApplication.objects.get(user=self.pleb_anna).group_applications.count(),
         )
 
 
@@ -288,25 +284,25 @@ class ListApplicationsTestCase(APITestCase):
         self.webkom_leader = LegoUser.objects.create(username="webkomleader")
         self.webkom_rec = LegoUser.objects.create(username="webkomrec")
 
-        self.webkom = Committee.objects.create(name="Webkom")
+        self.webkom = Group.objects.create(name="Webkom")
 
         Membership.objects.create(
-            user=self.webkom_leader, role=LEADER, committee=self.webkom
+            user=self.webkom_leader, role=LEADER, group=self.webkom
         )
         Membership.objects.create(
-            user=self.webkom_rec, role=RECRUITING, committee=self.webkom
+            user=self.webkom_rec, role=RECRUITING, group=self.webkom
         )
 
         self.bedkom_leader = LegoUser.objects.create(username="bedkomleader")
         self.bedkom_rec = LegoUser.objects.create(username="bedkomrec")
 
-        self.bedkom = Committee.objects.create(name="Bedkom")
+        self.bedkom = Group.objects.create(name="Bedkom")
 
         Membership.objects.create(
-            user=self.bedkom_leader, role=LEADER, committee=self.bedkom
+            user=self.bedkom_leader, role=LEADER, group=self.bedkom
         )
         Membership.objects.create(
-            user=self.bedkom_rec, role=RECRUITING, committee=self.bedkom
+            user=self.bedkom_rec, role=RECRUITING, group=self.bedkom
         )
         self.application_data = {
             "text": "testtest",
@@ -352,7 +348,7 @@ class ListApplicationsTestCase(APITestCase):
 
         self.assertEqual(res.status_code, status.HTTP_403_FORBIDDEN)
 
-    def test_committee_leader_can_see_applications_for_own_committee(self):
+    def test_group_leader_can_see_applications_for_own_group(self):
         self.client.force_authenticate(user=self.pleb)
         application_data = {
             "text": "testtest",
@@ -371,14 +367,12 @@ class ListApplicationsTestCase(APITestCase):
         self.assertEqual(res.status_code, status.HTTP_200_OK)
         # Should only return one UserApplication
         self.assertEqual(len(json), 1)
-        # The UserApplication should only have one CommitteeApplication
-        self.assertEqual(len(json[0]["committee_applications"]), 1)
-        # This CommitteeApplication should be to webkom
-        self.assertEqual(
-            json[0]["committee_applications"][0]["committee"]["name"], "Webkom"
-        )
+        # The UserApplication should only have one GroupApplication
+        self.assertEqual(len(json[0]["group_applications"]), 1)
+        # This GroupApplication should be to webkom
+        self.assertEqual(json[0]["group_applications"][0]["group"]["name"], "Webkom")
 
-    def test_committee_recruiter_can_see_applications_for_own_committee(self):
+    def test_group_recruiter_can_see_applications_for_own_group(self):
         self.client.force_authenticate(user=self.pleb)
         self.client.post(
             reverse("userapplication-list"), self.application_data, format="json"
@@ -392,14 +386,12 @@ class ListApplicationsTestCase(APITestCase):
         self.assertEqual(res.status_code, status.HTTP_200_OK)
         # Should only return one UserApplication
         self.assertEqual(len(json), 1)
-        # The UserApplication should only have one CommitteeApplication
-        self.assertEqual(len(json[0]["committee_applications"]), 1)
-        # This CommitteeApplication should be to webkom
-        self.assertEqual(
-            json[0]["committee_applications"][0]["committee"]["name"], "Webkom"
-        )
+        # The UserApplication should only have one GroupApplication
+        self.assertEqual(len(json[0]["group_applications"]), 1)
+        # This GroupApplication should be to webkom
+        self.assertEqual(json[0]["group_applications"][0]["group"]["name"], "Webkom")
 
-    def test_committee_leader_cannot_see_applications_for_other_committee(self):
+    def test_group_leader_cannot_see_applications_for_other_group(self):
         self.client.force_authenticate(user=self.pleb)
         self.client.post(
             reverse("userapplication-list"), self.application_data, format="json"
@@ -409,19 +401,19 @@ class ListApplicationsTestCase(APITestCase):
         self.client.force_authenticate(user=self.webkom_leader)
         res = self.client.get(reverse("userapplication-list"))
         json = res.json()
-        # There should not be a committee application for bedkom here
-        for committee_application in json[0]["committee_applications"]:
-            self.assertNotEqual(committee_application["committee"]["name"], "Bedkom")
+        # There should not be a group application for bedkom here
+        for group_application in json[0]["group_applications"]:
+            self.assertNotEqual(group_application["group"]["name"], "Bedkom")
 
         # Re-Auth as bedkom_leader
         self.client.force_authenticate(user=self.bedkom_leader)
         res = self.client.get(reverse("userapplication-list"))
         json = res.json()
-        # There should not be a committee application for bedkom here
-        for committee_application in json[0]["committee_applications"]:
-            self.assertNotEqual(committee_application["committee"]["name"], "Webkom")
+        # There should not be a group application for bedkom here
+        for group_application in json[0]["group_applications"]:
+            self.assertNotEqual(group_application["group"]["name"], "Webkom")
 
-    def test_committee_recruiter_cannot_see_applications_for_other_committee(self):
+    def test_group_recruiter_cannot_see_applications_for_other_group(self):
         self.client.force_authenticate(user=self.pleb)
         self.client.post(
             reverse("userapplication-list"), self.application_data, format="json"
@@ -431,17 +423,17 @@ class ListApplicationsTestCase(APITestCase):
         self.client.force_authenticate(user=self.webkom_rec)
         res = self.client.get(reverse("userapplication-list"))
         json = res.json()
-        # There should not be a committee application for bedkom here
-        for committee_application in json[0]["committee_applications"]:
-            self.assertNotEqual(committee_application["committee"]["name"], "Bedkom")
+        # There should not be a group application for bedkom here
+        for group_application in json[0]["group_applications"]:
+            self.assertNotEqual(group_application["group"]["name"], "Bedkom")
 
         # Re-Auth as bedkom_rec
         self.client.force_authenticate(user=self.bedkom_rec)
         res = self.client.get(reverse("userapplication-list"))
         json = res.json()
-        # There should not be a committee application for bedkom here
-        for committee_application in json[0]["committee_applications"]:
-            self.assertNotEqual(committee_application["committee"]["name"], "Webkom")
+        # There should not be a group application for bedkom here
+        for group_application in json[0]["group_applications"]:
+            self.assertNotEqual(group_application["group"]["name"], "Webkom")
 
     def test_abakus_leader_can_see_all_applications(self):
         self.client.force_authenticate(user=self.pleb)
@@ -456,20 +448,20 @@ class ListApplicationsTestCase(APITestCase):
 
         self.client.force_authenticate(user=abakus_leader)
         res = self.client.get(reverse("userapplication-list"))
-        apps = res.json()[0]["committee_applications"]
+        apps = res.json()[0]["group_applications"]
 
         # Ensure that the leader can see both the webkom and the bedkom application
-        self.assertEqual(apps[0]["committee"]["name"], "Webkom")
-        self.assertEqual(apps[1]["committee"]["name"], "Bedkom")
+        self.assertEqual(apps[0]["group"]["name"], "Webkom")
+        self.assertEqual(apps[1]["group"]["name"], "Bedkom")
 
 
 class DeleteComitteeApplicationsTestCase(APITestCase):
     """
-    Tests for api endpoint allowing leader of committee / opptaksansvarlig and abakus_leader to delete committee
+    Tests for api endpoint allowing leader of group / opptaksansvarlig and abakus_leader to delete group
     applications
 
-    representative_of_committee can only delete applications to their own committee. abakus_leader can
-    delete any committee applications.
+    representative_of_group can only delete applications to their own group. abakus_leader can
+    delete any group applications.
 
     Users can delete their own applications with the /mine endpoint
     """
@@ -479,26 +471,26 @@ class DeleteComitteeApplicationsTestCase(APITestCase):
         self.admission = create_admission()
 
         self.webkom_leader = LegoUser.objects.create(username="webkomleader")
-        self.webkom = Committee.objects.create(name="Webkom")
-        self.arrkom = Committee.objects.create(name="Arrkom")
+        self.webkom = Group.objects.create(name="Webkom")
+        self.arrkom = Group.objects.create(name="Arrkom")
         Membership.objects.create(
-            user=self.webkom_leader, role=LEADER, committee=self.webkom
+            user=self.webkom_leader, role=LEADER, group=self.webkom
         )
         self.abakus_leader = LegoUser.objects.create(
             username="bigsupremeleader", is_superuser=True
         )
 
     def unauthorized_user_cannot_delete_application(self):
-        """Normal users should not be able to delete committee applications"""
+        """Normal users should not be able to delete group applications"""
         self.client.force_authenticate(user=self.pleb)
 
         res = self.client.delete(
-            reverse("userapplication-delete_committee_application", kwargs={"pk": 1})
+            reverse("userapplication-delete_group_application", kwargs={"pk": 1})
         )
 
         self.assertEqual(res.status_code, status.HTTP_401_UNAUTHORIZED)
 
-    def test_can_not_delete_own_committee_application(self):
+    def test_can_not_delete_own_group_application(self):
         application = UserApplication.objects.create(
             user=self.pleb, admission=self.admission
         )
@@ -506,30 +498,30 @@ class DeleteComitteeApplicationsTestCase(APITestCase):
         self.client.force_authenticate(user=self.pleb)
         res = self.client.delete(
             reverse(
-                "userapplication-delete_committee_application",
+                "userapplication-delete_group_application",
                 kwargs={"pk": application.pk},
             )
         )
         self.assertEqual(res.status_code, status.HTTP_403_FORBIDDEN)
 
-    def leader_can_delete_committee_application(self):
+    def leader_can_delete_group_application(self):
         application = UserApplication.objects.create(
             user=self.pleb, admission=self.admission
         )
-        arrkomAppliction = CommitteeApplication.objects.create(
+        arrkomAppliction = GroupApplication.objects.create(
             application=application.pk,
-            committee=self.arrkom,
+            group=self.arrkom,
             text="Some application text",
         )
-        CommitteeApplication.objects.create(
+        GroupApplication.objects.create(
             application=application.pk,
-            committee=self.webkom,
+            group=self.webkom,
             text="Some application text",
         )
         self.client.force_authenticate(user=self.webkom_leader)
         res = self.client.delete(
             reverse(
-                "userapplication-delete_committee_application",
+                "userapplication-delete_group_application",
                 kwargs={"pk": application.pk},
             )
         )
@@ -537,9 +529,9 @@ class DeleteComitteeApplicationsTestCase(APITestCase):
         self.assertEqual(res.status_code, status.HTTP_200_OK)
         self.assertTrue(UserApplication.filter(application.pk).exists())
         self.assertEqual(
-            CommitteeApplication.objects.filter(application=application.pk).count(), 1
+            GroupApplication.objects.filter(application=application.pk).count(), 1
         )
         self.assertEqual(
-            CommitteeApplication.objects.get(application=application.pk),
+            GroupApplication.objects.get(application=application.pk),
             arrkomAppliction,
         )

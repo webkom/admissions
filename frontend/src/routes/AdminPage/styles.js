@@ -37,18 +37,18 @@ export const FormWrapper = styled.div`
   `};
 `;
 
-export const CommitteeLogo = styled.img`
+export const GroupLogo = styled.img`
   object-fit: scale-down;
   max-height: 2em;
   margin-right: 0.5em;
 `;
 
-export const CommitteeLogoWrapper = styled.div`
+export const GroupLogoWrapper = styled.div`
   display: flex;
   align-items: center;
 `;
 
-export const EditCommitteeFormWrapper = styled.div`
+export const EditGroupFormWrapper = styled.div`
   display: flex;
   width: 100%;
 
