@@ -1,6 +1,6 @@
-var path = require("path");
-var webpack = require("webpack");
-var BundleTracker = require("webpack-bundle-tracker");
+const path = require("path");
+const webpack = require("webpack");
+const BundleTracker = require("webpack-bundle-tracker");
 const CircularDependencyPlugin = require("circular-dependency-plugin");
 
 const isProduction = process.env.NODE_ENV === "production";

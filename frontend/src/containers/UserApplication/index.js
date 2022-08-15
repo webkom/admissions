@@ -1,4 +1,4 @@
-import React, { Component } from "react";
+import React, { useEffect, useState } from "react";
 import Moment from "react-moment";
 import "moment/locale/nb";
 Moment.globalLocale = "nb";
@@ -15,31 +15,25 @@ import SmallDescription from "./SmallDescription";
 import SmallDescriptionWrapper from "./SmallDescriptionWrapper";
 import Header from "./Header";
 
-class UserApplication extends Component {
-  constructor(props) {
-    super(props);
-    this.state = {
-      groupApplications: [],
-    };
-  }
+const UserApplication = ({
+  user,
+  group_applications,
+  created_at,
+  updated_at,
+  applied_within_deadline,
+  phone_number,
+  pk,
+  generateCSVData,
+}) => {
+  const [groupApplications, setGroupApplications] = useState([]);
 
-  componentDidMount() {
-    const {
-      user,
-      group_applications,
-      created_at,
-      updated_at,
-      applied_within_deadline,
-      phone_number,
-      pk,
-    } = this.props;
-
+  useEffect(() => {
     const GroupApplications = group_applications.map((application, i) => {
       if (
         application.group.name.toLowerCase() ==
         djangoData.user.representative_of_group.toLowerCase()
       ) {
-        this.props.generateCSVData(
+        generateCSVData(
           user.full_name,
           user.email,
           user.username,
@@ -60,71 +54,61 @@ class UserApplication extends Component {
       }
     });
 
-    this.setState({ groupApplications: GroupApplications });
-  }
+    setGroupApplications(GroupApplications);
+  }, []);
 
-  render() {
-    const {
-      user,
-      created_at,
-      updated_at,
-      applied_within_deadline,
-      phone_number,
-    } = this.props;
-    const { groupApplications } = this.state;
-    return (
-      <Wrapper>
-        <CollapseContainer
-          header={
+  return (
+    <Wrapper>
+      <CollapseContainer
+        header={
+          <Header>
+            <Name>{user.full_name}</Name>
+            {!applied_within_deadline && (
+              <Icon
+                name="stopwatch"
+                iconPrefix="ios"
+                size="1.5rem"
+                title="Søkte etter fristen"
+                color="#c0392b"
+                padding="0 10px 0 0"
+              />
+            )}
+          </Header>
+        }
+        content={
+          <div>
             <Header>
-              <Name>{user.full_name}</Name>
-              {!applied_within_deadline && (
-                <Icon
-                  name="stopwatch"
-                  iconPrefix="ios"
-                  size="1.5rem"
-                  title="Søkte etter fristen"
-                  color="#c0392b"
-                  padding="0 10px 0 0"
-                />
-              )}
+              <SmallDescriptionWrapper>
+                <SmallDescription> Brukernavn </SmallDescription>
+                {user.username}
+              </SmallDescriptionWrapper>
+              <SmallDescriptionWrapper>
+                <SmallDescription> Tlf. </SmallDescription> {phone_number}
+              </SmallDescriptionWrapper>
+              <SmallDescriptionWrapper>
+                <SmallDescription> E-mail </SmallDescription> {user.email}
+              </SmallDescriptionWrapper>
+              <SmallDescriptionWrapper>
+                <div>
+                  <SmallDescription> Sendt </SmallDescription>
+                  <Moment format="dddd Do MMMM, \k\l. HH:mm">
+                    {created_at}
+                  </Moment>
+                </div>
+                <div>
+                  <SmallDescription> Oppdatert </SmallDescription>
+                  <Moment format="dddd Do MMMM, \k\l. HH:mm">
+                    {updated_at}
+                  </Moment>
+                </div>
+              </SmallDescriptionWrapper>
             </Header>
-          }
-          content={
-            <div>
-              <Header>
-                <SmallDescriptionWrapper>
-                  <SmallDescription> Brukernavn </SmallDescription>
-                  {user.username}
-                </SmallDescriptionWrapper>
-                <SmallDescriptionWrapper>
-                  <SmallDescription> Tlf. </SmallDescription> {phone_number}
-                </SmallDescriptionWrapper>
-                <SmallDescriptionWrapper>
-                  <SmallDescription> E-mail </SmallDescription> {user.email}
-                </SmallDescriptionWrapper>
-                <SmallDescriptionWrapper>
-                  <div>
-                    <SmallDescription> Sendt </SmallDescription>
-                    <Moment format="dddd Do MMMM, \k\l. HH:mm">
-                      {created_at}
-                    </Moment>
-                  </div>
-                  <div>
-                    <SmallDescription> Oppdatert </SmallDescription>
-                    <Moment format="dddd Do MMMM, \k\l. HH:mm">
-                      {updated_at}
-                    </Moment>
-                  </div>
-                </SmallDescriptionWrapper>
-              </Header>
-              {groupApplications}
-            </div>
-          }
-        />
-      </Wrapper>
-    );
-  }
-}
+            {groupApplications}
+          </div>
+        }
+      />
+    </Wrapper>
+  );
+};
 
 export default UserApplication;

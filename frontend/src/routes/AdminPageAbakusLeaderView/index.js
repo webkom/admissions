@@ -1,4 +1,4 @@
-import React, { Component } from "react";
+import React, { useEffect, useState } from "react";
 import styled from "styled-components";
 import Moment from "react-moment";
 import "moment/locale/nb";
@@ -20,34 +20,31 @@ import StatisticsName from "./StatisticsName";
 import StatisticsWrapper from "./StatisticsWrapper";
 import { replaceQuotationMarks } from "../../utils/replaceQuotationMarks";
 
-class AdminPage extends Component {
-  constructor(props) {
-    super(props);
-    this.state = {
-      results: undefined,
-      error: null,
-      isFetching: true,
-      user: { name: "" },
-      admission: null,
-      applications: [],
-      groups: [],
-      csvData: [],
-      headers: [
-        { label: "Full Name", key: "name" },
-        { label: "Prioriteringer", key: "priorityText" },
-        { label: "Komité", key: "group" },
-        { label: "Søknadstekst", key: "groupApplicationText" },
-        { label: "Email", key: "email" },
-        { label: "Mobilnummer", key: "phoneNumber" },
-        { label: "Username", key: "username" },
-        { label: "Søkt innen frist", key: "appliedWithinDeadline" },
-        { label: "Tid sendt", key: "createdAt" },
-        { label: "Tid oppdatert", key: "updatedAt" },
-      ],
-    };
-  }
+const AdminPage = () => {
+  const [state, setState] = useState({
+    results: undefined,
+    error: null,
+    isFetching: true,
+    user: { name: "" },
+    admission: null,
+    applications: [],
+    groups: [],
+    csvData: [],
+    headers: [
+      { label: "Full Name", key: "name" },
+      { label: "Prioriteringer", key: "priorityText" },
+      { label: "Komité", key: "group" },
+      { label: "Søknadstekst", key: "groupApplicationText" },
+      { label: "Email", key: "email" },
+      { label: "Mobilnummer", key: "phoneNumber" },
+      { label: "Username", key: "username" },
+      { label: "Søkt innen frist", key: "appliedWithinDeadline" },
+      { label: "Tid sendt", key: "createdAt" },
+      { label: "Tid oppdatert", key: "updatedAt" },
+    ],
+  });
 
-  generateCSVData = (
+  const generateCSVData = (
     name,
     email,
     username,
@@ -59,7 +56,7 @@ class AdminPage extends Component {
     groupApplicationText,
     phoneNumber
   ) => {
-    this.setState((prevState) => ({
+    setState((prevState) => ({
       ...prevState,
       csvData: [
         ...prevState.csvData,
@@ -82,7 +79,7 @@ class AdminPage extends Component {
     }));
   };
 
-  componentDidMount() {
+  useEffect(() => {
     Promise.all([
       callApi("/application/"),
       callApi("/admission/"),
@@ -91,132 +88,131 @@ class AdminPage extends Component {
       .then((data) => {
         data.map(({ url, jsonData }) => {
           if (url.includes("/application/")) {
-            this.setState({
+            setState({
               applications: jsonData,
             });
           } else if (url.includes("/admission/")) {
-            this.setState({
+            setState({
               admission: jsonData[0],
             });
           } else if (url.includes("/group/")) {
-            this.setState({
+            setState({
               groups: jsonData,
             });
           }
         });
-        this.setState({
+        setState({
           isFetching: false,
         });
       })
       .catch((error) => {
-        this.setState({ error, isFetching: false });
+        setState({ error, isFetching: false });
       });
 
-    this.setState({
+    setState({
       user: { name: djangoData.user && djangoData.user.full_name },
     });
-  }
+  }, []);
 
-  render() {
-    const {
-      error,
-      isFetching,
-      admission,
-      groups,
-      applications,
-      csvData,
-      headers,
-    } = this.state;
-    applications.sort(function (a, b) {
-      if (a.user.full_name < b.user.full_name) return -1;
-      if (a.user.full_name > b.user.full_name) return 1;
-      return 0;
-    });
-    const UserApplications = applications.map((userApplication, i) => {
-      return (
-        <UserApplicationAdminView
-          key={i}
-          {...userApplication}
-          generateCSVData={this.generateCSVData}
-        />
-      );
-    });
+  const {
+    error,
+    isFetching,
+    admission,
+    groups,
+    applications,
+    csvData,
+    headers,
+  } = state;
 
-    const numApplicants = applications.length;
+  applications.sort(function (a, b) {
+    if (a.user.full_name < b.user.full_name) return -1;
+    if (a.user.full_name > b.user.full_name) return 1;
+    return 0;
+  });
+  const UserApplications = applications.map((userApplication, i) => {
+    return (
+      <UserApplicationAdminView
+        key={i}
+        {...userApplication}
+        generateCSVData={generateCSVData}
+      />
+    );
+  });
 
-    var numApplications = 0;
-    applications.map((application) => {
-      numApplications += application.group_applications.length;
-    });
+  const numApplicants = applications.length;
 
-    if (error) {
-      return <div>Error: {error.message}</div>;
-    } else if (isFetching) {
-      return <LoadingBall />;
-    } else {
-      return (
-        <PageWrapper>
-          <PageTitle>Admin Panel</PageTitle>
-          <LinkLink to="/">Gå til forside</LinkLink>
-          <Wrapper>
+  let numApplications = 0;
+  applications.map((application) => {
+    numApplications += application.group_applications.length;
+  });
+
+  if (error) {
+    return <div>Error: {error.message}</div>;
+  } else if (isFetching) {
+    return <LoadingBall />;
+  } else {
+    return (
+      <PageWrapper>
+        <PageTitle>Admin Panel</PageTitle>
+        <LinkLink to="/">Gå til forside</LinkLink>
+        <Wrapper>
+          <Statistics>
+            <StatisticsWrapper>
+              <StatisticsName>Søknader åpner</StatisticsName>
+              <Moment format="HH:mm:ss dddd Do MMMM">
+                {admission.open_from}
+              </Moment>
+            </StatisticsWrapper>
+            <StatisticsWrapper>
+              <StatisticsName>Søknadsfrist</StatisticsName>
+              <Moment format="HH:mm:ss dddd Do MMMM">
+                {admission.public_deadline}
+              </Moment>
+            </StatisticsWrapper>
+            <StatisticsWrapper>
+              <StatisticsName>Redigeringsfrist</StatisticsName>
+              <Moment format="HH:mm:ss dddd Do MMMM">
+                {admission.application_deadline}
+              </Moment>
+            </StatisticsWrapper>
+          </Statistics>
+          <Statistics>
+            <StatisticsWrapper>
+              <StatisticsName>Antall søkere</StatisticsName>
+              {numApplicants} {numApplicants == 1 ? "søker" : "søkere"}
+            </StatisticsWrapper>
+            <StatisticsWrapper>
+              <StatisticsName>Totalt antall søknader</StatisticsName>
+              {numApplications} {numApplications == 1 ? "søknad" : "søknader"}
+            </StatisticsWrapper>
+
             <Statistics>
-              <StatisticsWrapper>
-                <StatisticsName>Søknader åpner</StatisticsName>
-                <Moment format="HH:mm:ss dddd Do MMMM">
-                  {admission.open_from}
-                </Moment>
-              </StatisticsWrapper>
-              <StatisticsWrapper>
-                <StatisticsName>Søknadsfrist</StatisticsName>
-                <Moment format="HH:mm:ss dddd Do MMMM">
-                  {admission.public_deadline}
-                </Moment>
-              </StatisticsWrapper>
-              <StatisticsWrapper>
-                <StatisticsName>Redigeringsfrist</StatisticsName>
-                <Moment format="HH:mm:ss dddd Do MMMM">
-                  {admission.application_deadline}
-                </Moment>
-              </StatisticsWrapper>
+              {groups
+                .sort((a, b) => a.name.localeCompare(b.name))
+                .map((group) => (
+                  <GroupStatistics
+                    key={group.pk}
+                    applications={applications}
+                    groupName={group.name}
+                    groupLogo={group.logo}
+                  />
+                ))}
             </Statistics>
-            <Statistics>
-              <StatisticsWrapper>
-                <StatisticsName>Antall søkere</StatisticsName>
-                {numApplicants} {numApplicants == 1 ? "søker" : "søkere"}
-              </StatisticsWrapper>
-              <StatisticsWrapper>
-                <StatisticsName>Totalt antall søknader</StatisticsName>
-                {numApplications} {numApplications == 1 ? "søknad" : "søknader"}
-              </StatisticsWrapper>
-
-              <Statistics>
-                {groups
-                  .sort((a, b) => a.name.localeCompare(b.name))
-                  .map((group) => (
-                    <GroupStatistics
-                      key={group.pk}
-                      applications={applications}
-                      groupName={group.name}
-                      groupLogo={group.logo}
-                    />
-                  ))}
-              </Statistics>
-            </Statistics>
-            <CSVExport
-              data={csvData}
-              headers={headers}
-              filename={"applications.csv"}
-              target="_blank"
-            >
-              Eksporter som csv
-            </CSVExport>
-            {UserApplications}
-          </Wrapper>
-        </PageWrapper>
-      );
-    }
+          </Statistics>
+          <CSVExport
+            data={csvData}
+            headers={headers}
+            filename={"applications.csv"}
+            target="_blank"
+          >
+            Eksporter som csv
+          </CSVExport>
+          {UserApplications}
+        </Wrapper>
+      </PageWrapper>
+    );
   }
-}
+};
 
 export default AdminPage;
 

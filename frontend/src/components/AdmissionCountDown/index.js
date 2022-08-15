@@ -1,49 +1,34 @@
-import React, { Component } from "react";
+import React, { useEffect, useState } from "react";
 import moment from "moment-timezone";
 
-class AdmissionCountDown extends Component {
-  constructor(props) {
-    super(props);
-    this.state = {
-      timeDiff: this.calcTimeDiff(),
+const AdmissionCountDown = ({ endTime }) => {
+  const [timeDiff, setTimeDiff] = useState(calcTimeDiff());
+  const [counterInterval, setCounterInterval] = useState();
+
+  const endTimeMoment = moment(endTime);
+
+  useEffect(() => {
+    setCounterInterval(setInterval(() => setTimeDiff(calcTimeDiff()), 1000));
+    return () => {
+      clearInterval(counterInterval);
     };
-  }
+  }, []);
 
-  counterInterval;
-  endTime = moment(this.props.endTime);
-
-  componentDidMount() {
-    this.counterInterval = setInterval(
-      () =>
-        this.setState({
-          timeDiff: this.calcTimeDiff(),
-        }),
-      1000
-    );
-  }
-
-  componentWillUnmount() {
-    clearInterval(this.counterInterval);
-  }
-
-  calcTimeDiff() {
+  const calcTimeDiff = () => {
     const now = moment();
-    const time = now.to(this.endTime);
+    const time = now.to(endTimeMoment);
 
     // If it's 1 day left we would like to say 'i morgen' and not 1 day
-    const isTomorrow = moment().add("1", "day").isSame(this.endTime, "day");
+    const isTomorrow = moment().add("1", "day").isSame(endTimeMoment, "day");
     return isTomorrow ? "i morgen" : time;
-  }
+  };
 
-  render() {
-    const now = moment();
-    return (
-      <p style={{ alignContent: "center" }}>
-        Opptaket {now.isBefore(this.endTime) ? "åpner" : "åpnet"}{" "}
-        {moment().isAfter(this.endTime) && "for "} {this.state.timeDiff}
-      </p>
-    );
-  }
-}
+  return (
+    <p style={{ alignContent: "center" }}>
+      Opptaket {moment().isBefore(endTimeMoment) ? "åpner" : "åpnet"}{" "}
+      {moment().isAfter(endTimeMoment) && "for "} {timeDiff}
+    </p>
+  );
+};
 
 export default AdmissionCountDown;

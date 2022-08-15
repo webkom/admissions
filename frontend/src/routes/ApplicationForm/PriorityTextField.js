@@ -1,48 +1,47 @@
-import React, { Component } from "react";
+import React, { useEffect, useState } from "react";
 import { FieldLabel, StyledTextAreaField } from "src/components/styledFields";
 import styled from "styled-components";
 import { media } from "src/styles/mediaQueries";
 
-class PriorityTextField extends Component {
-  componentDidMount() {
-    this.setState({
-      timeout: setInterval(() => {
-        sessionStorage.setItem("text", this.props.field.value);
-      }, 4000),
-    });
-  }
-  componentWillUnmount() {
-    clearInterval(this.state.timeout);
-  }
-  render() {
-    const {
-      label,
-      optional = false,
-      field: { name, onChange, value },
-      form: { handleBlur },
-      disabled,
-    } = this.props;
-    return (
-      <Wrapper>
-        <LabelWrapper>
-          <FieldLabel htmlFor={name}>{label}</FieldLabel>
-          {optional && <Optional>(valgfritt)</Optional>}
-        </LabelWrapper>
-        <StyledTextAreaField
-          type="textarea"
-          name={name}
-          id={name}
-          disabled={disabled}
-          onChange={onChange}
-          onBlur={handleBlur}
-          placeholder="Skriv dine kommentarer her..."
-          value={value}
-          rows="5"
-        />
-      </Wrapper>
+const PriorityTextField = ({
+  label,
+  optional = false,
+  field: { name, onChange, value },
+  form: { handleBlur },
+  disabled,
+}) => {
+  const [timeout, setTimeout] = useState();
+  useEffect(() => {
+    setTimeout(
+      setInterval(() => {
+        sessionStorage.setItem("text", value);
+      }, 4000)
     );
-  }
-}
+    return () => {
+      clearInterval(timeout);
+    };
+  }, []);
+
+  return (
+    <Wrapper>
+      <LabelWrapper>
+        <FieldLabel htmlFor={name}>{label}</FieldLabel>
+        {optional && <Optional>(valgfritt)</Optional>}
+      </LabelWrapper>
+      <StyledTextAreaField
+        type="textarea"
+        name={name}
+        id={name}
+        disabled={disabled}
+        onChange={onChange}
+        onBlur={handleBlur}
+        placeholder="Skriv dine kommentarer her..."
+        value={value}
+        rows="5"
+      />
+    </Wrapper>
+  );
+};
 
 export default PriorityTextField;
 

@@ -1,4 +1,4 @@
-import React, { Component } from "react";
+import React, { useState } from "react";
 import {
   Overlay,
   ConfirmBox,
@@ -9,52 +9,44 @@ import {
   TriggerText,
 } from "./styles.js";
 
-class ConfirmModal extends Component {
-  state = { isOpen: false };
+const ConfirmModal = ({ onConfirm, title, message, Component }) => {
+  const [isOpen, setIsOpen] = useState(false);
 
-  hideModal = () => {
-    this.setState({
-      isOpen: false,
-    });
+  const hideModal = () => {
+    setIsOpen(false);
   };
 
-  showModal = () => {
-    this.setState({
-      isOpen: true,
-    });
+  const showModal = () => {
+    setIsOpen(true);
   };
 
-  confirmAction = () => {
-    this.props.onConfirm();
-    this.hideModal();
+  const confirmAction = () => {
+    onConfirm();
+    hideModal();
   };
-  render() {
-    const { title, message, Component } = this.props;
-    const { isOpen } = this.state;
 
-    return isOpen ? (
-      <Overlay>
-        <ConfirmBox>
-          <Title>{title}</Title>
-          <Message>{message}</Message>
-          <ButtonGroup>
-            <ActionButton
-              background="gray"
-              border="1px solid darkgray"
-              onClick={this.hideModal}
-            >
-              Cancel
-            </ActionButton>
-            <ActionButton onClick={this.confirmAction}>Ja</ActionButton>
-          </ButtonGroup>
-        </ConfirmBox>
-      </Overlay>
-    ) : Component ? (
-      <Component onClick={this.showModal} />
-    ) : (
-      <TriggerText onClick={this.showModal}>{title}</TriggerText>
-    );
-  }
-}
+  return isOpen ? (
+    <Overlay>
+      <ConfirmBox>
+        <Title>{title}</Title>
+        <Message>{message}</Message>
+        <ButtonGroup>
+          <ActionButton
+            background="gray"
+            border="1px solid darkgray"
+            onClick={hideModal}
+          >
+            Cancel
+          </ActionButton>
+          <ActionButton onClick={confirmAction}>Ja</ActionButton>
+        </ButtonGroup>
+      </ConfirmBox>
+    </Overlay>
+  ) : Component ? (
+    <Component onClick={showModal} />
+  ) : (
+    <TriggerText onClick={showModal}>{title}</TriggerText>
+  );
+};
 
 export default ConfirmModal;

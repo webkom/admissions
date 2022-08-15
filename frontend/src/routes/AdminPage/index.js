@@ -1,4 +1,4 @@
-import React, { Component } from "react";
+import React, { useEffect, useState } from "react";
 import styled from "styled-components";
 import * as Sentry from "@sentry/browser";
 import { withFormik, Field, Form } from "formik";
@@ -30,30 +30,27 @@ import {
   GroupLogoWrapper,
 } from "./styles";
 
-class AdminPage extends Component {
-  constructor(props) {
-    super(props);
-    this.state = {
-      results: undefined,
-      error: null,
-      user: { name: "" },
-      applications: [],
-      csvData: [],
-      isFetching: true,
-      headers: [
-        { label: "Full Name", key: "name" },
-        { label: "Søknadstekst", key: "applicationText" },
-        { label: "Mobilnummer", key: "phoneNumber" },
-        { label: "Email", key: "email" },
-        { label: "Username", key: "username" },
-        { label: "Søkt innen frist", key: "appliedWithinDeadline" },
-        { label: "Tid sendt", key: "createdAt" },
-        { label: "Tid oppdatert", key: "updatedAt" },
-      ],
-    };
-  }
+const AdminPage = ({ groups }) => {
+  const [state, setState] = useState({
+    results: undefined,
+    error: null,
+    user: { name: "" },
+    applications: [],
+    csvData: [],
+    isFetching: true,
+    headers: [
+      { label: "Full Name", key: "name" },
+      { label: "Søknadstekst", key: "applicationText" },
+      { label: "Mobilnummer", key: "phoneNumber" },
+      { label: "Email", key: "email" },
+      { label: "Username", key: "username" },
+      { label: "Søkt innen frist", key: "appliedWithinDeadline" },
+      { label: "Tid sendt", key: "createdAt" },
+      { label: "Tid oppdatert", key: "updatedAt" },
+    ],
+  });
 
-  generateCSVData = (
+  const generateCSVData = (
     name,
     email,
     username,
@@ -63,7 +60,7 @@ class AdminPage extends Component {
     applicationText,
     phoneNumber
   ) => {
-    this.setState((prevState) => ({
+    setState((prevState) => ({
       ...prevState,
       csvData: [
         ...prevState.csvData,
@@ -81,111 +78,107 @@ class AdminPage extends Component {
     }));
   };
 
-  componentDidMount() {
+  useEffect(() => {
     callApi("/application/").then(
       ({ jsonData }) => {
-        this.setState({
+        setState((prevState) => ({
+          ...prevState,
           applications: jsonData,
           isFetching: false,
-        });
+        }));
       },
       (error) => {
-        this.setState({ error, isFetching: false });
+        setState((prevState) => ({ ...prevState, error, isFetching: false }));
       }
     );
 
-    this.setState({
+    setState((prevState) => ({
+      ...prevState,
       user: { name: djangoData.user && djangoData.user.full_name },
-    });
+    }));
     Sentry.setUser(djangoData.user);
-  }
+  }, []);
 
-  render() {
-    const { error, isFetching, applications, csvData, headers } = this.state;
-
-    applications.sort(function (a, b) {
-      if (a.user.full_name < b.user.full_name) return -1;
-      if (a.user.full_name > b.user.full_name) return 1;
-      return 0;
-    });
-    const filteredApplications = applications.filter((userApplication) => {
-      var filteredComApp = userApplication.group_applications.filter(
-        (groupApplication) =>
-          groupApplication.group.name.toLowerCase() ==
-          djangoData.user.representative_of_group.toLowerCase()
-      );
-
-      return filteredComApp.length > 0;
-    });
-
-    // Render applications from users
-    const UserApplications = filteredApplications.map((userApplication, i) => {
-      return (
-        <UserApplication
-          key={i}
-          {...userApplication}
-          whichGroupLeader={djangoData.user.representative_of_group}
-          generateCSVData={this.generateCSVData}
-        />
-      );
-    });
-    const group = this.props.groups.find(
-      (group) =>
-        group.name.toLowerCase() ===
+  state.applications.sort((a, b) => {
+    if (a.user.full_name < b.user.full_name) return -1;
+    if (a.user.full_name > b.user.full_name) return 1;
+    return 0;
+  });
+  const filteredApplications = state.applications.filter((userApplication) => {
+    const filteredComApp = userApplication.group_applications.filter(
+      (groupApplication) =>
+        groupApplication.group.name.toLowerCase() ==
         djangoData.user.representative_of_group.toLowerCase()
     );
 
-    const numApplicants = filteredApplications.length;
+    return filteredComApp.length > 0;
+  });
 
-    if (error) {
-      return <div>Error: {error.message}</div>;
-    } else if (isFetching) {
-      return <LoadingBall />;
-    } else {
-      return (
-        <PageWrapper>
-          <PageTitle>Admin Panel</PageTitle>
-          <GroupLogoWrapper>
-            <GroupLogo src={group.logo} />
-            <h2>{djangoData.user.representative_of_group}</h2>
-          </GroupLogoWrapper>
-          <LinkLink to="/">Gå til forside</LinkLink>
+  // Render applications from users
+  const UserApplications = filteredApplications.map((userApplication, i) => {
+    return (
+      <UserApplication
+        key={i}
+        {...userApplication}
+        whichGroupLeader={djangoData.user.representative_of_group}
+        generateCSVData={generateCSVData}
+      />
+    );
+  });
+  const group = groups.find(
+    (group) =>
+      group.name.toLowerCase() ===
+      djangoData.user.representative_of_group.toLowerCase()
+  );
 
-          <Wrapper>
-            <EditGroupForm
-              apiRoot={this.API_ROOT}
-              initialDescription={group && group.description}
-              initialReplyText={group && group.response_label}
-              group={group}
-            />
-          </Wrapper>
-          <Wrapper>
-            <Statistics>
-              <StatisticsWrapper>
-                <StatisticsName>Antall søkere</StatisticsName>
-                {numApplicants} {numApplicants == 1 ? "søker" : "søkere"}
-              </StatisticsWrapper>
-            </Statistics>
-            <CSVExport
-              data={csvData}
-              headers={headers}
-              filename={"applications.csv"}
-              target="_blank"
-            >
-              Eksporter som csv
-            </CSVExport>
-            {UserApplications}
-          </Wrapper>
-        </PageWrapper>
-      );
-    }
+  const numApplicants = filteredApplications.length;
+
+  if (state.error) {
+    return <div>Error: {state.error.message}</div>;
+  } else if (state.isFetching) {
+    return <LoadingBall />;
+  } else {
+    return (
+      <PageWrapper>
+        <PageTitle>Admin Panel</PageTitle>
+        <GroupLogoWrapper>
+          <GroupLogo src={group.logo} />
+          <h2>{djangoData.user.representative_of_group}</h2>
+        </GroupLogoWrapper>
+        <LinkLink to="/">Gå til forside</LinkLink>
+
+        <Wrapper>
+          <EditGroupForm
+            initialDescription={group && group.description}
+            initialReplyText={group && group.response_label}
+            group={group}
+          />
+        </Wrapper>
+        <Wrapper>
+          <Statistics>
+            <StatisticsWrapper>
+              <StatisticsName>Antall søkere</StatisticsName>
+              {numApplicants} {numApplicants == 1 ? "søker" : "søkere"}
+            </StatisticsWrapper>
+          </Statistics>
+          <CSVExport
+            data={state.csvData}
+            headers={state.headers}
+            filename={"applications.csv"}
+            target="_blank"
+          >
+            Eksporter som csv
+          </CSVExport>
+          {UserApplications}
+        </Wrapper>
+      </PageWrapper>
+    );
   }
-}
+};
 
 export default AdminPage;
 
-const MyInnerForm = (props) => {
-  const { isSubmitting, handleSubmit, isValid } = props;
+const MyInnerForm = ({ isSubmitting, handleSubmit, isValid }) => {
   return (
     <Form>
       <FormWrapper>

@@ -1,4 +1,4 @@
-import React, { Component } from "react";
+import React, { useState } from "react";
 import PropTypes from "prop-types";
 import Truncate from "react-truncate";
 
@@ -7,70 +7,51 @@ import EllipsisWrapper from "./EllipsisWrapper";
 import Ellipsis from "./Ellipsis";
 import EllipsisToggle from "./EllipsisToggle";
 
-class ReadMore extends Component {
-  constructor(...args) {
-    super(...args);
+const ReadMore = ({ children, more, less, lines }) => {
+  const [expanded, setExpanded] = useState(false);
+  const [truncated, setTruncated] = useState(false);
 
-    this.state = {
-      expanded: false,
-      truncated: false,
-    };
-
-    this.handleTruncate = this.handleTruncate.bind(this);
-    this.toggleLines = this.toggleLines.bind(this);
-  }
-
-  handleTruncate(truncated) {
-    if (this.state.truncated !== truncated) {
-      this.setState({
-        truncated,
-      });
+  const handleTruncate = (_truncated) => {
+    if (truncated !== _truncated) {
+      setTruncated(_truncated);
     }
-  }
+  };
 
-  toggleLines(event) {
+  const toggleLines = (event) => {
     event.preventDefault();
 
-    this.setState({
-      expanded: !this.state.expanded,
-    });
-  }
+    setExpanded(!expanded);
+  };
 
-  render() {
-    const { children, more, less, lines } = this.props;
-
-    const { expanded, truncated } = this.state;
-
-    return (
-      <Wrapper>
-        <div>
-          <Truncate
-            lines={!expanded && lines}
-            ellipsis={
-              <EllipsisWrapper>
-                {" "}
-                <Ellipsis>...</Ellipsis>
-                <EllipsisToggle href="#" onClick={this.toggleLines}>
-                  {more}
-                </EllipsisToggle>
-              </EllipsisWrapper>
-            }
-            onTruncate={this.handleTruncate}
-          >
-            {children}
-          </Truncate>
-          {!truncated && expanded && (
+  return (
+    <Wrapper>
+      <div>
+        <Truncate
+          lines={!expanded && lines}
+          ellipsis={
             <EllipsisWrapper>
-              <EllipsisToggle href="#" onClick={this.toggleLines}>
-                {less}
+              {" "}
+              <Ellipsis>...</Ellipsis>
+              <EllipsisToggle href="#" onClick={toggleLines}>
+                {more}
               </EllipsisToggle>
             </EllipsisWrapper>
-          )}
-        </div>
-      </Wrapper>
-    );
-  }
-}
+          }
+          onTruncate={handleTruncate}
+        >
+          {children}
+        </Truncate>
+        {!truncated && expanded && (
+          <EllipsisWrapper>
+            <EllipsisToggle href="#" onClick={toggleLines}>
+              {less}
+            </EllipsisToggle>
+          </EllipsisWrapper>
+        )}
+      </div>
+    </Wrapper>
+  );
+};
 
 ReadMore.defaultProps = {
   lines: 3,

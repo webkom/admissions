@@ -1,4 +1,4 @@
-import React, { Component } from "react";
+import React, { useEffect, useState } from "react";
 import styled from "styled-components";
 
 import callApi from "src/utils/callApi";
@@ -16,28 +16,26 @@ import AdmissionCountDown from "../../components/AdmissionCountDown";
 
 import LoadingBall from "src/components/LoadingBall";
 
-class LandingPage extends Component {
-  constructor(props) {
-    super(props);
-    this.state = {
-      results: undefined,
-      admission: null,
-      error: null,
-      isLoading: true,
-      hasSubmitted: false,
-    };
-  }
+const LandingPage = () => {
+  const [state, setState] = useState({
+    results: undefined,
+    admission: null,
+    error: null,
+    isLoading: true,
+    hasSubmitted: false,
+  });
 
-  componentDidMount() {
+  useEffect(() => {
     callApi("/admission/").then(
       ({ jsonData: data }) => {
-        this.setState({
+        setState((prevState) => ({
+          ...prevState,
           admission: data[0],
           isLoading: false,
-        });
+        }));
       },
       (error) => {
-        this.setState({ error });
+        setState((prevState) => ({ ...prevState, error }));
       }
     );
     djangoData.user.full_name &&
@@ -45,95 +43,95 @@ class LandingPage extends Component {
         (res) => {
           // HTTP 204 will return no content, but the promise is still Fulfilled
           if (res && res.status == 204) {
-            this.setState({
+            setState((prevState) => ({
+              ...prevState,
               hasSubmitted: false,
-            });
+            }));
           } else {
-            this.setState({
+            setState((prevState) => ({
+              ...prevState,
               hasSubmitted: true,
               isLoading: false,
-            });
+            }));
           }
         },
-        () => this.setState({ hasSubmitted: false })
+        () => setState((prevState) => ({ ...prevState, hasSubmitted: false }))
       );
+  }, []);
+
+  const { error, isLoading, admission, hasSubmitted } = state;
+  if (error) {
+    return <div>Error: {error.message}</div>;
   }
 
-  render() {
-    const { error, isLoading, admission, hasSubmitted } = this.state;
-    if (error) {
-      return <div>Error: {error.message}</div>;
-    }
+  if (isLoading) {
+    return <LoadingBall />;
+  }
 
-    if (isLoading) {
-      return <LoadingBall />;
-    }
+  if (!admission) {
+    return <LandingPageNoAdmission />;
+  }
 
-    if (!admission) {
-      return <LandingPageNoAdmission />;
-    }
-
-    return (
-      <LandingPageSkeleton>
-        <YearOfAdmission>
-          <Moment format="YYYY">{admission.public_deadline}</Moment>
-        </YearOfAdmission>
-        <InfoBox>
-          <DecorativeLine vertical red />
-          <ApplicationDateInfo admission={admission} />
-        </InfoBox>
-        <Notice>
-          <StyledSpan bold>Merk:</StyledSpan> Oppdateringer etter søknadsfristen
-          kan ikke garanteres å bli sett av komiteen(e) du søker deg til.
-        </Notice>
-        <LinkWrapper>
-          {djangoData.user.full_name ? (
-            <li>
-              <LegoButton
-                to={hasSubmitted ? "/min-soknad" : "/velg-komiteer"}
-                icon="arrow-forward"
-                iconPrefix="ios"
-                disabled={!admission.is_open}
-              >
-                Gå til søknad
-              </LegoButton>
-            </li>
-          ) : (
-            <li>
-              <LegoButton
-                icon="arrow-forward"
-                iconPrefix="ios"
-                disabled={!admission.is_open}
-                onClick={(e) => {
-                  window.location = "/login/lego/";
-                  e.preventDefault();
-                }}
-              >
-                Gå til søknad
-              </LegoButton>
-            </li>
-          )}
-
-          {djangoData.user.is_privileged && (
-            <li>
-              <LegoButton
-                to="/admin"
-                icon="arrow-forward"
-                iconPrefix="ios"
-                buttonStyle="secondary"
-              >
-                Gå til admin panel
-              </LegoButton>
-            </li>
-          )}
-        </LinkWrapper>
-        {!admission.is_open && (
-          <AdmissionCountDown endTime={admission.open_from} />
+  return (
+    <LandingPageSkeleton>
+      <YearOfAdmission>
+        <Moment format="YYYY">{admission.public_deadline}</Moment>
+      </YearOfAdmission>
+      <InfoBox>
+        <DecorativeLine vertical red />
+        <ApplicationDateInfo admission={admission} />
+      </InfoBox>
+      <Notice>
+        <StyledSpan bold>Merk:</StyledSpan> Oppdateringer etter søknadsfristen
+        kan ikke garanteres å bli sett av komiteen(e) du søker deg til.
+      </Notice>
+      <LinkWrapper>
+        {djangoData.user.full_name ? (
+          <li>
+            <LegoButton
+              to={hasSubmitted ? "/min-soknad" : "/velg-komiteer"}
+              icon="arrow-forward"
+              iconPrefix="ios"
+              disabled={!admission.is_open}
+            >
+              Gå til søknad
+            </LegoButton>
+          </li>
+        ) : (
+          <li>
+            <LegoButton
+              icon="arrow-forward"
+              iconPrefix="ios"
+              disabled={!admission.is_open}
+              onClick={(e) => {
+                window.location = "/login/lego/";
+                e.preventDefault();
+              }}
+            >
+              Gå til søknad
+            </LegoButton>
+          </li>
         )}
-      </LandingPageSkeleton>
-    );
-  }
-}
+
+        {djangoData.user.is_privileged && (
+          <li>
+            <LegoButton
+              to="/admin"
+              icon="arrow-forward"
+              iconPrefix="ios"
+              buttonStyle="secondary"
+            >
+              Gå til admin panel
+            </LegoButton>
+          </li>
+        )}
+      </LinkWrapper>
+      {!admission.is_open && (
+        <AdmissionCountDown endTime={admission.open_from} />
+      )}
+    </LandingPageSkeleton>
+  );
+};
 
 export default LandingPage;
 

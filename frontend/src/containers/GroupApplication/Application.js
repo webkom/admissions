@@ -1,4 +1,4 @@
-import React, { Component } from "react";
+import React, { useEffect, useState } from "react";
 import styled from "styled-components";
 import { media } from "src/styles/mediaQueries";
 import {
@@ -8,64 +8,62 @@ import {
 } from "src/components/styledFields";
 import readmeIfy from "src/components/ReadmeLogo";
 
-class Application extends Component {
-  componentDidMount() {
-    this.setState({
-      timeout: setInterval(() => {
+const Application = ({
+  responseLabel,
+  group,
+  field: { name, onChange, value },
+  form: { touched, errors, handleBlur },
+  disabled,
+}) => {
+  const [timeout, setTimeout] = useState();
+  useEffect(() => {
+    setTimeout(
+      setInterval(() => {
         sessionStorage.setItem(
           "applicationText",
           JSON.stringify({
             ...JSON.parse(sessionStorage.getItem("applicationText")),
-            [this.props.group.name.toLowerCase()]: this.props.field.value,
+            [group.name.toLowerCase()]: value,
           })
         );
-      }, 4000),
-    });
-  }
-  componentWillUnmount() {
-    clearInterval(this.state.timeout);
-  }
-  render() {
-    const {
-      responseLabel,
-      group,
-      field: { name, onChange, value },
-      form: { touched, errors, handleBlur },
-      disabled,
-    } = this.props;
-    const error = touched[name] && errors[name];
-    return (
-      <Container>
-        <LogoNameWrapper>
-          <Logo src={group.logo} />
-          <Name>{readmeIfy(group.name)}</Name>
-        </LogoNameWrapper>
-        {responseLabel && (
-          <ResponseLabel>{readmeIfy(responseLabel, true)}</ResponseLabel>
-        )}
-        <InputWrapper>
-          <FieldLabel htmlFor={group.name.toLowerCase()}>
-            Søknadstekst
-          </FieldLabel>
-          <InputArea
-            className="textarea"
-            type="textarea"
-            name={name}
-            id={name}
-            onChange={onChange}
-            onBlur={handleBlur}
-            placeholder="Skriv søknadstekst her..."
-            value={value}
-            error={error}
-            rows="10"
-            disabled={disabled}
-          />
-          <InputValidationFeedback error={error} />
-        </InputWrapper>
-      </Container>
+      }, 4000)
     );
-  }
-}
+
+    return () => {
+      clearInterval(timeout);
+    };
+  }, []);
+
+  const error = touched[name] && errors[name];
+  return (
+    <Container>
+      <LogoNameWrapper>
+        <Logo src={group.logo} />
+        <Name>{readmeIfy(group.name)}</Name>
+      </LogoNameWrapper>
+      {responseLabel && (
+        <ResponseLabel>{readmeIfy(responseLabel, true)}</ResponseLabel>
+      )}
+      <InputWrapper>
+        <FieldLabel htmlFor={group.name.toLowerCase()}>Søknadstekst</FieldLabel>
+        <InputArea
+          className="textarea"
+          type="textarea"
+          name={name}
+          id={name}
+          onChange={onChange}
+          onBlur={handleBlur}
+          placeholder="Skriv søknadstekst her..."
+          value={value}
+          error={error}
+          rows="10"
+          disabled={disabled}
+        />
+        <InputValidationFeedback error={error} />
+      </InputWrapper>
+    </Container>
+  );
+};
 
 export default Application;
 
