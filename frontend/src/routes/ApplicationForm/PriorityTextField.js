@@ -2,6 +2,7 @@ import React, { useEffect } from "react";
 import { FieldLabel, StyledTextAreaField } from "src/components/styledFields";
 import styled from "styled-components";
 import { media } from "src/styles/mediaQueries";
+import useDebouncedState from "../../utils/useDebouncedState";
 
 const PriorityTextField = ({
   label,
@@ -10,9 +11,11 @@ const PriorityTextField = ({
   form: { handleBlur },
   disabled,
 }) => {
+  const debouncedValue = useDebouncedState(value);
+
   useEffect(() => {
     sessionStorage.setItem("text", value);
-  }, [value]);
+  }, [debouncedValue]);
 
   return (
     <Wrapper>

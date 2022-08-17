@@ -7,6 +7,7 @@ import {
   StyledTextAreaField,
 } from "src/components/styledFields";
 import readmeIfy from "src/components/ReadmeLogo";
+import useDebouncedState from "../../utils/useDebouncedState";
 
 const Application = ({
   responseLabel,
@@ -15,6 +16,8 @@ const Application = ({
   form: { touched, errors, handleBlur },
   disabled,
 }) => {
+  const debouncedValue = useDebouncedState(value);
+
   useEffect(() => {
     sessionStorage.setItem(
       "applicationText",
@@ -23,7 +26,7 @@ const Application = ({
         [group.name.toLowerCase()]: value,
       })
     );
-  }, [value]);
+  }, [debouncedValue]);
 
   const error = touched[name] && errors[name];
   return (
