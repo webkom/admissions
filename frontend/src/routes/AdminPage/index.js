@@ -1,4 +1,4 @@
-import React, { Component } from "react";
+import React, { useEffect, useState } from "react";
 import styled from "styled-components";
 import * as Sentry from "@sentry/browser";
 import { withFormik, Field, Form } from "formik";
@@ -30,162 +30,123 @@ import {
   GroupLogoWrapper,
 } from "./styles";
 
-class AdminPage extends Component {
-  constructor(props) {
-    super(props);
-    this.state = {
-      results: undefined,
-      error: null,
-      user: { name: "" },
-      applications: [],
-      csvData: [],
-      isFetching: true,
-      headers: [
-        { label: "Full Name", key: "name" },
-        { label: "Søknadstekst", key: "applicationText" },
-        { label: "Mobilnummer", key: "phoneNumber" },
-        { label: "Email", key: "email" },
-        { label: "Username", key: "username" },
-        { label: "Søkt innen frist", key: "appliedWithinDeadline" },
-        { label: "Tid sendt", key: "createdAt" },
-        { label: "Tid oppdatert", key: "updatedAt" },
-      ],
-    };
-  }
+const AdminPage = ({ groups }) => {
+  const [error, setError] = useState(null);
+  const [sortedApplications, setSortedApplications] = useState([]);
+  const [csvData, setCsvData] = useState([]);
+  const [isFetching, setIsFetching] = useState(true);
 
-  generateCSVData = (
-    name,
-    email,
-    username,
-    createdAt,
-    updatedAt,
-    appliedWithinDeadline,
-    applicationText,
-    phoneNumber
-  ) => {
-    this.setState((prevState) => ({
-      ...prevState,
-      csvData: [
-        ...prevState.csvData,
-        {
-          name,
-          email,
-          username,
-          applicationText: replaceQuotationMarks(applicationText),
-          createdAt,
-          updatedAt,
-          appliedWithinDeadline,
-          phoneNumber,
-        },
-      ],
-    }));
-  };
+  const csvHeaders = [
+    { label: "Full Name", key: "name" },
+    { label: "Søknadstekst", key: "applicationText" },
+    { label: "Mobilnummer", key: "phoneNumber" },
+    { label: "Email", key: "email" },
+    { label: "Username", key: "username" },
+    { label: "Søkt innen frist", key: "appliedWithinDeadline" },
+    { label: "Tid sendt", key: "createdAt" },
+    { label: "Tid oppdatert", key: "updatedAt" },
+  ];
 
-  componentDidMount() {
+  useEffect(() => {
     callApi("/application/").then(
       ({ jsonData }) => {
-        this.setState({
-          applications: jsonData,
-          isFetching: false,
-        });
+        setSortedApplications(
+          [...jsonData].sort((a, b) => {
+            if (a.user.full_name < b.user.full_name) return -1;
+            if (a.user.full_name > b.user.full_name) return 1;
+            return 0;
+          })
+        );
+        setIsFetching(false);
       },
       (error) => {
-        this.setState({ error, isFetching: false });
+        setError(error);
+        setIsFetching(false);
       }
     );
 
-    this.setState({
-      user: { name: djangoData.user && djangoData.user.full_name },
-    });
     Sentry.setUser(djangoData.user);
-  }
+  }, []);
 
-  render() {
-    const { error, isFetching, applications, csvData, headers } = this.state;
-
-    applications.sort(function (a, b) {
-      if (a.user.full_name < b.user.full_name) return -1;
-      if (a.user.full_name > b.user.full_name) return 1;
-      return 0;
+  useEffect(() => {
+    // Push all the individual applications into csvData with the right format
+    const updatedCsvData = [];
+    sortedApplications.forEach((userApplication) => {
+      updatedCsvData.push({
+        name: userApplication.user.full_name,
+        email: userApplication.user.email,
+        username: userApplication.user.username,
+        applicationText: replaceQuotationMarks(
+          userApplication.group_applications[0].text
+        ),
+        createdAt: userApplication.created_at,
+        updatedAt: userApplication.updated_at,
+        appliedWithinDeadline: userApplication.applied_within_deadline,
+        phoneNumber: userApplication.phone_number,
+      });
     });
-    const filteredApplications = applications.filter((userApplication) => {
-      var filteredComApp = userApplication.group_applications.filter(
-        (groupApplication) =>
-          groupApplication.group.name.toLowerCase() ==
-          djangoData.user.representative_of_group.toLowerCase()
-      );
+    setCsvData(updatedCsvData);
+  }, [sortedApplications]);
 
-      return filteredComApp.length > 0;
-    });
+  const group = groups.find(
+    (group) =>
+      group.name.toLowerCase() ===
+      djangoData.user.representative_of_group.toLowerCase()
+  );
 
-    // Render applications from users
-    const UserApplications = filteredApplications.map((userApplication, i) => {
-      return (
-        <UserApplication
-          key={i}
-          {...userApplication}
-          whichGroupLeader={djangoData.user.representative_of_group}
-          generateCSVData={this.generateCSVData}
-        />
-      );
-    });
-    const group = this.props.groups.find(
-      (group) =>
-        group.name.toLowerCase() ===
-        djangoData.user.representative_of_group.toLowerCase()
-    );
+  const numApplicants = sortedApplications.length;
 
-    const numApplicants = filteredApplications.length;
+  if (error) {
+    return <div>Error: {error.message}</div>;
+  } else if (isFetching) {
+    return <LoadingBall />;
+  } else {
+    return (
+      <PageWrapper>
+        <PageTitle>Admin Panel</PageTitle>
+        <GroupLogoWrapper>
+          <GroupLogo src={group.logo} />
+          <h2>{djangoData.user.representative_of_group}</h2>
+        </GroupLogoWrapper>
+        <LinkLink to="/">Gå til forside</LinkLink>
 
-    if (error) {
-      return <div>Error: {error.message}</div>;
-    } else if (isFetching) {
-      return <LoadingBall />;
-    } else {
-      return (
-        <PageWrapper>
-          <PageTitle>Admin Panel</PageTitle>
-          <GroupLogoWrapper>
-            <GroupLogo src={group.logo} />
-            <h2>{djangoData.user.representative_of_group}</h2>
-          </GroupLogoWrapper>
-          <LinkLink to="/">Gå til forside</LinkLink>
-
-          <Wrapper>
-            <EditGroupForm
-              apiRoot={this.API_ROOT}
-              initialDescription={group && group.description}
-              initialReplyText={group && group.response_label}
-              group={group}
+        <Wrapper>
+          <EditGroupForm
+            initialDescription={group && group.description}
+            initialReplyText={group && group.response_label}
+            group={group}
+          />
+        </Wrapper>
+        <Wrapper>
+          <Statistics>
+            <StatisticsWrapper>
+              <StatisticsName>Antall søkere</StatisticsName>
+              {numApplicants} {numApplicants == 1 ? "søker" : "søkere"}
+            </StatisticsWrapper>
+          </Statistics>
+          <CSVExport
+            data={csvData}
+            headers={csvHeaders}
+            filename={"applications.csv"}
+            target="_blank"
+          >
+            Eksporter som csv
+          </CSVExport>
+          {sortedApplications.map((userApplication) => (
+            <UserApplication
+              key={userApplication.user.username}
+              {...userApplication}
             />
-          </Wrapper>
-          <Wrapper>
-            <Statistics>
-              <StatisticsWrapper>
-                <StatisticsName>Antall søkere</StatisticsName>
-                {numApplicants} {numApplicants == 1 ? "søker" : "søkere"}
-              </StatisticsWrapper>
-            </Statistics>
-            <CSVExport
-              data={csvData}
-              headers={headers}
-              filename={"applications.csv"}
-              target="_blank"
-            >
-              Eksporter som csv
-            </CSVExport>
-            {UserApplications}
-          </Wrapper>
-        </PageWrapper>
-      );
-    }
+          ))}
+        </Wrapper>
+      </PageWrapper>
+    );
   }
-}
+};
 
 export default AdminPage;
 
-const MyInnerForm = (props) => {
-  const { isSubmitting, handleSubmit, isValid } = props;
+const MyInnerForm = ({ isSubmitting, handleSubmit, isValid }) => {
   return (
     <Form>
       <FormWrapper>

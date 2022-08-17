@@ -1,8 +1,8 @@
 /* eslint-disable */
 
-var webpack = require("webpack");
-var WebpackDevServer = require("webpack-dev-server");
-var config = require("./webpack.config");
+const webpack = require("webpack");
+const WebpackDevServer = require("webpack-dev-server");
+const config = require("./webpack.config");
 
 config.mode = "development";
 

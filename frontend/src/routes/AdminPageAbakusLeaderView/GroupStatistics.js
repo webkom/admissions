@@ -6,7 +6,7 @@ import StatisticsGroupLogo from "./StatisticsGroupLogo";
 
 const GroupStatistics = ({ applications, groupName, groupLogo }) => {
   const calculateNumGroupApplications = (group) => {
-    var sum = 0;
+    let sum = 0;
     applications.map((application) => {
       application.group_applications.map((groupApplication) => {
         if (groupApplication.group.name.toLowerCase() === group.toLowerCase()) {

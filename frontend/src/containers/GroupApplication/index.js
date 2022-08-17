@@ -1,29 +1,24 @@
-import React, { Component } from "react";
+import React, { useEffect } from "react";
 import Application from "./Application";
 
-class GroupApplication extends Component {
-  componentDidMount() {
-    setTimeout(this.initializeValue, 0);
-  }
+const GroupApplication = (props) => {
+  useEffect(() => {
+    initializeValue();
+  }, []);
 
-  initializeValue = () => {
-    var groupName = this.props.group.name.toLowerCase();
+  const initializeValue = () => {
+    const groupName = props.group.name.toLowerCase();
 
-    var restoredApplicationText = JSON.parse(
+    const restoredApplicationText = JSON.parse(
       sessionStorage.getItem("applicationText")
     );
 
     if (restoredApplicationText != null && restoredApplicationText[groupName]) {
-      this.props.form.setFieldValue(
-        groupName,
-        restoredApplicationText[groupName]
-      );
+      props.form.setFieldValue(groupName, restoredApplicationText[groupName]);
     }
   };
 
-  render() {
-    return <Application {...this.props} />;
-  }
-}
+  return <Application {...props} />;
+};
 
 export default GroupApplication;

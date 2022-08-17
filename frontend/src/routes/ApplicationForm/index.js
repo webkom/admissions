@@ -1,4 +1,4 @@
-import React, { Component } from "react";
+import React from "react";
 import { withFormik, Field } from "formik";
 import * as Yup from "yup";
 import callApi from "src/utils/callApi";
@@ -8,129 +8,79 @@ import GroupApplication from "src/containers/GroupApplication";
 import FormStructure from "./FormStructure";
 
 // State of the form
-class FormContainer extends Component {
-  constructor() {
-    super();
-    this.state = {
-      width: window.innerWidth,
-      isMobile: false,
-    };
-  }
-
-  componentDidMount() {
-    this.setState({ isMobile: this.state.width <= 500 });
-    window.addEventListener("resize", this.handleWindowSizeChange);
-  }
-
-  componentWillUnmount() {
-    window.removeEventListener("resize", this.handleWindowSizeChange);
-  }
-
-  handleWindowSizeChange = () => {
-    this.setState({ width: window.innerWidth });
+const FormContainer = ({
+  admission,
+  touched,
+  errors,
+  isSubmitting,
+  groups,
+  selectedGroups,
+  handleSubmit,
+  isValid,
+  toggleGroup,
+  toggleIsEditing,
+  myApplication,
+  isEditingApplication,
+  handleReset,
+}) => {
+  const _toggleGroup = (name) => {
+    toggleGroup(name.toLowerCase());
   };
 
-  toggleGroup = (name) => {
-    this.props.toggleGroup(name.toLowerCase());
+  const onCancelEdit = () => {
+    toggleIsEditing();
+    handleReset();
   };
 
-  onCancelEdit = () => {
-    this.props.toggleIsEditing();
-    this.props.handleReset();
-  };
-
-  onDeleteApplication = () => {
+  const onDeleteApplication = () => {
     callApi("/application/mine/", {
       method: "DELETE",
     }).then(() => {
-      this.props.toggleIsEditing();
+      toggleIsEditing();
       sessionStorage.clear();
       window.location = "/";
     });
   };
 
-  persistState = () => {
-    var selectedGroupsJSON = JSON.stringify(this.state.selectedGroups);
-    sessionStorage.setItem("selectedGroups", selectedGroupsJSON);
-    sessionStorage.setItem(
-      "isEditingApplication",
-      this.props.isEditingApplication
-    );
-  };
-
-  initializeState = () => {
-    var selectedGroupsJSON = sessionStorage.getItem("selectedGroups");
-    var selectedGroups = JSON.parse(selectedGroupsJSON);
-
-    if (selectedGroups != null) {
-      this.setState({
-        selectedGroups: selectedGroups,
-      });
-    }
-  };
-
-  handleApplicationFieldBlur = (e) => {
-    this.props.handleBlur(e);
-  };
-
-  render() {
-    const {
-      admission,
-      touched,
-      errors,
-      isSubmitting,
-      groups,
-      selectedGroups,
-      handleSubmit,
-      isValid,
-      toggleGroup,
-      toggleIsEditing,
-      myApplication,
-      isEditingApplication,
-    } = this.props;
-
-    const hasSelected =
-      groups.filter((group) => selectedGroups[group.name.toLowerCase()])
-        .length >= 1;
-    const SelectedGroupItems = groups
-      .filter((group) => selectedGroups[group.name.toLowerCase()])
-      .map((group, index) => (
-        <Field
-          component={GroupApplication}
-          group={group}
-          name={group.name.toLowerCase()}
-          responseLabel={group.response_label}
-          error={
-            touched[group.name.toLowerCase()] &&
-            errors[group.name.toLowerCase()]
-          }
-          key={`${group.name.toLowerCase()} ${index}`}
-          disabled={!isEditingApplication}
-        />
-      ));
-
-    // This is where the actual form structure comes in.
-    return (
-      <FormStructure
-        admission={admission}
-        hasSelected={hasSelected}
-        SelectedGroupItems={SelectedGroupItems}
-        isSubmitting={isSubmitting}
-        isValid={isValid}
-        handleSubmit={handleSubmit}
-        isMobile={this.state.isMobile}
-        groups={groups}
-        selectedGroups={selectedGroups}
-        toggleGroup={toggleGroup}
-        toggleIsEditing={toggleIsEditing}
-        isEditing={isEditingApplication}
-        myApplication={myApplication}
-        onDeleteApplication={this.onDeleteApplication}
-        onCancel={this.onCancelEdit}
+  const hasSelected =
+    groups.filter((group) => selectedGroups[group.name.toLowerCase()]).length >=
+    1;
+  const SelectedGroupItems = groups
+    .filter((group) => selectedGroups[group.name.toLowerCase()])
+    .map((group, index) => (
+      <Field
+        component={GroupApplication}
+        group={group}
+        name={group.name.toLowerCase()}
+        responseLabel={group.response_label}
+        error={
+          touched[group.name.toLowerCase()] && errors[group.name.toLowerCase()]
+        }
+        key={`${group.name.toLowerCase()} ${index}`}
+        disabled={!isEditingApplication}
       />
-    );
-  }
-}
+    ));
+
+  // This is where the actual form structure comes in.
+  return (
+    <FormStructure
+      admission={admission}
+      hasSelected={hasSelected}
+      SelectedGroupItems={SelectedGroupItems}
+      isSubmitting={isSubmitting}
+      isValid={isValid}
+      handleSubmit={handleSubmit}
+      groups={groups}
+      selectedGroups={selectedGroups}
+      toggleGroup={_toggleGroup}
+      toggleIsEditing={toggleIsEditing}
+      isEditing={isEditingApplication}
+      myApplication={myApplication}
+      onDeleteApplication={onDeleteApplication}
+      onCancel={onCancelEdit}
+    />
+  );
+};
 
 // Highest order component for application form.
 // Handles form values, submit post and form validation.
@@ -166,7 +116,7 @@ const ApplicationForm = withFormik({
     values,
     { props: { selectedGroups, toggleIsEditing }, setSubmitting }
   ) {
-    var submission = {
+    const submission = {
       text: values.priorityText,
       applications: {},
       phone_number: values.phoneNumber,
@@ -194,7 +144,7 @@ const ApplicationForm = withFormik({
 
   validationSchema: (props) => {
     return Yup.lazy((values) => {
-      var selectedGroups = Object.keys(values).filter(
+      const selectedGroups = Object.keys(values).filter(
         (group) => props.selectedGroups[group]
       );
       const schema = {};
