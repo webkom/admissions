@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect } from "react";
 import styled from "styled-components";
 import { media } from "src/styles/mediaQueries";
 import {
@@ -15,22 +15,18 @@ const Application = ({
   form: { touched, errors, handleBlur },
   disabled,
 }) => {
-  const [timeout, setTimeout] = useState();
   useEffect(() => {
-    setTimeout(
-      setInterval(() => {
-        sessionStorage.setItem(
-          "applicationText",
-          JSON.stringify({
-            ...JSON.parse(sessionStorage.getItem("applicationText")),
-            [group.name.toLowerCase()]: value,
-          })
-        );
-      }, 4000)
-    );
-
+    const updateLocalStorageInterval = setInterval(() => {
+      sessionStorage.setItem(
+        "applicationText",
+        JSON.stringify({
+          ...JSON.parse(sessionStorage.getItem("applicationText")),
+          [group.name.toLowerCase()]: value,
+        })
+      );
+    }, 4000);
     return () => {
-      clearInterval(timeout);
+      clearInterval(updateLocalStorageInterval);
     };
   }, []);
 

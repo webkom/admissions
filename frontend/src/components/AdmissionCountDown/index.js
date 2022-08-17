@@ -3,14 +3,16 @@ import moment from "moment-timezone";
 
 const AdmissionCountDown = ({ endTime }) => {
   const [timeDiff, setTimeDiff] = useState(calcTimeDiff());
-  const [counterInterval, setCounterInterval] = useState();
 
   const endTimeMoment = moment(endTime);
 
   useEffect(() => {
-    setCounterInterval(setInterval(() => setTimeDiff(calcTimeDiff()), 1000));
+    const updateTimeDiffInterval = setInterval(
+      () => setTimeDiff(calcTimeDiff()),
+      1000
+    );
     return () => {
-      clearInterval(counterInterval);
+      clearInterval(updateTimeDiffInterval);
     };
   }, []);
 
@@ -25,7 +27,7 @@ const AdmissionCountDown = ({ endTime }) => {
 
   return (
     <p style={{ alignContent: "center" }}>
-      Opptaket {moment().isBefore(endTimeMoment) ? "åpner " : "åpnet for "} 
+      Opptaket {moment().isBefore(endTimeMoment) ? "åpner " : "åpnet for "}
       {timeDiff}
     </p>
   );

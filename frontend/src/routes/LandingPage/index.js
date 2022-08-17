@@ -17,25 +17,19 @@ import AdmissionCountDown from "../../components/AdmissionCountDown";
 import LoadingBall from "src/components/LoadingBall";
 
 const LandingPage = () => {
-  const [state, setState] = useState({
-    results: undefined,
-    admission: null,
-    error: null,
-    isLoading: true,
-    hasSubmitted: false,
-  });
+  const [admission, setAdmission] = useState(null);
+  const [error, setError] = useState(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [hasSubmitted, setHasSubmitted] = useState(false);
 
   useEffect(() => {
     callApi("/admission/").then(
       ({ jsonData: data }) => {
-        setState((prevState) => ({
-          ...prevState,
-          admission: data[0],
-          isLoading: false,
-        }));
+        setAdmission(data[0]);
+        setIsLoading(false);
       },
       (error) => {
-        setState((prevState) => ({ ...prevState, error }));
+        setError(error);
       }
     );
     djangoData.user.full_name &&
@@ -43,23 +37,16 @@ const LandingPage = () => {
         (res) => {
           // HTTP 204 will return no content, but the promise is still Fulfilled
           if (res && res.status == 204) {
-            setState((prevState) => ({
-              ...prevState,
-              hasSubmitted: false,
-            }));
+            setHasSubmitted(false);
           } else {
-            setState((prevState) => ({
-              ...prevState,
-              hasSubmitted: true,
-              isLoading: false,
-            }));
+            setHasSubmitted(true);
+            setIsLoading(false);
           }
         },
-        () => setState((prevState) => ({ ...prevState, hasSubmitted: false }))
+        () => setHasSubmitted(false)
       );
   }, []);
 
-  const { error, isLoading, admission, hasSubmitted } = state;
   if (error) {
     return <div>Error: {error.message}</div>;
   }

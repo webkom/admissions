@@ -3,7 +3,7 @@ import Application from "./Application";
 
 const GroupApplication = (props) => {
   useEffect(() => {
-    setTimeout(initializeValue, 0);
+    initializeValue();
   }, []);
 
   const initializeValue = () => {

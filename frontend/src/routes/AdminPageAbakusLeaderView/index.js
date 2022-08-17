@@ -6,7 +6,6 @@ Moment.globalLocale = "nb";
 
 import callApi from "src/utils/callApi";
 
-import djangoData from "src/utils/djangoData";
 import UserApplicationAdminView from "src/containers/UserApplicationAdminView";
 import { media } from "src/styles/mediaQueries";
 
@@ -21,28 +20,25 @@ import StatisticsWrapper from "./StatisticsWrapper";
 import { replaceQuotationMarks } from "../../utils/replaceQuotationMarks";
 
 const AdminPage = () => {
-  const [state, setState] = useState({
-    results: undefined,
-    error: null,
-    isFetching: true,
-    user: { name: "" },
-    admission: null,
-    applications: [],
-    groups: [],
-    csvData: [],
-    headers: [
-      { label: "Full Name", key: "name" },
-      { label: "Prioriteringer", key: "priorityText" },
-      { label: "Komité", key: "group" },
-      { label: "Søknadstekst", key: "groupApplicationText" },
-      { label: "Email", key: "email" },
-      { label: "Mobilnummer", key: "phoneNumber" },
-      { label: "Username", key: "username" },
-      { label: "Søkt innen frist", key: "appliedWithinDeadline" },
-      { label: "Tid sendt", key: "createdAt" },
-      { label: "Tid oppdatert", key: "updatedAt" },
-    ],
-  });
+  const [error, setError] = useState(null);
+  const [isFetching, setIsFetching] = useState(true);
+  const [admission, setAdmission] = useState(null);
+  const [applications, setApplications] = useState([]);
+  const [groups, setGroups] = useState([]);
+  const [csvData, setCsvData] = useState([]);
+
+  const csvHeaders = [
+    { label: "Full Name", key: "name" },
+    { label: "Prioriteringer", key: "priorityText" },
+    { label: "Komité", key: "group" },
+    { label: "Søknadstekst", key: "groupApplicationText" },
+    { label: "Email", key: "email" },
+    { label: "Mobilnummer", key: "phoneNumber" },
+    { label: "Username", key: "username" },
+    { label: "Søkt innen frist", key: "appliedWithinDeadline" },
+    { label: "Tid sendt", key: "createdAt" },
+    { label: "Tid oppdatert", key: "updatedAt" },
+  ];
 
   const generateCSVData = (
     name,
@@ -56,27 +52,24 @@ const AdminPage = () => {
     groupApplicationText,
     phoneNumber
   ) => {
-    setState((prevState) => ({
-      ...prevState,
-      csvData: [
-        ...prevState.csvData,
-        {
-          name,
-          email,
-          username,
-          createdAt,
-          updatedAt,
-          appliedWithinDeadline,
-          priorityText:
-            priorityText != ""
-              ? replaceQuotationMarks(priorityText)
-              : "Ingen prioriteringer",
-          group,
-          groupApplicationText: replaceQuotationMarks(groupApplicationText),
-          phoneNumber,
-        },
-      ],
-    }));
+    setCsvData((prevState) => [
+      ...prevState.csvData,
+      {
+        name,
+        email,
+        username,
+        createdAt,
+        updatedAt,
+        appliedWithinDeadline,
+        priorityText:
+          priorityText != ""
+            ? replaceQuotationMarks(priorityText)
+            : "Ingen prioriteringer",
+        group,
+        groupApplicationText: replaceQuotationMarks(groupApplicationText),
+        phoneNumber,
+      },
+    ]);
   };
 
   useEffect(() => {
@@ -88,41 +81,20 @@ const AdminPage = () => {
       .then((data) => {
         data.map(({ url, jsonData }) => {
           if (url.includes("/application/")) {
-            setState({
-              applications: jsonData,
-            });
+            setApplications(jsonData);
           } else if (url.includes("/admission/")) {
-            setState({
-              admission: jsonData[0],
-            });
+            setAdmission(jsonData[0]);
           } else if (url.includes("/group/")) {
-            setState({
-              groups: jsonData,
-            });
+            setGroups(jsonData);
           }
         });
-        setState({
-          isFetching: false,
-        });
+        setIsFetching(false);
       })
       .catch((error) => {
-        setState({ error, isFetching: false });
+        setError(error);
+        setIsFetching(false);
       });
-
-    setState({
-      user: { name: djangoData.user && djangoData.user.full_name },
-    });
   }, []);
-
-  const {
-    error,
-    isFetching,
-    admission,
-    groups,
-    applications,
-    csvData,
-    headers,
-  } = state;
 
   applications.sort(function (a, b) {
     if (a.user.full_name < b.user.full_name) return -1;
@@ -201,7 +173,7 @@ const AdminPage = () => {
           </Statistics>
           <CSVExport
             data={csvData}
-            headers={headers}
+            headers={csvHeaders}
             filename={"applications.csv"}
             target="_blank"
           >
