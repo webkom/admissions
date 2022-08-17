@@ -25,8 +25,8 @@ const AdmissionCountDown = ({ endTime }) => {
 
   return (
     <p style={{ alignContent: "center" }}>
-      Opptaket {moment().isBefore(endTimeMoment) ? "åpner" : "åpnet"}{" "}
-      {moment().isAfter(endTimeMoment) && "for "} {timeDiff}
+      Opptaket {moment().isBefore(endTimeMoment) ? "åpner " : "åpnet for "} 
+      {timeDiff}
     </p>
   );
 };
