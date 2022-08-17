@@ -16,19 +16,14 @@ const Application = ({
   disabled,
 }) => {
   useEffect(() => {
-    const updateLocalStorageInterval = setInterval(() => {
-      sessionStorage.setItem(
-        "applicationText",
-        JSON.stringify({
-          ...JSON.parse(sessionStorage.getItem("applicationText")),
-          [group.name.toLowerCase()]: value,
-        })
-      );
-    }, 4000);
-    return () => {
-      clearInterval(updateLocalStorageInterval);
-    };
-  }, []);
+    sessionStorage.setItem(
+      "applicationText",
+      JSON.stringify({
+        ...JSON.parse(sessionStorage.getItem("applicationText")),
+        [group.name.toLowerCase()]: value,
+      })
+    );
+  }, [value]);
 
   const error = touched[name] && errors[name];
   return (

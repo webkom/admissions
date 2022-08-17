@@ -32,7 +32,7 @@ import {
 
 const AdminPage = ({ groups }) => {
   const [error, setError] = useState(null);
-  const [applications, setApplications] = useState([]);
+  const [sortedApplications, setSortedApplications] = useState([]);
   const [csvData, setCsvData] = useState([]);
   const [isFetching, setIsFetching] = useState(true);
 
@@ -47,35 +47,16 @@ const AdminPage = ({ groups }) => {
     { label: "Tid oppdatert", key: "updatedAt" },
   ];
 
-  const generateCSVData = (
-    name,
-    email,
-    username,
-    createdAt,
-    updatedAt,
-    appliedWithinDeadline,
-    applicationText,
-    phoneNumber
-  ) => {
-    setCsvData((prevState) => [
-      ...prevState.csvData,
-      {
-        name,
-        email,
-        username,
-        applicationText: replaceQuotationMarks(applicationText),
-        createdAt,
-        updatedAt,
-        appliedWithinDeadline,
-        phoneNumber,
-      },
-    ]);
-  };
-
   useEffect(() => {
     callApi("/application/").then(
       ({ jsonData }) => {
-        setApplications(jsonData);
+        setSortedApplications(
+          [...jsonData].sort((a, b) => {
+            if (a.user.full_name < b.user.full_name) return -1;
+            if (a.user.full_name > b.user.full_name) return 1;
+            return 0;
+          })
+        );
         setIsFetching(false);
       },
       (error) => {
@@ -87,39 +68,33 @@ const AdminPage = ({ groups }) => {
     Sentry.setUser(djangoData.user);
   }, []);
 
-  applications.sort((a, b) => {
-    if (a.user.full_name < b.user.full_name) return -1;
-    if (a.user.full_name > b.user.full_name) return 1;
-    return 0;
-  });
-  const filteredApplications = applications.filter((userApplication) => {
-    const filteredComApp = userApplication.group_applications.filter(
-      (groupApplication) =>
-        groupApplication.group.name.toLowerCase() ==
-        djangoData.user.representative_of_group.toLowerCase()
-    );
+  useEffect(() => {
+    // Push all the individual applications into csvData with the right format
+    const updatedCsvData = [];
+    sortedApplications.forEach((userApplication) => {
+      updatedCsvData.push({
+        name: userApplication.user.full_name,
+        email: userApplication.user.email,
+        username: userApplication.user.username,
+        applicationText: replaceQuotationMarks(
+          userApplication.group_applications[0].text
+        ),
+        createdAt: userApplication.created_at,
+        updatedAt: userApplication.updated_at,
+        appliedWithinDeadline: userApplication.applied_within_deadline,
+        phoneNumber: userApplication.phone_number,
+      });
+    });
+    setCsvData(updatedCsvData);
+  }, [sortedApplications]);
 
-    return filteredComApp.length > 0;
-  });
-
-  // Render applications from users
-  const UserApplications = filteredApplications.map((userApplication, i) => {
-    return (
-      <UserApplication
-        key={i}
-        {...userApplication}
-        whichGroupLeader={djangoData.user.representative_of_group}
-        generateCSVData={generateCSVData}
-      />
-    );
-  });
   const group = groups.find(
     (group) =>
       group.name.toLowerCase() ===
       djangoData.user.representative_of_group.toLowerCase()
   );
 
-  const numApplicants = filteredApplications.length;
+  const numApplicants = sortedApplications.length;
 
   if (error) {
     return <div>Error: {error.message}</div>;
@@ -157,7 +132,12 @@ const AdminPage = ({ groups }) => {
           >
             Eksporter som csv
           </CSVExport>
-          {UserApplications}
+          {sortedApplications.map((userApplication) => (
+            <UserApplication
+              key={userApplication.user.username}
+              {...userApplication}
+            />
+          ))}
         </Wrapper>
       </PageWrapper>
     );

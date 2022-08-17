@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useMemo } from "react";
 import Moment from "react-moment";
 import "moment/locale/nb";
 Moment.globalLocale = "nb";
@@ -24,45 +24,14 @@ const UserApplicationAdminView = ({
   applied_within_deadline,
   phone_number,
   pk,
-  generateCSVData,
 }) => {
-  const [groupApplications, setGroupApplications] = useState([]);
+  const sortedGroupApplications = useMemo(() =>
+    [...group_applications].sort((a, b) =>
+      a.group.name.localeCompare(b.group.name)
+    )
+  );
 
-  useEffect(() => {
-    group_applications.sort(function (a, b) {
-      if (a.group.name < b.group.name) return -1;
-      if (a.group.name > b.group.name) return 1;
-      return 0;
-    });
-
-    const GroupApplications = group_applications.map((application, i) => {
-      generateCSVData(
-        user.full_name,
-        user.email,
-        user.username,
-        created_at,
-        updated_at,
-        applied_within_deadline,
-        text,
-        application.group.name,
-        application.text,
-        phone_number
-      );
-
-      return (
-        <ApplicationAdminView
-          key={user.username + "-" + i}
-          group={application.group.name}
-          applicationId={pk}
-          text={application.text}
-        />
-      );
-    });
-
-    setGroupApplications(GroupApplications);
-  }, []);
-
-  const numApplications = groupApplications.length;
+  const numApplications = sortedGroupApplications.length;
   const priorityText = text ? text : <i>Ingen kommentarer.</i>;
   return (
     <Wrapper>
@@ -114,7 +83,14 @@ const UserApplicationAdminView = ({
               </SmallDescriptionWrapper>
             </Header>
             <PriorityText text={priorityText} />
-            {groupApplications}
+            {sortedGroupApplications.map((application) => (
+              <ApplicationAdminView
+                key={user.username + "-" + application.group.name}
+                group={application.group.name}
+                applicationId={pk}
+                text={application.text}
+              />
+            ))}
           </div>
         }
       />

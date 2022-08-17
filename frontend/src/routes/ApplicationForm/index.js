@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React from "react";
 import { withFormik, Field } from "formik";
 import * as Yup from "yup";
 import callApi from "src/utils/callApi";
@@ -23,21 +23,6 @@ const FormContainer = ({
   isEditingApplication,
   handleReset,
 }) => {
-  const [width, setWidth] = useState(window.innerWidth);
-  const [isMobile, setIsMobile] = useState(false);
-
-  useEffect(() => {
-    setIsMobile(width <= 500);
-    window.addEventListener("resize", handleWindowSizeChange);
-    return () => {
-      window.removeEventListener("resize", handleWindowSizeChange);
-    };
-  }, []);
-
-  const handleWindowSizeChange = () => {
-    setWidth(window.innerWidth);
-  };
-
   const _toggleGroup = (name) => {
     toggleGroup(name.toLowerCase());
   };
@@ -85,7 +70,6 @@ const FormContainer = ({
       isSubmitting={isSubmitting}
       isValid={isValid}
       handleSubmit={handleSubmit}
-      isMobile={isMobile}
       groups={groups}
       selectedGroups={selectedGroups}
       toggleGroup={_toggleGroup}

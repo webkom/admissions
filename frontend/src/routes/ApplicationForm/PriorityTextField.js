@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect } from "react";
 import { FieldLabel, StyledTextAreaField } from "src/components/styledFields";
 import styled from "styled-components";
 import { media } from "src/styles/mediaQueries";
@@ -10,17 +10,9 @@ const PriorityTextField = ({
   form: { handleBlur },
   disabled,
 }) => {
-  const [timeout, setTimeout] = useState();
   useEffect(() => {
-    setTimeout(
-      setInterval(() => {
-        sessionStorage.setItem("text", value);
-      }, 4000)
-    );
-    return () => {
-      clearInterval(timeout);
-    };
-  }, []);
+    sessionStorage.setItem("text", value);
+  }, [value]);
 
   return (
     <Wrapper>

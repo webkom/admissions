@@ -23,7 +23,7 @@ const AdminPage = () => {
   const [error, setError] = useState(null);
   const [isFetching, setIsFetching] = useState(true);
   const [admission, setAdmission] = useState(null);
-  const [applications, setApplications] = useState([]);
+  const [sortedApplications, setSortedApplications] = useState([]);
   const [groups, setGroups] = useState([]);
   const [csvData, setCsvData] = useState([]);
 
@@ -40,38 +40,6 @@ const AdminPage = () => {
     { label: "Tid oppdatert", key: "updatedAt" },
   ];
 
-  const generateCSVData = (
-    name,
-    email,
-    username,
-    createdAt,
-    updatedAt,
-    appliedWithinDeadline,
-    priorityText,
-    group,
-    groupApplicationText,
-    phoneNumber
-  ) => {
-    setCsvData((prevState) => [
-      ...prevState.csvData,
-      {
-        name,
-        email,
-        username,
-        createdAt,
-        updatedAt,
-        appliedWithinDeadline,
-        priorityText:
-          priorityText != ""
-            ? replaceQuotationMarks(priorityText)
-            : "Ingen prioriteringer",
-        group,
-        groupApplicationText: replaceQuotationMarks(groupApplicationText),
-        phoneNumber,
-      },
-    ]);
-  };
-
   useEffect(() => {
     Promise.all([
       callApi("/application/"),
@@ -81,7 +49,11 @@ const AdminPage = () => {
       .then((data) => {
         data.map(({ url, jsonData }) => {
           if (url.includes("/application/")) {
-            setApplications(jsonData);
+            setSortedApplications(
+              [...jsonData].sort((a, b) =>
+                a.user.full_name.localeCompare(b.user.full_name)
+              )
+            );
           } else if (url.includes("/admission/")) {
             setAdmission(jsonData[0]);
           } else if (url.includes("/group/")) {
@@ -96,25 +68,35 @@ const AdminPage = () => {
       });
   }, []);
 
-  applications.sort(function (a, b) {
-    if (a.user.full_name < b.user.full_name) return -1;
-    if (a.user.full_name > b.user.full_name) return 1;
-    return 0;
-  });
-  const UserApplications = applications.map((userApplication, i) => {
-    return (
-      <UserApplicationAdminView
-        key={i}
-        {...userApplication}
-        generateCSVData={generateCSVData}
-      />
-    );
-  });
+  useEffect(() => {
+    // Push all the individual applications into csvData with the right format
+    const updatedCsvData = [];
+    sortedApplications.forEach((application) => {
+      application.group_applications.forEach((groupApplication) => {
+        updatedCsvData.push({
+          name: application.user.full_name,
+          email: application.user.email,
+          username: application.user.username,
+          createdAt: application.created_at,
+          updatedAt: application.updated_at,
+          appliedWithinDeadline: application.applied_within_deadline,
+          priorityText:
+            application.text != ""
+              ? replaceQuotationMarks(application.text)
+              : "Ingen prioriteringer",
+          group: groupApplication.group.name,
+          groupApplicationText: replaceQuotationMarks(groupApplication.text),
+          phoneNumber: application.phone_number,
+        });
+      });
+    });
+    setCsvData(updatedCsvData);
+  }, [sortedApplications]);
 
-  const numApplicants = applications.length;
+  const numApplicants = sortedApplications.length;
 
   let numApplications = 0;
-  applications.map((application) => {
+  sortedApplications.forEach((application) => {
     numApplications += application.group_applications.length;
   });
 
@@ -164,7 +146,7 @@ const AdminPage = () => {
                 .map((group) => (
                   <GroupStatistics
                     key={group.pk}
-                    applications={applications}
+                    applications={sortedApplications}
                     groupName={group.name}
                     groupLogo={group.logo}
                   />
@@ -179,7 +161,12 @@ const AdminPage = () => {
           >
             Eksporter som csv
           </CSVExport>
-          {UserApplications}
+          {sortedApplications.map((userApplication) => (
+            <UserApplicationAdminView
+              key={userApplication.user.username}
+              {...userApplication}
+            />
+          ))}
         </Wrapper>
       </PageWrapper>
     );
