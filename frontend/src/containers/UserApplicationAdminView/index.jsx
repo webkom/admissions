@@ -1,7 +1,5 @@
 import React, { useMemo } from "react";
-import Moment from "react-moment";
-import "moment/locale/nb";
-Moment.globalLocale = "nb";
+import FormatTime from "src/components/Time/FormatTime";
 
 import ApplicationAdminView from "src/components/ApplicationAdminView";
 import CollapseContainer from "src/containers/CollapseContainer";
@@ -73,15 +71,15 @@ const UserApplicationAdminView = ({
               <SmallDescriptionWrapper>
                 <div>
                   <SmallDescription> Sendt </SmallDescription>
-                  <Moment format="dddd Do MMMM, \k\l. HH:mm">
+                  <FormatTime format="EEEE d. MMMM, kl. HH:mm">
                     {created_at}
-                  </Moment>
+                  </FormatTime>
                 </div>
                 <div>
                   <SmallDescription> Oppdatert </SmallDescription>
-                  <Moment format="dddd Do MMMM, \k\l. HH:mm">
+                  <FormatTime format="EEEE d. MMMM, kl. HH:mm">
                     {updated_at}
-                  </Moment>
+                  </FormatTime>
                 </div>
               </SmallDescriptionWrapper>
             </Header>

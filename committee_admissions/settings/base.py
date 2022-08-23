@@ -36,7 +36,7 @@ THIRD_PARTY_APPS = [
     "rest_framework.authtoken",
     "social_django",
     "corsheaders",
-    "webpack_loader",
+    "django_vite",
 ]
 
 LOCAL_APPS = ["committee_admissions.utils", "committee_admissions.admissions"]
@@ -112,7 +112,11 @@ STATICFILES_FINDERS = [
     "django.contrib.staticfiles.finders.AppDirectoriesFinder",
 ]
 
-STATICFILES_DIRS = [BASE_PROJECT_DIR.path("assets")(), ROOT_DIR.path("assets")()]
+STATICFILES_DIRS = [
+    BASE_PROJECT_DIR.path("assets")(),
+    ROOT_DIR.path("assets")(),
+    BASE_PROJECT_DIR.path("assets/bundles")(),
+]
 
 STATIC_URL = "/static/"
 
@@ -131,13 +135,9 @@ LOGOUT_REDIRECT_URL = "/"
 # When using PostgreSQL, it’s recommended to use the built-in JSONB field to store the extracted extra_data.
 SOCIAL_AUTH_JSONFIELD_ENABLED = True
 
-# WEBPACK =======================================================================
-WEBPACK_LOADER = {
-    "DEFAULT": {
-        "BUNDLE_DIR_NAME": "bundles/",
-        "STATS_FILE": BASE_PROJECT_DIR.path("webpack-stats.json")(),
-    }
-}
+# Vite: Frontent assets =======================================================================
+DJANGO_VITE_ASSETS_PATH = "assets"
+DJANGO_VITE_MANIFEST_PATH = FILES_ROOT.path("static/vite-manifest.json")()
 
 AUTH_USER_MODEL = "admissions.LegoUser"
 

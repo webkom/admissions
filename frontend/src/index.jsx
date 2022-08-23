@@ -76,7 +76,3 @@ root.render(
     </Router>
   </QueryClientProvider>
 );
-
-if (module.hot) {
-  module.hot.accept();
-}

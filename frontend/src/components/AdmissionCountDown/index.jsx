@@ -1,10 +1,10 @@
 import React, { useEffect, useState } from "react";
-import moment from "moment-timezone";
+import { DateTime } from "luxon";
 
-const AdmissionCountDown = ({ endTime }) => {
+const AdmissionCountDown = ({ endTime: endTimeString }) => {
   const [timeDiff, setTimeDiff] = useState(calcTimeDiff());
 
-  const endTimeMoment = moment(endTime);
+  const endTime = DateTime.fromISO(endTimeString);
 
   useEffect(() => {
     const updateTimeDiffInterval = setInterval(
@@ -17,17 +17,16 @@ const AdmissionCountDown = ({ endTime }) => {
   }, []);
 
   const calcTimeDiff = () => {
-    const now = moment();
-    const time = now.to(endTimeMoment);
+    const time = endTime.toRelative();
 
     // If it's 1 day left we would like to say 'i morgen' and not 1 day
-    const isTomorrow = moment().add("1", "day").isSame(endTimeMoment, "day");
+    const isTomorrow = DateTime.now().plus({ days: 1 }).hasSame(endTime, "day");
     return isTomorrow ? "i morgen" : time;
   };
 
   return (
     <p style={{ alignContent: "center" }}>
-      Opptaket {moment().isBefore(endTimeMoment) ? "åpner " : "åpnet for "}
+      Opptaket {DateTime.now() < endTime ? "åpner " : "åpnet for "}
       {timeDiff}
     </p>
   );

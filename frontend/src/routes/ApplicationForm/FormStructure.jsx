@@ -1,9 +1,8 @@
 import React, { useEffect } from "react";
 import { Form, Field } from "formik";
-import Moment from "react-moment";
-import "moment/locale/nb";
-Moment.globalLocale = "nb";
+import { media } from "src/styles/mediaQueries";
 
+import FormatTime from "src/components/Time/FormatTime";
 import Icon from "src/components/Icon";
 import LegoButton from "src/components/LegoButton";
 import ConfirmModal from "src/components/ConfirmModal";
@@ -82,9 +81,9 @@ const FormStructure = ({
             Søknaden ble sist registrert
             {myApplication && (
               <StyledSpan bold>
-                <Moment format="dddd Do MMMM, \k\l. HH:mm:ss">
+                <FormatTime format="EEEE d. MMMM, kl. HH:mm:ss">
                   {myApplication.updated_at}
-                </Moment>
+                </FormatTime>
               </StyledSpan>
             )}
           </TimeStamp>
@@ -95,9 +94,9 @@ const FormStructure = ({
                 <StyledSpan bold> fritt endre søknaden</StyledSpan> din frem til{" "}
                 {admission && (
                   <StyledSpan bold red>
-                    <Moment format="dddd Do MMMM">
+                    <FormatTime format="EEEE d. MMMM">
                       {admission.public_deadline}
-                    </Moment>
+                    </FormatTime>
                   </StyledSpan>
                 )}{" "}
                 og komiteene vil kun se den siste versjonen.
@@ -238,14 +237,14 @@ const FormStructure = ({
                   <ApplicationDateInfo>
                     <StyledSpan bold>Søknadsfristen</StyledSpan> er{" "}
                     <StyledSpan bold red>
-                      <Moment format="dddd Do MMMM">
+                      <FormatTime format="EEEE d. MMMM">
                         {admission.public_deadline}
-                      </Moment>
+                      </FormatTime>
                     </StyledSpan>
                     <StyledSpan red>
-                      <Moment format=", \k\l. HH:mm:ss">
+                      <FormatTime format=", kl. HH:mm:ss">
                         {admission.public_deadline}
-                      </Moment>
+                      </FormatTime>
                     </StyledSpan>
                     .
                   </ApplicationDateInfo>

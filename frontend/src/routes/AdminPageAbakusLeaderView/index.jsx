@@ -1,8 +1,6 @@
 import React, { useEffect, useState } from "react";
 import styled from "styled-components";
-import Moment from "react-moment";
-import "moment/locale/nb";
-Moment.globalLocale = "nb";
+import FormatTime from "src/components/Time/FormatTime";
 
 import UserApplicationAdminView from "src/containers/UserApplicationAdminView";
 import { media } from "src/styles/mediaQueries";
@@ -115,21 +113,21 @@ const AdminPageAbakusLeaderView = () => {
           <Statistics>
             <StatisticsWrapper>
               <StatisticsName>Søknader åpner</StatisticsName>
-              <Moment format="HH:mm:ss dddd Do MMMM">
+              <FormatTime format="HH:mm:ss EEEE d. MMMM">
                 {admission.open_from}
-              </Moment>
+              </FormatTime>
             </StatisticsWrapper>
             <StatisticsWrapper>
               <StatisticsName>Søknadsfrist</StatisticsName>
-              <Moment format="HH:mm:ss dddd Do MMMM">
+              <FormatTime format="HH:mm:ss EEEE d. MMMM">
                 {admission.public_deadline}
-              </Moment>
+              </FormatTime>
             </StatisticsWrapper>
             <StatisticsWrapper>
               <StatisticsName>Redigeringsfrist</StatisticsName>
-              <Moment format="HH:mm:ss dddd Do MMMM">
+              <FormatTime format="HH:mm:ss EEEE d. MMMM">
                 {admission.application_deadline}
-              </Moment>
+              </FormatTime>
             </StatisticsWrapper>
           </Statistics>
           <Statistics>

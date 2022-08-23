@@ -1,11 +1,9 @@
 import React from "react";
-import Moment from "react-moment";
-import "moment/locale/nb";
-Moment.globalLocale = "nb";
 
 import Icon from "src/components/Icon";
 import Application from "src/components/Application";
 import CollapseContainer from "src/containers/CollapseContainer";
+import FormatTime from "src/components/Time/FormatTime";
 
 import Wrapper from "./Wrapper";
 import Name from "./Name";
@@ -55,11 +53,15 @@ const UserApplication = ({
             <SmallDescriptionWrapper>
               <div>
                 <SmallDescription> Sendt </SmallDescription>
-                <Moment format="dddd Do MMMM, \k\l. HH:mm">{created_at}</Moment>
+                <FormatTime format="EEEE d. MMMM, kl. HH:mm">
+                  {created_at}
+                </FormatTime>
               </div>
               <div>
                 <SmallDescription> Oppdatert </SmallDescription>
-                <Moment format="dddd Do MMMM, \k\l. HH:mm">{updated_at}</Moment>
+                <FormatTime format="EEEE d. MMMM, kl. HH:mm">
+                  {updated_at}
+                </FormatTime>
               </div>
             </SmallDescriptionWrapper>
           </Header>

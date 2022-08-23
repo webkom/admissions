@@ -1,5 +1,6 @@
-{% load render_bundle from webpack_loader %}
 {% load static %}
+{% load django_vite %}
+{% load vite %}
 
 <!DOCTYPE html>
 <html lang="en">
@@ -20,7 +21,13 @@
     <link rel="shortcut icon" href="{% static "favicon.png" %}">
     <link href="https://fonts.googleapis.com/icon?family=Material+Icons"
       rel="stylesheet">
+
+    {% vite_react_preamble %}
+    {% vite_hmr_client %}
+    {% vite_asset 'frontend/src/index.jsx' %}
+
     <title>Opptak | Abakus.no</title>
+
   </head>
   <body>
     <noscript>
@@ -46,8 +53,6 @@
         API_URL: "{{ settings.API_URL }}"
     }
     </script>
-    {% render_bundle 'app' %}
-    {% render_bundle 'vendor' %}
     <!--
       This HTML file is a template.
       If you open it directly in the browser, you will see an empty page.
