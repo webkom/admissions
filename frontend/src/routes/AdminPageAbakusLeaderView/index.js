@@ -4,8 +4,6 @@ import Moment from "react-moment";
 import "moment/locale/nb";
 Moment.globalLocale = "nb";
 
-import callApi from "src/utils/callApi";
-
 import UserApplicationAdminView from "src/containers/UserApplicationAdminView";
 import { media } from "src/styles/mediaQueries";
 
@@ -18,13 +16,11 @@ import GroupStatistics from "./GroupStatistics";
 import StatisticsName from "./StatisticsName";
 import StatisticsWrapper from "./StatisticsWrapper";
 import { replaceQuotationMarks } from "../../utils/replaceQuotationMarks";
+import { useAdmission, useApplications } from "src/query/hooks";
+import { useGroups } from "../../query/hooks";
 
-const AdminPage = () => {
-  const [error, setError] = useState(null);
-  const [isFetching, setIsFetching] = useState(true);
-  const [admission, setAdmission] = useState(null);
+const AdminPageAbakusLeaderView = () => {
   const [sortedApplications, setSortedApplications] = useState([]);
-  const [groups, setGroups] = useState([]);
   const [csvData, setCsvData] = useState([]);
 
   const csvHeaders = [
@@ -40,33 +36,30 @@ const AdminPage = () => {
     { label: "Tid oppdatert", key: "updatedAt" },
   ];
 
+  const {
+    data: applications,
+    error: applicationsError,
+    isFetching: applicationsIsFetching,
+  } = useApplications();
+  const {
+    data: admission,
+    error: admissionError,
+    isFetching: admissionIsFetching,
+  } = useAdmission();
+  const {
+    data: groups,
+    error: groupsError,
+    isFetching: groupsIsFetching,
+  } = useGroups();
+
   useEffect(() => {
-    Promise.all([
-      callApi("/application/"),
-      callApi("/admission/"),
-      callApi("/group/"),
-    ])
-      .then((data) => {
-        data.map(({ url, jsonData }) => {
-          if (url.includes("/application/")) {
-            setSortedApplications(
-              [...jsonData].sort((a, b) =>
-                a.user.full_name.localeCompare(b.user.full_name)
-              )
-            );
-          } else if (url.includes("/admission/")) {
-            setAdmission(jsonData[0]);
-          } else if (url.includes("/group/")) {
-            setGroups(jsonData);
-          }
-        });
-        setIsFetching(false);
-      })
-      .catch((error) => {
-        setError(error);
-        setIsFetching(false);
-      });
-  }, []);
+    if (!applications) return;
+    setSortedApplications(
+      [...applications].sort((a, b) =>
+        a.user.full_name.localeCompare(b.user.full_name)
+      )
+    );
+  }, [applications]);
 
   useEffect(() => {
     // Push all the individual applications into csvData with the right format
@@ -100,9 +93,18 @@ const AdminPage = () => {
     numApplications += application.group_applications.length;
   });
 
-  if (error) {
-    return <div>Error: {error.message}</div>;
-  } else if (isFetching) {
+  if (applicationsError || admissionError || groupsError) {
+    return (
+      <div>
+        Error: {applicationsError.message}
+        {admissionError.message}
+      </div>
+    );
+  } else if (
+    applicationsIsFetching ||
+    admissionIsFetching ||
+    groupsIsFetching
+  ) {
     return <LoadingBall />;
   } else {
     return (
@@ -141,7 +143,7 @@ const AdminPage = () => {
             </StatisticsWrapper>
 
             <Statistics>
-              {groups
+              {(groups !== undefined ? [...groups] : [])
                 .sort((a, b) => a.name.localeCompare(b.name))
                 .map((group) => (
                   <GroupStatistics
@@ -173,7 +175,7 @@ const AdminPage = () => {
   }
 };
 
-export default AdminPage;
+export default AdminPageAbakusLeaderView;
 
 /** Styles **/
 

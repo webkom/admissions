@@ -70,3 +70,32 @@ const callApi = async (url, { method = "GET", body = null } = {}) => {
   return parseResponseBody(res).then(rejectOnHttpErrors);
 };
 export default (...input) => callApi(...input).catch(reportToSentry);
+
+const _callApiFromQuery = async (url, { method = "GET", body = null } = {}) => {
+  const request = new Request(`${config.API_URL}${url}`, {
+    method,
+    headers: new Headers({
+      Accept: "application/json",
+      "Content-Type": "application/json",
+      "X-CSRFToken": Cookie.get("csrftoken"),
+      "Access-Control-Allow-Credentials": true,
+    }),
+    redirect: "manual",
+    credentials: "include",
+    // IE don't support body equal to null
+    ...(body ? { body } : {}),
+  });
+  const response = await Promise.race([timeoutPromise(20000), fetch(request)]);
+  const contentType =
+    response.headers.get("content-type") || "application/json";
+  const contentLength =
+    parseInt(response.headers.get("content-length"), 10) || 0;
+
+  if (contentType.includes("application/json") && contentLength !== 0) {
+    return await response.json();
+  }
+  const responseText = await response.text();
+  return responseText;
+};
+export const callApiFromQuery = (...input) =>
+  _callApiFromQuery(...input).catch(reportToSentry);

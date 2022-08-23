@@ -23,23 +23,9 @@ const FormContainer = ({
   isEditingApplication,
   handleReset,
 }) => {
-  const _toggleGroup = (name) => {
-    toggleGroup(name.toLowerCase());
-  };
-
   const onCancelEdit = () => {
     toggleIsEditing();
     handleReset();
-  };
-
-  const onDeleteApplication = () => {
-    callApi("/application/mine/", {
-      method: "DELETE",
-    }).then(() => {
-      toggleIsEditing();
-      sessionStorage.clear();
-      window.location = "/";
-    });
   };
 
   const hasSelected =
@@ -72,11 +58,10 @@ const FormContainer = ({
       handleSubmit={handleSubmit}
       groups={groups}
       selectedGroups={selectedGroups}
-      toggleGroup={_toggleGroup}
+      toggleGroup={toggleGroup}
       toggleIsEditing={toggleIsEditing}
       isEditing={isEditingApplication}
       myApplication={myApplication}
-      onDeleteApplication={onDeleteApplication}
       onCancel={onCancelEdit}
     />
   );

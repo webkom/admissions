@@ -14,6 +14,7 @@ import SmallDescription from "./SmallDescription";
 import SmallDescriptionWrapper from "./SmallDescriptionWrapper";
 import Header from "./Header";
 import NumApplications from "./NumApplications";
+import { useGroups } from "../../query/hooks";
 
 const UserApplicationAdminView = ({
   user,
@@ -25,6 +26,8 @@ const UserApplicationAdminView = ({
   phone_number,
   pk,
 }) => {
+  const { data: groups } = useGroups();
+
   const sortedGroupApplications = useMemo(() =>
     [...group_applications].sort((a, b) =>
       a.group.name.localeCompare(b.group.name)
@@ -86,7 +89,9 @@ const UserApplicationAdminView = ({
             {sortedGroupApplications.map((application) => (
               <ApplicationAdminView
                 key={user.username + "-" + application.group.name}
-                group={application.group.name}
+                group={groups.find(
+                  (group) => group.pk === application.group.pk
+                )}
                 applicationId={pk}
                 text={application.text}
               />
