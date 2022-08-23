@@ -25,7 +25,7 @@ const PhoneNumberField = ({
         id={name}
         onBlur={(e) => {
           sessionStorage.setItem("phoneNumber", e.target.value);
-          handleBlur();
+          handleBlur(e);
         }}
         placeholder="Fyll inn mobilnummer..."
         error={error}

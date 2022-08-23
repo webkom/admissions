@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect } from "react";
 import { BrowserRouter as Router, useRoutes } from "react-router-dom";
 import { createRoot } from "react-dom/client";
 import { QueryClient, QueryClientProvider } from "react-query";
@@ -13,6 +13,7 @@ import ScrollToTop from "./scrollToTop";
 import * as Sentry from "@sentry/browser";
 import "src/styles/globals.css";
 import config from "src/utils/config";
+import djangoData from "src/utils/djangoData";
 import "@babel/polyfill";
 
 Sentry.init({
@@ -44,6 +45,14 @@ const queryClient = new QueryClient({
 const container = document.getElementById("root");
 const root = createRoot(container);
 
+const App = ({ children }) => {
+  useEffect(() => {
+    Sentry.setUser(djangoData.user);
+  }, [djangoData.user]);
+
+  return <main>{children}</main>;
+};
+
 const AppRoutes = () =>
   useRoutes([
     { path: "/", element: <LandingPage /> },
@@ -57,11 +66,11 @@ root.render(
   <QueryClientProvider client={queryClient}>
     <Router>
       <ScrollToTop>
-        <main>
+        <App>
           <ErrorBoundary>
             <AppRoutes />
           </ErrorBoundary>
-        </main>
+        </App>
       </ScrollToTop>
     </Router>
   </QueryClientProvider>
