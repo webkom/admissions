@@ -7,7 +7,7 @@ import {
   ButtonGroup,
   ActionButton,
   TriggerText,
-} from "./styles.js";
+} from "./styles";
 
 const ConfirmModal = ({ onConfirm, title, message, Component }) => {
   const [isOpen, setIsOpen] = useState(false);
