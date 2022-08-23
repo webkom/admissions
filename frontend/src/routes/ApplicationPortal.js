@@ -14,8 +14,6 @@ import AdminPageAbakusLeaderView from "src/routes/AdminPageAbakusLeaderView";
 import LoadingBall from "src/components/LoadingBall";
 import NavBar from "src/components/NavBar";
 
-import * as Sentry from "@sentry/browser";
-
 const ApplicationPortal = () => {
   const [selectedGroups, setSelectedGroups] = useState({});
   const [isEditingApplication, setIsEditingApplication] = useState(true);
@@ -49,17 +47,16 @@ const ApplicationPortal = () => {
       "isEditingApplication",
       true
     );
-    const selectedGroups = JSON.parse(selectedGroupsJSON);
-    const isEditingApplication = JSON.parse(isEditingApplicationJSON);
+    const parsedSelectedGroups = JSON.parse(selectedGroupsJSON);
+    const parsedIsEditingApplication = JSON.parse(isEditingApplicationJSON);
 
-    if (selectedGroups != null) {
-      setSelectedGroups(selectedGroups);
-      setIsEditingApplication(isEditingApplication);
+    if (parsedSelectedGroups != null) {
+      setSelectedGroups(parsedSelectedGroups);
+      setIsEditingApplication(parsedIsEditingApplication);
     }
   };
 
   useEffect(() => {
-    Sentry.setUser(djangoData.user);
     initializeState();
   }, []);
 
@@ -103,7 +100,6 @@ const ApplicationPortal = () => {
               toggleIsEditing={toggleIsEditing}
               admission={admission}
               groups={groups}
-              error={error}
               myApplication={myApplication}
               selectedGroups={selectedGroups}
               isEditingApplication={isEditingApplication}

@@ -1,7 +1,7 @@
 import React from "react";
-import { withFormik, Field } from "formik";
+import { Formik, Field } from "formik";
 import * as Yup from "yup";
-import callApi from "src/utils/callApi";
+import { useCreateApplicationMutation } from "src/query/mutations";
 
 import GroupApplication from "src/containers/GroupApplication";
 
@@ -21,11 +21,9 @@ const FormContainer = ({
   toggleIsEditing,
   myApplication,
   isEditingApplication,
-  handleReset,
 }) => {
   const onCancelEdit = () => {
     toggleIsEditing();
-    handleReset();
   };
 
   const hasSelected =
@@ -50,18 +48,20 @@ const FormContainer = ({
   // This is where the actual form structure comes in.
   return (
     <FormStructure
-      admission={admission}
+      {...{
+        admission,
+        isSubmitting,
+        isValid,
+        handleSubmit,
+        groups,
+        selectedGroups,
+        toggleGroup,
+        toggleIsEditing,
+        myApplication,
+      }}
       hasSelected={hasSelected}
       SelectedGroupItems={SelectedGroupItems}
-      isSubmitting={isSubmitting}
-      isValid={isValid}
-      handleSubmit={handleSubmit}
-      groups={groups}
-      selectedGroups={selectedGroups}
-      toggleGroup={toggleGroup}
-      toggleIsEditing={toggleIsEditing}
       isEditing={isEditingApplication}
-      myApplication={myApplication}
       onCancel={onCancelEdit}
     />
   );
@@ -69,85 +69,116 @@ const FormContainer = ({
 
 // Highest order component for application form.
 // Handles form values, submit post and form validation.
-const ApplicationForm = withFormik({
-  mapPropsToValues({ myApplication = {}, selectedGroups = {} }) {
-    const {
-      text = sessionStorage.getItem("text") || "",
-      phone_number = sessionStorage.getItem("phoneNumber") || "",
-      group_applications = [],
-    } = myApplication;
+const ApplicationForm = ({
+  myApplication,
+  selectedGroups,
+  toggleGroup,
+  toggleIsEditing,
+  admission,
+  groups,
+  isEditingApplication,
+}) => {
+  const createApplicationMutation = useCreateApplicationMutation();
 
-    const blankGroupApplications = {};
-    Object.keys(selectedGroups).forEach((group) => {
-      blankGroupApplications[group] = "";
-    });
+  const {
+    text = sessionStorage.getItem("text") || "",
+    phone_number = sessionStorage.getItem("phoneNumber") || "",
+    group_applications = [],
+  } = myApplication || {};
 
-    const groupApplications = group_applications.reduce(
-      (obj, application) => ({
-        ...obj,
-        [application.group.name.toLowerCase()]: application.text,
-      }),
-      {}
-    );
+  const blankGroupApplications = {};
+  Object.keys(selectedGroups).forEach((group) => {
+    blankGroupApplications[group] = "";
+  });
 
-    return {
-      priorityText: text,
-      phoneNumber: phone_number,
-      ...blankGroupApplications,
-      ...groupApplications,
-    };
-  },
-  handleSubmit(
-    values,
-    { props: { selectedGroups, toggleIsEditing }, setSubmitting }
-  ) {
-    const submission = {
-      text: values.priorityText,
-      applications: {},
-      phone_number: values.phoneNumber,
-    };
-    Object.keys(values)
-      .filter((group) => selectedGroups[group])
-      .forEach((name) => {
-        submission.applications[name] = values[name];
-      });
-    return callApi("/application/", {
-      method: "POST",
-      body: JSON.stringify(submission),
-    })
-      .then(() => {
-        setSubmitting(false);
-        toggleIsEditing();
-        window.__DJANGO__.user.has_application = true;
-      })
-      .catch((err) => {
-        alert("Det skjedde en feil.... ");
-        setSubmitting(false);
-        throw err;
-      });
-  },
+  const groupApplications = group_applications.reduce(
+    (obj, application) => ({
+      ...obj,
+      [application.group.name.toLowerCase()]: application.text,
+    }),
+    {}
+  );
 
-  validationSchema: (props) => {
-    return Yup.lazy((values) => {
-      const selectedGroups = Object.keys(values).filter(
-        (group) => props.selectedGroups[group]
-      );
-      const schema = {};
-      selectedGroups.forEach((name) => {
-        schema[name] = Yup.string().required("Søknadsteksten må fylles ut");
-      });
-      schema.phoneNumber = Yup.string("Skriv inn et norsk telefonnummer")
-        .matches(
-          /^(0047|\+47|47)?(?:\s*\d){8}$/,
-          "Skriv inn et gyldig norsk telefonnummer"
+  const initialValues = {
+    priorityText: text,
+    phoneNumber: phone_number,
+    ...blankGroupApplications,
+    ...groupApplications,
+  };
+
+  return (
+    <Formik
+      initialValues={initialValues}
+      validateOnChange={true}
+      enableReinitialize={true}
+      validationSchema={() => {
+        return Yup.lazy(() => {
+          // Iterate over all selected groups and add them to the required schema
+          const schema = {};
+          Object.entries(selectedGroups)
+            .filter(([, isSelected]) => isSelected)
+            .map(([name]) => name)
+            .forEach((name) => {
+              schema[name] = Yup.string().required(
+                "Søknadsteksten må fylles ut"
+              );
+            });
+          // Require phoneNumber with given structure to be set
+          schema.phoneNumber = Yup.string("Skriv inn et norsk telefonnummer")
+            .matches(
+              /^(0047|\+47|47)?(?:\s*\d){8}$/,
+              "Skriv inn et gyldig norsk telefonnummer"
+            )
+            .required("Skriv inn et gyldig norsk telefonnummer");
+          return Yup.object().shape(schema);
+        });
+      }}
+      onSubmit={(values, { setSubmitting }) => {
+        const submission = {
+          text: values.priorityText,
+          applications: {},
+          phone_number: values.phoneNumber,
+        };
+        Object.keys(values)
+          .filter((group) => selectedGroups[group])
+          .forEach((name) => {
+            submission.applications[name] = values[name];
+          });
+        createApplicationMutation.mutate(
+          { newApplication: submission },
+          {
+            onSuccess: () => {
+              setSubmitting(false);
+              toggleIsEditing();
+              window.__DJANGO__.user.has_application = true;
+            },
+            onError: () => {
+              alert("Det skjedde en feil.... ");
+              setSubmitting(false);
+            },
+          }
+        );
+      }}
+    >
+      {
+        (formikProps) => (
+          <FormContainer
+            {...formikProps}
+            {...{
+              admission,
+              groups,
+              selectedGroups,
+              toggleGroup,
+              toggleIsEditing,
+              myApplication,
+              isEditingApplication,
+            }}
+          />
         )
-        .required("Skriv inn et gyldig norsk telefonnummer");
-      return Yup.object().shape(schema);
-    });
-  },
-  displayName: "ApplicationForm",
-  validateOnChange: true,
-  enableReinitialize: true,
-})(FormContainer);
+        // https://formik.org/docs/api/formik#props-1
+      }
+    </Formik>
+  );
+};
 
 export default ApplicationForm;

@@ -1,26 +1,17 @@
 import React, { useEffect, useState } from "react";
 import styled from "styled-components";
-import * as Sentry from "@sentry/browser";
-import { withFormik, Field, Form } from "formik";
-import * as Yup from "yup";
 
-import callApi from "src/utils/callApi";
-import { useApplications, useGroups } from "../../query/hooks";
+import { useApplications, useGroups } from "src/query/hooks";
 import djangoData from "src/utils/djangoData";
 import { media } from "src/styles/mediaQueries";
 
 import UserApplication from "src/containers/UserApplication";
-import TextAreaField from "src/components/TextAreaField";
 import LoadingBall from "src/components/LoadingBall";
+import EditGroupForm from "./form";
 
-import CSRFToken from "./csrftoken";
-
-import { replaceQuotationMarks } from "../../utils/replaceQuotationMarks";
+import { replaceQuotationMarks } from "src/utils/replaceQuotationMarks";
 
 import {
-  EditGroupFormWrapper,
-  FormWrapper,
-  SubmitButton,
   Wrapper,
   LinkLink,
   CSVExport,
@@ -48,10 +39,6 @@ const AdminPage = () => {
 
   const { data: applications, isFetching, error } = useApplications();
   const { data: groups } = useGroups();
-
-  useEffect(() => {
-    Sentry.setUser(djangoData.user);
-  }, []);
 
   useEffect(() => {
     if (!applications) return;
@@ -141,92 +128,6 @@ const AdminPage = () => {
 };
 
 export default AdminPage;
-
-const MyInnerForm = ({ isSubmitting, handleSubmit, isValid }) => {
-  return (
-    <Form>
-      <FormWrapper>
-        <CSRFToken />
-        <EditGroupFormWrapper>
-          <Field
-            component={TextAreaField}
-            title="Endre beskrivelsen av komiteen"
-            name="description"
-            placeholder="Skriv en beskrivelse av komiteen..."
-          />
-          <Field
-            component={TextAreaField}
-            title="Endre hva komitteen ønsker å høre om fra søkere"
-            name="response_label"
-            placeholder="Skriv hva komitteen ønsker å vite om søkeren..."
-          />
-        </EditGroupFormWrapper>
-        <SubmitButton
-          onClick={handleSubmit}
-          type="submit"
-          disabled={isSubmitting}
-          valid={isValid}
-        >
-          Submit
-        </SubmitButton>
-      </FormWrapper>
-    </Form>
-  );
-};
-
-const EditGroupForm = withFormik({
-  mapPropsToValues({ initialDescription, initialReplyText }) {
-    return {
-      response_label: initialReplyText || "",
-      description: initialDescription || "",
-    };
-  },
-  handleSubmit(values, { props: { group }, setSubmitting, setErrors }) {
-    const submission = {
-      name: group.name,
-      description: values.description,
-      response_label: values.response_label,
-    };
-
-    return callApi(`/group/${group.pk}/`, {
-      method: "PATCH",
-      body: JSON.stringify(submission),
-    })
-      .then((res) => {
-        setSubmitting(false);
-        alert("Gruppe oppdatert :D");
-        return res.jsonData;
-      })
-      .catch((err) => {
-        setSubmitting(false);
-        let errors = {};
-        alert("Det skjedde en feil. Kontakt Webkom");
-        Object.keys(err.response.jsonData).forEach((key) => {
-          errors[key] = err.response.jsonData[key][0];
-        });
-        setErrors(errors);
-        throw err;
-      });
-  },
-  validationSchema: () => {
-    return Yup.lazy(() => {
-      const schema = {};
-
-      schema.description = Yup.string()
-        .min(30, "Skriv mer enn 30 tegn da!")
-        .max(300, "Nå er det nok!")
-        .required("Beskrivelsen kan ikke være tom!");
-      schema.response_label = Yup.string()
-        .min(30, "Skriv mer enn 30 tegn da!")
-        .max(300, "Nå er det nok!")
-        .required("Boksen kan ikke være tom!");
-      return Yup.object().shape(schema);
-    });
-  },
-  enableReinitialize: true,
-})(MyInnerForm);
-
-export { EditGroupForm };
 
 /** Styles **/
 

@@ -31,8 +31,7 @@ const LandingPage = () => {
   } = useMyApplication();
 
   useEffect(() => {
-    if (!myApplication) return;
-    setHasSubmitted(myApplication !== null);
+    setHasSubmitted(!!myApplication);
   }, [myApplication]);
 
   if (admissionError || myApplicationError) {

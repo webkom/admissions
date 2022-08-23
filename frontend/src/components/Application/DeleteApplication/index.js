@@ -1,9 +1,9 @@
 import React from "react";
 import LegoButton from "src/components/LegoButton";
 import ConfirmModal from "src/components/ConfirmModal";
-import callApi from "src/utils/callApi";
 import styled from "styled-components";
 import { media } from "src/styles/mediaQueries";
+import { useDeleteGroupApplicationMutation } from "src/query/mutations";
 
 const DeleteWrapper = styled.div`
   display: flex;
@@ -18,23 +18,21 @@ const DeleteWrapper = styled.div`
     `};
 `;
 
-const performDelete = (id, groupName) => {
-  callApi(
-    `/application/${id}/delete_group_application/${
-      groupName ? `?group=${groupName}` : ""
-    }`,
-    {
-      method: "DELETE",
-    }
-  )
-    .then(() => location.reload())
-    .catch((err) => {
-      alert("Det skjedde en feil.... ");
-      throw err;
-    });
-};
-
 const DeleteApplication = ({ id, groupName }) => {
+  const deleteGroupApplicationMutation = useDeleteGroupApplicationMutation();
+
+  const performDelete = (applicationId, groupName) => {
+    deleteGroupApplicationMutation.mutate(
+      { applicationId, groupName },
+      {
+        onError: (error) => {
+          alert("Det skjedde en feil.... ");
+          throw error;
+        },
+      }
+    );
+  };
+
   return (
     <DeleteWrapper>
       <ConfirmModal
