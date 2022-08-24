@@ -1,0 +1,9 @@
+{
+  "compilerOptions": {
+    "baseUrl": ".",
+    "paths": {
+      "src/*": ["./frontend/src/*"],
+      "assets/*": ["./frontend/src/assets/*"]
+    }
+  }
+}

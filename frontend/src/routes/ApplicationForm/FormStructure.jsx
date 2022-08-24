@@ -1,6 +1,5 @@
 import React, { useEffect } from "react";
 import { Form, Field } from "formik";
-import { media } from "src/styles/mediaQueries";
 
 import FormatTime from "src/components/Time/FormatTime";
 import Icon from "src/components/Icon";
