@@ -20,7 +20,6 @@ const FormContainer = ({
   toggleGroup,
   toggleIsEditing,
   myApplication,
-  isEditingApplication,
 }) => {
   const onCancelEdit = () => {
     toggleIsEditing();
@@ -41,7 +40,6 @@ const FormContainer = ({
           touched[group.name.toLowerCase()] && errors[group.name.toLowerCase()]
         }
         key={`${group.name.toLowerCase()} ${index}`}
-        disabled={!isEditingApplication}
       />
     ));
 
@@ -61,7 +59,6 @@ const FormContainer = ({
       }}
       hasSelected={hasSelected}
       SelectedGroupItems={SelectedGroupItems}
-      isEditing={isEditingApplication}
       onCancel={onCancelEdit}
     />
   );
@@ -76,7 +73,6 @@ const ApplicationForm = ({
   toggleIsEditing,
   admission,
   groups,
-  isEditingApplication,
 }) => {
   const createApplicationMutation = useCreateApplicationMutation();
 
@@ -171,7 +167,6 @@ const ApplicationForm = ({
               toggleGroup,
               toggleIsEditing,
               myApplication,
-              isEditingApplication,
             }}
           />
         )

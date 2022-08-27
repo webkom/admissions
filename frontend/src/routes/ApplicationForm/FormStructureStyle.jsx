@@ -46,6 +46,7 @@ export const SeparatorLine = styled.div`
 export const FormHeader = styled.div`
   display: flex;
   justify-content: space-between;
+  width: 100%;
   max-width: 750px;
   margin: 1em 0 1em 0;
 
