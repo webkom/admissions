@@ -78,7 +78,7 @@ const FormStructure = ({
             kommentarfeltet.
             <Icon name="information-circle-outline" />
             Det er ikke sikkert prioriteringslisten vil bli tatt hensyn til.
-            Ikke søk på en komite du ikke ønsker å bli med i.
+            Ikke søk på en komité du ikke ønsker å bli med i.
           </HelpText>
           <Field
             name="priorityText"

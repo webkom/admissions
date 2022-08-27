@@ -6,6 +6,7 @@ import {
 } from "src/components/styledFields";
 import styled from "styled-components";
 import { media } from "src/styles/mediaQueries";
+import { savePhoneNumberDraft } from "src/utils/draftHelper";
 
 const PhoneNumberField = ({
   field: { name },
@@ -24,7 +25,7 @@ const PhoneNumberField = ({
         disabled={disabled}
         id={name}
         onBlur={(e) => {
-          sessionStorage.setItem("phoneNumber", e.target.value);
+          savePhoneNumberDraft(e.target.value);
           handleBlur(e);
         }}
         placeholder="Fyll inn mobilnummer..."

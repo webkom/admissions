@@ -2,6 +2,10 @@ import React, { useEffect, useState } from "react";
 import { useLocation } from "react-router-dom";
 import styled from "styled-components";
 
+import {
+  getSelectedGroupsDraft,
+  saveSelectedGroupsDraft,
+} from "src/utils/draftHelper";
 import djangoData from "src/utils/djangoData";
 import draftIsNewerThanApplication from "src/utils/draftIsNewerThanApplication";
 
@@ -38,13 +42,11 @@ const ApplicationPortal = () => {
   };
 
   const persistState = () => {
-    const selectedGroupsJSON = JSON.stringify(selectedGroups);
-    sessionStorage.setItem("selectedGroups", selectedGroupsJSON);
+    saveSelectedGroupsDraft(selectedGroups);
   };
 
   const initializeState = () => {
-    const selectedGroupsJSON = sessionStorage.getItem("selectedGroups");
-    const parsedSelectedGroups = JSON.parse(selectedGroupsJSON);
+    const parsedSelectedGroups = getSelectedGroupsDraft();
 
     if (parsedSelectedGroups != null) {
       setSelectedGroups(parsedSelectedGroups);

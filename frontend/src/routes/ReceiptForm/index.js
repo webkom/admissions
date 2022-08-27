@@ -19,8 +19,6 @@ const ApplicationForm = ({ toggleIsEditing }) => {
 
   const { phone_number, text, group_applications } = myApplication;
 
-  console.log(myApplication);
-
   const groupApplications = group_applications.reduce(
     (obj, application) => ({
       ...obj,

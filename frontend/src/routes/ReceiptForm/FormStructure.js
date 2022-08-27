@@ -34,6 +34,7 @@ import {
   TimeStamp,
   Title,
 } from "src/routes/ApplicationForm/FormStructureStyle";
+import { clearAllDrafts } from "src/utils/draftHelper";
 
 const FormStructure = ({ toggleIsEditing }) => {
   const navigate = useNavigate();
@@ -111,7 +112,7 @@ const FormStructure = ({ toggleIsEditing }) => {
               onConfirm={() =>
                 deleteApplicationMutation.mutate(null, {
                   onSuccess: () => {
-                    sessionStorage.clear();
+                    clearAllDrafts();
                     navigate("/");
                   },
                 })
@@ -145,7 +146,7 @@ const FormStructure = ({ toggleIsEditing }) => {
             kommentarfeltet.
             <Icon name="information-circle-outline" />
             Det er ikke sikkert prioriteringslisten vil bli tatt hensyn til.
-            Ikke søk på en komite du ikke ønsker å bli med i.
+            Ikke søk på en komité du ikke ønsker å bli med i.
           </HelpText>
           <Field
             name="priorityText"
