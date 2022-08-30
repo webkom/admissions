@@ -1,6 +1,7 @@
 import React from "react";
 import styled from "styled-components";
 import { media } from "src/styles/mediaQueries";
+import avatar from "assets/avatar.png";
 
 const UserInfo = ({ user }) => {
   return (
@@ -9,9 +10,7 @@ const UserInfo = ({ user }) => {
         <Name>{user.full_name}</Name>
         <LogoutBtn href="/logout/">Logg ut</LogoutBtn>
       </NameLogOutWrapper>
-      <ProfilePicture
-        src={user.profile_picture || require("assets/avatar.png")}
-      />
+      <ProfilePicture src={user.profile_picture || avatar} />
     </Container>
   );
 };

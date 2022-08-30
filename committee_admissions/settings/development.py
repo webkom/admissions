@@ -2,10 +2,22 @@ from django.core.management.commands.runserver import Command as runserver
 
 from .base import *
 
+SETTINGS_DIR = environ.Path(__file__) - 1
+
+env = environ.Env()
+env_file = str(SETTINGS_DIR.path(".env"))
+env.read_env(env_file)
+
 # GENERAL CONFIGURATION =======================================================
-DEBUG = True
+DEBUG = env("DEBUG", default=True)
 SECRET_KEY = "secretkeythatisnotsosecret"
 runserver.default_port = "5000"
+
+DJANGO_VITE_DEV_MODE = env("VITE_DEV", default=True)
+DJANGO_VITE_DEV_SERVER_PORT = "5001"
+STATICFILES_DIRS = STATICFILES_DIRS + [
+    BASE_PROJECT_DIR.path("frontend/src/assets")(),
+]
 
 # DATABASE CONFIGURATION ======================================================
 DATABASES = {
@@ -21,11 +33,6 @@ DATABASES = {
 
 API_URL = "/api"
 
-SETTINGS_DIR = environ.Path(__file__) - 1
-
-env = environ.Env()
-env_file = str(SETTINGS_DIR.path(".env"))
-env.read_env(env_file)
 
 # Uncomment app config and middleware config to enable debug toolbar
 # APP CONFIGURATION ============================================================

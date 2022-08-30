@@ -88,7 +88,7 @@ In the last terminal you are ready to start the frontend. Simply install the req
 $ yarn
 
 # Start the dev-server
-$ yarn watch
+$ yarn dev
 ```
 
 > Now you are ready, go to 127.0.0.1:5000

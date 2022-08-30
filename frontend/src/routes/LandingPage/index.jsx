@@ -2,16 +2,13 @@ import React, { useEffect, useState } from "react";
 import styled from "styled-components";
 import { useAdmission, useMyApplication } from "../../query/hooks";
 
-import Moment from "react-moment";
-import "moment/locale/nb";
-Moment.globalLocale = "nb";
-
 import djangoData from "src/utils/djangoData";
 import DecorativeLine from "src/components/DecorativeLine";
 import LegoButton from "src/components/LegoButton";
 import LandingPageSkeleton from "./LandingPageSkeleton";
 import LandingPageNoAdmission from "./LandingPageNoAdmission";
 import { media } from "src/styles/mediaQueries";
+import FormatTime from "src/components/Time/FormatTime";
 import AdmissionCountDown from "../../components/AdmissionCountDown";
 
 import LoadingBall from "src/components/LoadingBall";
@@ -53,7 +50,7 @@ const LandingPage = () => {
   return (
     <LandingPageSkeleton>
       <YearOfAdmission>
-        <Moment format="YYYY">{admission.public_deadline}</Moment>
+        <FormatTime format="yyyy">{admission.public_deadline}</FormatTime>
       </YearOfAdmission>
       <InfoBox>
         <DecorativeLine vertical red />
@@ -118,10 +115,14 @@ const ApplicationDateInfo = ({ admission }) => (
     <p>
       Siste frist for å <StyledSpan bold>legge inn en søknad</StyledSpan> er{" "}
       <StyledSpan bold red>
-        <Moment format="dddd Do MMMM">{admission.public_deadline}</Moment>
+        <FormatTime format="EEEE d. MMMM">
+          {admission.public_deadline}
+        </FormatTime>
       </StyledSpan>
       <StyledSpan red>
-        <Moment format=", \k\l. HH:mm:ss">{admission.public_deadline}</Moment>
+        <FormatTime format=", kl. HH:mm:ss">
+          {admission.public_deadline}
+        </FormatTime>
       </StyledSpan>
       .
     </p>

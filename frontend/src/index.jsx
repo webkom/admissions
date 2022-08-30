@@ -1,3 +1,4 @@
+import "vite/modulepreload-polyfill";
 import React, { useEffect } from "react";
 import { BrowserRouter as Router, useRoutes } from "react-router-dom";
 import { createRoot } from "react-dom/client";
@@ -75,7 +76,3 @@ root.render(
     </Router>
   </QueryClientProvider>
 );
-
-if (module.hot) {
-  module.hot.accept();
-}
