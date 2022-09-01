@@ -53,7 +53,7 @@
     "eventsource-polyfill": "0.9.6",
     "prettier": "2.7.1",
     "prop-types": "^15.8.1",
-    "stylelint": "^14.9.1",
+    "stylelint": "^14.11.0",
     "stylelint-config-recommended": "8.0.0",
     "stylelint-config-standard": "^26.0.0",
     "stylelint-config-styled-components": "0.1.1",
