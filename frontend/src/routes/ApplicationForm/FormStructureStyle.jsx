@@ -266,6 +266,7 @@ export const NoChosenGroupsWrapper = styled.div`
   flex-direction: column;
   align-items: center;
   margin-top: 5rem;
+  margin-bottom: 5rem;
   text-align: center;
 
   ${media.portrait`

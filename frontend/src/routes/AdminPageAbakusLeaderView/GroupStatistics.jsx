@@ -3,6 +3,7 @@ import React from "react";
 import StatisticsName from "./StatisticsName";
 import StatisticsWrapper from "./StatisticsWrapper";
 import StatisticsGroupLogo from "./StatisticsGroupLogo";
+import readmeIfy from "src/components/ReadmeLogo";
 
 const GroupStatistics = ({ applications, groupName, groupLogo }) => {
   const calculateNumGroupApplications = (group) => {
@@ -21,7 +22,7 @@ const GroupStatistics = ({ applications, groupName, groupLogo }) => {
   return (
     <StatisticsWrapper smallerMargin>
       <StatisticsGroupLogo src={groupLogo} />
-      <StatisticsName capitalize>{groupName}</StatisticsName>
+      <StatisticsName capitalize>{readmeIfy(groupName)}</StatisticsName>
       {count} stk
     </StatisticsWrapper>
   );

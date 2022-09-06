@@ -82,15 +82,15 @@ const InnerForm = ({ updateGroupMutation, handleSubmit, isValid }) => {
         <EditGroupFormWrapper>
           <Field
             component={TextAreaField}
-            title="Endre beskrivelsen av komiteen"
+            title="Endre beskrivelsen av gruppen"
             name="description"
-            placeholder="Skriv en beskrivelse av komiteen..."
+            placeholder="Skriv en beskrivelse av gruppen..."
           />
           <Field
             component={TextAreaField}
-            title="Endre hva komitteen ønsker å høre om fra søkere"
+            title="Endre hva gruppen ønsker å høre om fra søkere"
             name="response_label"
-            placeholder="Skriv hva komitteen ønsker å vite om søkeren..."
+            placeholder="Skriv hva gruppen ønsker å vite om søkeren..."
           />
         </EditGroupFormWrapper>
         <SubmitButton

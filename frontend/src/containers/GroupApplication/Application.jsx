@@ -27,7 +27,6 @@ const Application = ({
   return (
     <Container>
       <LogoNameWrapper>
-        <Logo src={group.logo} />
         <Name>{readmeIfy(group.name)}</Name>
       </LogoNameWrapper>
       {responseLabel && (

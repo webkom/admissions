@@ -12,7 +12,7 @@ const NavBar = ({ user, isEditing }) => (
     </BrandContainer>
     {!user.has_application || isEditing ? (
       <NavItemsContainer>
-        <NavItem to="/velg-komiteer" text="Velg komiteer" />
+        <NavItem to="/velg-grupper" text="Velg grupper" />
         <NavItem to="/min-soknad" text="Min søknad" />
       </NavItemsContainer>
     ) : (

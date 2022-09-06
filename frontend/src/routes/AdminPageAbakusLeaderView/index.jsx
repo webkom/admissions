@@ -24,7 +24,7 @@ const AdminPageAbakusLeaderView = () => {
   const csvHeaders = [
     { label: "Full Name", key: "name" },
     { label: "Prioriteringer", key: "priorityText" },
-    { label: "Komité", key: "group" },
+    { label: "Gruppe", key: "group" },
     { label: "Søknadstekst", key: "groupApplicationText" },
     { label: "Email", key: "email" },
     { label: "Mobilnummer", key: "phoneNumber" },

@@ -18,9 +18,9 @@ import {
   Statistics,
   StatisticsName,
   StatisticsWrapper,
-  GroupLogo,
   GroupLogoWrapper,
 } from "./styles";
+import readmeIfy from "src/components/ReadmeLogo";
 
 const AdminPage = () => {
   const [sortedApplications, setSortedApplications] = useState([]);
@@ -88,8 +88,7 @@ const AdminPage = () => {
       <PageWrapper>
         <PageTitle>Admin Panel</PageTitle>
         <GroupLogoWrapper>
-          <GroupLogo src={group.logo} />
-          <h2>{djangoData.user.representative_of_group}</h2>
+          <h2>{readmeIfy(djangoData.user.representative_of_group)}</h2>
         </GroupLogoWrapper>
         <LinkLink to="/">Gå til forside</LinkLink>
 

@@ -90,7 +90,7 @@ const ApplicationPortal = () => {
       <PageWrapper>
         <NavBar user={djangoData.user} isEditing={isEditingApplication} />
         <ContentContainer>
-          {location.pathname.startsWith("/velg-komiteer") && (
+          {location.pathname.startsWith("/velg-grupper") && (
             <GroupsPage
               toggleGroup={toggleGroup}
               selectedGroups={selectedGroups}

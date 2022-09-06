@@ -31,7 +31,10 @@ const GroupsPage = ({ selectedGroups, toggleGroup }) => {
 
   return (
     <PageWrapper>
-      <Title>Velg de komiteene du vil søke på og gå videre</Title>
+      <Title>Velg de gruppene du vil søke på og gå videre</Title>
+      <ReadMoreLink href="//abakus.no/pages/grupper/104-revyen" target="_blank">
+        Les mer om revygruppene på abakus.no
+      </ReadMoreLink>
       <GroupsWrapper>{GroupCards}</GroupsWrapper>
       <NextButtonWrapper>
         <LegoButton
@@ -45,7 +48,7 @@ const GroupsPage = ({ selectedGroups, toggleGroup }) => {
         {!hasSelectedAnything() && (
           <ErrorMessage>
             <Icon name="information-circle-outline" />
-            Du må velge en eller flere komiteer før du kan gå videre
+            Du må velge en eller flere grupper før du kan gå videre
           </ErrorMessage>
         )}
       </NextButtonWrapper>
@@ -70,7 +73,7 @@ export const PageWrapper = styled.div`
 export const Title = styled.h1`
   color: rgba(129, 129, 129, 0.59);
   font-size: 1.3rem;
-  margin: 1.6rem 0 2rem;
+  margin: 1.6rem 0 0;
   line-height: 1.5em;
 
   ${media.handheld`
@@ -78,6 +81,18 @@ export const Title = styled.h1`
     font-size: 1.2rem;
     line-height: 1.2em;
   `};
+`;
+
+const ReadMoreLink = styled.a`
+  text-align: center;
+  margin: 1em 0 2em;
+  font-weight: 600;
+  align-self: center;
+  font-size: 1rem;
+
+  &:hover {
+    text-decoration: underline;
+  }
 `;
 
 export const GroupsWrapper = styled.div`

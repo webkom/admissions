@@ -75,12 +75,11 @@ const FormStructure = ({ toggleIsEditing }) => {
                   </FormatTime>
                 </StyledSpan>
               )}{" "}
-              og komiteene vil kun se den siste versjonen.
+              og revystyret vil kun se den siste versjonen.
             </Text>
             <Notice>
               <StyledSpan bold>Merk:</StyledSpan> Oppdateringer etter
-              søknadsfristen kan ikke garanteres å bli sett av komiteen(e) du
-              søker deg til.
+              søknadsfristen kan ikke garanteres å bli sett av revystyret.
             </Notice>
           </EditInfo>
           <EditActions>
@@ -132,7 +131,7 @@ const FormStructure = ({ toggleIsEditing }) => {
           <HelpText>
             <Icon name="information-circle-outline" />
             Mobilnummeret vil bli brukt til å kalle deg inn på intervju av
-            komitéledere.
+            revystyret.
           </HelpText>
           <Field
             name="phoneNumber"
@@ -142,11 +141,11 @@ const FormStructure = ({ toggleIsEditing }) => {
 
           <HelpText>
             <Icon name="information-circle-outline" />
-            Kun leder av Abakus kan se det du skriver inn i prioriterings- og
+            Kun revystyret kan se det du skriver inn i prioriterings- og
             kommentarfeltet.
             <Icon name="information-circle-outline" />
             Det er ikke sikkert prioriteringslisten vil bli tatt hensyn til.
-            Ikke søk på en komité du ikke ønsker å bli med i.
+            Ikke søk på en gruppe du ikke ønsker å bli med i.
           </HelpText>
           <Field
             name="priorityText"
@@ -160,11 +159,10 @@ const FormStructure = ({ toggleIsEditing }) => {
         <GroupsSection>
           <Sidebar>
             <div>
-              <SectionHeader>Komiteer</SectionHeader>
+              <SectionHeader>Grupper</SectionHeader>
               <HelpText>
                 <Icon name="information-circle-outline" />
-                Her skriver du søknaden til komiteen(e) du har valgt. Hver
-                komité kan kun se søknaden til sin egen komité.
+                Her skriver du søknaden til gruppen(e) du har valgt.
               </HelpText>
             </div>
           </Sidebar>
@@ -188,16 +186,16 @@ const FormStructure = ({ toggleIsEditing }) => {
             </Applications>
           ) : (
             <NoChosenGroupsWrapper>
-              <NoChosenTitle>Du har ikke valgt noen komiteer.</NoChosenTitle>
+              <NoChosenTitle>Du har ikke valgt noen grupper.</NoChosenTitle>
               <NoChosenSubTitle>
-                Send inn en ny søknad for å velge komitéer.
+                Send inn en ny søknad for å velge revygrupper.
               </NoChosenSubTitle>
               <LegoButton
                 icon="arrow-forward"
                 iconPrefix="ios"
-                to="/velg-komiteer"
+                to="/velg-grupper"
               >
-                Velg komiteer
+                Velg grupper
               </LegoButton>
             </NoChosenGroupsWrapper>
           )}

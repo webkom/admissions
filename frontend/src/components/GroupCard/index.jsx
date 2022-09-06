@@ -3,29 +3,18 @@ import styled from "styled-components";
 import { media } from "src/styles/mediaQueries";
 import readmeIfy from "src/components/ReadmeLogo";
 
-const GroupCard = ({
-  onToggle,
-  isChosen,
-  name,
-  description,
-  readMoreLink,
-  logo,
-}) => {
+const GroupCard = ({ onToggle, isChosen, name, description }) => {
   return (
     <Card onClick={() => onToggle(name)} isChosen={isChosen}>
-      <Logo src={logo} />
       <Name>{readmeIfy(name)}</Name>
       <Description>{readmeIfy(description, true)}</Description>
-      <LearnMoreLink href={`${readMoreLink}`} target="_blank">
-        Les mer på abakus.no
-      </LearnMoreLink>
       <SelectedMark isChosen={isChosen}>
         {isChosen ? (
           <SelectedMarkText isChosen={isChosen}>
             Valgt <span>- klikk for å fjerne</span>
           </SelectedMarkText>
         ) : (
-          <SelectedMarkText>Velg komité</SelectedMarkText>
+          <SelectedMarkText>Velg gruppe</SelectedMarkText>
         )}
       </SelectedMark>
     </Card>
@@ -39,11 +28,10 @@ export default GroupCard;
 export const Card = styled.div`
   display: grid;
   grid-template-columns: 1fr 3fr;
-  grid-template-rows: 2rem 1fr 1.5rem;
+  grid-template-rows: 2rem 1fr;
   grid-template-areas:
-    ". name"
-    "logo text"
-    ". readmore";
+    "name name"
+    "text text";
   grid-gap: 10px 20px;
   background: var(--lego-white);
   box-shadow: ${(props) =>

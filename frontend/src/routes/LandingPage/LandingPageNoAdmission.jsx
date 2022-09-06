@@ -13,8 +13,7 @@ const LandingPageNoAdmission = () => {
       <InfoBox>
         <DecorativeLine vertical />
         <p>
-          Komiteeopptak skjer vanligvis i september etter semesterstart. Følg
-          med på{" "}
+          Opptak skjer vanligvis i september etter semesterstart. Følg med på{" "}
           <a href="https://abakus.no" target="_blank" rel="noopener noreferrer">
             abakus.no
           </a>{" "}

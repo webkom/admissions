@@ -49,22 +49,29 @@ const LandingPage = () => {
 
   return (
     <LandingPageSkeleton>
-      <YearOfAdmission>
-        <FormatTime format="yyyy">{admission.public_deadline}</FormatTime>
-      </YearOfAdmission>
+      <YearOfAdmission>2023</YearOfAdmission>
       <InfoBox>
         <DecorativeLine vertical red />
         <ApplicationDateInfo admission={admission} />
       </InfoBox>
       <Notice>
         <StyledSpan bold>Merk:</StyledSpan> Oppdateringer etter søknadsfristen
-        kan ikke garanteres å bli sett av komiteen(e) du søker deg til.
+        kan ikke garanteres å bli sett av revystyret.
       </Notice>
+      {admission.is_open && !djangoData.user.full_name && (
+        <Notice>
+          Er du ikke medlem av Abakus? Søk via{" "}
+          <a href="https://docs.google.com/forms/d/e/1FAIpQLSfsR40RJxjvv23BUeK7wrz8j5BxxLWJwC3DO8eLrABsJFOwzQ/viewform?usp=sf_link">
+            dette skjemaet
+          </a>
+          .
+        </Notice>
+      )}
       <LinkWrapper>
         {djangoData.user.full_name ? (
           <li>
             <LegoButton
-              to={hasSubmitted ? "/min-soknad" : "/velg-komiteer"}
+              to={hasSubmitted ? "/min-soknad" : "/velg-grupper"}
               icon="arrow-forward"
               iconPrefix="ios"
               disabled={!admission.is_open}
@@ -170,6 +177,7 @@ const Notice = styled.p`
   font-style: italic;
   font-size: 1rem;
   max-width: 600px;
+  width: 600px;
   line-height: 1.4rem;
 
   ${media.handheld`

@@ -26,10 +26,10 @@ const ToggleGroups = ({ groups, selectedGroups, toggleGroup }) => {
     <Wrapper>
       <Title>Endre dine valg</Title>
       <Tooltip>
-        Klikk på logoene til komiteene for å legge til/fjerne de fra søknaden.
+        Klikk på logoene til gruppene for å legge til/fjerne de fra søknaden.
       </Tooltip>
       <IconsWrapper>{ChooseGroupsItems}</IconsWrapper>
-      <LinkToOverview to="/velg-komiteer">
+      <LinkToOverview to="/velg-grupper">
         Eller gå tilbake til oversikten for å lese mer
       </LinkToOverview>
     </Wrapper>
