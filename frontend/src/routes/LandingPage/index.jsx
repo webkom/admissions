@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import styled from "styled-components";
-import { useAdmission, useMyApplication } from "../../query/hooks";
+import { useAdmissions, useMyApplication } from "src/query/hooks";
 
 import djangoData from "src/utils/djangoData";
 import DecorativeLine from "src/components/DecorativeLine";
@@ -17,10 +17,10 @@ const LandingPage = () => {
   const [hasSubmitted, setHasSubmitted] = useState(false);
 
   const {
-    data: admission,
+    data: admissions,
     error: admissionError,
     isFetching: admissionIsFetching,
-  } = useAdmission();
+  } = useAdmissions();
   const {
     data: myApplication,
     error: myApplicationError,
@@ -43,67 +43,79 @@ const LandingPage = () => {
     return <LoadingBall />;
   }
 
-  if (!admission) {
+  if (!admissions || admissions.length === 0) {
     return <LandingPageNoAdmission />;
   }
 
   return (
     <LandingPageSkeleton>
-      <YearOfAdmission>
-        <FormatTime format="yyyy">{admission.public_deadline}</FormatTime>
-      </YearOfAdmission>
-      <InfoBox>
-        <DecorativeLine vertical red />
-        <ApplicationDateInfo admission={admission} />
-      </InfoBox>
-      <Notice>
-        <StyledSpan bold>Merk:</StyledSpan> Oppdateringer etter søknadsfristen
-        kan ikke garanteres å bli sett av komiteen(e) du søker deg til.
-      </Notice>
-      <LinkWrapper>
-        {djangoData.user.full_name ? (
-          <li>
-            <LegoButton
-              to={hasSubmitted ? "/min-soknad" : "/velg-komiteer"}
-              icon="arrow-forward"
-              iconPrefix="ios"
-              disabled={!admission.is_open}
-            >
-              Gå til søknad
-            </LegoButton>
-          </li>
-        ) : (
-          <li>
-            <LegoButton
-              icon="arrow-forward"
-              iconPrefix="ios"
-              disabled={!admission.is_open}
-              onClick={(e) => {
-                window.location = "/login/lego/";
-                e.preventDefault();
-              }}
-            >
-              Gå til søknad
-            </LegoButton>
-          </li>
-        )}
+      {admissions.map((admission) => (
+        <Admission key={admission.pk}>
+          <AdmissionTitle>{admission.title}</AdmissionTitle>
 
-        {djangoData.user.is_privileged && (
-          <li>
-            <LegoButton
-              to="/admin"
-              icon="arrow-forward"
-              iconPrefix="ios"
-              buttonStyle="secondary"
-            >
-              Gå til admin panel
-            </LegoButton>
-          </li>
-        )}
-      </LinkWrapper>
-      {!admission.is_open && (
-        <AdmissionCountDown endTime={admission.open_from} />
-      )}
+          <InfoBox>
+            <DecorativeLine vertical red />
+            <div>
+              <ApplicationDateInfo admission={admission} />
+            </div>
+          </InfoBox>
+          {admission.is_open && (
+            <Notice>
+              <StyledSpan bold>Merk:</StyledSpan> Oppdateringer etter
+              søknadsfristen kan ikke garanteres å bli sett av komiteen(e) du
+              søker deg til.
+            </Notice>
+          )}
+          {!admission.is_open && (
+            <AdmissionCountDown endTime={admission.open_from} />
+          )}
+          <LinkWrapper>
+            {admission.is_open &&
+              (djangoData.user.full_name ? (
+                <li>
+                  <LegoButton
+                    to={
+                      `/${admission.pk}/` +
+                      (hasSubmitted ? "min-soknad" : "velg-komiteer")
+                    }
+                    icon="arrow-forward"
+                    iconPrefix="ios"
+                    disabled={!admission.is_open}
+                  >
+                    Gå til søknad
+                  </LegoButton>
+                </li>
+              ) : (
+                <li>
+                  <LegoButton
+                    icon="arrow-forward"
+                    iconPrefix="ios"
+                    disabled={!admission.is_open}
+                    onClick={(e) => {
+                      window.location = "/login/lego/";
+                      e.preventDefault();
+                    }}
+                  >
+                    Gå til søknad
+                  </LegoButton>
+                </li>
+              ))}
+
+            {djangoData.user.is_privileged && (
+              <li>
+                <LegoButton
+                  to={`/${admission.pk}/admin/`}
+                  icon="arrow-forward"
+                  iconPrefix="ios"
+                  buttonStyle="secondary"
+                >
+                  Gå til admin panel
+                </LegoButton>
+              </li>
+            )}
+          </LinkWrapper>
+        </Admission>
+      ))}
     </LandingPageSkeleton>
   );
 };
@@ -131,16 +143,21 @@ const ApplicationDateInfo = ({ admission }) => (
 
 /** Styles **/
 
-const YearOfAdmission = styled.h1`
-  color: #aeaeae;
-  font-size: 2.5rem;
-  font-weight: 500;
+const Admission = styled.div`
+  width: 100%;
+  max-width: 600px;
+  margin-top: 40px;
+`;
+
+const AdmissionTitle = styled.h2`
+  font-size: 28px;
+  margin: 0;
 `;
 
 const InfoBox = styled.div`
   display: flex;
   max-width: 600px;
-  margin-top: 40px;
+  margin-top: 1em;
   p {
     margin: 0 0 0 1rem;
     font-size: 1.1rem;
@@ -181,7 +198,7 @@ const Notice = styled.p`
 `;
 
 const LinkWrapper = styled.ul`
-  margin-top: 1.5rem;
+  margin-top: 0;
   margin-bottom: 1rem;
   display: flex;
   flex-direction: column;

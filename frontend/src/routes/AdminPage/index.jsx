@@ -1,16 +1,13 @@
 import React, { useEffect, useState } from "react";
 import styled from "styled-components";
-
-import { useApplications, useGroups } from "src/query/hooks";
+import { useParams } from "react-router-dom";
+import { useAdmission, useApplications } from "src/query/hooks";
 import djangoData from "src/utils/djangoData";
 import { media } from "src/styles/mediaQueries";
-
 import UserApplication from "src/containers/UserApplication";
 import LoadingBall from "src/components/LoadingBall";
 import EditGroupForm from "./form";
-
 import { replaceQuotationMarks } from "src/utils/replaceQuotationMarks";
-
 import {
   Wrapper,
   LinkLink,
@@ -23,6 +20,7 @@ import {
 } from "./styles";
 
 const AdminPage = () => {
+  const { admissionId } = useParams();
   const [sortedApplications, setSortedApplications] = useState([]);
   const [csvData, setCsvData] = useState([]);
 
@@ -37,8 +35,13 @@ const AdminPage = () => {
     { label: "Tid oppdatert", key: "updatedAt" },
   ];
 
-  const { data: applications, isFetching, error } = useApplications();
-  const { data: groups } = useGroups();
+  const { data: admission } = useAdmission(admissionId);
+  const { groups } = admission;
+  const {
+    data: applications,
+    isFetching,
+    error,
+  } = useApplications(admissionId);
 
   useEffect(() => {
     if (!applications) return;
@@ -71,19 +74,20 @@ const AdminPage = () => {
     setCsvData(updatedCsvData);
   }, [sortedApplications]);
 
-  const group = groups.find(
-    (group) =>
-      group.name.toLowerCase() ===
-      djangoData.user.representative_of_group.toLowerCase()
-  );
-
   const numApplicants = sortedApplications.length;
 
   if (error) {
     return <div>Error: {error.message}</div>;
   } else if (isFetching) {
     return <LoadingBall />;
+  } else if (!groups) {
+    return <div>Feil: klarte ikke laste inn grupper.</div>;
   } else {
+    const group = (groups ?? []).find(
+      (group) =>
+        group.name.toLowerCase() ===
+        djangoData.user.representative_of_group.toLowerCase()
+    );
     return (
       <PageWrapper>
         <PageTitle>Admin Panel</PageTitle>

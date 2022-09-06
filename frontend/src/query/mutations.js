@@ -11,18 +11,18 @@ const customMutationWrapper = (useCustomMutation, invalidateQuery) => {
   });
 };
 
-export const useDeleteMyApplicationMutation = () =>
+export const useDeleteMyApplicationMutation = (admissionId) =>
   customMutationWrapper(() => {
-    return callApiFromQuery("/application/mine/", {
+    return callApiFromQuery(`/admission/${admissionId}/application/mine/`, {
       method: "DELETE",
     });
-  }, ["/application/mine/"]);
+  }, [`/admission/${admissionId}/application/mine/`]);
 
-export const useDeleteGroupApplicationMutation = () =>
+export const useDeleteGroupApplicationMutation = (admissionId) =>
   customMutationWrapper(
     ({ applicationId, groupName }) => {
       return callApiFromQuery(
-        `/application/${applicationId}/delete_group_application/${
+        `/admission/${admissionId}/application/${applicationId}/delete_group_application/${
           groupName ? `?group=${groupName}` : ""
         }`,
         {
@@ -30,27 +30,24 @@ export const useDeleteGroupApplicationMutation = () =>
         }
       );
     },
-    ["/application/"]
+    [`/admission/${admissionId}/application/`]
   );
 
 export const useUpdateGroupMutation = () =>
-  customMutationWrapper(
-    ({ groupPrimaryKey, updatedGroupData }) => {
-      return callApiFromQuery(`/group/${groupPrimaryKey}/`, {
-        method: "PATCH",
-        body: JSON.stringify(updatedGroupData),
-      });
-    },
-    ["/group/"]
-  );
+  customMutationWrapper(({ groupPrimaryKey, updatedGroupData }) => {
+    return callApiFromQuery(`/group/${groupPrimaryKey}/`, {
+      method: "PATCH",
+      body: JSON.stringify(updatedGroupData),
+    });
+  });
 
-export const useCreateApplicationMutation = () =>
+export const useCreateApplicationMutation = (admissionId) =>
   customMutationWrapper(
     ({ newApplication }) => {
-      return callApiFromQuery("/application/", {
+      return callApiFromQuery(`/admission/${admissionId}/application/`, {
         method: "POST",
         body: JSON.stringify(newApplication),
       });
     },
-    ["/application/mine/"]
+    [`/admission/${admissionId}/application/mine/`]
   );

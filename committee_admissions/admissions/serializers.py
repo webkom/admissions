@@ -10,42 +10,10 @@ from committee_admissions.admissions.models import (
 )
 
 
-class AdmissionPublicSerializer(serializers.HyperlinkedModelSerializer):
-    class Meta:
-        model = Admission
-        fields = (
-            "is_open",
-            "open_from",
-            "public_deadline",
-            "application_deadline",
-            "is_closed",
-        )
-
-
-class AdminAdmissionSerializer(serializers.HyperlinkedModelSerializer):
-    applications = UserApplication.objects.all()
-
-    class Meta:
-        model = Admission
-        fields = (
-            "url",
-            "pk",
-            "title",
-            "open_from",
-            "public_deadline",
-            "application_deadline",
-            "is_closed",
-            "is_appliable",
-            "applications",
-            "is_open",
-        )
-
-
 class GroupSerializer(serializers.HyperlinkedModelSerializer):
     class Meta:
         model = Group
         fields = (
-            "url",
             "pk",
             "name",
             "description",
@@ -70,6 +38,46 @@ class ShortGroupSerializer(serializers.HyperlinkedModelSerializer):
     class Meta:
         model = Group
         fields = ("pk", "name")
+
+
+class AdmissionListPublicSerializer(serializers.HyperlinkedModelSerializer):
+    class Meta:
+        model = Admission
+        fields = (
+            "pk",
+            "title",
+            "is_open",
+            "open_from",
+            "public_deadline",
+            "application_deadline",
+            "is_closed",
+        )
+
+
+class AdmissionPublicSerializer(AdmissionListPublicSerializer):
+    groups = GroupSerializer(source="group_set", many=True)
+
+    class Meta(AdmissionListPublicSerializer.Meta):
+        fields = AdmissionListPublicSerializer.Meta.fields + ("groups",)
+
+
+class AdminAdmissionSerializer(serializers.HyperlinkedModelSerializer):
+    applications = UserApplication.objects.all()
+
+    class Meta:
+        model = Admission
+        fields = (
+            "url",
+            "pk",
+            "title",
+            "open_from",
+            "public_deadline",
+            "application_deadline",
+            "is_closed",
+            "is_appliable",
+            "applications",
+            "is_open",
+        )
 
 
 class GroupApplicationSerializer(serializers.HyperlinkedModelSerializer):
@@ -115,7 +123,6 @@ class UserApplicationSerializer(serializers.ModelSerializer):
     class Meta:
         model = UserApplication
         fields = (
-            "url",
             "pk",
             "user",
             "text",

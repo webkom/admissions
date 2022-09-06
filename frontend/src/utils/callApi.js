@@ -45,7 +45,11 @@ const _callApiFromQuery = async (url, { method = "GET", body = null } = {}) => {
     response.headers.get("content-type") || "application/json";
   const contentLength =
     parseInt(response.headers.get("content-length"), 10) || 0;
-
+  if (response.status !== 200) {
+    const newError = new Error(response.statusText);
+    newError.code = response.status;
+    throw newError;
+  }
   if (contentType.includes("application/json") && contentLength !== 0) {
     return await response.json();
   }

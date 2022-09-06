@@ -3,6 +3,7 @@ import { Formik } from "formik";
 import { useMyApplication } from "src/query/hooks";
 
 import FormStructure from "./FormStructure";
+import { useParams } from "react-router-dom";
 
 // State of the form
 const FormContainer = ({ toggleIsEditing }) => {
@@ -13,7 +14,8 @@ const FormContainer = ({ toggleIsEditing }) => {
 // Highest order component for application form.
 // Handles form values, submit post and form validation.
 const ApplicationForm = ({ toggleIsEditing }) => {
-  const { data: myApplication, isFetching } = useMyApplication();
+  const { admissionId } = useParams();
+  const { data: myApplication, isFetching } = useMyApplication(admissionId);
 
   if (isFetching) return <p>Loading</p>;
 
