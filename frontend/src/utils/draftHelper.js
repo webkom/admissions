@@ -23,19 +23,14 @@ const keys = {
 
 const getItem = (key, defaultValue = '""') =>
   sessionStorage.getItem(key) ?? defaultValue;
-const getParsedJson = (key, defaultValue = '""') => {
-  return JSON.parse(getItem(key, defaultValue));
+const getParsedJson = (key, defaultValue = "") => {
+  return JSON.parse(getItem(key, JSON.stringify(defaultValue)));
 };
 const saveObject = (key, value) => {
-  const previousValue = getItem(key);
   sessionStorage.setItem(key, JSON.stringify(value));
-  if (JSON.stringify(value) === previousValue) return;
-  sessionStorage.setItem("updated_at", new Date().toJSON());
 };
 
 export const clearAllDrafts = () => sessionStorage.clear();
-
-export const getDraftUpdatedAt = () => new Date(getItem("updated_at"));
 
 // key-specific methods
 export const saveApplicationTextDraft = ([groupName, applicationText]) => {
@@ -61,5 +56,11 @@ export const getPriorityTextDraft = () => getParsedJson(keys.priorityText);
 export const savePhoneNumberDraft = (phoneNumber) =>
   saveObject(keys.phoneNumber, phoneNumber);
 
-export const getPhoneNumberDraft = (defaultValue = null) =>
+export const getPhoneNumberDraft = (defaultValue = "") =>
   getParsedJson(keys.phoneNumber) || defaultValue;
+
+export const saveIsEditingDraft = (newValue) =>
+  saveObject(keys.isEditingApplication, newValue);
+
+export const getIsEditingDraft = (defaultValue = null) =>
+  getParsedJson(keys.isEditingApplication, defaultValue);

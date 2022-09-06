@@ -3,11 +3,12 @@ import { useLocation } from "react-router-dom";
 import styled from "styled-components";
 
 import {
+  getIsEditingDraft,
   getSelectedGroupsDraft,
+  saveIsEditingDraft,
   saveSelectedGroupsDraft,
 } from "src/utils/draftHelper";
 import djangoData from "src/utils/djangoData";
-import draftIsNewerThanApplication from "src/utils/draftIsNewerThanApplication";
 
 import { useAdmission, useMyApplication, useGroups } from "src/query/hooks";
 
@@ -22,7 +23,7 @@ import NavBar from "src/components/NavBar";
 
 const ApplicationPortal = () => {
   const [selectedGroups, setSelectedGroups] = useState({});
-  const [isEditingApplication, setIsEditingApplication] = useState(true);
+  const [isEditingApplication, setIsEditingApplication] = useState(null);
 
   const location = useLocation();
 
@@ -58,7 +59,8 @@ const ApplicationPortal = () => {
   }, []);
 
   useEffect(() => {
-    setIsEditingApplication(draftIsNewerThanApplication(myApplication));
+    if (isFetching) return;
+    setIsEditingApplication(!myApplication || getIsEditingDraft());
     if (!myApplication) return;
     setSelectedGroups(
       myApplication.group_applications
@@ -73,6 +75,8 @@ const ApplicationPortal = () => {
 
   useEffect(() => {
     persistState();
+    if (isEditingApplication === null) return;
+    saveIsEditingDraft(isEditingApplication);
   }, [isEditingApplication]);
 
   if (!djangoData.user) {
