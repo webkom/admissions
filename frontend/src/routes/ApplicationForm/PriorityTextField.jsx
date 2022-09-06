@@ -2,7 +2,8 @@ import React, { useEffect } from "react";
 import { FieldLabel, StyledTextAreaField } from "src/components/styledFields";
 import styled from "styled-components";
 import { media } from "src/styles/mediaQueries";
-import useDebouncedState from "../../utils/useDebouncedState";
+import useDebouncedState from "src/utils/useDebouncedState";
+import { savePriorityTextDraft } from "src/utils/draftHelper";
 
 const PriorityTextField = ({
   label,
@@ -14,7 +15,7 @@ const PriorityTextField = ({
   const debouncedValue = useDebouncedState(value);
 
   useEffect(() => {
-    sessionStorage.setItem("text", value);
+    savePriorityTextDraft(value);
   }, [debouncedValue]);
 
   return (

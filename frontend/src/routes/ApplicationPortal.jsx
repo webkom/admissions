@@ -2,11 +2,18 @@ import React, { useEffect, useState } from "react";
 import { useLocation } from "react-router-dom";
 import styled from "styled-components";
 
+import {
+  getIsEditingDraft,
+  getSelectedGroupsDraft,
+  saveIsEditingDraft,
+  saveSelectedGroupsDraft,
+} from "src/utils/draftHelper";
 import djangoData from "src/utils/djangoData";
 
 import { useAdmission, useMyApplication, useGroups } from "src/query/hooks";
 
 import ApplicationForm from "src/routes/ApplicationForm";
+import ReceiptForm from "src/routes/ReceiptForm";
 import GroupsPage from "src/routes/GroupsPage";
 import AdminPage from "src/routes/AdminPage";
 import AdminPageAbakusLeaderView from "src/routes/AdminPageAbakusLeaderView";
@@ -16,7 +23,7 @@ import NavBar from "src/components/NavBar";
 
 const ApplicationPortal = () => {
   const [selectedGroups, setSelectedGroups] = useState({});
-  const [isEditingApplication, setIsEditingApplication] = useState(true);
+  const [isEditingApplication, setIsEditingApplication] = useState(null);
 
   const location = useLocation();
 
@@ -36,23 +43,14 @@ const ApplicationPortal = () => {
   };
 
   const persistState = () => {
-    const selectedGroupsJSON = JSON.stringify(selectedGroups);
-    sessionStorage.setItem("selectedGroups", selectedGroupsJSON);
-    sessionStorage.setItem("isEditingApplication", isEditingApplication);
+    saveSelectedGroupsDraft(selectedGroups);
   };
 
   const initializeState = () => {
-    const selectedGroupsJSON = sessionStorage.getItem("selectedGroups");
-    const isEditingApplicationJSON = sessionStorage.getItem(
-      "isEditingApplication",
-      true
-    );
-    const parsedSelectedGroups = JSON.parse(selectedGroupsJSON);
-    const parsedIsEditingApplication = JSON.parse(isEditingApplicationJSON);
+    const parsedSelectedGroups = getSelectedGroupsDraft();
 
     if (parsedSelectedGroups != null) {
       setSelectedGroups(parsedSelectedGroups);
-      setIsEditingApplication(parsedIsEditingApplication);
     }
   };
 
@@ -61,6 +59,8 @@ const ApplicationPortal = () => {
   }, []);
 
   useEffect(() => {
+    if (isFetching) return;
+    setIsEditingApplication(!myApplication || getIsEditingDraft());
     if (!myApplication) return;
     setSelectedGroups(
       myApplication.group_applications
@@ -75,6 +75,8 @@ const ApplicationPortal = () => {
 
   useEffect(() => {
     persistState();
+    if (isEditingApplication === null) return;
+    saveIsEditingDraft(isEditingApplication);
   }, [isEditingApplication]);
 
   if (!djangoData.user) {
@@ -94,17 +96,21 @@ const ApplicationPortal = () => {
               selectedGroups={selectedGroups}
             />
           )}
-          {location.pathname.startsWith("/min-soknad") && (
-            <ApplicationForm
-              toggleGroup={toggleGroup}
-              toggleIsEditing={toggleIsEditing}
-              admission={admission}
-              groups={groups}
-              myApplication={myApplication}
-              selectedGroups={selectedGroups}
-              isEditingApplication={isEditingApplication}
-            />
-          )}
+          {location.pathname.startsWith("/min-soknad") ? (
+            myApplication && !isEditingApplication ? (
+              <ReceiptForm toggleIsEditing={toggleIsEditing} />
+            ) : (
+              <ApplicationForm
+                toggleGroup={toggleGroup}
+                toggleIsEditing={toggleIsEditing}
+                admission={admission}
+                groups={groups}
+                myApplication={myApplication}
+                selectedGroups={selectedGroups}
+                isEditingApplication={isEditingApplication}
+              />
+            )
+          ) : null}
           {location.pathname.startsWith("/admin") &&
             (djangoData.user.is_superuser ? (
               <AdminPageAbakusLeaderView />

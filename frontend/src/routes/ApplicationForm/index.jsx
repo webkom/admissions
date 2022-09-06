@@ -6,6 +6,10 @@ import { useCreateApplicationMutation } from "src/query/mutations";
 import GroupApplication from "src/containers/GroupApplication";
 
 import FormStructure from "./FormStructure";
+import {
+  getPhoneNumberDraft,
+  getPriorityTextDraft,
+} from "src/utils/draftHelper";
 
 // State of the form
 const FormContainer = ({
@@ -20,7 +24,6 @@ const FormContainer = ({
   toggleGroup,
   toggleIsEditing,
   myApplication,
-  isEditingApplication,
 }) => {
   const onCancelEdit = () => {
     toggleIsEditing();
@@ -41,7 +44,6 @@ const FormContainer = ({
           touched[group.name.toLowerCase()] && errors[group.name.toLowerCase()]
         }
         key={`${group.name.toLowerCase()} ${index}`}
-        disabled={!isEditingApplication}
       />
     ));
 
@@ -61,7 +63,6 @@ const FormContainer = ({
       }}
       hasSelected={hasSelected}
       SelectedGroupItems={SelectedGroupItems}
-      isEditing={isEditingApplication}
       onCancel={onCancelEdit}
     />
   );
@@ -76,14 +77,13 @@ const ApplicationForm = ({
   toggleIsEditing,
   admission,
   groups,
-  isEditingApplication,
 }) => {
   const createApplicationMutation = useCreateApplicationMutation();
 
   const {
-    text = sessionStorage.getItem("text") || "",
-    phone_number = sessionStorage.getItem("phoneNumber") || "",
-    group_applications = [],
+    text = getPriorityTextDraft(),
+    phone_number: phoneNumber = getPhoneNumberDraft(),
+    group_applications: groupApplications = [],
   } = myApplication || {};
 
   const blankGroupApplications = {};
@@ -91,7 +91,7 @@ const ApplicationForm = ({
     blankGroupApplications[group] = "";
   });
 
-  const groupApplications = group_applications.reduce(
+  const reformattedGroupApplications = groupApplications.reduce(
     (obj, application) => ({
       ...obj,
       [application.group.name.toLowerCase()]: application.text,
@@ -101,9 +101,9 @@ const ApplicationForm = ({
 
   const initialValues = {
     priorityText: text,
-    phoneNumber: phone_number,
+    phoneNumber,
     ...blankGroupApplications,
-    ...groupApplications,
+    ...reformattedGroupApplications,
   };
 
   return (
@@ -171,7 +171,6 @@ const ApplicationForm = ({
               toggleGroup,
               toggleIsEditing,
               myApplication,
-              isEditingApplication,
             }}
           />
         )

@@ -7,7 +7,8 @@ import {
   StyledTextAreaField,
 } from "src/components/styledFields";
 import readmeIfy from "src/components/ReadmeLogo";
-import useDebouncedState from "../../utils/useDebouncedState";
+import useDebouncedState from "src/utils/useDebouncedState";
+import { saveApplicationTextDraft } from "src/utils/draftHelper";
 
 const Application = ({
   responseLabel,
@@ -19,13 +20,7 @@ const Application = ({
   const debouncedValue = useDebouncedState(value);
 
   useEffect(() => {
-    sessionStorage.setItem(
-      "applicationText",
-      JSON.stringify({
-        ...JSON.parse(sessionStorage.getItem("applicationText")),
-        [group.name.toLowerCase()]: value,
-      })
-    );
+    saveApplicationTextDraft([group.name, value]);
   }, [debouncedValue]);
 
   const error = touched[name] && errors[name];
