@@ -164,14 +164,13 @@ stack-data==0.3.0
     # via ipython
 structlog==22.1.0
     # via -r requirements/base.in
-toml==0.10.2
-    # via tox
 tomli==2.0.1
     # via
     #   black
     #   build
     #   pep517
-tox==3.25.1
+    #   tox
+tox==3.26.0
     # via -r requirements/development.in
 traitlets==5.3.0
     # via
