@@ -72,7 +72,7 @@ flake8==5.0.4
     # via -r requirements/flake8.txt
 idna==3.3
     # via requests
-ipython==8.4.0
+ipython==8.5.0
     # via -r requirements/base.in
 isort==5.10.1
     # via -r requirements/isort.txt
