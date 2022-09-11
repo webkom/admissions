@@ -14,7 +14,7 @@ export default defineConfig({
     origin: "http://localhost:5001",
   },
   build: {
-    outDir: "assets/bundles/",
+    outDir: "assets/",
     manifest: "vite-manifest.json",
     rollupOptions: {
       input: "frontend/src/index.jsx",
