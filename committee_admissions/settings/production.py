@@ -10,6 +10,7 @@ from .base import *  # noqa
 env = environ.Env(DEBUG=(bool, False))
 
 DEBUG = env("DEBUG")
+DJANGO_VITE_DEV_MODE = env("VITE_DEV", default=False)
 SECRET_KEY = env("SECRET_KEY")
 ALLOWED_HOSTS = env("ALLOWED_HOSTS").split(",")
 FRONTEND_URL = env("FRONTEND_URL")
