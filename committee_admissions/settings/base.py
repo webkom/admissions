@@ -136,8 +136,8 @@ LOGOUT_REDIRECT_URL = "/"
 SOCIAL_AUTH_JSONFIELD_ENABLED = True
 
 # Vite: Frontent assets =======================================================================
-DJANGO_VITE_ASSETS_PATH = "assets"
-DJANGO_VITE_MANIFEST_PATH = FILES_ROOT.path("static/vite-manifest.json")()
+DJANGO_VITE_ASSETS_PATH = BASE_PROJECT_DIR.path("assets/bundles")
+DJANGO_VITE_MANIFEST_PATH = BASE_PROJECT_DIR.path("assets/bundles/vite-manifest.json")()
 
 AUTH_USER_MODEL = "admissions.LegoUser"
 
