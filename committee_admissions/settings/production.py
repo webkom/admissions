@@ -11,7 +11,7 @@ env = environ.Env(DEBUG=(bool, False))
 
 DEBUG = env("DEBUG")
 SECRET_KEY = env("SECRET_KEY")
-ALLOWED_HOSTS = env("ALLOWED_HOSTS")
+ALLOWED_HOSTS = env("ALLOWED_HOSTS").split(",")
 FRONTEND_URL = env("FRONTEND_URL")
 API_URL = env("API_URL")
 ENVIRONMENT_NAME = env("ENVIRONMENT_NAME", default="production")
