@@ -8,13 +8,15 @@ const projectRootDir = path.resolve(__dirname);
 export default defineConfig({
   plugins: [react()],
   base: "/static/",
+  root: projectRootDir,
   server: {
     port: 5001,
     strictPort: true,
     origin: "http://localhost:5001",
   },
   build: {
-    outDir: "assets/",
+    outDir: "assets",
+    assetsDir: "bundles",
     manifest: "vite-manifest.json",
     rollupOptions: {
       input: "frontend/src/index.jsx",
