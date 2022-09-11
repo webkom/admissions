@@ -31,7 +31,7 @@ WORKDIR /app
 RUN pip install --no-cache -r requirements/production.txt
 
 COPY . /app/
-COPY --from=frontend-builder /app/assets/bundles /app/assets/bundles
+COPY --from=frontend-builder /app/assets/ /app/assets/
 
 RUN set -e \
     && ENV_CONFIG=0 python manage.py collectstatic --noinput
