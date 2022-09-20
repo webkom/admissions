@@ -2,7 +2,6 @@ import React, { useEffect, useState } from "react";
 import styled from "styled-components";
 import FormatTime from "src/components/Time/FormatTime";
 
-import UserApplicationAdminView from "src/containers/UserApplicationAdminView";
 import { media } from "src/styles/mediaQueries";
 
 import LoadingBall from "src/components/LoadingBall";
@@ -16,6 +15,8 @@ import StatisticsWrapper from "./StatisticsWrapper";
 import { replaceQuotationMarks } from "../../utils/replaceQuotationMarks";
 import { useAdmission, useApplications } from "src/query/hooks";
 import { useGroups } from "../../query/hooks";
+
+import AdmissionsContainer from "src/containers/AdmissionsContainer";
 
 const AdminPageAbakusLeaderView = () => {
   const [sortedApplications, setSortedApplications] = useState([]);
@@ -161,12 +162,7 @@ const AdminPageAbakusLeaderView = () => {
           >
             Eksporter som csv
           </CSVExport>
-          {sortedApplications.map((userApplication) => (
-            <UserApplicationAdminView
-              key={userApplication.user.username}
-              {...userApplication}
-            />
-          ))}
+          <AdmissionsContainer applications={sortedApplications} />
         </Wrapper>
       </PageWrapper>
     );
