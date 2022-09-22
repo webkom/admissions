@@ -4,14 +4,7 @@ import { innerColumns } from "./Columns";
 
 const AdmissionsInnerTable = ({ groupApplications }) => {
   const columns = useMemo(() => innerColumns, []);
-  const data = useMemo(
-    () =>
-      groupApplications.map(() => ({
-        group: groupApplications.group,
-        text: groupApplications.text,
-      })),
-    [groupApplications]
-  );
+  const data = useMemo(() => groupApplications, [groupApplications]);
 
   const tableInstance = useTable({ columns, data }, useSortBy, useBlockLayout);
   const { getTableProps, getTableBodyProps, headerGroups, rows, prepareRow } =
