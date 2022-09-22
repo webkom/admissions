@@ -40,7 +40,7 @@ export const columns = [
           <FormatTime format="EEEE d. MMMM, kl. HH:mm ">
             {props.row.original.createdAt}
           </FormatTime>
-          {(!props.row.original.appliedWithinDeadline && (
+          {!props.row.original.appliedWithinDeadline && (
             <Icon
               name="stopwatch"
               iconPrefix="ios"
@@ -49,7 +49,7 @@ export const columns = [
               color="#c0392b"
               padding="0 10px 0 0"
             />
-          ))}
+          )}
         </>
       );
     },
