@@ -1,6 +1,6 @@
 import React, { useMemo } from "react";
 import { useTable, useSortBy, useExpanded } from "react-table";
-import { cols } from "./Columns";
+import { columns as cols } from "./Columns";
 import AdmissionsInnerTable from "./InnerTable";
 import SubComponentWrapper from "./SubComponentWrapper";
 import SubComponentHeader from "./SubComponentHeader";
@@ -12,12 +12,12 @@ const AdmissionsContainer = ({ applications }) => {
       applications.map((application) => ({
         username: application.user.username,
         fullname: application.user.full_name,
-        phone_number: application.phone_number,
+        phoneNumber: application.phone_number,
         email: application.user.email,
-        applied_within_deadline: application.applied_within_deadline,
+        appliedWithinDeadline: application.applied_within_deadline,
         numApplications: application.group_applications.length,
-        created_at: application.created_at,
-        updated_at: application.updated_at,
+        createdAt: application.created_at,
+        updatedAt: application.updated_at,
         text: application.text,
         groupApplications: application.group_applications.map(
           (application) => ({

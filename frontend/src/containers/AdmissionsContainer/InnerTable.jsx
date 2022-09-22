@@ -1,14 +1,14 @@
 import React, { useMemo } from "react";
 import { useTable, useSortBy, useBlockLayout } from "react-table";
-import { innerCols } from "./Columns";
+import { innerColumns } from "./Columns";
 
 const AdmissionsInnerTable = ({ groupApplications }) => {
-  const columns = useMemo(() => innerCols, []);
+  const columns = useMemo(() => innerColumns, []);
   const data = useMemo(
     () =>
-      groupApplications.map((application) => ({
-        group: application.group,
-        text: application.text,
+      groupApplications.map(() => ({
+        group: groupApplications.group,
+        text: groupApplications.text,
       })),
     [groupApplications]
   );
