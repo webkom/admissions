@@ -46,7 +46,7 @@
     "@vitejs/plugin-react": "^2.0.1",
     "coveralls": "3.1.1",
     "eslint": "^8.24.0",
-    "eslint-plugin-react": "^7.31.8",
+    "eslint-plugin-react": "^7.31.9",
     "eventsource-polyfill": "0.9.6",
     "prettier": "2.7.1",
     "prop-types": "^15.8.1",
