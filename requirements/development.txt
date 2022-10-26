@@ -170,7 +170,7 @@ tomli==2.0.1
     #   build
     #   pep517
     #   tox
-tox==3.26.0
+tox==3.27.0
     # via -r requirements/development.in
 traitlets==5.3.0
     # via
