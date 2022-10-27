@@ -22,7 +22,7 @@ const Application = ({ text, applicationId }) => {
       <Wrapper>
         <ReadMore lines={200}>{applicationText}</ReadMore>
       </Wrapper>
-      <DeleteApplication id={applicationId} />
+      <DeleteApplication applicationId={applicationId} />
     </div>
   );
 };

@@ -1,22 +1,17 @@
 import { useQuery } from "react-query";
 
-export const useGroups = () => {
-  return useQuery(["/group/"]);
+export const useAdmissions = () => {
+  return useQuery(["/admission/"]);
 };
 
-export const useAdmission = () => {
-  const query = useQuery(["/admission/"]);
-  // The API seemingly supports multiple admissions at the same time,
-  // but it is not currently being used.
-  // Thus this hook only returns the first, as that is all that is
-  // currently used in the project.
-  return { ...query, data: query.data ? query.data[0] : undefined };
+export const useAdmission = (admissionId) => {
+  return useQuery([`/admission/${admissionId}/`]);
 };
 
-export const useApplications = () => {
-  return useQuery(["/application/"]);
+export const useApplications = (admissionId) => {
+  return useQuery([`/admission/${admissionId}/application/`]);
 };
 
-export const useMyApplication = () => {
-  return useQuery(["/application/mine/"]);
+export const useMyApplication = (admissionId) => {
+  return useQuery([`/admission/${admissionId}/application/mine/`]);
 };

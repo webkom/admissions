@@ -15,6 +15,8 @@ from committee_admissions.admissions.models import (
     UserApplication,
 )
 
+admission_id = 1
+
 
 def fake_timedelta(days=0):
     base_date = timezone.now().replace(hour=12, minute=15, second=0, microsecond=0)
@@ -23,6 +25,7 @@ def fake_timedelta(days=0):
 
 
 def create_admission():
+    global admission_id
     base_date = timezone.now().replace(hour=23, minute=59, second=59, microsecond=59)
 
     open_date = base_date.replace(
@@ -32,6 +35,7 @@ def create_admission():
     application_deadline_date = base_date + timedelta(days=9)
 
     return Admission.objects.create(
+        pk=admission_id,
         title=f"Opptak {base_date.year}",
         open_from=open_date,
         public_deadline=public_deadline_date,
@@ -199,6 +203,8 @@ class EditAdmissionTestCase(APITestCase):
 
 class CreateApplicationTestCase(APITestCase):
     def setUp(self):
+        global admission_id
+        self.admission_id = admission_id
         # Create admission and group
         self.admission = create_admission()
         self.webkom = Group.objects.create(name="Webkom")
@@ -227,8 +233,11 @@ class CreateApplicationTestCase(APITestCase):
 
         annas_application_data["user"] = self.pleb_anna.pk
 
+        admission = Admission.objects.first()
         res = self.client.post(
-            reverse("userapplication-list"), annas_application_data, format="json"
+            reverse("userapplication-list", kwargs={"admission_pk": self.admission_id}),
+            annas_application_data,
+            format="json",
         )
 
         self.assertEqual(res.status_code, status.HTTP_201_CREATED)
@@ -241,7 +250,9 @@ class CreateApplicationTestCase(APITestCase):
     def test_can_apply(self):
         self.client.force_authenticate(user=self.pleb_anna)
         res = self.client.post(
-            reverse("userapplication-list"), self.application_data, format="json"
+            reverse("userapplication-list", kwargs={"admission_pk": self.admission_id}),
+            self.application_data,
+            format="json",
         )
 
         self.assertEqual(res.status_code, status.HTTP_201_CREATED)
@@ -251,7 +262,9 @@ class CreateApplicationTestCase(APITestCase):
 
         # Apply first with webkom and koskom
         self.client.post(
-            reverse("userapplication-list"), self.application_data, format="json"
+            reverse("userapplication-list", kwargs={"admission_pk": self.admission_id}),
+            self.application_data,
+            format="json",
         )
 
         self.assertEqual(
@@ -267,7 +280,9 @@ class CreateApplicationTestCase(APITestCase):
 
         # Apply then only with webkom, removing koskom
         self.client.post(
-            reverse("userapplication-list"), self.application_data, format="json"
+            reverse("userapplication-list", kwargs={"admission_pk": self.admission_id}),
+            self.application_data,
+            format="json",
         )
 
         self.assertEqual(
@@ -278,6 +293,9 @@ class CreateApplicationTestCase(APITestCase):
 
 class ListApplicationsTestCase(APITestCase):
     def setUp(self):
+        global admission_id
+        self.admission_id = admission_id
+
         self.pleb = LegoUser.objects.create()
         self.admission = create_admission()
 
@@ -317,7 +335,9 @@ class ListApplicationsTestCase(APITestCase):
         """Normal users should not be able to list applications"""
         self.client.force_authenticate(user=self.pleb)
 
-        res = self.client.get(reverse("userapplication-list"))
+        res = self.client.get(
+            reverse("userapplication-mine", kwargs={"admission_pk": self.admission_id})
+        )
 
         self.assertEqual(res.status_code, status.HTTP_401_UNAUTHORIZED)
 
@@ -325,7 +345,9 @@ class ListApplicationsTestCase(APITestCase):
         """Normal users should not be able to list applications"""
         self.client.force_authenticate(user=self.pleb)
 
-        res = self.client.get(reverse("userapplication-list"))
+        res = self.client.get(
+            reverse("userapplication-list", kwargs={"admission_pk": self.admission_id})
+        )
 
         self.assertEqual(res.status_code, status.HTTP_403_FORBIDDEN)
 
@@ -334,7 +356,9 @@ class ListApplicationsTestCase(APITestCase):
         UserApplication.objects.create(user=self.pleb, admission=self.admission)
 
         self.client.force_authenticate(user=self.pleb)
-        res = self.client.get(reverse("userapplication-mine"))
+        res = self.client.get(
+            reverse("userapplication-mine", kwargs={"admission_pk": self.admission_id})
+        )
         self.assertEqual(res.status_code, status.HTTP_200_OK)
 
     def test_cannot_get_application_by_pk(self):
@@ -343,7 +367,7 @@ class ListApplicationsTestCase(APITestCase):
         )
         self.client.force_authenticate(user=self.pleb)
         res = self.client.get(
-            reverse("userapplication-detail", kwargs={"pk": application.pk})
+            reverse("userapplication-list", kwargs={"admission_pk": self.admission_id})
         )
 
         self.assertEqual(res.status_code, status.HTTP_403_FORBIDDEN)
@@ -356,12 +380,16 @@ class ListApplicationsTestCase(APITestCase):
             "phone_number": "00000000",
         }
         self.client.post(
-            reverse("userapplication-list"), application_data, format="json"
+            reverse("userapplication-list", kwargs={"admission_pk": self.admission_id}),
+            application_data,
+            format="json",
         )
 
         # Re-Auth as webkom_leader
         self.client.force_authenticate(user=self.webkom_leader)
-        res = self.client.get(reverse("userapplication-list"))
+        res = self.client.get(
+            reverse("userapplication-list", kwargs={"admission_pk": self.admission_id})
+        )
         json = res.json()
         # Should return with 200
         self.assertEqual(res.status_code, status.HTTP_200_OK)
@@ -375,12 +403,16 @@ class ListApplicationsTestCase(APITestCase):
     def test_group_recruiter_can_see_applications_for_own_group(self):
         self.client.force_authenticate(user=self.pleb)
         self.client.post(
-            reverse("userapplication-list"), self.application_data, format="json"
+            reverse("userapplication-list", kwargs={"admission_pk": self.admission_id}),
+            self.application_data,
+            format="json",
         )
 
         # Re-Auth as webkom_rec
         self.client.force_authenticate(user=self.webkom_rec)
-        res = self.client.get(reverse("userapplication-list"))
+        res = self.client.get(
+            reverse("userapplication-list", kwargs={"admission_pk": self.admission_id})
+        )
         json = res.json()
         # Should return with 200
         self.assertEqual(res.status_code, status.HTTP_200_OK)
@@ -394,12 +426,16 @@ class ListApplicationsTestCase(APITestCase):
     def test_group_leader_cannot_see_applications_for_other_group(self):
         self.client.force_authenticate(user=self.pleb)
         self.client.post(
-            reverse("userapplication-list"), self.application_data, format="json"
+            reverse("userapplication-list", kwargs={"admission_pk": self.admission_id}),
+            self.application_data,
+            format="json",
         )
 
         # Re-Auth as webkom_leader
         self.client.force_authenticate(user=self.webkom_leader)
-        res = self.client.get(reverse("userapplication-list"))
+        res = self.client.get(
+            reverse("userapplication-list", kwargs={"admission_pk": self.admission_id})
+        )
         json = res.json()
         # There should not be a group application for bedkom here
         for group_application in json[0]["group_applications"]:
@@ -407,7 +443,9 @@ class ListApplicationsTestCase(APITestCase):
 
         # Re-Auth as bedkom_leader
         self.client.force_authenticate(user=self.bedkom_leader)
-        res = self.client.get(reverse("userapplication-list"))
+        res = self.client.get(
+            reverse("userapplication-list", kwargs={"admission_pk": self.admission_id})
+        )
         json = res.json()
         # There should not be a group application for bedkom here
         for group_application in json[0]["group_applications"]:
@@ -416,12 +454,16 @@ class ListApplicationsTestCase(APITestCase):
     def test_group_recruiter_cannot_see_applications_for_other_group(self):
         self.client.force_authenticate(user=self.pleb)
         self.client.post(
-            reverse("userapplication-list"), self.application_data, format="json"
+            reverse("userapplication-list", kwargs={"admission_pk": self.admission_id}),
+            self.application_data,
+            format="json",
         )
 
         # Re-Auth as webkom_rec
         self.client.force_authenticate(user=self.webkom_rec)
-        res = self.client.get(reverse("userapplication-list"))
+        res = self.client.get(
+            reverse("userapplication-list", kwargs={"admission_pk": self.admission_id})
+        )
         json = res.json()
         # There should not be a group application for bedkom here
         for group_application in json[0]["group_applications"]:
@@ -429,7 +471,9 @@ class ListApplicationsTestCase(APITestCase):
 
         # Re-Auth as bedkom_rec
         self.client.force_authenticate(user=self.bedkom_rec)
-        res = self.client.get(reverse("userapplication-list"))
+        res = self.client.get(
+            reverse("userapplication-list", kwargs={"admission_pk": self.admission_id})
+        )
         json = res.json()
         # There should not be a group application for bedkom here
         for group_application in json[0]["group_applications"]:
@@ -438,7 +482,9 @@ class ListApplicationsTestCase(APITestCase):
     def test_abakus_leader_can_see_all_applications(self):
         self.client.force_authenticate(user=self.pleb)
         self.client.post(
-            reverse("userapplication-list"), self.application_data, format="json"
+            reverse("userapplication-list", kwargs={"admission_pk": self.admission_id}),
+            self.application_data,
+            format="json",
         )
 
         # Auth user as AbakusLeader
@@ -447,7 +493,9 @@ class ListApplicationsTestCase(APITestCase):
         )
 
         self.client.force_authenticate(user=abakus_leader)
-        res = self.client.get(reverse("userapplication-list"))
+        res = self.client.get(
+            reverse("userapplication-list", kwargs={"admission_pk": self.admission_id})
+        )
         apps = res.json()[0]["group_applications"]
 
         # Ensure that the leader can see both the webkom and the bedkom application
@@ -467,6 +515,8 @@ class DeleteComitteeApplicationsTestCase(APITestCase):
     """
 
     def setUp(self):
+        global admission_id
+        self.admission_id = admission_id
         self.pleb = LegoUser.objects.create()
         self.admission = create_admission()
 
@@ -483,9 +533,11 @@ class DeleteComitteeApplicationsTestCase(APITestCase):
     def unauthorized_user_cannot_delete_application(self):
         """Normal users should not be able to delete group applications"""
         self.client.force_authenticate(user=self.pleb)
-
         res = self.client.delete(
-            reverse("userapplication-delete_group_application", kwargs={"pk": 1})
+            reverse(
+                "userapplication-delete_group_application",
+                kwargs={"admission_pk": self.admission_id},
+            )
         )
 
         self.assertEqual(res.status_code, status.HTTP_401_UNAUTHORIZED)
@@ -499,7 +551,7 @@ class DeleteComitteeApplicationsTestCase(APITestCase):
         res = self.client.delete(
             reverse(
                 "userapplication-delete_group_application",
-                kwargs={"pk": application.pk},
+                kwargs={"admission_pk": self.admission_id, "pk": application.pk},
             )
         )
         self.assertEqual(res.status_code, status.HTTP_403_FORBIDDEN)
@@ -522,7 +574,7 @@ class DeleteComitteeApplicationsTestCase(APITestCase):
         res = self.client.delete(
             reverse(
                 "userapplication-delete_group_application",
-                kwargs={"pk": application.pk},
+                kwargs={"admission_pk": self.admission_id, "pk": application.pk},
             )
         )
 

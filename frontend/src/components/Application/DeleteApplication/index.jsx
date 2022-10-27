@@ -4,6 +4,7 @@ import ConfirmModal from "src/components/ConfirmModal";
 import styled from "styled-components";
 import { media } from "src/styles/mediaQueries";
 import { useDeleteGroupApplicationMutation } from "src/query/mutations";
+import { useParams } from "react-router-dom";
 
 const DeleteWrapper = styled.div`
   display: flex;
@@ -18,8 +19,10 @@ const DeleteWrapper = styled.div`
     `};
 `;
 
-const DeleteApplication = ({ id, groupName }) => {
-  const deleteGroupApplicationMutation = useDeleteGroupApplicationMutation();
+const DeleteApplication = ({ applicationId, groupName }) => {
+  const { admissionId } = useParams();
+  const deleteGroupApplicationMutation =
+    useDeleteGroupApplicationMutation(admissionId);
 
   const performDelete = (applicationId, groupName) => {
     deleteGroupApplicationMutation.mutate(
@@ -43,7 +46,7 @@ const DeleteApplication = ({ id, groupName }) => {
           </LegoButton>
         )}
         message="Er du sikker på at du vil slette denne søknaden?"
-        onConfirm={() => performDelete(id, groupName)}
+        onConfirm={() => performDelete(applicationId, groupName)}
       />
     </DeleteWrapper>
   );

@@ -4,14 +4,20 @@ import LegoButton from "src/components/LegoButton";
 import Icon from "src/components/Icon";
 import styled from "styled-components";
 import { media } from "src/styles/mediaQueries";
-import { useGroups } from "../../query/hooks";
+import { useAdmission } from "src/query/hooks";
+import { useParams } from "react-router-dom";
 
 const GroupsPage = ({ selectedGroups, toggleGroup }) => {
-  const { data: groups } = useGroups();
+  const { admissionId } = useParams();
+  const {
+    data: { groups },
+  } = useAdmission(admissionId);
 
   const handleToggleGroup = (name) => {
     toggleGroup(name.toLowerCase());
   };
+
+  if (!groups) return null;
 
   const GroupCards = groups.map((group, index) => (
     <GroupCard
@@ -35,7 +41,7 @@ const GroupsPage = ({ selectedGroups, toggleGroup }) => {
       <GroupsWrapper>{GroupCards}</GroupsWrapper>
       <NextButtonWrapper>
         <LegoButton
-          to="/min-soknad"
+          to="../min-soknad"
           icon="arrow-forward"
           iconPrefix="ios"
           disabled={!hasSelectedAnything()}

@@ -12,7 +12,8 @@ import SmallDescription from "./SmallDescription";
 import SmallDescriptionWrapper from "./SmallDescriptionWrapper";
 import Header from "./Header";
 import NumApplications from "./NumApplications";
-import { useGroups } from "../../query/hooks";
+import { useAdmission } from "src/query/hooks";
+import { useParams } from "react-router-dom";
 
 const UserApplicationAdminView = ({
   user,
@@ -24,7 +25,10 @@ const UserApplicationAdminView = ({
   phone_number,
   pk,
 }) => {
-  const { data: groups } = useGroups();
+  const { admissionId } = useParams();
+  const {
+    data: { groups },
+  } = useAdmission(admissionId);
 
   const sortedGroupApplications = useMemo(() =>
     [...group_applications].sort((a, b) =>

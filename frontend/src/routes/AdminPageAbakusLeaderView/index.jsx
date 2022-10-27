@@ -13,11 +13,12 @@ import Statistics from "./Statistics";
 import GroupStatistics from "./GroupStatistics";
 import StatisticsName from "./StatisticsName";
 import StatisticsWrapper from "./StatisticsWrapper";
-import { replaceQuotationMarks } from "../../utils/replaceQuotationMarks";
+import { replaceQuotationMarks } from "src/utils/replaceQuotationMarks";
 import { useAdmission, useApplications } from "src/query/hooks";
-import { useGroups } from "../../query/hooks";
+import { useParams } from "react-router-dom";
 
 const AdminPageAbakusLeaderView = () => {
+  const { admissionId } = useParams();
   const [sortedApplications, setSortedApplications] = useState([]);
   const [csvData, setCsvData] = useState([]);
 
@@ -38,17 +39,13 @@ const AdminPageAbakusLeaderView = () => {
     data: applications,
     error: applicationsError,
     isFetching: applicationsIsFetching,
-  } = useApplications();
+  } = useApplications(admissionId);
   const {
     data: admission,
     error: admissionError,
     isFetching: admissionIsFetching,
-  } = useAdmission();
-  const {
-    data: groups,
-    error: groupsError,
-    isFetching: groupsIsFetching,
-  } = useGroups();
+  } = useAdmission(admissionId);
+  const { groups } = admission ?? {};
 
   useEffect(() => {
     if (!applications) return;
@@ -91,18 +88,14 @@ const AdminPageAbakusLeaderView = () => {
     numApplications += application.group_applications.length;
   });
 
-  if (applicationsError || admissionError || groupsError) {
+  if (applicationsError || admissionError) {
     return (
       <div>
         Error: {applicationsError.message}
         {admissionError.message}
       </div>
     );
-  } else if (
-    applicationsIsFetching ||
-    admissionIsFetching ||
-    groupsIsFetching
-  ) {
+  } else if (applicationsIsFetching || admissionIsFetching) {
     return <LoadingBall />;
   } else {
     return (
