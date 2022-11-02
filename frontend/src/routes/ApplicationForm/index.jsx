@@ -78,7 +78,7 @@ const ApplicationForm = ({
   admission,
   groups,
 }) => {
-  const createApplicationMutation = useCreateApplicationMutation();
+  const createApplicationMutation = useCreateApplicationMutation(admission.pk);
 
   const {
     text = getPriorityTextDraft(),

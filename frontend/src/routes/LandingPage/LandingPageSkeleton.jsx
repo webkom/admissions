@@ -10,7 +10,7 @@ const LandingPageSkeleton = ({ children }) => {
       <BrandContainer>
         <AbakusLogo />
       </BrandContainer>
-      <Title>Opptak til komiteer</Title>
+      <Title>Opptak</Title>
       {children}
     </Container>
   );

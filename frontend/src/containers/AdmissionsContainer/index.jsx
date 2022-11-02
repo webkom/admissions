@@ -73,8 +73,8 @@ const AdmissionsContainer = ({ applications }) => {
           {rows.map((row) => {
             prepareRow(row);
             return (
-              <React.Fragment key={row} {...row.getRowProps()}>
-                <tr>
+              <React.Fragment key={row.id}>
+                <tr {...row.getRowProps()}>
                   {row.cells.map((cell) => {
                     return (
                       <td key={cell} {...cell.getCellProps()}>

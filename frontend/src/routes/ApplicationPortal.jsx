@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { useLocation } from "react-router-dom";
+import { Route, Routes, useParams } from "react-router-dom";
 import styled from "styled-components";
 
 import {
@@ -10,7 +10,7 @@ import {
 } from "src/utils/draftHelper";
 import djangoData from "src/utils/djangoData";
 
-import { useAdmission, useMyApplication, useGroups } from "src/query/hooks";
+import { useAdmission, useMyApplication } from "src/query/hooks";
 
 import ApplicationForm from "src/routes/ApplicationForm";
 import ReceiptForm from "src/routes/ReceiptForm";
@@ -20,16 +20,16 @@ import AdminPageAbakusLeaderView from "src/routes/AdminPageAbakusLeaderView";
 
 import LoadingBall from "src/components/LoadingBall";
 import NavBar from "src/components/NavBar";
+import NotFoundPage from "./NotFoundPage";
 
 const ApplicationPortal = () => {
+  const { admissionId } = useParams();
   const [selectedGroups, setSelectedGroups] = useState({});
   const [isEditingApplication, setIsEditingApplication] = useState(null);
 
-  const location = useLocation();
-
-  const { data: groups, isFetching } = useGroups();
-  const { data: myApplication } = useMyApplication();
-  const { data: admission, error } = useAdmission();
+  const { data: myApplication } = useMyApplication(admissionId);
+  const { data: admission, isFetching, error } = useAdmission(admissionId);
+  const { groups } = admission ?? {};
 
   const toggleGroup = (name) => {
     setSelectedGroups({
@@ -64,7 +64,7 @@ const ApplicationPortal = () => {
     if (!myApplication) return;
     setSelectedGroups(
       myApplication.group_applications
-        .map((a) => a.group.name.toLowerCase())
+        ?.map((a) => a.group.name.toLowerCase())
         .reduce((obj, a) => ({ ...obj, [a]: true }), {})
     );
   }, [myApplication]);
@@ -82,6 +82,9 @@ const ApplicationPortal = () => {
   if (!djangoData.user) {
     return null;
   } else if (error) {
+    if (error.code === 404) {
+      return <NotFoundPage />;
+    }
     return <div>Error: {error.message}</div>;
   } else if (isFetching) {
     return <LoadingBall />;
@@ -90,33 +93,46 @@ const ApplicationPortal = () => {
       <PageWrapper>
         <NavBar user={djangoData.user} isEditing={isEditingApplication} />
         <ContentContainer>
-          {location.pathname.startsWith("/velg-komiteer") && (
-            <GroupsPage
-              toggleGroup={toggleGroup}
-              selectedGroups={selectedGroups}
+          <Routes>
+            <Route
+              path="/velg-komiteer"
+              element={
+                <GroupsPage
+                  toggleGroup={toggleGroup}
+                  selectedGroups={selectedGroups}
+                />
+              }
             />
-          )}
-          {location.pathname.startsWith("/min-soknad") ? (
-            myApplication && !isEditingApplication ? (
-              <ReceiptForm toggleIsEditing={toggleIsEditing} />
-            ) : (
-              <ApplicationForm
-                toggleGroup={toggleGroup}
-                toggleIsEditing={toggleIsEditing}
-                admission={admission}
-                groups={groups}
-                myApplication={myApplication}
-                selectedGroups={selectedGroups}
-                isEditingApplication={isEditingApplication}
-              />
-            )
-          ) : null}
-          {location.pathname.startsWith("/admin") &&
-            (djangoData.user.is_superuser ? (
-              <AdminPageAbakusLeaderView />
-            ) : (
-              <AdminPage />
-            ))}
+            <Route
+              path="/min-soknad"
+              element={
+                myApplication && !isEditingApplication ? (
+                  <ReceiptForm toggleIsEditing={toggleIsEditing} />
+                ) : (
+                  <ApplicationForm
+                    toggleGroup={toggleGroup}
+                    toggleIsEditing={toggleIsEditing}
+                    admission={admission}
+                    groups={groups}
+                    myApplication={myApplication}
+                    selectedGroups={selectedGroups}
+                    isEditingApplication={isEditingApplication}
+                  />
+                )
+              }
+            />
+            <Route
+              path="/admin"
+              element={
+                djangoData.user.is_superuser ? (
+                  <AdminPageAbakusLeaderView />
+                ) : (
+                  <AdminPage />
+                )
+              }
+            />
+            <Route path="*" element={<NotFoundPage />} />
+          </Routes>
         </ContentContainer>
       </PageWrapper>
     );

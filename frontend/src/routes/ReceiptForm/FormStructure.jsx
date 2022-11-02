@@ -7,9 +7,9 @@ import ConfirmModal from "src/components/ConfirmModal";
 import Application from "src/containers/GroupApplication/Application";
 import PriorityTextField from "src/routes/ApplicationForm/PriorityTextField";
 import PhoneNumberField from "src/routes/ApplicationForm/PhoneNumberField";
-import { useAdmission, useGroups, useMyApplication } from "src/query/hooks";
+import { useAdmission, useMyApplication } from "src/query/hooks";
 import { useDeleteMyApplicationMutation } from "src/query/mutations";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useParams } from "react-router-dom";
 import {
   Applications,
   EditActions,
@@ -37,12 +37,13 @@ import {
 import { clearAllDrafts } from "src/utils/draftHelper";
 
 const FormStructure = ({ toggleIsEditing }) => {
+  const { admissionId } = useParams();
   const navigate = useNavigate();
-  const deleteApplicationMutation = useDeleteMyApplicationMutation();
+  const deleteApplicationMutation = useDeleteMyApplicationMutation(admissionId);
 
-  const { data: admission } = useAdmission();
-  const { data: myApplication } = useMyApplication();
-  const { data: groups } = useGroups();
+  const { data: myApplication } = useMyApplication(admissionId);
+  const { data: admission } = useAdmission(admissionId);
+  const { groups } = admission ?? {};
 
   return (
     <PageWrapper>

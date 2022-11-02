@@ -51,7 +51,7 @@ executing==0.8.3
     # via stack-data
 idna==3.3
     # via requests
-ipython==8.5.0
+ipython==8.6.0
     # via -r requirements/base.in
 jedi==0.18.1
     # via ipython
@@ -75,7 +75,7 @@ pip-tools==6.8.0
     # via -r requirements/base.in
 prompt-toolkit==3.0.30
     # via ipython
-psycopg2-binary==2.9.3
+psycopg2-binary==2.9.5
     # via -r requirements/base.in
 ptyprocess==0.7.0
     # via pexpect
@@ -125,7 +125,7 @@ urllib3==1.26.10
     # via
     #   requests
     #   sentry-sdk
-uwsgi==2.0.20
+uwsgi==2.0.21
     # via -r requirements/production.in
 wcwidth==0.2.5
     # via prompt-toolkit

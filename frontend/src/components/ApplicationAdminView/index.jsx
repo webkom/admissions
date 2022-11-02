@@ -27,7 +27,10 @@ const ApplicationAdminView = ({ group, text, applicationId }) => {
         <SmallDescription>Søknad til ...</SmallDescription>
         <GroupName>{group.name} </GroupName>
         <ReadMore lines={3}>{applicationText}</ReadMore>
-        <DeleteApplication id={applicationId} groupName={group.name} />
+        <DeleteApplication
+          applicationId={applicationId}
+          groupName={group.name}
+        />
       </SmallDescriptionWrapper>
     </Wrapper>
   );

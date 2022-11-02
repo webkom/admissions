@@ -10,7 +10,7 @@ asttokens==2.0.5
     # via stack-data
 backcall==0.2.0
     # via ipython
-black==22.8.0
+black==22.10.0
     # via -r requirements/black.txt
 build==0.8.0
     # via pip-tools
@@ -48,7 +48,7 @@ django==4.0.7
     #   djangorestframework
 django-cors-headers==3.13.0
     # via -r requirements/base.in
-django-debug-toolbar==3.6.0
+django-debug-toolbar==3.7.0
     # via -r requirements/development.in
 django-environ==0.9.0
     # via -r requirements/base.in
@@ -72,7 +72,7 @@ flake8==5.0.4
     # via -r requirements/flake8.txt
 idna==3.3
     # via requests
-ipython==8.5.0
+ipython==8.6.0
     # via -r requirements/base.in
 isort==5.10.1
     # via -r requirements/isort.txt
@@ -112,7 +112,7 @@ pluggy==0.13.1
     # via tox
 prompt-toolkit==3.0.30
     # via ipython
-psycopg2-binary==2.9.3
+psycopg2-binary==2.9.5
     # via -r requirements/base.in
 ptyprocess==0.7.0
     # via pexpect

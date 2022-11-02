@@ -57,9 +57,7 @@ const App = ({ children }) => {
 const AppRoutes = () =>
   useRoutes([
     { path: "/", element: <LandingPage /> },
-    { path: "/velg-komiteer", element: <ApplicationPortal /> },
-    { path: "/min-soknad", element: <ApplicationPortal /> },
-    { path: "/admin", element: <ApplicationPortal /> },
+    { path: ":admissionId/*", element: <ApplicationPortal /> },
     { path: "*", element: <NotFoundPage /> },
   ]);
 

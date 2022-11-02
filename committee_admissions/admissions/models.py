@@ -74,6 +74,7 @@ class Admission(models.Model):
 
 
 class Group(models.Model):
+    admissions = models.ManyToManyField(Admission)
     name = models.CharField(max_length=50, unique=True)
     description = models.TextField(blank=True, max_length=300)
     response_label = models.TextField(blank=True, max_length=300)

@@ -41,7 +41,7 @@ const FormStructure = ({
   isValid,
   onCancel,
 }) => {
-  const { data: myApplication } = useMyApplication();
+  const { data: myApplication } = useMyApplication(admission.pk);
 
   return (
     <PageWrapper>
