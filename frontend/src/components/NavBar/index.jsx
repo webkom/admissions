@@ -17,7 +17,7 @@ const NavBar = ({ user, isEditing }) => (
       </NavItemsContainer>
     ) : (
       <NavItemsContainer>
-        <NavItem to="/min-soknad" text="Min søknad" />
+        <NavItem to="./min-soknad" text="Min søknad" />
       </NavItemsContainer>
     )}
 

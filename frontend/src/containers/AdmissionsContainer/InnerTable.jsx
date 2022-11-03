@@ -1,8 +1,9 @@
 import React, { useMemo } from "react";
 import { useTable, useSortBy, useBlockLayout } from "react-table";
+import DeleteApplication from "src/components/Application/DeleteApplication";
 import { innerColumns } from "./Columns";
 
-const AdmissionsInnerTable = ({ groupApplications }) => {
+const AdmissionsInnerTable = ({ applicationId, groupApplications }) => {
   const columns = useMemo(() => innerColumns, []);
   const data = useMemo(() => groupApplications, [groupApplications]);
 
@@ -34,8 +35,18 @@ const AdmissionsInnerTable = ({ groupApplications }) => {
             return (
               <tr key={row.id} {...row.getRowProps()}>
                 {row.cells.map((cell) => {
+                  if (cell.column.id === "actions") {
+                    return (
+                      <td key={cell.column.id}>
+                        <DeleteApplication
+                          applicationId={applicationId}
+                          groupName={row.original.group}
+                        />
+                      </td>
+                    );
+                  }
                   return (
-                    <td key={cell.id} {...cell.getCellProps()}>
+                    <td key={cell.column.id} {...cell.getCellProps()}>
                       {cell.render("Cell")}
                     </td>
                   );

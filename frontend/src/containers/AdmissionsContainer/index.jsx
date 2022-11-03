@@ -10,6 +10,7 @@ const AdmissionsContainer = ({ applications }) => {
   const data = useMemo(
     () =>
       applications.map((application) => ({
+        id: application.pk,
         username: application.user.username,
         fullname: application.user.full_name,
         phoneNumber: application.phone_number,
@@ -47,6 +48,7 @@ const AdmissionsContainer = ({ applications }) => {
           <p>{row.original.text}</p>
           <SubComponentHeader>Søknader</SubComponentHeader>
           <AdmissionsInnerTable
+            applicationId={row.original.id}
             groupApplications={row.original.groupApplications}
           />
         </SubComponentWrapper>

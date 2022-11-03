@@ -41,7 +41,7 @@ const DeleteApplication = ({ applicationId, groupName }) => {
       <ConfirmModal
         title="Slett søknad"
         Component={({ onClick }) => (
-          <LegoButton icon="trash" onClick={onClick}>
+          <LegoButton icon="trash" onClick={onClick} size="small">
             Slett søknad
           </LegoButton>
         )}
