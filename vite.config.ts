@@ -19,7 +19,7 @@ export default defineConfig({
     assetsDir: "bundles",
     manifest: "vite-manifest.json",
     rollupOptions: {
-      input: "frontend/src/index.jsx",
+      input: "frontend/src/index.tsx",
     },
     sourcemap: "inline",
   },
