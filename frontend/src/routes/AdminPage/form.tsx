@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Field, Form, Formik } from "formik";
+import { Field, Form, Formik, FormikProps } from "formik";
 import * as Yup from "yup";
 
 import { useUpdateGroupMutation } from "src/query/mutations";
@@ -8,6 +8,7 @@ import TextAreaField from "src/components/TextAreaField";
 
 import CSRFToken from "./csrftoken";
 import { EditGroupFormWrapper, FormWrapper, SubmitButton } from "./styles";
+import { Group } from "src/types";
 
 const signupSchema = Yup.object().shape({
   description: Yup.string()
@@ -20,8 +21,24 @@ const signupSchema = Yup.object().shape({
     .required("Boksen kan ikke være tom!"),
 });
 
-const EditGroupForm = ({ group, initialDescription, initialReplyText }) => {
-  const [resetMutationTimeout, setResetMutationTimeout] = useState();
+interface FormValues {
+  description: string;
+  response_label: string;
+}
+
+interface EditGroupFormProps {
+  group: Group;
+  initialDescription: string;
+  initialReplyText: string;
+}
+
+const EditGroupForm: React.FC<EditGroupFormProps> = ({
+  group,
+  initialDescription,
+  initialReplyText,
+}) => {
+  const [resetMutationTimeout, setResetMutationTimeout] =
+    useState<NodeJS.Timeout>();
 
   const updateGroupMutation = useUpdateGroupMutation();
 
@@ -52,7 +69,7 @@ const EditGroupForm = ({ group, initialDescription, initialReplyText }) => {
               );
             },
             onError: (error) => {
-              let errors = {};
+              const errors: { [key: string]: string } = {};
               Object.keys(error).forEach((key) => {
                 errors[key] = error[key][0];
               });
@@ -74,7 +91,15 @@ const EditGroupForm = ({ group, initialDescription, initialReplyText }) => {
   );
 };
 
-const InnerForm = ({ updateGroupMutation, handleSubmit, isValid }) => {
+type InnerFormProps = {
+  updateGroupMutation: ReturnType<typeof useUpdateGroupMutation>;
+} & FormikProps<FormValues>;
+
+const InnerForm: React.FC<InnerFormProps> = ({
+  updateGroupMutation,
+  submitForm,
+  isValid,
+}) => {
   return (
     <Form>
       <FormWrapper>
@@ -94,7 +119,7 @@ const InnerForm = ({ updateGroupMutation, handleSubmit, isValid }) => {
           />
         </EditGroupFormWrapper>
         <SubmitButton
-          onClick={handleSubmit}
+          onClick={submitForm}
           type="submit"
           disabled={updateGroupMutation.isLoading}
           valid={isValid}

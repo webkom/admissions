@@ -4,18 +4,20 @@ import FormatTime from "src/components/Time/FormatTime";
 import ApplicationAdminView from "src/components/ApplicationAdminView";
 import CollapseContainer from "src/containers/CollapseContainer";
 import Icon from "src/components/Icon";
-
-import Wrapper from "./Wrapper";
-import Name from "./Name";
-import PriorityText from "./PriorityText";
-import SmallDescription from "./SmallDescription";
-import SmallDescriptionWrapper from "./SmallDescriptionWrapper";
-import Header from "./Header";
-import NumApplications from "./NumApplications";
+import Wrapper from "src/containers/UserApplication/Wrapper";
+import Name from "src/containers/UserApplication/Name";
+import PriorityText from "src/containers/UserApplication/PriorityText";
+import SmallDescription from "src/containers/UserApplication/SmallDescription";
+import SmallDescriptionWrapper from "src/containers/UserApplication/SmallDescriptionWrapper";
+import Header from "src/containers/UserApplication/Header";
+import NumApplications from "src/containers/UserApplication/NumApplications";
 import { useAdmission } from "src/query/hooks";
 import { useParams } from "react-router-dom";
+import { Application } from "src/types";
 
-const UserApplicationAdminView = ({
+type UserApplicationAdminViewProps = Application;
+
+const UserApplicationAdminView: React.FC<UserApplicationAdminViewProps> = ({
   user,
   text,
   group_applications,
@@ -26,18 +28,21 @@ const UserApplicationAdminView = ({
   pk,
 }) => {
   const { admissionId } = useParams();
-  const {
-    data: { groups },
-  } = useAdmission(admissionId);
+  const { data } = useAdmission(admissionId ?? "");
+  const { groups } = data ?? {};
 
-  const sortedGroupApplications = useMemo(() =>
-    [...group_applications].sort((a, b) =>
-      a.group.name.localeCompare(b.group.name)
-    )
+  const sortedGroupApplications = useMemo(
+    () =>
+      [...group_applications].sort((a, b) =>
+        a.group.name.localeCompare(b.group.name)
+      ),
+    [group_applications]
   );
 
+  if (!groups) return null;
+
   const numApplications = sortedGroupApplications.length;
-  const priorityText = text ? text : <i>Ingen kommentarer.</i>;
+  const priorityText = text ? text : "Ingen kommentarer.";
   return (
     <Wrapper>
       <CollapseContainer
@@ -48,7 +53,7 @@ const UserApplicationAdminView = ({
               {!applied_within_deadline && (
                 <Icon
                   name="stopwatch"
-                  iconPrefix="ios"
+                  prefix="ios"
                   size="1.5rem"
                   title="Søkte etter fristen"
                   color="#c0392b"
@@ -88,16 +93,20 @@ const UserApplicationAdminView = ({
               </SmallDescriptionWrapper>
             </Header>
             <PriorityText text={priorityText} />
-            {sortedGroupApplications.map((application) => (
-              <ApplicationAdminView
-                key={user.username + "-" + application.group.name}
-                group={groups.find(
-                  (group) => group.pk === application.group.pk
-                )}
-                applicationId={pk}
-                text={application.text}
-              />
-            ))}
+            {sortedGroupApplications.map((application) => {
+              const group = groups.find(
+                (group) => group.pk === application.group.pk
+              );
+              if (!group) return <p>Feil: ugyldig gruppe</p>;
+              return (
+                <ApplicationAdminView
+                  key={user.username + "-" + application.group.name}
+                  group={group}
+                  applicationId={pk}
+                  text={application.text}
+                />
+              );
+            })}
           </div>
         }
       />

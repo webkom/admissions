@@ -10,8 +10,19 @@ import styled from "styled-components";
 import { Link } from "react-router-dom";
 import MiniToggleGroup from "./MiniToggleGroup";
 import { media } from "src/styles/mediaQueries";
+import { Group } from "src/types";
 
-const ToggleGroups = ({ groups, selectedGroups, toggleGroup }) => {
+interface ToggleGroupsProps {
+  groups: Group[];
+  selectedGroups: any;
+  toggleGroup: (name: string) => void;
+}
+
+const ToggleGroups: React.FC<ToggleGroupsProps> = ({
+  groups,
+  selectedGroups,
+  toggleGroup,
+}) => {
   const ChooseGroupsItems = groups.map((group, index) => (
     <MiniToggleGroup
       name={group.name}

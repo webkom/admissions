@@ -4,8 +4,14 @@ import UserInfo from "./UserInfo";
 import AbakusLogo from "src/components/AbakusLogo";
 import NavItem from "./NavItem";
 import { media } from "src/styles/mediaQueries";
+import { User } from "src/types";
 
-const NavBar = ({ user, isEditing }) => (
+interface NavBarProps {
+  user: User;
+  isEditing: boolean;
+}
+
+const NavBar: React.FC<NavBarProps> = ({ user, isEditing }) => (
   <Container>
     <BrandContainer>
       <AbakusLogo />

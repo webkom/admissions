@@ -1,17 +1,27 @@
-import { useQuery } from "react-query";
+import { useQuery } from "@tanstack/react-query";
+import { Admission, Application } from "src/types";
+
+interface QueryError {
+  message: string;
+  code?: number;
+}
 
 export const useAdmissions = () => {
-  return useQuery(["/admission/"]);
+  return useQuery<Admission[], QueryError>(["/admission/"]);
 };
 
-export const useAdmission = (admissionId) => {
-  return useQuery([`/admission/${admissionId}/`]);
+export const useAdmission = (admissionId: string) => {
+  return useQuery<Admission, QueryError>([`/admission/${admissionId}/`]);
 };
 
-export const useApplications = (admissionId) => {
-  return useQuery([`/admission/${admissionId}/application/`]);
+export const useApplications = (admissionId: string) => {
+  return useQuery<Application[], QueryError>([
+    `/admission/${admissionId}/application/`,
+  ]);
 };
 
-export const useMyApplication = (admissionId) => {
-  return useQuery([`/admission/${admissionId}/application/mine/`]);
+export const useMyApplication = (admissionId: string) => {
+  return useQuery<Application, QueryError>([
+    `/admission/${admissionId}/application/mine/`,
+  ]);
 };

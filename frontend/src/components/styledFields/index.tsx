@@ -3,7 +3,11 @@ import styled from "styled-components";
 import { Field } from "formik";
 import Textarea from "react-textarea-autosize";
 
-export const StyledField = styled(Field)`
+interface StyledFieldProps {
+  error?: boolean;
+}
+
+export const StyledField = styled(Field)<StyledFieldProps>`
   display: block;
   width: 20em;
   overflow: hidden;
@@ -29,7 +33,7 @@ export const StyledField = styled(Field)`
   }
 `;
 
-export const StyledTextAreaField = styled(Textarea)`
+export const StyledTextAreaField = styled(Textarea)<StyledFieldProps>`
   width: 100%;
   min-height: 8rem;
   padding: 1rem;
@@ -63,8 +67,13 @@ export const FieldLabel = styled.label`
   display: inline-block;
 `;
 
-export const InputValidationFeedback = ({ error }) =>
-  error ? <ValidationError>{error}</ValidationError> : null;
+interface InputValidationFeedbackProps {
+  error?: string;
+}
+
+export const InputValidationFeedback: React.FC<
+  InputValidationFeedbackProps
+> = ({ error }) => (error ? <ValidationError>{error}</ValidationError> : null);
 
 export const ValidationError = styled.div`
   color: var(--lego-red);

@@ -4,8 +4,11 @@ import styled from "styled-components";
 import { media } from "src/styles/mediaQueries";
 import useDebouncedState from "src/utils/useDebouncedState";
 import { savePriorityTextDraft } from "src/utils/draftHelper";
+import { FormikValues } from "formik";
 
-const PriorityTextField = ({
+type PriorityTextFieldProps = FormikValues;
+
+const PriorityTextField: React.FC<PriorityTextFieldProps> = ({
   label,
   optional = false,
   field: { name, onChange, value },
@@ -25,7 +28,6 @@ const PriorityTextField = ({
         {optional && <Optional>(valgfritt)</Optional>}
       </LabelWrapper>
       <StyledTextAreaField
-        type="textarea"
         name={name}
         id={name}
         disabled={disabled}
@@ -33,7 +35,7 @@ const PriorityTextField = ({
         onBlur={handleBlur}
         placeholder="Skriv dine kommentarer her..."
         value={value}
-        rows="5"
+        rows={5}
       />
     </Wrapper>
   );

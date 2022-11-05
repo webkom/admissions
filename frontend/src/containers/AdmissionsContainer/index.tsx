@@ -4,8 +4,15 @@ import { columns as cols } from "./Columns";
 import AdmissionsInnerTable from "./InnerTable";
 import SubComponentWrapper from "./SubComponentWrapper";
 import SubComponentHeader from "./SubComponentHeader";
+import { Application } from "src/types";
 
-const AdmissionsContainer = ({ applications }) => {
+interface AdmissionsContainerProps {
+  applications: Application[];
+}
+
+const AdmissionsContainer: React.FC<AdmissionsContainerProps> = ({
+  applications,
+}) => {
   const columns = useMemo(() => cols, []);
   const data = useMemo(
     () =>

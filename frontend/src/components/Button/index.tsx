@@ -1,6 +1,12 @@
 import styled from "styled-components";
 
-const Button = styled.button.attrs((props) => ({
+interface ButtonProps {
+  width?: string | number;
+  fontSize?: string | number;
+  margin?: string | number;
+}
+
+const Button = styled.button.attrs((props: ButtonProps) => ({
   width: props.width || "auto",
   fontSize: props.fontSize || "1em",
   margin: props.margin || "0",

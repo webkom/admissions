@@ -19,12 +19,21 @@ const DeleteWrapper = styled.div`
     `};
 `;
 
-const DeleteApplication = ({ applicationId, groupName }) => {
-  const { admissionId } = useParams();
-  const deleteGroupApplicationMutation =
-    useDeleteGroupApplicationMutation(admissionId);
+interface DeleteApplicationProps {
+  applicationId: number;
+  groupName?: string;
+}
 
-  const performDelete = (applicationId, groupName) => {
+const DeleteApplication: React.FC<DeleteApplicationProps> = ({
+  applicationId,
+  groupName,
+}) => {
+  const { admissionId } = useParams();
+  const deleteGroupApplicationMutation = useDeleteGroupApplicationMutation(
+    admissionId ?? ""
+  );
+
+  const performDelete = (applicationId: number, groupName?: string) => {
     deleteGroupApplicationMutation.mutate(
       { applicationId, groupName },
       {

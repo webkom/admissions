@@ -43,7 +43,12 @@ export const ButtonGroup = styled.div`
   padding: 0;
 `;
 
-export const ActionButton = styled.button.attrs((props) => ({
+interface ActionButtonProps {
+  background: string;
+  border: string | number;
+}
+
+export const ActionButton = styled.button.attrs((props: ActionButtonProps) => ({
   background: props.background || "var(--lego-red)",
   border: props.border || "1px solid var(--abakus-red)",
 }))`

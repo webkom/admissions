@@ -1,16 +1,16 @@
-import React from "react";
+import React, { ReactNode } from "react";
 import styled from "styled-components";
 
 const ReadmeLogo = () => <Readme>readme</Readme>;
 const ReadmeLogoBody = () => <ReadmeBody>readme</ReadmeBody>;
 
-const readmeIfy = (text, isBodyText = false) =>
+const readmeIfy = (text: string, isBodyText = false) =>
   text && (
     <span>
       {text
         .split(/readme/)
         .reduce(
-          (prev, current, i) =>
+          (prev: ReactNode[], current, i) =>
             i
               ? prev.concat(
                   isBodyText ? (

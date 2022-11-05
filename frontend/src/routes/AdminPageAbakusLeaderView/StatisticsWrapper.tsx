@@ -1,6 +1,10 @@
 import styled from "styled-components";
 
-const SmallDescriptionWrapper = styled.div`
+interface SmallDescriptionWrapperProps {
+  smallerMargin?: boolean;
+}
+
+const SmallDescriptionWrapper = styled.div<SmallDescriptionWrapperProps>`
   display: inline-flex;
   flex-direction: column;
   margin: ${(props) => (props.smallerMargin ? "0 0.5em 1em 1em" : "1em")};

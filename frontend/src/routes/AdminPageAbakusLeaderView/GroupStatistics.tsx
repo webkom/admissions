@@ -3,13 +3,26 @@ import React from "react";
 import StatisticsName from "./StatisticsName";
 import StatisticsWrapper from "./StatisticsWrapper";
 import StatisticsGroupLogo from "./StatisticsGroupLogo";
+import { Application } from "src/types";
 
-const GroupStatistics = ({ applications, groupName, groupLogo }) => {
-  const calculateNumGroupApplications = (group) => {
+interface GroupStatisticsProps {
+  applications: Application[];
+  groupName: string;
+  groupLogo: string;
+}
+
+const GroupStatistics: React.FC<GroupStatisticsProps> = ({
+  applications,
+  groupName,
+  groupLogo,
+}) => {
+  const calculateNumGroupApplications = (groupName: string) => {
     let sum = 0;
     applications.map((application) => {
       application.group_applications.map((groupApplication) => {
-        if (groupApplication.group.name.toLowerCase() === group.toLowerCase()) {
+        if (
+          groupApplication.group.name.toLowerCase() === groupName.toLowerCase()
+        ) {
           sum += 1;
         }
       });

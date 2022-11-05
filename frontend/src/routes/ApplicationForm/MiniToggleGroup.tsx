@@ -8,7 +8,19 @@
 import React from "react";
 import styled from "styled-components";
 
-const MiniToggleGroup = ({ name, logo, toggleGroup, isChosen }) => {
+interface MiniToggleGroupProps {
+  name: string;
+  logo: string;
+  toggleGroup: (name: string) => void;
+  isChosen: boolean;
+}
+
+const MiniToggleGroup: React.FC<MiniToggleGroupProps> = ({
+  name,
+  logo,
+  toggleGroup,
+  isChosen,
+}) => {
   return (
     <Wrapper
       type="button"
@@ -24,7 +36,11 @@ export default MiniToggleGroup;
 
 /** Styles **/
 
-const Wrapper = styled.button`
+interface WrapperProps {
+  isChosen: boolean;
+}
+
+const Wrapper = styled.button<WrapperProps>`
   padding: 0;
   width: 40px;
   font-family: var(--font-family);

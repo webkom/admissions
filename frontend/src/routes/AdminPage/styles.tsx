@@ -15,7 +15,11 @@ export const Wrapper = styled(Card)`
   `};
 `;
 
-export const SubmitButton = styled(Button)`
+interface SubmitButtonProps {
+  valid: boolean;
+}
+
+export const SubmitButton = styled(Button)<SubmitButtonProps>`
   background: ${(props) => (props.valid ? "#db3737" : "gray")};
   border: 1px solid ${(props) => (props.valid ? "#a82a2a" : "darkgray")};
   width: 10em;
@@ -90,7 +94,11 @@ export const Statistics = styled.div`
   flex-wrap: wrap;
 `;
 
-export const StatisticsWrapper = styled.div`
+interface StatisticsWrapperProps {
+  smallerMargin?: string | number;
+}
+
+export const StatisticsWrapper = styled.div<StatisticsWrapperProps>`
   display: inline-flex;
   flex-direction: column;
   margin: ${(props) => (props.smallerMargin ? "0 0.5em 1em 1em" : "1em")};
@@ -100,7 +108,11 @@ export const StatisticsWrapper = styled.div`
   align-items: center;
 `;
 
-export const StatisticsName = styled.span`
+interface StatisticsNameProps {
+  capitalize?: boolean;
+}
+
+export const StatisticsName = styled.span<StatisticsNameProps>`
   font-size: 0.8em;
   font-weight: bold;
   text-transform: ${(props) => (props.capitalize ? "capitalize" : "normal")};

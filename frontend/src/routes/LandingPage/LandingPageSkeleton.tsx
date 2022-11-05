@@ -1,10 +1,10 @@
-import React from "react";
+import React, { PropsWithChildren } from "react";
 import styled from "styled-components";
 import { media } from "src/styles/mediaQueries";
 
 import AbakusLogo from "src/components/AbakusLogo";
 
-const LandingPageSkeleton = ({ children }) => {
+const LandingPageSkeleton: React.FC<PropsWithChildren> = ({ children }) => {
   return (
     <Container>
       <BrandContainer>

@@ -1,8 +1,8 @@
 import "vite/modulepreload-polyfill";
-import React, { useEffect } from "react";
+import React, { PropsWithChildren, useEffect } from "react";
 import { BrowserRouter as Router, useRoutes } from "react-router-dom";
 import { createRoot } from "react-dom/client";
-import { QueryClient, QueryClientProvider } from "react-query";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { defaultQueryFn } from "./query/queries";
 
 import NotFoundPage from "src/routes/NotFoundPage";
@@ -22,12 +22,6 @@ Sentry.init({
   release: config.RELEASE,
   environment: config.ENVIRONMENT,
   beforeSend(event) {
-    if (event.body?.applications) {
-      delete event.body.applications;
-    }
-    if (event.body?.text) {
-      delete event.body.text;
-    }
     return event;
   },
 });
@@ -44,9 +38,12 @@ const queryClient = new QueryClient({
 });
 
 const container = document.getElementById("root");
+if (!container) {
+  throw new Error("Failed to find root element");
+}
 const root = createRoot(container);
 
-const App = ({ children }) => {
+const App: React.FC<PropsWithChildren> = ({ children }) => {
   useEffect(() => {
     Sentry.setUser(djangoData.user);
   }, [djangoData.user]);
@@ -62,15 +59,17 @@ const AppRoutes = () =>
   ]);
 
 root.render(
-  <QueryClientProvider client={queryClient}>
-    <Router>
-      <ScrollToTop>
-        <App>
-          <ErrorBoundary>
-            <AppRoutes />
-          </ErrorBoundary>
-        </App>
-      </ScrollToTop>
-    </Router>
-  </QueryClientProvider>
+  <ErrorBoundary openReportDialog>
+    <React.StrictMode>
+      <QueryClientProvider client={queryClient}>
+        <Router>
+          <ScrollToTop>
+            <App>
+              <AppRoutes />
+            </App>
+          </ScrollToTop>
+        </Router>
+      </QueryClientProvider>
+    </React.StrictMode>
+  </ErrorBoundary>
 );

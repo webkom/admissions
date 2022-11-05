@@ -2,8 +2,13 @@ import React from "react";
 import styled from "styled-components";
 import { media } from "src/styles/mediaQueries";
 import avatar from "assets/avatar.png";
+import { User } from "src/types";
 
-const UserInfo = ({ user }) => {
+interface UserInfoProps {
+  user: User;
+}
+
+const UserInfo: React.FC<UserInfoProps> = ({ user }) => {
   return (
     <Container>
       <NameLogOutWrapper>

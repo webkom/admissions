@@ -1,6 +1,11 @@
 import styled from "styled-components";
 
-const DecorativeLine = styled.div.attrs((props) => ({
+interface DecorativeLineProps {
+  vertical: boolean;
+  red: boolean;
+}
+
+const DecorativeLine = styled.div.attrs((props: DecorativeLineProps) => ({
   vertical: props.vertical ? true : false,
   red: props.red ? true : false,
 }))`

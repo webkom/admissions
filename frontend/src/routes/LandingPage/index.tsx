@@ -12,8 +12,11 @@ import FormatTime from "src/components/Time/FormatTime";
 import AdmissionCountDown from "../../components/AdmissionCountDown";
 
 import LoadingBall from "src/components/LoadingBall";
+import { useParams } from "react-router-dom";
+import { Admission as AdmissionInterface } from "src/types";
 
 const LandingPage = () => {
+  const { admissionId } = useParams();
   const [hasSubmitted, setHasSubmitted] = useState(false);
 
   const {
@@ -25,7 +28,7 @@ const LandingPage = () => {
     data: myApplication,
     error: myApplicationError,
     isFetching: myApplicationIsFetching,
-  } = useMyApplication();
+  } = useMyApplication(admissionId ?? "");
 
   useEffect(() => {
     setHasSubmitted(!!myApplication);
@@ -34,7 +37,7 @@ const LandingPage = () => {
   if (admissionError || myApplicationError) {
     return (
       <div>
-        Error: {admissionError} {myApplicationError}
+        Error: {admissionError?.message} {myApplicationError?.message}
       </div>
     );
   }
@@ -92,7 +95,7 @@ const LandingPage = () => {
                     iconPrefix="ios"
                     disabled={!admission.is_open}
                     onClick={(e) => {
-                      window.location = "/login/lego/";
+                      (window as Window).location = "/login/lego/";
                       e.preventDefault();
                     }}
                   >
@@ -122,7 +125,13 @@ const LandingPage = () => {
 
 export default LandingPage;
 
-const ApplicationDateInfo = ({ admission }) => (
+interface ApplicationDateInfoProps {
+  admission: AdmissionInterface;
+}
+
+const ApplicationDateInfo: React.FC<ApplicationDateInfoProps> = ({
+  admission,
+}) => (
   <div>
     <p>
       Siste frist for å <StyledSpan bold>legge inn en søknad</StyledSpan> er{" "}
@@ -175,12 +184,14 @@ const InfoBox = styled.div`
   `};
 `;
 
-const StyledSpan = styled.span.attrs((props) => ({
-  red: props.red ? true : false,
-  bold: props.bold ? "600" : "normal",
-}))`
+interface StyledSpanProps {
+  red?: boolean;
+  bold?: boolean;
+}
+
+const StyledSpan = styled.span<StyledSpanProps>`
   color: ${(props) => (props.red ? "var(--lego-red)" : "inherit")};
-  font-weight: ${(props) => props.bold};
+  font-weight: ${(props) => (props.bold ? 600 : "normal")};
 `;
 
 const Notice = styled.p`

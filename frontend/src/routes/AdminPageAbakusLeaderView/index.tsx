@@ -17,11 +17,21 @@ import { useAdmission, useApplications } from "src/query/hooks";
 import { useParams } from "react-router-dom";
 
 import AdmissionsContainer from "src/containers/AdmissionsContainer";
+import { CsvData } from "src/routes/AdminPage";
+import { Application } from "src/types";
+
+type CompleteCsvData = {
+  priorityText: string;
+  group: string;
+  groupApplicationText: string;
+} & Omit<CsvData, "applicationText">;
 
 const AdminPageAbakusLeaderView = () => {
   const { admissionId } = useParams();
-  const [sortedApplications, setSortedApplications] = useState([]);
-  const [csvData, setCsvData] = useState([]);
+  const [sortedApplications, setSortedApplications] = useState<Application[]>(
+    []
+  );
+  const [csvData, setCsvData] = useState<CompleteCsvData[]>([]);
 
   const csvHeaders = [
     { label: "Full Name", key: "name" },
@@ -40,12 +50,12 @@ const AdminPageAbakusLeaderView = () => {
     data: applications,
     error: applicationsError,
     isFetching: applicationsIsFetching,
-  } = useApplications(admissionId);
+  } = useApplications(admissionId ?? "");
   const {
     data: admission,
     error: admissionError,
     isFetching: admissionIsFetching,
-  } = useAdmission(admissionId);
+  } = useAdmission(admissionId ?? "");
   const { groups } = admission ?? {};
 
   useEffect(() => {
@@ -59,7 +69,7 @@ const AdminPageAbakusLeaderView = () => {
 
   useEffect(() => {
     // Push all the individual applications into csvData with the right format
-    const updatedCsvData = [];
+    const updatedCsvData: CompleteCsvData[] = [];
     sortedApplications.forEach((application) => {
       application.group_applications.forEach((groupApplication) => {
         updatedCsvData.push({
@@ -92,12 +102,14 @@ const AdminPageAbakusLeaderView = () => {
   if (applicationsError || admissionError) {
     return (
       <div>
-        Error: {applicationsError.message}
-        {admissionError.message}
+        Error: {applicationsError?.message}
+        {admissionError?.message}
       </div>
     );
   } else if (applicationsIsFetching || admissionIsFetching) {
     return <LoadingBall />;
+  } else if (!admission) {
+    return <p>Opptak {admissionId} ble ikke funnet i systemet.</p>;
   } else {
     return (
       <PageWrapper>

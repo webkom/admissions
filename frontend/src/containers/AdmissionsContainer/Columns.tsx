@@ -43,7 +43,7 @@ export const columns = [
           {!props.row.original.appliedWithinDeadline && (
             <Icon
               name="stopwatch"
-              iconPrefix="ios"
+              prefix="ios"
               size="1.5rem"
               title="Søkte etter fristen"
               color="#c0392b"

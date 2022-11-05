@@ -1,6 +1,11 @@
 import styled from "styled-components";
 
-const CardTitle = styled.h1.attrs((props) => ({
+interface CardTitleProps {
+  fontSize: string | number;
+  margin: string | number;
+}
+
+const CardTitle = styled.h1.attrs((props: CardTitleProps) => ({
   fontSize: props.fontSize || "1.5em",
   margin: props.margin || "1rem 1.5rem",
 }))`

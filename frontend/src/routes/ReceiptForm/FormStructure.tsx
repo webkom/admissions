@@ -36,14 +36,24 @@ import {
 } from "src/routes/ApplicationForm/FormStructureStyle";
 import { clearAllDrafts } from "src/utils/draftHelper";
 
-const FormStructure = ({ toggleIsEditing }) => {
+interface FormStructureProps {
+  toggleIsEditing: () => void;
+}
+
+const FormStructure: React.FC<FormStructureProps> = ({ toggleIsEditing }) => {
   const { admissionId } = useParams();
   const navigate = useNavigate();
-  const deleteApplicationMutation = useDeleteMyApplicationMutation(admissionId);
+  const deleteApplicationMutation = useDeleteMyApplicationMutation(
+    admissionId ?? ""
+  );
 
-  const { data: myApplication } = useMyApplication(admissionId);
-  const { data: admission } = useAdmission(admissionId);
+  const { data: myApplication } = useMyApplication(admissionId ?? "");
+  const { data: admission } = useAdmission(admissionId ?? "");
   const { groups } = admission ?? {};
+
+  if (!myApplication) {
+    return <p>Du har ingen innsendte søknader.</p>;
+  }
 
   return (
     <PageWrapper>
@@ -95,11 +105,7 @@ const FormStructure = ({ toggleIsEditing }) => {
             <ConfirmModal
               title="Slett søknad"
               Component={({ onClick }) => (
-                <LegoButton
-                  onClick={onClick}
-                  buttonStyle="secondary"
-                  size="medium"
-                >
+                <LegoButton onClick={onClick} buttonStyle="secondary">
                   {deleteApplicationMutation.isLoading
                     ? "Sletter søknad..."
                     : deleteApplicationMutation.isError
@@ -111,7 +117,7 @@ const FormStructure = ({ toggleIsEditing }) => {
               )}
               message="Er du sikker på at du vil slette søknaden din?"
               onConfirm={() =>
-                deleteApplicationMutation.mutate(null, {
+                deleteApplicationMutation.mutate(undefined, {
                   onSuccess: () => {
                     clearAllDrafts();
                     navigate("/");
@@ -172,9 +178,11 @@ const FormStructure = ({ toggleIsEditing }) => {
           {myApplication.group_applications.length > 0 ? (
             <Applications>
               {myApplication.group_applications.map((groupApplication) => {
-                const group = groups.find(
+                const group = groups?.find(
                   (group) => group.pk === groupApplication.group.pk
                 );
+                if (!group) return null;
+
                 return (
                   <Field
                     component={Application}

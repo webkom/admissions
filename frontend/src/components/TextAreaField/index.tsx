@@ -2,7 +2,22 @@ import React from "react";
 import InputValidationFeedback from "src/components/InputValidationFeedback";
 import { FieldLabel, StyledTextAreaField } from "src/components/styledFields";
 
-const TextAreaField = ({
+interface TextAreaFieldProps {
+  placeholder: string;
+  title: string;
+  field: {
+    name: string;
+    onChange: React.ChangeEventHandler<HTMLTextAreaElement>;
+    value: string;
+  };
+  form: {
+    touched: { [key: string]: string };
+    errors: { [key: string]: string };
+    handleBlur: () => void;
+  };
+}
+
+const TextAreaField: React.FC<TextAreaFieldProps> = ({
   placeholder,
   title,
   field: { name, onChange, value },
@@ -18,14 +33,13 @@ const TextAreaField = ({
       </FieldLabel>
 
       <StyledTextAreaField
-        type="textarea"
         name={name}
         id={name}
         onChange={onChange}
         onBlur={handleBlur}
         placeholder={placeholder}
         value={value}
-        rows="10"
+        rows={10}
       />
     </div>
   );

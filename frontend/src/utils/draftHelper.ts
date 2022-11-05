@@ -1,66 +1,69 @@
-import { useEffect } from "react";
-
-// Debounced hook
-export const useDebouncedDraftUpdate = (updateMethod, value, timeout = 500) => {
-  useEffect(() => {
-    updateMethod(value);
-  }, []);
-
-  useEffect(() => {
-    const timer = setTimeout(() => updateMethod(value), timeout);
-    return () => clearTimeout(timer);
-  }, [value]);
-};
-
 // Update/fetch methods
-const keys = {
-  applicationText: "applicationText",
-  selectedGroups: "selectedGroups",
-  isEditingApplication: "isEditingApplication",
-  priorityText: "priorityText",
-  phoneNumber: "phoneNumber",
-};
+enum KeyType {
+  applicationText,
+  selectedGroups,
+  isEditingApplication,
+  priorityText,
+  phoneNumber,
+}
 
-const getItem = (key, defaultValue = '""') =>
-  sessionStorage.getItem(key) ?? defaultValue;
-const getParsedJson = (key, defaultValue = "") => {
+const getItem = (key: KeyType, defaultValue = '""') =>
+  sessionStorage.getItem(KeyType[key]) ?? defaultValue;
+const getParsedJson = (
+  key: KeyType,
+  defaultValue: string | boolean | null | [] = ""
+) => {
   return JSON.parse(getItem(key, JSON.stringify(defaultValue)));
 };
-const saveObject = (key, value) => {
-  sessionStorage.setItem(key, JSON.stringify(value));
+const saveObject = (
+  key: KeyType,
+  value: string | boolean | SelectedGroupsDraft
+) => {
+  if (value === undefined) {
+    value = "";
+  }
+  sessionStorage.setItem(KeyType[key], JSON.stringify(value));
 };
 
 export const clearAllDrafts = () => sessionStorage.clear();
 
 // key-specific methods
-export const saveApplicationTextDraft = ([groupName, applicationText]) => {
-  saveObject(keys.applicationText, {
-    ...getParsedJson(keys.applicationText, []),
+export const saveApplicationTextDraft = ([groupName, applicationText]: [
+  string,
+  string
+]) => {
+  saveObject(KeyType.applicationText, {
+    ...getParsedJson(KeyType.applicationText, []),
     [groupName.toLowerCase()]: applicationText,
   });
 };
 
 export const getApplictionTextDrafts = () =>
-  getParsedJson(keys.applicationText);
+  getParsedJson(KeyType.applicationText);
 
-export const saveSelectedGroupsDraft = (selectedGroups) =>
-  saveObject(keys.selectedGroups, selectedGroups);
+interface SelectedGroupsDraft {
+  [key: string]: boolean;
+}
 
-export const getSelectedGroupsDraft = () => getParsedJson(keys.selectedGroups);
+export const saveSelectedGroupsDraft = (selectedGroups: SelectedGroupsDraft) =>
+  saveObject(KeyType.selectedGroups, selectedGroups);
 
-export const savePriorityTextDraft = (priorityText) =>
-  saveObject(keys.priorityText, priorityText);
+export const getSelectedGroupsDraft: () => SelectedGroupsDraft = () =>
+  getParsedJson(KeyType.selectedGroups);
 
-export const getPriorityTextDraft = () => getParsedJson(keys.priorityText);
+export const savePriorityTextDraft = (priorityText: string) =>
+  saveObject(KeyType.priorityText, priorityText);
 
-export const savePhoneNumberDraft = (phoneNumber) =>
-  saveObject(keys.phoneNumber, phoneNumber);
+export const getPriorityTextDraft = () => getParsedJson(KeyType.priorityText);
+
+export const savePhoneNumberDraft = (phoneNumber: string) =>
+  saveObject(KeyType.phoneNumber, phoneNumber);
 
 export const getPhoneNumberDraft = (defaultValue = "") =>
-  getParsedJson(keys.phoneNumber) || defaultValue;
+  getParsedJson(KeyType.phoneNumber) || defaultValue;
 
-export const saveIsEditingDraft = (newValue) =>
-  saveObject(keys.isEditingApplication, newValue);
+export const saveIsEditingDraft = (newValue: boolean) =>
+  saveObject(KeyType.isEditingApplication, newValue);
 
-export const getIsEditingDraft = (defaultValue = null) =>
-  getParsedJson(keys.isEditingApplication, defaultValue);
+export const getIsEditingDraft = (defaultValue: boolean | null = null) =>
+  getParsedJson(KeyType.isEditingApplication, defaultValue);

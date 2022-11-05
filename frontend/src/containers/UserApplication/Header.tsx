@@ -5,7 +5,7 @@ const Header = styled.div`
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin: 1em 0;
+  margin: 0.5em 0;
 
   ${media.handheld`
      justify-content: center;

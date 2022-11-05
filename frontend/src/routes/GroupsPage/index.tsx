@@ -7,13 +7,20 @@ import { media } from "src/styles/mediaQueries";
 import { useAdmission } from "src/query/hooks";
 import { useParams } from "react-router-dom";
 
-const GroupsPage = ({ selectedGroups, toggleGroup }) => {
-  const { admissionId } = useParams();
-  const {
-    data: { groups },
-  } = useAdmission(admissionId);
+interface GroupsPageProps {
+  selectedGroups: { [key: string]: boolean };
+  toggleGroup: (name: string) => void;
+}
 
-  const handleToggleGroup = (name) => {
+const GroupsPage: React.FC<GroupsPageProps> = ({
+  selectedGroups,
+  toggleGroup,
+}) => {
+  const { admissionId } = useParams();
+  const { data: admission } = useAdmission(admissionId ?? "");
+  const { groups } = admission ?? {};
+
+  const handleToggleGroup = (name: string) => {
     toggleGroup(name.toLowerCase());
   };
 

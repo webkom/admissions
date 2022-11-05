@@ -3,9 +3,15 @@ import * as Sentry from "@sentry/browser";
 import config from "src/utils/config";
 import "whatwg-fetch";
 
-export class HttpError extends Error {}
+export class HttpError extends Error {
+  code: number;
+  constructor(message: string, errorCode: number) {
+    super(message);
+    this.code = errorCode;
+  }
+}
 
-function reportToSentry(error) {
+function reportToSentry(error: any) {
   try {
     if (error.response) {
       Sentry.setContext("response", {
@@ -26,14 +32,22 @@ function timeoutPromise(ms = 0) {
   });
 }
 
-const _callApiFromQuery = async (url, { method = "GET", body = null } = {}) => {
+interface CallApiParams {
+  method?: string;
+  body?: string | null;
+}
+
+const _callApiFromQuery = async (
+  url: string,
+  { method = "GET", body = null }: CallApiParams = {}
+) => {
   const request = new Request(`${config.API_URL}${url}`, {
     method,
     headers: new Headers({
       Accept: "application/json",
       "Content-Type": "application/json",
-      "X-CSRFToken": Cookie.get("csrftoken"),
-      "Access-Control-Allow-Credentials": true,
+      "X-CSRFToken": Cookie.get("csrftoken") ?? "",
+      "Access-Control-Allow-Credentials": "true",
     }),
     redirect: "manual",
     credentials: "include",
@@ -44,11 +58,9 @@ const _callApiFromQuery = async (url, { method = "GET", body = null } = {}) => {
   const contentType =
     response.headers.get("content-type") || "application/json";
   const contentLength =
-    parseInt(response.headers.get("content-length"), 10) || 0;
-  if (response.status !== 200) {
-    const newError = new Error(response.statusText);
-    newError.code = response.status;
-    throw newError;
+    parseInt(response.headers.get("content-length") ?? "0", 10) || 0;
+  if (String(response.status)[0] !== "2") {
+    throw new HttpError(response.statusText, response.status);
   }
   if (contentType.includes("application/json") && contentLength !== 0) {
     return await response.json();
@@ -56,5 +68,5 @@ const _callApiFromQuery = async (url, { method = "GET", body = null } = {}) => {
   const responseText = await response.text();
   return responseText;
 };
-export const callApiFromQuery = (...input) =>
+export const callApiFromQuery: typeof _callApiFromQuery = (...input) =>
   _callApiFromQuery(...input).catch(reportToSentry);

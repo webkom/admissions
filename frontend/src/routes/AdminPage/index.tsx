@@ -18,11 +18,25 @@ import {
   GroupLogo,
   GroupLogoWrapper,
 } from "./styles";
+import { Application } from "src/types";
+
+export interface CsvData {
+  name: string;
+  email: string;
+  username: string;
+  applicationText: string;
+  createdAt: string;
+  updatedAt: string;
+  appliedWithinDeadline: boolean;
+  phoneNumber: string;
+}
 
 const AdminPage = () => {
   const { admissionId } = useParams();
-  const [sortedApplications, setSortedApplications] = useState([]);
-  const [csvData, setCsvData] = useState([]);
+  const [sortedApplications, setSortedApplications] = useState<Application[]>(
+    []
+  );
+  const [csvData, setCsvData] = useState<CsvData[]>([]);
 
   const csvHeaders = [
     { label: "Full Name", key: "name" },
@@ -35,13 +49,13 @@ const AdminPage = () => {
     { label: "Tid oppdatert", key: "updatedAt" },
   ];
 
-  const { data: admission } = useAdmission(admissionId);
-  const { groups } = admission;
+  const { data: admission } = useAdmission(admissionId ?? "");
+  const { groups } = admission ?? {};
   const {
     data: applications,
     isFetching,
     error,
-  } = useApplications(admissionId);
+  } = useApplications(admissionId ?? "");
 
   useEffect(() => {
     if (!applications) return;
@@ -56,7 +70,7 @@ const AdminPage = () => {
 
   useEffect(() => {
     // Push all the individual applications into csvData with the right format
-    const updatedCsvData = [];
+    const updatedCsvData: CsvData[] = [];
     sortedApplications.forEach((userApplication) => {
       updatedCsvData.push({
         name: userApplication.user.full_name,
@@ -88,6 +102,8 @@ const AdminPage = () => {
         group.name.toLowerCase() ===
         djangoData.user.representative_of_group.toLowerCase()
     );
+    if (!group) return <div>Feil: Ugyldig gruppe</div>;
+
     return (
       <PageWrapper>
         <PageTitle>Admin Panel</PageTitle>

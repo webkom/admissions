@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { JSXElementConstructor, useState } from "react";
 import {
   Overlay,
   ConfirmBox,
@@ -9,7 +9,23 @@ import {
   TriggerText,
 } from "./styles";
 
-const ConfirmModal = ({ onConfirm, title, message, Component }) => {
+interface SubComponentProps {
+  onClick: () => void;
+}
+
+interface ConfirmModalProps {
+  onConfirm: () => void;
+  title: string;
+  message: string;
+  Component?: JSXElementConstructor<SubComponentProps>;
+}
+
+const ConfirmModal: React.FC<ConfirmModalProps> = ({
+  onConfirm,
+  title,
+  message,
+  Component,
+}) => {
   const [isOpen, setIsOpen] = useState(false);
 
   const hideModal = () => {

@@ -1,7 +1,10 @@
 import React from "react";
-import { Formik, Field } from "formik";
+import { Formik, Field, FormikValues } from "formik";
 import * as Yup from "yup";
-import { useCreateApplicationMutation } from "src/query/mutations";
+import {
+  MutationApplication,
+  useCreateApplicationMutation,
+} from "src/query/mutations";
 
 import GroupApplication from "src/containers/GroupApplication";
 
@@ -10,9 +13,14 @@ import {
   getPhoneNumberDraft,
   getPriorityTextDraft,
 } from "src/utils/draftHelper";
+import { Admission, Application, Group } from "src/types";
+
+interface FormContainerProps extends FormikValues {
+  toggleIsEditing: () => void;
+}
 
 // State of the form
-const FormContainer = ({
+const FormContainer: React.FC<FormContainerProps> = ({
   admission,
   touched,
   errors,
@@ -30,11 +38,11 @@ const FormContainer = ({
   };
 
   const hasSelected =
-    groups.filter((group) => selectedGroups[group.name.toLowerCase()]).length >=
-    1;
+    groups.filter((group: Group) => selectedGroups[group.name.toLowerCase()])
+      .length >= 1;
   const SelectedGroupItems = groups
-    .filter((group) => selectedGroups[group.name.toLowerCase()])
-    .map((group, index) => (
+    .filter((group: Group) => selectedGroups[group.name.toLowerCase()])
+    .map((group: Group, index: number) => (
       <Field
         component={GroupApplication}
         group={group}
@@ -68,9 +76,23 @@ const FormContainer = ({
   );
 };
 
+interface ApplicationFormProps {
+  myApplication?: Application;
+  selectedGroups: { [key: string]: boolean };
+  toggleGroup: (groupName: string) => void;
+  toggleIsEditing: () => void;
+  admission?: Admission;
+  groups: Group[];
+}
+
+interface FormValues extends Record<string, string> {
+  priorityText: string;
+  phoneNumber: string;
+}
+
 // Highest order component for application form.
 // Handles form values, submit post and form validation.
-const ApplicationForm = ({
+const ApplicationForm: React.FC<ApplicationFormProps> = ({
   myApplication,
   selectedGroups,
   toggleGroup,
@@ -78,7 +100,9 @@ const ApplicationForm = ({
   admission,
   groups,
 }) => {
-  const createApplicationMutation = useCreateApplicationMutation(admission.pk);
+  const createApplicationMutation = useCreateApplicationMutation(
+    String(admission?.pk)
+  );
 
   const {
     text = getPriorityTextDraft(),
@@ -86,7 +110,7 @@ const ApplicationForm = ({
     group_applications: groupApplications = [],
   } = myApplication || {};
 
-  const blankGroupApplications = {};
+  const blankGroupApplications: { [key: string]: string } = {};
   Object.keys(selectedGroups).forEach((group) => {
     blankGroupApplications[group] = "";
   });
@@ -99,7 +123,7 @@ const ApplicationForm = ({
     {}
   );
 
-  const initialValues = {
+  const initialValues: FormValues = {
     priorityText: text,
     phoneNumber,
     ...blankGroupApplications,
@@ -114,7 +138,9 @@ const ApplicationForm = ({
       validationSchema={() => {
         return Yup.lazy(() => {
           // Iterate over all selected groups and add them to the required schema
-          const schema = {};
+          const schema: {
+            [key: string]: Yup.StringSchema<string | undefined>;
+          } = {};
           Object.entries(selectedGroups)
             .filter(([, isSelected]) => isSelected)
             .map(([name]) => name)
@@ -124,7 +150,7 @@ const ApplicationForm = ({
               );
             });
           // Require phoneNumber with given structure to be set
-          schema.phoneNumber = Yup.string("Skriv inn et norsk telefonnummer")
+          schema.phoneNumber = Yup.string()
             .matches(
               /^(0047|\+47|47)?(?:\s*\d){8}$/,
               "Skriv inn et gyldig norsk telefonnummer"
@@ -134,7 +160,7 @@ const ApplicationForm = ({
         });
       }}
       onSubmit={(values, { setSubmitting }) => {
-        const submission = {
+        const submission: MutationApplication = {
           text: values.priorityText,
           applications: {},
           phone_number: values.phoneNumber,

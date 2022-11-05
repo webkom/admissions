@@ -1,7 +1,13 @@
 import React, { useEffect, useState } from "react";
 import { DateTime } from "luxon";
 
-const AdmissionCountDown = ({ endTime: endTimeString }) => {
+interface AdmissionCountDownProps {
+  endTime: string;
+}
+
+const AdmissionCountDown: React.FC<AdmissionCountDownProps> = ({
+  endTime: endTimeString,
+}) => {
   const endTime = DateTime.fromISO(endTimeString);
   const calcTimeDiff = () => {
     const time = endTime.toRelative();

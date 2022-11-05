@@ -3,7 +3,20 @@ import styled from "styled-components";
 
 // See https://ionicons.com/ for icon names. md or ios as prefix.
 
-const Icon = ({ name, title, size, color, padding, prefix = "md" }) => (
+interface IconProps extends IconStyleProps {
+  name: string;
+  title?: string;
+  prefix?: string;
+}
+
+const Icon: React.FC<IconProps> = ({
+  name,
+  title,
+  size,
+  color,
+  padding,
+  prefix = "md",
+}) => (
   <Ionicon
     className={`ion-${prefix}-${name}`}
     size={size}
@@ -17,7 +30,13 @@ export default Icon;
 
 /** Styles **/
 
-const Ionicon = styled.i.attrs((props) => ({
+interface IconStyleProps {
+  size?: string | number;
+  color?: string;
+  padding?: string | number;
+}
+
+const Ionicon = styled.i.attrs((props: IconStyleProps) => ({
   size: props.size || "2rem",
   color: props.color || "inherit",
   padding: props.padding || "0",

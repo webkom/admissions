@@ -1,68 +1,66 @@
-import React, { useState } from "react";
-import PropTypes from "prop-types";
-import Truncate from "react-truncate";
+import React, { useEffect, useState } from "react";
 
 import Wrapper from "./Wrapper";
 import EllipsisWrapper from "./EllipsisWrapper";
 import Ellipsis from "./Ellipsis";
 import EllipsisToggle from "./EllipsisToggle";
 
-const ReadMore = ({ children, more, less, lines }) => {
+interface ReadMoreProps {
+  text: string;
+  more?: string;
+  less?: string;
+  truncateLength?: number;
+}
+
+const ReadMore: React.FC<ReadMoreProps> = ({
+  text,
+  more = "Vis mer",
+  less = "Vis mindre",
+  truncateLength = 400,
+}) => {
+  const [textAsJsx, setTextAsJsx] = useState<React.ReactNode>(null);
+  const [truncated, setTruncated] = useState<React.ReactNode>(null);
   const [expanded, setExpanded] = useState(false);
-  const [truncated, setTruncated] = useState(false);
 
-  const handleTruncate = (_truncated) => {
-    if (truncated !== _truncated) {
-      setTruncated(_truncated);
-    }
-  };
+  useEffect(() => {
+    setTextAsJsx(textToJsx(text));
+    if (text.length < truncateLength) return;
+    setTruncated(textToJsx(text.slice(0, truncateLength)));
+  }, [text]);
 
-  const toggleLines = (event) => {
-    event.preventDefault();
-
-    setExpanded(!expanded);
-  };
+  const textToJsx = (text: string) =>
+    text.split("\n").map((line, i, arr) => {
+      return (
+        <span key={i}>
+          {line}
+          {i !== arr.length - 1 && <br />}
+        </span>
+      );
+    });
 
   return (
     <Wrapper>
-      <div>
-        <Truncate
-          lines={!expanded && lines}
-          ellipsis={
-            <EllipsisWrapper>
-              {" "}
-              <Ellipsis>...</Ellipsis>
-              <EllipsisToggle href="#" onClick={toggleLines}>
-                {more}
-              </EllipsisToggle>
-            </EllipsisWrapper>
-          }
-          onTruncate={handleTruncate}
-        >
-          {children}
-        </Truncate>
-        {!truncated && expanded && (
+      {!truncated ? (
+        textAsJsx
+      ) : (
+        <>
+          {expanded ? textAsJsx : truncated}
           <EllipsisWrapper>
-            <EllipsisToggle href="#" onClick={toggleLines}>
-              {less}
+            {!expanded && <Ellipsis>...</Ellipsis>}
+            <EllipsisToggle
+              href="#"
+              onClick={(e) => {
+                e.preventDefault();
+                setExpanded(!expanded);
+              }}
+            >
+              {expanded ? less : more}
             </EllipsisToggle>
           </EllipsisWrapper>
-        )}
-      </div>
+        </>
+      )}
     </Wrapper>
   );
-};
-
-ReadMore.defaultProps = {
-  lines: 3,
-  more: "Utvid",
-  less: "Vis mindre",
-};
-
-ReadMore.propTypes = {
-  children: PropTypes.node.isRequired,
-  text: PropTypes.node,
-  lines: PropTypes.number,
 };
 
 export default ReadMore;

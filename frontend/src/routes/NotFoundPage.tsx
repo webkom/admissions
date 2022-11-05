@@ -6,7 +6,7 @@ const NotFoundPage = () => {
   return (
     <DIV>
       <div>
-        <AbakusLogo size="6em" />
+        <AbakusLogo />
         <H1>404 This Page Does Not Exist</H1>
       </div>
     </DIV>

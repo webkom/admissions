@@ -3,12 +3,17 @@ import styled from "styled-components";
 import { NavLink, useMatch } from "react-router-dom";
 import DecorativeLine from "src/components/DecorativeLine";
 
-const NavItem = ({ to, text }) => {
+interface NavItemProps {
+  to: string;
+  text: string;
+}
+
+const NavItem: React.FC<NavItemProps> = ({ to, text }) => {
   const match = useMatch(to + "/*");
   return (
     <Container>
       <Item to={to}>{text}</Item>
-      <DecorativeLine red={match} />
+      <DecorativeLine red={!!match} />
     </Container>
   );
 };

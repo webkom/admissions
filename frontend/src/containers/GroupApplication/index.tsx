@@ -1,8 +1,8 @@
 import React, { useEffect } from "react";
 import { getApplictionTextDrafts } from "src/utils/draftHelper";
-import Application from "./Application";
+import Application, { ApplicationProps } from "./Application";
 
-const GroupApplication = (props) => {
+const GroupApplication = (props: ApplicationProps) => {
   useEffect(() => {
     initializeValue();
   }, []);

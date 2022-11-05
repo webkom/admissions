@@ -1,9 +1,13 @@
 import React from "react";
-import { connect } from "formik";
+import { connect, FormikContextType, FormikValues } from "formik";
 
-class ErrorFocus extends React.Component {
-  componentDidUpdate(prevProps) {
-    const { isSubmitting, isValidating, errors } = prevProps.formik;
+interface ErrorFocusProps {
+  formik: FormikContextType<FormikValues>;
+}
+
+class ErrorFocus extends React.Component<ErrorFocusProps> {
+  componentDidUpdate({ formik }: ErrorFocusProps) {
+    const { isSubmitting, isValidating, errors } = formik;
     const keys = Object.keys(errors);
     keys.sort();
 
@@ -17,7 +21,7 @@ class ErrorFocus extends React.Component {
         errorElement = document.querySelector(selector);
       }
       if (errorElement) {
-        errorElement.focus();
+        (errorElement as HTMLElement).focus();
       }
     }
   }
@@ -27,4 +31,4 @@ class ErrorFocus extends React.Component {
   }
 }
 
-export default connect(ErrorFocus);
+export default connect((props) => <ErrorFocus formik={props.formik} />);

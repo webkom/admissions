@@ -9,24 +9,26 @@ import SmallDescription from "./SmallDescription";
 import SmallDescriptionWrapper from "./SmallDescriptionWrapper";
 
 import DeleteApplication from "src/components/Application/DeleteApplication";
+import { Group } from "src/types";
 
-const ApplicationAdminView = ({ group, text, applicationId }) => {
-  const applicationText = text.split("\n").map((line, i, arr) => {
-    const linee = <span key={i}>{line}</span>;
-    if (i === arr.length - 1) {
-      return linee;
-    } else {
-      return [linee, <br key={i + "br"} />];
-    }
-  });
+interface ApplicationAdminViewProps {
+  group: Group;
+  text: string;
+  applicationId: number;
+}
 
+const ApplicationAdminView: React.FC<ApplicationAdminViewProps> = ({
+  group,
+  text,
+  applicationId,
+}) => {
   return (
     <Wrapper>
       <GroupLogo src={group.logo} />
       <SmallDescriptionWrapper>
         <SmallDescription>Søknad til ...</SmallDescription>
         <GroupName>{group.name} </GroupName>
-        <ReadMore lines={3}>{applicationText}</ReadMore>
+        <ReadMore truncateLength={200} text={text} />
         <DeleteApplication
           applicationId={applicationId}
           groupName={group.name}

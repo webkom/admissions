@@ -234,12 +234,14 @@ export const SubmitSection = styled.div`
   `};
 `;
 
-export const StyledSpan = styled.span.attrs((props) => ({
-  red: props.red ? true : false,
-  bold: props.bold ? "600" : "normal",
-}))`
+interface StyledSpanProps {
+  red?: boolean;
+  bold?: boolean;
+}
+
+export const StyledSpan = styled.span<StyledSpanProps>`
   color: ${(props) => (props.red ? "var(--lego-red)" : "inherit")};
-  font-weight: ${(props) => props.bold};
+  font-weight: ${(props) => (props.bold ? "600" : "normal")};
 `;
 
 export const ApplicationDateInfo = styled.p`

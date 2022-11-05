@@ -1,1 +1,2 @@
-export const replaceQuotationMarks = (text) => text.replaceAll('"', "'");
+export const replaceQuotationMarks = (text: string) =>
+  text.replaceAll('"', "'");

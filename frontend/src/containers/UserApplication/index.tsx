@@ -10,8 +10,11 @@ import Name from "./Name";
 import SmallDescription from "./SmallDescription";
 import SmallDescriptionWrapper from "./SmallDescriptionWrapper";
 import Header from "./Header";
+import { Application as UserApplicationInterface } from "src/types";
 
-const UserApplication = ({
+type UserApplicationProps = UserApplicationInterface;
+
+const UserApplication: React.FC<UserApplicationProps> = ({
   user,
   group_applications,
   created_at,
@@ -28,7 +31,7 @@ const UserApplication = ({
           {!applied_within_deadline && (
             <Icon
               name="stopwatch"
-              iconPrefix="ios"
+              prefix="ios"
               size="1.5rem"
               title="Søkte etter fristen"
               color="#c0392b"

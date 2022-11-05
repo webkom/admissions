@@ -22,16 +22,26 @@ import LoadingBall from "src/components/LoadingBall";
 import NavBar from "src/components/NavBar";
 import NotFoundPage from "./NotFoundPage";
 
+interface SelectedGroups {
+  [key: string]: boolean;
+}
+
 const ApplicationPortal = () => {
   const { admissionId } = useParams();
-  const [selectedGroups, setSelectedGroups] = useState({});
-  const [isEditingApplication, setIsEditingApplication] = useState(null);
+  const [selectedGroups, setSelectedGroups] = useState<SelectedGroups>({});
+  const [isEditingApplication, setIsEditingApplication] = useState<
+    boolean | null
+  >(null);
 
-  const { data: myApplication } = useMyApplication(admissionId);
-  const { data: admission, isFetching, error } = useAdmission(admissionId);
+  const { data: myApplication } = useMyApplication(admissionId ?? "");
+  const {
+    data: admission,
+    isFetching,
+    error,
+  } = useAdmission(admissionId ?? "");
   const { groups } = admission ?? {};
 
-  const toggleGroup = (name) => {
+  const toggleGroup = (name: string) => {
     setSelectedGroups({
       ...selectedGroups,
       [name.toLowerCase()]: !selectedGroups[name.toLowerCase()],
@@ -91,7 +101,7 @@ const ApplicationPortal = () => {
   } else {
     return (
       <PageWrapper>
-        <NavBar user={djangoData.user} isEditing={isEditingApplication} />
+        <NavBar user={djangoData.user} isEditing={!!isEditingApplication} />
         <ContentContainer>
           <Routes>
             <Route
@@ -113,10 +123,9 @@ const ApplicationPortal = () => {
                     toggleGroup={toggleGroup}
                     toggleIsEditing={toggleIsEditing}
                     admission={admission}
-                    groups={groups}
+                    groups={groups ?? []}
                     myApplication={myApplication}
                     selectedGroups={selectedGroups}
-                    isEditingApplication={isEditingApplication}
                   />
                 )
               }

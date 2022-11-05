@@ -2,8 +2,23 @@ import * as React from "react";
 import * as Sentry from "@sentry/browser";
 import awSnap from "assets/sentry-aw-snap.svg";
 import styled from "styled-components";
+import { PropsWithChildren } from "react";
 
-class ErrorBoundary extends React.Component {
+interface ErrorBoundaryProps extends PropsWithChildren {
+  resetOnChange?: boolean;
+  openReportDialog?: boolean;
+  hidden?: boolean;
+}
+
+interface ErrorBoundaryState {
+  error: Error | null;
+  lastEventId: string | null;
+}
+
+class ErrorBoundary extends React.Component<
+  ErrorBoundaryProps,
+  ErrorBoundaryState
+> {
   state = {
     error: null,
     lastEventId: null,
@@ -21,7 +36,7 @@ class ErrorBoundary extends React.Component {
       });
   };
 
-  UNSAFE_componentWillReceiveProps(nextProps) {
+  UNSAFE_componentWillReceiveProps(nextProps: ErrorBoundaryProps) {
     const { resetOnChange } = this.props;
     const { error } = this.state;
     if (error && nextProps.resetOnChange !== resetOnChange) {
@@ -29,10 +44,17 @@ class ErrorBoundary extends React.Component {
     }
   }
 
-  componentDidCatch(error, errorInfo) {
+  componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
     this.setState({ error });
+    if (process.env.NODE_ENV === "development") {
+      /* eslint no-console: 0 */
+      console.error(error);
+
+      /* eslint no-console: 0 */
+      console.error(errorInfo);
+    }
     Sentry.withScope((scope) => {
-      scope.setExtras(errorInfo);
+      scope.setExtra("errorInfo", errorInfo);
       const lastEventId = Sentry.captureException(error);
       this.setState({ lastEventId }, () => {
         this.props.openReportDialog && this.openDialog();
@@ -41,13 +63,11 @@ class ErrorBoundary extends React.Component {
   }
 
   render() {
-    const { openReportDialog, hidden = false, children, ...rest } = this.props;
+    const { openReportDialog, hidden = false } = this.props;
     const { lastEventId } = this.state;
 
     if (!this.state.error) {
-      return React.Children.map(children, (child) =>
-        React.cloneElement(child, { ...rest })
-      );
+      return this.props.children;
     }
     if (hidden) {
       return null;

@@ -1,5 +1,5 @@
-import React from "react";
-import { Form, Field } from "formik";
+import React, { ReactNode } from "react";
+import { Form, Field, FormikValues } from "formik";
 import FormatTime from "src/components/Time/FormatTime";
 import Icon from "src/components/Icon";
 import LegoButton from "src/components/LegoButton";
@@ -28,8 +28,17 @@ import {
   SubmitSection,
   Title,
 } from "./FormStructureStyle";
+import { Admission, Group } from "src/types";
 
-const FormStructure = ({
+interface FormStructureProps extends FormikValues {
+  admission: Admission;
+  groups: Group[];
+  selectedGroups: Record<string, string>;
+  toggleGroup: (groupName: string) => void;
+  SelectedGroupItems: ReactNode;
+}
+
+const FormStructure: React.FC<FormStructureProps> = ({
   admission,
   groups,
   selectedGroups,
@@ -41,7 +50,7 @@ const FormStructure = ({
   isValid,
   onCancel,
 }) => {
-  const { data: myApplication } = useMyApplication(admission.pk);
+  const { data: myApplication } = useMyApplication(String(admission.pk));
 
   return (
     <PageWrapper>
@@ -53,7 +62,7 @@ const FormStructure = ({
               icon="arrow-back"
               iconPrefix="ios"
               onClick={onCancel}
-              valid={isValid}
+              disabled={!isValid}
               buttonStyle="primary"
             >
               Avbryt
@@ -161,9 +170,7 @@ const FormStructure = ({
                 icon="arrow-forward"
                 iconPrefix="ios"
                 onClick={handleSubmit}
-                type="submit"
-                disabled={isSubmitting}
-                valid={isValid}
+                disabled={isSubmitting || !isValid}
                 buttonStyle="tertiary"
               >
                 Send inn søknad

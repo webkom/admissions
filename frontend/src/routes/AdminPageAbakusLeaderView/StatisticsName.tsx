@@ -1,6 +1,10 @@
 import styled from "styled-components";
 
-const SmallDescription = styled.span`
+interface SmallDescriptionProps {
+  capitalize?: boolean;
+}
+
+const SmallDescription = styled.span<SmallDescriptionProps>`
   font-size: 0.8em;
   font-weight: bold;
   text-transform: ${(props) => (props.capitalize ? "capitalize" : "normal")};

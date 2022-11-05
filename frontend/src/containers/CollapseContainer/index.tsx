@@ -1,5 +1,4 @@
 import React, { useState } from "react";
-import Collapse from "react-collapse";
 
 import Icon from "src/components/Icon";
 
@@ -9,7 +8,15 @@ import CollapseButton from "./CollapseButton";
 import Wrapper from "./Wrapper";
 import HeaderWrapper from "./HeaderWrapper";
 
-const CollapseContainer = ({ header, content }) => {
+interface CollapseContainerProps {
+  header: React.ReactNode;
+  content: React.ReactNode;
+}
+
+const CollapseContainer: React.FC<CollapseContainerProps> = ({
+  header,
+  content,
+}) => {
   const [isOpened, setIsOpened] = useState(false);
 
   const toggleView = () => {
@@ -21,20 +28,18 @@ const CollapseContainer = ({ header, content }) => {
       <CollapseButton key="btn" onClick={() => toggleView()}>
         <HeaderWrapper>
           <HeaderWrapper>
-            <Header transform="uppercase">{header}</Header>
+            <Header textTransform="uppercase">{header}</Header>
           </HeaderWrapper>
           <DropDownIcon>
             <Icon
               name={isOpened ? "arrow-dropup" : "arrow-dropdown"}
-              iconPrefix="ios"
+              prefix="ios"
               size="1.5rem"
             />
           </DropDownIcon>
         </HeaderWrapper>
       </CollapseButton>
-      <Collapse key="container" isOpened={isOpened}>
-        {content}
-      </Collapse>
+      {isOpened && content}
     </Wrapper>
   );
 };

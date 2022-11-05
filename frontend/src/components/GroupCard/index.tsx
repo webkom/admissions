@@ -3,7 +3,16 @@ import styled from "styled-components";
 import { media } from "src/styles/mediaQueries";
 import readmeIfy from "src/components/ReadmeLogo";
 
-const GroupCard = ({
+interface GroupCardProps {
+  onToggle: (arg0: string) => void;
+  isChosen: boolean;
+  name: string;
+  description: string;
+  readMoreLink: string;
+  logo: string;
+}
+
+const GroupCard: React.FC<GroupCardProps> = ({
   onToggle,
   isChosen,
   name,
@@ -36,7 +45,11 @@ export default GroupCard;
 
 /** Styles **/
 
-export const Card = styled.div`
+interface GroupCardStyledProps {
+  isChosen?: boolean;
+}
+
+export const Card = styled.div<GroupCardStyledProps>`
   display: grid;
   grid-template-columns: 1fr 3fr;
   grid-template-rows: 2rem 1fr 1.5rem;
@@ -128,7 +141,7 @@ export const LearnMoreLink = styled.a`
     `};
 `;
 
-export const SelectedMark = styled.div`
+export const SelectedMark = styled.div<GroupCardStyledProps>`
   width: 100%;
   height: 35px;
   padding: 8px 0;
@@ -145,7 +158,7 @@ export const SelectedMark = styled.div`
   border-radius: 0px 0px 10px 10px;
 `;
 
-const SelectedMarkText = styled.span`
+const SelectedMarkText = styled.span<GroupCardStyledProps>`
   color: ${(props) =>
     props.isChosen ? "var(--lego-white);" : "var(--lego-gray-light);"};
   font-size: 1rem;

@@ -9,8 +9,21 @@ import {
 import readmeIfy from "src/components/ReadmeLogo";
 import useDebouncedState from "src/utils/useDebouncedState";
 import { saveApplicationTextDraft } from "src/utils/draftHelper";
+import { Group } from "src/types";
+import { FieldInputProps, FormikProps } from "formik";
 
-const Application = ({
+type FieldValue = string;
+export type FormValues = Record<string, string>;
+
+export interface ApplicationProps {
+  responseLabel: string;
+  group: Group;
+  field: FieldInputProps<FieldValue>;
+  form: FormikProps<FormValues>;
+  disabled: boolean;
+}
+
+const Application: React.FC<ApplicationProps> = ({
   responseLabel,
   group,
   field: { name, onChange, value },
@@ -23,7 +36,8 @@ const Application = ({
     saveApplicationTextDraft([group.name, value]);
   }, [debouncedValue]);
 
-  const error = touched[name] && errors[name];
+  const error = touched[name] ? errors[name] : undefined;
+
   return (
     <Container>
       <LogoNameWrapper>
@@ -37,15 +51,14 @@ const Application = ({
         <FieldLabel htmlFor={group.name.toLowerCase()}>Søknadstekst</FieldLabel>
         <InputArea
           className="textarea"
-          type="textarea"
           name={name}
           id={name}
           onChange={onChange}
           onBlur={handleBlur}
           placeholder="Skriv søknadstekst her..."
           value={value}
-          error={error}
-          rows="10"
+          error={!!error}
+          rows={10}
           disabled={disabled}
         />
         <InputValidationFeedback error={error} />
