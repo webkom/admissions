@@ -15,6 +15,17 @@ steps:
       - yarn lint
       - yarn build
 
+  - name: typescript
+    image: node:16
+    when:
+      event: push
+    environment:
+      LANG: C.UTF-8
+    depends_on:
+      - build-frontend
+    commands:
+      - yarn types
+
   - name: missing-migrations
     image: abakus/lego-testbase:python3.9
     when:
