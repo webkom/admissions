@@ -78,10 +78,16 @@ export const innerColumns = [
   {
     Header: "Gruppe",
     accessor: "group",
+    width: 100,
   },
   {
     Header: "Søknadstekst",
     accessor: "text",
-    width: 600,
+    width: 480,
+  },
+  {
+    Header: "Handlinger",
+    accessor: "actions",
+    width: 170,
   },
 ];

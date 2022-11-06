@@ -16,6 +16,7 @@ const LegoButton = ({
   iconPrefix = "md",
   onClick,
   type = "button",
+  size = "normal",
 }) => {
   const getButtonStyle = (style) => {
     switch (style) {
@@ -64,8 +65,11 @@ const LegoButton = ({
       onClick={onClick}
       disabled={disabled}
       type={type}
+      size={size}
     >
-      <Text buttonstyle={getButtonStyle(buttonStyle)}>{children}</Text>
+      <Text buttonstyle={getButtonStyle(buttonStyle)} size={size}>
+        {children}
+      </Text>
       {icon && <Icon name={icon} prefix={iconPrefix} />}
     </ILegoButton>
   );
@@ -95,11 +99,12 @@ const ILegoRouterLink = styled(Link)`
       border: 1px solid #bd1c1c;
       box-shadow: 0px 4px 4px rgba(0, 0, 0, 0.25);
       border-radius: 10px;
-      padding: 10px 30px;
+      padding: ${(props) =>
+        props.size === "small" ? "7.5px 15px" : "10px 30px"};
 
       > i {
-        margin-left: 25px;
-        font-size: 1.8rem;
+        margin-left: ${(props) => (props.size === "small" ? "10px" : "25px")};
+        font-size: ${(props) => (props.size === "small" ? "1.2rem" : "1.8rem")};
       }
     `}
 
@@ -153,7 +158,7 @@ const Text = styled.span`
   ${(props) =>
     (props.buttonstyle === "primary" || props.buttonstyle === "tertiary") &&
     css`
-      font-size: 1.2rem;
+      font-size: ${(props) => (props.size === "small" ? "1rem" : "1.2rem")};
       margin-bottom: 3px;
     `}
 
