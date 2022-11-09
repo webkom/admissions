@@ -1,19 +1,40 @@
 import React, { useMemo } from "react";
-import { useTable, useSortBy, useExpanded } from "react-table";
-import { columns as cols } from "./Columns";
-import AdmissionsInnerTable from "./InnerTable";
+import {
+  useReactTable,
+  getCoreRowModel,
+  flexRender,
+  Row,
+  getExpandedRowModel,
+  ExpandedState,
+} from "@tanstack/react-table";
+import { columns } from "./Columns";
+import AdmissionsInnerTable, { InnerTableValues } from "./InnerTable";
 import SubComponentWrapper from "./SubComponentWrapper";
 import SubComponentHeader from "./SubComponentHeader";
 import { Application } from "src/types";
+import { useState } from "react";
 
 interface AdmissionsContainerProps {
   applications: Application[];
 }
 
+export interface AdmissionsTableValues {
+  username: string;
+  fullname: string;
+  phoneNumber: string;
+  email: string;
+  appliedWithinDeadline: boolean;
+  numApplications: number;
+  createdAt: string;
+  updatedAt: string;
+  text: string;
+  groupApplications: InnerTableValues[];
+}
+
 const AdmissionsContainer: React.FC<AdmissionsContainerProps> = ({
   applications,
 }) => {
-  const columns = useMemo(() => cols, []);
+  const [expanded, setExpanded] = useState<ExpandedState>({});
   const data = useMemo(
     () =>
       applications.map((application) => ({
@@ -28,34 +49,35 @@ const AdmissionsContainer: React.FC<AdmissionsContainerProps> = ({
         updatedAt: application.updated_at,
         text: application.text,
         groupApplications: application.group_applications.map(
-          (application) => ({
-            group: application.group.name,
-            text: application.text,
+          (groupApplication) => ({
+            applicationId: application.pk,
+            group: groupApplication.group.name,
+            text: groupApplication.text,
           })
         ),
       })),
     [applications]
   );
 
-  const tableInstance = useTable({ columns, data }, useSortBy, useExpanded);
-  const {
-    getTableProps,
-    getTableBodyProps,
-    headerGroups,
-    rows,
-    prepareRow,
-    visibleColumns,
-  } = tableInstance;
+  const table = useReactTable({
+    columns,
+    data,
+    state: {
+      expanded,
+    },
+    onExpandedChange: setExpanded,
+    getCoreRowModel: getCoreRowModel(),
+    getExpandedRowModel: getExpandedRowModel(),
+  });
 
   const subComponent = React.useCallback(
-    ({ row }) => (
+    ({ row }: { row: Row<AdmissionsTableValues> }) => (
       <>
         <SubComponentWrapper>
           <SubComponentHeader>Prioriteringstekst</SubComponentHeader>
           <p>{row.original.text}</p>
           <SubComponentHeader>Søknader</SubComponentHeader>
           <AdmissionsInnerTable
-            applicationId={row.original.id}
             groupApplications={row.original.groupApplications}
           />
         </SubComponentWrapper>
@@ -66,42 +88,42 @@ const AdmissionsContainer: React.FC<AdmissionsContainerProps> = ({
 
   return (
     <div>
-      <table {...getTableProps()}>
+      <table>
         <thead>
-          {headerGroups.map((headerGroup) => (
-            <tr key={headerGroup} {...headerGroup.getHeaderGroupProps()}>
-              {headerGroup.headers.map((column) => (
-                <th key={column} {...column.getHeaderProps()}>
-                  {column.render("Header")}
+          {table.getHeaderGroups().map((headerGroup) => (
+            <tr key={headerGroup.id}>
+              {headerGroup.headers.map((header) => (
+                <th key={header.id}>
+                  {header.isPlaceholder
+                    ? null
+                    : flexRender(
+                        header.column.columnDef.header,
+                        header.getContext()
+                      )}
                 </th>
               ))}
             </tr>
           ))}
         </thead>
-        <tbody {...getTableBodyProps()}>
-          {rows.map((row) => {
-            prepareRow(row);
-            return (
-              <React.Fragment key={row.id}>
-                <tr {...row.getRowProps()}>
-                  {row.cells.map((cell) => {
-                    return (
-                      <td key={cell} {...cell.getCellProps()}>
-                        {cell.render("Cell")}
-                      </td>
-                    );
-                  })}
+        <tbody>
+          {table.getRowModel().rows.map((row) => (
+            <React.Fragment key={row.id}>
+              <tr>
+                {row.getVisibleCells().map((cell) => (
+                  <td key={cell.id}>
+                    {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                  </td>
+                ))}
+              </tr>
+              {row.getIsExpanded() ? (
+                <tr>
+                  <td colSpan={row.getVisibleCells().length}>
+                    {subComponent({ row })}
+                  </td>
                 </tr>
-                {row.isExpanded ? (
-                  <tr>
-                    <td colSpan={visibleColumns.length}>
-                      {subComponent({ row })}
-                    </td>
-                  </tr>
-                ) : null}
-              </React.Fragment>
-            );
-          })}
+              ) : null}
+            </React.Fragment>
+          ))}
         </tbody>
       </table>
     </div>

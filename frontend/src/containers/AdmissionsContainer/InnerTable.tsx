@@ -1,63 +1,71 @@
 import React, { useMemo } from "react";
-import { useTable, useSortBy, useBlockLayout } from "react-table";
-import DeleteApplication from "src/components/Application/DeleteApplication";
+import {
+  flexRender,
+  getCoreRowModel,
+  useReactTable,
+} from "@tanstack/react-table";
 import { innerColumns } from "./Columns";
+import styled from "styled-components";
 
-const AdmissionsInnerTable = ({ applicationId, groupApplications }) => {
+export interface InnerTableValues {
+  applicationId: number;
+  group: string;
+  text: string;
+}
+
+interface AdmissionsInnerTableProps {
+  groupApplications: InnerTableValues[];
+}
+
+const AdmissionsInnerTable: React.FC<AdmissionsInnerTableProps> = ({
+  groupApplications,
+}) => {
   const columns = useMemo(() => innerColumns, []);
   const data = useMemo(() => groupApplications, [groupApplications]);
 
-  const tableInstance = useTable({ columns, data }, useSortBy, useBlockLayout);
-  const { getTableProps, getTableBodyProps, headerGroups, rows, prepareRow } =
-    tableInstance;
+  const table = useReactTable({
+    columns,
+    data,
+    getCoreRowModel: getCoreRowModel(),
+  });
 
   return (
     <div>
-      <table {...getTableProps()}>
+      <StyledTable>
         <thead>
-          <tr>
-            {headerGroups[0].headers.map((column) => (
-              <th
-                key={column.id}
-                {...column.getHeaderProps(column.getSortByToggleProps())}
-                className={
-                  column.isSorted ? (column.isSortedDesc ? "desc" : "asc") : ""
-                }
-              >
-                {column.render("Header")}
-              </th>
-            ))}
-          </tr>
+          {table.getHeaderGroups().map((headerGroup) => (
+            <tr key={headerGroup.id}>
+              {headerGroup.headers.map((header) => (
+                <th key={header.id} style={{ width: header.getSize() }}>
+                  {header.isPlaceholder
+                    ? null
+                    : flexRender(
+                        header.column.columnDef.header,
+                        header.getContext()
+                      )}
+                </th>
+              ))}
+            </tr>
+          ))}
         </thead>
-        <tbody {...getTableBodyProps()}>
-          {rows.map((row) => {
-            prepareRow(row);
-            return (
-              <tr key={row.id} {...row.getRowProps()}>
-                {row.cells.map((cell) => {
-                  if (cell.column.id === "actions") {
-                    return (
-                      <td key={cell.column.id}>
-                        <DeleteApplication
-                          applicationId={applicationId}
-                          groupName={row.original.group}
-                        />
-                      </td>
-                    );
-                  }
-                  return (
-                    <td key={cell.column.id} {...cell.getCellProps()}>
-                      {cell.render("Cell")}
-                    </td>
-                  );
-                })}
-              </tr>
-            );
-          })}
+        <tbody>
+          {table.getRowModel().rows.map((row) => (
+            <tr key={row.id}>
+              {row.getVisibleCells().map((cell) => (
+                <td key={cell.id}>
+                  {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                </td>
+              ))}
+            </tr>
+          ))}
         </tbody>
-      </table>
+      </StyledTable>
     </div>
   );
 };
 
 export default AdmissionsInnerTable;
+
+const StyledTable = styled.table`
+  width: 100%;
+`;
