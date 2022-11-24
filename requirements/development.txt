@@ -165,12 +165,8 @@ stack-data==0.3.0
 structlog==22.1.0
     # via -r requirements/base.in
 tomli==2.0.1
-    # via
-    #   black
-    #   build
-    #   pep517
-    #   tox
-tox==3.27.0
+    # via pep517
+tox==3.27.1
     # via -r requirements/development.in
 traitlets==5.3.0
     # via
