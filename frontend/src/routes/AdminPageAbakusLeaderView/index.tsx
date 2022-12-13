@@ -31,6 +31,10 @@ const AdminPageAbakusLeaderView = () => {
   const [sortedApplications, setSortedApplications] = useState<Application[]>(
     []
   );
+  const [selectedGroups, setSelectedGroups] = useState<string[]>([]);
+  const [filteredApplications, setFilteredApplications] = useState<
+    Application[]
+  >([]);
   const [csvData, setCsvData] = useState<CompleteCsvData[]>([]);
 
   const csvHeaders = [
@@ -68,9 +72,21 @@ const AdminPageAbakusLeaderView = () => {
   }, [applications]);
 
   useEffect(() => {
+    setFilteredApplications(
+      sortedApplications.filter(
+        (application) =>
+          selectedGroups.length === 0 ||
+          application.group_applications.find((groupApplication) =>
+            selectedGroups.includes(groupApplication.group.name)
+          )
+      )
+    );
+  }, [sortedApplications, selectedGroups]);
+
+  useEffect(() => {
     // Push all the individual applications into csvData with the right format
     const updatedCsvData: CompleteCsvData[] = [];
-    sortedApplications.forEach((application) => {
+    filteredApplications.forEach((application) => {
       application.group_applications.forEach((groupApplication) => {
         updatedCsvData.push({
           name: application.user.full_name,
@@ -90,7 +106,7 @@ const AdminPageAbakusLeaderView = () => {
       });
     });
     setCsvData(updatedCsvData);
-  }, [sortedApplications]);
+  }, [filteredApplications]);
 
   const numApplicants = sortedApplications.length;
 
@@ -155,6 +171,8 @@ const AdminPageAbakusLeaderView = () => {
                     applications={sortedApplications}
                     groupName={group.name}
                     groupLogo={group.logo}
+                    selectedGroups={selectedGroups}
+                    setSelectedGroups={setSelectedGroups}
                   />
                 ))}
             </Statistics>
@@ -167,7 +185,7 @@ const AdminPageAbakusLeaderView = () => {
           >
             Eksporter som csv
           </CSVExport>
-          <AdmissionsContainer applications={sortedApplications} />
+          <AdmissionsContainer applications={filteredApplications} />
         </Wrapper>
       </PageWrapper>
     );
