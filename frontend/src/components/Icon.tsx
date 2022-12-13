@@ -1,5 +1,5 @@
 import React from "react";
-import styled from "styled-components";
+import styled, { Interpolation } from "styled-components";
 
 // See https://ionicons.com/ for icon names. md or ios as prefix.
 
@@ -7,6 +7,7 @@ interface IconProps extends IconStyleProps {
   name: string;
   title?: string;
   prefix?: string;
+  styles?: Interpolation<React.CSSProperties>;
 }
 
 const Icon: React.FC<IconProps> = ({
@@ -16,6 +17,7 @@ const Icon: React.FC<IconProps> = ({
   color,
   padding,
   prefix = "md",
+  styles,
 }) => (
   <Ionicon
     className={`ion-${prefix}-${name}`}
@@ -23,6 +25,7 @@ const Icon: React.FC<IconProps> = ({
     color={color}
     title={title}
     padding={padding}
+    styles={styles}
   />
 );
 
@@ -34,13 +37,16 @@ interface IconStyleProps {
   size?: string | number;
   color?: string;
   padding?: string | number;
+  styles?: Interpolation<React.CSSProperties>;
 }
 
 const Ionicon = styled.i.attrs((props: IconStyleProps) => ({
   size: props.size || "2rem",
   color: props.color || "inherit",
   padding: props.padding || "0",
+  styles: props.styles,
 }))`
+  ${({ styles }) => styles}
   font-size: ${(props) => props.size};
   line-height: 1;
   color: ${(props) => props.color};
