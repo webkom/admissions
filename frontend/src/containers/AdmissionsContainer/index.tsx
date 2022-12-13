@@ -6,6 +6,8 @@ import {
   Row,
   getExpandedRowModel,
   ExpandedState,
+  SortingState,
+  getSortedRowModel,
 } from "@tanstack/react-table";
 import { columns } from "./Columns";
 import AdmissionsInnerTable, { InnerTableValues } from "./InnerTable";
@@ -35,6 +37,7 @@ const AdmissionsContainer: React.FC<AdmissionsContainerProps> = ({
   applications,
 }) => {
   const [expanded, setExpanded] = useState<ExpandedState>({});
+  const [sorting, setSorting] = useState<SortingState>([]);
   const data = useMemo(
     () =>
       applications.map((application) => ({
@@ -64,10 +67,13 @@ const AdmissionsContainer: React.FC<AdmissionsContainerProps> = ({
     data,
     state: {
       expanded,
+      sorting,
     },
     onExpandedChange: setExpanded,
+    onSortingChange: setSorting,
     getCoreRowModel: getCoreRowModel(),
     getExpandedRowModel: getExpandedRowModel(),
+    getSortedRowModel: getSortedRowModel(),
   });
 
   const subComponent = React.useCallback(
@@ -94,12 +100,25 @@ const AdmissionsContainer: React.FC<AdmissionsContainerProps> = ({
             <tr key={headerGroup.id}>
               {headerGroup.headers.map((header) => (
                 <th key={header.id}>
-                  {header.isPlaceholder
-                    ? null
-                    : flexRender(
+                  {header.isPlaceholder ? null : (
+                    <div
+                      style={
+                        header.column.getCanSort()
+                          ? { cursor: "pointer" }
+                          : undefined
+                      }
+                      onClick={header.column.getToggleSortingHandler()}
+                    >
+                      {flexRender(
                         header.column.columnDef.header,
                         header.getContext()
                       )}
+                      {{
+                        asc: " 🔼",
+                        desc: " 🔽",
+                      }[header.column.getIsSorted() as string] ?? null}
+                    </div>
+                  )}
                 </th>
               ))}
             </tr>
