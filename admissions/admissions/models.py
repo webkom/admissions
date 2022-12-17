@@ -53,6 +53,7 @@ class LegoUser(AbstractUser):
 
 class Admission(models.Model):
     title = models.CharField(max_length=255)
+    description = models.TextField(default="")
     open_from = models.DateTimeField()
     public_deadline = models.DateTimeField()
     application_deadline = models.DateTimeField()
