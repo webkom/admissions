@@ -14,7 +14,7 @@ black==22.12.0
     # via -r black.txt
 build==0.8.0
     # via pip-tools
-certifi==2022.6.15
+certifi==2022.12.7
     # via
     #   requests
     #   sentry-sdk
