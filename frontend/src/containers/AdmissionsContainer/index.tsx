@@ -6,6 +6,8 @@ import {
   Row,
   getExpandedRowModel,
   ExpandedState,
+  SortingState,
+  getSortedRowModel,
 } from "@tanstack/react-table";
 import { columns } from "./Columns";
 import AdmissionsInnerTable, { InnerTableValues } from "./InnerTable";
@@ -13,6 +15,9 @@ import SubComponentWrapper from "./SubComponentWrapper";
 import SubComponentHeader from "./SubComponentHeader";
 import { Application } from "src/types";
 import { useState } from "react";
+import { TableWrapper } from "src/routes/AdminPageAbakusLeaderView/Wrapper";
+import styled from "styled-components";
+import Icon from "src/components/Icon";
 
 interface AdmissionsContainerProps {
   applications: Application[];
@@ -35,6 +40,7 @@ const AdmissionsContainer: React.FC<AdmissionsContainerProps> = ({
   applications,
 }) => {
   const [expanded, setExpanded] = useState<ExpandedState>({});
+  const [sorting, setSorting] = useState<SortingState>([]);
   const data = useMemo(
     () =>
       applications.map((application) => ({
@@ -64,10 +70,13 @@ const AdmissionsContainer: React.FC<AdmissionsContainerProps> = ({
     data,
     state: {
       expanded,
+      sorting,
     },
     onExpandedChange: setExpanded,
+    onSortingChange: setSorting,
     getCoreRowModel: getCoreRowModel(),
     getExpandedRowModel: getExpandedRowModel(),
+    getSortedRowModel: getSortedRowModel(),
   });
 
   const subComponent = React.useCallback(
@@ -87,19 +96,32 @@ const AdmissionsContainer: React.FC<AdmissionsContainerProps> = ({
   );
 
   return (
-    <div>
-      <table>
+    <TableWrapper>
+      <StyledTable>
         <thead>
           {table.getHeaderGroups().map((headerGroup) => (
             <tr key={headerGroup.id}>
               {headerGroup.headers.map((header) => (
-                <th key={header.id}>
-                  {header.isPlaceholder
-                    ? null
-                    : flexRender(
+                <th key={header.id} style={{ width: header.getSize() }}>
+                  {header.isPlaceholder ? null : (
+                    <div
+                      style={
+                        header.column.getCanSort()
+                          ? { cursor: "pointer" }
+                          : undefined
+                      }
+                      onClick={header.column.getToggleSortingHandler()}
+                    >
+                      {flexRender(
                         header.column.columnDef.header,
                         header.getContext()
                       )}
+                      {{
+                        asc: <SortArrow name="arrow-dropup" />,
+                        desc: <SortArrow name="arrow-dropdown" />,
+                      }[header.column.getIsSorted() as string] ?? null}
+                    </div>
+                  )}
                 </th>
               ))}
             </tr>
@@ -110,7 +132,7 @@ const AdmissionsContainer: React.FC<AdmissionsContainerProps> = ({
             <React.Fragment key={row.id}>
               <tr>
                 {row.getVisibleCells().map((cell) => (
-                  <td key={cell.id}>
+                  <td key={cell.id} style={{ width: cell.column.getSize() }}>
                     {flexRender(cell.column.columnDef.cell, cell.getContext())}
                   </td>
                 ))}
@@ -125,9 +147,23 @@ const AdmissionsContainer: React.FC<AdmissionsContainerProps> = ({
             </React.Fragment>
           ))}
         </tbody>
-      </table>
-    </div>
+      </StyledTable>
+    </TableWrapper>
   );
 };
+
+const StyledTable = styled.table`
+  width: 100%;
+  min-width: 850px;
+`;
+
+const SortArrow = ({ name }: { name: string }) => (
+  <Icon
+    name={name}
+    size="24px"
+    padding="0 0 0 5px"
+    styles={{ verticalAlign: "text-top" }}
+  />
+);
 
 export default AdmissionsContainer;

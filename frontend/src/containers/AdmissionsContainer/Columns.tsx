@@ -16,6 +16,7 @@ export const columns = [
         {table.getIsAllRowsExpanded() ? "▼" : "►"}
       </span>
     ),
+    size: 1,
     cell: ({ row }) => (
       <span onClick={() => row.toggleExpanded()}>
         {row.getIsExpanded() ? "▼" : "►"}
@@ -36,6 +37,7 @@ export const columns = [
   }),
   columnHelper.accessor("createdAt", {
     header: "Sendt",
+    size: 170,
     cell: (info) => (
       <>
         <FormatTime format="EEEE d. MMMM, kl. HH:mm ">
@@ -56,6 +58,7 @@ export const columns = [
   }),
   columnHelper.accessor("updatedAt", {
     header: "Oppdatert",
+    size: 170,
     cell: (info) => (
       <>
         <FormatTime format="EEEE d. MMMM, kl. HH:mm">
@@ -66,6 +69,7 @@ export const columns = [
   }),
   columnHelper.accessor("numApplications", {
     header: "Søknader",
+    size: 1,
     cell: (info) => info.row.original.numApplications,
   }),
 ];
