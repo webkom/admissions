@@ -7,9 +7,7 @@ interface FormatTimeProps {
 }
 
 const FormatTime: React.FC<FormatTimeProps> = ({ format, children }) => {
-  const formatted = DateTime.fromISO(children, { zone: "utc" })
-    .setLocale("no")
-    .toFormat(format);
+  const formatted = DateTime.fromISO(children).setLocale("no").toFormat(format);
 
   return <span>{formatted}</span>;
 };
