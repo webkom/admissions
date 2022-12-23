@@ -57,7 +57,7 @@ const Application: React.FC<ApplicationProps> = ({
           onBlur={handleBlur}
           placeholder="Skriv søknadstekst her..."
           value={value}
-          error={!!error}
+          $error={!!error}
           rows={10}
           disabled={disabled}
         />

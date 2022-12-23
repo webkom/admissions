@@ -4,7 +4,7 @@ import { Field } from "formik";
 import Textarea from "react-textarea-autosize";
 
 interface StyledFieldProps {
-  error?: boolean;
+  $error?: boolean;
 }
 
 export const StyledField = styled(Field)<StyledFieldProps>`
@@ -42,7 +42,7 @@ export const StyledTextAreaField = styled(Textarea)<StyledFieldProps>`
   font-family: var(--font-family);
   color: var(--lego-font-color);
   border: 2px solid
-    ${(props) => (props.error ? "var(--lego-red)" : "var(--lego-gray-medium)")};
+    ${({ $error }) => ($error ? "var(--lego-red)" : "var(--lego-gray-medium)")};
   border-radius: 13px;
   box-shadow: inset 0px 4px 4px rgba(129, 129, 129, 0.1);
   overflow: hidden;

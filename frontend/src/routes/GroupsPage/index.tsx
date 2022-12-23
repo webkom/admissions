@@ -48,7 +48,7 @@ const GroupsPage: React.FC<GroupsPageProps> = ({
       <GroupsWrapper>{GroupCards}</GroupsWrapper>
       <NextButtonWrapper>
         <LegoButton
-          to="../min-soknad"
+          to={`/${admissionId}/min-soknad`}
           icon="arrow-forward"
           iconPrefix="ios"
           disabled={!hasSelectedAnything()}

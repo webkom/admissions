@@ -7,7 +7,7 @@
 
 import React from "react";
 import styled from "styled-components";
-import { Link } from "react-router-dom";
+import { Link, useParams } from "react-router-dom";
 import MiniToggleGroup from "./MiniToggleGroup";
 import { media } from "src/styles/mediaQueries";
 import { Group } from "src/types";
@@ -23,6 +23,8 @@ const ToggleGroups: React.FC<ToggleGroupsProps> = ({
   selectedGroups,
   toggleGroup,
 }) => {
+  const { admissionId } = useParams();
+
   const ChooseGroupsItems = groups.map((group, index) => (
     <MiniToggleGroup
       name={group.name}
@@ -40,7 +42,7 @@ const ToggleGroups: React.FC<ToggleGroupsProps> = ({
         Klikk på logoene til komiteene for å legge til/fjerne de fra søknaden.
       </Tooltip>
       <IconsWrapper>{ChooseGroupsItems}</IconsWrapper>
-      <LinkToOverview to="/velg-komiteer">
+      <LinkToOverview to={`/${admissionId}/velg-komiteer`}>
         Eller gå tilbake til oversikten for å lese mer
       </LinkToOverview>
     </Wrapper>
