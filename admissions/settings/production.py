@@ -3,7 +3,7 @@ from urllib.parse import urlparse
 import sentry_sdk
 from sentry_sdk.integrations.django import DjangoIntegration
 
-from committee_admissions.utils.sentry import remove_sensitive_data
+from admissions.utils.sentry import remove_sensitive_data
 
 from .base import *  # noqa
 
@@ -28,7 +28,7 @@ SOCIAL_AUTH_LEGO_SECRET = env("AUTH_LEGO_SECRET")
 SOCIAL_AUTH_LEGO_API_URL = env("AUTH_LEGO_API_URL")
 
 AUTHENTICATION_BACKENDS = [
-    "committee_admissions.oauth.LegoOAuth2"
+    "admissions.oauth.LegoOAuth2"
 ] + AUTHENTICATION_BACKENDS  # noqa
 
 # Sentry

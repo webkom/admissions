@@ -1,8 +1,8 @@
-# committee-admissions
+# admissions
 
 #### opptak.abakus.no
 
-Recruitment for Abakom.
+Recruitment for Abakus.
 
 ## Runnings LEGO and this repository in parallel
 
@@ -20,7 +20,7 @@ Run LEGO-WEBAPP by following the [README here](https://github.com/webkom/lego-we
 
 ### Terminal 3
 
-Run the committe_admissions backend by doing the following:
+Run the admissions backend by doing the following:
 
 Running the backend requires Python 3.9 and a `postgresql` database. The frontend requires `Node`. We recommend using
 a virtual environment. Create a `venv` in root using
@@ -50,13 +50,13 @@ $ pip install pip-tools
 $ pip-sync requirements/development.txt
 ```
 
-The `.env` file with secret keys is not included, but an `example.env` file has been provided in `./committe_admissions/settings`, so that you can simply rename the file and fill in the values.
+The `.env` file with secret keys is not included, but an `example.env` file has been provided in `./admissions/settings`, so that you can simply rename the file and fill in the values.
 
 The secrets can be found at **localhost:3000** in the user settings menu after creating an OAuth2 app there. In the form enter `http://127.0.0.1:5000/complete/lego/` as the redirect url.
 
 ```sh
 # Create a copy of the example env file (run from the root of the project)
-$ cp committee_admissions/settings/example.env committee_admissions/settings/.env
+$ cp admissions/settings/example.env admissions/settings/.env
 
 # Edit the file and change the KEY and SECRET
 AUTH_LEGO_KEY="Client ID from OAuth2"
@@ -127,7 +127,7 @@ remove excess packages.
 
 ## Run tests
 
-Run django tests using tox. Note that we point at the committee_admissions database running at :5433 if we are running lego and admissions
+Run django tests using tox. Note that we point at the admissions database running at :5433 if we are running lego and admissions
 in parallel
 
 ```bash

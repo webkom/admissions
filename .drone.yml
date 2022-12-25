@@ -94,7 +94,7 @@ steps:
       - coverage
     settings:
       registry: https://registry.webkom.dev
-      repo: registry.webkom.dev/webkom/committee-admissions
+      repo: registry.webkom.dev/webkom/admissions
       username:
         from_secret: docker_username
       password:

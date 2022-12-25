@@ -3,7 +3,7 @@ from datetime import timedelta
 from django.core.management.base import BaseCommand
 from django.utils import timezone
 
-from committee_admissions.admissions.models import Admission
+from admissions.admissions.models import Admission
 
 
 class Command(BaseCommand):

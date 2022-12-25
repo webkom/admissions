@@ -1,5 +1,5 @@
 """
-WSGI config for committee_admissions project.
+WSGI config for admissions project.
 
 It exposes the WSGI callable as a module-level variable named ``application``.
 
@@ -13,6 +13,6 @@ from django.core.wsgi import get_wsgi_application
 
 from sentry_sdk.integrations.wsgi import SentryWsgiMiddleware
 
-os.environ.setdefault("DJANGO_SETTINGS_MODULE", "committee_admissions.settings")
+os.environ.setdefault("DJANGO_SETTINGS_MODULE", "admissions.settings")
 
 application = SentryWsgiMiddleware(get_wsgi_application())

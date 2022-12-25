@@ -3,8 +3,8 @@ from django.db import transaction
 from six.moves.urllib.parse import urljoin
 from social_core.backends.oauth import BaseOAuth2
 
-from committee_admissions.admissions import constants
-from committee_admissions.admissions.models import Group, Membership
+from admissions.admissions import constants
+from admissions.admissions.models import Group, Membership
 
 
 class LegoOAuth2(BaseOAuth2):

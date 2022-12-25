@@ -1,4 +1,4 @@
-"""committee_admissions URL Configuration
+"""admissions URL Configuration
 
 The `urlpatterns` list routes URLs to views. For more information please see:
     https://docs.djangoproject.com/en/2.0/topics/http/urls/
@@ -19,7 +19,7 @@ from django.contrib.auth import views as auth_views
 from django.urls import include, path, re_path
 from rest_framework import routers
 
-from committee_admissions.admissions.views import (
+from admissions.admissions.views import (
     AdmissionViewSet,
     ApplicationViewSet,
     AppView,

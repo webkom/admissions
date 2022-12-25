@@ -12,6 +12,4 @@ else:
         try:
             from .local import *  # noqa
         except ImportError:
-            raise ImportError(
-                "Couldn't load local settings committee_admissions.settings.local"
-            )
+            raise ImportError("Couldn't load local settings admissions.settings.local")

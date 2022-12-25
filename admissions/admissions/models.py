@@ -4,8 +4,8 @@ from django.db import models
 from django.db.models import Q
 from django.utils import timezone
 
-from committee_admissions.admissions import constants
-from committee_admissions.utils.models import TimeStampModel
+from admissions.admissions import constants
+from admissions.utils.models import TimeStampModel
 
 
 class LegoUser(AbstractUser):

@@ -1,10 +1,10 @@
 {
-  "name": "committee-admissions",
+  "name": "admissions",
   "version": "1.0.0",
-  "description": "Committee admission pages for Abakus",
+  "description": "Admission system for Abakus",
   "main": "index.js",
-  "repository": "git@github.com:webkom/committee-admissions.git",
-  "author": "Sigrid Marita Kvamme cherrybeans <sigridkvamme@gmail.com>",
+  "repository": "git@github.com:webkom/admissions.git",
+  "author": "Webkom <webkom@abakus.no>",
   "license": "MIT",
   "scripts": {
     "dev": "vite",
