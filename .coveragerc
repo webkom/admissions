@@ -15,12 +15,12 @@ exclude_lines =
     if __name__ == .__main__.:
 
 omit =
-    committee_admissions/*/migrations/*
-    committee_admissions/settings/*
-    committee_admissions/*/tests/*
-    committee_admissions/admissions/factories.py
-    committee_admissions/wsgi.py
-    committee_admissions/urls.py
+    admissions/*/migrations/*
+    admissions/settings/*
+    admissions/*/tests/*
+    admissions/admissions/factories.py
+    admissions/wsgi.py
+    admissions/urls.py
 
 show_missing = True
 

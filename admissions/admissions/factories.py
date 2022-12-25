@@ -2,7 +2,7 @@ from django.contrib.auth import models
 
 import factory
 
-from committee_admissions.admissions.models import (
+from admissions.admissions.models import (
     Admission,
     Group,
     GroupApplication,

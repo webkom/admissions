@@ -5,8 +5,8 @@ from django.utils import timezone
 from rest_framework import status
 from rest_framework.test import APITestCase
 
-from committee_admissions.admissions.constants import LEADER, MEMBER, RECRUITING
-from committee_admissions.admissions.models import (
+from admissions.admissions.constants import LEADER, MEMBER, RECRUITING
+from admissions.admissions.models import (
     Admission,
     Group,
     GroupApplication,

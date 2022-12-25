@@ -7,14 +7,14 @@ from rest_framework import permissions, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
 
-from committee_admissions.admissions.models import (
+from admissions.admissions.models import (
     Admission,
     Group,
     GroupApplication,
     LegoUser,
     UserApplication,
 )
-from committee_admissions.admissions.serializers import (
+from admissions.admissions.serializers import (
     AdminAdmissionSerializer,
     AdmissionListPublicSerializer,
     AdmissionPublicSerializer,

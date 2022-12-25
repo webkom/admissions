@@ -1,5 +1,5 @@
 """
-Django settings for committee_admissions project.
+Django settings for admissions project.
 
 For more information on this file, see
 https://docs.djangoproject.com/en/2.0/topics/settings/
@@ -15,9 +15,7 @@ from .logging import *  # noqa
 
 # GENERAL CONFIGURATION ======================================================
 BASE_PROJECT_DIR = environ.Path(__file__) - 3  # manage.py level
-ROOT_DIR = (
-    environ.Path(__file__) - 2
-)  # (committee_admissions/settings/base.py - 2 = committee_admissions/)
+ROOT_DIR = environ.Path(__file__) - 2  # (admissions/settings/base.py - 2 = admissions/)
 FILES_ROOT = ROOT_DIR.path("files/")
 
 # APP CONFIGURATION ===========================================================
@@ -39,7 +37,7 @@ THIRD_PARTY_APPS = [
     "django_vite",
 ]
 
-LOCAL_APPS = ["committee_admissions.utils", "committee_admissions.admissions"]
+LOCAL_APPS = ["admissions.utils", "admissions.admissions"]
 
 INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS
 
@@ -55,7 +53,7 @@ MIDDLEWARE = [
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
-    "committee_admissions.utils.middleware.LoggingMiddleware",
+    "admissions.utils.middleware.LoggingMiddleware",
 ]
 
 # DJANGO REST FRAMEWORK CONFIGURATION ==========================================
@@ -124,8 +122,8 @@ MEDIA_ROOT = str(FILES_ROOT.path("media")())
 MEDIA_URL = "/media/"
 
 # MISC CONFIGURATION ============================================================
-WSGI_APPLICATION = "committee_admissions.wsgi.application"
-ROOT_URLCONF = "committee_admissions.urls"
+WSGI_APPLICATION = "admissions.wsgi.application"
+ROOT_URLCONF = "admissions.urls"
 SHELL_PLUS = "ipython"
 
 LOGIN_REDIRECT_URL = "/"
@@ -156,5 +154,5 @@ SOCIAL_AUTH_PIPELINE = (
     "social_core.pipeline.social_auth.load_extra_data",
     "social_core.pipeline.user.user_details",
     # Custom pipe
-    "committee_admissions.oauth.update_custom_user_details",
+    "admissions.oauth.update_custom_user_details",
 )
