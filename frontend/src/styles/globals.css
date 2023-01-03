@@ -1,7 +1,7 @@
-@import "https://fonts.googleapis.com/css?family=Cardo";
-@import "https://unpkg.com/ionicons@4.5.10-0/dist/css/ionicons.min.css";
-@import "./variables.css";
-@import "./fonts.css";
+@import url("https://fonts.googleapis.com/css?family=Cardo");
+@import url("https://unpkg.com/ionicons@4.5.10-0/dist/css/ionicons.min.css");
+@import url("./variables.css");
+@import url("./fonts.css");
 
 html {
   box-sizing: border-box;
