@@ -46,6 +46,7 @@ class AdmissionListPublicSerializer(serializers.HyperlinkedModelSerializer):
         fields = (
             "pk",
             "title",
+            "description",
             "is_open",
             "open_from",
             "public_deadline",
@@ -70,6 +71,7 @@ class AdminAdmissionSerializer(serializers.HyperlinkedModelSerializer):
             "url",
             "pk",
             "title",
+            "description",
             "open_from",
             "public_deadline",
             "application_deadline",

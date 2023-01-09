@@ -20,7 +20,7 @@ export const useApplications = (admissionId: string) => {
   ]);
 };
 
-export const useMyApplication = (admissionId: string) => {
+export const useMyApplication = (admissionId: string | number) => {
   return useQuery<Application, QueryError>([
     `/admission/${admissionId}/application/mine/`,
   ]);

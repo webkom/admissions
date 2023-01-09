@@ -35,6 +35,7 @@ export interface Application {
 export interface Admission {
   pk: number;
   title: string;
+  description: string;
   is_open: boolean;
   is_closed: boolean;
   open_from: string;
