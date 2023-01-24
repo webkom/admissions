@@ -12,7 +12,7 @@ import Statistics from "./Statistics";
 import GroupStatistics from "./GroupStatistics";
 import StatisticsName from "./StatisticsName";
 import StatisticsWrapper from "./StatisticsWrapper";
-import { replaceQuotationMarks } from "src/utils/replaceQuotationMarks";
+import { replaceQuotationMarks } from "src/utils/methods";
 import { useAdmission, useApplications } from "src/query/hooks";
 import { useParams } from "react-router-dom";
 

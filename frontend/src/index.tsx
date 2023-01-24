@@ -16,6 +16,7 @@ import "src/styles/globals.css";
 import config from "src/utils/config";
 import djangoData from "src/utils/djangoData";
 import "@babel/polyfill";
+import ManageAdmissions from "src/routes/ManageAdmissions";
 
 Sentry.init({
   dsn: config.SENTRY_DSN,
@@ -54,6 +55,7 @@ const App: React.FC<PropsWithChildren> = ({ children }) => {
 const AppRoutes = () =>
   useRoutes([
     { path: "/", element: <LandingPage /> },
+    { path: "/admin/*", element: <ManageAdmissions /> },
     { path: ":admissionId/*", element: <ApplicationPortal /> },
     { path: "*", element: <NotFoundPage /> },
   ]);

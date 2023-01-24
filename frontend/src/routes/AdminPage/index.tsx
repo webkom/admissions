@@ -7,7 +7,7 @@ import { media } from "src/styles/mediaQueries";
 import UserApplication from "src/containers/UserApplication";
 import LoadingBall from "src/components/LoadingBall";
 import EditGroupForm from "./form";
-import { replaceQuotationMarks } from "src/utils/replaceQuotationMarks";
+import { replaceQuotationMarks } from "src/utils/methods";
 import {
   Wrapper,
   LinkLink,
