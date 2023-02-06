@@ -173,7 +173,6 @@ class ApplicationCreateUpdateSerializer(serializers.HyperlinkedModelSerializer):
         GroupApplication.objects.filter(application=user_application).delete()
 
         for group_name, text in applications.items():
-
             group = Group.objects.get(name__iexact=group_name)
             application, created = GroupApplication.objects.update_or_create(
                 application=user_application,
