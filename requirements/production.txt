@@ -57,7 +57,7 @@ jedi==0.18.1
     # via ipython
 matplotlib-inline==0.1.3
     # via ipython
-oauthlib==3.2.1
+oauthlib==3.2.2
     # via
     #   requests-oauthlib
     #   social-auth-core

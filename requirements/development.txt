@@ -10,7 +10,7 @@ asttokens==2.0.5
     # via stack-data
 backcall==0.2.0
     # via ipython
-black==22.12.0
+black==23.1.0
     # via -r black.txt
 build==0.8.0
     # via pip-tools
@@ -84,12 +84,13 @@ mccabe==0.7.0
     # via flake8
 mypy-extensions==0.4.3
     # via black
-oauthlib==3.2.1
+oauthlib==3.2.2
     # via
     #   requests-oauthlib
     #   social-auth-core
-packaging==21.3
+packaging==23.0
     # via
+    #   black
     #   build
     #   tox
 parso==0.8.3
@@ -130,8 +131,6 @@ pygments==2.12.0
     # via ipython
 pyjwt==2.4.0
     # via social-auth-core
-pyparsing==3.0.9
-    # via packaging
 python-dateutil==2.8.2
     # via faker
 python3-openid==3.2.0
