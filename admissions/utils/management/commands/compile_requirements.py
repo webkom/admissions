@@ -5,7 +5,6 @@ from django.core.management.base import BaseCommand
 
 
 class Command(BaseCommand):
-
     help = "pip-compiles all requirements"
 
     def add_arguments(self, parser):

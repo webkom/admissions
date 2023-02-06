@@ -8,7 +8,6 @@ from admissions.admissions.models import Group, Membership
 
 
 class LegoOAuth2(BaseOAuth2):
-
     name = "lego"
     ACCESS_TOKEN_METHOD = "POST"
     SCOPE_SEPARATOR = ","

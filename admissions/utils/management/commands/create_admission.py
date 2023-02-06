@@ -7,7 +7,6 @@ from admissions.admissions.models import Admission
 
 
 class Command(BaseCommand):
-
     help = "Creates a new admission with valid dates"
 
     def add_arguments(self, parser):
