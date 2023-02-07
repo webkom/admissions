@@ -165,10 +165,17 @@ export const HelpText = styled.span`
 
 /* Groups section */
 
-export const GroupsSection = styled.div`
+interface GroupSectionProps {
+  isSingleGroupAdmission: boolean;
+}
+
+export const GroupsSection = styled.div<GroupSectionProps>`
   display: grid;
   grid-template-columns: 1fr 1.5fr;
-  grid-template-areas: "sidebar applications";
+  grid-template-areas: ${(props) =>
+    props.isSingleGroupAdmission
+      ? '"applications applications"'
+      : '"sidebar applications"'};
   grid-gap: 1rem 2rem;
   max-width: 750px;
 

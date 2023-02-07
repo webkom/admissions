@@ -51,6 +51,7 @@ const FormStructure: React.FC<FormStructureProps> = ({
   onCancel,
 }) => {
   const { data: myApplication } = useMyApplication(String(admission.pk));
+  const isSingleGroupAdmission = groups.length === 1;
 
   return (
     <PageWrapper>
@@ -76,45 +77,40 @@ const FormStructure: React.FC<FormStructureProps> = ({
           <SectionHeader>Generelt</SectionHeader>
           <HelpText>
             <Icon name="information-circle-outline" />
-            Mobilnummeret vil bli brukt til å kalle deg inn på intervju av
-            komitéledere.
+            Mobilnummeret vil bli brukt til å kalle deg inn på kaffeprater
           </HelpText>
           <Field name="phoneNumber" component={PhoneNumberField} />
 
           <HelpText>
             <Icon name="information-circle-outline" />
-            Kun leder av Abakus kan se det du skriver inn i prioriterings- og
-            kommentarfeltet.
-            <Icon name="information-circle-outline" />
-            Det er ikke sikkert prioriteringslisten vil bli tatt hensyn til.
-            Ikke søk på en komité du ikke ønsker å bli med i.
+            Alle i backup kan se det du skriver i søknaden din
           </HelpText>
           <Field
             name="priorityText"
             component={PriorityTextField}
-            label="Prioriteringer, og andre kommentarer"
-            optional
+            label="Hvilken klasse og linje går du, og skal du på utveksling neste år?"
           />
         </GeneralInfoSection>
         <SeparatorLine />
-        <GroupsSection>
-          <Sidebar>
-            <div>
-              <SectionHeader>Komiteer</SectionHeader>
-              <HelpText>
-                <Icon name="information-circle-outline" />
-                Her skriver du søknaden til komiteen(e) du har valgt. Hver
-                komité kan kun se søknaden til sin egen komité.
-              </HelpText>
+        <GroupsSection isSingleGroupAdmission={isSingleGroupAdmission}>
+          {!isSingleGroupAdmission && (
+            <Sidebar>
+              <div>
+                <SectionHeader>Komiteer</SectionHeader>
+                <HelpText>
+                  <Icon name="information-circle-outline" />
+                  Her skriver du søknaden til backup
+                </HelpText>
 
-              <ToggleGroups
-                groups={groups}
-                selectedGroups={selectedGroups}
-                toggleGroup={toggleGroup}
-              />
-            </div>
-          </Sidebar>
-          {hasSelected ? (
+                <ToggleGroups
+                  groups={groups}
+                  selectedGroups={selectedGroups}
+                  toggleGroup={toggleGroup}
+                />
+              </div>
+            </Sidebar>
+          )}
+          {hasSelected || isSingleGroupAdmission ? (
             <Applications>{SelectedGroupItems}</Applications>
           ) : (
             <NoChosenGroupsWrapper>
@@ -125,7 +121,7 @@ const FormStructure: React.FC<FormStructureProps> = ({
               <LegoButton
                 icon="arrow-forward"
                 iconPrefix="ios"
-                to="/velg-komiteer"
+                to="../velg-komiteer"
               >
                 Velg komiteer
               </LegoButton>

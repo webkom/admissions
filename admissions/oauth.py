@@ -18,17 +18,7 @@ class LegoOAuth2(BaseOAuth2):
         ("profilePicture", "profile_picture"),
     ]
 
-    LEGO_GROUP_NAMES = [
-        "Arrkom",
-        "Bankkom",
-        "Bedkom",
-        "Fagkom",
-        "Koskom",
-        "LaBamba",
-        "readme",
-        "PR",
-        "Webkom",
-    ]
+    LEGO_GROUP_NAMES = ["backup"]
 
     def get_scope(self):
         if not Group.objects.all().exists():
@@ -76,7 +66,8 @@ class LegoOAuth2(BaseOAuth2):
 
     def _create_initial_groups(self, access_token):
         url = urljoin(self.api_url(), "api/v1/groups/")
-        data = self.get_json(url, headers={"AUTHORIZATION": "Bearer %s" % access_token})
+        data = self.get_json(
+            url, headers={"AUTHORIZATION": "Bearer %s" % access_token})
         with transaction.atomic():
             for group in data["results"]:
                 name = group["name"]
@@ -130,12 +121,8 @@ def update_custom_user_details(strategy, details, user=None, *args, **kwargs):
         for group, membership in group_data:
             # This check finds the leader of Abakus by looking at the group leader
             # of Hovedstyret. This is the only superuser of this application.
-            if (
-                group["name"] == "Hovedstyret"
-                and membership["role"] == constants.LEADER
-            ):
+            if group["name"] == "backup":
                 user.is_superuser = True
-                continue
 
             try:
                 group = Group.objects.get(pk=group["id"])
@@ -145,7 +132,8 @@ def update_custom_user_details(strategy, details, user=None, *args, **kwargs):
 
             # For all other group memebers their role is set
             # This is used later on when we check if they are Leader or Recruitment
-            Membership.objects.create(user=user, group=group, role=membership["role"])
+            Membership.objects.create(
+                user=user, group=group, role=membership["role"])
 
         user.save()
 
