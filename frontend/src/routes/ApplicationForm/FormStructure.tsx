@@ -16,6 +16,8 @@ import {
   GeneralInfoSection,
   GroupsSection,
   HelpText,
+  InformationSection,
+  InfoText,
   NoChosenGroupsWrapper,
   NoChosenSubTitle,
   NoChosenTitle,
@@ -51,6 +53,7 @@ const FormStructure: React.FC<FormStructureProps> = ({
   onCancel,
 }) => {
   const { data: myApplication } = useMyApplication(String(admission.pk));
+  const isSingleGroupAdmission = groups.length === 1;
 
   return (
     <PageWrapper>
@@ -72,49 +75,91 @@ const FormStructure: React.FC<FormStructureProps> = ({
       </FormHeader>
       <Form>
         <SeparatorLine />
+        <InformationSection>
+          <SectionHeader>Informasjon</SectionHeader>
+
+          <InfoText>Hei!</InfoText>
+          <InfoText>
+            Aller først - tusen takk for din interesse for å søke backup! Lurer
+            du på mer om oss kan du lese{" "}
+            <a href="https://abakus.no/articles/447/"> her</a>. <br />
+            Kriteriet for å søke er at du har interesse for Abakus og har vært
+            medlem i Abakus i minst 3 måneder, men vi prioriterer 2. klassinger
+            og oppover. Absolutt alle kan søke uavhengig om man har hatt
+            tidligere verv eller ikke. Søkere som skal være i Trondheim hele det
+            neste året vil få høyest prioritet, men om du kun er borte et halvt
+            år vil din søknad likevel bli vurdert.
+          </InfoText>
+
+          <InfoText>
+            Planen videre:
+            <ul>
+              <li> - 19. februar kl. 23:59: Søknadsfrist</li>
+              <li> - 13.feb - 21. februar: Kaffeprat*</li>
+              <li>
+                - 22. feb: Du får svar på om du kommer med eller ikke. Kommer du
+                ikke med i år anbefaler vi deg å søke til neste år igjen! Hold
+                gjerne av ettermiddagen i tilfelle du blir tatt opp
+              </li>
+            </ul>
+          </InfoText>
+          <InfoText>
+            *Dette er en lavterskelsamtale for at du skal bli bedre kjent med
+            oss og vi bedre kjent med deg. Dersom du er på utveksling vil
+            samtalene foregå over Zoom. Du vil bli kontaktet av to backupere for
+            å finne tid som passer:)
+          </InfoText>
+          <InfoText>
+            Vi håper du er motivert for å søke og ønsker deg lykke til i
+            prosessen. Dersom du har noen spørsmål eller innspill til prosessen
+            kan dette gjøres ved å sende en e-post til{" "}
+            <a href="mailto:backup-rekruttering@abakus.no">
+              backup-rekruttering@abakus.no
+            </a>
+            .
+          </InfoText>
+        </InformationSection>
+        <SeparatorLine />
+        <SeparatorLine />
         <GeneralInfoSection>
           <SectionHeader>Generelt</SectionHeader>
           <HelpText>
             <Icon name="information-circle-outline" />
-            Mobilnummeret vil bli brukt til å kalle deg inn på intervju av
-            komitéledere.
+            Mobilnummeret vil kunne brukes for å kontakte deg i forbindelse med
+            opptaket
           </HelpText>
           <Field name="phoneNumber" component={PhoneNumberField} />
 
           <HelpText>
             <Icon name="information-circle-outline" />
-            Kun leder av Abakus kan se det du skriver inn i prioriterings- og
-            kommentarfeltet.
-            <Icon name="information-circle-outline" />
-            Det er ikke sikkert prioriteringslisten vil bli tatt hensyn til.
-            Ikke søk på en komité du ikke ønsker å bli med i.
+            Alle i backup kan se det du skriver i søknaden din
           </HelpText>
           <Field
             name="priorityText"
             component={PriorityTextField}
-            label="Prioriteringer, og andre kommentarer"
-            optional
+            label="Hvilken klasse og linje går du, og skal du på utveksling neste år?"
           />
         </GeneralInfoSection>
         <SeparatorLine />
-        <GroupsSection>
-          <Sidebar>
-            <div>
-              <SectionHeader>Komiteer</SectionHeader>
-              <HelpText>
-                <Icon name="information-circle-outline" />
-                Her skriver du søknaden til komiteen(e) du har valgt. Hver
-                komité kan kun se søknaden til sin egen komité.
-              </HelpText>
+        <GroupsSection isSingleGroupAdmission={isSingleGroupAdmission}>
+          {!isSingleGroupAdmission && (
+            <Sidebar>
+              <div>
+                <SectionHeader>Komiteer</SectionHeader>
+                <HelpText>
+                  <Icon name="information-circle-outline" />
+                  Her skriver du søknaden til backup
+                </HelpText>
 
-              <ToggleGroups
-                groups={groups}
-                selectedGroups={selectedGroups}
-                toggleGroup={toggleGroup}
-              />
-            </div>
-          </Sidebar>
-          {hasSelected ? (
+                <ToggleGroups
+                  groups={groups}
+                  selectedGroups={selectedGroups}
+                  toggleGroup={toggleGroup}
+                />
+              </div>
+            </Sidebar>
+          )}
+          {hasSelected || isSingleGroupAdmission ? (
             <Applications>{SelectedGroupItems}</Applications>
           ) : (
             <NoChosenGroupsWrapper>
@@ -125,7 +170,7 @@ const FormStructure: React.FC<FormStructureProps> = ({
               <LegoButton
                 icon="arrow-forward"
                 iconPrefix="ios"
-                to="/velg-komiteer"
+                to="../velg-komiteer"
               >
                 Velg komiteer
               </LegoButton>
@@ -154,13 +199,16 @@ const FormStructure: React.FC<FormStructureProps> = ({
               </div>
             )}
             <SubmitInfo>
-              Oppdateringer etter søknadsfristen kan ikke garanteres å bli sett
-              av komiteen(e) du søker deg til.
+              Oppdateringer etter søknadsfristen kan ikke garanteres å bli sett.
             </SubmitInfo>
             <SubmitInfo>
-              Din søknad til hver komité kan kun ses av den aktuelle komiteen og
-              leder av Abakus. All søknadsinformasjon slettes etter opptaket er
-              gjennomført.
+              Søkaden vil bli sett av hele backup. All søknadsinformasjon
+              slettes etter opptaket er gjennomført. Ta kontakt med{" "}
+              <a href="mailto:backup@abakus.no"> backup@abakus.no</a> eller{" "}
+              <a href="mailto:backup-rekruttering@abakus.no">
+                backup-rekruttering@abakus.no
+              </a>{" "}
+              om du har noen spørsmål.
             </SubmitInfo>
             <SubmitInfo>Du kan når som helst trekke søknaden din.</SubmitInfo>
           </div>
