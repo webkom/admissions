@@ -38,7 +38,7 @@ class AppView(TemplateView):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context["settings"] = settings
-        # :rip:
+        # :rip: test
         # beacuse of proxy model
         if self.request.user.is_authenticated:
             self.request.user.__class__ = LegoUser
