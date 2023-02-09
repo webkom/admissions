@@ -83,7 +83,7 @@ const FormStructure: React.FC<FormStructureProps> = ({
           </InfoText>
           <InfoText>
 
-            Aller først - tusen takk for din interesse for å søke backup! Lurer du på mer om oss kan du lese <a href="https://www.abakus.no"> her</a>. <br />
+            Aller først - tusen takk for din interesse for å søke backup! Lurer du på mer om oss kan du lese <a href="https://abakus.no/articles/447/"> her</a>. <br />
             Kriteriet for å søke er at du har interesse for Abakus og har vært medlem i Abakus i minst 3 måneder, men vi prioriterer 2. klassinger og oppover. Absolutt alle kan søke uavhengig om man har hatt tidligere verv eller ikke. Søkere som skal være i Trondheim hele det neste året vil få høyest prioritet, men om du kun er borte et halvt år vil din søknad likevel bli vurdert.
 
           </InfoText>
