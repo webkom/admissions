@@ -66,8 +66,7 @@ class LegoOAuth2(BaseOAuth2):
 
     def _create_initial_groups(self, access_token):
         url = urljoin(self.api_url(), "api/v1/groups/")
-        data = self.get_json(
-            url, headers={"AUTHORIZATION": "Bearer %s" % access_token})
+        data = self.get_json(url, headers={"AUTHORIZATION": "Bearer %s" % access_token})
         with transaction.atomic():
             for group in data["results"]:
                 name = group["name"]
@@ -132,8 +131,7 @@ def update_custom_user_details(strategy, details, user=None, *args, **kwargs):
 
             # For all other group memebers their role is set
             # This is used later on when we check if they are Leader or Recruitment
-            Membership.objects.create(
-                user=user, group=group, role=membership["role"])
+            Membership.objects.create(user=user, group=group, role=membership["role"])
 
         user.save()
 
