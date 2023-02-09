@@ -210,8 +210,6 @@ export const HelpText = styled.span`
   `};
 `;
 
-
-
 /* Groups section */
 
 interface GroupSectionProps {

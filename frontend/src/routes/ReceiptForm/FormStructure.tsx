@@ -78,20 +78,31 @@ const FormStructure: React.FC<FormStructureProps> = ({ toggleIsEditing }) => {
         </TimeStamp>
         <InformationSection>
           <InfoText>
-            Tusen takk for din søknad!  Dersom du har noen spørsmål eller innspill til prosessen kan dette gjøres ved å sende en e-post til <a href='mailto:backup-rekruttering@abakus.no'> backup-rekruttering@abakus.no</a>.
-
+            Tusen takk for din søknad! Dersom du har noen spørsmål eller
+            innspill til prosessen kan dette gjøres ved å sende en e-post til{" "}
+            <a href="mailto:backup-rekruttering@abakus.no">
+              backup-rekruttering@abakus.no
+            </a>
+            .
           </InfoText>
-          <InfoText> Planen videre:
+          <InfoText>
+            Planen videre:
             <ul>
               <li> - 19. februar kl. 23:59: Søknadsfrist</li>
               <li> - 13.feb - 21. februar: Kaffeprat*</li>
-              <li> - 22. feb: Du får svar på om du kommer med eller ikke. Kommer du ikke med i år anbefaler vi deg å søke til neste år igjen! Hold gjerne av ettermiddagen i tilfelle du blir tatt opp </li>
+              <li>
+                - 22. feb: Du får svar på om du kommer med eller ikke. Kommer du
+                ikke med i år anbefaler vi deg å søke til neste år igjen! Hold
+                gjerne av ettermiddagen i tilfelle du blir tatt opp
+              </li>
             </ul>
           </InfoText>
           <InfoText>
-            *Dette er en lavterskelsamtale for at du skal bli bedre kjent med oss og vi bedre kjent med deg. Dersom du er på utveksling vil samtalene foregå over Zoom. Du vil bli kontaktet av to backupere for å finne tid som passer:)
+            *Dette er en lavterskelsamtale for at du skal bli bedre kjent med
+            oss og vi bedre kjent med deg. Dersom du er på utveksling vil
+            samtalene foregå over Zoom. Du vil bli kontaktet av to backupere for
+            å finne tid som passer:)
           </InfoText>
-
         </InformationSection>
 
         <EditWrapper>
@@ -145,7 +156,6 @@ const FormStructure: React.FC<FormStructureProps> = ({ toggleIsEditing }) => {
               }
             />
           </EditActions>
-
         </EditWrapper>
       </RecieptInfo>
 

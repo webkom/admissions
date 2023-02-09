@@ -78,29 +78,45 @@ const FormStructure: React.FC<FormStructureProps> = ({
         <InformationSection>
           <SectionHeader>Informasjon</SectionHeader>
 
+          <InfoText>Hei!</InfoText>
           <InfoText>
-            Hei!
+            Aller først - tusen takk for din interesse for å søke backup! Lurer
+            du på mer om oss kan du lese{" "}
+            <a href="https://abakus.no/articles/447/"> her</a>. <br />
+            Kriteriet for å søke er at du har interesse for Abakus og har vært
+            medlem i Abakus i minst 3 måneder, men vi prioriterer 2. klassinger
+            og oppover. Absolutt alle kan søke uavhengig om man har hatt
+            tidligere verv eller ikke. Søkere som skal være i Trondheim hele det
+            neste året vil få høyest prioritet, men om du kun er borte et halvt
+            år vil din søknad likevel bli vurdert.
           </InfoText>
+
           <InfoText>
-
-            Aller først - tusen takk for din interesse for å søke backup! Lurer du på mer om oss kan du lese <a href="https://abakus.no/articles/447/"> her</a>. <br />
-            Kriteriet for å søke er at du har interesse for Abakus og har vært medlem i Abakus i minst 3 måneder, men vi prioriterer 2. klassinger og oppover. Absolutt alle kan søke uavhengig om man har hatt tidligere verv eller ikke. Søkere som skal være i Trondheim hele det neste året vil få høyest prioritet, men om du kun er borte et halvt år vil din søknad likevel bli vurdert.
-
-          </InfoText>
-
-          <InfoText> Planen videre:
+            Planen videre:
             <ul>
               <li> - 19. februar kl. 23:59: Søknadsfrist</li>
               <li> - 13.feb - 21. februar: Kaffeprat*</li>
-              <li> - 22. feb: Du får svar på om du kommer med eller ikke. Kommer du ikke med i år anbefaler vi deg å søke til neste år igjen! Hold gjerne av ettermiddagen i tilfelle du blir tatt opp </li>
+              <li>
+                - 22. feb: Du får svar på om du kommer med eller ikke. Kommer du
+                ikke med i år anbefaler vi deg å søke til neste år igjen! Hold
+                gjerne av ettermiddagen i tilfelle du blir tatt opp
+              </li>
             </ul>
           </InfoText>
           <InfoText>
-            *Dette er en lavterskelsamtale for at du skal bli bedre kjent med oss og vi bedre kjent med deg. Dersom du er på utveksling vil samtalene foregå over Zoom. Du vil bli kontaktet av to backupere for å finne tid som passer:)
+            *Dette er en lavterskelsamtale for at du skal bli bedre kjent med
+            oss og vi bedre kjent med deg. Dersom du er på utveksling vil
+            samtalene foregå over Zoom. Du vil bli kontaktet av to backupere for
+            å finne tid som passer:)
           </InfoText>
           <InfoText>
-            Vi håper du er motivert for å søke og ønsker deg lykke til i prosessen. Dersom du har noen spørsmål eller innspill til prosessen kan dette gjøres ved å sende en e-post til <a href='mailto:backup-rekruttering@abakus.no'> backup-rekruttering@abakus.no</a>.
-
+            Vi håper du er motivert for å søke og ønsker deg lykke til i
+            prosessen. Dersom du har noen spørsmål eller innspill til prosessen
+            kan dette gjøres ved å sende en e-post til{" "}
+            <a href="mailto:backup-rekruttering@abakus.no">
+              backup-rekruttering@abakus.no
+            </a>
+            .
           </InfoText>
         </InformationSection>
         <SeparatorLine />
@@ -109,7 +125,8 @@ const FormStructure: React.FC<FormStructureProps> = ({
           <SectionHeader>Generelt</SectionHeader>
           <HelpText>
             <Icon name="information-circle-outline" />
-            Mobilnummeret vil kunne brukes for å kontakte deg i forbindelse med opptaket
+            Mobilnummeret vil kunne brukes for å kontakte deg i forbindelse med
+            opptaket
           </HelpText>
           <Field name="phoneNumber" component={PhoneNumberField} />
 
@@ -185,7 +202,13 @@ const FormStructure: React.FC<FormStructureProps> = ({
               Oppdateringer etter søknadsfristen kan ikke garanteres å bli sett.
             </SubmitInfo>
             <SubmitInfo>
-              Søkaden vil bli sett av hele backup. All søknadsinformasjon slettes etter opptaket er gjennomført. Ta kontakt med <a href="mailto:backup@abakus.no"> backup@abakus.no</a> eller <a href="mailto:backup-rekruttering@abakus.no"> backup-rekruttering@abakus.no</a> om du har noen spørsmål.
+              Søkaden vil bli sett av hele backup. All søknadsinformasjon
+              slettes etter opptaket er gjennomført. Ta kontakt med{" "}
+              <a href="mailto:backup@abakus.no"> backup@abakus.no</a>{" "}eller{" "}
+              <a href="mailto:backup-rekruttering@abakus.no">
+                backup-rekruttering@abakus.no
+              </a>{" "}
+              om du har noen spørsmål.
             </SubmitInfo>
             <SubmitInfo>Du kan når som helst trekke søknaden din.</SubmitInfo>
           </div>
@@ -205,7 +228,7 @@ const FormStructure: React.FC<FormStructureProps> = ({
         </SubmitSection>
         <ErrorFocus />
       </Form>
-    </PageWrapper >
+    </PageWrapper>
   );
 };
 
