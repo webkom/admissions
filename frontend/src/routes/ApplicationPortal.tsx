@@ -28,7 +28,9 @@ interface SelectedGroups {
 
 const ApplicationPortal = () => {
   const { admissionId } = useParams();
-  const [selectedGroups, setSelectedGroups] = useState<SelectedGroups>({});
+  const [selectedGroups, setSelectedGroups] = useState<SelectedGroups>({
+    backup: true,
+  });
   const [isEditingApplication, setIsEditingApplication] = useState<
     boolean | null
   >(null);
@@ -40,6 +42,7 @@ const ApplicationPortal = () => {
     error,
   } = useAdmission(admissionId ?? "");
   const { groups } = admission ?? {};
+  const isSingleGroupAdmission = groups?.length === 1;
 
   const toggleGroup = (name: string) => {
     setSelectedGroups({
@@ -101,7 +104,11 @@ const ApplicationPortal = () => {
   } else {
     return (
       <PageWrapper>
-        <NavBar user={djangoData.user} isEditing={!!isEditingApplication} />
+        <NavBar
+          user={djangoData.user}
+          isEditing={!!isEditingApplication}
+          isSingleGroupAdmission={isSingleGroupAdmission}
+        />
         <ContentContainer>
           <Routes>
             <Route
@@ -130,6 +137,7 @@ const ApplicationPortal = () => {
                 )
               }
             />
+
             <Route
               path="/admin"
               element={
@@ -140,6 +148,7 @@ const ApplicationPortal = () => {
                 )
               }
             />
+            <Route path="/gruppeAdmin" element={<AdminPage />} />
             <Route path="*" element={<NotFoundPage />} />
           </Routes>
         </ContentContainer>

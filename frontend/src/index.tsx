@@ -29,10 +29,8 @@ Sentry.init({
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
-      retry: process.env.NODE_ENV === "production",
-      refetchOnWindowFocus: process.env.NODE_ENV === "production",
       queryFn: defaultQueryFn,
-      staleTime: 60000,
+      staleTime: 99999999999,
     },
   },
 });
