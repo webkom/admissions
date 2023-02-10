@@ -28,12 +28,18 @@ interface SelectedGroups {
 
 const ApplicationPortal = () => {
   const { admissionId } = useParams();
-  const [selectedGroups, setSelectedGroups] = useState<SelectedGroups>({
+  const selectedGroups: SelectedGroups = {
     backup: true,
-  });
+  };
   const [isEditingApplication, setIsEditingApplication] = useState<
     boolean | null
   >(null);
+
+  // Empty function to prevent the default value from being tampered
+  // with without having to remove all occurences
+  const setSelectedGroups = (_: SelectedGroups) => {
+    return _;
+  };
 
   const { data: myApplication } = useMyApplication(admissionId ?? "");
   const {
