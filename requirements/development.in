@@ -2,7 +2,7 @@
 
 django-debug-toolbar==3.8.1
 factory-boy>=2.12.0
-tox==4.4.5
+tox==4.4.6
 
 -r isort.txt
 -r black.txt
