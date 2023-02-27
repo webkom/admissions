@@ -6,7 +6,6 @@ import { media } from "src/styles/mediaQueries";
 import FormatTime from "src/components/Time/FormatTime";
 import { useMyApplication } from "src/query/hooks";
 import { Admission as AdmissionInterface } from "src/types";
-import { useAdmission } from "src/query/hooks";
 import CountDown from "./CountDown";
 
 interface AdmissionProps {
@@ -17,9 +16,6 @@ const Admission: React.FC<AdmissionProps> = ({ admission }) => {
   const [hasSubmitted, setHasSubmitted] = useState(false);
 
   const { data: myApplication } = useMyApplication(admission.pk);
-  const { data: detailedAdmission } = useAdmission(admission.pk);
-  const isSingleGroupAdmission: boolean =
-    detailedAdmission?.groups?.length === 1;
 
   useEffect(() => {
     setHasSubmitted(!!myApplication);
@@ -87,9 +83,7 @@ const Admission: React.FC<AdmissionProps> = ({ admission }) => {
                   <LegoButton
                     to={
                       `/${admission.pk}/` +
-                      (hasSubmitted || isSingleGroupAdmission
-                        ? "min-soknad"
-                        : "velg-komiteer")
+                      (hasSubmitted ? "min-soknad" : "velg-komiteer")
                     }
                     icon="arrow-forward"
                     iconPrefix="ios"
@@ -132,7 +126,7 @@ const Admission: React.FC<AdmissionProps> = ({ admission }) => {
       <p>
         Du kan til enhver tid trekke søknaden din hvis du skulle ombestemme deg.
         Hvis det ikke fungerer å slette søknaden, send en mail til{" "}
-        <a href="mailto:backup@abakus.no">backup@abakus.no</a>.
+        <a href="mailto:leder@abakus.no">leder@abakus.no</a>.
       </p>
     </AdmissionWrapper>
   );

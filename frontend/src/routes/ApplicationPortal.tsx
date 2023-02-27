@@ -28,18 +28,10 @@ interface SelectedGroups {
 
 const ApplicationPortal = () => {
   const { admissionId } = useParams();
-  const selectedGroups: SelectedGroups = {
-    backup: true,
-  };
+  const [selectedGroups, setSelectedGroups] = useState<SelectedGroups>({});
   const [isEditingApplication, setIsEditingApplication] = useState<
     boolean | null
   >(null);
-
-  // Empty function to prevent the default value from being tampered
-  // with without having to remove all occurences
-  const setSelectedGroups = (_: SelectedGroups) => {
-    return _;
-  };
 
   const { data: myApplication } = useMyApplication(admissionId ?? "");
   const {
@@ -48,7 +40,6 @@ const ApplicationPortal = () => {
     error,
   } = useAdmission(admissionId ?? "");
   const { groups } = admission ?? {};
-  const isSingleGroupAdmission = groups?.length === 1;
 
   const toggleGroup = (name: string) => {
     setSelectedGroups({
@@ -110,11 +101,7 @@ const ApplicationPortal = () => {
   } else {
     return (
       <PageWrapper>
-        <NavBar
-          user={djangoData.user}
-          isEditing={!!isEditingApplication}
-          isSingleGroupAdmission={isSingleGroupAdmission}
-        />
+        <NavBar user={djangoData.user} isEditing={!!isEditingApplication} />
         <ContentContainer>
           <Routes>
             <Route
@@ -143,7 +130,6 @@ const ApplicationPortal = () => {
                 )
               }
             />
-
             <Route
               path="/admin"
               element={
@@ -154,7 +140,6 @@ const ApplicationPortal = () => {
                 )
               }
             />
-            <Route path="/gruppeAdmin" element={<AdminPage />} />
             <Route path="*" element={<NotFoundPage />} />
           </Routes>
         </ContentContainer>
