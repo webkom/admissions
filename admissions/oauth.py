@@ -18,7 +18,17 @@ class LegoOAuth2(BaseOAuth2):
         ("profilePicture", "profile_picture"),
     ]
 
-    LEGO_GROUP_NAMES = ["backup"]
+    LEGO_GROUP_NAMES = [
+        "Arrkom",
+        "Bankkom",
+        "Bedkom",
+        "Fagkom",
+        "Koskom",
+        "LaBamba",
+        "readme",
+        "PR",
+        "Webkom",
+    ]
 
     def get_scope(self):
         if not Group.objects.all().exists():
@@ -120,8 +130,12 @@ def update_custom_user_details(strategy, details, user=None, *args, **kwargs):
         for group, membership in group_data:
             # This check finds the leader of Abakus by looking at the group leader
             # of Hovedstyret. This is the only superuser of this application.
-            if group["name"] == "backup":
+            if (
+                group["name"] == "Hovedstyret"
+                and membership["role"] == constants.LEADER
+            ):
                 user.is_superuser = True
+                continue
 
             try:
                 group = Group.objects.get(pk=group["id"])

@@ -9,19 +9,14 @@ import { User } from "src/types";
 interface NavBarProps {
   user: User;
   isEditing: boolean;
-  isSingleGroupAdmission?: boolean;
 }
 
-const NavBar: React.FC<NavBarProps> = ({
-  user,
-  isEditing,
-  isSingleGroupAdmission = false,
-}) => (
+const NavBar: React.FC<NavBarProps> = ({ user, isEditing }) => (
   <Container>
     <BrandContainer>
       <AbakusLogo />
     </BrandContainer>
-    {!isSingleGroupAdmission && (!user.has_application || isEditing) ? (
+    {!user.has_application || isEditing ? (
       <NavItemsContainer>
         <NavItem to="./velg-komiteer" text="Velg komiteer" />
         <NavItem to="./min-soknad" text="Min søknad" />

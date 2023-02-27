@@ -10,7 +10,7 @@ export const useAdmissions = () => {
   return useQuery<Admission[], QueryError>(["/admission/"]);
 };
 
-export const useAdmission = (admissionId: string | number) => {
+export const useAdmission = (admissionId: string) => {
   return useQuery<Admission, QueryError>([`/admission/${admissionId}/`]);
 };
 
