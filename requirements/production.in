@@ -1,3 +1,0 @@
--r base.in
-
-uwsgi==2.0.21

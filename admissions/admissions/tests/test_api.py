@@ -233,7 +233,6 @@ class CreateApplicationTestCase(APITestCase):
 
         annas_application_data["user"] = self.pleb_anna.pk
 
-        admission = Admission.objects.first()
         res = self.client.post(
             reverse("userapplication-list", kwargs={"admission_pk": self.admission_id}),
             annas_application_data,
@@ -362,9 +361,6 @@ class ListApplicationsTestCase(APITestCase):
         self.assertEqual(res.status_code, status.HTTP_200_OK)
 
     def test_cannot_get_application_by_pk(self):
-        application = UserApplication.objects.create(
-            user=self.pleb, admission=self.admission
-        )
         self.client.force_authenticate(user=self.pleb)
         res = self.client.get(
             reverse("userapplication-list", kwargs={"admission_pk": self.admission_id})
