@@ -52,7 +52,7 @@ django==4.1.6
     #   django-extensions
     #   django-vite
     #   djangorestframework
-django-cors-headers==3.13.0
+django-cors-headers==3.14.0
     # via -r requirements/base.in
 django-debug-toolbar==3.8.1
     # via -r requirements/development.in
