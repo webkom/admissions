@@ -44,7 +44,7 @@ defusedxml==0.7.1
     #   social-auth-core
 distlib==0.3.6
     # via virtualenv
-django==4.1.6
+django==4.1.7
     # via
     #   -r requirements/base.in
     #   django-cors-headers
