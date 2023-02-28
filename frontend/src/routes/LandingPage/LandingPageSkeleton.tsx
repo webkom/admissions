@@ -3,6 +3,8 @@ import styled from "styled-components";
 import { media } from "src/styles/mediaQueries";
 
 import AbakusLogo from "src/components/AbakusLogo";
+import djangoData from "src/utils/djangoData";
+import LegoButton from "src/components/LegoButton";
 
 const LandingPageSkeleton: React.FC<PropsWithChildren> = ({ children }) => {
   return (
@@ -12,6 +14,18 @@ const LandingPageSkeleton: React.FC<PropsWithChildren> = ({ children }) => {
       </BrandContainer>
       <Title>Opptak</Title>
       {children}
+      {djangoData.user.is_superuser && (
+        <LegoButtonWrapper>
+          <LegoButton
+            to={`/admin/`}
+            icon="arrow-forward"
+            iconPrefix="ios"
+            buttonStyle="secondary"
+          >
+            Administrer opptak
+          </LegoButton>
+        </LegoButtonWrapper>
+      )}
     </Container>
   );
 };
@@ -52,4 +66,8 @@ const Title = styled.h1`
   ${media.handheld`
     font-size: 1.3rem;
   `};
+`;
+
+const LegoButtonWrapper = styled.div`
+  margin-top: 3em;
 `;

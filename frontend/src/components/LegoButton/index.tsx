@@ -17,6 +17,7 @@ interface LegoButtonProps extends PropsWithChildren {
   iconPrefix?: string;
   onClick?: (e: React.MouseEvent<HTMLElement>) => void;
   size?: "small" | "normal";
+  type?: "button" | "submit" | "reset";
 }
 
 const LegoButton: React.FC<LegoButtonProps> = ({
@@ -29,6 +30,7 @@ const LegoButton: React.FC<LegoButtonProps> = ({
   iconPrefix = "md",
   onClick,
   size = "normal",
+  type = "button",
 }) => {
   if (to) {
     return (
@@ -36,6 +38,7 @@ const LegoButton: React.FC<LegoButtonProps> = ({
         to={to}
         buttonStyle={buttonStyle}
         onClick={onClick}
+        size={size}
         disabled={disabled}
       >
         <Text buttonStyle={buttonStyle}>{children}</Text>
@@ -64,6 +67,7 @@ const LegoButton: React.FC<LegoButtonProps> = ({
       onClick={onClick}
       disabled={disabled}
       size={size}
+      type={type}
     >
       <Text buttonStyle={buttonStyle}>{children}</Text>
       {icon && <Icon name={icon} prefix={iconPrefix} />}
