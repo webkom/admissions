@@ -24,7 +24,7 @@ ENV PYTHONUNBUFFERED 1
 ENV ENV_CONFIG 1
 ENV RELEASE ${RELEASE}
 
-RUN pip install "poetry==1.5.1"
+RUN pip install "poetry==1.4.0"
 
 RUN mkdir /app
 COPY poetry.lock pyproject.toml /app/
