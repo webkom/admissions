@@ -3,7 +3,7 @@ from datetime import timedelta
 from django.core.management.base import BaseCommand
 from django.utils import timezone
 
-from admissions.admissions.models import Admission
+from admissions.admissions.models import Admission, Group
 
 
 class Command(BaseCommand):
@@ -23,11 +23,15 @@ class Command(BaseCommand):
         public_deadline_date = base_date + timedelta(days=7)
         application_deadline_date = base_date + timedelta(days=9)
 
-        Admission.objects.create(
+        admission = Admission.objects.create(
             title=f"Opptak {base_date.year}",
             open_from=open_date,
             public_deadline=public_deadline_date,
             application_deadline=application_deadline_date,
         )
+
+        groups = Group.objects.all()
+        for group in groups:
+            group.admissions.add(admission)
 
         self.stdout.write(self.style.SUCCESS("Successfully created admission"))
