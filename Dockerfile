@@ -24,11 +24,15 @@ ENV PYTHONUNBUFFERED 1
 ENV ENV_CONFIG 1
 ENV RELEASE ${RELEASE}
 
+RUN pip install "poetry==1.5.1"
+
 RUN mkdir /app
-COPY requirements /app/requirements
+COPY poetry.lock pyproject.toml /app/
 WORKDIR /app
 
-RUN pip install --no-cache -r requirements/production.txt
+RUN poetry config virtualenvs.create false \
+    && poetry install --no-dev --no-interaction --no-ansi
+
 
 COPY . /app/
 COPY --from=frontend-builder /app/assets /app/assets
