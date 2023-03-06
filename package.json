@@ -19,7 +19,7 @@
   },
   "dependencies": {
     "@babel/polyfill": "^7.0.0",
-    "@sentry/browser": "^7.40.0",
+    "@sentry/browser": "^7.41.0",
     "@tanstack/react-query": "^4.26.0",
     "@tanstack/react-table": "^8.7.9",
     "formik": "^2.2.9",
