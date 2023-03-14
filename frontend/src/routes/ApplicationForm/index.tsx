@@ -164,6 +164,7 @@ const ApplicationForm: React.FC<ApplicationFormProps> = ({
           text: values.priorityText,
           applications: {},
           phone_number: values.phoneNumber,
+          admission: admission?.pk,
         };
         Object.keys(values)
           .filter((group) => selectedGroups[group])

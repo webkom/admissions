@@ -195,6 +195,7 @@ class ApplicationCreateUpdateSerializer(serializers.HyperlinkedModelSerializer):
         user = validated_data.pop("user")
         text = validated_data.pop("text")
         phone_number = validated_data.pop("phone_number")
+        admission_pk = self.initial_data.pop("admission")
 
         admission = Admission.objects.get(pk=validated_data.get("admission_id"))
 
