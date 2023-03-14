@@ -6,6 +6,7 @@ from django.views.generic.base import TemplateView
 from rest_framework import permissions, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
+from admissions.utils.email import send_message
 
 from admissions.admissions.models import (
     Admission,
@@ -13,6 +14,7 @@ from admissions.admissions.models import (
     GroupApplication,
     LegoUser,
     UserApplication,
+    Membership
 )
 from admissions.admissions.serializers import (
     AdminAdmissionSerializer,
@@ -148,6 +150,10 @@ class ApplicationViewSet(viewsets.ModelViewSet):
                 # If this is the only application the user had left, we can
                 # delete the entire userApplication
                 UserApplication.objects.get(pk=pk).delete()
+            
+            recruiters = Membership.objects.select_related().filter(role="recruiting", group=group)
+            send_message(Admission.title, recruiters)
+
             return Response(status=status.HTTP_200_OK)
 
         except UserApplication.DoesNotExist:

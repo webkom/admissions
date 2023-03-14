@@ -1,0 +1,7 @@
+{% extends "email/base.txt" %}
+
+{% block content %}
+
+En søknad til opptak {{admission_title}} har blitt slettet.
+
+{% endblock %}

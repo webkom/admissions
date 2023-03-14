@@ -33,6 +33,9 @@ DATABASES = {
 
 API_URL = "/api"
 
+# EMAIl
+EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
+
 
 # Uncomment app config and middleware config to enable debug toolbar
 # APP CONFIGURATION ============================================================

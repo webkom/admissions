@@ -31,6 +31,12 @@ AUTHENTICATION_BACKENDS = [
     "admissions.oauth.LegoOAuth2"
 ] + AUTHENTICATION_BACKENDS  # noqa
 
+# Email
+EMAIL_HOST = "smtp.gmail.com"
+EMAIL_PORT = 465
+EMAIL_USE_SSL = os.environ.get("SMTP_SSL_ENABLE") or False
+EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
+
 # Sentry
 SENTRY_DSN = env("RAVEN_DSN")
 sentry_sdk.init(
