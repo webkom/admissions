@@ -191,8 +191,9 @@ class ApplicationCreateUpdateSerializer(serializers.HyperlinkedModelSerializer):
         user = validated_data.pop("user")
         text = validated_data.pop("text")
         phone_number = validated_data.pop("phone_number")
+        admission_pk = self.initial_data.pop("admission")
 
-        admission = [obj for obj in Admission.objects.all() if obj.is_open][0]
+        admission = [obj for obj in Admission.objects.all() if obj.is_open and obj.pk == admission_pk][0]
 
         user_application, created = UserApplication.objects.update_or_create(
             admission=admission,

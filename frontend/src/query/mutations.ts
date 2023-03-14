@@ -127,6 +127,7 @@ export interface MutationApplication {
   text: string;
   phone_number: string;
   applications: Record<string, string>;
+  admission: number | undefined;
 }
 
 interface CreateApplicationProps {
