@@ -16,12 +16,14 @@ interface ToggleGroupsProps {
   groups: Group[];
   selectedGroups: any;
   toggleGroup: (name: string) => void;
+  admission_pk: number;
 }
 
 const ToggleGroups: React.FC<ToggleGroupsProps> = ({
   groups,
   selectedGroups,
   toggleGroup,
+  admission_pk,
 }) => {
   const { admissionId } = useParams();
 
