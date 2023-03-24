@@ -30,7 +30,7 @@
     "react-dom": "^18.2.0",
     "react-router-dom": "6.8.2",
     "react-textarea-autosize": "^8.4.1",
-    "styled-components": "5.3.8",
+    "styled-components": "5.3.9",
     "whatwg-fetch": "^3.6.2"
   },
   "devDependencies": {
