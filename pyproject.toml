@@ -18,7 +18,7 @@ social-auth-app-django = "^5.0.0"
 psycopg2-binary = "^2.9.5"
 ipython = "^8.11.0"
 structlog = "^22.3.0"
-sentry-sdk = "^1.17.0"
+sentry-sdk = "^1.19.0"
 uwsgi = "^2.0.21"
 
 
