@@ -1,24 +1,25 @@
 import React from "react";
 import styled from "styled-components";
-import { Route, Routes } from "react-router-dom";
-import { useAdmissions } from "src/query/hooks";
+import { Link, Route, Routes } from "react-router-dom";
+import { useAdminAdmissions } from "src/query/hooks";
 import { media } from "src/styles/mediaQueries";
 import LoadingBall from "src/components/LoadingBall";
 import NavBar from "./components/NavBar";
 import CreateAdmission from "./CreateAdmission";
 
 const ManageAdmissions: React.FC = () => {
-  const { data, isFetching, error } = useAdmissions();
+  const { data, isFetching, error } = useAdminAdmissions();
 
   if (error) {
     return <div>Error: {error.message}</div>;
-  } else if (isFetching) {
+  } else if (isFetching && !data) {
     return <LoadingBall />;
   } else {
     return (
       <PageWrapper>
         <Header>
-          <h1>Administrer opptak</h1>
+          <h2>Administrer opptak</h2>
+          <Link to={"/"}>Gå tilbake til forsiden</Link>
         </Header>
         <Wrapper>
           <LeftSide>
@@ -55,6 +56,14 @@ export const PageWrapper = styled.div`
 const Header = styled.div`
   width: 100%;
   background: var(--lego-background);
+  margin-bottom: 1rem;
+  a,
+  h2 {
+    margin-left: 1rem;
+  }
+  h2 {
+    margin-bottom: 0;
+  }
   ${media.handheld`
     margin: 0 1em 0 1em;
     font-size: 2.5rem;

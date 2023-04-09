@@ -1,40 +1,102 @@
 import { useFormik } from "formik";
 import { DateTime } from "luxon";
-import React, { useEffect } from "react";
+import React, { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 import LegoButton from "src/components/LegoButton";
-import { useAdmission } from "src/query/hooks";
-import { Group } from "src/types";
+import { useAdminAdmission } from "src/query/hooks";
+import {
+  MutationAdmission,
+  useAdminCreateAdmission,
+  useAdminUpdateAdmission,
+} from "src/query/mutations";
+import { HttpError } from "src/utils/callApi";
 import { toggleFromArray } from "src/utils/methods";
 import styled from "styled-components";
 import GroupSelector from "./components/GroupSelector";
 
+interface ReturnedData {
+  type: "error" | "success";
+  message: string;
+}
+
 const formatDateString = (dateString?: string) =>
   formatDate(DateTime.fromISO(dateString ?? ""));
 const formatCurrentDate = () => formatDate(DateTime.now());
-const formatDate = (date: DateTime) => date.toFormat("yyyy-MM-d'T'hh:mm:ss");
+const formatDate = (date: DateTime) => date.toFormat("yyyy-MM-dd'T'HH:mm:ss");
+const localTimeStringToTimezoned = (dateString: string) =>
+  DateTime.fromISO(dateString, {
+    zone: "local",
+  }).toISO({ includeOffset: true });
 
 const CreateAdmission: React.FC = () => {
   const { admissionId } = useParams();
-  const { data: admission, isLoading } = useAdmission(
+  const { data: admission } = useAdminAdmission(
     admissionId ?? "",
     admissionId !== undefined
   );
 
+  const createAdmission = useAdminCreateAdmission();
+  const updateAdmission = useAdminUpdateAdmission();
+
+  const [returnedData, setReturnedData] = useState<ReturnedData>();
+
   const isNew = !admissionId;
 
-  const formik = useFormik({
+  useEffect(() => {
+    setReturnedData(undefined);
+  }, [admissionId]);
+
+  const formik = useFormik<MutationAdmission>({
     initialValues: {
       title: "",
       slug: "",
-      openTime: formatCurrentDate(),
-      deadline: formatCurrentDate(),
-      closeTime: formatCurrentDate(),
-      adminGroups: [],
+      description: "",
+      open_from: formatCurrentDate(),
+      public_deadline: formatCurrentDate(),
+      application_deadline: formatCurrentDate(),
       groups: [],
     },
     onSubmit: (values) => {
-      console.log(JSON.stringify(values, null, 2));
+      setReturnedData(undefined);
+      const processedValues = { ...values };
+      // Use luxon to parse datetime with local timezone and add timezone offset to the datetime-string
+      processedValues.open_from =
+        localTimeStringToTimezoned(processedValues.open_from) ?? "";
+      processedValues.application_deadline =
+        localTimeStringToTimezoned(processedValues.application_deadline) ?? "";
+      processedValues.public_deadline =
+        localTimeStringToTimezoned(processedValues.public_deadline) ?? "";
+      const onSuccess = () => {
+        setReturnedData({ type: "success", message: "Opptaket er lagret!" });
+      };
+      const onError = (error: unknown) => {
+        if (error instanceof HttpError) {
+          setReturnedData({
+            type: "error",
+            message:
+              "Feilkode " + error?.code + ", klarte ikke lagre opptaket.",
+          });
+        } else {
+          setReturnedData({ type: "error", message: JSON.stringify(error) });
+        }
+      };
+      if (isNew) {
+        createAdmission.mutate(
+          { admission: processedValues },
+          {
+            onSuccess,
+            onError,
+          }
+        );
+      } else {
+        updateAdmission.mutate(
+          { admissionId: admissionId ?? "", admission: processedValues },
+          {
+            onSuccess,
+            onError,
+          }
+        );
+      }
     },
   });
 
@@ -43,18 +105,14 @@ const CreateAdmission: React.FC = () => {
       formik.setValues({
         title: admission.title,
         slug: "",
-        openTime: formatDateString(admission.open_from),
-        deadline: formatDateString(admission.public_deadline),
-        closeTime: formatDateString(admission.application_deadline),
-        adminGroups: [],
-        groups: [],
+        description: admission.description,
+        open_from: formatDateString(admission.open_from),
+        public_deadline: formatDateString(admission.public_deadline),
+        application_deadline: formatDateString(admission.application_deadline),
+        groups: admission.groups.map((group) => group.pk),
       });
     }
   }, [admission]);
-
-  if (isLoading && admissionId !== undefined) {
-    return <></>;
-  }
 
   return (
     <form onSubmit={formik.handleSubmit}>
@@ -73,19 +131,6 @@ const CreateAdmission: React.FC = () => {
             onChange={formik.handleChange}
           />
         </InputWrapper>
-        <InputWrapper>
-          <InputTitle>Slug</InputTitle>
-          <InputDescription>
-            Opptaket vil ligge under opptak.abakus.no/[slug]/
-          </InputDescription>
-          <Input
-            name="slug"
-            value={formik.values.slug}
-            onChange={formik.handleChange}
-            placeholder="f. eks. komiteer/revy/backup"
-            disabled={!isNew}
-          />
-        </InputWrapper>
       </FormGroup>
       <FormGroup>
         <InputWrapper>
@@ -94,9 +139,9 @@ const CreateAdmission: React.FC = () => {
             Fra dette tidspunktet er det mulig å legge inn søknader
           </InputDescription>
           <Input
-            name="openTime"
+            name="open_from"
             type="datetime-local"
-            value={formik.values.openTime}
+            value={formik.values.open_from}
             onChange={formik.handleChange}
           />
         </InputWrapper>
@@ -107,9 +152,9 @@ const CreateAdmission: React.FC = () => {
             søke og redigere søknaden sin.
           </InputDescription>
           <Input
-            name="deadline"
+            name="public_deadline"
             type="datetime-local"
-            value={formik.values.deadline}
+            value={formik.values.public_deadline}
             onChange={formik.handleChange}
           />
         </InputWrapper>
@@ -119,27 +164,10 @@ const CreateAdmission: React.FC = () => {
             Etter dette tidspunktet er det ikke mulig å legge inn søknader
           </InputDescription>
           <Input
-            name="closeTime"
+            name="application_deadline"
             type="datetime-local"
-            value={formik.values.closeTime}
+            value={formik.values.application_deadline}
             onChange={formik.handleChange}
-          />
-        </InputWrapper>
-      </FormGroup>
-      <FormGroup>
-        <InputWrapper>
-          <InputTitle>Admin-grupper</InputTitle>
-          <InputDescription>
-            Lederne av disse gruppene får tilgang til å se samtlige søkere.
-          </InputDescription>
-          <GroupSelector
-            value={formik.values.adminGroups}
-            toggleGroup={(value) => {
-              formik.setFieldValue(
-                "adminGroups",
-                toggleFromArray<Group>(formik.values.adminGroups, value)
-              );
-            }}
           />
         </InputWrapper>
       </FormGroup>
@@ -155,13 +183,22 @@ const CreateAdmission: React.FC = () => {
             toggleGroup={(value) => {
               formik.setFieldValue(
                 "groups",
-                toggleFromArray<Group>(formik.values.groups, value)
+                toggleFromArray(formik.values.groups, value)
               );
             }}
           />
         </InputWrapper>
       </FormGroup>
-      <LegoButton type="submit">Opprett opptak</LegoButton>
+      {returnedData && (
+        <FormGroup>
+          <ResultText type={returnedData.type}>
+            {returnedData.message}
+          </ResultText>
+        </FormGroup>
+      )}
+      <LegoButton type="submit">
+        {isNew ? "Opprett opptak" : "Oppdater opptak"}
+      </LegoButton>
     </form>
   );
 };
@@ -201,4 +238,13 @@ const Input = styled.input`
   padding: 5px;
   border-radius: 3px;
   border: 1px solid #d6d6d6;
+`;
+
+const ResultText = styled.span.attrs((props: ReturnedData) => ({
+  type: props.type,
+}))`
+  padding: 0.3rem 1rem;
+  border-radius: 10px;
+  background: ${({ type }) =>
+    type === "success" ? "var(--lego-green)" : "var(--abakus-red-light)"};
 `;

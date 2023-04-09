@@ -1,29 +1,22 @@
-import React, { useState, useEffect } from "react";
+import React from "react";
+import { useGroups } from "src/query/hooks";
 import { Group } from "src/types";
-import { callApiFromQuery } from "src/utils/callApi";
 import styled from "styled-components";
 
 interface GroupSelectorProps {
-  value: Group[];
-  toggleGroup: (group: Group) => void;
+  value: Group["pk"][];
+  toggleGroup: (groupId: number) => void;
 }
 
 const GroupSelector: React.FC<GroupSelectorProps> = ({
   value: selectedGroups,
   toggleGroup,
 }) => {
-  const [groups, setGroups] = useState<Group[]>([]);
-
-  useEffect(() => {
-    (async () => {
-      const res = await callApiFromQuery("/group/");
-      setGroups(res);
-    })();
-  }, []);
+  const { data: groups } = useGroups();
 
   const toggleSelectedGroup = (groupId: number) => {
-    const group = groups.find((group) => group.pk === groupId);
-    if (group) toggleGroup(group);
+    const group = groups?.find((group) => group.pk === groupId);
+    if (group) toggleGroup(group.pk);
   };
 
   return (
@@ -34,7 +27,7 @@ const GroupSelector: React.FC<GroupSelectorProps> = ({
       >
         <option>Legg til gruppe</option>
         {groups
-          .filter((group) => !selectedGroups.includes(group))
+          ?.filter((group) => !selectedGroups.includes(group.pk))
           .map((groupSuggestion) => (
             <option key={groupSuggestion.pk} value={groupSuggestion.pk}>
               {groupSuggestion.name}
@@ -42,15 +35,19 @@ const GroupSelector: React.FC<GroupSelectorProps> = ({
           ))}
       </Select>
       <SelectedGroupWrapper>
-        {selectedGroups.map((group) => (
-          <SelectedGroup
-            key={"selected" + group.pk}
-            onClick={() => toggleSelectedGroup(group.pk)}
-            alt={group.name}
-            title={group.name}
-            src={group.logo}
-          />
-        ))}
+        {selectedGroups.map((groupId) => {
+          const group = groups?.find((group) => group.pk === groupId);
+          if (!group) return null;
+          return (
+            <SelectedGroup
+              key={"selected" + group.pk}
+              onClick={() => toggleSelectedGroup(group.pk)}
+              alt={group.name}
+              title={group.name}
+              src={group.logo}
+            />
+          );
+        })}
       </SelectedGroupWrapper>
     </>
   );

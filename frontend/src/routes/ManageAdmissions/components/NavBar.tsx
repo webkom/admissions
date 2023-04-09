@@ -17,6 +17,9 @@ const NavBar: React.FC<Props> = ({ admissions }) => {
           {admission.title}
         </NavLink>
       ))}
+      {admissions?.length === 0 && (
+        <p>Du har ikke redigeringstilgang til noen opptak.</p>
+      )}
       <CreateNewWrapper>
         <LegoButton buttonStyle="primary" to="/admin/" icon="add" size="small">
           Lag nytt
@@ -37,10 +40,10 @@ const NavHeader = styled.h3`
 `;
 
 const NavLink = styled(Link)`
-  display: inline-block;
-  padding: 0.2rem 0;
+  display: block;
+  line-height: 1.4;
+  padding: 0.3rem 0;
   font-weight: 500;
-  vertical-align: center;
 `;
 
 const CreateNewWrapper = styled.div`

@@ -44,6 +44,14 @@ class LegoUser(AbstractUser):
         return membership.group
 
     @property
+    def is_member_of_webkom(self):
+        """
+        Return whether the user is a member of the webkom-group or not
+        """
+        webkom = Group.objects.get(name=constants.WEBKOM_GROUPNAME)
+        return Membership.objects.filter(user=self, group=webkom).exists()
+
+    @property
     def has_application(self):
         """
         Return true if this user has a registrered application
@@ -52,11 +60,14 @@ class LegoUser(AbstractUser):
 
 
 class Admission(models.Model):
-    title = models.CharField(max_length=255)
-    description = models.TextField(default="")
+    title = models.CharField(max_length=255, unique=True)
+    description = models.TextField(default="", blank=True)
     open_from = models.DateTimeField()
     public_deadline = models.DateTimeField()
     application_deadline = models.DateTimeField()
+    created_by = models.ForeignKey(
+        LegoUser, null=True, related_name="admissions", on_delete=models.CASCADE
+    )
 
     def __str__(self):
         return self.title

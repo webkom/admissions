@@ -62,23 +62,55 @@ class AdmissionPublicSerializer(AdmissionListPublicSerializer):
         fields = AdmissionListPublicSerializer.Meta.fields + ("groups",)
 
 
-class AdminAdmissionSerializer(serializers.HyperlinkedModelSerializer):
-    applications = UserApplication.objects.all()
+class AdminCreateUpdateAdmissionSerializer(serializers.HyperlinkedModelSerializer):
+    groups = serializers.PrimaryKeyRelatedField(many=True, queryset=Group.objects.all())
+    created_by = serializers.PrimaryKeyRelatedField(
+        default=serializers.CurrentUserDefault(), read_only=True
+    )
 
     class Meta:
         model = Admission
         fields = (
-            "url",
-            "pk",
             "title",
             "description",
             "open_from",
             "public_deadline",
             "application_deadline",
-            "is_closed",
-            "is_appliable",
+            "groups",
+            "created_by",
+        )
+
+    def update_or_create(self, pk, validated_data):
+        groups = validated_data.pop("groups")
+        admission, created = Admission.objects.update_or_create(
+            pk=pk, defaults=validated_data
+        )
+        admission.group_set.set(groups)  # Set the values in the database
+        setattr(admission, "groups", groups)  # Set the value to return
+        return admission
+
+    def create(self, validated_data):
+        return self.update_or_create(None, validated_data)
+
+    def update(self, instance, validated_data):
+        return self.update_or_create(instance.pk, validated_data)
+
+
+class AdminAdmissionSerializer(serializers.HyperlinkedModelSerializer):
+    applications = UserApplication.objects.all()
+    groups = GroupSerializer(source="group_set", many=True)
+
+    class Meta:
+        model = Admission
+        fields = (
+            "pk",
+            "title",
+            "description",
+            "groups",
+            "open_from",
+            "public_deadline",
+            "application_deadline",
             "applications",
-            "is_open",
         )
 
 

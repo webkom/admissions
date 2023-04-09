@@ -20,11 +20,15 @@ from django.urls import include, path, re_path
 from rest_framework import routers
 
 from admissions.admissions.views import (
+    AdminAdmissionViewSet,
     AdmissionViewSet,
     ApplicationViewSet,
     AppView,
     GroupViewSet,
 )
+
+adminRouter = routers.DefaultRouter()
+adminRouter.register(r"admission", AdminAdmissionViewSet, "admin-admission")
 
 router = routers.DefaultRouter()
 router.register(r"admission", AdmissionViewSet)
@@ -32,7 +36,7 @@ router.register(r"admission/(?P<admission_pk>\d+)/application", ApplicationViewS
 router.register(r"group", GroupViewSet)
 urlpatterns = [
     re_path(r"logout/$", auth_views.LogoutView.as_view(), name="logout"),
-    path("api/admin/", admin.site.urls),
+    path("api/admin/", include(adminRouter.urls)),
     path("api-auth/", include("rest_framework.urls", namespace="rest_framework")),
     path("api/", include(router.urls)),
     re_path("", include("social_django.urls", namespace="social")),
