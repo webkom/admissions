@@ -5,31 +5,36 @@ import AbakusLogo from "src/components/AbakusLogo";
 import NavItem from "./NavItem";
 import { media } from "src/styles/mediaQueries";
 import { User } from "src/types";
+import { useParams } from "react-router-dom";
 
 interface NavBarProps {
   user: User;
   isEditing: boolean;
 }
 
-const NavBar: React.FC<NavBarProps> = ({ user, isEditing }) => (
-  <Container>
-    <BrandContainer>
-      <AbakusLogo />
-    </BrandContainer>
-    {!user.has_application || isEditing ? (
-      <NavItemsContainer>
-        <NavItem to="./velg-komiteer" text="Velg komiteer" />
-        <NavItem to="./min-soknad" text="Min søknad" />
-      </NavItemsContainer>
-    ) : (
-      <NavItemsContainer>
-        <NavItem to="./min-soknad" text="Min søknad" />
-      </NavItemsContainer>
-    )}
+const NavBar: React.FC<NavBarProps> = ({ user, isEditing }) => {
+  const { admissionId } = useParams();
 
-    <UserInfo user={user} />
-  </Container>
-);
+  return (
+    <Container>
+      <BrandContainer>
+        <AbakusLogo />
+      </BrandContainer>
+      {!user.has_application || isEditing ? (
+        <NavItemsContainer>
+          <NavItem to={`/${admissionId}/velg-komiteer`} text="Velg komiteer" />
+          <NavItem to={`/${admissionId}/min-soknad`} text="Min søknad" />
+        </NavItemsContainer>
+      ) : (
+        <NavItemsContainer>
+          <NavItem to={`/${admissionId}/min-soknad`} text="Min søknad" />
+        </NavItemsContainer>
+      )}
+
+      <UserInfo user={user} />
+    </Container>
+  );
+};
 
 export default NavBar;
 

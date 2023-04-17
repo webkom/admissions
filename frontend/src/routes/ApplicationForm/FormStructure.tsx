@@ -125,7 +125,7 @@ const FormStructure: React.FC<FormStructureProps> = ({
               <LegoButton
                 icon="arrow-forward"
                 iconPrefix="ios"
-                to="/velg-komiteer"
+                to={`/${admission.pk}/velg-komiteer`}
               >
                 Velg komiteer
               </LegoButton>

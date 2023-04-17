@@ -36,12 +36,12 @@ const LegoButton: React.FC<LegoButtonProps> = ({
     return (
       <ILegoRouterLink
         to={to}
-        buttonStyle={buttonStyle}
+        $buttonStyle={buttonStyle}
         onClick={onClick}
-        size={size}
+        $size={size}
         disabled={disabled}
       >
-        <Text buttonStyle={buttonStyle}>{children}</Text>
+        <Text $buttonStyle={buttonStyle}>{children}</Text>
         {icon && <Icon name={icon} prefix={iconPrefix} />}
       </ILegoRouterLink>
     );
@@ -51,11 +51,11 @@ const LegoButton: React.FC<LegoButtonProps> = ({
         href={href}
         target="_blank"
         rel="noopener noreferrer"
-        buttonStyle={buttonStyle}
+        $buttonStyle={buttonStyle}
         onClick={onClick}
         disabled={disabled}
       >
-        <Text buttonStyle={buttonStyle}>{children}</Text>
+        <Text $buttonStyle={buttonStyle}>{children}</Text>
         {icon && <Icon name={icon} prefix={iconPrefix} />}
       </ILegoLink>
     );
@@ -63,13 +63,13 @@ const LegoButton: React.FC<LegoButtonProps> = ({
 
   return (
     <ILegoButton
-      buttonStyle={buttonStyle}
+      $buttonStyle={buttonStyle}
       onClick={onClick}
       disabled={disabled}
-      size={size}
+      $size={size}
       type={type}
     >
-      <Text buttonStyle={buttonStyle}>{children}</Text>
+      <Text $buttonStyle={buttonStyle}>{children}</Text>
       {icon && <Icon name={icon} prefix={iconPrefix} />}
     </ILegoButton>
   );
@@ -80,9 +80,9 @@ export default LegoButton;
 /** Styles **/
 
 interface LegoButtonStyleProps {
-  buttonStyle: ButtonStyle;
+  $buttonStyle: ButtonStyle;
   disabled?: boolean;
-  size?: "small" | "normal";
+  $size?: "small" | "normal";
 }
 
 const ILegoRouterLink = styled(Link)<LegoButtonStyleProps>`
@@ -97,26 +97,26 @@ const ILegoRouterLink = styled(Link)<LegoButtonStyleProps>`
   }
 
   /** Primary style (also base for tertiary) **/
-  ${(props) =>
-    (props.buttonStyle === "primary" || props.buttonStyle === "tertiary") &&
+  ${({ $buttonStyle }) =>
+    ($buttonStyle === "primary" || $buttonStyle === "tertiary") &&
     css<LegoButtonStyleProps>`
       background: var(--lego-red);
       color: var(--lego-white);
       border: 1px solid #bd1c1c;
       box-shadow: 0px 4px 4px rgba(0, 0, 0, 0.25);
       border-radius: 10px;
-      padding: ${(props) =>
-        props.size === "small" ? "7.5px 15px" : "10px 30px"};
+      padding: ${({ $size }) =>
+        $size === "small" ? "7.5px 15px" : "10px 30px"};
 
       > i {
-        margin-left: ${(props) => (props.size === "small" ? "10px" : "25px")};
-        font-size: ${(props) => (props.size === "small" ? "1.2rem" : "1.8rem")};
+        margin-left: ${({ $size }) => ($size === "small" ? "10px" : "25px")};
+        font-size: ${({ $size }) => ($size === "small" ? "1.2rem" : "1.8rem")};
       }
     `}
 
   /** Secondary style **/
-  ${(props) =>
-    props.buttonStyle === "secondary" &&
+  ${({ $buttonStyle }) =>
+    $buttonStyle === "secondary" &&
     css`
       color: var(--lego-red);
 
@@ -134,17 +134,17 @@ const ILegoRouterLink = styled(Link)<LegoButtonStyleProps>`
     `}
 
   /** Tertiary style **/
-  ${(props) =>
-    props.buttonStyle === "tertiary" &&
+  ${({ $buttonStyle }) =>
+    $buttonStyle === "tertiary" &&
     css`
       background: var(--lego-font-color);
       border: 1px solid var(--lego-font-color);
     `}
 
   /** Disabled primary & tertiary style **/
-  ${(props) =>
-    props.disabled &&
-    (props.buttonStyle === "primary" || props.buttonStyle === "tertiary") &&
+  ${({ disabled, $buttonStyle }) =>
+    disabled &&
+    ($buttonStyle === "primary" || $buttonStyle === "tertiary") &&
     css`
       background: var(--lego-gray-medium);
       border: 1px solid var(--lego-gray-dark);
@@ -161,16 +161,16 @@ const Text = styled.span<LegoButtonStyleProps>`
   font-family: var(--font-family);
 
   /** Primary style & Tertiary style **/
-  ${(props) =>
-    (props.buttonStyle === "primary" || props.buttonStyle === "tertiary") &&
+  ${({ $buttonStyle }) =>
+    ($buttonStyle === "primary" || $buttonStyle === "tertiary") &&
     css<LegoButtonStyleProps>`
-      font-size: ${(props) => (props.size === "small" ? "1rem" : "1.2rem")};
+      font-size: ${({ $size }) => ($size === "small" ? "1rem" : "1.2rem")};
       margin-bottom: 3px;
     `}
 
   /** Secondary style **/
-  ${(props) =>
-    props.buttonStyle === "secondary" &&
+  ${({ $buttonStyle }) =>
+    $buttonStyle === "secondary" &&
     css`
       font-size: 1.1rem;
       display: inline-block;
