@@ -125,6 +125,18 @@ $ pip-sync requirements/development.txt
 This will install missing packages, install the correct version and
 remove excess packages.
 
+## Creating admissions
+
+Currently when running
+
+```sh
+# Create a custom admission for development
+$ python manage.py create_admission
+```
+
+you create an admisison not connected to any group. To connect it to a group, this must be done in the shell. Note that when
+creating gruops, you must import the Group model manually, as otherwise it will use the Django Group model instead of our own.
+
 ## Run tests
 
 Run django tests using tox. Note that we point at the admissions database running at :5433 if we are running lego and admissions
