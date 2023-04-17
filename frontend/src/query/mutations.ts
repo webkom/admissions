@@ -1,6 +1,64 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { callApiFromQuery } from "../utils/callApi";
 
+// Admin mutations
+
+export interface MutationAdmission {
+  title: string;
+  slug?: string;
+  description: string;
+  open_from: string;
+  public_deadline: string;
+  application_deadline: string;
+  groups: number[];
+}
+interface CreateAdmissionProps {
+  admission: MutationAdmission;
+}
+
+export const useAdminCreateAdmission = () => {
+  const queryClient = useQueryClient();
+  return useMutation(
+    ({ admission }: CreateAdmissionProps) => {
+      return callApiFromQuery(`/admin/admission/`, {
+        method: "POST",
+        body: JSON.stringify(admission),
+      });
+    },
+    {
+      onSuccess: () => {
+        queryClient.invalidateQueries([`/admin/admission/`]);
+      },
+    }
+  );
+};
+
+interface UpdateAdmissionProps extends CreateAdmissionProps {
+  admissionId: string;
+}
+
+export const useAdminUpdateAdmission = () => {
+  const queryClient = useQueryClient();
+  return useMutation(
+    ({ admissionId, admission }: UpdateAdmissionProps) => {
+      return callApiFromQuery(`/admin/admission/${admissionId}/`, {
+        method: "PATCH",
+        body: JSON.stringify(admission),
+      });
+    },
+    {
+      onSuccess: (_, variables) => {
+        queryClient.invalidateQueries([`/admin/admission/`]);
+        queryClient.invalidateQueries([
+          `/admin/admission/${variables.admissionId}/`,
+        ]);
+      },
+    }
+  );
+};
+
+// User mutations
+
 export const useDeleteMyApplicationMutation = (admissionId: string) => {
   const queryClient = useQueryClient();
   return useMutation(

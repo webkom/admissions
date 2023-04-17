@@ -3,6 +3,11 @@ from rest_framework import permissions
 from .models import GroupApplication, LegoUser, UserApplication
 
 
+def cast_as_lego_user(user_obj) -> LegoUser:
+    user_obj.__class__ = LegoUser
+    return user_obj
+
+
 class IsOwnerOrReadOnly(permissions.BasePermission):
     """
     Custom permission to only allow owners of an object to edit it.
@@ -12,6 +17,35 @@ class IsOwnerOrReadOnly(permissions.BasePermission):
         if request.method in permissions.SAFE_METHODS:
             return True
         return obj.user == request.user
+
+
+class IsSuperuser(permissions.BasePermission):
+    def has_permission(self, request):
+        return cast_as_lego_user(request.user).is_superuser
+
+    def has_object_permission(self, request):
+        return cast_as_lego_user(request.user).is_superuser
+
+
+class IsStaff(permissions.BasePermission):
+    def has_permission(self, request, *_):
+        return cast_as_lego_user(request.user).is_staff
+
+    def has_object_permission(self, request, *_):
+        return cast_as_lego_user(request.user).is_staff
+
+
+class IsWebkom(permissions.BasePermission):
+    def has_permission(self, request, *_):
+        return cast_as_lego_user(request.user).is_member_of_webkom
+
+    def has_object_permission(self, request, *_):
+        return cast_as_lego_user(request.user).is_member_of_webkom
+
+
+class IsCreatorOfObject(permissions.BasePermission):
+    def has_object_permission(self, request, view, obj):
+        return obj.created_by == cast_as_lego_user(request.user)
 
 
 class GroupPermissions(permissions.BasePermission):

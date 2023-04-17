@@ -16,6 +16,7 @@ from admissions.admissions.models import (
 )
 from admissions.admissions.serializers import (
     AdminAdmissionSerializer,
+    AdminCreateUpdateAdmissionSerializer,
     AdmissionListPublicSerializer,
     AdmissionPublicSerializer,
     ApplicationCreateUpdateSerializer,
@@ -29,6 +30,9 @@ from .permissions import (
     ApplicationPermissions,
     GroupApplicationPermissions,
     GroupPermissions,
+    IsCreatorOfObject,
+    IsStaff,
+    IsWebkom,
 )
 
 
@@ -166,3 +170,27 @@ class ApplicationViewSet(viewsets.ModelViewSet):
         except UserApplication.DoesNotExist:
             # HTTP 204 No Content
             return HttpResponse(status=204)
+
+
+class AdminAdmissionViewSet(viewsets.ModelViewSet):
+    queryset = Admission.objects.all().order_by("open_from")
+    authentication_classes = [SessionAuthentication]
+    permission_classes = [
+        permissions.IsAuthenticated,
+        IsWebkom | (IsStaff & IsCreatorOfObject),
+    ]
+    http_method_names = ["get", "post", "patch"]
+
+    def get_serializer_class(self):
+        if self.request.method == "GET":
+            return AdminAdmissionSerializer
+        elif self.request.method == "POST" or self.request.method == "PATCH":
+            return AdminCreateUpdateAdmissionSerializer
+
+    def get_queryset(self):
+        if self.request.user.is_member_of_webkom:
+            return self.queryset
+        return self.queryset.filter(created_by=self.request.user)
+
+    def perform_create(self, serializer):
+        serializer.save(created_by=self.request.user)

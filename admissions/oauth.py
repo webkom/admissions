@@ -131,11 +131,17 @@ def update_custom_user_details(strategy, details, user=None, *args, **kwargs):
             # This check finds the leader of Abakus by looking at the group leader
             # of Hovedstyret. This is the only superuser of this application.
             if (
-                group["name"] == "Hovedstyret"
+                group["name"] in constants.SUPERUSER_LEADER_GROUPS
                 and membership["role"] == constants.LEADER
             ):
                 user.is_superuser = True
-                continue
+
+            # Leaders of certain groups have staff_permission, which allows them to edit admissions
+            if (
+                group["name"] in constants.STAFF_LEADER_GROUPS
+                and membership["role"] == constants.LEADER
+            ):
+                user.is_staff = True
 
             try:
                 group = Group.objects.get(pk=group["id"])

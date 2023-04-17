@@ -14,7 +14,7 @@ const LandingPageSkeleton: React.FC<PropsWithChildren> = ({ children }) => {
       </BrandContainer>
       <Title>Opptak</Title>
       {children}
-      {djangoData.user.is_superuser && (
+      {(djangoData.user.is_staff || djangoData.user.is_member_of_webkom) && (
         <LegoButtonWrapper>
           <LegoButton
             to={`/admin/`}

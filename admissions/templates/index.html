@@ -42,8 +42,9 @@
         is_superuser: {{ request.user.is_superuser|yesno:"true,false" }},
         is_privileged: {{ request.user.is_privileged|yesno:"true,false" }},
         has_application: {{ request.user.has_application|yesno:"true,false" }},
-        representative_of_group: "{{ request.user.representative_of_group }}"
-
+        representative_of_group: "{{ request.user.representative_of_group }}",
+        is_staff: {{ request.user.is_staff|yesno:"true,false" }},
+        is_member_of_webkom: {{ request.user.is_member_of_webkom|yesno:"true,false" }}
       }
     };
     window.__CONFIG__ = {
@@ -53,13 +54,5 @@
         API_URL: "{{ settings.API_URL }}"
     }
     </script>
-    <!--
-      This HTML file is a template.
-      If you open it directly in the browser, you will see an empty page.
-
-      You can add webfonts, meta tags, or analytics to this file.
-      The build step will place the bundled scripts into the <body> tag.
-    -->
-
   </body>
 </html>
