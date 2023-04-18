@@ -77,34 +77,35 @@ const Admission: React.FC<AdmissionProps> = ({ admission }) => {
             />
           )}
           <LinkWrapper>
-            {(admission.is_open || hasSubmitted) && (djangoData.user.full_name ? (
-              <li>
-                <LegoButton
-                  to={
-                    `/${admission.pk}/` +
-                    (hasSubmitted ? "min-soknad" : "velg-komiteer")
-                  }
-                  icon="arrow-forward"
-                  iconPrefix="ios"
-                >
-                  Gå til søknad
-                </LegoButton>
-              </li>
-            ) : (
-              <li>
-                <LegoButton
-                  icon="arrow-forward"
-                  iconPrefix="ios"
-                  disabled={!admission.is_open}
-                  onClick={(e) => {
-                    (window as Window).location = "/login/lego/";
-                    e.preventDefault();
-                  }}
-                >
-                  Gå til søknad
-                </LegoButton>
-              </li>
-            ))}
+            {(admission.is_open || hasSubmitted) &&
+              (djangoData.user.full_name ? (
+                <li>
+                  <LegoButton
+                    to={
+                      `/${admission.pk}/` +
+                      (hasSubmitted ? "min-soknad" : "velg-komiteer")
+                    }
+                    icon="arrow-forward"
+                    iconPrefix="ios"
+                  >
+                    Gå til søknad
+                  </LegoButton>
+                </li>
+              ) : (
+                <li>
+                  <LegoButton
+                    icon="arrow-forward"
+                    iconPrefix="ios"
+                    disabled={!admission.is_open}
+                    onClick={(e) => {
+                      (window as Window).location = "/login/lego/";
+                      e.preventDefault();
+                    }}
+                  >
+                    Gå til søknad
+                  </LegoButton>
+                </li>
+              ))}
 
             {djangoData.user.is_privileged && (
               <li>
