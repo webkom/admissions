@@ -77,7 +77,7 @@ const Admission: React.FC<AdmissionProps> = ({ admission }) => {
             />
           )}
           <LinkWrapper>
-            {djangoData.user.full_name ? (
+            {(admission.is_open || hasSubmitted) && (djangoData.user.full_name ? (
               <li>
                 <LegoButton
                   to={
@@ -104,7 +104,7 @@ const Admission: React.FC<AdmissionProps> = ({ admission }) => {
                   Gå til søknad
                 </LegoButton>
               </li>
-            )}
+            ))}
 
             {djangoData.user.is_privileged && (
               <li>
