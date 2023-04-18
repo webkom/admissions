@@ -113,9 +113,9 @@ const InnerForm: React.FC<InnerFormProps> = ({
           />
           <Field
             component={TextAreaField}
-            title="Endre hva komitteen ønsker å høre om fra søkere"
+            title="Endre hva komiteen ønsker å høre om fra søkere"
             name="response_label"
-            placeholder="Skriv hva komitteen ønsker å vite om søkeren..."
+            placeholder="Skriv hva komiteen ønsker å vite om søkeren..."
           />
         </EditGroupFormWrapper>
         <SubmitButton
@@ -124,7 +124,7 @@ const InnerForm: React.FC<InnerFormProps> = ({
           disabled={updateGroupMutation.isLoading}
           valid={isValid}
         >
-          Submit
+          Lagre
         </SubmitButton>
         {updateGroupMutation.isSuccess && <p>Lagret!</p>}
       </FormWrapper>
