@@ -1,58 +1,52 @@
 # admissions
 
-#### opptak.abakus.no
+#### [opptak.abakus.no](https://opptak.abakus.no/)
 
-Recruitment for Abakus.
+Recruitment for [Abakus](https://abakus.no/).
 
 ## Runnings LEGO and this repository in parallel
 
 > When working in development you want to have LEGO running (both frontend and backend). This allows you to create an OAuth2 application from the settings menu in the webapp.
 
-You need a total of **4 terminals**(or shells if you like).
+To do this, you need a total of **4 terminals** (or shells if you like).
 
 ### Terminal 1
 
-Run LEGO by following the [README here](https://github.com/webkom/lego#readme)
+Run LEGO by following the README [here](https://github.com/webkom/lego#readme).
 
 ### Terminal 2
 
-Run LEGO-WEBAPP by following the [README here](https://github.com/webkom/lego-webapp#readme)
+Run LEGO-WEBAPP by following the README [here](https://github.com/webkom/lego-webapp#readme).
 
 ### Terminal 3
 
-Run the admissions backend by doing the following:
+Running the admissions backend requires Python 3.9 and a `postgresql` database.
 
-Running the backend requires Python 3.9 and a `postgresql` database. The frontend requires `Node`. We recommend using
-a virtual environment. Create a `venv` in root using
+The backend uses [poetry](https://python-poetry.org/) for dependency management. If you do not have it installed you can follow the installation guide [here](https://python-poetry.org/docs/#installation). Then, the dependencies can be installed or updated with
 
 ```sh
-$ python3 -m venv venv
-$ source venv/bin/activate
+$ poetry install
+```
+
+This command will also create a virtual environment in which the dependencies are installed, if one has not already been created and activated.
+
+Then, run the following command
+
+```sh
 $ make dev_settings
 ```
 
-The `docker-compose.yml` file provides a `postgresql` database. This uses a different port than LEGO, so you can run it in parallel.
+The [`docker-compose.yml`](./docker-compose.yml) file provides a `postgresql` database. This uses a different port than LEGO, so you can run it in parallel as follows.
 
 ```sh
 $ docker-compose up -d
 ```
 
-Install requirements either with the default
+#### Secrets
 
-```sh
-$ pip install -r requirements/development.txt
-```
+The `.env` file with secret keys is not included, but an [`example.env`](./admissions/settings/example.env) file has been provided in `./admissions/settings`, so that you can simply rename the file and fill in the values.
 
-or by first installing [pip-tools](https://github.com/jazzband/pip-tools) and running
-
-```sh
-$ pip install pip-tools
-$ pip-sync requirements/development.txt
-```
-
-The `.env` file with secret keys is not included, but an `example.env` file has been provided in `./admissions/settings`, so that you can simply rename the file and fill in the values.
-
-The secrets can be found at **localhost:3000** in the user settings menu after creating an OAuth2 app there. In the form enter `http://127.0.0.1:5000/complete/lego/` as the redirect url.
+To access the values to enter, go to the OAuth2 tab in the user settings [menu](http://localhost:3000/users/me/settings/oauth2) in the running dev version of lego-webapp. If you have not already created secrets for the admissions application, create a new application. In the form, enter `http://127.0.0.1:5000/complete/lego/` as the redirect url.
 
 ```sh
 # Create a copy of the example env file (run from the root of the project)
@@ -64,24 +58,21 @@ AUTH_LEGO_SECRET="Client Secret from OAuth2"
 AUTH_LEGO_API_URL="http://localhost:8000/"
 ```
 
-Now you are ready to migrate the database, create some fixtures, and run the server.
+Now you are ready to migrate the database and run the server.
 
 ```sh
 # Migrate the database migrations
-$ python manage.py migrate
-
-# Create a custom admission for development
-$ python manage.py create_admission
+$ poetry run python manage.py migrate
 
 # Run the Django server
-$ python manage.py runserver
+$ poetry run python manage.py runserver
 ```
 
-> If coding over long periods of time, simply flush the db with `python manage.py flush` and run the server again.
+> If coding over long periods of time, or you want to flush the database, run `poetry run python manage.py flush` to flush it, and run the server again with `poetry run python manage.py runserver`.
 
 ### Terminal 4
 
-In the last terminal you are ready to start the frontend. Simply install the requirement and run the dev-server.
+In the last terminal you are ready to start the frontend. The frontend requires `Node`. You simply need to install the requirements and run the dev-server as follows.
 
 ```sh
 # Install dependencies
@@ -91,7 +82,9 @@ $ yarn
 $ yarn dev
 ```
 
-> Now you are ready, go to 127.0.0.1:5000
+> Finally, you can go to [127.0.0.1:5000](http://127.0.0.1:5000/) and view the admissions page.
+
+To create an admission, first, go to [http://127.0.0.1:5000/login/lego/](http://127.0.0.1:5000/login/lego/) to authorize. Then, click "Administrer opptak" and create an admission. Phew, now you are ready to start developing!
 
 ## Requirements
 
@@ -107,7 +100,7 @@ We use [pip-tools](https://github.com/jazzband/pip-tools) to make the requiremen
 Run the following custom command to update `development.txt` and `production.txt`.
 
 ```sh
-$ python manage.py compile_requirements
+$ poetry run python manage.py compile_requirements
 ```
 
 Or the manual way
@@ -131,16 +124,14 @@ Currently when running
 
 ```sh
 # Create a custom admission for development
-$ python manage.py create_admission
+$ poetry run python manage.py create_admission
 ```
 
-you create an admisison not connected to any group. To connect it to a group, this must be done in the shell. Note that when
-creating gruops, you must import the Group model manually, as otherwise it will use the Django Group model instead of our own.
+you create an admission connected to all groups, if they exist (they are generated the first time you log in). To connect it to a group, this must be done in the shell. Note that when creating groups, you must import the Group model manually, as otherwise it will use the Django Group model instead of our own.
 
 ## Run tests
 
-Run django tests using tox. Note that we point at the admissions database running at :5433 if we are running lego and admissions
-in parallel
+Run django tests using tox. Note that we point at the admissions database running at :5433 if we are running lego and admissions in parallel
 
 ```bash
 $ DATABASE_PORT=5433 tox -e tests
