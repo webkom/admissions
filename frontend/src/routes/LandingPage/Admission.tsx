@@ -34,7 +34,7 @@ const Admission: React.FC<AdmissionProps> = ({ admission }) => {
               </React.Fragment>
             ))}
           </AdmissionDescription>
-          {!admission.is_open && (
+          {!admission.is_open && !admission.is_closed && (
             <TimeLineItem
               title="Opptaket åpner"
               dateString={admission.open_from}
@@ -46,7 +46,7 @@ const Admission: React.FC<AdmissionProps> = ({ admission }) => {
             dateString={admission.public_deadline}
             details={["Alle søknader er garantert å behandlet."]}
           />
-          {admission.is_open && (
+          {(admission.is_open || admission.is_closed) && (
             <TimeLineItem
               title="Redigeringsfrist"
               dateString={admission.application_deadline}
@@ -77,36 +77,34 @@ const Admission: React.FC<AdmissionProps> = ({ admission }) => {
             />
           )}
           <LinkWrapper>
-            {admission.is_open &&
-              (djangoData.user.full_name ? (
-                <li>
-                  <LegoButton
-                    to={
-                      `/${admission.pk}/` +
-                      (hasSubmitted ? "min-soknad" : "velg-komiteer")
-                    }
-                    icon="arrow-forward"
-                    iconPrefix="ios"
-                    disabled={!admission.is_open}
-                  >
-                    Gå til søknad
-                  </LegoButton>
-                </li>
-              ) : (
-                <li>
-                  <LegoButton
-                    icon="arrow-forward"
-                    iconPrefix="ios"
-                    disabled={!admission.is_open}
-                    onClick={(e) => {
-                      (window as Window).location = "/login/lego/";
-                      e.preventDefault();
-                    }}
-                  >
-                    Gå til søknad
-                  </LegoButton>
-                </li>
-              ))}
+            {djangoData.user.full_name ? (
+              <li>
+                <LegoButton
+                  to={
+                    `/${admission.pk}/` +
+                    (hasSubmitted ? "min-soknad" : "velg-komiteer")
+                  }
+                  icon="arrow-forward"
+                  iconPrefix="ios"
+                >
+                  Gå til søknad
+                </LegoButton>
+              </li>
+            ) : (
+              <li>
+                <LegoButton
+                  icon="arrow-forward"
+                  iconPrefix="ios"
+                  disabled={!admission.is_open}
+                  onClick={(e) => {
+                    (window as Window).location = "/login/lego/";
+                    e.preventDefault();
+                  }}
+                >
+                  Gå til søknad
+                </LegoButton>
+              </li>
+            )}
 
             {djangoData.user.is_privileged && (
               <li>
