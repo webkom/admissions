@@ -52,6 +52,7 @@ class AdmissionListPublicSerializer(serializers.HyperlinkedModelSerializer):
             "public_deadline",
             "application_deadline",
             "is_closed",
+            "is_appliable",
         )
 
 
@@ -96,7 +97,7 @@ class AdminCreateUpdateAdmissionSerializer(serializers.HyperlinkedModelSerialize
         return self.update_or_create(instance.pk, validated_data)
 
 
-class AdminAdmissionSerializer(serializers.HyperlinkedModelSerializer):
+class AdminAdmissionSerializer(serializers.ModelSerializer):
     applications = UserApplication.objects.all()
     groups = GroupSerializer(source="group_set", many=True)
 
@@ -111,6 +112,9 @@ class AdminAdmissionSerializer(serializers.HyperlinkedModelSerializer):
             "public_deadline",
             "application_deadline",
             "applications",
+            "is_open",
+            "is_closed",
+            "is_appliable",
         )
 
 
@@ -192,7 +196,7 @@ class ApplicationCreateUpdateSerializer(serializers.HyperlinkedModelSerializer):
         text = validated_data.pop("text")
         phone_number = validated_data.pop("phone_number")
 
-        admission = [obj for obj in Admission.objects.all() if obj.is_open][0]
+        admission = Admission.objects.get(pk=validated_data.get("admission_id"))
 
         user_application, created = UserApplication.objects.update_or_create(
             admission=admission,

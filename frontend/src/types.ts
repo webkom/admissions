@@ -37,6 +37,7 @@ export interface Admission {
   title: string;
   description: string;
   is_open: boolean;
+  is_appliable: boolean;
   is_closed: boolean;
   open_from: string;
   public_deadline: string;
