@@ -126,7 +126,8 @@ class ApplicationViewSet(viewsets.ModelViewSet):
         return UserApplicationSerializer
 
     def perform_create(self, serializer):
-        serializer.save(user=self.request.user)
+        admission_id = self.kwargs.get("admission_pk", None)
+        serializer.save(user=self.request.user, admission_id=admission_id)
 
     @action(detail=True, methods=["DELETE"], url_name="delete_group_application")
     def delete_group_application(self, request, admission_pk, pk=None):

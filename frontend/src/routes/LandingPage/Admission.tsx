@@ -58,19 +58,19 @@ const Admission: React.FC<AdmissionProps> = ({ admission }) => {
           )}
         </TimeLineWrapper>
         <CountDownWrapper>
-          {!admission.is_open && (
+          {!admission.is_open && !admission.is_closed && (
             <CountDown
               title="Opptaket åpner om"
               dateString={admission.open_from}
             />
           )}
-          {admission.is_open && !admission.is_closed && (
+          {admission.is_appliable && (
             <CountDown
               title="Søknadsfrist om"
               dateString={admission.public_deadline}
             />
           )}
-          {admission.is_open && admission.is_closed && (
+          {!admission.is_appliable && admission.is_open && (
             <CountDown
               title="Redigeringsfrist om"
               dateString={admission.application_deadline}
