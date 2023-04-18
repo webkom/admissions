@@ -34,7 +34,7 @@ const Admission: React.FC<AdmissionProps> = ({ admission }) => {
               </React.Fragment>
             ))}
           </AdmissionDescription>
-          {!admission.is_open && (
+          {!admission.is_open && !admission.is_closed && (
             <TimeLineItem
               title="Opptaket åpner"
               dateString={admission.open_from}
@@ -46,7 +46,7 @@ const Admission: React.FC<AdmissionProps> = ({ admission }) => {
             dateString={admission.public_deadline}
             details={["Alle søknader er garantert å behandlet."]}
           />
-          {admission.is_open && (
+          {(admission.is_open || admission.is_closed) && (
             <TimeLineItem
               title="Redigeringsfrist"
               dateString={admission.application_deadline}
@@ -77,7 +77,7 @@ const Admission: React.FC<AdmissionProps> = ({ admission }) => {
             />
           )}
           <LinkWrapper>
-            {admission.is_open &&
+            {(admission.is_open || hasSubmitted) &&
               (djangoData.user.full_name ? (
                 <li>
                   <LegoButton
@@ -87,7 +87,6 @@ const Admission: React.FC<AdmissionProps> = ({ admission }) => {
                     }
                     icon="arrow-forward"
                     iconPrefix="ios"
-                    disabled={!admission.is_open}
                   >
                     Gå til søknad
                   </LegoButton>

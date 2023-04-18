@@ -95,13 +95,15 @@ const FormStructure: React.FC<FormStructureProps> = ({ toggleIsEditing }) => {
             </Notice>
           </EditInfo>
           <EditActions>
-            <LegoButton
-              icon="arrow-forward"
-              iconPrefix="ios"
-              onClick={toggleIsEditing}
-            >
-              Endre søknad
-            </LegoButton>
+            {admission && admission.is_open && (
+              <LegoButton
+                icon="arrow-forward"
+                iconPrefix="ios"
+                onClick={toggleIsEditing}
+              >
+                Endre søknad
+              </LegoButton>
+            )}
             <ConfirmModal
               title="Slett søknad"
               Component={({ onClick }) => (
