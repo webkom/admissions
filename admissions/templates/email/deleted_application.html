@@ -1,11 +1,8 @@
 {% extends "email/base.html" %}
 
-{% block alert %}
+{% block content %}
+En søknad til opptak {{ admission_title }} har blitt slettet.
+<br />
 
-    <tr>
-        <td class="alert alert-info">
-            Slettet søknad - {{ admission_title }}
-        </td>
-    </tr>
-
+For mer informasjon, gå til <a href="https://opptak.abakus.no/">opptakssiden</a>.
 {% endblock %}

@@ -4,6 +4,7 @@ from .base import *
 
 SECRET_KEY = "Testing"
 
+# Email
 EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
 
 DATABASES = {

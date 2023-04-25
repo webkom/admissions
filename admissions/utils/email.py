@@ -1,4 +1,4 @@
-from django.core.mail import send_mail
+from django.core.mail import EmailMultiAlternatives
 from django.core import mail
 from django.template.loader import render_to_string
 
@@ -13,7 +13,6 @@ def send_message(admission_title, recipients):
     Send a message to members with role "recruiting" when users delete applications.
     """
 
-    # setup connection
     connection = mail.get_connection()
     connection.open()
 
@@ -21,7 +20,8 @@ def send_message(admission_title, recipients):
     html_template = "../templates/email/deleted_application.html"
     context = {
         "admission_title": admission_title,
-        "system_name": ""
+        "system_name": "",
+        "title": "Søknad slettet"
     }
     subject = "Søknad til opptak slettet"
     from_email = "Abakus <no-reply@abakus.no>"
@@ -38,18 +38,17 @@ def send_message(admission_title, recipients):
         recipient_list=recipient_list,
     )
 
-    send_mail(
+    email = EmailMultiAlternatives(
         subject=subject,
-        message=plain_body,
+        body=plain_body,
         from_email=from_email,
-        recipient_list=recipient_list,
-        # optional connection
+        bcc=recipient_list,
         connection=connection,
-        html_message=transform(html_body),
-        fail_silently=False,
     )
+    email.attach_alternative(transform(html_body), "text/html")
+    
+    email.send()
 
-    #close connection
     connection.close()
 
 

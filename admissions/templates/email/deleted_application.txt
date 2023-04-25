@@ -1,7 +1,7 @@
 {% extends "email/base.txt" %}
 
 {% block content %}
+En søknad til opptak {{ admission_title }} har blitt slettet.
 
-En søknad til opptak {{admission_title}} har blitt slettet.
-
+For mer informasjon, gå til opptakssiden på https://opptak.abakus.no/.
 {% endblock %}

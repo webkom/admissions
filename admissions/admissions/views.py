@@ -177,8 +177,7 @@ class ApplicationViewSet(viewsets.ModelViewSet):
                 recruiters = Membership.objects.all().filter(Q(role=constants.RECRUITING), group__in=groups)
                 admission = Admission.objects.get(pk = admission_pk).title
                 send_message(admission, recruiters)
-                print(instance[0])
-                instance.delete()
+                #instance.delete()
                 return Response(status=status.HTTP_204_NO_CONTENT)
         except UserApplication.DoesNotExist:
             # HTTP 204 No Content
