@@ -7,6 +7,8 @@ from rest_framework import permissions, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from admissions.utils.email import send_message
+from admissions.admissions import constants
+from django.db.models import Q
 
 from admissions.admissions.models import (
     Admission,
@@ -150,9 +152,6 @@ class ApplicationViewSet(viewsets.ModelViewSet):
                 # If this is the only application the user had left, we can
                 # delete the entire userApplication
                 UserApplication.objects.get(pk=pk).delete()
-            
-            recruiters = Membership.objects.select_related().filter(role="recruiting", group=group)
-            send_message(Admission.title, recruiters)
 
             return Response(status=status.HTTP_200_OK)
 
@@ -172,7 +171,14 @@ class ApplicationViewSet(viewsets.ModelViewSet):
             elif request.method == "DELETE":
                 instance = UserApplication.objects.get(
                     user=request.user, admission=admission_pk
-                ).delete()
+                )
+                serializer = self.get_serializer(instance)
+                groups = [group.get("group").get("pk") for group in serializer.data.get("group_applications")]
+                recruiters = Membership.objects.all().filter(Q(role=constants.RECRUITING), group__in=groups)
+                admission = Admission.objects.get(pk = admission_pk).title
+                send_message(admission, recruiters)
+                print(instance[0])
+                instance.delete()
                 return Response(status=status.HTTP_204_NO_CONTENT)
         except UserApplication.DoesNotExist:
             # HTTP 204 No Content

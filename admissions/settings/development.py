@@ -33,7 +33,7 @@ DATABASES = {
 
 API_URL = "/api"
 
-# EMAIl
+# EMAIL
 EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
 
 

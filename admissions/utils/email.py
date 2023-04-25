@@ -17,10 +17,11 @@ def send_message(admission_title, recipients):
     connection = mail.get_connection()
     connection.open()
 
-    plain_template = "admissions/templates/email/deleted_application.txt"
-    html_template = "admissions/templates/email/deleted_application.html"
+    plain_template = "../templates/email/deleted_application.txt"
+    html_template = "../templates/email/deleted_application.html"
     context = {
-        "admission_title": admission_title
+        "admission_title": admission_title,
+        "system_name": ""
     }
     subject = "Søknad til opptak slettet"
     from_email = "Abakus <no-reply@abakus.no>"
@@ -53,5 +54,5 @@ def send_message(admission_title, recipients):
 
 
 def get_recipients(recipients):
-    return [recipient.email_address for recipient in recipients]
+    return [recipient.user.email for recipient in recipients]
 
