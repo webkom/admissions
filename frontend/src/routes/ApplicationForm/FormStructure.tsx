@@ -111,7 +111,6 @@ const FormStructure: React.FC<FormStructureProps> = ({
                 groups={groups}
                 selectedGroups={selectedGroups}
                 toggleGroup={toggleGroup}
-                admission_pk={admission.pk}
               />
             </div>
           </Sidebar>

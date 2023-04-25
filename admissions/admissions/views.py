@@ -152,7 +152,6 @@ class ApplicationViewSet(viewsets.ModelViewSet):
                 # If this is the only application the user had left, we can
                 # delete the entire userApplication
                 UserApplication.objects.get(pk=pk).delete()
-
             return Response(status=status.HTTP_200_OK)
 
         except UserApplication.DoesNotExist:
@@ -177,7 +176,7 @@ class ApplicationViewSet(viewsets.ModelViewSet):
                 recruiters = Membership.objects.all().filter(Q(role=constants.RECRUITING), group__in=groups)
                 admission = Admission.objects.get(pk = admission_pk).title
                 send_message(admission, recruiters)
-                #instance.delete()
+                instance.delete()
                 return Response(status=status.HTTP_204_NO_CONTENT)
         except UserApplication.DoesNotExist:
             # HTTP 204 No Content
