@@ -41,14 +41,14 @@ interface FormStructureProps {
 }
 
 const FormStructure: React.FC<FormStructureProps> = ({ toggleIsEditing }) => {
-  const { admissionId } = useParams();
+  const { admissionSlug } = useParams();
   const navigate = useNavigate();
   const deleteApplicationMutation = useDeleteMyApplicationMutation(
-    admissionId ?? ""
+    admissionSlug ?? ""
   );
 
-  const { data: myApplication } = useMyApplication(admissionId ?? "");
-  const { data: admission } = useAdmission(admissionId ?? "");
+  const { data: myApplication } = useMyApplication(admissionSlug ?? "");
+  const { data: admission } = useAdmission(admissionSlug ?? "");
   const { groups } = admission ?? {};
 
   if (!myApplication) {
@@ -206,7 +206,7 @@ const FormStructure: React.FC<FormStructureProps> = ({ toggleIsEditing }) => {
               <LegoButton
                 icon="arrow-forward"
                 iconPrefix="ios"
-                to={`/${admissionId}/velg-komiteer`}
+                to={`/${admissionSlug}/velg-komiteer`}
               >
                 Velg komiteer
               </LegoButton>

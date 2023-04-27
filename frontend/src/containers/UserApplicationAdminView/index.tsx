@@ -27,8 +27,8 @@ const UserApplicationAdminView: React.FC<UserApplicationAdminViewProps> = ({
   phone_number,
   pk,
 }) => {
-  const { admissionId } = useParams();
-  const { data } = useAdmission(admissionId ?? "");
+  const { admissionSlug } = useParams();
+  const { data } = useAdmission(admissionSlug ?? "");
   const { groups } = data ?? {};
 
   const sortedGroupApplications = useMemo(

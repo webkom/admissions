@@ -12,8 +12,8 @@ export const useAdminAdmissions = () => {
   return useQuery<Admission[], QueryError>(["/admin/admission/"]);
 };
 
-export const useAdminAdmission = (admissionId: string, enabled = true) => {
-  return useQuery<Admission, QueryError>([`/admin/admission/${admissionId}/`], {
+export const useAdminAdmission = (slug: string, enabled = true) => {
+  return useQuery<Admission, QueryError>([`/admin/admission/${slug}/`], {
     enabled,
   });
 };
@@ -24,19 +24,19 @@ export const useAdmissions = () => {
   return useQuery<Admission[], QueryError>(["/admission/"]);
 };
 
-export const useAdmission = (admissionId: string) => {
-  return useQuery<Admission, QueryError>([`/admission/${admissionId}/`]);
+export const useAdmission = (slug: string) => {
+  return useQuery<Admission, QueryError>([`/admission/${slug}/`]);
 };
 
-export const useApplications = (admissionId: string) => {
+export const useApplications = (slug: string) => {
   return useQuery<Application[], QueryError>([
-    `/admission/${admissionId}/application/`,
+    `/admission/${slug}/application/`,
   ]);
 };
 
-export const useMyApplication = (admissionId: string | number) => {
+export const useMyApplication = (slug: string) => {
   return useQuery<Application, QueryError>([
-    `/admission/${admissionId}/application/mine/`,
+    `/admission/${slug}/application/mine/`,
   ]);
 };
 

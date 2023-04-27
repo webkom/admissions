@@ -50,7 +50,7 @@ const FormStructure: React.FC<FormStructureProps> = ({
   isValid,
   onCancel,
 }) => {
-  const { data: myApplication } = useMyApplication(String(admission.pk));
+  const { data: myApplication } = useMyApplication(String(admission.slug));
 
   return (
     <PageWrapper>
@@ -125,7 +125,7 @@ const FormStructure: React.FC<FormStructureProps> = ({
               <LegoButton
                 icon="arrow-forward"
                 iconPrefix="ios"
-                to={`/${admission.pk}/velg-komiteer`}
+                to={`/${admission.slug}/velg-komiteer`}
               >
                 Velg komiteer
               </LegoButton>

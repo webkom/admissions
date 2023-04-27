@@ -15,7 +15,7 @@ from admissions.admissions.models import (
     UserApplication,
 )
 
-admission_id = 1
+admission_slug = "opptak"
 
 
 def fake_timedelta(days=0):
@@ -25,7 +25,7 @@ def fake_timedelta(days=0):
 
 
 def create_admission():
-    global admission_id
+    global admission_slug
     base_date = timezone.now().replace(hour=23, minute=59, second=59, microsecond=59)
 
     open_date = base_date.replace(
@@ -35,7 +35,7 @@ def create_admission():
     closed_from_date = base_date + timedelta(days=9)
 
     return Admission.objects.create(
-        pk=admission_id,
+        slug=admission_slug,
         title=f"Opptak {base_date.year}",
         open_from=open_date,
         public_deadline=public_deadline_date,
@@ -145,7 +145,7 @@ class EditAdmissionTestCase(APITestCase):
         self.client.force_authenticate(user=pleb)
 
         res = self.client.patch(
-            reverse("admission-detail", kwargs={"pk": self.admission.pk}),
+            reverse("admission-detail", kwargs={"slug": self.admission.slug}),
             self.edit_admission_data,
         )
 
@@ -159,7 +159,7 @@ class EditAdmissionTestCase(APITestCase):
         self.client.force_authenticate(user=webkom_leader)
 
         res = self.client.patch(
-            reverse("admission-detail", kwargs={"pk": self.admission.pk}),
+            reverse("admission-detail", kwargs={"slug": self.admission.slug}),
             self.edit_admission_data,
         )
 
@@ -173,14 +173,14 @@ class EditAdmissionTestCase(APITestCase):
         self.client.force_authenticate(user=webkom_member)
 
         res = self.client.patch(
-            reverse("admission-detail", kwargs={"pk": self.admission.pk}),
+            reverse("admission-detail", kwargs={"slug": self.admission.slug}),
             self.edit_admission_data,
         )
         self.assertEqual(res.status_code, status.HTTP_403_FORBIDDEN)
 
     def test_unauthorized_user_cannot_edit_admission(self):
         res = self.client.patch(
-            reverse("admission-detail", kwargs={"pk": self.admission.pk}),
+            reverse("admission-detail", kwargs={"slug": self.admission.slug}),
             self.edit_admission_data,
         )
 
@@ -194,7 +194,7 @@ class EditAdmissionTestCase(APITestCase):
         self.client.force_authenticate(user=abakus_leader)
 
         res = self.client.patch(
-            reverse("admission-detail", kwargs={"pk": self.admission.pk}),
+            reverse("admission-detail", kwargs={"slug": self.admission.slug}),
             self.edit_admission_data,
         )
 
@@ -203,8 +203,8 @@ class EditAdmissionTestCase(APITestCase):
 
 class CreateApplicationTestCase(APITestCase):
     def setUp(self):
-        global admission_id
-        self.admission_id = admission_id
+        global admission_slug
+        self.admission_slug = admission_slug
         # Create admission and group
         self.admission = create_admission()
         self.webkom = Group.objects.create(name="Webkom")
@@ -234,7 +234,9 @@ class CreateApplicationTestCase(APITestCase):
         annas_application_data["user"] = self.pleb_anna.pk
 
         res = self.client.post(
-            reverse("userapplication-list", kwargs={"admission_pk": self.admission_id}),
+            reverse(
+                "userapplication-list", kwargs={"admission_slug": self.admission_slug}
+            ),
             annas_application_data,
             format="json",
         )
@@ -249,7 +251,9 @@ class CreateApplicationTestCase(APITestCase):
     def test_can_apply(self):
         self.client.force_authenticate(user=self.pleb_anna)
         res = self.client.post(
-            reverse("userapplication-list", kwargs={"admission_pk": self.admission_id}),
+            reverse(
+                "userapplication-list", kwargs={"admission_slug": self.admission_slug}
+            ),
             self.application_data,
             format="json",
         )
@@ -261,7 +265,9 @@ class CreateApplicationTestCase(APITestCase):
 
         # Apply first with webkom and koskom
         self.client.post(
-            reverse("userapplication-list", kwargs={"admission_pk": self.admission_id}),
+            reverse(
+                "userapplication-list", kwargs={"admission_slug": self.admission_slug}
+            ),
             self.application_data,
             format="json",
         )
@@ -279,7 +285,9 @@ class CreateApplicationTestCase(APITestCase):
 
         # Apply then only with webkom, removing koskom
         self.client.post(
-            reverse("userapplication-list", kwargs={"admission_pk": self.admission_id}),
+            reverse(
+                "userapplication-list", kwargs={"admission_slug": self.admission_slug}
+            ),
             self.application_data,
             format="json",
         )
@@ -292,8 +300,8 @@ class CreateApplicationTestCase(APITestCase):
 
 class ListApplicationsTestCase(APITestCase):
     def setUp(self):
-        global admission_id
-        self.admission_id = admission_id
+        global admission_slug
+        self.admission_slug = admission_slug
 
         self.pleb = LegoUser.objects.create()
         self.admission = create_admission()
@@ -335,7 +343,9 @@ class ListApplicationsTestCase(APITestCase):
         self.client.force_authenticate(user=self.pleb)
 
         res = self.client.get(
-            reverse("userapplication-mine", kwargs={"admission_pk": self.admission_id})
+            reverse(
+                "userapplication-mine", kwargs={"admission_slug": self.admission_slug}
+            )
         )
 
         self.assertEqual(res.status_code, status.HTTP_401_UNAUTHORIZED)
@@ -345,7 +355,9 @@ class ListApplicationsTestCase(APITestCase):
         self.client.force_authenticate(user=self.pleb)
 
         res = self.client.get(
-            reverse("userapplication-list", kwargs={"admission_pk": self.admission_id})
+            reverse(
+                "userapplication-list", kwargs={"admission_slug": self.admission_slug}
+            )
         )
 
         self.assertEqual(res.status_code, status.HTTP_403_FORBIDDEN)
@@ -356,14 +368,18 @@ class ListApplicationsTestCase(APITestCase):
 
         self.client.force_authenticate(user=self.pleb)
         res = self.client.get(
-            reverse("userapplication-mine", kwargs={"admission_pk": self.admission_id})
+            reverse(
+                "userapplication-mine", kwargs={"admission_slug": self.admission_slug}
+            )
         )
         self.assertEqual(res.status_code, status.HTTP_200_OK)
 
     def test_cannot_get_application_by_pk(self):
         self.client.force_authenticate(user=self.pleb)
         res = self.client.get(
-            reverse("userapplication-list", kwargs={"admission_pk": self.admission_id})
+            reverse(
+                "userapplication-list", kwargs={"admission_slug": self.admission_slug}
+            )
         )
 
         self.assertEqual(res.status_code, status.HTTP_403_FORBIDDEN)
@@ -376,7 +392,9 @@ class ListApplicationsTestCase(APITestCase):
             "phone_number": "00000000",
         }
         self.client.post(
-            reverse("userapplication-list", kwargs={"admission_pk": self.admission_id}),
+            reverse(
+                "userapplication-list", kwargs={"admission_slug": self.admission_slug}
+            ),
             application_data,
             format="json",
         )
@@ -384,7 +402,9 @@ class ListApplicationsTestCase(APITestCase):
         # Re-Auth as webkom_leader
         self.client.force_authenticate(user=self.webkom_leader)
         res = self.client.get(
-            reverse("userapplication-list", kwargs={"admission_pk": self.admission_id})
+            reverse(
+                "userapplication-list", kwargs={"admission_slug": self.admission_slug}
+            )
         )
         json = res.json()
         # Should return with 200
@@ -399,7 +419,9 @@ class ListApplicationsTestCase(APITestCase):
     def test_group_recruiter_can_see_applications_for_own_group(self):
         self.client.force_authenticate(user=self.pleb)
         self.client.post(
-            reverse("userapplication-list", kwargs={"admission_pk": self.admission_id}),
+            reverse(
+                "userapplication-list", kwargs={"admission_slug": self.admission_slug}
+            ),
             self.application_data,
             format="json",
         )
@@ -407,7 +429,9 @@ class ListApplicationsTestCase(APITestCase):
         # Re-Auth as webkom_rec
         self.client.force_authenticate(user=self.webkom_rec)
         res = self.client.get(
-            reverse("userapplication-list", kwargs={"admission_pk": self.admission_id})
+            reverse(
+                "userapplication-list", kwargs={"admission_slug": self.admission_slug}
+            )
         )
         json = res.json()
         # Should return with 200
@@ -422,7 +446,9 @@ class ListApplicationsTestCase(APITestCase):
     def test_group_leader_cannot_see_applications_for_other_group(self):
         self.client.force_authenticate(user=self.pleb)
         self.client.post(
-            reverse("userapplication-list", kwargs={"admission_pk": self.admission_id}),
+            reverse(
+                "userapplication-list", kwargs={"admission_slug": self.admission_slug}
+            ),
             self.application_data,
             format="json",
         )
@@ -430,7 +456,9 @@ class ListApplicationsTestCase(APITestCase):
         # Re-Auth as webkom_leader
         self.client.force_authenticate(user=self.webkom_leader)
         res = self.client.get(
-            reverse("userapplication-list", kwargs={"admission_pk": self.admission_id})
+            reverse(
+                "userapplication-list", kwargs={"admission_slug": self.admission_slug}
+            )
         )
         json = res.json()
         # There should not be a group application for bedkom here
@@ -440,7 +468,9 @@ class ListApplicationsTestCase(APITestCase):
         # Re-Auth as bedkom_leader
         self.client.force_authenticate(user=self.bedkom_leader)
         res = self.client.get(
-            reverse("userapplication-list", kwargs={"admission_pk": self.admission_id})
+            reverse(
+                "userapplication-list", kwargs={"admission_slug": self.admission_slug}
+            )
         )
         json = res.json()
         # There should not be a group application for bedkom here
@@ -450,7 +480,9 @@ class ListApplicationsTestCase(APITestCase):
     def test_group_recruiter_cannot_see_applications_for_other_group(self):
         self.client.force_authenticate(user=self.pleb)
         self.client.post(
-            reverse("userapplication-list", kwargs={"admission_pk": self.admission_id}),
+            reverse(
+                "userapplication-list", kwargs={"admission_slug": self.admission_slug}
+            ),
             self.application_data,
             format="json",
         )
@@ -458,7 +490,9 @@ class ListApplicationsTestCase(APITestCase):
         # Re-Auth as webkom_rec
         self.client.force_authenticate(user=self.webkom_rec)
         res = self.client.get(
-            reverse("userapplication-list", kwargs={"admission_pk": self.admission_id})
+            reverse(
+                "userapplication-list", kwargs={"admission_slug": self.admission_slug}
+            )
         )
         json = res.json()
         # There should not be a group application for bedkom here
@@ -468,7 +502,9 @@ class ListApplicationsTestCase(APITestCase):
         # Re-Auth as bedkom_rec
         self.client.force_authenticate(user=self.bedkom_rec)
         res = self.client.get(
-            reverse("userapplication-list", kwargs={"admission_pk": self.admission_id})
+            reverse(
+                "userapplication-list", kwargs={"admission_slug": self.admission_slug}
+            )
         )
         json = res.json()
         # There should not be a group application for bedkom here
@@ -478,7 +514,9 @@ class ListApplicationsTestCase(APITestCase):
     def test_abakus_leader_can_see_all_applications(self):
         self.client.force_authenticate(user=self.pleb)
         self.client.post(
-            reverse("userapplication-list", kwargs={"admission_pk": self.admission_id}),
+            reverse(
+                "userapplication-list", kwargs={"admission_slug": self.admission_slug}
+            ),
             self.application_data,
             format="json",
         )
@@ -490,7 +528,9 @@ class ListApplicationsTestCase(APITestCase):
 
         self.client.force_authenticate(user=abakus_leader)
         res = self.client.get(
-            reverse("userapplication-list", kwargs={"admission_pk": self.admission_id})
+            reverse(
+                "userapplication-list", kwargs={"admission_slug": self.admission_slug}
+            )
         )
         apps = res.json()[0]["group_applications"]
 
@@ -511,8 +551,8 @@ class DeleteComitteeApplicationsTestCase(APITestCase):
     """
 
     def setUp(self):
-        global admission_id
-        self.admission_id = admission_id
+        global admission_slug
+        self.admission_slug = admission_slug
         self.pleb = LegoUser.objects.create()
         self.admission = create_admission()
 
@@ -532,7 +572,7 @@ class DeleteComitteeApplicationsTestCase(APITestCase):
         res = self.client.delete(
             reverse(
                 "userapplication-delete_group_application",
-                kwargs={"admission_pk": self.admission_id},
+                kwargs={"admission_slug": self.admission_slug},
             )
         )
 
@@ -547,7 +587,7 @@ class DeleteComitteeApplicationsTestCase(APITestCase):
         res = self.client.delete(
             reverse(
                 "userapplication-delete_group_application",
-                kwargs={"admission_pk": self.admission_id, "pk": application.pk},
+                kwargs={"admission_slug": self.admission_slug, "pk": application.pk},
             )
         )
         self.assertEqual(res.status_code, status.HTTP_403_FORBIDDEN)
@@ -570,7 +610,7 @@ class DeleteComitteeApplicationsTestCase(APITestCase):
         res = self.client.delete(
             reverse(
                 "userapplication-delete_group_application",
-                kwargs={"admission_pk": self.admission_id, "pk": application.pk},
+                kwargs={"admission_slug": self.admission_slug, "pk": application.pk},
             )
         )
 

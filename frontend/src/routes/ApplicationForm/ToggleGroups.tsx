@@ -23,7 +23,7 @@ const ToggleGroups: React.FC<ToggleGroupsProps> = ({
   selectedGroups,
   toggleGroup,
 }) => {
-  const { admissionId } = useParams();
+  const { admissionSlug } = useParams();
 
   const ChooseGroupsItems = groups.map((group, index) => (
     <MiniToggleGroup
@@ -42,7 +42,7 @@ const ToggleGroups: React.FC<ToggleGroupsProps> = ({
         Klikk på logoene til komiteene for å legge til/fjerne de fra søknaden.
       </Tooltip>
       <IconsWrapper>{ChooseGroupsItems}</IconsWrapper>
-      <LinkToOverview to={`/${admissionId}/velg-komiteer`}>
+      <LinkToOverview to={`/${admissionSlug}/velg-komiteer`}>
         Eller gå tilbake til oversikten for å lese mer
       </LinkToOverview>
     </Wrapper>

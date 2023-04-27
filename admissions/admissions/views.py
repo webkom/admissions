@@ -53,6 +53,7 @@ class AdmissionViewSet(viewsets.ModelViewSet):
     queryset = Admission.objects.all()
     authentication_classes = [SessionAuthentication]
     permission_classes = [AdmissionPermissions]
+    lookup_field = "slug"
 
     def get_serializer_class(self):
         if self.action == "list":
@@ -89,7 +90,7 @@ class ApplicationViewSet(viewsets.ModelViewSet):
         return [permission() for permission in permission_classes]
 
     def get_queryset(self):
-        admission_id = self.kwargs.get("admission_pk", None)
+        admission_slug = self.kwargs.get("admission_slug", None)
         user = self.request.user
         if user.is_anonymous:
             return User.objects.none()
@@ -100,7 +101,7 @@ class ApplicationViewSet(viewsets.ModelViewSet):
             return (
                 super()
                 .get_queryset()
-                .filter(admission=admission_id)
+                .filter(admission__slug=admission_slug)
                 .prefetch_related("group_applications", "group_applications__group")
             )
 
@@ -110,7 +111,7 @@ class ApplicationViewSet(viewsets.ModelViewSet):
         return (
             super()
             .get_queryset()
-            .filter(group_applications__group=group, admission=admission_id)
+            .filter(group_applications__group=group, admission__slug=admission_slug)
             .prefetch_related(
                 Prefetch(
                     "group_applications",
@@ -126,11 +127,11 @@ class ApplicationViewSet(viewsets.ModelViewSet):
         return UserApplicationSerializer
 
     def perform_create(self, serializer):
-        admission_id = self.kwargs.get("admission_pk", None)
-        serializer.save(user=self.request.user, admission_id=admission_id)
+        admission_slug = self.kwargs.get("admission_slug", None)
+        serializer.save(user=self.request.user, admission_slug=admission_slug)
 
     @action(detail=True, methods=["DELETE"], url_name="delete_group_application")
-    def delete_group_application(self, request, admission_pk, pk=None):
+    def delete_group_application(self, request, admission_slug, pk=None):
         try:
             self.request.user.__class__ = LegoUser
             group = None
@@ -155,17 +156,17 @@ class ApplicationViewSet(viewsets.ModelViewSet):
             return HttpResponse(status=204)
 
     @action(detail=False, methods=["GET", "DELETE"])
-    def mine(self, request, admission_pk):
+    def mine(self, request, admission_slug):
         try:
             if request.method == "GET":
                 instance = UserApplication.objects.get(
-                    user=request.user, admission=admission_pk
+                    user=request.user, admission__slug=admission_slug
                 )
                 serializer = self.get_serializer(instance)
                 return Response(serializer.data)
             elif request.method == "DELETE":
                 instance = UserApplication.objects.get(
-                    user=request.user, admission=admission_pk
+                    user=request.user, admission__slug=admission_slug
                 ).delete()
                 return Response(status=status.HTTP_204_NO_CONTENT)
         except UserApplication.DoesNotExist:
@@ -181,6 +182,7 @@ class AdminAdmissionViewSet(viewsets.ModelViewSet):
         IsWebkom | (IsStaff & IsCreatorOfObject),
     ]
     http_method_names = ["get", "post", "patch"]
+    lookup_field = "slug"
 
     def get_serializer_class(self):
         if self.request.method == "GET":
