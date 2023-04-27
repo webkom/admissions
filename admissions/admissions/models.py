@@ -59,34 +59,7 @@ class LegoUser(AbstractUser):
         return UserApplication.objects.filter(user=self).exists()
 
 
-class Admission(models.Model):
-    title = models.CharField(max_length=255, unique=True)
-    description = models.TextField(default="", blank=True)
-    open_from = models.DateTimeField()
-    public_deadline = models.DateTimeField()
-    application_deadline = models.DateTimeField()
-    created_by = models.ForeignKey(
-        LegoUser, null=True, related_name="admissions", on_delete=models.CASCADE
-    )
-
-    def __str__(self):
-        return self.title
-
-    @property
-    def is_open(self):
-        return self.application_deadline > timezone.now() > self.open_from
-
-    @property
-    def is_closed(self):
-        return timezone.now() > self.application_deadline
-
-    @property
-    def is_appliable(self):
-        return self.public_deadline > timezone.now() > self.open_from
-
-
 class Group(models.Model):
-    admissions = models.ManyToManyField(Admission)
     name = models.CharField(max_length=50, unique=True)
     description = models.TextField(blank=True, max_length=300)
     response_label = models.TextField(blank=True, max_length=300)
@@ -100,6 +73,45 @@ class Group(models.Model):
         return self.name
 
 
+class Admission(models.Model):
+    title = models.CharField(max_length=255, unique=True)
+    description = models.TextField(default="", blank=True)
+    open_from = models.DateTimeField()
+    public_deadline = models.DateTimeField()
+    closed_from = models.DateTimeField()
+    created_by = models.ForeignKey(
+        LegoUser, null=True, related_name="admissions", on_delete=models.CASCADE
+    )
+    groups = models.ManyToManyField(Group, through="AdmissionGroup")
+
+    def __str__(self):
+        return self.title
+
+    @property
+    def is_open(self):
+        return self.closed_from > timezone.now() > self.open_from
+
+    @property
+    def is_appliable(self):
+        return self.public_deadline > timezone.now() > self.open_from
+
+    @property
+    def is_closed(self):
+        return timezone.now() > self.closed_from
+
+
+class AdmissionGroup(models.Model):
+    admission = models.ForeignKey(Admission, on_delete=models.CASCADE)
+    group = models.ForeignKey(Group, on_delete=models.CASCADE)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["admission", "group"], name="unique_admission_group_combination"
+            )
+        ]
+
+
 class UserApplication(TimeStampModel):
     admission = models.ForeignKey(
         Admission, related_name="applications", on_delete=models.CASCADE
@@ -109,7 +121,11 @@ class UserApplication(TimeStampModel):
     phone_number = models.CharField(max_length=20)
 
     class Meta:
-        unique_together = ("admission", "user")
+        constraints = [
+            models.UniqueConstraint(
+                fields=["admission", "user"], name="unique_admission_user_combination"
+            )
+        ]
 
     @property
     def is_editable(self):
@@ -149,7 +165,12 @@ class Membership(models.Model):
     )
 
     class Meta:
-        unique_together = ("user", "group")
+        constraints = [
+            models.UniqueConstraint(
+                fields=["user", "group"],
+                name="unique_user_group_combination",
+            )
+        ]
 
     def __str__(self):
         return f"{self.user} is in {self.group}"

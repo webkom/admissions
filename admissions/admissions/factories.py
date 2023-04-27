@@ -29,9 +29,7 @@ class RandomAdmissionFactory(factory.DjangoModelFactory):
     title = factory.Sequence(lambda n: "Opptak %d" % n)
     open_from = factory.Faker("past_datetime", start_date="-10d", tzinfo=None)
     public_deadline = factory.Faker("future_datetime", end_date="+15d", tzinfo=None)
-    application_deadline = factory.Faker(
-        "future_datetime", end_date="+15d", tzinfo=None
-    )
+    closed_from = factory.Faker("future_datetime", end_date="+15d", tzinfo=None)
 
 
 class RandomGroupFactory(factory.DjangoModelFactory):

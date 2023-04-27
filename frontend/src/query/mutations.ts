@@ -9,7 +9,7 @@ export interface MutationAdmission {
   description: string;
   open_from: string;
   public_deadline: string;
-  application_deadline: string;
+  closed_from: string;
   groups: number[];
 }
 interface CreateAdmissionProps {

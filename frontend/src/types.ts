@@ -41,6 +41,6 @@ export interface Admission {
   is_closed: boolean;
   open_from: string;
   public_deadline: string;
-  application_deadline: string;
+  closed_from: string;
   groups: Group[];
 }

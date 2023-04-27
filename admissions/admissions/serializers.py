@@ -17,7 +17,6 @@ class GroupSerializer(serializers.HyperlinkedModelSerializer):
             "pk",
             "name",
             "description",
-            "response_label",
             "detail_link",
             "logo",
         )
@@ -26,7 +25,6 @@ class GroupSerializer(serializers.HyperlinkedModelSerializer):
         group, created = Group.objects.update_or_create(
             name=validated_data.get("name", None),
             defaults={
-                "response_label": validated_data.get("response_label", None),
                 "description": validated_data.get("description", None),
             },
         )
@@ -50,14 +48,14 @@ class AdmissionListPublicSerializer(serializers.HyperlinkedModelSerializer):
             "is_open",
             "open_from",
             "public_deadline",
-            "application_deadline",
+            "closed_from",
             "is_closed",
             "is_appliable",
         )
 
 
 class AdmissionPublicSerializer(AdmissionListPublicSerializer):
-    groups = GroupSerializer(source="group_set", many=True)
+    groups = GroupSerializer(many=True)
 
     class Meta(AdmissionListPublicSerializer.Meta):
         fields = AdmissionListPublicSerializer.Meta.fields + ("groups",)
@@ -76,18 +74,17 @@ class AdminCreateUpdateAdmissionSerializer(serializers.HyperlinkedModelSerialize
             "description",
             "open_from",
             "public_deadline",
-            "application_deadline",
+            "closed_from",
             "groups",
             "created_by",
         )
 
     def update_or_create(self, pk, validated_data):
-        groups = validated_data.pop("groups")
+        input_groups = validated_data.pop("groups")
         admission, created = Admission.objects.update_or_create(
             pk=pk, defaults=validated_data
         )
-        admission.group_set.set(groups)  # Set the values in the database
-        setattr(admission, "groups", groups)  # Set the value to return
+        admission.groups.set(input_groups)
         return admission
 
     def create(self, validated_data):
@@ -99,7 +96,7 @@ class AdminCreateUpdateAdmissionSerializer(serializers.HyperlinkedModelSerialize
 
 class AdminAdmissionSerializer(serializers.ModelSerializer):
     applications = UserApplication.objects.all()
-    groups = GroupSerializer(source="group_set", many=True)
+    groups = GroupSerializer(many=True)
 
     class Meta:
         model = Admission
@@ -110,7 +107,7 @@ class AdminAdmissionSerializer(serializers.ModelSerializer):
             "groups",
             "open_from",
             "public_deadline",
-            "application_deadline",
+            "closed_from",
             "applications",
             "is_open",
             "is_closed",

@@ -49,7 +49,7 @@ const Admission: React.FC<AdmissionProps> = ({ admission }) => {
           {(admission.is_open || admission.is_closed) && (
             <TimeLineItem
               title="Redigeringsfrist"
-              dateString={admission.application_deadline}
+              dateString={admission.closed_from}
               details={[
                 "Du kan fortsatt søke og redigere søknaden din, men det er ikke sikkert at de som behandler søknaden får det med seg.",
                 "Etter redigeringsfristen vil du ikke lenger kunne se søknaden din.",
@@ -73,7 +73,7 @@ const Admission: React.FC<AdmissionProps> = ({ admission }) => {
           {!admission.is_appliable && admission.is_open && (
             <CountDown
               title="Redigeringsfrist om"
-              dateString={admission.application_deadline}
+              dateString={admission.closed_from}
             />
           )}
           <LinkWrapper>
