@@ -148,7 +148,7 @@ const AdminPageAbakusLeaderView = () => {
             <StatisticsWrapper>
               <StatisticsName>Redigeringsfrist</StatisticsName>
               <FormatTime format="HH:mm:ss EEEE d. MMMM">
-                {admission.application_deadline}
+                {admission.closed_from}
               </FormatTime>
             </StatisticsWrapper>
           </Statistics>

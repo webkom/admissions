@@ -32,14 +32,14 @@ def create_admission():
         hour=12, minute=15, second=0, microsecond=0
     ) - timedelta(days=1)
     public_deadline_date = base_date + timedelta(days=7)
-    application_deadline_date = base_date + timedelta(days=9)
+    closed_from_date = base_date + timedelta(days=9)
 
     return Admission.objects.create(
         pk=admission_id,
         title=f"Opptak {base_date.year}",
         open_from=open_date,
         public_deadline=public_deadline_date,
-        application_deadline=application_deadline_date,
+        closed_from=closed_from_date,
     )
 
 

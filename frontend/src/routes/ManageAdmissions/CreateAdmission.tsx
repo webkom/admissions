@@ -53,7 +53,7 @@ const CreateAdmission: React.FC = () => {
       description: "",
       open_from: formatCurrentDate(),
       public_deadline: formatCurrentDate(),
-      application_deadline: formatCurrentDate(),
+      closed_from: formatCurrentDate(),
       groups: [],
     },
     onSubmit: (values) => {
@@ -62,8 +62,8 @@ const CreateAdmission: React.FC = () => {
       // Use luxon to parse datetime with local timezone and add timezone offset to the datetime-string
       processedValues.open_from =
         localTimeStringToTimezoned(processedValues.open_from) ?? "";
-      processedValues.application_deadline =
-        localTimeStringToTimezoned(processedValues.application_deadline) ?? "";
+      processedValues.closed_from =
+        localTimeStringToTimezoned(processedValues.closed_from) ?? "";
       processedValues.public_deadline =
         localTimeStringToTimezoned(processedValues.public_deadline) ?? "";
       const onSuccess = () => {
@@ -108,7 +108,7 @@ const CreateAdmission: React.FC = () => {
         description: admission.description,
         open_from: formatDateString(admission.open_from),
         public_deadline: formatDateString(admission.public_deadline),
-        application_deadline: formatDateString(admission.application_deadline),
+        closed_from: formatDateString(admission.closed_from),
         groups: admission.groups.map((group) => group.pk),
       });
     }
@@ -164,9 +164,9 @@ const CreateAdmission: React.FC = () => {
             Etter dette tidspunktet er det ikke mulig å legge inn søknader
           </InputDescription>
           <Input
-            name="application_deadline"
+            name="closed_from"
             type="datetime-local"
-            value={formik.values.application_deadline}
+            value={formik.values.closed_from}
             onChange={formik.handleChange}
           />
         </InputWrapper>
