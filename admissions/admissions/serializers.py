@@ -43,6 +43,7 @@ class AdmissionListPublicSerializer(serializers.HyperlinkedModelSerializer):
         model = Admission
         fields = (
             "pk",
+            "slug",
             "title",
             "description",
             "is_open",
@@ -52,6 +53,8 @@ class AdmissionListPublicSerializer(serializers.HyperlinkedModelSerializer):
             "is_closed",
             "is_appliable",
         )
+        lookup_field = "slug"
+        extra_kwargs = {"url": {"lookup_field": "slug"}}
 
 
 class AdmissionPublicSerializer(AdmissionListPublicSerializer):
@@ -59,6 +62,8 @@ class AdmissionPublicSerializer(AdmissionListPublicSerializer):
 
     class Meta(AdmissionListPublicSerializer.Meta):
         fields = AdmissionListPublicSerializer.Meta.fields + ("groups",)
+        lookup_field = "slug"
+        extra_kwargs = {"url": {"lookup_field": "slug"}}
 
 
 class AdminCreateUpdateAdmissionSerializer(serializers.HyperlinkedModelSerializer):
@@ -103,6 +108,7 @@ class AdminAdmissionSerializer(serializers.ModelSerializer):
         fields = (
             "pk",
             "title",
+            "slug",
             "description",
             "groups",
             "open_from",
@@ -113,6 +119,8 @@ class AdminAdmissionSerializer(serializers.ModelSerializer):
             "is_closed",
             "is_appliable",
         )
+        lookup_field = "slug"
+        extra_kwargs = {"url": {"lookup_field": "slug"}}
 
 
 class GroupApplicationSerializer(serializers.HyperlinkedModelSerializer):
@@ -193,7 +201,7 @@ class ApplicationCreateUpdateSerializer(serializers.HyperlinkedModelSerializer):
         text = validated_data.pop("text")
         phone_number = validated_data.pop("phone_number")
 
-        admission = Admission.objects.get(pk=validated_data.get("admission_id"))
+        admission = Admission.objects.get(slug=validated_data.get("admission_slug"))
 
         user_application, created = UserApplication.objects.update_or_create(
             admission=admission,

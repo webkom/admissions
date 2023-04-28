@@ -29,10 +29,10 @@ const localTimeStringToTimezoned = (dateString: string) =>
   }).toISO({ includeOffset: true });
 
 const CreateAdmission: React.FC = () => {
-  const { admissionId } = useParams();
+  const { admissionSlug } = useParams();
   const { data: admission } = useAdminAdmission(
-    admissionId ?? "",
-    admissionId !== undefined
+    admissionSlug ?? "",
+    admissionSlug !== undefined
   );
 
   const createAdmission = useAdminCreateAdmission();
@@ -40,11 +40,11 @@ const CreateAdmission: React.FC = () => {
 
   const [returnedData, setReturnedData] = useState<ReturnedData>();
 
-  const isNew = !admissionId;
+  const isNew = !admissionSlug;
 
   useEffect(() => {
     setReturnedData(undefined);
-  }, [admissionId]);
+  }, [admissionSlug]);
 
   const formik = useFormik<MutationAdmission>({
     initialValues: {
@@ -90,7 +90,7 @@ const CreateAdmission: React.FC = () => {
         );
       } else {
         updateAdmission.mutate(
-          { admissionId: admissionId ?? "", admission: processedValues },
+          { slug: admissionSlug ?? "", admission: processedValues },
           {
             onSuccess,
             onError,
@@ -104,7 +104,7 @@ const CreateAdmission: React.FC = () => {
     if (admission) {
       formik.setValues({
         title: admission.title,
-        slug: "",
+        slug: admission.slug,
         description: admission.description,
         open_from: formatDateString(admission.open_from),
         public_deadline: formatDateString(admission.public_deadline),
@@ -129,6 +129,19 @@ const CreateAdmission: React.FC = () => {
             name="title"
             value={formik.values.title}
             onChange={formik.handleChange}
+          />
+        </InputWrapper>
+        <InputWrapper>
+          <InputTitle>Slug</InputTitle>
+          <InputDescription>
+            Opptaket vil ligge under opptak.abakus.no/[slug]/
+          </InputDescription>
+          <Input
+            name="slug"
+            value={formik.values.slug}
+            onChange={formik.handleChange}
+            placeholder="f. eks. komiteer/revy/backup"
+            disabled={!isNew}
           />
         </InputWrapper>
       </FormGroup>

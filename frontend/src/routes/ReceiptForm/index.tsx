@@ -18,9 +18,9 @@ const FormContainer: React.FC<FormProps> = ({ toggleIsEditing }) => {
 // Highest order component for application form.
 // Handles form values, submit post and form validation.
 const ApplicationForm: React.FC<FormProps> = ({ toggleIsEditing }) => {
-  const { admissionId } = useParams();
+  const { admissionSlug } = useParams();
   const { data: myApplication, isFetching } = useMyApplication(
-    admissionId ?? ""
+    admissionSlug ?? ""
   );
 
   if (isFetching) return <p>Loading</p>;

@@ -27,18 +27,18 @@ interface SelectedGroups {
 }
 
 const ApplicationPortal = () => {
-  const { admissionId } = useParams();
+  const { admissionSlug } = useParams();
   const [selectedGroups, setSelectedGroups] = useState<SelectedGroups>({});
   const [isEditingApplication, setIsEditingApplication] = useState<
     boolean | null
   >(null);
 
-  const { data: myApplication } = useMyApplication(admissionId ?? "");
+  const { data: myApplication } = useMyApplication(admissionSlug ?? "");
   const {
     data: admission,
     isFetching,
     error,
-  } = useAdmission(admissionId ?? "");
+  } = useAdmission(admissionSlug ?? "");
   const { groups } = admission ?? {};
 
   const toggleGroup = (name: string) => {

@@ -15,7 +15,7 @@ interface AdmissionProps {
 const Admission: React.FC<AdmissionProps> = ({ admission }) => {
   const [hasSubmitted, setHasSubmitted] = useState(false);
 
-  const { data: myApplication } = useMyApplication(admission.pk);
+  const { data: myApplication } = useMyApplication(admission.slug);
 
   useEffect(() => {
     setHasSubmitted(!!myApplication);
@@ -82,7 +82,7 @@ const Admission: React.FC<AdmissionProps> = ({ admission }) => {
                 <li>
                   <LegoButton
                     to={
-                      `/${admission.pk}/` +
+                      `/${admission.slug}/` +
                       (hasSubmitted ? "min-soknad" : "velg-komiteer")
                     }
                     icon="arrow-forward"
@@ -110,7 +110,7 @@ const Admission: React.FC<AdmissionProps> = ({ admission }) => {
             {djangoData.user.is_privileged && (
               <li>
                 <LegoButton
-                  to={`/${admission.pk}/admin/`}
+                  to={`/${admission.slug}/admin/`}
                   icon="arrow-forward"
                   iconPrefix="ios"
                   buttonStyle="secondary"

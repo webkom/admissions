@@ -13,7 +13,7 @@ interface NavBarProps {
 }
 
 const NavBar: React.FC<NavBarProps> = ({ user, isEditing }) => {
-  const { admissionId } = useParams();
+  const { admissionSlug } = useParams();
 
   return (
     <Container>
@@ -22,12 +22,15 @@ const NavBar: React.FC<NavBarProps> = ({ user, isEditing }) => {
       </BrandContainer>
       {!user.has_application || isEditing ? (
         <NavItemsContainer>
-          <NavItem to={`/${admissionId}/velg-komiteer`} text="Velg komiteer" />
-          <NavItem to={`/${admissionId}/min-soknad`} text="Min søknad" />
+          <NavItem
+            to={`/${admissionSlug}/velg-komiteer`}
+            text="Velg komiteer"
+          />
+          <NavItem to={`/${admissionSlug}/min-soknad`} text="Min søknad" />
         </NavItemsContainer>
       ) : (
         <NavItemsContainer>
-          <NavItem to={`/${admissionId}/min-soknad`} text="Min søknad" />
+          <NavItem to={`/${admissionSlug}/min-soknad`} text="Min søknad" />
         </NavItemsContainer>
       )}
 

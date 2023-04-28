@@ -101,7 +101,7 @@ const ApplicationForm: React.FC<ApplicationFormProps> = ({
   groups,
 }) => {
   const createApplicationMutation = useCreateApplicationMutation(
-    String(admission?.pk)
+    admission?.slug ?? ""
   );
 
   const {

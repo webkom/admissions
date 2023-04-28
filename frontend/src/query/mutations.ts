@@ -34,14 +34,14 @@ export const useAdminCreateAdmission = () => {
 };
 
 interface UpdateAdmissionProps extends CreateAdmissionProps {
-  admissionId: string;
+  slug: string;
 }
 
 export const useAdminUpdateAdmission = () => {
   const queryClient = useQueryClient();
   return useMutation(
-    ({ admissionId, admission }: UpdateAdmissionProps) => {
-      return callApiFromQuery(`/admin/admission/${admissionId}/`, {
+    ({ slug, admission }: UpdateAdmissionProps) => {
+      return callApiFromQuery(`/admin/admission/${slug}/`, {
         method: "PATCH",
         body: JSON.stringify(admission),
       });
@@ -49,9 +49,7 @@ export const useAdminUpdateAdmission = () => {
     {
       onSuccess: (_, variables) => {
         queryClient.invalidateQueries([`/admin/admission/`]);
-        queryClient.invalidateQueries([
-          `/admin/admission/${variables.admissionId}/`,
-        ]);
+        queryClient.invalidateQueries([`/admin/admission/${variables.slug}/`]);
       },
     }
   );
@@ -59,19 +57,17 @@ export const useAdminUpdateAdmission = () => {
 
 // User mutations
 
-export const useDeleteMyApplicationMutation = (admissionId: string) => {
+export const useDeleteMyApplicationMutation = (slug: string) => {
   const queryClient = useQueryClient();
   return useMutation(
     () => {
-      return callApiFromQuery(`/admission/${admissionId}/application/mine/`, {
+      return callApiFromQuery(`/admission/${slug}/application/mine/`, {
         method: "DELETE",
       });
     },
     {
       onSuccess: () => {
-        queryClient.invalidateQueries([
-          `/admission/${admissionId}/application/mine/`,
-        ]);
+        queryClient.invalidateQueries([`/admission/${slug}/application/mine/`]);
       },
     }
   );
@@ -82,12 +78,12 @@ interface DeleteGroupApplicationProps {
   groupName?: string;
 }
 
-export const useDeleteGroupApplicationMutation = (admissionId: string) => {
+export const useDeleteGroupApplicationMutation = (admissionSlug: string) => {
   const queryClient = useQueryClient();
   return useMutation(
     ({ applicationId, groupName }: DeleteGroupApplicationProps) => {
       return callApiFromQuery(
-        `/admission/${admissionId}/application/${applicationId}/delete_group_application/${
+        `/admission/${admissionSlug}/application/${applicationId}/delete_group_application/${
           groupName ? `?group=${groupName}` : ""
         }`,
         {
@@ -98,7 +94,7 @@ export const useDeleteGroupApplicationMutation = (admissionId: string) => {
     {
       onSuccess: () => {
         queryClient.invalidateQueries([
-          `/admission/${admissionId}/application/`,
+          `/admission/${admissionSlug}/application/`,
         ]);
       },
     }
@@ -133,11 +129,11 @@ interface CreateApplicationProps {
   newApplication: MutationApplication;
 }
 
-export const useCreateApplicationMutation = (admissionId: string) => {
+export const useCreateApplicationMutation = (admissionSlug: string) => {
   const queryClient = useQueryClient();
   return useMutation(
     ({ newApplication }: CreateApplicationProps) => {
-      return callApiFromQuery(`/admission/${admissionId}/application/`, {
+      return callApiFromQuery(`/admission/${admissionSlug}/application/`, {
         method: "POST",
         body: JSON.stringify(newApplication),
       });
@@ -145,7 +141,7 @@ export const useCreateApplicationMutation = (admissionId: string) => {
     {
       onSuccess: () => {
         queryClient.invalidateQueries([
-          `/admission/${admissionId}/application/mine/`,
+          `/admission/${admissionSlug}/application/mine/`,
         ]);
       },
     }

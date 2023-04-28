@@ -56,7 +56,7 @@ const AppRoutes = () =>
   useRoutes([
     { path: "/", element: <LandingPage /> },
     { path: "/admin/*", element: <ManageAdmissions /> },
-    { path: ":admissionId/*", element: <ApplicationPortal /> },
+    { path: ":admissionSlug/*", element: <ApplicationPortal /> },
     { path: "*", element: <NotFoundPage /> },
   ]);
 

@@ -75,6 +75,7 @@ class Group(models.Model):
 
 class Admission(models.Model):
     title = models.CharField(max_length=255, unique=True)
+    slug = models.SlugField(max_length=200, unique=True)
     description = models.TextField(default="", blank=True)
     open_from = models.DateTimeField()
     public_deadline = models.DateTimeField()
