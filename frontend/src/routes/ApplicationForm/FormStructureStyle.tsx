@@ -5,7 +5,9 @@ export const PageWrapper = styled.div`
   width: 100%;
   padding: 0 1rem;
   margin: 0 auto 4em auto;
-  min-height: 100vh;
+  min-height: calc(
+    100vh - 70px - 2rem - 4em
+  ); /* Calculated to never overflow navbar/padding/margin */
   display: flex;
   flex-direction: column;
   align-items: center;

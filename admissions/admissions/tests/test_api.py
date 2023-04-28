@@ -68,7 +68,7 @@ class EditGroupTestCase(APITestCase):
 
         self.edit_group_data = {
             "response_text": "Halla, Webkom er ikke noe gucci",
-            "description": "Webkoms maskott er en ku(le)",
+            "description": "Webkoms maskott er en rød ku(le)",
         }
 
     def test_pleb_cannot_edit_group(self):

@@ -92,7 +92,7 @@ const ApplicationPortal = () => {
   if (!djangoData.user) {
     return null;
   } else if (error) {
-    if (error.code === 404) {
+    if (error.response?.status === 404) {
       return <NotFoundPage />;
     }
     return <div>Error: {error.message}</div>;
@@ -162,5 +162,5 @@ export const PageWrapper = styled.div`
   display: flex;
   flex-direction: column;
   align-items: center;
-  min-height: 100vh;
+  min-height: calc(100vh - 70px);
 `;
