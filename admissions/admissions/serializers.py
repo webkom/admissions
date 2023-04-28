@@ -77,11 +77,16 @@ class AdminCreateUpdateAdmissionSerializer(serializers.HyperlinkedModelSerialize
         if self.instance is not None:
             self.fields.get("slug").read_only = True
 
-    groups = serializers.PrimaryKeyRelatedField(many=True, queryset=Group.objects.all())
+    slug = serializers.SlugField(validators=[MinLengthValidator(4)])
     created_by = serializers.PrimaryKeyRelatedField(
         default=serializers.CurrentUserDefault(), read_only=True
     )
-    slug = serializers.SlugField(validators=[MinLengthValidator(4)])
+    admin_groups = serializers.PrimaryKeyRelatedField(
+        many=True, required=False, queryset=Group.objects.all()
+    )
+    groups = serializers.PrimaryKeyRelatedField(
+        many=True, required=True, queryset=Group.objects.all()
+    )
 
     class Meta:
         model = Admission
@@ -92,15 +97,18 @@ class AdminCreateUpdateAdmissionSerializer(serializers.HyperlinkedModelSerialize
             "open_from",
             "public_deadline",
             "closed_from",
+            "admin_groups",
             "groups",
             "created_by",
         )
 
     def update_or_create(self, pk, validated_data):
+        input_admin_groups = validated_data.pop("admin_groups")
         input_groups = validated_data.pop("groups")
         admission, created = Admission.objects.update_or_create(
             pk=pk, defaults=validated_data
         )
+        admission.admin_groups.set(input_admin_groups)
         admission.groups.set(input_groups)
         return admission
 
@@ -113,6 +121,7 @@ class AdminCreateUpdateAdmissionSerializer(serializers.HyperlinkedModelSerialize
 
 class AdminAdmissionSerializer(serializers.ModelSerializer):
     applications = UserApplication.objects.all()
+    admin_groups = GroupSerializer(many=True)
     groups = GroupSerializer(many=True)
 
     class Meta:
@@ -122,6 +131,7 @@ class AdminAdmissionSerializer(serializers.ModelSerializer):
             "title",
             "slug",
             "description",
+            "admin_groups",
             "groups",
             "open_from",
             "public_deadline",

@@ -56,6 +56,7 @@ const CreateAdmission: React.FC = () => {
       open_from: formatCurrentDate(),
       public_deadline: formatCurrentDate(),
       closed_from: formatCurrentDate(),
+      admin_groups: [],
       groups: [],
     },
     onSubmit: (values) => {
@@ -113,6 +114,7 @@ const CreateAdmission: React.FC = () => {
         open_from: formatDateString(admission.open_from),
         public_deadline: formatDateString(admission.public_deadline),
         closed_from: formatDateString(admission.closed_from),
+        admin_groups: admission.admin_groups?.map((group) => group.pk) ?? [],
         groups: admission.groups.map((group) => group.pk),
       });
     }
@@ -186,6 +188,23 @@ const CreateAdmission: React.FC = () => {
             type="datetime-local"
             value={formik.values.closed_from}
             onChange={formik.handleChange}
+          />
+        </InputWrapper>
+      </FormGroup>
+      <FormGroup>
+        <InputWrapper>
+          <InputTitle>Admin-grupper</InputTitle>
+          <InputDescription>
+            Medlemmene av disse gruppene får tilgang til å se samtlige søkere.
+          </InputDescription>
+          <GroupSelector
+            value={formik.values.admin_groups}
+            toggleGroup={(value) => {
+              formik.setFieldValue(
+                "admin_groups",
+                toggleFromArray(formik.values.admin_groups, value)
+              );
+            }}
           />
         </InputWrapper>
       </FormGroup>

@@ -43,5 +43,6 @@ export interface Admission {
   open_from: string;
   public_deadline: string;
   closed_from: string;
+  admin_groups?: Group[];
   groups: Group[];
 }

@@ -84,6 +84,7 @@ class Admission(models.Model):
         LegoUser, null=True, related_name="admissions", on_delete=models.CASCADE
     )
     groups = models.ManyToManyField(Group, through="AdmissionGroup")
+    admin_groups = models.ManyToManyField(Group, related_name="admin_groups")
 
     def __str__(self):
         return self.title
