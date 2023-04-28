@@ -1,10 +1,9 @@
-import React, { useEffect, useState } from "react";
+import React from "react";
 import styled from "styled-components";
 import djangoData from "src/utils/djangoData";
 import LegoButton from "src/components/LegoButton";
 import { media } from "src/styles/mediaQueries";
 import FormatTime from "src/components/Time/FormatTime";
-import { useMyApplication } from "src/query/hooks";
 import { Admission as AdmissionInterface } from "src/types";
 import CountDown from "./CountDown";
 
@@ -13,14 +12,6 @@ interface AdmissionProps {
 }
 
 const Admission: React.FC<AdmissionProps> = ({ admission }) => {
-  const [hasSubmitted, setHasSubmitted] = useState(false);
-
-  const { data: myApplication } = useMyApplication(admission.slug);
-
-  useEffect(() => {
-    setHasSubmitted(!!myApplication);
-  }, [myApplication]);
-
   return (
     <AdmissionWrapper>
       <AdmissionDetails>
@@ -77,13 +68,15 @@ const Admission: React.FC<AdmissionProps> = ({ admission }) => {
             />
           )}
           <LinkWrapper>
-            {(admission.is_open || hasSubmitted) &&
+            {(admission.is_open || admission.userdata.has_application) &&
               (djangoData.user.full_name ? (
                 <li>
                   <LegoButton
                     to={
                       `/${admission.slug}/` +
-                      (hasSubmitted ? "min-soknad" : "velg-komiteer")
+                      (admission.userdata.has_application
+                        ? "min-soknad"
+                        : "velg-komiteer")
                     }
                     icon="arrow-forward"
                     iconPrefix="ios"
@@ -107,7 +100,7 @@ const Admission: React.FC<AdmissionProps> = ({ admission }) => {
                 </li>
               ))}
 
-            {djangoData.user.is_privileged && (
+            {admission.userdata.is_privileged && (
               <li>
                 <LegoButton
                   to={`/${admission.slug}/admin/`}

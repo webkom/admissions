@@ -51,13 +51,6 @@ class LegoUser(AbstractUser):
         webkom = Group.objects.get(name=constants.WEBKOM_GROUPNAME)
         return Membership.objects.filter(user=self, group=webkom).exists()
 
-    @property
-    def has_application(self):
-        """
-        Return true if this user has a registrered application
-        """
-        return UserApplication.objects.filter(user=self).exists()
-
 
 class Group(models.Model):
     name = models.CharField(max_length=50, unique=True)

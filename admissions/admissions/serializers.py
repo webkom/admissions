@@ -1,11 +1,14 @@
 from django.core.validators import MinLengthValidator
+from django.db.models import Q
 from rest_framework import serializers
 
+from admissions.admissions import constants
 from admissions.admissions.models import (
     Admission,
     Group,
     GroupApplication,
     LegoUser,
+    Membership,
     UserApplication,
 )
 
@@ -43,6 +46,9 @@ class ShortGroupSerializer(serializers.HyperlinkedModelSerializer):
 
 
 class AdmissionListPublicSerializer(serializers.HyperlinkedModelSerializer):
+    groups = serializers.PrimaryKeyRelatedField(read_only=True, many=True)
+    userdata = serializers.SerializerMethodField()
+
     class Meta:
         model = Admission
         fields = (
@@ -54,11 +60,38 @@ class AdmissionListPublicSerializer(serializers.HyperlinkedModelSerializer):
             "open_from",
             "public_deadline",
             "closed_from",
+            "groups",
             "is_closed",
             "is_appliable",
+            "userdata",
         )
         lookup_field = "slug"
         extra_kwargs = {"url": {"lookup_field": "slug"}}
+
+    def get_userdata(self, obj):
+        res = {
+            "has_application": False,
+            "is_privileged": False,
+            "is_admin": False,
+        }
+        request = self.context.get("request")
+        if not request or not hasattr(request, "user"):
+            return res
+        res["has_application"] = UserApplication.objects.filter(
+            user=request.user.pk, admission=obj.pk
+        ).exists()
+        for group in obj.groups.all():
+            if (
+                Membership.objects.filter(user=request.user.pk, group=group.pk)
+                .filter(Q(role=constants.LEADER) | Q(role=constants.RECRUITING))
+                .exists()
+            ):
+                res["is_privileged"] = True
+        for group in obj.admin_groups.all():
+            if Membership.objects.filter(user=request.user.pk, group=group.pk).exists():
+                res["is_privileged"] = True
+                res["is_admin"] = True
+        return res
 
 
 class AdmissionPublicSerializer(AdmissionListPublicSerializer):

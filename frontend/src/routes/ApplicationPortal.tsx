@@ -21,6 +21,7 @@ import AdminPageAbakusLeaderView from "src/routes/AdminPageAbakusLeaderView";
 import LoadingBall from "src/components/LoadingBall";
 import NavBar from "src/components/NavBar";
 import NotFoundPage from "./NotFoundPage";
+import RequireAuth from "src/components/RequireAuth";
 
 interface SelectedGroups {
   [key: string]: boolean;
@@ -133,11 +134,13 @@ const ApplicationPortal = () => {
             <Route
               path="/admin"
               element={
-                djangoData.user.is_superuser ? (
-                  <AdminPageAbakusLeaderView />
-                ) : (
-                  <AdminPage />
-                )
+                <RequireAuth auth={!!admission?.userdata.is_privileged}>
+                  {admission?.userdata.is_admin ? (
+                    <AdminPageAbakusLeaderView />
+                  ) : (
+                    <AdminPage />
+                  )}
+                </RequireAuth>
               }
             />
             <Route path="*" element={<NotFoundPage />} />
