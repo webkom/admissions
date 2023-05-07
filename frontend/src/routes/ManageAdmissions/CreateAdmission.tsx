@@ -1,15 +1,16 @@
+import { AxiosError } from "axios";
 import { useFormik } from "formik";
 import { DateTime } from "luxon";
 import React, { useEffect, useState } from "react";
-import { useParams } from "react-router-dom";
+import { useNavigate, useParams } from "react-router-dom";
 import LegoButton from "src/components/LegoButton";
 import { useAdminAdmission } from "src/query/hooks";
 import {
+  AdmissionMutationResponse,
   MutationAdmission,
   useAdminCreateAdmission,
   useAdminUpdateAdmission,
 } from "src/query/mutations";
-import { HttpError } from "src/utils/callApi";
 import { toggleFromArray } from "src/utils/methods";
 import styled from "styled-components";
 import GroupSelector from "./components/GroupSelector";
@@ -29,6 +30,7 @@ const localTimeStringToTimezoned = (dateString: string) =>
   }).toISO({ includeOffset: true });
 
 const CreateAdmission: React.FC = () => {
+  const navigate = useNavigate();
   const { admissionSlug } = useParams();
   const { data: admission } = useAdminAdmission(
     admissionSlug ?? "",
@@ -66,19 +68,21 @@ const CreateAdmission: React.FC = () => {
         localTimeStringToTimezoned(processedValues.closed_from) ?? "";
       processedValues.public_deadline =
         localTimeStringToTimezoned(processedValues.public_deadline) ?? "";
-      const onSuccess = () => {
+      const onSuccess = (data: AdmissionMutationResponse) => {
         setReturnedData({ type: "success", message: "Opptaket er lagret!" });
-      };
-      const onError = (error: unknown) => {
-        if (error instanceof HttpError) {
-          setReturnedData({
-            type: "error",
-            message:
-              "Feilkode " + error?.code + ", klarte ikke lagre opptaket.",
-          });
-        } else {
-          setReturnedData({ type: "error", message: JSON.stringify(error) });
+        if (data?.slug) {
+          navigate("/admin/" + data.slug);
         }
+      };
+      const onError = (error: AxiosError) => {
+        console.error(error.response?.data);
+        setReturnedData({
+          type: "error",
+          message:
+            "Feilkode " +
+            error.response?.status +
+            ", klarte ikke lagre opptaket.",
+        });
       };
       if (isNew) {
         createAdmission.mutate(
@@ -134,7 +138,8 @@ const CreateAdmission: React.FC = () => {
         <InputWrapper>
           <InputTitle>Slug</InputTitle>
           <InputDescription>
-            Opptaket vil ligge under opptak.abakus.no/[slug]/
+            Opptaket vil ligge under opptak.abakus.no/
+            {formik.values.slug || "[slug]"}/
           </InputDescription>
           <Input
             name="slug"

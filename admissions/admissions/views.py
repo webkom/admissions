@@ -175,7 +175,6 @@ class ApplicationViewSet(viewsets.ModelViewSet):
 
 
 class AdminAdmissionViewSet(viewsets.ModelViewSet):
-    queryset = Admission.objects.all().order_by("open_from")
     authentication_classes = [SessionAuthentication]
     permission_classes = [
         permissions.IsAuthenticated,
@@ -191,9 +190,10 @@ class AdminAdmissionViewSet(viewsets.ModelViewSet):
             return AdminCreateUpdateAdmissionSerializer
 
     def get_queryset(self):
-        if self.request.user.is_member_of_webkom:
-            return self.queryset
-        return self.queryset.filter(created_by=self.request.user)
+        qs = Admission.objects.all().order_by("open_from")
+        if not self.request.user.is_member_of_webkom:
+            return qs.filter(created_by=self.request.user)
+        return qs
 
     def perform_create(self, serializer):
         serializer.save(created_by=self.request.user)

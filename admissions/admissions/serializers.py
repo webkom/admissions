@@ -1,4 +1,4 @@
-from django.utils import timezone
+from django.core.validators import MinLengthValidator
 from rest_framework import serializers
 
 from admissions.admissions.models import (
@@ -11,12 +11,16 @@ from admissions.admissions.models import (
 
 
 class GroupSerializer(serializers.HyperlinkedModelSerializer):
+    description = serializers.CharField(validators=[MinLengthValidator(30)])
+    response_label = serializers.CharField(validators=[MinLengthValidator(30)])
+
     class Meta:
         model = Group
         fields = (
             "pk",
             "name",
             "description",
+            "response_label",
             "detail_link",
             "logo",
         )
@@ -67,15 +71,23 @@ class AdmissionPublicSerializer(AdmissionListPublicSerializer):
 
 
 class AdminCreateUpdateAdmissionSerializer(serializers.HyperlinkedModelSerializer):
+    def __init__(self, *args, **kwargs):
+        """If object is being updated don't allow slug to be changed."""
+        super().__init__(*args, **kwargs)
+        if self.instance is not None:
+            self.fields.get("slug").read_only = True
+
     groups = serializers.PrimaryKeyRelatedField(many=True, queryset=Group.objects.all())
     created_by = serializers.PrimaryKeyRelatedField(
         default=serializers.CurrentUserDefault(), read_only=True
     )
+    slug = serializers.SlugField(validators=[MinLengthValidator(4)])
 
     class Meta:
         model = Admission
         fields = (
             "title",
+            "slug",
             "description",
             "open_from",
             "public_deadline",

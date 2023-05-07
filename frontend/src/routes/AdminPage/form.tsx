@@ -69,11 +69,10 @@ const EditGroupForm: React.FC<EditGroupFormProps> = ({
               );
             },
             onError: (error) => {
-              const errors: { [key: string]: string } = {};
-              Object.keys(error).forEach((key) => {
-                errors[key] = error[key][0];
+              setErrors({
+                description: error.response?.data.description[0],
+                response_label: error.response?.data.response_label[0],
               });
-              setErrors(errors);
             },
           }
         );
