@@ -26,6 +26,9 @@ const LandingPageSkeleton: React.FC<PropsWithChildren> = ({ children }) => {
           </LegoButton>
         </LegoButtonWrapper>
       )}
+      <BottomLinkWrapper>
+        {!djangoData.user.full_name && <a href="/login/lego/">Logg inn</a>}
+      </BottomLinkWrapper>
     </Container>
   );
 };
@@ -39,9 +42,10 @@ export const Container = styled.div`
   flex-direction: column;
   align-items: center;
   margin: 0 auto;
-  padding: 2rem 0 2rem 0;
+  padding-top: 2rem;
   width: 80%;
   max-width: 100%;
+  min-height: 100vh;
   ${media.portrait`
     width: 90%;
   `}
@@ -70,4 +74,12 @@ const Title = styled.h1`
 
 const LegoButtonWrapper = styled.div`
   margin-top: 3em;
+`;
+
+const BottomLinkWrapper = styled.div`
+  display: flex;
+  flex-grow: 1;
+  align-items: flex-end;
+  padding-top: 2rem;
+  padding-bottom: 0.2rem;
 `;
