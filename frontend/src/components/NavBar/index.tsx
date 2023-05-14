@@ -6,6 +6,7 @@ import NavItem from "./NavItem";
 import { media } from "src/styles/mediaQueries";
 import { User } from "src/types";
 import { useParams } from "react-router-dom";
+import { useAdmission } from "src/query/hooks";
 
 interface NavBarProps {
   user: User;
@@ -14,13 +15,14 @@ interface NavBarProps {
 
 const NavBar: React.FC<NavBarProps> = ({ user, isEditing }) => {
   const { admissionSlug } = useParams();
+  const { data: admission } = useAdmission(admissionSlug ?? "");
 
   return (
     <Container>
       <BrandContainer>
         <AbakusLogo />
       </BrandContainer>
-      {!user.has_application || isEditing ? (
+      {!admission?.userdata.has_application || isEditing ? (
         <NavItemsContainer>
           <NavItem
             to={`/${admissionSlug}/velg-komiteer`}

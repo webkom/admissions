@@ -13,7 +13,6 @@ export interface User {
   profile_picture: string;
   phone_number: string;
   email: string;
-  has_application: boolean;
 }
 
 export interface GroupApplication {
@@ -32,6 +31,12 @@ export interface Application {
   group_applications: GroupApplication[];
 }
 
+interface AdmissionUserData {
+  has_application: boolean;
+  is_privileged: boolean;
+  is_admin: boolean;
+}
+
 export interface Admission {
   pk: number;
   slug: string;
@@ -43,5 +48,7 @@ export interface Admission {
   open_from: string;
   public_deadline: string;
   closed_from: string;
+  admin_groups?: Group[];
   groups: Group[];
+  userdata: AdmissionUserData;
 }

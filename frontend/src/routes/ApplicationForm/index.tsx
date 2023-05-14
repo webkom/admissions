@@ -176,7 +176,6 @@ const ApplicationForm: React.FC<ApplicationFormProps> = ({
             onSuccess: () => {
               setSubmitting(false);
               toggleIsEditing();
-              window.__DJANGO__.user.has_application = true;
             },
             onError: () => {
               alert("Det skjedde en feil.... ");

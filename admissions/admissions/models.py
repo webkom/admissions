@@ -51,13 +51,6 @@ class LegoUser(AbstractUser):
         webkom = Group.objects.get(name=constants.WEBKOM_GROUPNAME)
         return Membership.objects.filter(user=self, group=webkom).exists()
 
-    @property
-    def has_application(self):
-        """
-        Return true if this user has a registrered application
-        """
-        return UserApplication.objects.filter(user=self).exists()
-
 
 class Group(models.Model):
     name = models.CharField(max_length=50, unique=True)
@@ -84,6 +77,7 @@ class Admission(models.Model):
         LegoUser, null=True, related_name="admissions", on_delete=models.CASCADE
     )
     groups = models.ManyToManyField(Group, through="AdmissionGroup")
+    admin_groups = models.ManyToManyField(Group, related_name="admin_groups")
 
     def __str__(self):
         return self.title

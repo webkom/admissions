@@ -11,6 +11,7 @@ export interface MutationAdmission {
   open_from: string;
   public_deadline: string;
   closed_from: string;
+  admin_groups: number[];
   groups: number[];
 }
 interface CreateAdmissionProps {
