@@ -111,9 +111,7 @@ STATICFILES_FINDERS = [
 ]
 
 STATICFILES_DIRS = [
-    BASE_PROJECT_DIR.path("assets")(),
     ROOT_DIR.path("assets")(),
-    BASE_PROJECT_DIR.path("assets/bundles")(),
 ]
 
 STATIC_URL = "/static/"

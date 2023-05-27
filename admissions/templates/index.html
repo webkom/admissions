@@ -1,6 +1,5 @@
 {% load static %}
 {% load django_vite %}
-{% load vite %}
 
 <!DOCTYPE html>
 <html lang="en">
@@ -22,7 +21,7 @@
     <link href="https://fonts.googleapis.com/icon?family=Material+Icons"
       rel="stylesheet">
 
-    {% vite_react_preamble %}
+    {% vite_react_refresh %}
     {% vite_hmr_client %}
     {% vite_asset 'frontend/src/index.tsx' %}
 
