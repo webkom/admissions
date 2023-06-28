@@ -5,6 +5,7 @@ from rest_framework import serializers
 from admissions.admissions import constants
 from admissions.admissions.models import (
     Admission,
+    AdmissionGroup,
     Group,
     GroupApplication,
     LegoUser,
@@ -15,7 +16,6 @@ from admissions.admissions.models import (
 
 class GroupSerializer(serializers.HyperlinkedModelSerializer):
     description = serializers.CharField(validators=[MinLengthValidator(30)])
-    response_label = serializers.CharField(validators=[MinLengthValidator(30)])
 
     class Meta:
         model = Group
@@ -23,7 +23,7 @@ class GroupSerializer(serializers.HyperlinkedModelSerializer):
             "pk",
             "name",
             "description",
-            "response_label",
+            "questions",
             "detail_link",
             "logo",
         )
@@ -98,7 +98,7 @@ class AdmissionPublicSerializer(AdmissionListPublicSerializer):
     groups = GroupSerializer(many=True)
 
     class Meta(AdmissionListPublicSerializer.Meta):
-        fields = AdmissionListPublicSerializer.Meta.fields + ("groups",)
+        fields = AdmissionListPublicSerializer.Meta.fields + ("groups", "questions")
         lookup_field = "slug"
         extra_kwargs = {"url": {"lookup_field": "slug"}}
 
@@ -156,6 +156,7 @@ class AdminAdmissionSerializer(serializers.ModelSerializer):
     applications = UserApplication.objects.all()
     admin_groups = GroupSerializer(many=True)
     groups = GroupSerializer(many=True)
+    userdata = serializers.SerializerMethodField()
 
     class Meta:
         model = Admission
@@ -173,15 +174,41 @@ class AdminAdmissionSerializer(serializers.ModelSerializer):
             "is_open",
             "is_closed",
             "is_appliable",
+            "userdata",
         )
         lookup_field = "slug"
         extra_kwargs = {"url": {"lookup_field": "slug"}}
+
+    def get_userdata(self, obj):
+        res = {
+            "has_application": False,
+            "is_privileged": False,
+            "is_admin": False,
+        }
+        request = self.context.get("request")
+        if not request or not hasattr(request, "user"):
+            return res
+        res["has_application"] = UserApplication.objects.filter(
+            user=request.user.pk, admission=obj.pk
+        ).exists()
+        for group in obj.groups.all():
+            if (
+                Membership.objects.filter(user=request.user.pk, group=group.pk)
+                .filter(Q(role=constants.LEADER) | Q(role=constants.RECRUITING))
+                .exists()
+            ):
+                res["is_privileged"] = True
+        for group in obj.admin_groups.all():
+            if Membership.objects.filter(user=request.user.pk, group=group.pk).exists():
+                res["is_privileged"] = True
+                res["is_admin"] = True
+        return res
 
 
 class GroupApplicationSerializer(serializers.HyperlinkedModelSerializer):
     class Meta:
         model = GroupApplication
-        fields = ("url", "pk", "application", "group", "text")
+        fields = ("url", "pk", "application", "group", "responses")
 
 
 class ShortGroupApplicationSerializer(serializers.HyperlinkedModelSerializer):
@@ -189,7 +216,7 @@ class ShortGroupApplicationSerializer(serializers.HyperlinkedModelSerializer):
 
     class Meta:
         model = GroupApplication
-        fields = ("group", "text")
+        fields = ("group", "responses")
 
 
 class ShortUserSerializer(serializers.HyperlinkedModelSerializer):
@@ -205,14 +232,14 @@ class ShortUserSerializer(serializers.HyperlinkedModelSerializer):
 
 class UserApplicationSerializer(serializers.ModelSerializer):
     group_applications = serializers.SerializerMethodField()
-    text = serializers.SerializerMethodField()
+    # text = serializers.SerializerMethodField()
     user = ShortUserSerializer()
 
-    def get_text(self, obj):
-        is_filtered = getattr(obj, "group_applications_filtered", False)
-        if is_filtered:
-            return None
-        return obj.text
+    # def get_text(self, obj):
+    #     is_filtered = getattr(obj, "group_applications_filtered", False)
+    #     if is_filtered:
+    #         return None
+    #     return obj.text
 
     def get_group_applications(self, obj):
         qs = getattr(obj, "group_applications_filtered", obj.group_applications)
@@ -223,12 +250,11 @@ class UserApplicationSerializer(serializers.ModelSerializer):
         fields = (
             "pk",
             "user",
-            "text",
+            "responses",
             "created_at",
             "updated_at",
             "applied_within_deadline",
             "group_applications",
-            "phone_number",
         )
 
 
@@ -247,33 +273,61 @@ class UserSerializer(serializers.HyperlinkedModelSerializer):
 
 
 class ApplicationCreateUpdateSerializer(serializers.HyperlinkedModelSerializer):
+    group_applications = serializers.SerializerMethodField()
+
+    def get_group_applications(self, obj):
+        qs = getattr(obj, "group_applications_filtered", obj.group_applications)
+        return ShortGroupApplicationSerializer(qs, many=True).data
+
     class Meta:
         model = UserApplication
-        fields = ("text", "pk", "phone_number")
+        fields = ("pk", "responses", "group_applications")
+
+    def _validate(self, group_name: str, questions: dict, responses: dict) -> None:
+        error = self._validate_fields(questions, responses)
+        if error is not None:
+            if group_name == None:
+                raise serializers.ValidationError({"responses": error})
+            raise serializers.ValidationError({"groupResponses": {group_name: error}})
+
+    def _validate_fields(self, questions: dict, responses: dict) -> dict:
+        # Ensure that the received JSON indata matches the requested questions
+        editable_questions = list(filter(lambda x: x["type"] != "text", questions))
+        if len(editable_questions) != len(responses):
+            return "Alle spørsmål ble ikke sendt"
+        for question in editable_questions:
+            print(responses)
+            print(question)
+            response_key = next(
+                (key for key in responses.keys() if key == question["id"]), None
+            )
+            if response_key is None:
+                return {question["id"]: "Obligatorisk felt ble ikke sendt"}
+            response = responses[response_key]
+            if response is None:
+                return {question["id"]: "Obligatorisk felt"}
 
     def create(self, validated_data):
         user = validated_data.pop("user")
-        text = validated_data.pop("text")
-        phone_number = validated_data.pop("phone_number")
+        responses = validated_data.pop("responses")
 
         admission = Admission.objects.get(slug=validated_data.get("admission_slug"))
 
+        self._validate(None, admission.questions, responses)
+
         user_application, created = UserApplication.objects.update_or_create(
-            admission=admission,
-            user=user,
-            defaults={"text": text, "phone_number": phone_number},
+            admission=admission, user=user, responses=responses
         )
         # The code smell is strong with this one, young padawan
-        applications = self.initial_data.pop("applications")
+        group_applications = self.initial_data.pop("group_applications")
 
         GroupApplication.objects.filter(application=user_application).delete()
 
-        for group_name, text in applications.items():
+        for group_name, group_responses in group_applications.items():
             group = Group.objects.get(name__iexact=group_name)
+            self._validate(group_name, group.questions, group_responses)
             application, created = GroupApplication.objects.update_or_create(
-                application=user_application,
-                group=group,
-                defaults={"text": text},
+                application=user_application, group=group, responses=group_responses
             )
 
         return user_application

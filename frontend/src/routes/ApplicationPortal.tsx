@@ -78,7 +78,7 @@ const ApplicationPortal = () => {
         ?.map((a) => a.group.name.toLowerCase())
         .reduce((obj, a) => ({ ...obj, [a]: true }), {})
     );
-  }, [myApplication]);
+  }, [myApplication, isFetching]);
 
   useEffect(() => {
     persistState();
@@ -99,6 +99,8 @@ const ApplicationPortal = () => {
     return <div>Error: {error.message}</div>;
   } else if (isFetching) {
     return <LoadingBall />;
+  } else if (admission === undefined) {
+    return <div>Feil: kunne ikke laste inn opptaket</div>;
   } else {
     return (
       <PageWrapper>

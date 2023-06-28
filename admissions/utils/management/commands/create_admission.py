@@ -25,6 +25,7 @@ class Command(BaseCommand):
 
         admission = Admission.objects.create(
             title=f"Opptak {base_date.year}",
+            slug={base_date.year},
             open_from=open_date,
             public_deadline=public_deadline_date,
             closed_from=closed_from_date,

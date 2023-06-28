@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import styled from "styled-components";
 import FormatTime from "src/components/Time/FormatTime";
 
@@ -17,14 +17,13 @@ import { useAdmission, useApplications } from "src/query/hooks";
 import { useParams } from "react-router-dom";
 
 import AdmissionsContainer from "src/containers/AdmissionsContainer";
-import { CsvData } from "src/routes/AdminPage";
+import { BaseCsvData } from "src/routes/AdminPage";
 import { Application } from "src/types";
+import { filterEditableFields } from "src/utils/jsonFieldHelper";
 
-type CompleteCsvData = {
-  priorityText: string;
+type AdmissionAdminCsvData = {
   group: string;
-  groupApplicationText: string;
-} & Omit<CsvData, "applicationText">;
+} & BaseCsvData;
 
 const AdminPageAbakusLeaderView = () => {
   const { admissionSlug } = useParams();
@@ -35,20 +34,7 @@ const AdminPageAbakusLeaderView = () => {
   const [filteredApplications, setFilteredApplications] = useState<
     Application[]
   >([]);
-  const [csvData, setCsvData] = useState<CompleteCsvData[]>([]);
-
-  const csvHeaders = [
-    { label: "Full Name", key: "name" },
-    { label: "Prioriteringer", key: "priorityText" },
-    { label: "Komité", key: "group" },
-    { label: "Søknadstekst", key: "groupApplicationText" },
-    { label: "Email", key: "email" },
-    { label: "Mobilnummer", key: "phoneNumber" },
-    { label: "Username", key: "username" },
-    { label: "Søkt innen frist", key: "appliedWithinDeadline" },
-    { label: "Tid sendt", key: "createdAt" },
-    { label: "Tid oppdatert", key: "updatedAt" },
-  ];
+  const [csvData, setCsvData] = useState<AdmissionAdminCsvData[]>([]);
 
   const {
     data: applications,
@@ -61,6 +47,24 @@ const AdminPageAbakusLeaderView = () => {
     isFetching: admissionIsFetching,
   } = useAdmission(admissionSlug ?? "");
   const { groups } = admission ?? {};
+
+  const csvHeaders = useMemo(
+    () => [
+      { label: "Fullt navn", key: "name" },
+      { label: "Gruppe", key: "group" },
+      { label: "Søknadstekst(er)", key: "groupApplicationText" },
+      { label: "E-post", key: "email" },
+      { label: "Brukernavn", key: "username" },
+      { label: "Søkt innen frist", key: "appliedWithinDeadline" },
+      { label: "Tid sendt", key: "createdAt" },
+      { label: "Tid oppdatert", key: "updatedAt" },
+      ...filterEditableFields(admission?.questions).map((question) => ({
+        label: question.name,
+        key: question.id,
+      })),
+    ],
+    []
+  );
 
   useEffect(() => {
     if (!applications) return;
@@ -85,24 +89,32 @@ const AdminPageAbakusLeaderView = () => {
 
   useEffect(() => {
     // Push all the individual applications into csvData with the right format
-    const updatedCsvData: CompleteCsvData[] = [];
+    const updatedCsvData: AdmissionAdminCsvData[] = [];
     filteredApplications.forEach((application) => {
       application.group_applications.forEach((groupApplication) => {
-        updatedCsvData.push({
+        const csvDataItem: AdmissionAdminCsvData = {
           name: application.user.full_name,
           email: application.user.email,
           username: application.user.username,
           createdAt: application.created_at,
           updatedAt: application.updated_at,
           appliedWithinDeadline: application.applied_within_deadline,
-          priorityText:
-            application.text != ""
-              ? replaceQuotationMarks(application.text)
-              : "Ingen prioriteringer",
           group: groupApplication.group.name,
-          groupApplicationText: replaceQuotationMarks(groupApplication.text),
-          phoneNumber: application.phone_number,
-        });
+          groupApplicationText: Object.entries(groupApplication.responses)
+            .map(([id, value]) => {
+              const questionName: string =
+                filterEditableFields(
+                  admission?.groups.find(
+                    (group) => group.pk === groupApplication.group.pk
+                  )?.questions
+                ).find((question) => question.id === id)?.name ??
+                "Fant ikke spørsmålet";
+              return replaceQuotationMarks(questionName + ":\n" + value);
+            })
+            .join("\n\n"),
+          ...application.responses,
+        };
+        updatedCsvData.push(csvDataItem);
       });
     });
     setCsvData(updatedCsvData);
@@ -184,8 +196,14 @@ const AdminPageAbakusLeaderView = () => {
             target="_blank"
           >
             Eksporter som csv
+            <br />
+            NB: Åpne CSV-filen i Google Sheets for å være sikker på at den vises
+            riktig.
           </CSVExport>
-          <AdmissionsContainer applications={filteredApplications} />
+          <AdmissionsContainer
+            admission={admission}
+            applications={filteredApplications}
+          />
         </Wrapper>
       </PageWrapper>
     );

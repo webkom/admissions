@@ -12,6 +12,7 @@ from admissions.admissions.models import (
     Group,
     GroupApplication,
     LegoUser,
+    Membership,
     UserApplication,
 )
 from admissions.admissions.serializers import (
@@ -97,13 +98,15 @@ class ApplicationViewSet(viewsets.ModelViewSet):
         user.__class__ = LegoUser
         if not user.is_privileged:
             return User.objects.none()
-        if user.is_superuser:
-            return (
-                super()
-                .get_queryset()
-                .filter(admission__slug=admission_slug)
-                .prefetch_related("group_applications", "group_applications__group")
-            )
+        admission = Admission.objects.get(slug=admission_slug)
+        for group in admission.admin_groups.all():
+            if Membership.objects.filter(user=user, group=group.pk).exists():
+                return (
+                    super()
+                    .get_queryset()
+                    .filter(admission__slug=admission_slug)
+                    .prefetch_related("group_applications", "group_applications__group")
+                )
 
         group = user.representative_of_group
         qs = GroupApplication.objects.filter(group=group).select_related("group")

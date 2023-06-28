@@ -1,9 +1,43 @@
+type JsonFieldEditableBase = {
+  id: string;
+  name: string;
+  label: string;
+};
+
+export type JsonFieldTextArea = JsonFieldEditableBase & {
+  type: "textarea";
+  placeholder?: string;
+};
+
+export type JsonFieldTextInput = JsonFieldEditableBase & { type: "textinput" };
+
+export type JsonFieldPhoneInput = JsonFieldEditableBase & {
+  type: "phoneinput";
+};
+
+export type JsonFieldEditableInput =
+  | JsonFieldTextArea
+  | JsonFieldTextInput
+  | JsonFieldPhoneInput;
+
+export type JsonFieldText = {
+  type: "text";
+  text: string;
+};
+
+export type JsonFieldInput = JsonFieldText | JsonFieldEditableInput;
+
+export type JsonFieldValue = {
+  type: "text" | "textarea" | "textinput" | "phoneinput";
+  value: string;
+};
+
 export interface Group {
   pk: number;
   name: string;
   description: string;
   logo: string;
-  response_label: string;
+  questions: JsonFieldInput[];
   detail_link: string;
 }
 
@@ -17,7 +51,7 @@ export interface User {
 
 export interface GroupApplication {
   group: Group;
-  text: string;
+  responses: Record<string, string>;
 }
 
 export interface Application {
@@ -26,8 +60,7 @@ export interface Application {
   applied_within_deadline: boolean;
   created_at: string;
   updated_at: string;
-  text: string;
-  phone_number: string;
+  responses: Record<string, string>;
   group_applications: GroupApplication[];
 }
 
@@ -51,4 +84,5 @@ export interface Admission {
   admin_groups?: Group[];
   groups: Group[];
   userdata: AdmissionUserData;
+  questions: JsonFieldInput[];
 }

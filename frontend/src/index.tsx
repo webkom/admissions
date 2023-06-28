@@ -35,6 +35,10 @@ const queryClient = new QueryClient({
       refetchOnWindowFocus: process.env.NODE_ENV === "production",
       queryFn: defaultQueryFn,
       staleTime: 60000,
+      networkMode: "always",
+    },
+    mutations: {
+      networkMode: "always",
     },
   },
 });

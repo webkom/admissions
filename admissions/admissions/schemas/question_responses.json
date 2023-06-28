@@ -1,0 +1,5 @@
+{
+  "title": "Possible questions response types",
+  "type": "object",
+  "additionalProperties": { "type": "string" }
+}
