@@ -1148,18 +1148,18 @@ rsa = ["oauthlib[signedtoken] (>=3.0.0)"]
 
 [[package]]
 name = "sentry-sdk"
-version = "1.24.0"
+version = "1.28.0"
 description = "Python client for Sentry (https://sentry.io)"
 optional = false
 python-versions = "*"
 files = [
-    {file = "sentry-sdk-1.24.0.tar.gz", hash = "sha256:0bbcecda9f51936904c1030e7fef0fe693e633888f02a14d1cb68646a50e83b3"},
-    {file = "sentry_sdk-1.24.0-py2.py3-none-any.whl", hash = "sha256:56d6d9d194c898d853a7c1dd99bed92ce82334ee1282292c15bcc967ff1a49b5"},
+    {file = "sentry-sdk-1.28.0.tar.gz", hash = "sha256:2281ba98011cfa9bc9bb15c1074b6dd9f7fdfce94033cd25b50f18f078ffed4c"},
+    {file = "sentry_sdk-1.28.0-py2.py3-none-any.whl", hash = "sha256:b8b363aaa3f3d6a3acc1aa571efa4db29fb440339fed03560bb1276b8d2c2509"},
 ]
 
 [package.dependencies]
 certifi = "*"
-urllib3 = {version = ">=1.26.11,<2.0.0", markers = "python_version >= \"3.6\""}
+urllib3 = {version = ">=1.26.11", markers = "python_version >= \"3.6\""}
 
 [package.extras]
 aiohttp = ["aiohttp (>=3.5)"]
@@ -1428,4 +1428,4 @@ files = [
 [metadata]
 lock-version = "2.0"
 python-versions = "^3.9"
-content-hash = "79b3d9300db40d64f12a46b876925e5919f9ee08de4349daad10374979934917"
+content-hash = "fcd9a6680bdfccf4fa6abe50135e0627283266040deb3d175aa5ec00f991e9f7"
