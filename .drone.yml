@@ -104,8 +104,31 @@ steps:
         - version-${DRONE_COMMIT_SHA:0:7}
       build_args:
         RELEASE: ${DRONE_BRANCH}-${DRONE_COMMIT_SHA:0:7}
+  
+  - name: Deploy staging
+    image: abakus/ansible-deploy
+    depends_on:
+      - docker
+    when:
+      branch:
+        - staging
+      event: push
+      status: success
+    settings:
+      playbook: /infrastructure/esas/playbooks/deploy.yml
+      repository:
+        from_secret: infra_repository
+      tags:
+        - admissions-staging
+      limit: esas
+      extra_vars: admissions_version=version-${DRONE_COMMIT_SHA:0:7}
+      inventory: /infrastructure/inventory
+      vault_password:
+        from_secret: ansible_vault_password
+      private_key:
+        from_secret: infra_deploy_key
 
-  - name: Deploy
+  - name: Deploy prod
     image: abakus/ansible-deploy
     depends_on:
       - docker
