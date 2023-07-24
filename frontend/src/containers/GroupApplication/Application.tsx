@@ -1,67 +1,35 @@
-import React, { useEffect } from "react";
+import React from "react";
 import styled from "styled-components";
 import { media } from "src/styles/mediaQueries";
-import {
-  FieldLabel,
-  InputValidationFeedback,
-  StyledTextAreaField,
-} from "src/components/styledFields";
 import readmeIfy from "src/components/ReadmeLogo";
-import useDebouncedState from "src/utils/useDebouncedState";
-import { saveApplicationTextDraft } from "src/utils/draftHelper";
 import { Group } from "src/types";
-import { FieldInputProps, FormikProps } from "formik";
+import JsonFieldParser from "src/routes/ApplicationForm/JsonFieldParser";
 
-type FieldValue = string;
 export type FormValues = Record<string, string>;
 
 export interface ApplicationProps {
-  responseLabel: string;
   group: Group;
-  field: FieldInputProps<FieldValue>;
-  form: FormikProps<FormValues>;
-  disabled: boolean;
+  disabled?: boolean;
 }
 
-const Application: React.FC<ApplicationProps> = ({
-  responseLabel,
-  group,
-  field: { name, onChange, value },
-  form: { touched, errors, handleBlur },
-  disabled,
-}) => {
-  const debouncedValue = useDebouncedState(value);
-
-  useEffect(() => {
-    saveApplicationTextDraft([group.name, value]);
-  }, [debouncedValue]);
-
-  const error = touched[name] ? errors[name] : undefined;
-
+const Application: React.FC<ApplicationProps> = ({ group, disabled }) => {
   return (
     <Container>
       <LogoNameWrapper>
         <Logo src={group.logo} />
         <Name>{readmeIfy(group.name)}</Name>
       </LogoNameWrapper>
-      {responseLabel && (
-        <ResponseLabel>{readmeIfy(responseLabel, true)}</ResponseLabel>
-      )}
       <InputWrapper>
-        <FieldLabel htmlFor={group.name.toLowerCase()}>Søknadstekst</FieldLabel>
-        <InputArea
-          className="textarea"
-          name={name}
-          id={name}
-          onChange={onChange}
-          onBlur={handleBlur}
-          placeholder="Skriv søknadstekst her..."
-          value={value}
-          $error={!!error}
-          rows={10}
-          disabled={disabled}
-        />
-        <InputValidationFeedback error={error} />
+        {group.questions &&
+          Array.isArray(group.questions) &&
+          group.questions.map((question, index) => (
+            <JsonFieldParser
+              key={index}
+              group={group}
+              jsonField={question}
+              disabled={disabled}
+            />
+          ))}
       </InputWrapper>
     </Container>
   );
@@ -142,8 +110,4 @@ export const InputWrapper = styled.div`
   grid-area: input;
   font-family: var(--font-family);
   font-size: 1rem;
-`;
-
-const InputArea = styled(StyledTextAreaField)`
-  min-height: 10rem;
 `;

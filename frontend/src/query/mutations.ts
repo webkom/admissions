@@ -1,5 +1,6 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { AxiosError } from "axios";
+import { JsonFieldInput } from "src/types";
 import { apiClient } from "../utils/callApi";
 
 // Admin mutations
@@ -103,13 +104,13 @@ interface UpdateGroupProps {
   groupPrimaryKey: number;
   updatedGroupData: {
     description: string;
-    response_label: string;
+    questions: JsonFieldInput[];
   };
 }
 
 interface UpdateGroupErrorData {
   description: string[];
-  response_label: string[];
+  questions: string[];
 }
 
 export const useUpdateGroupMutation = () =>
@@ -119,9 +120,8 @@ export const useUpdateGroupMutation = () =>
   );
 
 export interface MutationApplication {
-  text: string;
-  phone_number: string;
-  applications: Record<string, string>;
+  responses: Record<string, string>;
+  group_applications: Record<string, Record<string, string>>;
 }
 
 interface CreateApplicationProps {
@@ -130,7 +130,11 @@ interface CreateApplicationProps {
 
 export const useCreateApplicationMutation = (admissionSlug: string) => {
   const queryClient = useQueryClient();
-  return useMutation<unknown, AxiosError, CreateApplicationProps>(
+  return useMutation<
+    unknown,
+    AxiosError<Record<string, Record<string, string>>>,
+    CreateApplicationProps
+  >(
     ({ newApplication }) =>
       apiClient.post(
         `/admission/${admissionSlug}/application/`,
