@@ -1,0 +1,62 @@
+{
+  "title": "Possible questions types",
+  "type": "array",
+  "items": {
+    "oneOf": [
+      {
+        "name": "text",
+        "type": "object",
+        "properties": {
+          "type": { "enum": ["text"] },
+          "text": { "type": "string" }
+        },
+        "required": ["type", "text"]
+      },
+      {
+        "name": "textinput",
+        "type": "object",
+        "properties": {
+          "type": { "enum": ["textinput"] },
+          "id": { "type": "string" },
+          "name": { "type": "string" },
+          "label": { "type": "string" }
+        },
+        "required": ["type", "id", "name", "label"]
+      },
+      {
+        "name": "textarea",
+        "type": "object",
+        "properties": {
+          "type": { "enum": ["textarea"] },
+          "id": { "type": "string" },
+          "name": { "type": "string" },
+          "label": { "type": "string" },
+          "placeholder": { "type": "string" }
+        },
+        "required": ["type", "id", "name", "label"]
+      },
+      {
+        "name": "numberinput",
+        "type": "object",
+        "properties": {
+          "type": { "enum": ["numberinput"] },
+          "id": { "type": "string" },
+          "name": { "type": "string" },
+          "label": { "type": "string" }
+        },
+        "required": ["type", "id", "name", "label"]
+      },
+      {
+        "name": "phoneinput",
+        "type": "object",
+        "properties": {
+          "type": { "enum": ["phoneinput"] },
+          "id": { "type": "string" },
+          "name": { "type": "string" },
+          "label": { "type": "string" }
+        },
+        "required": ["type", "id", "name", "label"]
+      }
+    ]
+  }
+}

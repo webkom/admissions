@@ -5,6 +5,8 @@ from django.db.models import Q
 from django.utils import timezone
 
 from admissions.admissions import constants
+from admissions.admissions.fields.jsonschemaquestionfield import JSONSchemaQuestionField
+from admissions.admissions.fields.jsonschemaresponsefield import JSONSchemaResponseField
 from admissions.utils.models import TimeStampModel
 
 
@@ -55,7 +57,7 @@ class LegoUser(AbstractUser):
 class Group(models.Model):
     name = models.CharField(max_length=50, unique=True)
     description = models.TextField(blank=True, max_length=300)
-    response_label = models.TextField(blank=True, max_length=300)
+    questions = JSONSchemaQuestionField(default=dict, blank=True)
     logo = models.URLField(null=True, blank=True)
     detail_link = models.CharField(max_length=150, default="")
 
@@ -67,17 +69,18 @@ class Group(models.Model):
 
 
 class Admission(models.Model):
-    title = models.CharField(max_length=255, unique=True)
-    slug = models.SlugField(max_length=200, unique=True, null=False)
-    description = models.TextField(default="", blank=True)
-    open_from = models.DateTimeField()
-    public_deadline = models.DateTimeField()
-    closed_from = models.DateTimeField()
     created_by = models.ForeignKey(
         LegoUser, null=True, related_name="admissions", on_delete=models.CASCADE
     )
-    groups = models.ManyToManyField(Group, through="AdmissionGroup")
+    title = models.CharField(max_length=255, unique=True)
+    slug = models.SlugField(max_length=200, unique=True, null=False)
+    open_from = models.DateTimeField()
+    public_deadline = models.DateTimeField()
+    closed_from = models.DateTimeField()
     admin_groups = models.ManyToManyField(Group, related_name="admin_groups")
+    groups = models.ManyToManyField(Group, through="AdmissionGroup")
+    description = models.TextField(default="", blank=True)
+    questions = JSONSchemaQuestionField(default=dict, blank=True)
 
     def __str__(self):
         return self.title
@@ -112,8 +115,7 @@ class UserApplication(TimeStampModel):
         Admission, related_name="applications", on_delete=models.CASCADE
     )
     user = models.ForeignKey(LegoUser, on_delete=models.CASCADE)
-    text = models.TextField(blank=True)
-    phone_number = models.CharField(max_length=20)
+    responses = JSONSchemaResponseField(default=dict, blank=True)
 
     class Meta:
         constraints = [
@@ -149,7 +151,7 @@ class GroupApplication(TimeStampModel):
     group = models.ForeignKey(
         Group, related_name="applications", on_delete=models.CASCADE
     )
-    text = models.TextField(blank=True)
+    responses = JSONSchemaResponseField(default=dict, blank=True)
 
 
 class Membership(models.Model):
