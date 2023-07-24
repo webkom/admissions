@@ -5,6 +5,8 @@ import FormatTime from "src/components/Time/FormatTime";
 import { AdmissionsTableValues } from ".";
 import { InnerTableValues } from "./InnerTable";
 import DeleteApplication from "src/components/Application/DeleteApplication";
+import { JsonFieldEditableInput } from "src/types";
+import { filterEditableFields } from "src/utils/jsonFieldHelper";
 
 const columnHelper = createColumnHelper<AdmissionsTableValues>();
 
@@ -28,9 +30,6 @@ export const columns = [
   }),
   columnHelper.accessor("fullname", {
     header: "Fullt navn",
-  }),
-  columnHelper.accessor("phoneNumber", {
-    header: "Tlf.",
   }),
   columnHelper.accessor("email", {
     header: "E-post",
@@ -81,9 +80,16 @@ export const innerColumns = [
     header: "Gruppe",
     size: 100,
   }),
-  innerColumnHelper.accessor("text", {
+  innerColumnHelper.accessor("responses", {
     header: "Søknadstekst",
     size: 800,
+    cell: ({ row }) =>
+      filterEditableFields(row.original.groupQuestions).map((question) => (
+        <div key={question.id}>
+          <h3>{question.name}</h3>
+          <span>{row.original.responses[question.id]}</span>
+        </div>
+      )),
   }),
   innerColumnHelper.display({
     id: "actions",

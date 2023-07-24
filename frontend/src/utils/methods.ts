@@ -23,3 +23,39 @@ export const toggleFromArray: <T>(
  */
 export const replaceQuotationMarks = (text: string) =>
   text.replaceAll('"', "'");
+
+/**
+ *
+ * @param name
+ * @param obj
+ * @returns
+ */
+export const traverseObject: (name: string, obj: object) => string = (
+  name,
+  obj
+) =>
+  name
+    .split(".")
+    .reduce((accumulator, currentIndex) => {
+      if (typeof accumulator === "string" || !accumulator) {
+        return accumulator;
+      }
+      if (currentIndex in accumulator) {
+        // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+        // @ts-ignore
+        return accumulator[currentIndex];
+      }
+      return "";
+    }, obj)
+    ?.toString();
+
+export const uuidv4mock = () => {
+  return (<any>[1e7] + -1e3 + -4e3 + -8e3 + -1e11).replace(
+    /[018]/g,
+    (c: number) =>
+      (
+        c ^
+        (crypto.getRandomValues(new Uint8Array(1))[0] & (15 >> (c / 4)))
+      ).toString(16)
+  );
+};

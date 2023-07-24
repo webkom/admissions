@@ -13,30 +13,32 @@ import { columns } from "./Columns";
 import AdmissionsInnerTable, { InnerTableValues } from "./InnerTable";
 import SubComponentWrapper from "./SubComponentWrapper";
 import SubComponentHeader from "./SubComponentHeader";
-import { Application } from "src/types";
+import { Admission, Application, JsonFieldEditableInput } from "src/types";
 import { useState } from "react";
 import { TableWrapper } from "src/routes/AdminPageAbakusLeaderView/Wrapper";
 import styled from "styled-components";
 import Icon from "src/components/Icon";
+import { filterEditableFields } from "src/utils/jsonFieldHelper";
 
 interface AdmissionsContainerProps {
+  admission: Admission;
   applications: Application[];
 }
 
 export interface AdmissionsTableValues {
   username: string;
   fullname: string;
-  phoneNumber: string;
   email: string;
   appliedWithinDeadline: boolean;
   numApplications: number;
   createdAt: string;
   updatedAt: string;
-  text: string;
+  responses: Record<string, string>;
   groupApplications: InnerTableValues[];
 }
 
 const AdmissionsContainer: React.FC<AdmissionsContainerProps> = ({
+  admission,
   applications,
 }) => {
   const [expanded, setExpanded] = useState<ExpandedState>({});
@@ -47,18 +49,20 @@ const AdmissionsContainer: React.FC<AdmissionsContainerProps> = ({
         id: application.pk,
         username: application.user.username,
         fullname: application.user.full_name,
-        phoneNumber: application.phone_number,
         email: application.user.email,
         appliedWithinDeadline: application.applied_within_deadline,
         numApplications: application.group_applications.length,
         createdAt: application.created_at,
         updatedAt: application.updated_at,
-        text: application.text,
+        responses: application.responses,
         groupApplications: application.group_applications.map(
           (groupApplication) => ({
             applicationId: application.pk,
             group: groupApplication.group.name,
-            text: groupApplication.text,
+            groupQuestions: admission.groups.find(
+              (group) => group.pk === groupApplication.group.pk
+            )?.questions,
+            responses: groupApplication.responses,
           })
         ),
       })),
@@ -83,9 +87,14 @@ const AdmissionsContainer: React.FC<AdmissionsContainerProps> = ({
     ({ row }: { row: Row<AdmissionsTableValues> }) => (
       <>
         <SubComponentWrapper>
-          <SubComponentHeader>Prioriteringstekst</SubComponentHeader>
-          <p>{row.original.text}</p>
-          <SubComponentHeader>Søknader</SubComponentHeader>
+          {filterEditableFields(admission.questions).map((question) => {
+            return (
+              <div key={question.id}>
+                <h3>{question.name}</h3>
+                <span>{row.original.responses[question.id]}</span>
+              </div>
+            );
+          })}
           <AdmissionsInnerTable
             groupApplications={row.original.groupApplications}
           />

@@ -8,35 +8,36 @@ import TextAreaField from "src/components/TextAreaField";
 
 import CSRFToken from "./csrftoken";
 import { EditGroupFormWrapper, FormWrapper, SubmitButton } from "./styles";
-import { Group } from "src/types";
+import { Group, JsonFieldInput } from "src/types";
+import JsonFieldEditor from "src/components/JsonFieldEditor";
+import { uuidv4mock } from "src/utils/methods";
 
-const signupSchema = Yup.object().shape({
+const editGroupSchema = Yup.object().shape({
   description: Yup.string()
     .min(30, "Skriv mer enn 30 tegn da!")
     .max(300, "Nå er det nok!")
     .required("Beskrivelsen kan ikke være tom!"),
-  response_label: Yup.string()
-    .min(30, "Skriv mer enn 30 tegn da!")
-    .max(300, "Nå er det nok!")
-    .required("Boksen kan ikke være tom!"),
 });
 
 interface FormValues {
   description: string;
-  response_label: string;
+  questions: JsonFieldInput[];
 }
 
 interface EditGroupFormProps {
   group: Group;
-  initialDescription: string;
-  initialReplyText: string;
 }
 
-const EditGroupForm: React.FC<EditGroupFormProps> = ({
-  group,
-  initialDescription,
-  initialReplyText,
-}) => {
+const mockedInitialQuestions: JsonFieldInput[] = [
+  {
+    type: "textarea",
+    id: uuidv4mock(),
+    name: "Søknadstekst",
+    label: "Vi vil gjerne høre mer om hva du liker å gjøre ...",
+  },
+];
+
+const EditGroupForm: React.FC<EditGroupFormProps> = ({ group }) => {
   const [resetMutationTimeout, setResetMutationTimeout] =
     useState<NodeJS.Timeout>();
 
@@ -45,16 +46,16 @@ const EditGroupForm: React.FC<EditGroupFormProps> = ({
   return (
     <Formik
       initialValues={{
-        description: initialDescription,
-        response_label: initialReplyText,
+        description: group.description,
+        questions:
+          group.questions && Array.isArray(group.questions)
+            ? group.questions
+            : mockedInitialQuestions,
       }}
-      validationSchema={signupSchema}
+      validationSchema={editGroupSchema}
       enableReinitialize={true}
       onSubmit={(values, { setErrors }) => {
-        const updatedGroupData = {
-          description: values.description,
-          response_label: values.response_label,
-        };
+        const updatedGroupData = values;
 
         clearTimeout(resetMutationTimeout);
 
@@ -71,7 +72,7 @@ const EditGroupForm: React.FC<EditGroupFormProps> = ({
             onError: (error) => {
               setErrors({
                 description: error.response?.data.description[0],
-                response_label: error.response?.data.response_label[0],
+                questions: error.response?.data.questions,
               });
             },
           }
@@ -82,6 +83,7 @@ const EditGroupForm: React.FC<EditGroupFormProps> = ({
         (formikProps) => (
           <InnerForm
             {...formikProps}
+            group={group}
             updateGroupMutation={updateGroupMutation}
           />
         ) // props reference: https://formik.org/docs/api/formik#props-1
@@ -91,13 +93,16 @@ const EditGroupForm: React.FC<EditGroupFormProps> = ({
 };
 
 type InnerFormProps = {
+  group: Group;
   updateGroupMutation: ReturnType<typeof useUpdateGroupMutation>;
 } & FormikProps<FormValues>;
 
 const InnerForm: React.FC<InnerFormProps> = ({
+  group,
   updateGroupMutation,
   submitForm,
   isValid,
+  values,
 }) => {
   return (
     <Form>
@@ -106,17 +111,13 @@ const InnerForm: React.FC<InnerFormProps> = ({
         <EditGroupFormWrapper>
           <Field
             component={TextAreaField}
-            title="Endre beskrivelsen av komiteen"
+            title="Endre beskrivelsen av gruppen"
             name="description"
-            placeholder="Skriv en beskrivelse av komiteen..."
-          />
-          <Field
-            component={TextAreaField}
-            title="Endre hva komiteen ønsker å høre om fra søkere"
-            name="response_label"
-            placeholder="Skriv hva komiteen ønsker å vite om søkeren..."
+            label="Beskrivelse av gruppen"
+            placeholder="Skriv en beskrivelse av gruppen..."
           />
         </EditGroupFormWrapper>
+        <JsonFieldEditor group={group} initialFields={values.questions} />
         <SubmitButton
           onClick={submitForm}
           type="submit"

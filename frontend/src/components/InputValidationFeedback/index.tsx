@@ -2,7 +2,7 @@ import React from "react";
 import "./styles.css";
 
 interface InputValidationFeedbackProps {
-  error: string;
+  error?: string;
 }
 
 const InputValidationFeedback: React.FC<InputValidationFeedbackProps> = ({
