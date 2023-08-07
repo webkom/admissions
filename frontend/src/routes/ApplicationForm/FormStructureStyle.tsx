@@ -196,12 +196,16 @@ export const Sidebar = styled.div`
     top: 2rem;
 
     > h2 {
-      margin-bottom: -1.5rem;
+      margin-bottom: 0.5rem;
     }
 
     > span {
-      margin-top: calc(1rem + 16px);
-      margin-bottom: 2rem;
+      margin-top: calc(0.5rem);
+      margin-bottom: 0.9rem;
+    }
+
+    > div {
+      margin-top: 1.5rem;
     }
   }
   ${media.portrait`
