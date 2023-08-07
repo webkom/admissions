@@ -82,6 +82,7 @@ steps:
     image: plugins/docker
     when:
       branch:
+        - staging
         - prod
       status: success
       event: push
