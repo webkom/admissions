@@ -200,7 +200,7 @@ export const Sidebar = styled.div`
     }
 
     > span {
-      margin-top: calc(0.5rem);
+      margin-top: 0.5rem;
       margin-bottom: 0.9rem;
     }
 

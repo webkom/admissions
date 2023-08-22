@@ -38,7 +38,7 @@ export const saveApplicationTextDraft = ([groupName, applicationText]: [
   });
 };
 
-export const getApplictionTextDrafts = () =>
+export const getApplictionTextDrafts: () => Record<string, string> = () =>
   getParsedJson(KeyType.applicationText);
 
 interface SelectedGroupsDraft {

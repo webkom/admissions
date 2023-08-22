@@ -10,6 +10,7 @@ import GroupApplication from "src/containers/GroupApplication";
 
 import FormStructure from "./FormStructure";
 import {
+  getApplictionTextDrafts,
   getPhoneNumberDraft,
   getPriorityTextDraft,
 } from "src/utils/draftHelper";
@@ -107,7 +108,7 @@ const ApplicationForm: React.FC<ApplicationFormProps> = ({
   const {
     text = getPriorityTextDraft(),
     phone_number: phoneNumber = getPhoneNumberDraft(),
-    group_applications: groupApplications = [],
+    group_applications: groupApplications = getApplictionTextDrafts(),
   } = myApplication || {};
 
   const blankGroupApplications: { [key: string]: string } = {};
@@ -115,13 +116,15 @@ const ApplicationForm: React.FC<ApplicationFormProps> = ({
     blankGroupApplications[group] = "";
   });
 
-  const reformattedGroupApplications = groupApplications.reduce(
-    (obj, application) => ({
-      ...obj,
-      [application.group.name.toLowerCase()]: application.text,
-    }),
-    {}
-  );
+  const reformattedGroupApplications = Array.isArray(groupApplications)
+    ? groupApplications.reduce(
+        (obj, application) => ({
+          ...obj,
+          [application.group.name.toLowerCase()]: application.text,
+        }),
+        {}
+      )
+    : groupApplications;
 
   const initialValues: FormValues = {
     priorityText: text,

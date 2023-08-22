@@ -29,7 +29,9 @@ interface SelectedGroups {
 
 const ApplicationPortal = () => {
   const { admissionSlug } = useParams();
-  const [selectedGroups, setSelectedGroups] = useState<SelectedGroups>({});
+  const [selectedGroups, setSelectedGroups] = useState<SelectedGroups>(
+    getSelectedGroupsDraft()
+  );
   const [isEditingApplication, setIsEditingApplication] = useState<
     boolean | null
   >(null);
@@ -68,6 +70,14 @@ const ApplicationPortal = () => {
   useEffect(() => {
     initializeState();
   }, []);
+
+  useEffect(() => {
+    // Only run on first load after myApplication is set
+    if (isEditingApplication === null && myApplication !== undefined) {
+      // Set to is not editing if myApplication exists (user has submitted an application)
+      setIsEditingApplication(!myApplication);
+    }
+  }, [isEditingApplication, myApplication]);
 
   useEffect(() => {
     if (isFetching) return;
