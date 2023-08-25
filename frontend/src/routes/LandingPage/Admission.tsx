@@ -35,7 +35,7 @@ const Admission: React.FC<AdmissionProps> = ({ admission }) => {
           <TimeLineItem
             title="Søknadsfrist"
             dateString={admission.public_deadline}
-            details={["Alle søknader er garantert å behandlet."]}
+            details={["Alle søknader er garantert å bli behandlet."]}
           />
           {(admission.is_open || admission.is_closed) && (
             <TimeLineItem
