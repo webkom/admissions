@@ -156,6 +156,7 @@ class AdminAdmissionSerializer(serializers.ModelSerializer):
     applications = UserApplication.objects.all()
     admin_groups = GroupSerializer(many=True)
     groups = GroupSerializer(many=True)
+    userdata = serializers.SerializerMethodField()
 
     class Meta:
         model = Admission
@@ -173,9 +174,35 @@ class AdminAdmissionSerializer(serializers.ModelSerializer):
             "is_open",
             "is_closed",
             "is_appliable",
+            "userdata",
         )
         lookup_field = "slug"
         extra_kwargs = {"url": {"lookup_field": "slug"}}
+
+    def get_userdata(self, obj):
+        res = {
+            "has_application": False,
+            "is_privileged": False,
+            "is_admin": False,
+        }
+        request = self.context.get("request")
+        if not request or not hasattr(request, "user"):
+            return res
+        res["has_application"] = UserApplication.objects.filter(
+            user=request.user.pk, admission=obj.pk
+        ).exists()
+        for group in obj.groups.all():
+            if (
+                Membership.objects.filter(user=request.user.pk, group=group.pk)
+                .filter(Q(role=constants.LEADER) | Q(role=constants.RECRUITING))
+                .exists()
+            ):
+                res["is_privileged"] = True
+        for group in obj.admin_groups.all():
+            if Membership.objects.filter(user=request.user.pk, group=group.pk).exists():
+                res["is_privileged"] = True
+                res["is_admin"] = True
+        return res
 
 
 class GroupApplicationSerializer(serializers.HyperlinkedModelSerializer):
