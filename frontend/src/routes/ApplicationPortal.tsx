@@ -21,24 +21,27 @@ import AdminPageAbakusLeaderView from "src/routes/AdminPageAbakusLeaderView";
 import LoadingBall from "src/components/LoadingBall";
 import NavBar from "src/components/NavBar";
 import NotFoundPage from "./NotFoundPage";
+import RequireAuth from "src/components/RequireAuth";
 
 interface SelectedGroups {
   [key: string]: boolean;
 }
 
 const ApplicationPortal = () => {
-  const { admissionId } = useParams();
-  const [selectedGroups, setSelectedGroups] = useState<SelectedGroups>({});
+  const { admissionSlug } = useParams();
+  const [selectedGroups, setSelectedGroups] = useState<SelectedGroups>(
+    getSelectedGroupsDraft()
+  );
   const [isEditingApplication, setIsEditingApplication] = useState<
     boolean | null
   >(null);
 
-  const { data: myApplication } = useMyApplication(admissionId ?? "");
+  const { data: myApplication } = useMyApplication(admissionSlug ?? "");
   const {
     data: admission,
     isFetching,
     error,
-  } = useAdmission(admissionId ?? "");
+  } = useAdmission(admissionSlug ?? "");
   const { groups } = admission ?? {};
 
   const toggleGroup = (name: string) => {
@@ -69,6 +72,14 @@ const ApplicationPortal = () => {
   }, []);
 
   useEffect(() => {
+    // Only run on first load after myApplication is set
+    if (isEditingApplication === null && myApplication !== undefined) {
+      // Set to is not editing if myApplication exists (user has submitted an application)
+      setIsEditingApplication(!myApplication);
+    }
+  }, [isEditingApplication, myApplication]);
+
+  useEffect(() => {
     if (isFetching) return;
     setIsEditingApplication(!myApplication || getIsEditingDraft());
     if (!myApplication) return;
@@ -92,7 +103,7 @@ const ApplicationPortal = () => {
   if (!djangoData.user) {
     return null;
   } else if (error) {
-    if (error.code === 404) {
+    if (error.response?.status === 404) {
       return <NotFoundPage />;
     }
     return <div>Error: {error.message}</div>;
@@ -133,11 +144,13 @@ const ApplicationPortal = () => {
             <Route
               path="/admin"
               element={
-                djangoData.user.is_superuser ? (
-                  <AdminPageAbakusLeaderView />
-                ) : (
-                  <AdminPage />
-                )
+                <RequireAuth auth={!!admission?.userdata.is_privileged}>
+                  {admission?.userdata.is_admin ? (
+                    <AdminPageAbakusLeaderView />
+                  ) : (
+                    <AdminPage />
+                  )}
+                </RequireAuth>
               }
             />
             <Route path="*" element={<NotFoundPage />} />
@@ -162,5 +175,5 @@ export const PageWrapper = styled.div`
   display: flex;
   flex-direction: column;
   align-items: center;
-  min-height: 100vh;
+  min-height: calc(100vh - 70px);
 `;

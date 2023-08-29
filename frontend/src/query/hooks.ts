@@ -1,19 +1,15 @@
 import { useQuery } from "@tanstack/react-query";
+import { AxiosError } from "axios";
 import { Admission, Application, Group } from "src/types";
-
-interface QueryError {
-  message: string;
-  code?: number;
-}
 
 // Admin hooks
 
 export const useAdminAdmissions = () => {
-  return useQuery<Admission[], QueryError>(["/admin/admission/"]);
+  return useQuery<Admission[], AxiosError>(["/admin/admission/"]);
 };
 
-export const useAdminAdmission = (admissionId: string, enabled = true) => {
-  return useQuery<Admission, QueryError>([`/admin/admission/${admissionId}/`], {
+export const useAdminAdmission = (slug: string, enabled = true) => {
+  return useQuery<Admission, AxiosError>([`/admin/admission/${slug}/`], {
     enabled,
   });
 };
@@ -21,25 +17,25 @@ export const useAdminAdmission = (admissionId: string, enabled = true) => {
 // User hooks
 
 export const useAdmissions = () => {
-  return useQuery<Admission[], QueryError>(["/admission/"]);
+  return useQuery<Admission[], AxiosError>(["/admission/"]);
 };
 
-export const useAdmission = (admissionId: string) => {
-  return useQuery<Admission, QueryError>([`/admission/${admissionId}/`]);
+export const useAdmission = (slug: string) => {
+  return useQuery<Admission, AxiosError>([`/admission/${slug}/`]);
 };
 
-export const useApplications = (admissionId: string) => {
-  return useQuery<Application[], QueryError>([
-    `/admission/${admissionId}/application/`,
+export const useApplications = (slug: string) => {
+  return useQuery<Application[], AxiosError>([
+    `/admission/${slug}/application/`,
   ]);
 };
 
-export const useMyApplication = (admissionId: string | number) => {
-  return useQuery<Application, QueryError>([
-    `/admission/${admissionId}/application/mine/`,
+export const useMyApplication = (slug: string) => {
+  return useQuery<Application, AxiosError>([
+    `/admission/${slug}/application/mine/`,
   ]);
 };
 
 export const useGroups = () => {
-  return useQuery<Group[], QueryError>(["/group/"]);
+  return useQuery<Group[], AxiosError>(["/group/"]);
 };

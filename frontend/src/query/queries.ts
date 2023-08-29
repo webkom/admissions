@@ -1,12 +1,9 @@
-import { callApiFromQuery } from "../utils/callApi";
+import { QueryFunction, QueryKey } from "@tanstack/react-query";
+import { apiClient } from "../utils/callApi";
 
-interface defaultQueryFnProps {
-  queryKey: string[];
-}
-
-export const defaultQueryFn: any = async ({
+export const defaultQueryFn: QueryFunction<unknown, QueryKey> = async ({
   queryKey,
-}: defaultQueryFnProps) => {
-  const path = typeof queryKey === "string" ? queryKey : queryKey[0];
-  return await callApiFromQuery(path);
+}) => {
+  const path = queryKey.join("/");
+  return (await apiClient.get(path)).data;
 };

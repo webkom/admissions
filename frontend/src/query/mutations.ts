@@ -1,5 +1,6 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { callApiFromQuery } from "../utils/callApi";
+import { AxiosError } from "axios";
+import { apiClient } from "../utils/callApi";
 
 // Admin mutations
 
@@ -9,22 +10,27 @@ export interface MutationAdmission {
   description: string;
   open_from: string;
   public_deadline: string;
-  application_deadline: string;
+  closed_from: string;
+  admin_groups: number[];
   groups: number[];
 }
 interface CreateAdmissionProps {
   admission: MutationAdmission;
 }
 
+export interface AdmissionMutationResponse extends MutationAdmission {
+  created_by: number;
+}
+
 export const useAdminCreateAdmission = () => {
   const queryClient = useQueryClient();
-  return useMutation(
-    ({ admission }: CreateAdmissionProps) => {
-      return callApiFromQuery(`/admin/admission/`, {
-        method: "POST",
-        body: JSON.stringify(admission),
-      });
-    },
+  return useMutation<
+    AdmissionMutationResponse,
+    AxiosError,
+    CreateAdmissionProps
+  >(
+    async ({ admission }: CreateAdmissionProps) =>
+      (await apiClient.post("/admin/admission/", admission)).data,
     {
       onSuccess: () => {
         queryClient.invalidateQueries([`/admin/admission/`]);
@@ -34,24 +40,22 @@ export const useAdminCreateAdmission = () => {
 };
 
 interface UpdateAdmissionProps extends CreateAdmissionProps {
-  admissionId: string;
+  slug: string;
 }
 
 export const useAdminUpdateAdmission = () => {
   const queryClient = useQueryClient();
-  return useMutation(
-    ({ admissionId, admission }: UpdateAdmissionProps) => {
-      return callApiFromQuery(`/admin/admission/${admissionId}/`, {
-        method: "PATCH",
-        body: JSON.stringify(admission),
-      });
-    },
+  return useMutation<
+    AdmissionMutationResponse,
+    AxiosError,
+    UpdateAdmissionProps
+  >(
+    async ({ slug, admission }: UpdateAdmissionProps) =>
+      (await apiClient.patch(`/admin/admission/${slug}/`, admission)).data,
     {
       onSuccess: (_, variables) => {
         queryClient.invalidateQueries([`/admin/admission/`]);
-        queryClient.invalidateQueries([
-          `/admin/admission/${variables.admissionId}/`,
-        ]);
+        queryClient.invalidateQueries([`/admin/admission/${variables.slug}/`]);
       },
     }
   );
@@ -59,19 +63,13 @@ export const useAdminUpdateAdmission = () => {
 
 // User mutations
 
-export const useDeleteMyApplicationMutation = (admissionId: string) => {
+export const useDeleteMyApplicationMutation = (slug: string) => {
   const queryClient = useQueryClient();
-  return useMutation(
-    () => {
-      return callApiFromQuery(`/admission/${admissionId}/application/mine/`, {
-        method: "DELETE",
-      });
-    },
+  return useMutation<unknown, AxiosError>(
+    () => apiClient.delete(`/admission/${slug}/application/mine/`),
     {
       onSuccess: () => {
-        queryClient.invalidateQueries([
-          `/admission/${admissionId}/application/mine/`,
-        ]);
+        queryClient.invalidateQueries([`/admission/${slug}/application/mine/`]);
       },
     }
   );
@@ -82,30 +80,25 @@ interface DeleteGroupApplicationProps {
   groupName?: string;
 }
 
-export const useDeleteGroupApplicationMutation = (admissionId: string) => {
+export const useDeleteGroupApplicationMutation = (admissionSlug: string) => {
   const queryClient = useQueryClient();
-  return useMutation(
-    ({ applicationId, groupName }: DeleteGroupApplicationProps) => {
-      return callApiFromQuery(
-        `/admission/${admissionId}/application/${applicationId}/delete_group_application/${
+  return useMutation<unknown, AxiosError, DeleteGroupApplicationProps>(
+    ({ applicationId, groupName }) =>
+      apiClient.delete(
+        `/admission/${admissionSlug}/application/${applicationId}/delete_group_application/${
           groupName ? `?group=${groupName}` : ""
-        }`,
-        {
-          method: "DELETE",
-        }
-      );
-    },
+        }`
+      ),
     {
       onSuccess: () => {
         queryClient.invalidateQueries([
-          `/admission/${admissionId}/application/`,
+          `/admission/${admissionSlug}/application/`,
         ]);
       },
     }
   );
 };
 
-type UpdateGroupError = { [key: string]: string[] };
 interface UpdateGroupProps {
   groupPrimaryKey: number;
   updatedGroupData: {
@@ -114,13 +107,15 @@ interface UpdateGroupProps {
   };
 }
 
+interface UpdateGroupErrorData {
+  description: string[];
+  response_label: string[];
+}
+
 export const useUpdateGroupMutation = () =>
-  useMutation<any, UpdateGroupError, UpdateGroupProps>(
+  useMutation<unknown, AxiosError<UpdateGroupErrorData>, UpdateGroupProps>(
     ({ groupPrimaryKey, updatedGroupData }) =>
-      callApiFromQuery(`/group/${groupPrimaryKey}/`, {
-        method: "PATCH",
-        body: JSON.stringify(updatedGroupData),
-      })
+      apiClient.patch(`/group/${groupPrimaryKey}/`, updatedGroupData)
   );
 
 export interface MutationApplication {
@@ -133,19 +128,18 @@ interface CreateApplicationProps {
   newApplication: MutationApplication;
 }
 
-export const useCreateApplicationMutation = (admissionId: string) => {
+export const useCreateApplicationMutation = (admissionSlug: string) => {
   const queryClient = useQueryClient();
-  return useMutation(
-    ({ newApplication }: CreateApplicationProps) => {
-      return callApiFromQuery(`/admission/${admissionId}/application/`, {
-        method: "POST",
-        body: JSON.stringify(newApplication),
-      });
-    },
+  return useMutation<unknown, AxiosError, CreateApplicationProps>(
+    ({ newApplication }) =>
+      apiClient.post(
+        `/admission/${admissionSlug}/application/`,
+        newApplication
+      ),
     {
       onSuccess: () => {
         queryClient.invalidateQueries([
-          `/admission/${admissionId}/application/mine/`,
+          `/admission/${admissionSlug}/application/mine/`,
         ]);
       },
     }

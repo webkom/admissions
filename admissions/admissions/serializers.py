@@ -1,16 +1,22 @@
-from django.utils import timezone
+from django.core.validators import MinLengthValidator
+from django.db.models import Q
 from rest_framework import serializers
 
+from admissions.admissions import constants
 from admissions.admissions.models import (
     Admission,
     Group,
     GroupApplication,
     LegoUser,
+    Membership,
     UserApplication,
 )
 
 
 class GroupSerializer(serializers.HyperlinkedModelSerializer):
+    description = serializers.CharField(validators=[MinLengthValidator(30)])
+    response_label = serializers.CharField(validators=[MinLengthValidator(30)])
+
     class Meta:
         model = Group
         fields = (
@@ -26,7 +32,6 @@ class GroupSerializer(serializers.HyperlinkedModelSerializer):
         group, created = Group.objects.update_or_create(
             name=validated_data.get("name", None),
             defaults={
-                "response_label": validated_data.get("response_label", None),
                 "description": validated_data.get("description", None),
             },
         )
@@ -41,53 +46,103 @@ class ShortGroupSerializer(serializers.HyperlinkedModelSerializer):
 
 
 class AdmissionListPublicSerializer(serializers.HyperlinkedModelSerializer):
+    groups = serializers.PrimaryKeyRelatedField(read_only=True, many=True)
+    userdata = serializers.SerializerMethodField()
+
     class Meta:
         model = Admission
         fields = (
             "pk",
+            "slug",
             "title",
             "description",
             "is_open",
             "open_from",
             "public_deadline",
-            "application_deadline",
+            "closed_from",
+            "groups",
             "is_closed",
             "is_appliable",
+            "userdata",
         )
+        lookup_field = "slug"
+        extra_kwargs = {"url": {"lookup_field": "slug"}}
+
+    def get_userdata(self, obj):
+        res = {
+            "has_application": False,
+            "is_privileged": False,
+            "is_admin": False,
+        }
+        request = self.context.get("request")
+        if not request or not hasattr(request, "user"):
+            return res
+        res["has_application"] = UserApplication.objects.filter(
+            user=request.user.pk, admission=obj.pk
+        ).exists()
+        for group in obj.groups.all():
+            if (
+                Membership.objects.filter(user=request.user.pk, group=group.pk)
+                .filter(Q(role=constants.LEADER) | Q(role=constants.RECRUITING))
+                .exists()
+            ):
+                res["is_privileged"] = True
+        for group in obj.admin_groups.all():
+            if Membership.objects.filter(user=request.user.pk, group=group.pk).exists():
+                res["is_privileged"] = True
+                res["is_admin"] = True
+        return res
 
 
 class AdmissionPublicSerializer(AdmissionListPublicSerializer):
-    groups = GroupSerializer(source="group_set", many=True)
+    groups = GroupSerializer(many=True)
 
     class Meta(AdmissionListPublicSerializer.Meta):
         fields = AdmissionListPublicSerializer.Meta.fields + ("groups",)
+        lookup_field = "slug"
+        extra_kwargs = {"url": {"lookup_field": "slug"}}
 
 
 class AdminCreateUpdateAdmissionSerializer(serializers.HyperlinkedModelSerializer):
-    groups = serializers.PrimaryKeyRelatedField(many=True, queryset=Group.objects.all())
+    def __init__(self, *args, **kwargs):
+        """If object is being updated don't allow slug to be changed."""
+        super().__init__(*args, **kwargs)
+        if self.instance is not None:
+            self.fields.get("slug").read_only = True
+
+    slug = serializers.SlugField(validators=[MinLengthValidator(4)])
     created_by = serializers.PrimaryKeyRelatedField(
         default=serializers.CurrentUserDefault(), read_only=True
+    )
+    admin_groups = serializers.PrimaryKeyRelatedField(
+        many=True, required=False, queryset=Group.objects.all()
+    )
+    groups = serializers.PrimaryKeyRelatedField(
+        many=True, required=True, queryset=Group.objects.all()
     )
 
     class Meta:
         model = Admission
         fields = (
             "title",
+            "slug",
             "description",
             "open_from",
             "public_deadline",
-            "application_deadline",
+            "closed_from",
+            "admin_groups",
             "groups",
             "created_by",
         )
 
     def update_or_create(self, pk, validated_data):
-        groups = validated_data.pop("groups")
+        input_admin_groups = validated_data.pop("admin_groups")
+        input_groups = validated_data.pop("groups")
         admission, created = Admission.objects.update_or_create(
             pk=pk, defaults=validated_data
         )
-        admission.group_set.set(groups)  # Set the values in the database
-        setattr(admission, "groups", groups)  # Set the value to return
+        admission.admin_groups.set(input_admin_groups)
+        admission.groups.set(input_groups)
         return admission
 
     def create(self, validated_data):
@@ -99,23 +154,55 @@ class AdminCreateUpdateAdmissionSerializer(serializers.HyperlinkedModelSerialize
 
 class AdminAdmissionSerializer(serializers.ModelSerializer):
     applications = UserApplication.objects.all()
-    groups = GroupSerializer(source="group_set", many=True)
+    admin_groups = GroupSerializer(many=True)
+    groups = GroupSerializer(many=True)
+    userdata = serializers.SerializerMethodField()
 
     class Meta:
         model = Admission
         fields = (
             "pk",
             "title",
+            "slug",
             "description",
+            "admin_groups",
             "groups",
             "open_from",
             "public_deadline",
-            "application_deadline",
+            "closed_from",
             "applications",
             "is_open",
             "is_closed",
             "is_appliable",
+            "userdata",
         )
+        lookup_field = "slug"
+        extra_kwargs = {"url": {"lookup_field": "slug"}}
+
+    def get_userdata(self, obj):
+        res = {
+            "has_application": False,
+            "is_privileged": False,
+            "is_admin": False,
+        }
+        request = self.context.get("request")
+        if not request or not hasattr(request, "user"):
+            return res
+        res["has_application"] = UserApplication.objects.filter(
+            user=request.user.pk, admission=obj.pk
+        ).exists()
+        for group in obj.groups.all():
+            if (
+                Membership.objects.filter(user=request.user.pk, group=group.pk)
+                .filter(Q(role=constants.LEADER) | Q(role=constants.RECRUITING))
+                .exists()
+            ):
+                res["is_privileged"] = True
+        for group in obj.admin_groups.all():
+            if Membership.objects.filter(user=request.user.pk, group=group.pk).exists():
+                res["is_privileged"] = True
+                res["is_admin"] = True
+        return res
 
 
 class GroupApplicationSerializer(serializers.HyperlinkedModelSerializer):
@@ -196,7 +283,7 @@ class ApplicationCreateUpdateSerializer(serializers.HyperlinkedModelSerializer):
         text = validated_data.pop("text")
         phone_number = validated_data.pop("phone_number")
 
-        admission = Admission.objects.get(pk=validated_data.get("admission_id"))
+        admission = Admission.objects.get(slug=validated_data.get("admission_slug"))
 
         user_application, created = UserApplication.objects.update_or_create(
             admission=admission,

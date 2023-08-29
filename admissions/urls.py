@@ -32,7 +32,7 @@ adminRouter.register(r"admission", AdminAdmissionViewSet, "admin-admission")
 
 router = routers.DefaultRouter()
 router.register(r"admission", AdmissionViewSet)
-router.register(r"admission/(?P<admission_pk>\d+)/application", ApplicationViewSet)
+router.register(r"admission/(?P<admission_slug>[-\w]+)/application", ApplicationViewSet)
 router.register(r"group", GroupViewSet)
 urlpatterns = [
     re_path(r"logout/$", auth_views.LogoutView.as_view(), name="logout"),

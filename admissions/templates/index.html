@@ -1,6 +1,5 @@
 {% load static %}
 {% load django_vite %}
-{% load vite %}
 
 <!DOCTYPE html>
 <html lang="en">
@@ -12,7 +11,7 @@
     <meta property="og:type" content="website">
     <meta property="og:title" content="Søk komité!">
     <meta property="og:description" content="Vil du være med å bidra til at Abakus skal fortsette å være den beste linjeforeningen? Da må du søke komité! ">
-    <meta property="og:image" content="{% static "39922758_10157833098769535_6098752564164034560_o.jpg" %}">
+    <meta property="og:image" content="{% static "og_logo.png" %}">
     <!--
       manifest.json provides metadata used when your web app is added to the
       homescreen on Android. See https://developers.google.com/web/fundamentals/engage-and-retain/web-app-manifest/
@@ -22,7 +21,7 @@
     <link href="https://fonts.googleapis.com/icon?family=Material+Icons"
       rel="stylesheet">
 
-    {% vite_react_preamble %}
+    {% vite_react_refresh %}
     {% vite_hmr_client %}
     {% vite_asset 'frontend/src/index.tsx' %}
 
@@ -41,7 +40,6 @@
         full_name: "{{ request.user.get_full_name }}",
         is_superuser: {{ request.user.is_superuser|yesno:"true,false" }},
         is_privileged: {{ request.user.is_privileged|yesno:"true,false" }},
-        has_application: {{ request.user.has_application|yesno:"true,false" }},
         representative_of_group: "{{ request.user.representative_of_group }}",
         is_staff: {{ request.user.is_staff|yesno:"true,false" }},
         is_member_of_webkom: {{ request.user.is_member_of_webkom|yesno:"true,false" }}

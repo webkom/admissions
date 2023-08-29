@@ -16,8 +16,8 @@ const GroupsPage: React.FC<GroupsPageProps> = ({
   selectedGroups,
   toggleGroup,
 }) => {
-  const { admissionId } = useParams();
-  const { data: admission } = useAdmission(admissionId ?? "");
+  const { admissionSlug } = useParams();
+  const { data: admission } = useAdmission(admissionSlug ?? "");
   const { groups } = admission ?? {};
 
   const handleToggleGroup = (name: string) => {
@@ -48,7 +48,7 @@ const GroupsPage: React.FC<GroupsPageProps> = ({
       <GroupsWrapper>{GroupCards}</GroupsWrapper>
       <NextButtonWrapper>
         <LegoButton
-          to={`/${admissionId}/min-soknad`}
+          to={`/${admissionSlug}/min-soknad`}
           icon="arrow-forward"
           iconPrefix="ios"
           disabled={!hasSelectedAnything()}
@@ -74,7 +74,9 @@ export const PageWrapper = styled.div`
   width: 100%;
   padding: 0 1rem;
   margin: 0 auto 4em auto;
-  min-height: 100vh;
+  min-height: calc(
+    100vh - 70px - 2rem - 4em
+  ); /* Calculated to never overflow navbar/padding/margin */
   display: flex;
   flex-direction: column;
   justify-content: center;

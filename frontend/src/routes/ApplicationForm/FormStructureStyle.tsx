@@ -5,7 +5,9 @@ export const PageWrapper = styled.div`
   width: 100%;
   padding: 0 1rem;
   margin: 0 auto 4em auto;
-  min-height: 100vh;
+  min-height: calc(
+    100vh - 70px - 2rem - 4em
+  ); /* Calculated to never overflow navbar/padding/margin */
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -194,12 +196,16 @@ export const Sidebar = styled.div`
     top: 2rem;
 
     > h2 {
-      margin-bottom: -1.5rem;
+      margin-bottom: 0.5rem;
     }
 
     > span {
-      margin-top: calc(1rem + 16px);
-      margin-bottom: 2rem;
+      margin-top: 0.5rem;
+      margin-bottom: 0.9rem;
+    }
+
+    > div {
+      margin-top: 1.5rem;
     }
   }
   ${media.portrait`

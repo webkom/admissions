@@ -17,6 +17,7 @@ import config from "src/utils/config";
 import djangoData from "src/utils/djangoData";
 import "@babel/polyfill";
 import ManageAdmissions from "src/routes/ManageAdmissions";
+import RequireAuth from "src/components/RequireAuth";
 
 Sentry.init({
   dsn: config.SENTRY_DSN,
@@ -30,8 +31,8 @@ Sentry.init({
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
-      retry: process.env.NODE_ENV === "production",
-      refetchOnWindowFocus: process.env.NODE_ENV === "production",
+      refetchOnMount: false,
+      refetchOnWindowFocus: false,
       queryFn: defaultQueryFn,
       staleTime: 60000,
     },
@@ -55,8 +56,17 @@ const App: React.FC<PropsWithChildren> = ({ children }) => {
 const AppRoutes = () =>
   useRoutes([
     { path: "/", element: <LandingPage /> },
-    { path: "/admin/*", element: <ManageAdmissions /> },
-    { path: ":admissionId/*", element: <ApplicationPortal /> },
+    {
+      path: "/admin/*",
+      element: (
+        <RequireAuth
+          auth={djangoData.user.is_staff || djangoData.user.is_member_of_webkom}
+        >
+          <ManageAdmissions />
+        </RequireAuth>
+      ),
+    },
+    { path: ":admissionSlug/*", element: <ApplicationPortal /> },
     { path: "*", element: <NotFoundPage /> },
   ]);
 

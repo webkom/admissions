@@ -32,7 +32,7 @@ export interface CsvData {
 }
 
 const AdminPage = () => {
-  const { admissionId } = useParams();
+  const { admissionSlug } = useParams();
   const [sortedApplications, setSortedApplications] = useState<Application[]>(
     []
   );
@@ -49,13 +49,13 @@ const AdminPage = () => {
     { label: "Tid oppdatert", key: "updatedAt" },
   ];
 
-  const { data: admission } = useAdmission(admissionId ?? "");
+  const { data: admission } = useAdmission(admissionSlug ?? "");
   const { groups } = admission ?? {};
   const {
     data: applications,
     isFetching,
     error,
-  } = useApplications(admissionId ?? "");
+  } = useApplications(admissionSlug ?? "");
 
   useEffect(() => {
     if (!applications) return;

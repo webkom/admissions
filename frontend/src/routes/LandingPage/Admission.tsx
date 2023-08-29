@@ -1,10 +1,9 @@
-import React, { useEffect, useState } from "react";
+import React from "react";
 import styled from "styled-components";
 import djangoData from "src/utils/djangoData";
 import LegoButton from "src/components/LegoButton";
 import { media } from "src/styles/mediaQueries";
 import FormatTime from "src/components/Time/FormatTime";
-import { useMyApplication } from "src/query/hooks";
 import { Admission as AdmissionInterface } from "src/types";
 import CountDown from "./CountDown";
 
@@ -13,14 +12,6 @@ interface AdmissionProps {
 }
 
 const Admission: React.FC<AdmissionProps> = ({ admission }) => {
-  const [hasSubmitted, setHasSubmitted] = useState(false);
-
-  const { data: myApplication } = useMyApplication(admission.pk);
-
-  useEffect(() => {
-    setHasSubmitted(!!myApplication);
-  }, [myApplication]);
-
   return (
     <AdmissionWrapper>
       <AdmissionDetails>
@@ -44,12 +35,12 @@ const Admission: React.FC<AdmissionProps> = ({ admission }) => {
           <TimeLineItem
             title="Søknadsfrist"
             dateString={admission.public_deadline}
-            details={["Alle søknader er garantert å behandlet."]}
+            details={["Alle søknader er garantert å bli behandlet."]}
           />
           {(admission.is_open || admission.is_closed) && (
             <TimeLineItem
               title="Redigeringsfrist"
-              dateString={admission.application_deadline}
+              dateString={admission.closed_from}
               details={[
                 "Du kan fortsatt søke og redigere søknaden din, men det er ikke sikkert at de som behandler søknaden får det med seg.",
                 "Etter redigeringsfristen vil du ikke lenger kunne se søknaden din.",
@@ -73,17 +64,19 @@ const Admission: React.FC<AdmissionProps> = ({ admission }) => {
           {!admission.is_appliable && admission.is_open && (
             <CountDown
               title="Redigeringsfrist om"
-              dateString={admission.application_deadline}
+              dateString={admission.closed_from}
             />
           )}
           <LinkWrapper>
-            {(admission.is_open || hasSubmitted) &&
+            {(admission.is_open || admission.userdata.has_application) &&
               (djangoData.user.full_name ? (
                 <li>
                   <LegoButton
                     to={
-                      `/${admission.pk}/` +
-                      (hasSubmitted ? "min-soknad" : "velg-komiteer")
+                      `/${admission.slug}/` +
+                      (admission.userdata.has_application
+                        ? "min-soknad"
+                        : "velg-komiteer")
                     }
                     icon="arrow-forward"
                     iconPrefix="ios"
@@ -107,10 +100,10 @@ const Admission: React.FC<AdmissionProps> = ({ admission }) => {
                 </li>
               ))}
 
-            {djangoData.user.is_privileged && (
+            {admission.userdata.is_privileged && (
               <li>
                 <LegoButton
-                  to={`/${admission.pk}/admin/`}
+                  to={`/${admission.slug}/admin/`}
                   icon="arrow-forward"
                   iconPrefix="ios"
                   buttonStyle="secondary"

@@ -27,7 +27,7 @@ type CompleteCsvData = {
 } & Omit<CsvData, "applicationText">;
 
 const AdminPageAbakusLeaderView = () => {
-  const { admissionId } = useParams();
+  const { admissionSlug } = useParams();
   const [sortedApplications, setSortedApplications] = useState<Application[]>(
     []
   );
@@ -54,12 +54,12 @@ const AdminPageAbakusLeaderView = () => {
     data: applications,
     error: applicationsError,
     isFetching: applicationsIsFetching,
-  } = useApplications(admissionId ?? "");
+  } = useApplications(admissionSlug ?? "");
   const {
     data: admission,
     error: admissionError,
     isFetching: admissionIsFetching,
-  } = useAdmission(admissionId ?? "");
+  } = useAdmission(admissionSlug ?? "");
   const { groups } = admission ?? {};
 
   useEffect(() => {
@@ -125,7 +125,7 @@ const AdminPageAbakusLeaderView = () => {
   } else if (applicationsIsFetching || admissionIsFetching) {
     return <LoadingBall />;
   } else if (!admission) {
-    return <p>Opptak {admissionId} ble ikke funnet i systemet.</p>;
+    return <p>Opptak {admissionSlug} ble ikke funnet i systemet.</p>;
   } else {
     return (
       <PageWrapper>
@@ -148,7 +148,7 @@ const AdminPageAbakusLeaderView = () => {
             <StatisticsWrapper>
               <StatisticsName>Redigeringsfrist</StatisticsName>
               <FormatTime format="HH:mm:ss EEEE d. MMMM">
-                {admission.application_deadline}
+                {admission.closed_from}
               </FormatTime>
             </StatisticsWrapper>
           </Statistics>

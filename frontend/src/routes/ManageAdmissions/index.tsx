@@ -29,7 +29,7 @@ const ManageAdmissions: React.FC = () => {
             <Routes>
               <Route path="" element={<CreateAdmission key="newAdmission" />} />
               <Route
-                path=":admissionId"
+                path=":admissionSlug"
                 element={<CreateAdmission key="editAdmission" />}
               />
             </Routes>

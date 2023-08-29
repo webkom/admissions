@@ -52,7 +52,7 @@ const ConfirmModal: React.FC<ConfirmModalProps> = ({
             border="1px solid darkgray"
             onClick={hideModal}
           >
-            Cancel
+            Avbryt
           </ActionButton>
           <ActionButton onClick={confirmAction}>Ja</ActionButton>
         </ButtonGroup>

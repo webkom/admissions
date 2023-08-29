@@ -1,15 +1,16 @@
+import { AxiosError } from "axios";
 import { useFormik } from "formik";
 import { DateTime } from "luxon";
 import React, { useEffect, useState } from "react";
-import { useParams } from "react-router-dom";
+import { useNavigate, useParams } from "react-router-dom";
 import LegoButton from "src/components/LegoButton";
 import { useAdminAdmission } from "src/query/hooks";
 import {
+  AdmissionMutationResponse,
   MutationAdmission,
   useAdminCreateAdmission,
   useAdminUpdateAdmission,
 } from "src/query/mutations";
-import { HttpError } from "src/utils/callApi";
 import { toggleFromArray } from "src/utils/methods";
 import styled from "styled-components";
 import GroupSelector from "./components/GroupSelector";
@@ -29,10 +30,11 @@ const localTimeStringToTimezoned = (dateString: string) =>
   }).toISO({ includeOffset: true });
 
 const CreateAdmission: React.FC = () => {
-  const { admissionId } = useParams();
+  const navigate = useNavigate();
+  const { admissionSlug } = useParams();
   const { data: admission } = useAdminAdmission(
-    admissionId ?? "",
-    admissionId !== undefined
+    admissionSlug ?? "",
+    admissionSlug !== undefined
   );
 
   const createAdmission = useAdminCreateAdmission();
@@ -40,11 +42,11 @@ const CreateAdmission: React.FC = () => {
 
   const [returnedData, setReturnedData] = useState<ReturnedData>();
 
-  const isNew = !admissionId;
+  const isNew = !admissionSlug;
 
   useEffect(() => {
     setReturnedData(undefined);
-  }, [admissionId]);
+  }, [admissionSlug]);
 
   const formik = useFormik<MutationAdmission>({
     initialValues: {
@@ -53,7 +55,8 @@ const CreateAdmission: React.FC = () => {
       description: "",
       open_from: formatCurrentDate(),
       public_deadline: formatCurrentDate(),
-      application_deadline: formatCurrentDate(),
+      closed_from: formatCurrentDate(),
+      admin_groups: [],
       groups: [],
     },
     onSubmit: (values) => {
@@ -62,23 +65,25 @@ const CreateAdmission: React.FC = () => {
       // Use luxon to parse datetime with local timezone and add timezone offset to the datetime-string
       processedValues.open_from =
         localTimeStringToTimezoned(processedValues.open_from) ?? "";
-      processedValues.application_deadline =
-        localTimeStringToTimezoned(processedValues.application_deadline) ?? "";
+      processedValues.closed_from =
+        localTimeStringToTimezoned(processedValues.closed_from) ?? "";
       processedValues.public_deadline =
         localTimeStringToTimezoned(processedValues.public_deadline) ?? "";
-      const onSuccess = () => {
+      const onSuccess = (data: AdmissionMutationResponse) => {
         setReturnedData({ type: "success", message: "Opptaket er lagret!" });
-      };
-      const onError = (error: unknown) => {
-        if (error instanceof HttpError) {
-          setReturnedData({
-            type: "error",
-            message:
-              "Feilkode " + error?.code + ", klarte ikke lagre opptaket.",
-          });
-        } else {
-          setReturnedData({ type: "error", message: JSON.stringify(error) });
+        if (data?.slug) {
+          navigate("/admin/" + data.slug);
         }
+      };
+      const onError = (error: AxiosError) => {
+        console.error(error.response?.data);
+        setReturnedData({
+          type: "error",
+          message:
+            "Feilkode " +
+            error.response?.status +
+            ", klarte ikke lagre opptaket.",
+        });
       };
       if (isNew) {
         createAdmission.mutate(
@@ -90,7 +95,7 @@ const CreateAdmission: React.FC = () => {
         );
       } else {
         updateAdmission.mutate(
-          { admissionId: admissionId ?? "", admission: processedValues },
+          { slug: admissionSlug ?? "", admission: processedValues },
           {
             onSuccess,
             onError,
@@ -104,11 +109,12 @@ const CreateAdmission: React.FC = () => {
     if (admission) {
       formik.setValues({
         title: admission.title,
-        slug: "",
+        slug: admission.slug,
         description: admission.description,
         open_from: formatDateString(admission.open_from),
         public_deadline: formatDateString(admission.public_deadline),
-        application_deadline: formatDateString(admission.application_deadline),
+        closed_from: formatDateString(admission.closed_from),
+        admin_groups: admission.admin_groups?.map((group) => group.pk) ?? [],
         groups: admission.groups.map((group) => group.pk),
       });
     }
@@ -129,6 +135,20 @@ const CreateAdmission: React.FC = () => {
             name="title"
             value={formik.values.title}
             onChange={formik.handleChange}
+          />
+        </InputWrapper>
+        <InputWrapper>
+          <InputTitle>Slug</InputTitle>
+          <InputDescription>
+            Opptaket vil ligge under opptak.abakus.no/
+            {formik.values.slug || "[slug]"}/
+          </InputDescription>
+          <Input
+            name="slug"
+            value={formik.values.slug}
+            onChange={formik.handleChange}
+            placeholder="f. eks. komiteer/revy/backup"
+            disabled={!isNew}
           />
         </InputWrapper>
       </FormGroup>
@@ -164,10 +184,27 @@ const CreateAdmission: React.FC = () => {
             Etter dette tidspunktet er det ikke mulig å legge inn søknader
           </InputDescription>
           <Input
-            name="application_deadline"
+            name="closed_from"
             type="datetime-local"
-            value={formik.values.application_deadline}
+            value={formik.values.closed_from}
             onChange={formik.handleChange}
+          />
+        </InputWrapper>
+      </FormGroup>
+      <FormGroup>
+        <InputWrapper>
+          <InputTitle>Admin-grupper</InputTitle>
+          <InputDescription>
+            Medlemmene av disse gruppene får tilgang til å se samtlige søkere.
+          </InputDescription>
+          <GroupSelector
+            value={formik.values.admin_groups}
+            toggleGroup={(value) => {
+              formik.setFieldValue(
+                "admin_groups",
+                toggleFromArray(formik.values.admin_groups, value)
+              );
+            }}
           />
         </InputWrapper>
       </FormGroup>

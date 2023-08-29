@@ -28,9 +28,9 @@ const DeleteApplication: React.FC<DeleteApplicationProps> = ({
   applicationId,
   groupName,
 }) => {
-  const { admissionId } = useParams();
+  const { admissionSlug } = useParams();
   const deleteGroupApplicationMutation = useDeleteGroupApplicationMutation(
-    admissionId ?? ""
+    admissionSlug ?? ""
   );
 
   const performDelete = (applicationId: number, groupName?: string) => {
