@@ -20,6 +20,8 @@ const GroupsPage: React.FC<GroupsPageProps> = ({
   const { data: admission } = useAdmission(admissionSlug ?? "");
   const { groups } = admission ?? {};
 
+  const isRevy = admissionSlug === "revy";
+
   const handleToggleGroup = (name: string) => {
     toggleGroup(name.toLowerCase());
   };
@@ -35,6 +37,7 @@ const GroupsPage: React.FC<GroupsPageProps> = ({
       onToggle={handleToggleGroup}
       isChosen={!!selectedGroups[group.name.toLowerCase()]}
       readMoreLink={group.detail_link}
+      isRevy={isRevy}
     />
   ));
 
@@ -44,7 +47,9 @@ const GroupsPage: React.FC<GroupsPageProps> = ({
 
   return (
     <PageWrapper>
-      <Title>Velg de komiteene du vil søke på og gå videre</Title>
+      <Title>
+        Velg de {isRevy ? "gruppene" : "komiteene"} du vil søke på og gå videre
+      </Title>
       <GroupsWrapper>{GroupCards}</GroupsWrapper>
       <NextButtonWrapper>
         <LegoButton
@@ -58,7 +63,8 @@ const GroupsPage: React.FC<GroupsPageProps> = ({
         {!hasSelectedAnything() && (
           <ErrorMessage>
             <Icon name="information-circle-outline" />
-            Du må velge en eller flere komiteer før du kan gå videre
+            Du må velge en eller flere {isRevy ? "grupper" : "komiteer"} før du
+            kan gå videre
           </ErrorMessage>
         )}
       </NextButtonWrapper>

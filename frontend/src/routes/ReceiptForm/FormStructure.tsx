@@ -5,7 +5,6 @@ import Icon from "src/components/Icon";
 import LegoButton from "src/components/LegoButton";
 import ConfirmModal from "src/components/ConfirmModal";
 import Application from "src/containers/GroupApplication/Application";
-import PriorityTextField from "src/routes/ApplicationForm/PriorityTextField";
 import PhoneNumberField from "src/routes/ApplicationForm/PhoneNumberField";
 import { useAdmission, useMyApplication } from "src/query/hooks";
 import { useDeleteMyApplicationMutation } from "src/query/mutations";
@@ -42,6 +41,7 @@ interface FormStructureProps {
 
 const FormStructure: React.FC<FormStructureProps> = ({ toggleIsEditing }) => {
   const { admissionSlug } = useParams();
+  const isRevy = admissionSlug === "revy";
   const navigate = useNavigate();
   const deleteApplicationMutation = useDeleteMyApplicationMutation(
     admissionSlug ?? ""
@@ -86,12 +86,13 @@ const FormStructure: React.FC<FormStructureProps> = ({ toggleIsEditing }) => {
                   </FormatTime>
                 </StyledSpan>
               )}{" "}
-              og komiteene vil kun se den siste versjonen.
+              og {isRevy ? "revystyret" : "komiteene"} vil kun se den siste
+              versjonen.
             </Text>
             <Notice>
               <StyledSpan bold>Merk:</StyledSpan> Oppdateringer etter
-              søknadsfristen kan ikke garanteres å bli sett av komiteen(e) du
-              søker deg til.
+              søknadsfristen kan ikke garanteres å bli sett av{" "}
+              {isRevy ? "revystyret" : "komiteen(e) du søker deg til"}.
             </Notice>
           </EditInfo>
           <EditActions>
@@ -152,11 +153,13 @@ const FormStructure: React.FC<FormStructureProps> = ({ toggleIsEditing }) => {
         <GroupsSection>
           <Sidebar>
             <div>
-              <SectionHeader>Komiteer</SectionHeader>
+              <SectionHeader>{isRevy ? "Grupper" : "Komiteer"}</SectionHeader>
               <HelpText>
                 <Icon name="information-circle-outline" />
-                Her skriver du søknaden til komiteen(e) du har valgt. Hver
-                komité kan kun se søknaden til sin egen komité.
+                Her skriver du søknaden til{" "}
+                {isRevy ? "gruppen(e)" : "komiteen(e)"} du har valgt.
+                {!isRevy &&
+                  "Hver komité kan kun se søknaden til sin egen komité."}
               </HelpText>
               <HelpText>
                 <Icon name="information-circle-outline" />
@@ -187,16 +190,19 @@ const FormStructure: React.FC<FormStructureProps> = ({ toggleIsEditing }) => {
             </Applications>
           ) : (
             <NoChosenGroupsWrapper>
-              <NoChosenTitle>Du har ikke valgt noen komiteer.</NoChosenTitle>
+              <NoChosenTitle>
+                Du har ikke valgt noen {isRevy ? "grupper" : "komiteer"}.
+              </NoChosenTitle>
               <NoChosenSubTitle>
-                Send inn en ny søknad for å velge komitéer.
+                Send inn en ny søknad for å velge{" "}
+                {isRevy ? "grupper" : "komiteer"}.
               </NoChosenSubTitle>
               <LegoButton
                 icon="arrow-forward"
                 iconPrefix="ios"
                 to={`/${admissionSlug}/velg-komiteer`}
               >
-                Velg komiteer
+                Velg {isRevy ? "grupper" : "komiteer"}
               </LegoButton>
             </NoChosenGroupsWrapper>
           )}

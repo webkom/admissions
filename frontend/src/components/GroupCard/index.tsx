@@ -10,6 +10,7 @@ interface GroupCardProps {
   description: string;
   readMoreLink: string;
   logo: string;
+  isRevy: boolean;
 }
 
 const GroupCard: React.FC<GroupCardProps> = ({
@@ -19,6 +20,7 @@ const GroupCard: React.FC<GroupCardProps> = ({
   description,
   readMoreLink,
   logo,
+  isRevy,
 }) => {
   return (
     <Card onClick={() => onToggle(name)} isChosen={isChosen}>
@@ -34,7 +36,9 @@ const GroupCard: React.FC<GroupCardProps> = ({
             Valgt <span>- klikk for å fjerne</span>
           </SelectedMarkText>
         ) : (
-          <SelectedMarkText>Velg komité</SelectedMarkText>
+          <SelectedMarkText>
+            Velg {isRevy ? "gruppe" : "komité"}
+          </SelectedMarkText>
         )}
       </SelectedMark>
     </Card>
