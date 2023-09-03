@@ -11,7 +11,7 @@ const CreatedAtComparatorDesc: ApplicationComparator = {
     const date2 = new Date(app2.created_at);
     return date1.getTime() - date2.getTime();
   },
-  description: "Dato Opprettet Synkende",
+  description: "Dato opprettet synkende",
 };
 
 const CreatedAtComparatorAsc: ApplicationComparator = {
@@ -20,7 +20,7 @@ const CreatedAtComparatorAsc: ApplicationComparator = {
     const date2 = new Date(app2.created_at);
     return date2.getTime() - date1.getTime();
   },
-  description: "Dato Opprettet Stigende",
+  description: "Dato opprettet stigende",
 };
 
 const UpdatedAtComparatorAsc: ApplicationComparator = {
@@ -29,7 +29,7 @@ const UpdatedAtComparatorAsc: ApplicationComparator = {
     const date2 = new Date(app2.updated_at);
     return date1.getTime() - date2.getTime();
   },
-  description: "Dato Oppdatert Stigende",
+  description: "Dato oppdatert stigende",
 };
 
 const UpdatedAtComparatorDesc: ApplicationComparator = {
@@ -38,21 +38,21 @@ const UpdatedAtComparatorDesc: ApplicationComparator = {
     const date2 = new Date(app2.updated_at);
     return date2.getTime() - date1.getTime();
   },
-  description: "Dato Oppdatert Synkende",
+  description: "Dato oppdatert synkende",
 };
 
 const AlphabeticalComparatorAsc: ApplicationComparator = {
   compare: (app1, app2) => {
     return app2.user.full_name.localeCompare(app1.user.full_name);
   },
-  description: "Alfabetisk Stigende",
+  description: "Alfabetisk stigende",
 };
 
 const AlphabeticalComparatorDesc: ApplicationComparator = {
   compare: (app1, app2) => {
     return app1.user.full_name.localeCompare(app2.user.full_name);
   },
-  description: "Alfabetisk Synkende",
+  description: "Alfabetisk synkende",
 };
 
 export type { ApplicationComparator };
