@@ -19,6 +19,15 @@ import {
   GroupLogoWrapper,
 } from "./styles";
 import { Application } from "src/types";
+import {
+  AlphabeticalComparatorAsc,
+  AlphabeticalComparatorDesc,
+  ApplicationComparator,
+  CreatedAtComparatorAsc,
+  CreatedAtComparatorDesc,
+  UpdatedAtComparatorAsc,
+  UpdatedAtComparatorDesc,
+} from "src/utils/sortAdmissions";
 
 export interface CsvData {
   name: string;
@@ -57,16 +66,31 @@ const AdminPage = () => {
     error,
   } = useApplications(admissionSlug ?? "");
 
+  const [applicationComparator, setApplicationComparator] =
+    useState<ApplicationComparator>(UpdatedAtComparatorDesc);
+
+  const stringToComparatorMapper = new Map<string, ApplicationComparator>([
+    ["alphabeticaldesc", AlphabeticalComparatorDesc],
+    ["alphabeticalasc", AlphabeticalComparatorAsc],
+    ["createddesc", CreatedAtComparatorDesc],
+    ["createdasc", CreatedAtComparatorAsc],
+    ["updateddesc", UpdatedAtComparatorDesc],
+    ["updatedasc", UpdatedAtComparatorAsc],
+  ]);
+
+  const handleSortChange = (event: React.ChangeEvent<HTMLSelectElement>) => {
+    const selectedValue = event.target.value;
+    const selectedComparator =
+      stringToComparatorMapper.get(selectedValue) ?? AlphabeticalComparatorDesc;
+    setApplicationComparator(selectedComparator);
+  };
+
   useEffect(() => {
     if (!applications) return;
     setSortedApplications(
-      [...applications].sort((a, b) => {
-        if (a.user.full_name < b.user.full_name) return -1;
-        if (a.user.full_name > b.user.full_name) return 1;
-        return 0;
-      })
+      [...applications].sort(applicationComparator.compare)
     );
-  }, [applications]);
+  }, [applications, applicationComparator]);
 
   useEffect(() => {
     // Push all the individual applications into csvData with the right format
@@ -125,6 +149,18 @@ const AdminPage = () => {
             <StatisticsWrapper>
               <StatisticsName>Antall søkere</StatisticsName>
               {numApplicants} {numApplicants == 1 ? "søker" : "søkere"}
+            </StatisticsWrapper>
+            <StatisticsWrapper>
+              <StatisticsName style={{ marginBottom: "1.25em" }}>
+                Sorter etter
+              </StatisticsName>
+              <select onChange={handleSortChange}>
+                {Array.from(stringToComparatorMapper.keys()).map((key) => (
+                  <option key={key} value={key}>
+                    {stringToComparatorMapper.get(key)?.description}
+                  </option>
+                ))}
+              </select>{" "}
             </StatisticsWrapper>
           </Statistics>
           <CSVExport
