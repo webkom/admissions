@@ -23,8 +23,8 @@ const GroupCard: React.FC<GroupCardProps> = ({
   isRevy,
 }) => {
   return (
-    <Card onClick={() => onToggle(name)} isChosen={isChosen}>
-      <Logo src={logo} />
+    <Card onClick={() => onToggle(name)} isChosen={isChosen} $isRevy={isRevy}>
+      {!isRevy && <Logo src={logo} />}
       <Name>{readmeIfy(name)}</Name>
       <Description>{readmeIfy(description, true)}</Description>
       <LearnMoreLink href={`${readMoreLink}`} target="_blank">
@@ -49,17 +49,19 @@ export default GroupCard;
 
 /** Styles **/
 
-interface GroupCardStyledProps {
+interface GroupCardElementsStyledProps {
   isChosen?: boolean;
 }
+
+type GroupCardStyledProps = GroupCardElementsStyledProps & { $isRevy: boolean };
 
 export const Card = styled.div<GroupCardStyledProps>`
   display: grid;
   grid-template-columns: 1fr 3fr;
-  grid-template-rows: 2rem 1fr 1.5rem;
+  grid-template-rows: 2rem 1fr ${({ $isRevy }) => !$isRevy && "1.5rem"};
   grid-template-areas:
-    ". name"
-    "logo text"
+    "${({ $isRevy }) => ($isRevy ? "name" : ".")} name"
+    "${({ $isRevy }) => ($isRevy ? "text" : "logo")} text"
     ". readmore";
   grid-gap: 10px 20px;
   background: var(--lego-white);
@@ -145,7 +147,7 @@ export const LearnMoreLink = styled.a`
     `};
 `;
 
-export const SelectedMark = styled.div<GroupCardStyledProps>`
+export const SelectedMark = styled.div<GroupCardElementsStyledProps>`
   width: 100%;
   height: 35px;
   padding: 8px 0;
@@ -162,7 +164,7 @@ export const SelectedMark = styled.div<GroupCardStyledProps>`
   border-radius: 0px 0px 10px 10px;
 `;
 
-const SelectedMarkText = styled.span<GroupCardStyledProps>`
+const SelectedMarkText = styled.span<GroupCardElementsStyledProps>`
   color: ${(props) =>
     props.isChosen ? "var(--lego-white);" : "var(--lego-gray-light);"};
   font-size: 1rem;

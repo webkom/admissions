@@ -97,11 +97,13 @@ const FormStructure: React.FC<FormStructureProps> = ({
                 kalt inn til intervju.
               </HelpText>
 
-              <ToggleGroups
-                groups={groups}
-                selectedGroups={selectedGroups}
-                toggleGroup={toggleGroup}
-              />
+              {!isRevy && (
+                <ToggleGroups
+                  groups={groups}
+                  selectedGroups={selectedGroups}
+                  toggleGroup={toggleGroup}
+                />
+              )}
             </div>
           </Sidebar>
           {hasSelected ? (
@@ -118,7 +120,7 @@ const FormStructure: React.FC<FormStructureProps> = ({
               <LegoButton
                 icon="arrow-forward"
                 iconPrefix="ios"
-                to={`/${admission.slug}/velg-komiteer`}
+                to={`/${admission.slug}/velg-grupper`}
               >
                 Velg {isRevy ? "grupper" : "komiteer"}
               </LegoButton>

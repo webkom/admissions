@@ -116,7 +116,7 @@ const ApplicationPortal = () => {
         <ContentContainer>
           <Routes>
             <Route
-              path="/velg-komiteer"
+              path="/velg-grupper"
               element={
                 <GroupsPage
                   toggleGroup={toggleGroup}
