@@ -27,9 +27,11 @@ const GroupCard: React.FC<GroupCardProps> = ({
       {!isRevy && <Logo src={logo} />}
       <Name>{readmeIfy(name)}</Name>
       <Description>{readmeIfy(description, true)}</Description>
-      <LearnMoreLink href={`${readMoreLink}`} target="_blank">
-        Les mer på abakus.no
-      </LearnMoreLink>
+      {!isRevy && (
+        <LearnMoreLink href={`${readMoreLink}`} target="_blank">
+          Les mer på abakus.no
+        </LearnMoreLink>
+      )}
       <SelectedMark isChosen={isChosen}>
         {isChosen ? (
           <SelectedMarkText isChosen={isChosen}>
