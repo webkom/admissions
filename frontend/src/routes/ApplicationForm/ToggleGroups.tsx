@@ -24,6 +24,7 @@ const ToggleGroups: React.FC<ToggleGroupsProps> = ({
   toggleGroup,
 }) => {
   const { admissionSlug } = useParams();
+  const isRevy = admissionSlug === "revy";
 
   const ChooseGroupsItems = groups.map((group, index) => (
     <MiniToggleGroup
@@ -39,10 +40,11 @@ const ToggleGroups: React.FC<ToggleGroupsProps> = ({
     <Wrapper>
       <Title>Endre dine valg</Title>
       <Tooltip>
-        Klikk på logoene til komiteene for å legge til/fjerne de fra søknaden.
+        Klikk på logoene til {isRevy ? "gruppene" : "komiteene"} for å legge
+        til/fjerne dem fra søknaden.
       </Tooltip>
       <IconsWrapper>{ChooseGroupsItems}</IconsWrapper>
-      <LinkToOverview to={`/${admissionSlug}/velg-komiteer`}>
+      <LinkToOverview to={`/${admissionSlug}/velg-grupper`}>
         Eller gå tilbake til oversikten for å lese mer
       </LinkToOverview>
     </Wrapper>

@@ -12,6 +12,8 @@ interface AdmissionProps {
 }
 
 const Admission: React.FC<AdmissionProps> = ({ admission }) => {
+  const isRevy = admission.slug === "revy";
+
   return (
     <AdmissionWrapper>
       <AdmissionDetails>
@@ -76,7 +78,7 @@ const Admission: React.FC<AdmissionProps> = ({ admission }) => {
                       `/${admission.slug}/` +
                       (admission.userdata.has_application
                         ? "min-soknad"
-                        : "velg-komiteer")
+                        : "velg-grupper")
                     }
                     icon="arrow-forward"
                     iconPrefix="ios"
@@ -118,7 +120,12 @@ const Admission: React.FC<AdmissionProps> = ({ admission }) => {
       <p>
         Du kan til enhver tid trekke søknaden din hvis du skulle ombestemme deg.
         Hvis det ikke fungerer å slette søknaden, send en mail til{" "}
-        <a href="mailto:leder@abakus.no">leder@abakus.no</a>.
+        {isRevy ? (
+          <a href="mailto:revy@abakus.no">revy@abakus.no</a>
+        ) : (
+          <a href="mailto:leder@abakus.no">leder@abakus.no</a>
+        )}
+        .
       </p>
     </AdmissionWrapper>
   );

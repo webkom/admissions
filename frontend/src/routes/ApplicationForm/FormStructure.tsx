@@ -3,7 +3,6 @@ import { Form, Field, FormikValues } from "formik";
 import FormatTime from "src/components/Time/FormatTime";
 import Icon from "src/components/Icon";
 import LegoButton from "src/components/LegoButton";
-import PriorityTextField from "./PriorityTextField";
 import PhoneNumberField from "./PhoneNumberField";
 import ToggleGroups from "./ToggleGroups";
 import ErrorFocus from "./ErrorFocus";
@@ -51,6 +50,7 @@ const FormStructure: React.FC<FormStructureProps> = ({
   onCancel,
 }) => {
   const { data: myApplication } = useMyApplication(String(admission.slug));
+  const isRevy = admission.slug === "revy";
 
   return (
     <PageWrapper>
@@ -84,11 +84,12 @@ const FormStructure: React.FC<FormStructureProps> = ({
         <GroupsSection>
           <Sidebar>
             <div>
-              <SectionHeader>Komiteer</SectionHeader>
+              <SectionHeader>{isRevy ? "Grupper" : "Komiteer"}</SectionHeader>
               <HelpText>
                 <Icon name="information-circle-outline" />
-                Her skriver du søknaden til komiteen(e) du har valgt. Hver
-                komité kan kun se søknaden til sin egen komité.
+                {isRevy
+                  ? "Her skriver du søknaden til gruppen(e) du har valgt."
+                  : "Her skriver du søknaden til komiteen(e) du har valgt. Hver komité kan kun se søknaden til sin egen komité."}
               </HelpText>
               <HelpText>
                 <Icon name="information-circle-outline" />
@@ -96,27 +97,32 @@ const FormStructure: React.FC<FormStructureProps> = ({
                 kalt inn til intervju.
               </HelpText>
 
-              <ToggleGroups
-                groups={groups}
-                selectedGroups={selectedGroups}
-                toggleGroup={toggleGroup}
-              />
+              {!isRevy && (
+                <ToggleGroups
+                  groups={groups}
+                  selectedGroups={selectedGroups}
+                  toggleGroup={toggleGroup}
+                />
+              )}
             </div>
           </Sidebar>
           {hasSelected ? (
             <Applications>{SelectedGroupItems}</Applications>
           ) : (
             <NoChosenGroupsWrapper>
-              <NoChosenTitle>Du har ikke valgt noen komiteer.</NoChosenTitle>
+              <NoChosenTitle>
+                Du har ikke valgt noen {isRevy ? "grupper" : "komiteer"}.
+              </NoChosenTitle>
               <NoChosenSubTitle>
-                Velg i sidemargen eller gå til komiteoversikten
+                Velg i sidemargen eller gå til {isRevy ? "gruppe" : "komite"}
+                oversikten
               </NoChosenSubTitle>
               <LegoButton
                 icon="arrow-forward"
                 iconPrefix="ios"
-                to={`/${admission.slug}/velg-komiteer`}
+                to={`/${admission.slug}/velg-grupper`}
               >
-                Velg komiteer
+                Velg {isRevy ? "grupper" : "komiteer"}
               </LegoButton>
             </NoChosenGroupsWrapper>
           )}
@@ -144,12 +150,13 @@ const FormStructure: React.FC<FormStructureProps> = ({
             )}
             <SubmitInfo>
               Oppdateringer etter søknadsfristen kan ikke garanteres å bli sett
-              av komiteen(e) du søker deg til.
+              {!isRevy && " av komiteen(e) du søker deg til"}.
             </SubmitInfo>
             <SubmitInfo>
-              Din søknad til hver komité kan kun ses av den aktuelle komiteen og
-              leder av Abakus. All søknadsinformasjon slettes etter opptaket er
-              gjennomført.
+              {isRevy
+                ? "Søknaden din kan kun ses av revystyret."
+                : "Din søknad til hver komité kan kun ses av den aktuelle komiteen og leder av Abakus."}{" "}
+              All søknadsinformasjon slettes etter opptaket er gjennomført.
             </SubmitInfo>
             <SubmitInfo>Du kan når som helst trekke søknaden din.</SubmitInfo>
           </div>

@@ -16,6 +16,7 @@ interface NavBarProps {
 const NavBar: React.FC<NavBarProps> = ({ user, isEditing }) => {
   const { admissionSlug } = useParams();
   const { data: admission } = useAdmission(admissionSlug ?? "");
+  const isRevy = admissionSlug === "revy";
 
   return (
     <Container>
@@ -25,8 +26,8 @@ const NavBar: React.FC<NavBarProps> = ({ user, isEditing }) => {
       {!admission?.userdata.has_application || isEditing ? (
         <NavItemsContainer>
           <NavItem
-            to={`/${admissionSlug}/velg-komiteer`}
-            text="Velg komiteer"
+            to={`/${admissionSlug}/velg-grupper`}
+            text={isRevy ? "Velg grupper" : "Velg komiteer"}
           />
           <NavItem to={`/${admissionSlug}/min-soknad`} text="Min søknad" />
         </NavItemsContainer>
