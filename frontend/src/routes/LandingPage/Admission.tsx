@@ -127,6 +127,15 @@ const Admission: React.FC<AdmissionProps> = ({ admission }) => {
         )}
         .
       </p>
+      {isRevy && admission.is_open && !djangoData.user.full_name && (
+        <p>
+          Er du ikke medlem av Abakus? Søk via{" "}
+          <a href="https://docs.google.com/forms/d/e/1FAIpQLSf7TzGamFXYLA5jM1hrw4XhL0Y_nRgRcl1qjAHbGBlyC0ALxw/viewform?pli=1">
+            dette skjemaet
+          </a>
+          .
+        </p>
+      )}
     </AdmissionWrapper>
   );
 };
