@@ -95,10 +95,9 @@ const AdminPageAbakusLeaderView = () => {
           createdAt: application.created_at,
           updatedAt: application.updated_at,
           appliedWithinDeadline: application.applied_within_deadline,
-          priorityText:
-            application.text != ""
-              ? replaceQuotationMarks(application.text)
-              : "Ingen prioriteringer",
+          priorityText: !application.text
+            ? replaceQuotationMarks(application.text)
+            : "Ingen prioriteringer",
           group: groupApplication.group.name,
           groupApplicationText: replaceQuotationMarks(groupApplication.text),
           phoneNumber: application.phone_number,
