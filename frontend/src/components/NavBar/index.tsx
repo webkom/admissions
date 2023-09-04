@@ -26,7 +26,7 @@ const NavBar: React.FC<NavBarProps> = ({ user, isEditing }) => {
       {!admission?.userdata.has_application || isEditing ? (
         <NavItemsContainer>
           <NavItem
-            to={`/${admissionSlug}/velg-komiteer`}
+            to={`/${admissionSlug}/velg-grupper`}
             text={isRevy ? "Velg grupper" : "Velg komiteer"}
           />
           <NavItem to={`/${admissionSlug}/min-soknad`} text="Min søknad" />

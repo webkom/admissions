@@ -200,7 +200,7 @@ const FormStructure: React.FC<FormStructureProps> = ({ toggleIsEditing }) => {
               <LegoButton
                 icon="arrow-forward"
                 iconPrefix="ios"
-                to={`/${admissionSlug}/velg-komiteer`}
+                to={`/${admissionSlug}/velg-grupper`}
               >
                 Velg {isRevy ? "grupper" : "komiteer"}
               </LegoButton>
