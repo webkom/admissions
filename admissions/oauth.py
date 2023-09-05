@@ -126,17 +126,8 @@ def update_custom_user_details(strategy, details, user=None, *args, **kwargs):
     with transaction.atomic():
         # Remove old memberships before creating the new ones
         Membership.objects.filter(user=user).delete()
-        user.is_superuser = False
         for group, membership in group_data:
-            # This check finds the leader of Abakus by looking at the group leader
-            # of Hovedstyret. This is the only superuser of this application.
-            if (
-                group["name"] in constants.SUPERUSER_LEADER_GROUPS
-                and membership["role"] == constants.LEADER
-            ):
-                user.is_superuser = True
-
-            # Leaders of certain groups have staff_permission, which allows them to edit admissions
+            # Leaders of certain groups have staff_permission, which allows them to manage admissions
             if (
                 group["name"] in constants.STAFF_LEADER_GROUPS
                 and membership["role"] == constants.LEADER

@@ -38,8 +38,6 @@
       user: {
         profile_picture: "{{ request.user.profile_picture|default:'' }}",
         full_name: "{{ request.user.get_full_name }}",
-        is_superuser: {{ request.user.is_superuser|yesno:"true,false" }},
-        is_privileged: {{ request.user.is_privileged|yesno:"true,false" }},
         representative_of_group: "{{ request.user.representative_of_group }}",
         is_staff: {{ request.user.is_staff|yesno:"true,false" }},
         is_member_of_webkom: {{ request.user.is_member_of_webkom|yesno:"true,false" }}
