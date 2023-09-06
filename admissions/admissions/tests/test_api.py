@@ -111,18 +111,16 @@ class EditGroupTestCase(APITestCase):
 
         self.assertEqual(res.status_code, status.HTTP_200_OK)
 
-    def test_abakus_leader_cannot_edit_group(self):
-        abakus_leader = LegoUser.objects.create(
-            username="bigsupremeleader", is_superuser=True
-        )
-        self.client.force_authenticate(user=abakus_leader)
+    def test_staff_user_cannot_edit_group(self):
+        staff_user = LegoUser.objects.create(username="bigsupremeleader", is_staff=True)
+        self.client.force_authenticate(user=staff_user)
 
         res = self.client.patch(
             reverse("group-detail", kwargs={"pk": self.arrkom.pk}),
             self.edit_group_data,
         )
 
-        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.assertEqual(res.status_code, status.HTTP_403_FORBIDDEN)
 
     # What about when not logged in aka. have a user? Rewrite api (remove LoginRequiredMixins
     # from views to stop from redirecting, and handle redirecting ourselves with permissions.
@@ -186,12 +184,10 @@ class EditAdmissionTestCase(APITestCase):
 
         self.assertEqual(res.status_code, status.HTTP_401_UNAUTHORIZED)
 
-    def test_abakus_leader_can_edit_admission(self):
-        abakus_leader = LegoUser.objects.create(
-            username="bigsupremeleader", is_superuser=True
-        )
+    def test_staff_user_can_edit_admission(self):
+        staff_user = LegoUser.objects.create(username="bigsupremeleader", is_staff=True)
 
-        self.client.force_authenticate(user=abakus_leader)
+        self.client.force_authenticate(user=staff_user)
 
         res = self.client.patch(
             reverse("admission-detail", kwargs={"slug": self.admission.slug}),
@@ -304,12 +300,22 @@ class ListApplicationsTestCase(APITestCase):
         self.admission_slug = admission_slug
 
         self.pleb = LegoUser.objects.create()
-        self.admission = create_admission()
+        leader_group = Group.objects.create(name="Abakus-Leder")
 
+        self.admission = create_admission()
+        self.admission.admin_groups.add(leader_group)
+
+        # Abakus leader
+        self.staff_user = LegoUser.objects.create(username="staff_user", is_staff=True)
+
+        Membership.objects.create(user=self.staff_user, role=MEMBER, group=leader_group)
+
+        # Webkom
         self.webkom_leader = LegoUser.objects.create(username="webkomleader")
         self.webkom_rec = LegoUser.objects.create(username="webkomrec")
 
         self.webkom = Group.objects.create(name="Webkom")
+        self.admission.groups.add(self.webkom)
 
         Membership.objects.create(
             user=self.webkom_leader, role=LEADER, group=self.webkom
@@ -318,10 +324,12 @@ class ListApplicationsTestCase(APITestCase):
             user=self.webkom_rec, role=RECRUITING, group=self.webkom
         )
 
+        # Bedkom
         self.bedkom_leader = LegoUser.objects.create(username="bedkomleader")
         self.bedkom_rec = LegoUser.objects.create(username="bedkomrec")
 
         self.bedkom = Group.objects.create(name="Bedkom")
+        self.admission.groups.add(self.bedkom)
 
         Membership.objects.create(
             user=self.bedkom_leader, role=LEADER, group=self.bedkom
@@ -329,6 +337,8 @@ class ListApplicationsTestCase(APITestCase):
         Membership.objects.create(
             user=self.bedkom_rec, role=RECRUITING, group=self.bedkom
         )
+
+        # Sample application data
         self.application_data = {
             "text": "testtest",
             "applications": {
@@ -339,12 +349,9 @@ class ListApplicationsTestCase(APITestCase):
         }
 
     def unauthorized_user_cannot_see_other_applications(self):
-        """Normal users should not be able to list applications"""
-        self.client.force_authenticate(user=self.pleb)
-
         res = self.client.get(
             reverse(
-                "userapplication-mine", kwargs={"admission_slug": self.admission_slug}
+                "userapplication-list", kwargs={"admission_slug": self.admission_slug}
             )
         )
 
@@ -511,7 +518,7 @@ class ListApplicationsTestCase(APITestCase):
         for group_application in json[0]["group_applications"]:
             self.assertNotEqual(group_application["group"]["name"], "Webkom")
 
-    def test_abakus_leader_can_see_all_applications(self):
+    def test_staff_user_can_see_all_applications(self):
         self.client.force_authenticate(user=self.pleb)
         self.client.post(
             reverse(
@@ -522,11 +529,7 @@ class ListApplicationsTestCase(APITestCase):
         )
 
         # Auth user as AbakusLeader
-        abakus_leader = LegoUser.objects.create(
-            username="abakus_leader", is_superuser=True
-        )
-
-        self.client.force_authenticate(user=abakus_leader)
+        self.client.force_authenticate(user=self.staff_user)
         res = self.client.get(
             reverse(
                 "userapplication-list", kwargs={"admission_slug": self.admission_slug}
@@ -539,12 +542,12 @@ class ListApplicationsTestCase(APITestCase):
         self.assertEqual(apps[1]["group"]["name"], "Bedkom")
 
 
-class DeleteComitteeApplicationsTestCase(APITestCase):
+class DeleteGroupApplicationsTestCase(APITestCase):
     """
-    Tests for api endpoint allowing leader of group / opptaksansvarlig and abakus_leader to delete group
+    Tests for api endpoint allowing leader of group / opptaksansvarlig and staff_user to delete group
     applications
 
-    representative_of_group can only delete applications to their own group. abakus_leader can
+    representative_of_group can only delete applications to their own group. staff_user can
     delete any group applications.
 
     Users can delete their own applications with the /mine endpoint
@@ -553,17 +556,20 @@ class DeleteComitteeApplicationsTestCase(APITestCase):
     def setUp(self):
         global admission_slug
         self.admission_slug = admission_slug
-        self.pleb = LegoUser.objects.create()
         self.admission = create_admission()
 
         self.webkom_leader = LegoUser.objects.create(username="webkomleader")
+        self.pleb = LegoUser.objects.create()
+
         self.webkom = Group.objects.create(name="Webkom")
         self.arrkom = Group.objects.create(name="Arrkom")
+
         Membership.objects.create(
             user=self.webkom_leader, role=LEADER, group=self.webkom
         )
-        self.abakus_leader = LegoUser.objects.create(
-            username="bigsupremeleader", is_superuser=True
+
+        self.staff_user = LegoUser.objects.create(
+            username="bigsupremeleader", is_staff=True
         )
 
     def unauthorized_user_cannot_delete_application(self):

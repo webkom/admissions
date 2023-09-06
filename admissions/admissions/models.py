@@ -12,24 +12,6 @@ class LegoUser(AbstractUser):
     profile_picture = models.URLField(null=True, blank=True)
 
     @property
-    def is_privileged(self):
-        """
-        Return true if the user is Abakus Leader or has admission privileges
-        """
-        return bool(self.is_superuser or self.admission_privileges)
-
-    @property
-    def admission_privileges(self):
-        """
-        Return true if the user has the role of LEADER or RECRUTING
-        """
-        return (
-            Membership.objects.filter(user=self)
-            .filter(Q(role=constants.LEADER) | Q(role=constants.RECRUITING))
-            .exists()
-        )
-
-    @property
     def representative_of_group(self):
         """
         Return the name of the group this user is the representative for

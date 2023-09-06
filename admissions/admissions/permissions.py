@@ -1,11 +1,30 @@
+from django.db.models import Q
 from rest_framework import permissions
 
-from .models import GroupApplication, LegoUser, UserApplication
+from admissions.admissions import constants
+
+from .models import Admission, GroupApplication, LegoUser, Membership, UserApplication
 
 
 def cast_as_lego_user(user_obj) -> LegoUser:
     user_obj.__class__ = LegoUser
     return user_obj
+
+
+def user_is_privileged(admission_slug, user):
+    # Return true if the user has some sort of privileges in the admission
+    admission = Admission.objects.get(slug=admission_slug)
+    for group in admission.admin_groups.all():
+        if Membership.objects.filter(user=user.pk, group=group.pk).exists():
+            return True
+    for group in admission.groups.all():
+        if (
+            Membership.objects.filter(user=user.pk, group=group.pk)
+            .filter(Q(role=constants.LEADER) | Q(role=constants.RECRUITING))
+            .exists()
+        ):
+            return True
+    return False
 
 
 class IsOwnerOrReadOnly(permissions.BasePermission):
@@ -17,14 +36,6 @@ class IsOwnerOrReadOnly(permissions.BasePermission):
         if request.method in permissions.SAFE_METHODS:
             return True
         return obj.user == request.user
-
-
-class IsSuperuser(permissions.BasePermission):
-    def has_permission(self, request):
-        return cast_as_lego_user(request.user).is_superuser
-
-    def has_object_permission(self, request):
-        return cast_as_lego_user(request.user).is_superuser
 
 
 class IsStaff(permissions.BasePermission):
@@ -53,14 +64,12 @@ class GroupPermissions(permissions.BasePermission):
         if request.method in permissions.SAFE_METHODS:
             return True
 
-        user = request.user
-        user.__class__ = LegoUser
-
-        # Here obj will be the name of the group
-        if obj == user.representative_of_group or user.is_superuser:
-            return True
-
-        return False
+        # Allow a user to edit a group if it is a leader or recruiter in that group
+        return (
+            Membership.objects.filter(user=request.user.pk, group=obj.pk)
+            .filter(Q(role=constants.LEADER) | Q(role=constants.RECRUITING))
+            .exists()
+        )
 
 
 class AdmissionPermissions(permissions.BasePermission):
@@ -68,15 +77,15 @@ class AdmissionPermissions(permissions.BasePermission):
         if request.method in permissions.SAFE_METHODS:
             return True
 
-        # If the user is AbakusLeader -> give access
-        return request.user.is_superuser
+        # If the user is staff (can edit admissions)
+        return request.user.is_staff
 
     def has_permission(self, request, view):
         if request.method in permissions.SAFE_METHODS:
             return True
 
-        # If the user is AbakusLeader -> give access
-        return request.user.is_superuser
+        # If the user is staff (can edit admissions)
+        return request.user.is_staff
 
 
 class ApplicationPermissions(permissions.BasePermission):
@@ -84,9 +93,7 @@ class ApplicationPermissions(permissions.BasePermission):
         return False
 
     def has_permission(self, request, view):
-        user = request.user
-        user.__class__ = LegoUser
-        return user.is_privileged
+        return user_is_privileged(view.kwargs.get("admission_slug"), request.user)
 
 
 class GroupApplicationPermissions(permissions.BasePermission):
@@ -98,5 +105,4 @@ class GroupApplicationPermissions(permissions.BasePermission):
             return GroupApplication.objects.filter(application=obj).count() == 0
 
     def has_permission(self, request, view):
-        request.user.__class__ = LegoUser
-        return request.user.is_privileged
+        return user_is_privileged(view.kwargs.get("admission_slug"), request.user)

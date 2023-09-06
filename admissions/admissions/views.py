@@ -1,17 +1,19 @@
 from django.conf import settings
 from django.contrib.auth.models import User
-from django.db.models import Prefetch
+from django.db.models import Prefetch, Q
 from django.http import HttpResponse
 from django.views.generic.base import TemplateView
 from rest_framework import permissions, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
 
+from admissions.admissions import constants
 from admissions.admissions.models import (
     Admission,
     Group,
     GroupApplication,
     LegoUser,
+    Membership,
     UserApplication,
 )
 from admissions.admissions.serializers import (
@@ -34,6 +36,24 @@ from .permissions import (
     IsStaff,
     IsWebkom,
 )
+
+
+def user_is_admission_admin(admission, user):
+    for group in admission.admin_groups.all():
+        if Membership.objects.filter(user=user.pk, group=group.pk).exists():
+            return True
+    return False
+
+
+def get_representing_group(admission, user):
+    for group in admission.groups.all():
+        if (
+            Membership.objects.filter(user=user.pk, group=group.pk)
+            .filter(Q(role=constants.LEADER) | Q(role=constants.RECRUITING))
+            .exists()
+        ):
+            return group
+    return None
 
 
 class AppView(TemplateView):
@@ -91,35 +111,43 @@ class ApplicationViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         admission_slug = self.kwargs.get("admission_slug", None)
+        admission = Admission.objects.get(slug=admission_slug)
         user = self.request.user
         if user.is_anonymous:
-            return User.objects.none()
+            return UserApplication.objects.none()
         user.__class__ = LegoUser
-        if not user.is_privileged:
-            return User.objects.none()
-        if user.is_superuser:
+        # Check membership in admin groups
+        if user_is_admission_admin(admission, user):
             return (
                 super()
                 .get_queryset()
                 .filter(admission__slug=admission_slug)
                 .prefetch_related("group_applications", "group_applications__group")
             )
+        # Check membership in admission groups
+        representing_group = get_representing_group(admission, user)
+        if representing_group is not None:
+            qs = GroupApplication.objects.filter(
+                group=representing_group
+            ).select_related("group")
 
-        group = user.representative_of_group
-        qs = GroupApplication.objects.filter(group=group).select_related("group")
-
-        return (
-            super()
-            .get_queryset()
-            .filter(group_applications__group=group, admission__slug=admission_slug)
-            .prefetch_related(
-                Prefetch(
-                    "group_applications",
-                    queryset=qs,
-                    to_attr="group_applications_filtered",
+            return (
+                super()
+                .get_queryset()
+                .filter(
+                    group_applications__group=representing_group,
+                    admission__slug=admission_slug,
+                )
+                .prefetch_related(
+                    Prefetch(
+                        "group_applications",
+                        queryset=qs,
+                        to_attr="group_applications_filtered",
+                    )
                 )
             )
-        )
+        # No permissions
+        return UserApplication.objects.none()
 
     def get_serializer_class(self):
         if self.action in ("create"):
@@ -133,14 +161,17 @@ class ApplicationViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=["DELETE"], url_name="delete_group_application")
     def delete_group_application(self, request, admission_slug, pk=None):
         try:
+            admission_slug = self.kwargs.get("admission_slug", None)
+            admission = Admission.objects.get(slug=admission_slug)
             self.request.user.__class__ = LegoUser
-            group = None
-            if request.user.is_superuser:
+
+            representing_group = get_representing_group(admission, self.request.user)
+            if user_is_admission_admin(admission, self.request.user):
                 group_name = request.query_params.get("group", None)
                 group = Group.objects.get(name=group_name)
+            elif representing_group is not None:
+                group = representing_group
             else:
-                group = request.user.representative_of_group
-            if group is None:
                 return Response(status=status.HTTP_400_BAD_REQUEST)
 
             GroupApplication.objects.get(application=pk, group=group).delete()
