@@ -21,7 +21,12 @@ const NavBar: React.FC<Props> = ({ admissions }) => {
         <p>Du har ikke redigeringstilgang til noen opptak.</p>
       )}
       <CreateNewWrapper>
-        <LegoButton buttonStyle="primary" to="/admin/" icon="add" size="small">
+        <LegoButton
+          buttonStyle="primary"
+          to="/admin/create"
+          icon="add"
+          size="small"
+        >
           Lag nytt
         </LegoButton>
       </CreateNewWrapper>

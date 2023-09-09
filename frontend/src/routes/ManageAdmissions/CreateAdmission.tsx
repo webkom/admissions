@@ -14,6 +14,8 @@ import {
 import { toggleFromArray } from "src/utils/methods";
 import styled from "styled-components";
 import GroupSelector from "./components/GroupSelector";
+import LoadingBall from "src/components/LoadingBall";
+import { StyledTextAreaField } from "src/components/styledFields";
 
 interface ReturnedData {
   type: "error" | "success";
@@ -32,7 +34,7 @@ const localTimeStringToTimezoned = (dateString: string) =>
 const CreateAdmission: React.FC = () => {
   const navigate = useNavigate();
   const { admissionSlug } = useParams();
-  const { data: admission } = useAdminAdmission(
+  const { data: admission, isLoading } = useAdminAdmission(
     admissionSlug ?? "",
     admissionSlug !== undefined
   );
@@ -120,6 +122,10 @@ const CreateAdmission: React.FC = () => {
     }
   }, [admission]);
 
+  if (admissionSlug && isLoading) {
+    return <LoadingBall />;
+  }
+
   return (
     <form onSubmit={formik.handleSubmit}>
       <Title>
@@ -149,6 +155,17 @@ const CreateAdmission: React.FC = () => {
             onChange={formik.handleChange}
             placeholder="f. eks. komiteer/revy/backup"
             disabled={!isNew}
+          />
+        </InputWrapper>
+      </FormGroup>
+      <FormGroup>
+        <InputWrapper>
+          <InputTitle>Beskrivelse</InputTitle>
+          <StyledTextAreaField
+            name="description"
+            value={formik.values.description}
+            onChange={formik.handleChange}
+            placeholder="Beskrivelse av opptaket"
           />
         </InputWrapper>
       </FormGroup>
