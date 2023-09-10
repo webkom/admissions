@@ -15,8 +15,7 @@ import { useAdmission, useMyApplication } from "src/query/hooks";
 import ApplicationForm from "src/routes/ApplicationForm";
 import ReceiptForm from "src/routes/ReceiptForm";
 import GroupsPage from "src/routes/GroupsPage";
-import AdminPage from "src/routes/AdminPage";
-import AdminPageAbakusLeaderView from "src/routes/AdminPageAbakusLeaderView";
+import AdmissionAdmin from "src/routes/AdmissionAdmin";
 
 import LoadingBall from "src/components/LoadingBall";
 import NavBar from "src/components/NavBar";
@@ -142,14 +141,10 @@ const ApplicationPortal = () => {
               }
             />
             <Route
-              path="/admin"
+              path="/admin/*"
               element={
                 <RequireAuth auth={!!admission?.userdata.is_privileged}>
-                  {admission?.userdata.is_admin ? (
-                    <AdminPageAbakusLeaderView />
-                  ) : (
-                    <AdminPage />
-                  )}
+                  <AdmissionAdmin />
                 </RequireAuth>
               }
             />

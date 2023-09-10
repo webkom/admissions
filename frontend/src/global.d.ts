@@ -1,3 +1,6 @@
+import { DjangoConfig } from "./utils/config";
+import { DjangoData } from "./utils/djangoData";
+
 declare global {
   namespace NodeJS {
     interface ProcessEnv {
@@ -5,8 +8,8 @@ declare global {
     }
   }
   interface Window {
-    __CONFIG__: any;
-    __DJANGO__: any;
+    __CONFIG__: DjangoConfig;
+    __DJANGO__: DjangoData;
   }
 }
 

@@ -55,6 +55,7 @@ export const GroupLogoWrapper = styled.div`
 export const EditGroupFormWrapper = styled.div`
   display: flex;
   width: 100%;
+  margin-bottom: 0.5em;
 
   div {
     flex: 1 1 100%;

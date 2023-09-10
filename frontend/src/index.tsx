@@ -60,7 +60,9 @@ const AppRoutes = () =>
       path: "/admin/*",
       element: (
         <RequireAuth
-          auth={djangoData.user.is_staff || djangoData.user.is_member_of_webkom}
+          auth={
+            !!djangoData.user.is_staff || !!djangoData.user.is_member_of_webkom
+          }
         >
           <ManageAdmissions />
         </RequireAuth>
