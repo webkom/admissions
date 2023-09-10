@@ -1,10 +1,44 @@
 # admissions
 
-#### [opptak.abakus.no](https://opptak.abakus.no/)
-
 Recruitment for [Abakus](https://abakus.no/).
 
-## Runnings LEGO and this repository in parallel
+**Table of contents**
+
+- [Environments](#environments)
+- [Local development](#local-development)
+- [Creating admissions](#creating-admissions)
+- [Permissions](#permissions)
+- [Run tests](#run-tests)
+- [Code style](#code-style)
+
+&nbsp;
+
+## Environments
+
+### Production
+
+[opptak.abakus.no](https://opptak.abakus.no/)  
+OAuth through [abakus.no](https://abakus.no/)
+
+### Staging
+
+[opptak-staging.abakus.no](https://opptak-staging.abakus.no/)  
+OAuth through [abakus.no](https://abakus.no/)
+
+&nbsp;
+
+## Local development
+
+### Prerequisites
+
+To run this project, you need
+
+1. python 3.9
+2. Docker OR a `postgresql` database
+3. [poetry](https://python-poetry.org/) ([installation guide](https://python-poetry.org/docs/#installation))
+4. Node and yarn
+
+### Running the project
 
 > When working in development you want to have LEGO running (both frontend and backend). This allows you to create an OAuth2 application from the settings menu in the webapp.
 
@@ -20,9 +54,7 @@ Run LEGO-WEBAPP by following the README [here](https://github.com/webkom/lego-we
 
 ### Terminal 3
 
-Running the admissions backend requires Python 3.9 and a `postgresql` database.
-
-The backend uses [poetry](https://python-poetry.org/) for dependency management. If you do not have it installed you can follow the installation guide [here](https://python-poetry.org/docs/#installation). Then, the dependencies can be installed or updated with
+Install the projects dependencies with
 
 ```sh
 $ poetry install
@@ -84,41 +116,24 @@ $ yarn dev
 
 > Finally, you can go to [127.0.0.1:5000](http://127.0.0.1:5000/) and view the admissions page.
 
-To create an admission, first, go to [http://127.0.0.1:5000/login/lego/](http://127.0.0.1:5000/login/lego/) to authorize. Then, click "Administrer opptak" and create an admission. Phew, now you are ready to start developing!
+**NB: The project has to be accessed through 127.0.0.1, and NOT localhost.** This is because accessing both LEGO and admissions from the same hostname creates a conflict some session storage, so the login will not work.
 
-## Requirements
+To create an admission, first, open [127.0.0.1:5000](http://127.0.0.1:5000/) and click the "Logg inn" button at the bottom of the page to authorize as a user with [permission to create admissions](#permissions). Then, click "Administrer opptak" and create an admission. Phew, now you are ready to start developing!
 
-We use the package [pip-tools](https://github.com/jazzband/pip-tools) to organize our requirements.
-
-### Adding a new requirement
-
-Add the new package to either `base.in`, `development.in` or
-`production.in` depending on best fit. Then generate a new requirements
-file by running
-
-We use [pip-tools](https://github.com/jazzband/pip-tools) to make the requirement files easy to understand and maintain.
-Run the following custom command to update `development.txt` and `production.txt`.
-
-```sh
-$ poetry run python manage.py compile_requirements
-```
-
-Or the manual way
-
-```sh
-$ pip-compile requirements/development.in > requirements/development.txt
-```
-
-To sync your virtual environment with the requirements file, do
-
-```sh
-$ pip-sync requirements/development.txt
-```
-
-This will install missing packages, install the correct version and
-remove excess packages.
+&nbsp;
 
 ## Creating admissions
+
+### GUI
+
+The simplest way to create an admission is through the GUI.
+
+1. Navigate to [127.0.0.1:5000](http://127.0.0.1:5000/)
+2. Log in as a user with permission to create admissions.
+3. Click "Administrer opptak" at the bottom of the screen
+4. Success
+
+### Shell
 
 Currently when running
 
@@ -127,17 +142,44 @@ Currently when running
 $ poetry run python manage.py create_admission
 ```
 
-you create an admission connected to all groups, if they exist (they are generated the first time you log in). To connect it to a group, this must be done in the shell. Note that when creating groups, you must import the Group model manually, as otherwise it will use the Django Group model instead of our own.
+you create an admission connected to all groups, if they exist (they are generated the first time you log in). To connect it to a group, you can either do it through the GUI, or create it in the shell.  
+Note that when creating groups in the shell, you must import the Group model manually, as otherwise it will use the Django Group model instead of our own.
+
+```python
+$ poetry run python manage.py shell_plus
+> from admissions.admissions.models import Group
+> new_group = Group.objects.create(name="GroupA")
+> admission = Admission.objects.get(slug="opptak")
+> admission.groups.add(new_group)
+```
+
+&nbsp;
+
+## Permissions
+
+The project gives permissions based on group memberships imported from LEGO.
+
+| Model                   | Action        | Requirement                                                                                                               |
+| :---------------------- | ------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| Admission               | CREATE        | Either (1) any member of Webkom, (2) leader of Abakus OR (3) leader of RevyStyret. <br/> (1,2,3) `user.is_staff`          |
+| Admission               | EDIT          | Either (1) member of Webkom OR (2) creator of admission. <br/>(1) `user.is_member_of_webkom`, (2) `admission.created_by`. |
+| All applications        | VIEW & DELETE | Member of a group in `admission.admin_groups`                                                                             |
+| Applications to a group | VIEW & DELETE | Member of a group in `admission.groups` WITH role LEADER or RERUITING                                                     |
+| Group                   | EDIT          | Member of a group in `admission.groups` WITH role LEADER or RERUITING                                                     |
+
+&nbsp;
 
 ## Run tests
 
 Run django tests using tox. Note that we point at the admissions database running at :5433 if we are running lego and admissions in parallel
 
 ```bash
-$ DATABASE_PORT=5433 tox -e tests
+$ DATABASE_PORT=5433 poetry run tox -e tests
 ```
 
-## Code Style
+&nbsp;
+
+## Code style
 
 This codebase uses the PEP 8 code style. We enforce this with isort, black & flake8.
 In addition to the standards outlined in PEP 8, we have a few guidelines
@@ -152,5 +194,5 @@ $ make fixme
 To check if it is formatted properly, run:
 
 ```bash
-$ DATABASE_PORT=5433 tox -e isort -e flake8 -e black
+$ DATABASE_PORT=5433 poetry run tox -e isort -e flake8 -e black
 ```
