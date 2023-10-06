@@ -7,6 +7,6 @@ interface InputValidationFeedbackProps {
 
 const InputValidationFeedback: React.FC<InputValidationFeedbackProps> = ({
   error,
-}) => (error ? <div className="input-feedback">{error}</div> : null);
+}) => (error ? <p className="input-feedback">{error}</p> : null);
 
 export default InputValidationFeedback;

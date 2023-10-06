@@ -26,7 +26,7 @@ export interface Application {
   applied_within_deadline: boolean;
   created_at: string;
   updated_at: string;
-  text: string;
+  text?: string;
   phone_number: string;
   group_applications: GroupApplication[];
 }

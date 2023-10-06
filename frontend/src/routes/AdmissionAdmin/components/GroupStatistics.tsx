@@ -1,10 +1,12 @@
 import React from "react";
 
-import StatisticsName from "./StatisticsName";
-import StatisticsWrapper from "./StatisticsWrapper";
-import StatisticsGroupLogo from "./StatisticsGroupLogo";
 import { Application } from "src/types";
 import styled from "styled-components";
+import {
+  StatisticsGroupLogo,
+  StatisticsName,
+  StatisticsWrapper,
+} from "./StyledElements";
 
 interface GroupStatisticsProps {
   applications: Application[];

@@ -15,9 +15,9 @@ import SubComponentWrapper from "./SubComponentWrapper";
 import SubComponentHeader from "./SubComponentHeader";
 import { Application } from "src/types";
 import { useState } from "react";
-import { TableWrapper } from "src/routes/AdminPageAbakusLeaderView/Wrapper";
 import styled from "styled-components";
 import Icon from "src/components/Icon";
+import { TableWrapper } from "src/routes/AdmissionAdmin/components/StyledElements";
 
 interface AdmissionsContainerProps {
   applications: Application[];
@@ -32,7 +32,7 @@ export interface AdmissionsTableValues {
   numApplications: number;
   createdAt: string;
   updatedAt: string;
-  text: string;
+  text?: string;
   groupApplications: InnerTableValues[];
 }
 

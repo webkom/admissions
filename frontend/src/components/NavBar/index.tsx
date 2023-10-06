@@ -4,17 +4,17 @@ import UserInfo from "./UserInfo";
 import AbakusLogo from "src/components/AbakusLogo";
 import NavItem from "./NavItem";
 import { media } from "src/styles/mediaQueries";
-import { User } from "src/types";
 import { useParams } from "react-router-dom";
 import { useAdmission } from "src/query/hooks";
+import { DjangoUserData } from "src/utils/djangoData";
 
 interface NavBarProps {
-  user: User;
+  user: DjangoUserData;
   isEditing: boolean;
 }
 
 const NavBar: React.FC<NavBarProps> = ({ user, isEditing }) => {
-  const { admissionSlug } = useParams();
+  const { admissionSlug, ...params } = useParams();
   const { data: admission } = useAdmission(admissionSlug ?? "");
   const isRevy = admissionSlug === "revy";
 
@@ -23,20 +23,20 @@ const NavBar: React.FC<NavBarProps> = ({ user, isEditing }) => {
       <BrandContainer>
         <AbakusLogo />
       </BrandContainer>
-      {!admission?.userdata.has_application || isEditing ? (
-        <NavItemsContainer>
-          <NavItem
-            to={`/${admissionSlug}/velg-grupper`}
-            text={isRevy ? "Velg grupper" : "Velg komiteer"}
-          />
-          <NavItem to={`/${admissionSlug}/min-soknad`} text="Min søknad" />
-        </NavItemsContainer>
-      ) : (
-        <NavItemsContainer>
-          <NavItem to={`/${admissionSlug}/min-soknad`} text="Min søknad" />
-        </NavItemsContainer>
-      )}
-
+      <NavItemsContainer>
+        {params["*"]?.substring(0, 5) !== "admin" && (
+          <>
+            {!admission?.userdata.has_application ||
+              (isEditing && (
+                <NavItem
+                  to={`/${admissionSlug}/velg-grupper`}
+                  text={isRevy ? "Velg grupper" : "Velg komiteer"}
+                />
+              ))}
+            <NavItem to={`/${admissionSlug}/min-soknad`} text="Min søknad" />
+          </>
+        )}
+      </NavItemsContainer>
       <UserInfo user={user} />
     </Container>
   );

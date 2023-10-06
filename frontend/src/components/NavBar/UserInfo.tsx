@@ -2,10 +2,10 @@ import React from "react";
 import styled from "styled-components";
 import { media } from "src/styles/mediaQueries";
 import avatar from "assets/avatar.png";
-import { User } from "src/types";
+import { DjangoUserData } from "src/utils/djangoData";
 
 interface UserInfoProps {
-  user: User;
+  user: DjangoUserData;
 }
 
 const UserInfo: React.FC<UserInfoProps> = ({ user }) => {

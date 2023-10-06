@@ -6,6 +6,7 @@ import { media } from "src/styles/mediaQueries";
 import LoadingBall from "src/components/LoadingBall";
 import NavBar from "./components/NavBar";
 import CreateAdmission from "./CreateAdmission";
+import Icon from "src/components/Icon";
 
 const ManageAdmissions: React.FC = () => {
   const { data, isFetching, error } = useAdminAdmissions();
@@ -19,7 +20,9 @@ const ManageAdmissions: React.FC = () => {
       <PageWrapper>
         <Header>
           <h2>Administrer opptak</h2>
-          <Link to={"/"}>Gå tilbake til forsiden</Link>
+          <Link to={"/"}>
+            <Icon name="arrow-back" size={22} /> Gå tilbake til forsiden
+          </Link>
         </Header>
         <Wrapper>
           <LeftSide>

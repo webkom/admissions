@@ -3,21 +3,10 @@ import styled from "styled-components";
 import { useParams } from "react-router-dom";
 import { useAdmission, useApplications } from "src/query/hooks";
 import djangoData from "src/utils/djangoData";
-import { media } from "src/styles/mediaQueries";
-import UserApplication from "src/containers/UserApplication";
 import LoadingBall from "src/components/LoadingBall";
-import EditGroupForm from "./form";
+import EditGroupForm from "./components/EditGroupForm";
 import { replaceQuotationMarks } from "src/utils/methods";
-import {
-  Wrapper,
-  LinkLink,
-  CSVExport,
-  Statistics,
-  StatisticsName,
-  StatisticsWrapper,
-  GroupLogo,
-  GroupLogoWrapper,
-} from "./styles";
+import { Wrapper, GroupLogo, GroupLogoWrapper } from "./components/styles";
 import { Application } from "src/types";
 import {
   AlphabeticalComparatorAsc,
@@ -40,7 +29,7 @@ export interface CsvData {
   phoneNumber: string;
 }
 
-const AdminPage = () => {
+const EditGroup = () => {
   const { admissionSlug } = useParams();
   const [sortedApplications, setSortedApplications] = useState<Application[]>(
     []
@@ -122,20 +111,16 @@ const AdminPage = () => {
     return <div>Feil: klarte ikke laste inn grupper.</div>;
   } else {
     const group = (groups ?? []).find(
-      (group) =>
-        group.name.toLowerCase() ===
-        djangoData.user.representative_of_group.toLowerCase()
+      (group) => group.name === djangoData.user.representative_of_group
     );
     if (!group) return <div>Feil: Ugyldig gruppe</div>;
 
     return (
       <PageWrapper>
-        <PageTitle>Admin Panel</PageTitle>
         <GroupLogoWrapper>
           <GroupLogo src={group.logo} />
           <h2>{djangoData.user.representative_of_group}</h2>
         </GroupLogoWrapper>
-        <LinkLink to="/">Gå til forside</LinkLink>
 
         <Wrapper>
           <EditGroupForm
@@ -144,59 +129,16 @@ const AdminPage = () => {
             group={group}
           />
         </Wrapper>
-        <Wrapper>
-          <Statistics>
-            <StatisticsWrapper>
-              <StatisticsName>Antall søkere</StatisticsName>
-              {numApplicants} {numApplicants == 1 ? "søker" : "søkere"}
-            </StatisticsWrapper>
-            <StatisticsWrapper>
-              <StatisticsName style={{ marginBottom: "1.25em" }}>
-                Sorter etter
-              </StatisticsName>
-              <select onChange={handleSortChange}>
-                {Array.from(stringToComparatorMapper.keys()).map((key) => (
-                  <option key={key} value={key}>
-                    {stringToComparatorMapper.get(key)?.description}
-                  </option>
-                ))}
-              </select>{" "}
-            </StatisticsWrapper>
-          </Statistics>
-          <CSVExport
-            data={csvData}
-            headers={csvHeaders}
-            filename={"applications.csv"}
-            target="_blank"
-          >
-            Eksporter som csv
-          </CSVExport>
-          {sortedApplications.map((userApplication) => (
-            <UserApplication
-              key={userApplication.user.username}
-              {...userApplication}
-            />
-          ))}
-        </Wrapper>
       </PageWrapper>
     );
   }
 };
 
-export default AdminPage;
-
-/** Styles **/
+export default EditGroup;
 
 export const PageWrapper = styled.div`
   display: flex;
   flex-direction: column;
   align-items: center;
   min-height: 100vh;
-`;
-
-const PageTitle = styled.h1`
-  ${media.handheld`
-    margin: 0 1em 0 1em;
-    font-size: 2.5rem;
-  `};
 `;

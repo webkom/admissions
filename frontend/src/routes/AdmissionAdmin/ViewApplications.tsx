@@ -2,23 +2,22 @@ import React, { useEffect, useState } from "react";
 import styled from "styled-components";
 import FormatTime from "src/components/Time/FormatTime";
 
-import { media } from "src/styles/mediaQueries";
-
 import LoadingBall from "src/components/LoadingBall";
-import Wrapper from "./Wrapper";
-import LinkLink from "./LinkLink";
-import CSVExport from "./CSVExport";
-import Statistics from "./Statistics";
-import GroupStatistics from "./GroupStatistics";
-import StatisticsName from "./StatisticsName";
-import StatisticsWrapper from "./StatisticsWrapper";
+import GroupStatistics from "./components/GroupStatistics";
 import { replaceQuotationMarks } from "src/utils/methods";
 import { useAdmission, useApplications } from "src/query/hooks";
 import { useParams } from "react-router-dom";
 
 import AdmissionsContainer from "src/containers/AdmissionsContainer";
-import { CsvData } from "src/routes/AdminPage";
+import { CsvData } from "./EditGroup";
 import { Application } from "src/types";
+import {
+  CSVExport,
+  Statistics,
+  StatisticsName,
+  StatisticsWrapper,
+} from "./components/StyledElements";
+import djangoData from "src/utils/djangoData";
 
 type CompleteCsvData = {
   priorityText: string;
@@ -26,7 +25,7 @@ type CompleteCsvData = {
   groupApplicationText: string;
 } & Omit<CsvData, "applicationText">;
 
-const AdminPageAbakusLeaderView = () => {
+const ViewApplications = () => {
   const { admissionSlug } = useParams();
   const [sortedApplications, setSortedApplications] = useState<Application[]>(
     []
@@ -97,7 +96,7 @@ const AdminPageAbakusLeaderView = () => {
           appliedWithinDeadline: application.applied_within_deadline,
           priorityText:
             application.text != ""
-              ? replaceQuotationMarks(application.text)
+              ? replaceQuotationMarks(application.text ?? "")
               : "Ingen prioriteringer",
           group: groupApplication.group.name,
           groupApplicationText: replaceQuotationMarks(groupApplication.text),
@@ -129,70 +128,71 @@ const AdminPageAbakusLeaderView = () => {
   } else {
     return (
       <PageWrapper>
-        <PageTitle>Admin Panel</PageTitle>
-        <LinkLink to="/">Gå til forside</LinkLink>
-        <Wrapper>
-          <Statistics>
-            <StatisticsWrapper>
-              <StatisticsName>Søknader åpner</StatisticsName>
-              <FormatTime format="HH:mm:ss EEEE d. MMMM">
-                {admission.open_from}
-              </FormatTime>
-            </StatisticsWrapper>
-            <StatisticsWrapper>
-              <StatisticsName>Søknadsfrist</StatisticsName>
-              <FormatTime format="HH:mm:ss EEEE d. MMMM">
-                {admission.public_deadline}
-              </FormatTime>
-            </StatisticsWrapper>
-            <StatisticsWrapper>
-              <StatisticsName>Redigeringsfrist</StatisticsName>
-              <FormatTime format="HH:mm:ss EEEE d. MMMM">
-                {admission.closed_from}
-              </FormatTime>
-            </StatisticsWrapper>
-          </Statistics>
-          <Statistics>
-            <StatisticsWrapper>
-              <StatisticsName>Antall søkere</StatisticsName>
-              {numApplicants} {numApplicants == 1 ? "søker" : "søkere"}
-            </StatisticsWrapper>
-            <StatisticsWrapper>
-              <StatisticsName>Totalt antall søknader</StatisticsName>
-              {numApplications} {numApplications == 1 ? "søknad" : "søknader"}
-            </StatisticsWrapper>
+        <Statistics>
+          <StatisticsWrapper>
+            <StatisticsName>Søknader åpner</StatisticsName>
+            <FormatTime format="HH:mm:ss EEEE d. MMMM">
+              {admission.open_from}
+            </FormatTime>
+          </StatisticsWrapper>
+          <StatisticsWrapper>
+            <StatisticsName>Søknadsfrist</StatisticsName>
+            <FormatTime format="HH:mm:ss EEEE d. MMMM">
+              {admission.public_deadline}
+            </FormatTime>
+          </StatisticsWrapper>
+          <StatisticsWrapper>
+            <StatisticsName>Redigeringsfrist</StatisticsName>
+            <FormatTime format="HH:mm:ss EEEE d. MMMM">
+              {admission.closed_from}
+            </FormatTime>
+          </StatisticsWrapper>
+        </Statistics>
+        <Statistics>
+          <StatisticsWrapper>
+            <StatisticsName>Antall søkere</StatisticsName>
+            {numApplicants} {numApplicants == 1 ? "søker" : "søkere"}
+          </StatisticsWrapper>
+          <StatisticsWrapper>
+            <StatisticsName>Totalt antall søknader</StatisticsName>
+            {numApplications} {numApplications == 1 ? "søknad" : "søknader"}
+          </StatisticsWrapper>
 
-            <Statistics>
-              {(groups !== undefined ? [...groups] : [])
-                .sort((a, b) => a.name.localeCompare(b.name))
-                .map((group) => (
-                  <GroupStatistics
-                    key={group.pk}
-                    applications={sortedApplications}
-                    groupName={group.name}
-                    groupLogo={group.logo}
-                    selectedGroups={selectedGroups}
-                    setSelectedGroups={setSelectedGroups}
-                  />
-                ))}
-            </Statistics>
+          <Statistics>
+            {(groups !== undefined ? [...groups] : [])
+              .filter(
+                (group) =>
+                  admission.userdata.is_admin ||
+                  group.name === djangoData.user.representative_of_group
+              )
+              .sort((a, b) => a.name.localeCompare(b.name))
+              .map((group) => (
+                <GroupStatistics
+                  key={group.pk}
+                  applications={sortedApplications}
+                  groupName={group.name}
+                  groupLogo={group.logo}
+                  selectedGroups={selectedGroups}
+                  setSelectedGroups={setSelectedGroups}
+                />
+              ))}
           </Statistics>
-          <CSVExport
-            data={csvData}
-            headers={csvHeaders}
-            filename={"applications.csv"}
-            target="_blank"
-          >
-            Eksporter som csv
-          </CSVExport>
-          <AdmissionsContainer applications={filteredApplications} />
-        </Wrapper>
+        </Statistics>
+        <CSVExport
+          data={csvData}
+          headers={csvHeaders}
+          filename={"applications.csv"}
+          target="_blank"
+        >
+          Eksporter som csv
+        </CSVExport>
+        <AdmissionsContainer applications={filteredApplications} />
       </PageWrapper>
     );
   }
 };
 
-export default AdminPageAbakusLeaderView;
+export default ViewApplications;
 
 /** Styles **/
 
@@ -201,11 +201,7 @@ export const PageWrapper = styled.div`
   flex-direction: column;
   align-items: center;
   min-height: 100vh;
-`;
-
-const PageTitle = styled.h1`
-  ${media.handheld`
-    margin: 0 1em 0 1em;
-    font-size: 2.5rem;
-  `};
+  margin: 1em;
+  border: 1px solid rgba(0, 0, 0, 0.09);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.04);
 `;
