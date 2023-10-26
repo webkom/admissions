@@ -1,12 +1,10 @@
 import React from "react";
-import { Form, Field } from "formik";
+import { Form } from "formik";
 import FormatTime from "src/components/Time/FormatTime";
 import Icon from "src/components/Icon";
 import LegoButton from "src/components/LegoButton";
 import ConfirmModal from "src/components/ConfirmModal";
 import Application from "src/containers/GroupApplication/Application";
-import PriorityTextField from "src/routes/ApplicationForm/PriorityTextField";
-import PhoneNumberField from "src/routes/ApplicationForm/PhoneNumberField";
 import { useAdmission, useMyApplication } from "src/query/hooks";
 import { useDeleteMyApplicationMutation } from "src/query/mutations";
 import { useNavigate, useParams } from "react-router-dom";
@@ -35,6 +33,7 @@ import {
   Title,
 } from "src/routes/ApplicationForm/FormStructureStyle";
 import { clearAllDrafts } from "src/utils/draftHelper";
+import JsonFieldParser from "../ApplicationForm/JsonFieldParser";
 
 interface FormStructureProps {
   toggleIsEditing: () => void;
@@ -53,6 +52,10 @@ const FormStructure: React.FC<FormStructureProps> = ({ toggleIsEditing }) => {
 
   if (!myApplication) {
     return <p>Du har ingen innsendte søknader.</p>;
+  }
+
+  if (!admission) {
+    return <p>Kan ikke finne opptaket.</p>;
   }
 
   return (
@@ -79,23 +82,20 @@ const FormStructure: React.FC<FormStructureProps> = ({ toggleIsEditing }) => {
             <Text>
               Du kan
               <StyledSpan bold> fritt endre søknaden</StyledSpan> din frem til{" "}
-              {admission && (
-                <StyledSpan bold red>
-                  <FormatTime format="EEEE d. MMMM">
-                    {admission.public_deadline}
-                  </FormatTime>
-                </StyledSpan>
-              )}{" "}
-              og komiteene vil kun se den siste versjonen.
+              <StyledSpan bold red>
+                <FormatTime format="EEEE d. MMMM">
+                  {admission.public_deadline}
+                </FormatTime>
+              </StyledSpan>
+              .
             </Text>
             <Notice>
               <StyledSpan bold>Merk:</StyledSpan> Oppdateringer etter
-              søknadsfristen kan ikke garanteres å bli sett av komiteen(e) du
-              søker deg til.
+              søknadsfristen kan ikke garanteres å bli sett.
             </Notice>
           </EditInfo>
           <EditActions>
-            {admission && admission.is_open && (
+            {admission.is_open && (
               <LegoButton
                 icon="arrow-forward"
                 iconPrefix="ios"
@@ -138,32 +138,9 @@ const FormStructure: React.FC<FormStructureProps> = ({ toggleIsEditing }) => {
         <SeparatorLine />
         <GeneralInfoSection>
           <SectionHeader>Generelt</SectionHeader>
-          <HelpText>
-            <Icon name="information-circle-outline" />
-            Mobilnummeret vil bli brukt til å kalle deg inn på intervju av
-            komitéledere.
-          </HelpText>
-          <Field
-            name="phoneNumber"
-            component={PhoneNumberField}
-            disabled={true}
-          />
-
-          <HelpText>
-            <Icon name="information-circle-outline" />
-            Kun leder av Abakus kan se det du skriver inn i prioriterings- og
-            kommentarfeltet.
-            <Icon name="information-circle-outline" />
-            Det er ikke sikkert prioriteringslisten vil bli tatt hensyn til.
-            Ikke søk på en komité du ikke ønsker å bli med i.
-          </HelpText>
-          <Field
-            name="priorityText"
-            component={PriorityTextField}
-            label="Prioriteringer, og andre kommentarer"
-            optional
-            disabled={true}
-          />
+          {admission.questions.map((question, index) => (
+            <JsonFieldParser key={index} jsonField={question} disabled />
+          ))}
         </GeneralInfoSection>
         <SeparatorLine />
         <GroupsSection>
@@ -172,8 +149,7 @@ const FormStructure: React.FC<FormStructureProps> = ({ toggleIsEditing }) => {
               <SectionHeader>Komiteer</SectionHeader>
               <HelpText>
                 <Icon name="information-circle-outline" />
-                Her skriver du søknaden til komiteen(e) du har valgt. Hver
-                komité kan kun se søknaden til sin egen komité.
+                Hver komité kan kun se søknaden til sin egen komité.
               </HelpText>
             </div>
           </Sidebar>
@@ -185,16 +161,7 @@ const FormStructure: React.FC<FormStructureProps> = ({ toggleIsEditing }) => {
                 );
                 if (!group) return null;
 
-                return (
-                  <Field
-                    component={Application}
-                    group={group}
-                    name={group.name.toLowerCase()}
-                    responseLabel={group.response_label}
-                    key={group.pk}
-                    disabled={true}
-                  />
-                );
+                return <Application key={group.pk} group={group} disabled />;
               })}
             </Applications>
           ) : (

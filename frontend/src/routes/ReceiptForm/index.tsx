@@ -9,15 +9,7 @@ interface FormProps {
   toggleIsEditing: () => void;
 }
 
-// State of the form
-const FormContainer: React.FC<FormProps> = ({ toggleIsEditing }) => {
-  // This is where the actual form structure comes in.
-  return <FormStructure toggleIsEditing={toggleIsEditing} />;
-};
-
-// Highest order component for application form.
-// Handles form values, submit post and form validation.
-const ApplicationForm: React.FC<FormProps> = ({ toggleIsEditing }) => {
+const ReceiptForm: React.FC<FormProps> = ({ toggleIsEditing }) => {
   const { admissionSlug } = useParams();
   const { data: myApplication, isFetching } = useMyApplication(
     admissionSlug ?? ""
@@ -25,27 +17,26 @@ const ApplicationForm: React.FC<FormProps> = ({ toggleIsEditing }) => {
 
   if (isFetching) return <p>Loading</p>;
 
-  const { phone_number, text, group_applications } = myApplication ?? {};
+  const { responses, group_applications } = myApplication ?? {};
 
-  const groupApplications = group_applications?.reduce(
-    (obj, application) => ({
-      ...obj,
-      [application.group.name.toLowerCase()]: application.text,
+  const groupResponses = group_applications?.reduce(
+    (accumulator, currentValue) => ({
+      ...accumulator,
+      [currentValue.group.name]: currentValue.responses,
     }),
     {}
   );
 
   const initialValues = {
-    priorityText: text,
-    phoneNumber: phone_number,
-    ...groupApplications,
+    responses: responses,
+    groupResponses: groupResponses,
   };
 
   return (
     <Formik initialValues={initialValues} onSubmit={() => undefined}>
-      <FormContainer toggleIsEditing={toggleIsEditing} />
+      <FormStructure toggleIsEditing={toggleIsEditing} />
     </Formik>
   );
 };
 
-export default ApplicationForm;
+export default ReceiptForm;

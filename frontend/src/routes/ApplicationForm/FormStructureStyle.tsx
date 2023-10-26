@@ -140,12 +140,16 @@ export const Text = styled.p`
   `}
 `;
 
-export const HelpText = styled.span`
+type HelpTextProps = {
+  $indented?: boolean;
+};
+
+export const HelpText = styled.span<HelpTextProps>`
   color: rgba(57, 75, 89, 0.75);
   font-size: 0.9rem;
   line-height: 1.2rem;
   display: flex;
-  margin-left: calc(-2.6rem + 4px);
+  margin-left: ${(props) => (props.$indented ? "calc(-2.6rem + 4px)" : "0")};
 
   i {
     color: var(--lego-gray-medium);

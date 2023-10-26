@@ -1,4 +1,4 @@
-import React, { FocusEvent } from "react";
+import React, { FocusEvent, useMemo } from "react";
 import {
   FieldLabel,
   InputValidationFeedback,
@@ -8,6 +8,7 @@ import styled from "styled-components";
 import { media } from "src/styles/mediaQueries";
 import { savePhoneNumberDraft } from "src/utils/draftHelper";
 import { FormikValues } from "formik";
+import { traverseObject } from "src/utils/methods";
 
 type PhoneNumberFieldProps = FormikValues;
 
@@ -16,7 +17,14 @@ const PhoneNumberField: React.FC<PhoneNumberFieldProps> = ({
   form: { touched, errors, handleBlur },
   disabled,
 }) => {
-  const error = touched[name] && errors[name];
+  const fieldError = useMemo(
+    () => traverseObject(name, errors),
+    [name, errors]
+  );
+  const fieldTouched = useMemo(
+    () => traverseObject(name, touched),
+    [name, touched]
+  );
 
   return (
     <Wrapper>
@@ -32,9 +40,9 @@ const PhoneNumberField: React.FC<PhoneNumberFieldProps> = ({
           handleBlur(e);
         }}
         placeholder="Fyll inn mobilnummer..."
-        error={error}
+        error={fieldTouched && fieldError}
       />
-      <InputValidationFeedback error={error} />
+      <InputValidationFeedback error={fieldTouched && fieldError} />
     </Wrapper>
   );
 };

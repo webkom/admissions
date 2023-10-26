@@ -3,19 +3,18 @@ import { getApplictionTextDrafts } from "src/utils/draftHelper";
 import Application, { ApplicationProps } from "./Application";
 
 const GroupApplication = (props: ApplicationProps) => {
-  useEffect(() => {
-    initializeValue();
-  }, []);
+  // useEffect(() => {
+  //   initializeValue();
+  // }, []);
+  // const initializeValue = () => {
+  //   const groupName = props.group.name.toLowerCase();
 
-  const initializeValue = () => {
-    const groupName = props.group.name.toLowerCase();
+  //   const restoredApplicationText = getApplictionTextDrafts();
 
-    const restoredApplicationText = getApplictionTextDrafts();
-
-    if (restoredApplicationText != null && restoredApplicationText[groupName]) {
-      props.form.setFieldValue(groupName, restoredApplicationText[groupName]);
-    }
-  };
+  //   if (restoredApplicationText != null && restoredApplicationText[groupName]) {
+  //     props.form.setFieldValue(groupName, restoredApplicationText[groupName]);
+  //   }
+  // };
 
   return <Application {...props} />;
 };
