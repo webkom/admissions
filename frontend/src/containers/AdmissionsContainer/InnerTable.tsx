@@ -6,11 +6,13 @@ import {
 } from "@tanstack/react-table";
 import { innerColumns } from "./Columns";
 import styled from "styled-components";
+import { JsonFieldInput } from "src/types";
 
 export interface InnerTableValues {
   applicationId: number;
   group: string;
-  text: string;
+  responses: Record<string, string>;
+  groupQuestions?: JsonFieldInput[];
 }
 
 interface AdmissionsInnerTableProps {

@@ -10,17 +10,27 @@ import Name from "./Name";
 import SmallDescription from "./SmallDescription";
 import SmallDescriptionWrapper from "./SmallDescriptionWrapper";
 import Header from "./Header";
-import { Application as UserApplicationInterface } from "src/types";
+import {
+  Admission,
+  Application as UserApplicationInterface,
+  Group,
+} from "src/types";
+import { filterEditableFields } from "src/utils/jsonFieldHelper";
 
-type UserApplicationProps = UserApplicationInterface;
+type UserApplicationProps = {
+  admission: Admission;
+  currentGroup: Group;
+} & UserApplicationInterface;
 
 const UserApplication: React.FC<UserApplicationProps> = ({
+  admission,
+  currentGroup,
   user,
+  responses,
   group_applications,
   created_at,
   updated_at,
   applied_within_deadline,
-  phone_number,
   pk,
 }) => (
   <Wrapper>
@@ -47,9 +57,12 @@ const UserApplication: React.FC<UserApplicationProps> = ({
               <SmallDescription> Brukernavn </SmallDescription>
               {user.username}
             </SmallDescriptionWrapper>
-            <SmallDescriptionWrapper>
-              <SmallDescription> Tlf. </SmallDescription> {phone_number}
-            </SmallDescriptionWrapper>
+            {filterEditableFields(admission.questions).map((question) => (
+              <SmallDescriptionWrapper key={question.id}>
+                <SmallDescription>{question.name} </SmallDescription>
+                {responses[question.id]}
+              </SmallDescriptionWrapper>
+            ))}
             <SmallDescriptionWrapper>
               <SmallDescription> E-mail </SmallDescription> {user.email}
             </SmallDescriptionWrapper>
@@ -72,7 +85,8 @@ const UserApplication: React.FC<UserApplicationProps> = ({
             <Application
               applicationId={pk}
               key={user.username + "-" + groupApplication.group.name}
-              text={groupApplication.text}
+              questions={currentGroup.questions}
+              responses={groupApplication.responses}
             />
           ))}
         </div>
