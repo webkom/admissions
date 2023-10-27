@@ -35,6 +35,7 @@ const queryClient = new QueryClient({
       refetchOnWindowFocus: false,
       queryFn: defaultQueryFn,
       staleTime: 60000,
+      retry: false,
     },
   },
 });
@@ -68,7 +69,14 @@ const AppRoutes = () =>
         </RequireAuth>
       ),
     },
-    { path: ":admissionSlug/*", element: <ApplicationPortal /> },
+    {
+      path: ":admissionSlug/*",
+      element: (
+        <RequireAuth auth={!!djangoData.user.full_name}>
+          <ApplicationPortal />
+        </RequireAuth>
+      ),
+    },
     { path: "*", element: <NotFoundPage /> },
   ]);
 
