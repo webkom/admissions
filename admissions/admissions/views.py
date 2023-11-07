@@ -7,6 +7,8 @@ from rest_framework import permissions, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
 
+from admissions.utils.email import send_message
+
 from admissions.admissions import constants
 from admissions.admissions.models import (
     Admission,
@@ -198,7 +200,14 @@ class ApplicationViewSet(viewsets.ModelViewSet):
             elif request.method == "DELETE":
                 instance = UserApplication.objects.get(
                     user=request.user, admission__slug=admission_slug
-                ).delete()
+                )
+                serializer = self.get_serializer(instance)
+                applied_groups = [group.get("group").get("pk") for group in serializer.data.get("group_applications")]
+                recruiters = Membership.objects.filter(Q(role=constants.RECRUITING) | Q(role=constants.LEADER), group__in=applied_groups)
+                admission_slug = self.kwargs.get("admission_slug", None)
+                admission = Admission.objects.get(slug=admission_slug)
+                send_message(admission, recruiters)
+                instance.delete()
                 return Response(status=status.HTTP_204_NO_CONTENT)
         except UserApplication.DoesNotExist:
             # HTTP 204 No Content

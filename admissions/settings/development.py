@@ -33,6 +33,12 @@ DATABASES = {
 
 API_URL = "/api"
 
+# E-mail in console
+EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
+# E-mail in local SMTP server
+# EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
+# EMAIL_HOST = '0.0.0.0'
+# EMAIL_PORT = 1025
 
 # Uncomment app config and middleware config to enable debug toolbar
 # APP CONFIGURATION ============================================================
