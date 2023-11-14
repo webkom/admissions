@@ -25,6 +25,7 @@ from admissions.admissions.serializers import (
     GroupSerializer,
     UserApplicationSerializer,
 )
+from admissions.utils.email import send_message
 
 from .authentication import SessionAuthentication
 from .permissions import (
@@ -198,7 +199,27 @@ class ApplicationViewSet(viewsets.ModelViewSet):
             elif request.method == "DELETE":
                 instance = UserApplication.objects.get(
                     user=request.user, admission__slug=admission_slug
-                ).delete()
+                )
+                serializer = self.get_serializer(instance)
+                applied_groups = [
+                    (group.get("group").get("pk"), group.get("group").get("name"))
+                    for group in serializer.data.get("group_applications")
+                ]
+                recruiters = {}
+                for group_pk, group_name in applied_groups:
+                    group_recruiters = Membership.objects.filter(
+                        Q(role=constants.RECRUITING) | Q(role=constants.LEADER),
+                        group=group_pk,
+                    )
+                    recruiters[group_name] = [
+                        recruiter.user.email for recruiter in group_recruiters
+                    ]
+
+                admission_slug = self.kwargs.get("admission_slug", None)
+                admission = Admission.objects.get(slug=admission_slug)
+                for group, group_recruiters in recruiters.items():
+                    send_message(admission, group, group_recruiters)
+                instance.delete()
                 return Response(status=status.HTTP_204_NO_CONTENT)
         except UserApplication.DoesNotExist:
             # HTTP 204 No Content

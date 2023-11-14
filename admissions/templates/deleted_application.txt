@@ -1,0 +1,7 @@
+{% extends "base.txt" %}
+
+{% block content %}
+En søknad til gruppe {{ group }} i opptak {{ admission_title }} har blitt slettet.
+
+For mer informasjon, gå til opptakssiden på https://opptak.abakus.no/.
+{% endblock %}

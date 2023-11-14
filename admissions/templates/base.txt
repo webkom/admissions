@@ -1,0 +1,1 @@
+{% block alert %}{% endblock %}{% block content %}{% endblock %}
