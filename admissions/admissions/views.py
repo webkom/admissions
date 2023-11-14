@@ -7,8 +7,6 @@ from rest_framework import permissions, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
 
-from admissions.utils.email import send_message
-
 from admissions.admissions import constants
 from admissions.admissions.models import (
     Admission,
@@ -27,6 +25,7 @@ from admissions.admissions.serializers import (
     GroupSerializer,
     UserApplicationSerializer,
 )
+from admissions.utils.email import send_message
 
 from .authentication import SessionAuthentication
 from .permissions import (
@@ -202,8 +201,14 @@ class ApplicationViewSet(viewsets.ModelViewSet):
                     user=request.user, admission__slug=admission_slug
                 )
                 serializer = self.get_serializer(instance)
-                applied_groups = [group.get("group").get("pk") for group in serializer.data.get("group_applications")]
-                recruiters = Membership.objects.filter(Q(role=constants.RECRUITING) | Q(role=constants.LEADER), group__in=applied_groups)
+                applied_groups = [
+                    group.get("group").get("pk")
+                    for group in serializer.data.get("group_applications")
+                ]
+                recruiters = Membership.objects.filter(
+                    Q(role=constants.RECRUITING) | Q(role=constants.LEADER),
+                    group__in=applied_groups,
+                )
                 admission_slug = self.kwargs.get("admission_slug", None)
                 admission = Admission.objects.get(slug=admission_slug)
                 send_message(admission, recruiters)

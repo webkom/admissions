@@ -1,5 +1,5 @@
-from django.core.mail import EmailMultiAlternatives
 from django.core import mail
+from django.core.mail import EmailMultiAlternatives
 from django.template.loader import render_to_string
 
 from premailer import transform
@@ -21,11 +21,10 @@ def send_message(admission_title, recipients):
     context = {
         "admission_title": admission_title,
         "system_name": "",
-        "title": "Søknad slettet"
+        "title": "Søknad slettet",
     }
     subject = "Søknad til opptak slettet"
     from_email = "Abakus <no-reply@abakus.no>"
-
 
     recipient_list = get_recipients(recipients)
     plain_body = render_to_string(plain_template, context)
