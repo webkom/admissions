@@ -294,16 +294,20 @@ class ApplicationCreateUpdateSerializer(serializers.HyperlinkedModelSerializer):
 
         # The code smell is strong with this one, young padawan
         applications = self.initial_data.pop("applications")
-        groups = [Group.objects.get(name__iexact=group) for group in applications.keys()]
-        removed_applications = GroupApplication.objects.filter(application=user_application).exclude(group__in=groups)
+        groups = [
+            Group.objects.get(name__iexact=group) for group in applications.keys()
+        ]
+        removed_applications = GroupApplication.objects.filter(
+            application=user_application
+        ).exclude(group__in=groups)
         removed_groups = [application.group for application in removed_applications]
         removed_applications.delete()
 
         for group in removed_groups:
             group_recruiters = Membership.objects.filter(
-                        Q(role=constants.RECRUITING) | Q(role=constants.LEADER),
-                        group=group.pk,
-                    )
+                Q(role=constants.RECRUITING) | Q(role=constants.LEADER),
+                group=group.pk,
+            )
             recruiters = [recruiter.user.email for recruiter in group_recruiters]
             send_message(admission, group.name, recruiters)
 
