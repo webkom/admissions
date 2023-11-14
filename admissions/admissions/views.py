@@ -206,13 +206,15 @@ class ApplicationViewSet(viewsets.ModelViewSet):
                     for group in serializer.data.get("group_applications")
                 ]
                 recruiters = {}
-                for (group_pk, group_name) in applied_groups:
+                for group_pk, group_name in applied_groups:
                     group_recruiters = Membership.objects.filter(
                         Q(role=constants.RECRUITING) | Q(role=constants.LEADER),
                         group=group_pk,
                     )
-                    recruiters[group_name] = [recruiter.user.email for recruiter in group_recruiters]
-                
+                    recruiters[group_name] = [
+                        recruiter.user.email for recruiter in group_recruiters
+                    ]
+
                 admission_slug = self.kwargs.get("admission_slug", None)
                 admission = Admission.objects.get(slug=admission_slug)
                 for group, group_recruiters in recruiters.items():
