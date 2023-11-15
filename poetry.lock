@@ -565,20 +565,20 @@ Django = ">=3.2"
 
 [[package]]
 name = "django-vite"
-version = "2.1.0"
-description = "Integration of ViteJS in a Django project."
+version = "3.0.0"
+description = "Integration of Vite in a Django project."
 optional = false
 python-versions = "*"
 files = [
-    {file = "django-vite-2.1.0.tar.gz", hash = "sha256:fd3777035a9802be6b77868a3c94d12dc1a9e95f6dbe9b8a56996abac720df6b"},
-    {file = "django_vite-2.1.0-py3-none-any.whl", hash = "sha256:78e24920f7e18f89fdff44708cd6cb91fc0776472800f2b4535e1a017967d266"},
+    {file = "django-vite-3.0.0.tar.gz", hash = "sha256:a2326f14d7aeba29e2db5ac4bcf27b0437810590d25f1b99a7fd20c5d1d312a2"},
+    {file = "django_vite-3.0.0-py3-none-any.whl", hash = "sha256:01407f806590872735f4ed87c79684e063942dba51838fc13f9056ebff10940c"},
 ]
 
 [package.dependencies]
-Django = ">=1.11"
+Django = ">=3.2"
 
 [package.extras]
-dev = ["black", "flake8"]
+dev = ["black"]
 
 [[package]]
 name = "djangorestframework"
@@ -1587,4 +1587,4 @@ files = [
 [metadata]
 lock-version = "2.0"
 python-versions = "^3.9"
-content-hash = "f8b33ee32bd05c927bd78f7a91ecb79dd1775e879283ecfa1b2ae764e6f4e2f2"
+content-hash = "dce27b8f39ed7d406a8e8ae63ee049363a7c7b0c32193fcce22c1529e74a40af"
