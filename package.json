@@ -29,7 +29,7 @@
     "react": "^18.2.0",
     "react-csv": "^2.2.2",
     "react-dom": "^18.2.0",
-    "react-router-dom": "6.11.1",
+    "react-router-dom": "6.20.0",
     "react-textarea-autosize": "^8.4.1",
     "styled-components": "5.3.10"
   },
