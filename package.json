@@ -15,7 +15,9 @@
     "lint": "yarn lint:prettier && yarn lint:js && yarn lint:css",
     "lint:js": "eslint '**/*.{ts,tsx}' --ignore-path .prettierignore",
     "lint:css": "stylelint './frontend/**/*.css'",
-    "types": "tsc"
+    "types": "tsc",
+    "cypress:open": "cypress open",
+    "cypress:run": "cypress run"
   },
   "dependencies": {
     "@babel/polyfill": "^7.0.0",
@@ -44,7 +46,9 @@
     "@typescript-eslint/eslint-plugin": "^5.61.0",
     "@typescript-eslint/parser": "^5.62.0",
     "@vitejs/plugin-react": "^4.0.2",
+    "cypress": "^13.6.2",
     "eslint": "^8.42.0",
+    "eslint-plugin-cypress": "^2.15.1",
     "eslint-plugin-react": "^7.32.2",
     "prettier": "2.8.8",
     "stylelint": "^15.10.1",

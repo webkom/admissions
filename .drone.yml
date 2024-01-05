@@ -7,7 +7,7 @@ steps:
   - name: build-frontend
     image: node:16
     when:
-      event: push
+      event: [push]
     environment:
       LANG: C.UTF-8
     commands:
@@ -18,7 +18,7 @@ steps:
   - name: typescript
     image: node:16
     when:
-      event: push
+      event: [push]
     environment:
       LANG: C.UTF-8
     depends_on:
@@ -27,9 +27,9 @@ steps:
       - yarn types
 
   - name: missing-migrations
-    image: abakus/lego-testbase:python3.9
+    image: abakus/lego-testbase:poetry
     when:
-      event: push
+      event: [push]
     environment:
       LANG: C.UTF-8
       DATABASE: database
@@ -38,9 +38,9 @@ steps:
       - tox -e missing-migrations
 
   - name: tests
-    image: abakus/lego-testbase:python3.9
+    image: abakus/lego-testbase:poetry
     when:
-      event: push
+      event: [push]
     environment:
       LANG: C.UTF-8
       DATABASE: database
@@ -48,28 +48,28 @@ steps:
       - tox -e tests
 
   - name: isort
-    image: abakus/lego-testbase:python3.9
+    image: abakus/lego-testbase:poetry
     when:
-      event: push
+      event: [push]
     environment:
       LANG: C.UTF-8
     commands:
       - tox -e isort
 
   - name: black
-    image: abakus/lego-testbase:python3.9
-    pull: true
+    image: abakus/lego-testbase:poetry
+    pull: if-not-exists
     when:
-      event: push
+      event: [push]
     environment:
       LANG: C.UTF-8
     commands:
       - tox -e black
 
   - name: coverage
-    image: abakus/lego-testbase:python3.9
+    image: abakus/lego-testbase:poetry
     when:
-      event: push
+      event: [push]
     depends_on:
       - tests
     environment:
@@ -84,8 +84,8 @@ steps:
       branch:
         - staging
         - prod
-      status: success
-      event: push
+      status: [success]
+      event: [push]
     depends_on:
       - build-frontend
       - missing-migrations
@@ -104,7 +104,7 @@ steps:
         - latest
         - version-${DRONE_COMMIT_SHA:0:7}
       build_args:
-        RELEASE: ${DRONE_BRANCH}-${DRONE_COMMIT_SHA:0:7}
+        - "RELEASE=${DRONE_BRANCH}-${DRONE_COMMIT_SHA:0:7}"
   
   - name: Deploy staging
     image: abakus/ansible-deploy
@@ -113,8 +113,8 @@ steps:
     when:
       branch:
         - staging
-      event: push
-      status: success
+      event: [push]
+      status: [success]
     settings:
       playbook: /infrastructure/esas/playbooks/deploy.yml
       repository:
@@ -136,8 +136,8 @@ steps:
     when:
       branch:
         - prod
-      event: push
-      status: success
+      event: [push]
+      status: [success]
     settings:
       playbook: /infrastructure/esas/playbooks/deploy.yml
       repository:
