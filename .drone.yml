@@ -4,67 +4,60 @@ type: docker
 name: default
 
 steps:
-  - name: build-frontend
+  - name: yarn-install
     image: node:16
     when:
       event: [push]
-    environment:
-      LANG: C.UTF-8
     commands:
       - yarn
+  
+  - name: lint-frontend
+    image: node:16
+    when:
+      event: [push]
+    depends_on:
+      - yarn-install
+    commands:
       - yarn lint
-      - yarn build
 
   - name: typescript
     image: node:16
     when:
       event: [push]
-    environment:
-      LANG: C.UTF-8
     depends_on:
-      - build-frontend
+      - yarn-install
     commands:
       - yarn types
 
+  - name: build-frontend
+    image: node:16
+    when:
+      event: [push]
+    depends_on:
+      - yarn-install
+    environment:
+      LANG: C.UTF-8
+    commands:
+      - yarn build
+  
   - name: missing-migrations
     image: abakus/lego-testbase:poetry
     when:
       event: [push]
     environment:
-      LANG: C.UTF-8
       DATABASE: database
     commands:
       - make ci_settings
       - tox -e missing-migrations
-
+  
   - name: tests
     image: abakus/lego-testbase:poetry
     when:
       event: [push]
     environment:
-      LANG: C.UTF-8
       DATABASE: database
     commands:
       - tox -e tests
-
-  - name: isort
-    image: abakus/lego-testbase:poetry
-    when:
-      event: [push]
-    environment:
-      LANG: C.UTF-8
-    commands:
-      - tox -e isort
-
-  - name: black
-    image: abakus/lego-testbase:poetry
-    pull: if-not-exists
-    when:
-      event: [push]
-    environment:
-      LANG: C.UTF-8
-    commands:
-      - tox -e black
 
   - name: coverage
     image: abakus/lego-testbase:poetry
@@ -73,11 +66,76 @@ steps:
     depends_on:
       - tests
     environment:
-      LANG: C.UTF-8
       DATABASE: database
     commands:
       - tox -e coverage
 
+  - name: isort
+    image: abakus/lego-testbase:poetry
+    when:
+      event: [push]
+    commands:
+      - tox -e isort
+  
+  - name: black
+    image: abakus/lego-testbase:poetry
+    when:
+      event: [push]
+    commands:
+      - tox -e black
+  
+  - name: cypress-install
+    image: node:16
+    when:
+      event: [push]
+    depends_on:
+      - lint-frontend
+      - typescript
+      - build-frontend
+      - missing-migrations
+      - coverage
+      - isort
+      - black
+    environment:
+      CYPRESS_CACHE_FOLDER: /drone/src/.cypress_cache
+    commands:
+      - yarn cypress install
+
+  - name: cypress-backend
+    image: abakus/lego-testbase:python3.11
+    detach: true
+    when:
+      event: [push]
+    depends_on:
+      - build-frontend
+    environment:
+      LANG: C.UTF-8
+      DATABASE: database
+      FRONTEND_URL: "https://localhost:5000"
+      API_URL: "/api"
+    commands:
+    - make ci_settings
+    - poetry install
+    - poetry run python manage.py collectstatic --noinput
+    - poetry run python manage.py migrate
+    - poetry run python manage.py create_admission
+    - poetry run python manage.py runserver 0.0.0.0:5000
+
+  - name: cypress
+    image: cypress/browsers:node-20.9.0-chrome-118.0.5993.88-1-ff-118.0.2-edge-118.0.2088.46-1
+    when:
+      event: [push]
+    depends_on:
+      - cypress-install
+    environment:
+      CYPRESS_BASE_URL: http://cypress-backend:5000
+      CYPRESS_CACHE_FOLDER: /drone/src/.cypress_cache
+      CYPRESS_RECORD_KEY:
+        from_secret: cypress_record_key
+    commands:
+      - ./wait-for-it.sh -t 420 cypress-backend:5000
+      - yarn cypress:run --record
+  
   - name: docker
     image: plugins/docker
     when:
@@ -87,12 +145,7 @@ steps:
       status: [success]
       event: [push]
     depends_on:
-      - build-frontend
-      - missing-migrations
-      - tests
-      - isort
-      - black
-      - coverage
+      - cypress
     settings:
       registry: https://registry.webkom.dev
       repo: registry.webkom.dev/webkom/admissions
