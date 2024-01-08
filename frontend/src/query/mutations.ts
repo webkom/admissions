@@ -29,7 +29,7 @@ export const useAdminCreateAdmission = () => {
     AxiosError,
     CreateAdmissionProps
   >(
-    async ({ admission }: CreateAdmissionProps) =>
+    async ({ admission }) =>
       (await apiClient.post("/admin/admission/", admission)).data,
     {
       onSuccess: () => {
@@ -50,8 +50,30 @@ export const useAdminUpdateAdmission = () => {
     AxiosError,
     UpdateAdmissionProps
   >(
-    async ({ slug, admission }: UpdateAdmissionProps) =>
+    async ({ slug, admission }) =>
       (await apiClient.patch(`/admin/admission/${slug}/`, admission)).data,
+    {
+      onSuccess: (_, variables) => {
+        queryClient.invalidateQueries([`/admin/admission/`]);
+        queryClient.invalidateQueries([`/admin/admission/${variables.slug}/`]);
+      },
+    }
+  );
+};
+
+interface DeleteAdmissionProps {
+  slug: string;
+}
+
+export const useAdminDeleteAdmission = () => {
+  const queryClient = useQueryClient();
+  return useMutation<
+    AdmissionMutationResponse,
+    AxiosError,
+    DeleteAdmissionProps
+  >(
+    async ({ slug }) =>
+      (await apiClient.delete(`/admin/admission/${slug}/`)).data,
     {
       onSuccess: (_, variables) => {
         queryClient.invalidateQueries([`/admin/admission/`]);

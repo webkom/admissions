@@ -1,7 +1,10 @@
+from datetime import datetime
+
 from django.conf import settings
 from django.contrib.auth.models import User
 from django.db.models import Prefetch, Q
 from django.http import HttpResponse
+from django.utils import timezone
 from django.views.generic.base import TemplateView
 from rest_framework import permissions, status, viewsets
 from rest_framework.decorators import action
@@ -232,7 +235,7 @@ class AdminAdmissionViewSet(viewsets.ModelViewSet):
         permissions.IsAuthenticated,
         IsWebkom | (IsStaff & IsCreatorOfObject),
     ]
-    http_method_names = ["get", "post", "patch"]
+    http_method_names = ["get", "post", "patch", "delete"]
     lookup_field = "slug"
 
     def get_serializer_class(self):
@@ -249,3 +252,12 @@ class AdminAdmissionViewSet(viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         serializer.save(created_by=self.request.user)
+
+    def destroy(self, request, *args, **kwargs):
+        admission = self.get_object()
+        if admission.closed_from > timezone.make_aware(datetime.now()):
+            return Response(
+                data={"message": "Opptaket kan ikke slettes før det har stengt"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        return super().destroy(request, *args, **kwargs)

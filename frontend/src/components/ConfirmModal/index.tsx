@@ -18,6 +18,8 @@ interface ConfirmModalProps {
   title: string;
   message: string;
   Component?: JSXElementConstructor<SubComponentProps>;
+  cancelText?: string;
+  confirmText?: string;
 }
 
 const ConfirmModal: React.FC<ConfirmModalProps> = ({
@@ -25,6 +27,8 @@ const ConfirmModal: React.FC<ConfirmModalProps> = ({
   title,
   message,
   Component,
+  cancelText = "Avbryt",
+  confirmText = "Ja",
 }) => {
   const [isOpen, setIsOpen] = useState(false);
 
@@ -52,9 +56,9 @@ const ConfirmModal: React.FC<ConfirmModalProps> = ({
             border="1px solid darkgray"
             onClick={hideModal}
           >
-            Avbryt
+            {cancelText}
           </ActionButton>
-          <ActionButton onClick={confirmAction}>Ja</ActionButton>
+          <ActionButton onClick={confirmAction}>{confirmText}</ActionButton>
         </ButtonGroup>
       </ConfirmBox>
     </Overlay>

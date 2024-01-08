@@ -3,12 +3,14 @@ import { useFormik } from "formik";
 import { DateTime } from "luxon";
 import React, { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
+import ConfirmModal from "src/components/ConfirmModal";
 import LegoButton from "src/components/LegoButton";
 import { useAdminAdmission } from "src/query/hooks";
 import {
   AdmissionMutationResponse,
   MutationAdmission,
   useAdminCreateAdmission,
+  useAdminDeleteAdmission,
   useAdminUpdateAdmission,
 } from "src/query/mutations";
 import { toggleFromArray } from "src/utils/methods";
@@ -20,11 +22,12 @@ interface ReturnedData {
   message: string;
 }
 
-const formatDateString = (dateString?: string) =>
+const formatDateString = (dateString?: string): string =>
   formatDate(DateTime.fromISO(dateString ?? ""));
-const formatCurrentDate = () => formatDate(DateTime.now());
-const formatDate = (date: DateTime) => date.toFormat("yyyy-MM-dd'T'HH:mm:ss");
-const localTimeStringToTimezoned = (dateString: string) =>
+const formatCurrentDate = (): string => formatDate(DateTime.now());
+const formatDate = (date: DateTime): string =>
+  date.toFormat("yyyy-MM-dd'T'HH:mm:ss");
+const localTimeStringToTimezoned = (dateString: string): string | null =>
   DateTime.fromISO(dateString, {
     zone: "local",
   }).toISO({ includeOffset: true });
@@ -32,13 +35,15 @@ const localTimeStringToTimezoned = (dateString: string) =>
 const CreateAdmission: React.FC = () => {
   const navigate = useNavigate();
   const { admissionSlug } = useParams();
-  const { data: admission } = useAdminAdmission(
-    admissionSlug ?? "",
-    admissionSlug !== undefined
-  );
+  const {
+    data: admission,
+    isLoading,
+    error,
+  } = useAdminAdmission(admissionSlug ?? "", admissionSlug !== undefined);
 
   const createAdmission = useAdminCreateAdmission();
   const updateAdmission = useAdminUpdateAdmission();
+  const deleteAdmission = useAdminDeleteAdmission();
 
   const [returnedData, setReturnedData] = useState<ReturnedData>();
 
@@ -105,6 +110,11 @@ const CreateAdmission: React.FC = () => {
     },
   });
 
+  const handleDeleteAdmission = () => {
+    if (!admission) return;
+    deleteAdmission.mutate({ slug: admission.slug });
+  };
+
   useEffect(() => {
     if (admission) {
       formik.setValues({
@@ -119,6 +129,10 @@ const CreateAdmission: React.FC = () => {
       });
     }
   }, [admission]);
+
+  if ((!isNew && !admission && !isLoading) || error?.response?.status === 404) {
+    return <p>Fant ikke opptaket {admissionSlug}</p>;
+  }
 
   return (
     <form onSubmit={formik.handleSubmit}>
@@ -233,9 +247,39 @@ const CreateAdmission: React.FC = () => {
           </ResultText>
         </FormGroup>
       )}
-      <LegoButton type="submit">
-        {isNew ? "Opprett opptak" : "Oppdater opptak"}
-      </LegoButton>
+      <FormGroup>
+        <InputWrapper>
+          <LegoButton type="submit" disabled={!formik.isValid}>
+            {isNew ? "Opprett opptak" : "Lagre endringer"}
+          </LegoButton>
+        </InputWrapper>
+        {!isNew && (
+          <InputWrapper>
+            <ConfirmModal
+              title="Slett opptak"
+              Component={({ onClick }) => (
+                <LegoButton
+                  size="small"
+                  disabled={
+                    DateTime.fromISO(admission?.closed_from ?? "")
+                      .diffNow()
+                      .valueOf() > 0
+                  }
+                  onClick={onClick}
+                >
+                  Slett opptak
+                </LegoButton>
+              )}
+              message="Er du sikker på at du vil slette opptaket?"
+              cancelText="Nei"
+              onConfirm={handleDeleteAdmission}
+            />
+            <InputDescription>
+              Et opptak kan kun slettes etter det har stengt
+            </InputDescription>
+          </InputWrapper>
+        )}
+      </FormGroup>
     </form>
   );
 };
@@ -266,6 +310,8 @@ const InputTitle = styled.p`
 
 const InputDescription = styled.span`
   display: block;
+  line-height: 1.5;
+  margin-bottom: 0.5em;
 `;
 
 const Input = styled.input`

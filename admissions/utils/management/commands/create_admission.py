@@ -25,13 +25,12 @@ class Command(BaseCommand):
 
         admission = Admission.objects.create(
             title=f"Opptak {base_date.year}",
+            slug=f"opptak-{base_date.year}",
             open_from=open_date,
             public_deadline=public_deadline_date,
             closed_from=closed_from_date,
         )
 
-        groups = Group.objects.all()
-        for group in groups:
-            group.admissions.add(admission)
+        admission.groups.set(Group.objects.all())
 
         self.stdout.write(self.style.SUCCESS("Successfully created admission"))
