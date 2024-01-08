@@ -30,7 +30,11 @@ class LegoUser(AbstractUser):
         """
         Return whether the user is a member of the webkom-group or not
         """
-        webkom = Group.objects.get(name=constants.WEBKOM_GROUPNAME)
+        try:
+            webkom = Group.objects.get(name=constants.WEBKOM_GROUPNAME)
+        except Group.DoesNotExist:
+            # Allow the project to run without a group named "webkom" initialized
+            return False
         return Membership.objects.filter(user=self, group=webkom).exists()
 
 

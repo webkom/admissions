@@ -1,46 +1,20 @@
-from datetime import timedelta
-
 from django.urls import reverse
-from django.utils import timezone
 from rest_framework import status
 from rest_framework.test import APITestCase
 
 from admissions.admissions.constants import LEADER, MEMBER, RECRUITING
 from admissions.admissions.models import (
-    Admission,
     Group,
     GroupApplication,
     LegoUser,
     Membership,
     UserApplication,
 )
-
-admission_slug = "opptak"
-
-
-def fake_timedelta(days=0):
-    base_date = timezone.now().replace(hour=12, minute=15, second=0, microsecond=0)
-
-    return base_date + timedelta(days=days)
-
-
-def create_admission():
-    global admission_slug
-    base_date = timezone.now().replace(hour=23, minute=59, second=59, microsecond=59)
-
-    open_date = base_date.replace(
-        hour=12, minute=15, second=0, microsecond=0
-    ) - timedelta(days=1)
-    public_deadline_date = base_date + timedelta(days=7)
-    closed_from_date = base_date + timedelta(days=9)
-
-    return Admission.objects.create(
-        slug=admission_slug,
-        title=f"Opptak {base_date.year}",
-        open_from=open_date,
-        public_deadline=public_deadline_date,
-        closed_from=closed_from_date,
-    )
+from admissions.admissions.tests.utils import (
+    DEFAULT_ADMISSION_SLUG,
+    create_admission,
+    fake_timedelta,
+)
 
 
 class EditGroupTestCase(APITestCase):
@@ -199,8 +173,8 @@ class EditAdmissionTestCase(APITestCase):
 
 class CreateApplicationTestCase(APITestCase):
     def setUp(self):
-        global admission_slug
-        self.admission_slug = admission_slug
+        global DEFAULT_ADMISSION_SLUG
+        self.admission_slug = DEFAULT_ADMISSION_SLUG
         # Create admission and group
         self.admission = create_admission()
         self.webkom = Group.objects.create(name="Webkom")
@@ -296,8 +270,8 @@ class CreateApplicationTestCase(APITestCase):
 
 class ListApplicationsTestCase(APITestCase):
     def setUp(self):
-        global admission_slug
-        self.admission_slug = admission_slug
+        global DEFAULT_ADMISSION_SLUG
+        self.admission_slug = DEFAULT_ADMISSION_SLUG
 
         self.pleb = LegoUser.objects.create()
         leader_group = Group.objects.create(name="Abakus-Leder")
@@ -554,8 +528,8 @@ class DeleteGroupApplicationsTestCase(APITestCase):
     """
 
     def setUp(self):
-        global admission_slug
-        self.admission_slug = admission_slug
+        global DEFAULT_ADMISSION_SLUG
+        self.admission_slug = DEFAULT_ADMISSION_SLUG
         self.admission = create_admission()
 
         self.webkom_leader = LegoUser.objects.create(username="webkomleader")
