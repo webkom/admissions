@@ -53,15 +53,18 @@ class Group(models.Model):
 
 
 class Admission(models.Model):
-    title = models.CharField(max_length=255, unique=True)
-    slug = models.SlugField(max_length=200, unique=True, null=False)
-    description = models.TextField(default="", blank=True)
-    open_from = models.DateTimeField()
-    public_deadline = models.DateTimeField()
-    closed_from = models.DateTimeField()
     created_by = models.ForeignKey(
         LegoUser, null=True, related_name="admissions", on_delete=models.CASCADE
     )
+    title = models.CharField(max_length=255, unique=True)
+    slug = models.SlugField(max_length=200, unique=True, null=False)
+    description = models.TextField(default="", blank=True)
+    header_fields = models.JSONField(default=list, null=True)
+
+    open_from = models.DateTimeField()
+    public_deadline = models.DateTimeField()
+    closed_from = models.DateTimeField()
+
     groups = models.ManyToManyField(Group, through="AdmissionGroup")
     admin_groups = models.ManyToManyField(Group, related_name="admin_groups")
 
@@ -100,6 +103,7 @@ class UserApplication(TimeStampModel):
     user = models.ForeignKey(LegoUser, on_delete=models.CASCADE)
     text = models.TextField(blank=True)
     phone_number = models.CharField(max_length=20)
+    header_fields_response = models.JSONField(default=None, null=True)
 
     class Meta:
         constraints = [

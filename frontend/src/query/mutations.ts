@@ -1,5 +1,6 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { AxiosError } from "axios";
+import { FieldModel } from "src/utils/jsonFields";
 import { apiClient } from "../utils/callApi";
 
 // Admin mutations
@@ -8,6 +9,7 @@ export interface MutationAdmission {
   title: string;
   slug?: string;
   description: string;
+  header_fields: FieldModel[];
   open_from: string;
   public_deadline: string;
   closed_from: string;

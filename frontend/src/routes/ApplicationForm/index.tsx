@@ -13,12 +13,14 @@ import {
 } from "src/utils/draftHelper";
 import { Admission, Application, Group } from "src/types";
 import FormContainer from "./FormContainer";
+import { InputFieldModel } from "src/utils/jsonFields";
 
 export type SelectedGroups = { [key: string]: boolean };
 
 export type FormValues = {
   priorityText: string;
   phoneNumber: string;
+  headerFields: { [fieldId: string]: string };
   groups: { [groupName: string]: string };
 };
 
@@ -33,8 +35,9 @@ export type SharedApplicationProps = {
 
 const generateInitialValues: (
   selectedGroups: SelectedGroups,
+  admission?: Admission,
   myApplication?: Application
-) => FormValues = (selectedGroups, myApplication) => {
+) => FormValues = (selectedGroups, admission, myApplication) => {
   const {
     text = getPriorityTextDraft(),
     phone_number: phoneNumber = getPhoneNumberDraft(),
@@ -44,6 +47,7 @@ const generateInitialValues: (
   const initialValues: FormValues = {
     priorityText: text,
     phoneNumber,
+    headerFields: {},
     groups: {},
   };
 
@@ -51,6 +55,17 @@ const generateInitialValues: (
   Object.keys(selectedGroups).forEach((group) => {
     formattedGroupApplications[group] = "";
   });
+
+  const blankHeaderFields = (admission?.header_fields as InputFieldModel[])
+    .filter((field) => "id" in field)
+    .reduce(
+      (obj, field) => ({
+        ...obj,
+        [field.id]: "",
+      }),
+      {}
+    );
+  initialValues.headerFields = blankHeaderFields;
 
   // The group applications are already formatted in the object form Formik likes
   if (!Array.isArray(groupApplications)) {
@@ -67,14 +82,14 @@ const generateInitialValues: (
       application.text;
   });
 
-  return {
-    priorityText: text,
-    phoneNumber,
-    groups: formattedGroupApplications,
-  };
+  initialValues.groups = formattedGroupApplications;
+  return initialValues;
 };
 
-const validationSchema = (selectedGroups: SelectedGroups) => {
+const validationSchema = (
+  selectedGroups: SelectedGroups,
+  admission?: Admission
+) => {
   return Yup.lazy(() => {
     // Iterate over all selected groups and add them to the required schema
     const selectedGroupsSchema: { [x: string]: Yup.StringSchema } = {};
@@ -87,6 +102,16 @@ const validationSchema = (selectedGroups: SelectedGroups) => {
           ))
       );
 
+    const headerFieldsSchema = (admission?.header_fields as InputFieldModel[])
+      .filter((field) => "id" in field && field.required)
+      .reduce(
+        (obj, field) => ({
+          ...obj,
+          [field.id]: Yup.string().required(`${field.title} må fylles ut`),
+        }),
+        {}
+      );
+
     return Yup.object().shape({
       phoneNumber: Yup.string()
         .matches(
@@ -95,6 +120,7 @@ const validationSchema = (selectedGroups: SelectedGroups) => {
         )
         .required("Skriv inn et gyldig norsk telefonnummer"),
       priorityText: Yup.string().optional(),
+      headerFields: Yup.object().shape(headerFieldsSchema),
       groups: Yup.object().shape(selectedGroupsSchema),
     });
   });
@@ -147,10 +173,14 @@ const ApplicationForm: React.FC<ApplicationFormProps> = ({
 
   return (
     <Formik<FormValues>
-      initialValues={generateInitialValues(selectedGroups, myApplication)}
+      initialValues={generateInitialValues(
+        selectedGroups,
+        admission,
+        myApplication
+      )}
       validateOnChange={true}
       enableReinitialize={true}
-      validationSchema={validationSchema(selectedGroups)}
+      validationSchema={validationSchema(selectedGroups, admission)}
       onSubmit={onSubmit}
     >
       {

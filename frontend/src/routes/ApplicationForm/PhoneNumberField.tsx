@@ -15,12 +15,21 @@ const PhoneNumberField: React.FC<PhoneNumberFieldProps> = ({
   field: { name },
   form: { touched, errors, handleBlur },
   disabled,
+  placeholder = "Fyll inn mobilnummer...",
+  title = "Mobilnummer",
 }) => {
-  const error = touched[name] && errors[name];
+  const nameSplit = name.split(".");
+  const error =
+    nameSplit.length > 1
+      ? touched[nameSplit[0]] &&
+        touched[nameSplit[0]][nameSplit[1]] &&
+        errors[nameSplit[0]] &&
+        errors[nameSplit[0]][nameSplit[1]]
+      : touched[name] && errors[name];
 
   return (
     <Wrapper>
-      <FieldLabel htmlFor={name}>Mobilnummer</FieldLabel>
+      <FieldLabel htmlFor={name}>{title}</FieldLabel>
 
       <StyledField
         type="tel"
@@ -31,7 +40,7 @@ const PhoneNumberField: React.FC<PhoneNumberFieldProps> = ({
           savePhoneNumberDraft(e.target.value);
           handleBlur(e);
         }}
-        placeholder="Fyll inn mobilnummer..."
+        placeholder={placeholder}
         error={error}
       />
       <InputValidationFeedback error={error} />

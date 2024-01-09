@@ -68,45 +68,36 @@ export const CancelButtonContainer = styled.div`
 
 /* General info section, mobile number, priorities */
 export const GeneralInfoSection = styled.div`
-  display: grid;
-  grid-template-columns: 1fr 1.5fr;
-  grid-template-areas:
-    "header header"
-    "phonenumberinfo phonenumber"
-    "prioritytextinfo prioritytext";
-  grid-gap: 1rem 2rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem 2rem;
   max-width: 750px;
   margin-bottom: 1.5rem;
 
   > h2 {
-    grid-area: header;
+    flex-basis: 100%;
     margin-bottom: -1.5rem;
   }
 
   > span {
+    flex-basis: 50%;
     margin-top: calc(1rem + 16px);
   }
 
-  span:nth-of-type(1) {
-    grid-area: phonenumberinfo;
-  }
-
-  span:nth-of-type(2) {
-    grid-area: prioritytextinfo;
+  > div {
+    flex-basis: 50%;
   }
 
   ${media.portrait`
-    grid-template-columns: 100%;
-    grid-template-areas:
-    "header"
-    "phonenumber"
-    "phonenumberinfo"
-    "prioritytext"
-    "prioritytextinfo";
-    grid-gap: 0.5rem ;
+    gap: 0.5rem ;
 
     > span {
+      flex-basis: 100%;
       margin-top: 0;
+    }
+
+    > div {
+      flex-basis: 100%;
     }
   `};
 `;

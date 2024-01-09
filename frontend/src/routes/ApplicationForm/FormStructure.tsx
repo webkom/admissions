@@ -29,6 +29,7 @@ import {
 } from "./FormStructureStyle";
 import { Admission, Group } from "src/types";
 import { SelectedGroups } from ".";
+import JsonFieldEditor from "src/components/JsonFieldEditor";
 
 interface FormStructureProps extends FormikValues {
   admission?: Admission;
@@ -80,6 +81,10 @@ const FormStructure: React.FC<FormStructureProps> = ({
             Mobilnummeret vil bli brukt til å kalle deg inn på intervju.
           </HelpText>
           <Field name="phoneNumber" component={PhoneNumberField} />
+          <JsonFieldEditor
+            sectionName="headerFields"
+            fields={admission?.header_fields}
+          />
         </GeneralInfoSection>
         <SeparatorLine />
         <GroupsSection>
