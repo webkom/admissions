@@ -1,95 +1,106 @@
 import React from "react";
-import { Formik, Field, FormikValues } from "formik";
+import { Formik, FormikHelpers } from "formik";
 import * as Yup from "yup";
 import {
   MutationApplication,
   useCreateApplicationMutation,
 } from "src/query/mutations";
 
-import GroupApplication from "src/containers/GroupApplication";
-
-import FormStructure from "./FormStructure";
 import {
   getApplictionTextDrafts,
   getPhoneNumberDraft,
   getPriorityTextDraft,
 } from "src/utils/draftHelper";
 import { Admission, Application, Group } from "src/types";
+import FormContainer from "./FormContainer";
 
-interface FormContainerProps extends FormikValues {
-  toggleIsEditing: () => void;
-}
+export type SelectedGroups = { [key: string]: boolean };
 
-// State of the form
-const FormContainer: React.FC<FormContainerProps> = ({
-  admission,
-  touched,
-  errors,
-  isSubmitting,
-  groups,
-  selectedGroups,
-  handleSubmit,
-  isValid,
-  toggleGroup,
-  toggleIsEditing,
-  myApplication,
-}) => {
-  const onCancelEdit = () => {
-    toggleIsEditing();
-  };
-
-  const hasSelected =
-    groups.filter((group: Group) => selectedGroups[group.name.toLowerCase()])
-      .length >= 1;
-  const SelectedGroupItems = groups
-    .filter((group: Group) => selectedGroups[group.name.toLowerCase()])
-    .map((group: Group, index: number) => (
-      <Field
-        component={GroupApplication}
-        group={group}
-        name={group.name.toLowerCase()}
-        responseLabel={group.response_label}
-        error={
-          touched[group.name.toLowerCase()] && errors[group.name.toLowerCase()]
-        }
-        key={`${group.name.toLowerCase()} ${index}`}
-      />
-    ));
-
-  // This is where the actual form structure comes in.
-  return (
-    <FormStructure
-      {...{
-        admission,
-        isSubmitting,
-        isValid,
-        handleSubmit,
-        groups,
-        selectedGroups,
-        toggleGroup,
-        toggleIsEditing,
-        myApplication,
-      }}
-      hasSelected={hasSelected}
-      SelectedGroupItems={SelectedGroupItems}
-      onCancel={onCancelEdit}
-    />
-  );
-};
-
-interface ApplicationFormProps {
-  myApplication?: Application;
-  selectedGroups: { [key: string]: boolean };
-  toggleGroup: (groupName: string) => void;
-  toggleIsEditing: () => void;
-  admission?: Admission;
-  groups: Group[];
-}
-
-interface FormValues extends Record<string, string> {
+export type FormValues = {
   priorityText: string;
   phoneNumber: string;
-}
+  groups: { [groupName: string]: string };
+};
+
+export type SharedApplicationProps = {
+  toggleIsEditing: () => void;
+  myApplication?: Application;
+  selectedGroups: SelectedGroups;
+  toggleGroup: (groupName: string) => void;
+  admission?: Admission;
+  groups: Group[];
+};
+
+const generateInitialValues: (
+  selectedGroups: SelectedGroups,
+  myApplication?: Application
+) => FormValues = (selectedGroups, myApplication) => {
+  const {
+    text = getPriorityTextDraft(),
+    phone_number: phoneNumber = getPhoneNumberDraft(),
+    group_applications: groupApplications = getApplictionTextDrafts(),
+  } = myApplication || {};
+
+  const initialValues: FormValues = {
+    priorityText: text,
+    phoneNumber,
+    groups: {},
+  };
+
+  const formattedGroupApplications: FormValues["groups"] = {};
+  Object.keys(selectedGroups).forEach((group) => {
+    formattedGroupApplications[group] = "";
+  });
+
+  // The group applications are already formatted in the object form Formik likes
+  if (!Array.isArray(groupApplications)) {
+    initialValues.groups = {
+      ...formattedGroupApplications,
+      ...groupApplications,
+    };
+    return initialValues;
+  }
+
+  // The group applications are formatted in the array that Django/Postgres likes
+  groupApplications.forEach((application) => {
+    formattedGroupApplications[application.group.name.toLowerCase()] =
+      application.text;
+  });
+
+  return {
+    priorityText: text,
+    phoneNumber,
+    groups: formattedGroupApplications,
+  };
+};
+
+const validationSchema = (selectedGroups: SelectedGroups) => {
+  return Yup.lazy(() => {
+    // Iterate over all selected groups and add them to the required schema
+    const selectedGroupsSchema: { [x: string]: Yup.StringSchema } = {};
+    Object.entries(selectedGroups)
+      .filter(([, isSelected]) => isSelected)
+      .forEach(
+        ([name]) =>
+          (selectedGroupsSchema[name] = Yup.string().required(
+            "Søknadsteksten må fylles ut"
+          ))
+      );
+
+    return Yup.object().shape({
+      phoneNumber: Yup.string()
+        .matches(
+          /^(0047|\+47|47)?(?:\s*\d){8}$/,
+          "Skriv inn et gyldig norsk telefonnummer"
+        )
+        .required("Skriv inn et gyldig norsk telefonnummer"),
+      priorityText: Yup.string().optional(),
+      groups: Yup.object().shape(selectedGroupsSchema),
+    });
+  });
+};
+
+type ApplicationFormProps = SharedApplicationProps;
 
 // Highest order component for application form.
 // Handles form values, submit post and form validation.
@@ -105,101 +116,57 @@ const ApplicationForm: React.FC<ApplicationFormProps> = ({
     admission?.slug ?? ""
   );
 
-  const {
-    text = getPriorityTextDraft(),
-    phone_number: phoneNumber = getPhoneNumberDraft(),
-    group_applications: groupApplications = getApplictionTextDrafts(),
-  } = myApplication || {};
-
-  const blankGroupApplications: { [key: string]: string } = {};
-  Object.keys(selectedGroups).forEach((group) => {
-    blankGroupApplications[group] = "";
-  });
-
-  const reformattedGroupApplications = Array.isArray(groupApplications)
-    ? groupApplications.reduce(
-        (obj, application) => ({
-          ...obj,
-          [application.group.name.toLowerCase()]: application.text,
-        }),
-        {}
-      )
-    : groupApplications;
-
-  const initialValues: FormValues = {
-    priorityText: text,
-    phoneNumber,
-    ...blankGroupApplications,
-    ...reformattedGroupApplications,
+  const onSubmit: (
+    values: FormValues,
+    formikHelpers: FormikHelpers<FormValues>
+  ) => void = (values, { setSubmitting }) => {
+    const submission: MutationApplication = {
+      text: values.priorityText,
+      applications: {},
+      phone_number: values.phoneNumber,
+    };
+    Object.keys(values.groups)
+      .filter((group) => selectedGroups[group])
+      .forEach((name) => {
+        submission.applications[name] = values.groups[name];
+      });
+    createApplicationMutation.mutate(
+      { newApplication: submission },
+      {
+        onSuccess: () => {
+          setSubmitting(false);
+          toggleIsEditing();
+        },
+        onError: () => {
+          alert("Det skjedde en feil.... ");
+          setSubmitting(false);
+        },
+      }
+    );
   };
 
   return (
-    <Formik
-      initialValues={initialValues}
+    <Formik<FormValues>
+      initialValues={generateInitialValues(selectedGroups, myApplication)}
       validateOnChange={true}
       enableReinitialize={true}
-      validationSchema={() => {
-        return Yup.lazy(() => {
-          // Iterate over all selected groups and add them to the required schema
-          const schema: {
-            [key: string]: Yup.StringSchema<string | undefined>;
-          } = {};
-          Object.entries(selectedGroups)
-            .filter(([, isSelected]) => isSelected)
-            .map(([name]) => name)
-            .forEach((name) => {
-              schema[name] = Yup.string().required(
-                "Søknadsteksten må fylles ut"
-              );
-            });
-          // Require phoneNumber with given structure to be set
-          schema.phoneNumber = Yup.string()
-            .matches(
-              /^(0047|\+47|47)?(?:\s*\d){8}$/,
-              "Skriv inn et gyldig norsk telefonnummer"
-            )
-            .required("Skriv inn et gyldig norsk telefonnummer");
-          return Yup.object().shape(schema);
-        });
-      }}
-      onSubmit={(values, { setSubmitting }) => {
-        const submission: MutationApplication = {
-          text: values.priorityText,
-          applications: {},
-          phone_number: values.phoneNumber,
-        };
-        Object.keys(values)
-          .filter((group) => selectedGroups[group])
-          .forEach((name) => {
-            submission.applications[name] = values[name];
-          });
-        createApplicationMutation.mutate(
-          { newApplication: submission },
-          {
-            onSuccess: () => {
-              setSubmitting(false);
-              toggleIsEditing();
-            },
-            onError: () => {
-              alert("Det skjedde en feil.... ");
-              setSubmitting(false);
-            },
-          }
-        );
-      }}
+      validationSchema={validationSchema(selectedGroups)}
+      onSubmit={onSubmit}
     >
       {
         (formikProps) => (
           <FormContainer
-            {...formikProps}
-            {...{
-              admission,
-              groups,
-              selectedGroups,
-              toggleGroup,
-              toggleIsEditing,
-              myApplication,
-            }}
+            admission={admission}
+            groups={groups}
+            selectedGroups={selectedGroups}
+            toggleGroup={toggleGroup}
+            toggleIsEditing={toggleIsEditing}
+            myApplication={myApplication}
+            handleSubmit={formikProps.handleSubmit}
+            touched={formikProps.touched}
+            errors={formikProps.errors}
+            isSubmitting={formikProps.isSubmitting}
+            isValid={formikProps.isValid}
           />
         )
         // https://formik.org/docs/api/formik#props-1
