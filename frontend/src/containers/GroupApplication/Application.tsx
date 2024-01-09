@@ -11,9 +11,9 @@ import useDebouncedState from "src/utils/useDebouncedState";
 import { saveApplicationTextDraft } from "src/utils/draftHelper";
 import { Group } from "src/types";
 import { FieldInputProps, FormikProps } from "formik";
+import { FormValues } from "src/routes/ApplicationForm";
 
 type FieldValue = string;
-export type FormValues = Record<string, string>;
 
 export interface ApplicationProps {
   responseLabel: string;
@@ -36,7 +36,10 @@ const Application: React.FC<ApplicationProps> = ({
     saveApplicationTextDraft([group.name, value]);
   }, [debouncedValue]);
 
-  const error = touched[name] ? errors[name] : undefined;
+  const error =
+    touched.groups && touched.groups[name]
+      ? errors.groups && errors.groups[name]
+      : undefined;
 
   return (
     <Container>
@@ -51,7 +54,7 @@ const Application: React.FC<ApplicationProps> = ({
         <FieldLabel htmlFor={group.name.toLowerCase()}>Søknadstekst</FieldLabel>
         <InputArea
           className="textarea"
-          name={name}
+          name={"groups." + name}
           id={name}
           onChange={onChange}
           onBlur={handleBlur}

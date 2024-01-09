@@ -9,12 +9,6 @@ interface FormProps {
   toggleIsEditing: () => void;
 }
 
-// State of the form
-const FormContainer: React.FC<FormProps> = ({ toggleIsEditing }) => {
-  // This is where the actual form structure comes in.
-  return <FormStructure toggleIsEditing={toggleIsEditing} />;
-};
-
 // Highest order component for application form.
 // Handles form values, submit post and form validation.
 const ApplicationForm: React.FC<FormProps> = ({ toggleIsEditing }) => {
@@ -43,7 +37,7 @@ const ApplicationForm: React.FC<FormProps> = ({ toggleIsEditing }) => {
 
   return (
     <Formik initialValues={initialValues} onSubmit={() => undefined}>
-      <FormContainer toggleIsEditing={toggleIsEditing} />
+      <FormStructure toggleIsEditing={toggleIsEditing} />
     </Formik>
   );
 };

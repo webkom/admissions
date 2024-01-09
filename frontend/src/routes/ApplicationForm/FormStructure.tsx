@@ -28,11 +28,12 @@ import {
   Title,
 } from "./FormStructureStyle";
 import { Admission, Group } from "src/types";
+import { SelectedGroups } from ".";
 
 interface FormStructureProps extends FormikValues {
-  admission: Admission;
+  admission?: Admission;
   groups: Group[];
-  selectedGroups: Record<string, string>;
+  selectedGroups: SelectedGroups;
   toggleGroup: (groupName: string) => void;
   SelectedGroupItems: ReactNode;
 }
@@ -49,8 +50,8 @@ const FormStructure: React.FC<FormStructureProps> = ({
   isValid,
   onCancel,
 }) => {
-  const { data: myApplication } = useMyApplication(String(admission.slug));
-  const isRevy = admission.slug === "revy";
+  const { data: myApplication } = useMyApplication(String(admission?.slug));
+  const isRevy = admission?.slug === "revy";
 
   return (
     <PageWrapper>
@@ -120,7 +121,7 @@ const FormStructure: React.FC<FormStructureProps> = ({
               <LegoButton
                 icon="arrow-forward"
                 iconPrefix="ios"
-                to={`/${admission.slug}/velg-grupper`}
+                to={`/${admission?.slug}/velg-grupper`}
               >
                 Velg {isRevy ? "grupper" : "komiteer"}
               </LegoButton>

@@ -11,10 +11,11 @@ import { Link, useParams } from "react-router-dom";
 import MiniToggleGroup from "./MiniToggleGroup";
 import { media } from "src/styles/mediaQueries";
 import { Group } from "src/types";
+import { SelectedGroups } from ".";
 
 interface ToggleGroupsProps {
   groups: Group[];
-  selectedGroups: any;
+  selectedGroups: SelectedGroups;
   toggleGroup: (name: string) => void;
 }
 
