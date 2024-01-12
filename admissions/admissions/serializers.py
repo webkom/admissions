@@ -250,13 +250,22 @@ class ShortUserSerializer(serializers.HyperlinkedModelSerializer):
 class UserApplicationSerializer(serializers.ModelSerializer):
     group_applications = serializers.SerializerMethodField()
     text = serializers.SerializerMethodField()
+    header_fields_response = serializers.SerializerMethodField()
     user = ShortUserSerializer()
 
     def get_text(self, obj):
+        # Hide value from non-admission-admins
         is_filtered = getattr(obj, "group_applications_filtered", False)
         if is_filtered:
             return None
         return obj.text
+
+    def get_header_fields_response(self, obj):
+        # Hide value from non-admission-admins
+        is_filtered = getattr(obj, "group_applications_filtered", False)
+        if is_filtered:
+            return {}
+        return obj.header_fields_response
 
     def get_group_applications(self, obj):
         qs = getattr(obj, "group_applications_filtered", obj.group_applications)

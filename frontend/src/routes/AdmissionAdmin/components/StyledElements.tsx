@@ -43,7 +43,6 @@ export const Statistics = styled.div`
 export const TableWrapper = styled.div`
   max-width: 100%;
   width: 100%;
-  overflow-x: auto;
 `;
 
 export const LinkLink = styled(Link)`

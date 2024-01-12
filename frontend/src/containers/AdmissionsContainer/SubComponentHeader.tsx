@@ -1,10 +1,8 @@
 import styled from "styled-components";
 
-const SubComponentHeader = styled.h5`
-  font-weight: bold;
-  margin: 0.5em;
-  font-size: 1.5em;
-  text-align: center;
+const SubComponentHeader = styled.p`
+  margin: 0 0 0.5em 0;
+  font-size: 1.4em;
 `;
 
 export default SubComponentHeader;

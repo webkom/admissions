@@ -19,14 +19,18 @@ const Admission: React.FC<AdmissionProps> = ({ admission }) => {
       <AdmissionDetails>
         <TimeLineWrapper>
           <AdmissionTitle>{admission.title}</AdmissionTitle>
-          <AdmissionDescription>
-            {admission.description.split("\n").map((descriptionLine, index) => (
-              <React.Fragment key={index}>
-                {descriptionLine}
-                <br />
-              </React.Fragment>
-            ))}
-          </AdmissionDescription>
+          {admission.description && (
+            <AdmissionDescription>
+              {admission.description
+                .split("\n")
+                .map((descriptionLine, index) => (
+                  <React.Fragment key={index}>
+                    {descriptionLine}
+                    <br />
+                  </React.Fragment>
+                ))}
+            </AdmissionDescription>
+          )}
           {!admission.is_open && !admission.is_closed && (
             <TimeLineItem
               title="Opptaket åpner"
@@ -195,6 +199,7 @@ const AdmissionDetails = styled.div`
 const AdmissionTitle = styled.h2`
   font-size: 28px;
   margin: 0;
+  margin-bottom: 0.4em;
   ${media.handheld`
     font-size: 1.5rem;
   `}

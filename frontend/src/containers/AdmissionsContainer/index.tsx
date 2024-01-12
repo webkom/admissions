@@ -13,30 +13,34 @@ import { columns } from "./Columns";
 import AdmissionsInnerTable, { InnerTableValues } from "./InnerTable";
 import SubComponentWrapper from "./SubComponentWrapper";
 import SubComponentHeader from "./SubComponentHeader";
-import { Application } from "src/types";
+import { Admission, Application } from "src/types";
 import { useState } from "react";
 import styled from "styled-components";
 import Icon from "src/components/Icon";
 import { TableWrapper } from "src/routes/AdmissionAdmin/components/StyledElements";
+import { InputResponseModel } from "src/utils/jsonFields";
 
 interface AdmissionsContainerProps {
+  admission: Admission;
   applications: Application[];
 }
 
 export interface AdmissionsTableValues {
   username: string;
   fullname: string;
-  phoneNumber: string;
   email: string;
-  appliedWithinDeadline: boolean;
-  numApplications: number;
   createdAt: string;
   updatedAt: string;
+  appliedWithinDeadline: boolean;
+  phoneNumber: string;
   text?: string;
+  headerFieldsResponse: InputResponseModel;
   groupApplications: InnerTableValues[];
+  numApplications: number;
 }
 
 const AdmissionsContainer: React.FC<AdmissionsContainerProps> = ({
+  admission,
   applications,
 }) => {
   const [expanded, setExpanded] = useState<ExpandedState>({});
@@ -54,6 +58,7 @@ const AdmissionsContainer: React.FC<AdmissionsContainerProps> = ({
         createdAt: application.created_at,
         updatedAt: application.updated_at,
         text: application.text,
+        headerFieldsResponse: application.header_fields_response,
         groupApplications: application.group_applications.map(
           (groupApplication) => ({
             applicationId: application.pk,
@@ -83,9 +88,23 @@ const AdmissionsContainer: React.FC<AdmissionsContainerProps> = ({
     ({ row }: { row: Row<AdmissionsTableValues> }) => (
       <>
         <SubComponentWrapper>
-          <SubComponentHeader>Prioriteringstekst</SubComponentHeader>
-          <p>{row.original.text}</p>
-          <SubComponentHeader>Søknader</SubComponentHeader>
+          {admission.userdata.is_admin && (
+            <>
+              {(!!row.original.text || admission.header_fields.length > 0) && (
+                <SubComponentHeader>Generelt</SubComponentHeader>
+              )}
+              {(admission.header_fields as InputResponseModel[])
+                .filter((headerField) => "id" in headerField)
+                .map((headerField) => (
+                  <p key={headerField.id}>
+                    {headerField.title}:{" "}
+                    {row.original.headerFieldsResponse[headerField.id]}
+                  </p>
+                ))}
+              <p>{row.original.text}</p>
+            </>
+          )}
+          <SubComponentHeader>Gruppesøknader</SubComponentHeader>
           <AdmissionsInnerTable
             groupApplications={row.original.groupApplications}
           />
@@ -154,7 +173,7 @@ const AdmissionsContainer: React.FC<AdmissionsContainerProps> = ({
 
 const StyledTable = styled.table`
   width: 100%;
-  min-width: 850px;
+  min-width: 800px;
 `;
 
 const SortArrow = ({ name }: { name: string }) => (
