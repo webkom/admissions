@@ -3,7 +3,11 @@ from django.db.models import Q
 from rest_framework import serializers
 
 from admissions.admissions import constants
-from admissions.admissions.json_models import InputModelList, ResponseModelList
+from admissions.admissions.json_models import (
+    InputModelList,
+    InputResponseModel,
+    validators,
+)
 from admissions.admissions.models import (
     Admission,
     Group,
@@ -263,12 +267,13 @@ class UserApplicationSerializer(serializers.ModelSerializer):
         fields = (
             "pk",
             "user",
-            "text",
             "created_at",
             "updated_at",
             "applied_within_deadline",
-            "group_applications",
+            "text",
             "phone_number",
+            "header_fields_response",
+            "group_applications",
         )
 
 
@@ -287,21 +292,52 @@ class UserSerializer(serializers.HyperlinkedModelSerializer):
 
 
 class ApplicationCreateUpdateSerializer(serializers.HyperlinkedModelSerializer):
+    question_json_schema = InputModelList
+    response_json_schema = InputResponseModel
+
     class Meta:
         model = UserApplication
-        fields = ("text", "pk", "phone_number")
+        fields = ("text", "pk", "phone_number", "header_fields_response")
+
+    def validate_header_fields_response(self, value):
+        try:
+            self.response_json_schema(value)
+        except Exception as errors:
+            raise serializers.ValidationError(errors)
+
+        admission_slug = self.context["request"].parser_context["kwargs"][
+            "admission_slug"
+        ]
+        admission = Admission.objects.get(slug=admission_slug)
+
+        for header_field in admission.header_fields:
+            if "id" not in header_field:
+                continue
+            if header_field["id"] not in value and header_field["required"]:
+                serializers.ValidationError("Missing required answer")
+            if header_field["type"] in validators:
+                for validator in validators[header_field["type"]]:
+                    validator().validate(header_field, value[header_field["id"]])
+        return value
 
     def create(self, validated_data):
         user = validated_data.pop("user")
         text = validated_data.pop("text")
         phone_number = validated_data.pop("phone_number")
+        header_fields_response = self.response_json_schema(
+            validated_data.pop("header_fields_response")
+        ).model_dump()
 
         admission = Admission.objects.get(slug=validated_data.get("admission_slug"))
 
         user_application, created = UserApplication.objects.update_or_create(
             admission=admission,
             user=user,
-            defaults={"text": text, "phone_number": phone_number},
+            defaults={
+                "text": text,
+                "phone_number": phone_number,
+                "header_fields_response": header_fields_response,
+            },
         )
 
         # The code smell is strong with this one, young padawan

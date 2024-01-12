@@ -13,14 +13,14 @@ import {
 } from "src/utils/draftHelper";
 import { Admission, Application, Group } from "src/types";
 import FormContainer from "./FormContainer";
-import { InputFieldModel } from "src/utils/jsonFields";
+import { InputFieldModel, InputResponseModel } from "src/utils/jsonFields";
 
 export type SelectedGroups = { [key: string]: boolean };
 
 export type FormValues = {
   priorityText: string;
   phoneNumber: string;
-  headerFields: { [fieldId: string]: string };
+  headerFields: InputResponseModel;
   groups: { [groupName: string]: string };
 };
 
@@ -61,7 +61,10 @@ const generateInitialValues: (
     .reduce(
       (obj, field) => ({
         ...obj,
-        [field.id]: "",
+        [field.id]:
+          (myApplication?.header_fields_response &&
+            myApplication?.header_fields_response[field.id]) ??
+          "",
       }),
       {}
     );
@@ -150,6 +153,7 @@ const ApplicationForm: React.FC<ApplicationFormProps> = ({
       text: values.priorityText,
       applications: {},
       phone_number: values.phoneNumber,
+      header_fields_response: values.headerFields,
     };
     Object.keys(values.groups)
       .filter((group) => selectedGroups[group])

@@ -185,11 +185,12 @@ class CreateApplicationTestCase(APITestCase):
 
         self.application_data = {
             "text": "Ønsker Webkom mest",
+            "phone_number": "12345678",
+            "header_fields_response": {},
             "applications": {
                 "webkom": "Hohohohohohohohohohooho webbis",
                 "koskom": "Hahahahahahahahahahaha arris",
             },
-            "phone_number": "12345678",
         }
 
         # Setup Bob
@@ -249,8 +250,9 @@ class CreateApplicationTestCase(APITestCase):
 
         self.application_data = {
             "text": "Ønsker Webkom mest",
-            "applications": {"webkom": "Hohohohohohohohohohooho webbis"},
             "phone_number": "12345678",
+            "header_fields_response": {},
+            "applications": {"webkom": "Hohohohohohohohohohooho webbis"},
         }
 
         # Apply then only with webkom, removing koskom
@@ -315,11 +317,12 @@ class ListApplicationsTestCase(APITestCase):
         # Sample application data
         self.application_data = {
             "text": "testtest",
+            "phone_number": "00000000",
+            "header_fields_response": {},
             "applications": {
                 "webkom": "Webkom application",
                 "bedkom": "Bedkom application",
             },
-            "phone_number": "00000000",
         }
 
     def unauthorized_user_cannot_see_other_applications(self):
@@ -369,8 +372,9 @@ class ListApplicationsTestCase(APITestCase):
         self.client.force_authenticate(user=self.pleb)
         application_data = {
             "text": "testtest",
-            "applications": {"webkom": "Webkom application"},
             "phone_number": "00000000",
+            "header_fields_response": {},
+            "applications": {"webkom": "Webkom application"},
         }
         self.client.post(
             reverse(

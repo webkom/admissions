@@ -39,7 +39,7 @@ const FormContainer: React.FC<FormContainerProps> = ({
       <Field
         component={GroupApplication}
         group={group}
-        name={group.name.toLowerCase()}
+        name={"groups." + group.name.toLowerCase()}
         responseLabel={group.response_label}
         error={
           touched.groups &&

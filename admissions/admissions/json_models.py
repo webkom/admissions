@@ -1,4 +1,6 @@
-from typing import List, Literal, Union
+import re
+from enum import Enum
+from typing import Dict, List, Literal, Union
 from uuid import uuid4
 
 from pydantic import BaseModel, ConfigDict, Field, RootModel
@@ -11,13 +13,21 @@ If you change one of them, make sure to change the other as well
 """
 
 
+class DataType(str, Enum):
+    TEXT = "text"
+    TEXTINPUT = "textinput"
+    TEXTAREA = "textarea"
+    NUMBERINPUT = "numberinput"
+    PHONEINPUT = "phoneinput"
+
+
 ####################################
 ##          INPUT MODELS          ##
 ####################################
 class TextModel(BaseModel):
     model_config = ConfigDict(strict=True)
 
-    type: Literal["text"]
+    type: Literal[DataType.TEXT]
     text: str
 
 
@@ -32,19 +42,19 @@ class BaseInputModel(BaseModel):
 
 
 class TextInputModel(BaseInputModel):
-    type: Literal["textinput"]
+    type: Literal[DataType.TEXTINPUT]
 
 
 class TextAreaModel(BaseInputModel):
-    type: Literal["textarea"]
+    type: Literal[DataType.TEXTAREA]
 
 
 class NumberInputModel(BaseInputModel):
-    type: Literal["numberinput"]
+    type: Literal[DataType.NUMBERINPUT]
 
 
 class PhoneInputModel(BaseInputModel):
-    type: Literal["phoneinput"]
+    type: Literal[DataType.PHONEINPUT]
 
 
 InputModelUnion = Union[
@@ -56,38 +66,28 @@ class InputModelList(RootModel):
     root: List[Annotated[InputModelUnion, Field(discriminator="type")]]
 
 
-#####################################
-##      INPUT RESPONSE MODELS      ##
-#####################################
-class BaseInputResponseModel(BaseModel):
-    model_config = ConfigDict(strict=True)
-
-    input_id: str = Field(frozen=True)
+####################################
+##      INPUT RESPONSE MODEL      ##
+####################################
+class InputResponseModel(RootModel):
+    root: Dict[str, str]
 
 
-class TextInputResponseModel(BaseInputResponseModel):
-    value: str
+####################################
+##           VALIDATORS           ##
+####################################
+class Validator:
+    def validate(self, model, value):
+        pass
 
 
-class TextAreaResponseModel(BaseInputResponseModel):
-    value: str
+class PhoneNumberValidator(Validator):
+    def validate(self, model, value):
+        regex = r"^(0047|\+47|47)?(?:\s*\d){8}$"
+        pattern = re.compile(regex)
+        match = re.search(pattern, value)
+        if not match:
+            raise ValueError("Invalid UUID")
 
 
-class NumberInputResponseModel(BaseInputResponseModel):
-    value: str
-
-
-class PhoneInputResponseModel(BaseInputResponseModel):
-    value: str
-
-
-InputResponseModelUnion = Union[
-    TextInputResponseModel,
-    TextAreaResponseModel,
-    NumberInputResponseModel,
-    PhoneInputResponseModel,
-]
-
-
-class ResponseModelList(RootModel):
-    root: List[InputResponseModelUnion]
+validators = {DataType.PHONEINPUT: [PhoneNumberValidator]}

@@ -27,21 +27,4 @@ export type InputFieldModel =
 
 export type FieldModel = TextModel | InputFieldModel;
 
-type BaseInputResponseModel = {
-  input_id: string;
-  value: string;
-};
-
-export type TextInputResponseModel = BaseInputResponseModel;
-
-export type TextAreaResponseModel = BaseInputResponseModel;
-
-export type NumberInputResponseModel = BaseInputResponseModel;
-
-export type PhoneInputResponseModel = BaseInputResponseModel;
-
-export type InputResponseModel =
-  | TextInputResponseModel
-  | TextAreaResponseModel
-  | NumberInputResponseModel
-  | PhoneInputResponseModel;
+export type InputResponseModel = { [input_id: string]: string };

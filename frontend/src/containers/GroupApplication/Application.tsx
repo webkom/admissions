@@ -51,10 +51,10 @@ const Application: React.FC<ApplicationProps> = ({
         <ResponseLabel>{readmeIfy(responseLabel, true)}</ResponseLabel>
       )}
       <InputWrapper>
-        <FieldLabel htmlFor={group.name.toLowerCase()}>Søknadstekst</FieldLabel>
+        <FieldLabel htmlFor={name}>Søknadstekst</FieldLabel>
         <InputArea
           className="textarea"
-          name={"groups." + name}
+          name={name}
           id={name}
           onChange={onChange}
           onBlur={handleBlur}

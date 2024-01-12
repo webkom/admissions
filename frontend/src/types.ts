@@ -1,4 +1,4 @@
-import { FieldModel } from "src/utils/jsonFields";
+import { FieldModel, InputResponseModel } from "src/utils/jsonFields";
 
 export interface Group {
   pk: number;
@@ -25,11 +25,12 @@ export interface GroupApplication {
 export interface Application {
   pk: number;
   user: User;
-  applied_within_deadline: boolean;
   created_at: string;
   updated_at: string;
+  applied_within_deadline: boolean;
   text?: string;
   phone_number: string;
+  header_fields_response: InputResponseModel;
   group_applications: GroupApplication[];
 }
 
