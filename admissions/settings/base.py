@@ -112,6 +112,7 @@ STATICFILES_FINDERS = [
 
 STATICFILES_DIRS = [
     ROOT_DIR.path("assets")(),
+    ROOT_DIR.path("../assets")(),
 ]
 
 STATIC_URL = "/static/"

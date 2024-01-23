@@ -32,6 +32,6 @@
 //   }
 // }
 
-Cypress.Commands.add("clearDb", () => {
-  cy.exec("poetry run python manage.py flush --no-input");
-});
+// Cypress.Commands.add("clearDb", () => {
+//   cy.exec("poetry run python manage.py flush --no-input");
+// });
