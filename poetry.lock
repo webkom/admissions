@@ -1354,13 +1354,13 @@ files = [
 
 [[package]]
 name = "social-auth-app-django"
-version = "5.2.0"
+version = "5.4.0"
 description = "Python Social Authentication, Django integration."
 optional = false
-python-versions = ">=3.7"
+python-versions = ">=3.8"
 files = [
-    {file = "social-auth-app-django-5.2.0.tar.gz", hash = "sha256:4a5dae406f3874b4003708ff120c02cb1a4c8eeead56cd163646347309fcd0f8"},
-    {file = "social_auth_app_django-5.2.0-py3-none-any.whl", hash = "sha256:0347ca4cd23ea9d15a665da9d22950552fb66b95600e6c2ebae38ca883b3a4ed"},
+    {file = "social-auth-app-django-5.4.0.tar.gz", hash = "sha256:09ac02a063cb313eed5e9ef2f9ac4477c8bf5bbd685925ff3aba43f9072f1bbb"},
+    {file = "social_auth_app_django-5.4.0-py3-none-any.whl", hash = "sha256:28c65b2e2092f30cdb3cf912eeaa6988b49fdf4001b29bd89e683673d700a38e"},
 ]
 
 [package.dependencies]
@@ -1581,4 +1581,4 @@ files = [
 [metadata]
 lock-version = "2.0"
 python-versions = "^3.9"
-content-hash = "0782ded931b66063944093f826cc860deea60fba9ed91e3e7e32b06a13ea39ee"
+content-hash = "e6270fb6e62e3b5738e263af95a4c8b235e0f26936bd282f6ba45ce692b1473d"
