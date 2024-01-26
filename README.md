@@ -78,7 +78,9 @@ $ docker-compose up -d
 
 The `.env` file with secret keys is not included, but an [`example.env`](./admissions/settings/example.env) file has been provided in `./admissions/settings`, so that you can simply rename the file and fill in the values.
 
-To access the values to enter, go to the OAuth2 tab in the user settings [menu](http://localhost:3000/users/me/settings/oauth2) in the running dev version of lego-webapp. If you have not already created secrets for the admissions application, create a new application. In the form, enter `http://127.0.0.1:5000/complete/lego/` as the redirect url.
+`example.env` is setup to connect to an Oauth2 application already configured in LEGO, so if you don't need anything special you are good to go with that one.
+
+If you want to configure another one, go to the OAuth2 tab in the user settings [menu](http://localhost:3000/users/me/settings/oauth2) in the running dev version of lego-webapp. Open or create an application, and enter the values you find into your .env file. If you are creating a new OAuth2 application, enter `http://127.0.0.1:5000/complete/lego/` as the redirect url.
 
 ```sh
 # Create a copy of the example env file (run from the root of the project)
@@ -90,7 +92,7 @@ AUTH_LEGO_SECRET="Client Secret from OAuth2"
 AUTH_LEGO_API_URL="http://localhost:8000/"
 ```
 
-Now you are ready to migrate the database and run the server.
+After creating and configuring your ./admissions/settings/.env file you are ready to migrate the database and run the server.
 
 ```sh
 # Migrate the database migrations
