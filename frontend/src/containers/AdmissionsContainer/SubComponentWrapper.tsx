@@ -2,8 +2,17 @@ import styled from "styled-components";
 
 const SubComponentWrapper = styled.div`
   background-color: #f5f5f5;
-  margin: 0.3em 0.3em 0.3em 0;
-  padding: 1em;
+  padding: 0.5em;
+  padding-top: 0;
+  margin-left: -7px;
+
+  p {
+    margin: 0.25em 0;
+  }
+
+  p:first-of-type {
+    margin-top: 0;
+  }
 `;
 
 export default SubComponentWrapper;

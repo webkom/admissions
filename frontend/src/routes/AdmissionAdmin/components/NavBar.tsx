@@ -47,8 +47,8 @@ const Wrapper = styled.div`
 
   h2,
   h3 {
-    margin-bottom: 0;
-    margin-top: 0.5em;
+    margin-bottom: 0.3em;
+    margin-top: 0.7em;
   }
 
   p {
@@ -57,7 +57,9 @@ const Wrapper = styled.div`
 `;
 
 const NavHeader = styled.h3`
+  display: block;
   margin: 0;
+  line-height: 1.4;
 `;
 
 const NavLink = styled(Link)`

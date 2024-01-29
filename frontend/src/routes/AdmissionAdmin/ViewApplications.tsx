@@ -18,6 +18,7 @@ import {
   StatisticsWrapper,
 } from "./components/StyledElements";
 import djangoData from "src/utils/djangoData";
+import { InputFieldModel } from "src/utils/jsonFields";
 
 type CompleteCsvData = {
   priorityText: string;
@@ -36,19 +37,6 @@ const ViewApplications = () => {
   >([]);
   const [csvData, setCsvData] = useState<CompleteCsvData[]>([]);
 
-  const csvHeaders = [
-    { label: "Full Name", key: "name" },
-    { label: "Prioriteringer", key: "priorityText" },
-    { label: "Komité", key: "group" },
-    { label: "Søknadstekst", key: "groupApplicationText" },
-    { label: "Email", key: "email" },
-    { label: "Mobilnummer", key: "phoneNumber" },
-    { label: "Username", key: "username" },
-    { label: "Søkt innen frist", key: "appliedWithinDeadline" },
-    { label: "Tid sendt", key: "createdAt" },
-    { label: "Tid oppdatert", key: "updatedAt" },
-  ];
-
   const {
     data: applications,
     error: applicationsError,
@@ -60,6 +48,27 @@ const ViewApplications = () => {
     isFetching: admissionIsFetching,
   } = useAdmission(admissionSlug ?? "");
   const { groups } = admission ?? {};
+
+  const csvHeaders = [
+    { label: "Fullt Navn", key: "name" },
+    { label: "Prioriteringer", key: "priorityText" },
+    ...(admission?.userdata.is_admin
+      ? (admission?.header_fields as InputFieldModel[])
+          .filter((headerField) => "id" in headerField)
+          .map((headerField) => ({
+            label: headerField.title,
+            key: headerField.id,
+          }))
+      : []),
+    { label: "Gruppe", key: "group" },
+    { label: "Søknadstekst", key: "groupApplicationText" },
+    { label: "E-post", key: "email" },
+    { label: "Mobilnummer", key: "phoneNumber" },
+    { label: "Brukernavn", key: "username" },
+    { label: "Søkt innen frist", key: "appliedWithinDeadline" },
+    { label: "Tid sendt", key: "createdAt" },
+    { label: "Tid oppdatert", key: "updatedAt" },
+  ];
 
   useEffect(() => {
     if (!applications) return;
@@ -89,18 +98,19 @@ const ViewApplications = () => {
       application.group_applications.forEach((groupApplication) => {
         updatedCsvData.push({
           name: application.user.full_name,
-          email: application.user.email,
-          username: application.user.username,
-          createdAt: application.created_at,
-          updatedAt: application.updated_at,
-          appliedWithinDeadline: application.applied_within_deadline,
           priorityText:
-            application.text != ""
+            application.text !== ""
               ? replaceQuotationMarks(application.text ?? "")
               : "Ingen prioriteringer",
+          ...application.header_fields_response,
           group: groupApplication.group.name,
           groupApplicationText: replaceQuotationMarks(groupApplication.text),
+          email: application.user.email,
           phoneNumber: application.phone_number,
+          username: application.user.username,
+          appliedWithinDeadline: application.applied_within_deadline,
+          createdAt: application.created_at,
+          updatedAt: application.updated_at,
         });
       });
     });
@@ -149,11 +159,11 @@ const ViewApplications = () => {
           </StatisticsWrapper>
         </Statistics>
         <Statistics>
-          <StatisticsWrapper>
+          <StatisticsWrapper smallerMargin>
             <StatisticsName>Antall søkere</StatisticsName>
             {numApplicants} {numApplicants == 1 ? "søker" : "søkere"}
           </StatisticsWrapper>
-          <StatisticsWrapper>
+          <StatisticsWrapper smallerMargin>
             <StatisticsName>Totalt antall søknader</StatisticsName>
             {numApplications} {numApplications == 1 ? "søknad" : "søknader"}
           </StatisticsWrapper>
@@ -186,7 +196,10 @@ const ViewApplications = () => {
         >
           Eksporter som csv
         </CSVExport>
-        <AdmissionsContainer applications={filteredApplications} />
+        <AdmissionsContainer
+          admission={admission}
+          applications={filteredApplications}
+        />
       </PageWrapper>
     );
   }
@@ -200,7 +213,6 @@ export const PageWrapper = styled.div`
   display: flex;
   flex-direction: column;
   align-items: center;
-  min-height: 100vh;
   margin: 1em;
   border: 1px solid rgba(0, 0, 0, 0.09);
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.04);

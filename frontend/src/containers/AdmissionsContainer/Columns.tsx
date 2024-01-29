@@ -25,12 +25,14 @@ export const columns = [
   }),
   columnHelper.accessor("username", {
     header: "Brukernavn",
+    size: 120,
   }),
   columnHelper.accessor("fullname", {
     header: "Fullt navn",
   }),
   columnHelper.accessor("phoneNumber", {
     header: "Tlf.",
+    size: 100,
   }),
   columnHelper.accessor("email", {
     header: "E-post",
@@ -69,7 +71,7 @@ export const columns = [
   }),
   columnHelper.accessor("numApplications", {
     header: "Søknader",
-    size: 1,
+    size: 70,
     cell: (info) => info.row.original.numApplications,
   }),
 ];

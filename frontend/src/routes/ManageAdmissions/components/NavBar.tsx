@@ -13,7 +13,10 @@ const NavBar: React.FC<Props> = ({ admissions }) => {
     <Wrapper>
       <NavHeader>Opptak</NavHeader>
       {admissions?.map((admission) => (
-        <NavLink key={admission.pk} to={"/admin/" + admission.slug}>
+        <NavLink
+          key={admission.pk + admission.title}
+          to={"/admin/" + admission.slug}
+        >
           {admission.title}
         </NavLink>
       ))}

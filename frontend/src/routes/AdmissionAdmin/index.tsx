@@ -34,18 +34,18 @@ const PageWrapper = styled.div`
   display: flex;
   flex-direction: column;
   align-items: center;
-  min-height: 100vh;
-  padding-bottom: 2em;
 `;
 
 const Wrapper = styled.div`
+  min-height: calc(100vh - 70px);
   width: 100%;
   display: flex;
   flex-direction: row;
+  overflow-x: auto;
 `;
 
 const LeftSide = styled.div`
-  flex-basis: 300px;
+  flex-basis: 245px;
   flex-shrink: 0;
 `;
 

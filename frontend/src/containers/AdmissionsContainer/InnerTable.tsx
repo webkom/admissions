@@ -68,4 +68,5 @@ export default AdmissionsInnerTable;
 
 const StyledTable = styled.table`
   width: 100%;
+  white-space: pre-line;
 `;

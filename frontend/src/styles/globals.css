@@ -88,6 +88,7 @@ th {
   padding: 5px 0;
   border-top: 1px solid #aaa;
   border-bottom: 1px solid #aaa !important;
+  font-weight: 500;
 }
 
 th,
@@ -97,6 +98,12 @@ td {
   border-bottom: 1px dashed #aaa;
   text-align: left;
   display: table-cell;
+  word-break: break-all;
+  hyphens: auto;
+}
+
+tr:last-of-type > td {
+  border-bottom: 0;
 }
 
 thead {
