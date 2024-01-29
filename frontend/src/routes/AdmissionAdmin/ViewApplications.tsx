@@ -9,22 +9,17 @@ import { useAdmission, useApplications } from "src/query/hooks";
 import { useParams } from "react-router-dom";
 
 import AdmissionsContainer from "src/containers/AdmissionsContainer";
-import { CsvData } from "./EditGroup";
 import { Application } from "src/types";
 import {
-  CSVExport,
   Statistics,
   StatisticsName,
   StatisticsWrapper,
 } from "./components/StyledElements";
 import djangoData from "src/utils/djangoData";
 import { InputFieldModel } from "src/utils/jsonFields";
-
-type CompleteCsvData = {
-  priorityText: string;
-  group: string;
-  groupApplicationText: string;
-} & Omit<CsvData, "applicationText">;
+import CSVExportHandler, {
+  CompleteCsvData,
+} from "./components/CSVExportHandler";
 
 const ViewApplications = () => {
   const { admissionSlug } = useParams();
@@ -188,14 +183,7 @@ const ViewApplications = () => {
               ))}
           </Statistics>
         </Statistics>
-        <CSVExport
-          data={csvData}
-          headers={csvHeaders}
-          filename={"applications.csv"}
-          target="_blank"
-        >
-          Eksporter som csv
-        </CSVExport>
+        <CSVExportHandler csvData={csvData} csvHeaders={csvHeaders} />
         <AdmissionsContainer
           admission={admission}
           applications={filteredApplications}
