@@ -3,6 +3,7 @@ from django.db.models import Q
 from rest_framework import serializers
 
 from admissions.admissions import constants
+from admissions.admissions.json_models import InputModelList, ResponseModelList
 from admissions.admissions.models import (
     Admission,
     Group,
@@ -99,7 +100,10 @@ class AdmissionPublicSerializer(AdmissionListPublicSerializer):
     groups = GroupSerializer(many=True)
 
     class Meta(AdmissionListPublicSerializer.Meta):
-        fields = AdmissionListPublicSerializer.Meta.fields + ("groups",)
+        fields = AdmissionListPublicSerializer.Meta.fields + (
+            "header_fields",
+            "groups",
+        )
         lookup_field = "slug"
         extra_kwargs = {"url": {"lookup_field": "slug"}}
 
@@ -128,6 +132,7 @@ class AdminCreateUpdateAdmissionSerializer(serializers.HyperlinkedModelSerialize
             "title",
             "slug",
             "description",
+            "header_fields",
             "open_from",
             "public_deadline",
             "closed_from",
@@ -137,6 +142,13 @@ class AdminCreateUpdateAdmissionSerializer(serializers.HyperlinkedModelSerialize
         )
 
     def update_or_create(self, pk, validated_data):
+        schema = InputModelList
+        try:
+            header_fields = schema(validated_data["header_fields"])
+            validated_data["header_fields"] = header_fields.model_dump()
+        except Exception as errors:
+            raise serializers.ValidationError(errors)
+
         input_admin_groups = validated_data.pop("admin_groups")
         input_groups = validated_data.pop("groups")
         admission, created = Admission.objects.update_or_create(
@@ -162,10 +174,10 @@ class AdminAdmissionSerializer(serializers.ModelSerializer):
     class Meta:
         model = Admission
         fields = (
-            "pk",
             "title",
             "slug",
             "description",
+            "header_fields",
             "admin_groups",
             "groups",
             "open_from",

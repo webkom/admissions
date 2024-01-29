@@ -1,3 +1,5 @@
+import { FieldModel } from "src/utils/jsonFields";
+
 export interface Group {
   pk: number;
   name: string;
@@ -50,5 +52,6 @@ export interface Admission {
   closed_from: string;
   admin_groups?: Group[];
   groups: Group[];
+  header_fields: FieldModel[];
   userdata: AdmissionUserData;
 }
