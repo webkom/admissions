@@ -34,6 +34,7 @@ import {
   Title,
 } from "src/routes/ApplicationForm/FormStructureStyle";
 import { clearAllDrafts } from "src/utils/draftHelper";
+import JsonFieldEditor from "src/components/JsonFieldEditor";
 
 interface FormStructureProps {
   toggleIsEditing: () => void;
@@ -148,6 +149,11 @@ const FormStructure: React.FC<FormStructureProps> = ({ toggleIsEditing }) => {
             component={PhoneNumberField}
             disabled={true}
           />
+          <JsonFieldEditor
+            sectionName="headerFields"
+            fields={admission?.header_fields}
+            disabled={true}
+          />
         </GeneralInfoSection>
         <SeparatorLine />
         <GroupsSection>
@@ -180,7 +186,7 @@ const FormStructure: React.FC<FormStructureProps> = ({ toggleIsEditing }) => {
                   <Field
                     component={Application}
                     group={group}
-                    name={group.name.toLowerCase()}
+                    name={"groups." + group.name.toLowerCase()}
                     responseLabel={group.response_label}
                     key={group.pk}
                     disabled={true}

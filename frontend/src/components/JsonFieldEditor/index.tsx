@@ -8,9 +8,14 @@ import { FieldModel, PhoneInputModel, TextModel } from "src/utils/jsonFields";
 type Props = {
   sectionName: string;
   fields?: FieldModel[];
+  disabled?: boolean;
 };
 
-const JsonFieldEditor: React.FC<Props> = ({ sectionName, fields }) => {
+const JsonFieldEditor: React.FC<Props> = ({
+  sectionName,
+  fields,
+  disabled = false,
+}) => {
   const TextField = ({ field }: { field: TextModel }) => (
     <HelpText>
       <Icon name="information-circle-outline" />
@@ -25,6 +30,7 @@ const JsonFieldEditor: React.FC<Props> = ({ sectionName, fields }) => {
       title={field.title}
       label={field.label}
       placeholder={field.placeholder}
+      disabled={disabled}
     />
   );
 

@@ -4,6 +4,7 @@ import { useMyApplication } from "src/query/hooks";
 
 import FormStructure from "./FormStructure";
 import { useParams } from "react-router-dom";
+import { FormValues } from "../ApplicationForm";
 
 interface FormProps {
   toggleIsEditing: () => void;
@@ -19,6 +20,10 @@ const ApplicationForm: React.FC<FormProps> = ({ toggleIsEditing }) => {
 
   if (isFetching) return <p>Loading</p>;
 
+  if (!myApplication) {
+    return <p>Feil: klarte ikke hente søknaden din.</p>;
+  }
+
   const { phone_number, text, group_applications } = myApplication ?? {};
 
   const groupApplications = group_applications?.reduce(
@@ -29,14 +34,18 @@ const ApplicationForm: React.FC<FormProps> = ({ toggleIsEditing }) => {
     {}
   );
 
-  const initialValues = {
-    priorityText: text,
+  const initialValues: FormValues = {
+    priorityText: text ?? "",
     phoneNumber: phone_number,
-    ...groupApplications,
+    headerFields: myApplication?.header_fields_response,
+    groups: groupApplications,
   };
 
   return (
-    <Formik initialValues={initialValues} onSubmit={() => undefined}>
+    <Formik<FormValues>
+      initialValues={initialValues}
+      onSubmit={() => undefined}
+    >
       <FormStructure toggleIsEditing={toggleIsEditing} />
     </Formik>
   );

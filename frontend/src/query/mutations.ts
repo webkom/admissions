@@ -1,6 +1,6 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { AxiosError } from "axios";
-import { FieldModel } from "src/utils/jsonFields";
+import { FieldModel, InputResponseModel } from "src/utils/jsonFields";
 import { apiClient } from "../utils/callApi";
 
 // Admin mutations
@@ -146,6 +146,7 @@ export interface MutationApplication {
   text: string;
   phone_number: string;
   applications: Record<string, string>;
+  header_fields_response: InputResponseModel;
 }
 
 interface CreateApplicationProps {
