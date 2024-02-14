@@ -39,15 +39,7 @@ class RandomGroupFactory(factory.DjangoModelFactory):
 
     name = factory.Iterator(
         [
-            "Webkom",
-            "Arrkom",
-            "Bankkom",
-            "Bedkom",
-            "Fagkom",
-            "Koskom",
-            "LaBamba",
-            "readme",
-            "PR",
+            "backup",
         ]
     )
     description = factory.Faker("text", max_nb_chars=200)

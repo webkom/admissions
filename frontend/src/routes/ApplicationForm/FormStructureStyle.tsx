@@ -66,6 +66,47 @@ export const CancelButtonContainer = styled.div`
   justify-content: center;`};
 `;
 
+/* General information, given to the candidate */
+export const InformationSection = styled.div`
+  max-width: 750px;
+  margin-bottom: 1.5rem;
+  > h2 {
+    grid-area: header;
+  }
+  > span {
+    margin-top: calc(1rem + 16px);
+  }
+  span:nth-of-type(1) {
+    grid-area: phonenumberinfo;
+  }
+  span:nth-of-type(2) {
+    grid-area: prioritytextinfo;
+  }
+  ${media.portrait`
+    grid-template-columns: 100%;
+    grid-template-areas:
+    "header"
+    "phonenumber"
+    "phonenumberinfo"
+    "prioritytext"
+    "prioritytextinfo";
+    grid-gap: 0.5rem ;
+    > span {
+      margin-top: 0;
+    }
+  `};
+`;
+
+export const InfoText = styled.p`
+  font-size: 0.9rem;
+  color: rgba(57, 75, 89, 0.75);
+  line-height: 1.3rem;
+  padding-right: 3rem;
+  ${media.portrait`
+    padding-right: 0;
+  `};
+`;
+
 /* General info section, mobile number, priorities */
 export const GeneralInfoSection = styled.div`
   display: flex;
