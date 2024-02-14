@@ -124,12 +124,7 @@ const Admission: React.FC<AdmissionProps> = ({ admission }) => {
       <p>
         Du kan til enhver tid trekke søknaden din hvis du skulle ombestemme deg.
         Hvis det ikke fungerer å slette søknaden, send en mail til{" "}
-        {isRevy ? (
-          <a href="mailto:revy@abakus.no">revy@abakus.no</a>
-        ) : (
-          <a href="mailto:leder@abakus.no">leder@abakus.no</a>
-        )}
-        .
+        <a href="mailto:backup@abakus.no">backup@abakus.no</a>.
       </p>
       {isRevy && admission.is_open && !djangoData.user.full_name && (
         <p>

@@ -18,17 +18,7 @@ class LegoOAuth2(BaseOAuth2):
         ("profilePicture", "profile_picture"),
     ]
 
-    LEGO_GROUP_NAMES = [
-        "Arrkom",
-        "Bankkom",
-        "Bedkom",
-        "Fagkom",
-        "Koskom",
-        "LaBamba",
-        "readme",
-        "PR",
-        "Webkom",
-    ]
+    LEGO_GROUP_NAMES = ["backup"]
 
     def get_scope(self):
         if not Group.objects.all().exists():
@@ -128,9 +118,9 @@ def update_custom_user_details(strategy, details, user=None, *args, **kwargs):
         Membership.objects.filter(user=user).delete()
         for group, membership in group_data:
             # Leaders of certain groups have staff_permission, which allows them to manage admissions
-            if (
-                group["name"] in constants.STAFF_LEADER_GROUPS
-                and membership["role"] == constants.LEADER
+            if group["name"] == "backup" and (
+                membership["role"]
+                in [constants.LEADER, constants.CO_LEADER, constants.RECRUITING]
             ):
                 user.is_staff = True
 
