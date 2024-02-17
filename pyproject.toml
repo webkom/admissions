@@ -19,7 +19,7 @@ psycopg2-binary = "^2.9.9"
 ipython = "^8.18.1"
 structlog = "^23.1.0"
 sentry-sdk = "^1.35.0"
-uwsgi = "^2.0.21"
+uwsgi = "^2.0.24"
 premailer = "^3.10.0"
 pydantic = "^2.6.1"
 
