@@ -22,13 +22,6 @@ export interface ApplicationProps {
   form: FormikProps<FormValues>;
   disabled: boolean;
 }
-const replaceLinebreak = (text: string) =>
-  text.split("\n").map((val) => (
-    <>
-      {val}
-      <br />
-    </>
-  ));
 
 const Application: React.FC<ApplicationProps> = ({
   responseLabel,
@@ -55,7 +48,7 @@ const Application: React.FC<ApplicationProps> = ({
         <Name>{readmeIfy(group.name)}</Name>
       </LogoNameWrapper>
       {responseLabel && (
-        <ResponseLabel>{replaceLinebreak(responseLabel)}</ResponseLabel>
+        <ResponseLabel>{readmeIfy(responseLabel, true)}</ResponseLabel>
       )}
       <InputWrapper>
         <FieldLabel htmlFor={name}>Søknadstekst</FieldLabel>

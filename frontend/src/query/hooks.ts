@@ -20,7 +20,7 @@ export const useAdmissions = () => {
   return useQuery<Admission[], AxiosError>(["/admission/"]);
 };
 
-export const useAdmission = (slug: string | number) => {
+export const useAdmission = (slug: string) => {
   return useQuery<Admission, AxiosError>([`/admission/${slug}/`]);
 };
 

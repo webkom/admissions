@@ -18,8 +18,6 @@ import {
   GeneralInfoSection,
   GroupsSection,
   HelpText,
-  InformationSection,
-  InfoText,
   NoChosenGroupsWrapper,
   NoChosenSubTitle,
   NoChosenTitle,
@@ -77,34 +75,6 @@ const FormStructure: React.FC<FormStructureProps> = ({ toggleIsEditing }) => {
             </StyledSpan>
           )}
         </TimeStamp>
-        <InformationSection>
-          <InfoText>
-            Tusen takk for din søknad! Dersom du har noen spørsmål eller
-            innspill til prosessen kan dette gjøres ved å sende en e-post til{" "}
-            <a href="mailto:backup-rekruttering@abakus.no">
-              backup-rekruttering@abakus.no
-            </a>
-            .
-          </InfoText>
-          <InfoText>
-            Planen videre:
-            <ul>
-              <li> - 21. februar kl. 23:59: Søknadsfrist</li>
-              <li> - 15. feb - 23. feb: Kaffeprat*</li>
-              <li>
-                - 26. feb: Du får svar på om du kommer med eller ikke. Kommer du
-                ikke med i år anbefaler vi deg å søke til neste år igjen! Hold
-                gjerne av ettermiddagen i tilfelle du blir tatt opp
-              </li>
-            </ul>
-          </InfoText>
-          <InfoText>
-            *Dette er en lavterskelsamtale for at du skal bli bedre kjent med
-            oss og vi bedre kjent med deg. Dersom du er på utveksling vil
-            samtalene foregå over Zoom. Du vil bli kontaktet av to backupere for
-            å finne tid som passer:)
-          </InfoText>
-        </InformationSection>
         <EditWrapper>
           <EditInfo>
             <Text>
@@ -117,11 +87,13 @@ const FormStructure: React.FC<FormStructureProps> = ({ toggleIsEditing }) => {
                   </FormatTime>
                 </StyledSpan>
               )}{" "}
-              og backup vil kun se den siste versjonen.
+              og {isRevy ? "revystyret" : "komiteene"} vil kun se den siste
+              versjonen.
             </Text>
             <Notice>
               <StyledSpan bold>Merk:</StyledSpan> Oppdateringer etter
-              søknadsfristen kan ikke garanteres å bli sett av backup.
+              søknadsfristen kan ikke garanteres å bli sett av{" "}
+              {isRevy ? "revystyret" : "komiteen(e) du søker deg til"}.
             </Notice>
           </EditInfo>
           <EditActions>
@@ -170,11 +142,7 @@ const FormStructure: React.FC<FormStructureProps> = ({ toggleIsEditing }) => {
           <SectionHeader>Generelt</SectionHeader>
           <HelpText>
             <Icon name="information-circle-outline" />
-            Mobilnummeret vil bli brukt til å kalle deg inn på intervju.{" "}
-          </HelpText>
-          <HelpText>
-            <Icon name="information-circle-outline" />
-            Alle i backup kan se det du skriver i søknaden din.
+            Mobilnummeret vil bli brukt til å kalle deg inn på intervju.
           </HelpText>
           <Field
             name="phoneNumber"
@@ -189,6 +157,23 @@ const FormStructure: React.FC<FormStructureProps> = ({ toggleIsEditing }) => {
         </GeneralInfoSection>
         <SeparatorLine />
         <GroupsSection>
+          <Sidebar>
+            <div>
+              <SectionHeader>{isRevy ? "Grupper" : "Komiteer"}</SectionHeader>
+              <HelpText>
+                <Icon name="information-circle-outline" />
+                Her skriver du søknaden til{" "}
+                {isRevy ? "gruppen(e)" : "komiteen(e)"} du har valgt.
+                {!isRevy &&
+                  "Hver komité kan kun se søknaden til sin egen komité."}
+              </HelpText>
+              <HelpText>
+                <Icon name="information-circle-outline" />
+                Søknadene vil brukes i opptaksprosessen, men alle søkere vil bli
+                kalt inn til intervju.
+              </HelpText>
+            </div>
+          </Sidebar>
           {myApplication.group_applications.length > 0 ? (
             <Applications>
               {myApplication.group_applications.map((groupApplication) => {
