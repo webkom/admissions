@@ -42,7 +42,7 @@ class DeleteAdmissionAuthorizationTestCase(APITestCase):
         )
 
         res = self.client.delete(
-            reverse("admin-admission-detail", kwargs={"slug": self.admission.slug})
+            reverse("manage-admission-detail", kwargs={"slug": self.admission.slug})
         )
         self.assertEqual(res.status_code, status.HTTP_204_NO_CONTENT)
 
@@ -60,7 +60,7 @@ class DeleteAdmissionAuthorizationTestCase(APITestCase):
         )
 
         res = self.client.delete(
-            reverse("admin-admission-detail", kwargs={"slug": self.admission.slug})
+            reverse("manage-admission-detail", kwargs={"slug": self.admission.slug})
         )
         self.assertEqual(res.status_code, status.HTTP_204_NO_CONTENT)
 
@@ -82,7 +82,7 @@ class DeleteAdmissionAuthorizationTestCase(APITestCase):
         )
 
         res = self.client.delete(
-            reverse("admin-admission-detail", kwargs={"slug": self.admission.slug})
+            reverse("manage-admission-detail", kwargs={"slug": self.admission.slug})
         )
         self.assertEqual(res.status_code, status.HTTP_404_NOT_FOUND)
 
@@ -96,7 +96,7 @@ class DeleteAdmissionAuthorizationTestCase(APITestCase):
         )
 
         res = self.client.delete(
-            reverse("admin-admission-detail", kwargs={"slug": self.admission.slug})
+            reverse("manage-admission-detail", kwargs={"slug": self.admission.slug})
         )
         self.assertEqual(res.status_code, status.HTTP_403_FORBIDDEN)
 
@@ -111,7 +111,7 @@ class DeleteAdmissionAuthorizationTestCase(APITestCase):
         )
 
         res = self.client.delete(
-            reverse("admin-admission-detail", kwargs={"slug": self.admission.slug})
+            reverse("manage-admission-detail", kwargs={"slug": self.admission.slug})
         )
         self.assertEqual(res.status_code, status.HTTP_403_FORBIDDEN)
 
@@ -137,7 +137,7 @@ class DeleteAdmissionValidityTestCase(APITestCase):
         )
 
         res = self.client.delete(
-            reverse("admin-admission-detail", kwargs={"slug": self.admission.slug})
+            reverse("manage-admission-detail", kwargs={"slug": self.admission.slug})
         )
         self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
 
@@ -196,7 +196,7 @@ class DeleteAdmissionCompleteTestCase(APITestCase):
         )
 
         res = self.client.delete(
-            reverse("admin-admission-detail", kwargs={"slug": self.admission.slug})
+            reverse("manage-admission-detail", kwargs={"slug": self.admission.slug})
         )
         self.assertEqual(res.status_code, status.HTTP_204_NO_CONTENT)
 
