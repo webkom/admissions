@@ -6,11 +6,7 @@ interface ButtonProps {
   margin?: string | number;
 }
 
-const Button = styled.button.attrs((props: ButtonProps) => ({
-  width: props.width || "auto",
-  fontSize: props.fontSize || "1em",
-  margin: props.margin || "0",
-}))`
+const Button = styled.button<ButtonProps>`
   color: #fff;
   font-weight: bold;
   background: gray;
@@ -19,10 +15,10 @@ const Button = styled.button.attrs((props: ButtonProps) => ({
   border-radius: 4px;
   outline: none;
   display: block;
-  font-size: ${(props) => props.fontSize};
+  font-size: ${(props) => props.fontSize || "1em"};
   font-family: var(--font-family);
-  width: ${(props) => props.width};
-  margin: ${(props) => props.margin};
+  width: ${(props) => props.width || "auto"};
+  margin: ${(props) => props.margin || "0"};
 `;
 
 export default Button;

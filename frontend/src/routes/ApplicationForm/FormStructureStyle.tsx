@@ -272,7 +272,7 @@ export const NoChosenGroupsWrapper = styled.div`
   `};
 `;
 
-export const NoChosenTitle = Title.withComponent("h3");
+export const NoChosenTitle = styled(Title).attrs({ as: "h3" })``;
 
 export const NoChosenSubTitle = styled.span`
   font-size: 1rem;

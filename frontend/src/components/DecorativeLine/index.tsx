@@ -1,14 +1,11 @@
 import styled from "styled-components";
 
 interface DecorativeLineProps {
-  vertical: boolean;
-  red: boolean;
+  vertical?: boolean;
+  red?: boolean;
 }
 
-const DecorativeLine = styled.div.attrs((props: DecorativeLineProps) => ({
-  vertical: props.vertical ? true : false,
-  red: props.red ? true : false,
-}))`
+const DecorativeLine = styled.div<DecorativeLineProps>`
   display: block;
   background: ${(props) =>
     props.red ? "var(--lego-red)" : "var(--lego-gray-medium)"};

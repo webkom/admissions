@@ -29,18 +29,18 @@
     "formik": "^2.4.6",
     "js-cookie": "^3.0.5",
     "luxon": "^3.4.4",
-    "react": "^18.2.0",
+    "react": "^18.3.1",
     "react-csv": "^2.2.2",
     "react-dom": "^18.2.0",
     "react-router-dom": "6.21.2",
     "react-textarea-autosize": "^8.5.3",
-    "styled-components": "5.3.10"
+    "styled-components": "6.1.9"
   },
   "devDependencies": {
     "@types/js-cookie": "^3.0.3",
     "@types/luxon": "^3.4.2",
     "@types/node": "^20.12.8",
-    "@types/react": "^18.2.14",
+    "@types/react": "^18.3.1",
     "@types/react-csv": "^1.1.10",
     "@types/react-dom": "^18.2.19",
     "@types/styled-components": "^5.1.26",

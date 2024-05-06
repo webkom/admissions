@@ -44,6 +44,8 @@ export const TableWrapper = styled.div`
   width: 100%;
 `;
 
+// eslint-disable-next-line
+//@ts-ignore
 export const CSVExport = styled(CSVLink)`
   padding: 1em 0;
   display: block;

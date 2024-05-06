@@ -49,6 +49,7 @@ const LegoButton: React.FC<LegoButtonProps> = ({
     return (
       <ILegoLink
         href={href}
+        to={href}
         target="_blank"
         rel="noopener noreferrer"
         $buttonStyle={buttonStyle}
@@ -63,6 +64,7 @@ const LegoButton: React.FC<LegoButtonProps> = ({
 
   return (
     <ILegoButton
+      to=""
       $buttonStyle={buttonStyle}
       onClick={onClick}
       disabled={disabled}
@@ -192,5 +194,5 @@ const Text = styled.span<LegoButtonStyleProps>`
     `}
 `;
 
-const ILegoLink = ILegoRouterLink.withComponent("a");
-const ILegoButton = ILegoRouterLink.withComponent("button");
+const ILegoLink = styled(ILegoRouterLink).attrs({ as: "a" })``;
+const ILegoButton = styled(ILegoRouterLink).attrs({ as: "button" })``;
