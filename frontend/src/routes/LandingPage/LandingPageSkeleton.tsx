@@ -17,7 +17,7 @@ const LandingPageSkeleton: React.FC<PropsWithChildren> = ({ children }) => {
       {(djangoData.user.is_staff || djangoData.user.is_member_of_webkom) && (
         <LegoButtonWrapper>
           <LegoButton
-            to={`/admin/`}
+            to={`/manage/`}
             icon="arrow-forward"
             iconPrefix="ios"
             buttonStyle="secondary"

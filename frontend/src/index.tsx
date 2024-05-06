@@ -58,7 +58,7 @@ const AppRoutes = () =>
   useRoutes([
     { path: "/", element: <LandingPage /> },
     {
-      path: "/admin/*",
+      path: "/manage/*",
       element: (
         <RequireAuth
           auth={

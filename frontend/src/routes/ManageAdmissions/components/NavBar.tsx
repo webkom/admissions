@@ -15,7 +15,7 @@ const NavBar: React.FC<Props> = ({ admissions }) => {
       {admissions?.map((admission) => (
         <NavLink
           key={admission.pk + admission.title}
-          to={"/admin/" + admission.slug}
+          to={"/manage/" + admission.slug}
         >
           {admission.title}
         </NavLink>
@@ -26,7 +26,7 @@ const NavBar: React.FC<Props> = ({ admissions }) => {
       <CreateNewWrapper>
         <LegoButton
           buttonStyle="primary"
-          to="/admin/create"
+          to="/manage/create"
           icon="add"
           size="small"
         >

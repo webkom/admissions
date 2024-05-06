@@ -5,13 +5,13 @@ import React, { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import ConfirmModal from "src/components/ConfirmModal";
 import LegoButton from "src/components/LegoButton";
-import { useAdminAdmission } from "src/query/hooks";
+import { useManageAdmission } from "src/query/hooks";
 import {
   AdmissionMutationResponse,
   MutationAdmission,
-  useAdminCreateAdmission,
-  useAdminDeleteAdmission,
-  useAdminUpdateAdmission,
+  useManageCreateAdmission,
+  useManageDeleteAdmission,
+  useManageUpdateAdmission,
 } from "src/query/mutations";
 import { toggleFromArray } from "src/utils/methods";
 import styled from "styled-components";
@@ -39,11 +39,11 @@ const CreateAdmission: React.FC = () => {
     data: admission,
     isLoading,
     error,
-  } = useAdminAdmission(admissionSlug ?? "", admissionSlug !== undefined);
+  } = useManageAdmission(admissionSlug ?? "", admissionSlug !== undefined);
 
-  const createAdmission = useAdminCreateAdmission();
-  const updateAdmission = useAdminUpdateAdmission();
-  const deleteAdmission = useAdminDeleteAdmission();
+  const createAdmission = useManageCreateAdmission();
+  const updateAdmission = useManageUpdateAdmission();
+  const deleteAdmission = useManageDeleteAdmission();
 
   const [returnedData, setReturnedData] = useState<ReturnedData>();
 
@@ -78,7 +78,7 @@ const CreateAdmission: React.FC = () => {
       const onSuccess = (data: AdmissionMutationResponse) => {
         setReturnedData({ type: "success", message: "Opptaket er lagret!" });
         if (data?.slug) {
-          navigate("/admin/" + data.slug);
+          navigate("/manage/" + data.slug);
         }
       };
       const onError = (error: AxiosError) => {
@@ -113,7 +113,14 @@ const CreateAdmission: React.FC = () => {
 
   const handleDeleteAdmission = () => {
     if (!admission) return;
-    deleteAdmission.mutate({ slug: admission.slug });
+    deleteAdmission.mutate(
+      { slug: admission.slug },
+      {
+        onSuccess: () => {
+          navigate("/manage/");
+        },
+      },
+    );
   };
 
   useEffect(() => {
