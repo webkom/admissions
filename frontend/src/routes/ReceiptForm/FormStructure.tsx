@@ -110,7 +110,7 @@ const FormStructure: React.FC<FormStructureProps> = ({ toggleIsEditing }) => {
               title="Slett søknad"
               Component={({ onClick }) => (
                 <LegoButton onClick={onClick} buttonStyle="secondary">
-                  {deleteApplicationMutation.isLoading
+                  {deleteApplicationMutation.isPending
                     ? "Sletter søknad..."
                     : deleteApplicationMutation.isError
                       ? "Klarte ikke slette søknad"

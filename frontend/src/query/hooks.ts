@@ -5,11 +5,14 @@ import { Admission, Application, Group } from "src/types";
 // Admin hooks
 
 export const useAdminAdmissions = () => {
-  return useQuery<Admission[], AxiosError>(["/admin/admission/"]);
+  return useQuery<Admission[], AxiosError>({
+    queryKey: ["/admin/admission/"],
+  });
 };
 
 export const useAdminAdmission = (slug: string, enabled = true) => {
-  return useQuery<Admission, AxiosError>([`/admin/admission/${slug}/`], {
+  return useQuery<Admission, AxiosError>({
+    queryKey: [`/admin/admission/${slug}/`],
     enabled,
   });
 };
@@ -17,25 +20,31 @@ export const useAdminAdmission = (slug: string, enabled = true) => {
 // User hooks
 
 export const useAdmissions = () => {
-  return useQuery<Admission[], AxiosError>(["/admission/"]);
+  return useQuery<Admission[], AxiosError>({
+    queryKey: ["/admission/"],
+  });
 };
 
 export const useAdmission = (slug: string) => {
-  return useQuery<Admission, AxiosError>([`/admission/${slug}/`]);
+  return useQuery<Admission, AxiosError>({
+    queryKey: [`/admission/${slug}/`],
+  });
 };
 
 export const useApplications = (slug: string) => {
-  return useQuery<Application[], AxiosError>([
-    `/admission/${slug}/application/`,
-  ]);
+  return useQuery<Application[], AxiosError>({
+    queryKey: [`/admission/${slug}/application/`],
+  });
 };
 
 export const useMyApplication = (slug: string) => {
-  return useQuery<Application, AxiosError>([
-    `/admission/${slug}/application/mine/`,
-  ]);
+  return useQuery<Application, AxiosError>({
+    queryKey: [`/admission/${slug}/application/mine/`],
+  });
 };
 
 export const useGroups = () => {
-  return useQuery<Group[], AxiosError>(["/group/"]);
+  return useQuery<Group[], AxiosError>({
+    queryKey: ["/group/"],
+  });
 };
