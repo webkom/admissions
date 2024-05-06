@@ -1,22 +1,11 @@
-import React, { useEffect, useState } from "react";
+import React from "react";
 import styled from "styled-components";
 import { useParams } from "react-router-dom";
-import { useAdmission, useApplications } from "src/query/hooks";
+import { useAdmission } from "src/query/hooks";
 import djangoData from "src/utils/djangoData";
 import LoadingBall from "src/components/LoadingBall";
 import EditGroupForm from "./components/EditGroupForm";
-import { replaceQuotationMarks } from "src/utils/methods";
 import { Wrapper, GroupLogo, GroupLogoWrapper } from "./components/styles";
-import { Application } from "src/types";
-import {
-  AlphabeticalComparatorAsc,
-  AlphabeticalComparatorDesc,
-  ApplicationComparator,
-  CreatedAtComparatorAsc,
-  CreatedAtComparatorDesc,
-  UpdatedAtComparatorAsc,
-  UpdatedAtComparatorDesc,
-} from "src/utils/sortAdmissions";
 
 export interface CsvData {
   name: string;
@@ -31,77 +20,13 @@ export interface CsvData {
 
 const EditGroup = () => {
   const { admissionSlug } = useParams();
-  const [sortedApplications, setSortedApplications] = useState<Application[]>(
-    []
-  );
-  const [csvData, setCsvData] = useState<CsvData[]>([]);
 
-  const csvHeaders = [
-    { label: "Full Name", key: "name" },
-    { label: "Søknadstekst", key: "applicationText" },
-    { label: "Mobilnummer", key: "phoneNumber" },
-    { label: "Email", key: "email" },
-    { label: "Username", key: "username" },
-    { label: "Søkt innen frist", key: "appliedWithinDeadline" },
-    { label: "Tid sendt", key: "createdAt" },
-    { label: "Tid oppdatert", key: "updatedAt" },
-  ];
-
-  const { data: admission } = useAdmission(admissionSlug ?? "");
-  const { groups } = admission ?? {};
   const {
-    data: applications,
+    data: admission,
     isFetching,
     error,
-  } = useApplications(admissionSlug ?? "");
-
-  const [applicationComparator, setApplicationComparator] =
-    useState<ApplicationComparator>(UpdatedAtComparatorDesc);
-
-  const stringToComparatorMapper = new Map<string, ApplicationComparator>([
-    ["alphabeticaldesc", AlphabeticalComparatorDesc],
-    ["alphabeticalasc", AlphabeticalComparatorAsc],
-    ["createddesc", CreatedAtComparatorDesc],
-    ["createdasc", CreatedAtComparatorAsc],
-    ["updateddesc", UpdatedAtComparatorDesc],
-    ["updatedasc", UpdatedAtComparatorAsc],
-  ]);
-
-  const handleSortChange = (event: React.ChangeEvent<HTMLSelectElement>) => {
-    const selectedValue = event.target.value;
-    const selectedComparator =
-      stringToComparatorMapper.get(selectedValue) ?? AlphabeticalComparatorDesc;
-    setApplicationComparator(selectedComparator);
-  };
-
-  useEffect(() => {
-    if (!applications) return;
-    setSortedApplications(
-      [...applications].sort(applicationComparator.compare)
-    );
-  }, [applications, applicationComparator]);
-
-  useEffect(() => {
-    // Push all the individual applications into csvData with the right format
-    const updatedCsvData: CsvData[] = [];
-    sortedApplications.forEach((userApplication) => {
-      updatedCsvData.push({
-        name: userApplication.user.full_name,
-        email: userApplication.user.email,
-        username: userApplication.user.username,
-        applicationText: replaceQuotationMarks(
-          userApplication.group_applications[0].text
-        ),
-        createdAt: userApplication.created_at,
-        updatedAt: userApplication.updated_at,
-        appliedWithinDeadline: userApplication.applied_within_deadline,
-        phoneNumber: userApplication.phone_number,
-      });
-    });
-    setCsvData(updatedCsvData);
-  }, [sortedApplications]);
-
-  const numApplicants = sortedApplications.length;
+  } = useAdmission(admissionSlug ?? "");
+  const { groups } = admission ?? {};
 
   if (error) {
     return <div>Error: {error.message}</div>;
@@ -111,7 +36,7 @@ const EditGroup = () => {
     return <div>Feil: klarte ikke laste inn grupper.</div>;
   } else {
     const group = (groups ?? []).find(
-      (group) => group.name === djangoData.user.representative_of_group
+      (group) => group.name === djangoData.user.representative_of_group,
     );
     if (!group) return <div>Feil: Ugyldig gruppe</div>;
 

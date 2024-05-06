@@ -13,9 +13,9 @@ const NavBar: React.FC<Props> = ({ admission }) => {
   const representingGroup = useMemo(
     () =>
       admission?.groups.find(
-        (group) => group.name === djangoData.user.representative_of_group
+        (group) => group.name === djangoData.user.representative_of_group,
       ),
-    [admission]
+    [admission],
   );
 
   return (

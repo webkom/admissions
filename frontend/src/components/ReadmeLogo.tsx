@@ -18,10 +18,10 @@ const readmeIfy = (text: string, isBodyText = false) =>
                   ) : (
                     <ReadmeLogo key={current} />
                   ),
-                  current
+                  current,
                 )
               : [current],
-          []
+          [],
         )}
     </span>
   );

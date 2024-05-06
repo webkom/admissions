@@ -24,7 +24,9 @@ export const StyledField = styled(Field)<StyledFieldProps>`
 
   &:focus {
     border: 2px solid #52b0eccc;
-    box-shadow: 0 1px 1px #52b0ec13 inset, 0 0 4px #52b0ec99;
+    box-shadow:
+      0 1px 1px #52b0ec13 inset,
+      0 0 4px #52b0ec99;
     outline: 0 none;
   }
 
@@ -50,7 +52,9 @@ export const StyledTextAreaField = styled(Textarea)<StyledFieldProps>`
 
   &:focus {
     border: 2px solid #52b0eccc;
-    box-shadow: 0 1px 1px #52b0ec13 inset, 0 0 4px #52b0ec99,
+    box-shadow:
+      0 1px 1px #52b0ec13 inset,
+      0 0 4px #52b0ec99,
       inset 0px 4px 4px rgba(129, 129, 129, 0.05);
     outline: 0 none;
   }

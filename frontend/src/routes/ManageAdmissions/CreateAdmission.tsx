@@ -97,7 +97,7 @@ const CreateAdmission: React.FC = () => {
           {
             onSuccess,
             onError,
-          }
+          },
         );
       } else {
         updateAdmission.mutate(
@@ -105,7 +105,7 @@ const CreateAdmission: React.FC = () => {
           {
             onSuccess,
             onError,
-          }
+          },
         );
       }
     },
@@ -218,7 +218,7 @@ const CreateAdmission: React.FC = () => {
             toggleGroup={(value) => {
               formik.setFieldValue(
                 "admin_groups",
-                toggleFromArray(formik.values.admin_groups, value)
+                toggleFromArray(formik.values.admin_groups, value),
               );
             }}
           />
@@ -236,7 +236,7 @@ const CreateAdmission: React.FC = () => {
             toggleGroup={(value) => {
               formik.setFieldValue(
                 "groups",
-                toggleFromArray(formik.values.groups, value)
+                toggleFromArray(formik.values.groups, value),
               );
             }}
           />

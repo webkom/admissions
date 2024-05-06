@@ -93,5 +93,5 @@ root.render(
         </Router>
       </QueryClientProvider>
     </React.StrictMode>
-  </ErrorBoundary>
+  </ErrorBoundary>,
 );

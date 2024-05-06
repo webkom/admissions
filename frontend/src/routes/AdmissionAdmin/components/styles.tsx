@@ -2,8 +2,6 @@ import styled from "styled-components";
 import { media } from "src/styles/mediaQueries";
 import Button from "src/components/Button";
 import { Card } from "src/components/Card";
-import { Link } from "react-router-dom";
-import { CSVLink } from "react-csv";
 
 export const Wrapper = styled(Card)`
   width: 50em;
@@ -65,56 +63,4 @@ export const EditGroupFormWrapper = styled.div`
   ${media.handheld`
     flex-wrap: wrap;
   `};
-`;
-
-const LinkLink = styled(Link)`
-  padding: 1em 0;
-  display: block;
-  font-weight: bold;
-`;
-
-const CSVExport = styled(CSVLink)`
-  padding: 1em 0;
-  display: block;
-  text-align: center;
-  border-top: 5px solid #c0392b;
-  border-bottom: 1px solid #c0392b;
-  width: 100%;
-  font-weight: bold;
-`;
-
-/*
- * Statistics
- */
-
-const Statistics = styled.div`
-  padding: 0.5em;
-  display: flex;
-  justify-content: center;
-  width: 100%;
-  flex-wrap: wrap;
-`;
-
-interface StatisticsWrapperProps {
-  smallerMargin?: string | number;
-}
-
-const StatisticsWrapper = styled.div<StatisticsWrapperProps>`
-  display: inline-flex;
-  flex-direction: column;
-  margin: ${(props) => (props.smallerMargin ? "0 0.5em 1em 1em" : "1em")};
-
-  justify-content: flex-start;
-  line-height: 1;
-  align-items: center;
-`;
-
-interface StatisticsNameProps {
-  capitalize?: boolean;
-}
-
-const StatisticsName = styled.span<StatisticsNameProps>`
-  font-size: 0.8em;
-  font-weight: bold;
-  text-transform: ${(props) => (props.capitalize ? "capitalize" : "normal")};
 `;

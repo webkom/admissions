@@ -15,7 +15,7 @@ interface FormProps {
 const ApplicationForm: React.FC<FormProps> = ({ toggleIsEditing }) => {
   const { admissionSlug } = useParams();
   const { data: myApplication, isFetching } = useMyApplication(
-    admissionSlug ?? ""
+    admissionSlug ?? "",
   );
 
   if (isFetching) return <p>Loading</p>;
@@ -31,7 +31,7 @@ const ApplicationForm: React.FC<FormProps> = ({ toggleIsEditing }) => {
       ...obj,
       [application.group.name.toLowerCase()]: application.text,
     }),
-    {}
+    {},
   );
 
   const initialValues: FormValues = {

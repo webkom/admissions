@@ -37,7 +37,7 @@ export const useAdminCreateAdmission = () => {
       onSuccess: () => {
         queryClient.invalidateQueries([`/admin/admission/`]);
       },
-    }
+    },
   );
 };
 
@@ -59,7 +59,7 @@ export const useAdminUpdateAdmission = () => {
         queryClient.invalidateQueries([`/admin/admission/`]);
         queryClient.invalidateQueries([`/admin/admission/${variables.slug}/`]);
       },
-    }
+    },
   );
 };
 
@@ -81,7 +81,7 @@ export const useAdminDeleteAdmission = () => {
         queryClient.invalidateQueries([`/admin/admission/`]);
         queryClient.invalidateQueries([`/admin/admission/${variables.slug}/`]);
       },
-    }
+    },
   );
 };
 
@@ -95,7 +95,7 @@ export const useDeleteMyApplicationMutation = (slug: string) => {
       onSuccess: () => {
         queryClient.invalidateQueries([`/admission/${slug}/application/mine/`]);
       },
-    }
+    },
   );
 };
 
@@ -111,7 +111,7 @@ export const useDeleteGroupApplicationMutation = (admissionSlug: string) => {
       apiClient.delete(
         `/admission/${admissionSlug}/application/${applicationId}/delete_group_application/${
           groupName ? `?group=${groupName}` : ""
-        }`
+        }`,
       ),
     {
       onSuccess: () => {
@@ -119,7 +119,7 @@ export const useDeleteGroupApplicationMutation = (admissionSlug: string) => {
           `/admission/${admissionSlug}/application/`,
         ]);
       },
-    }
+    },
   );
 };
 
@@ -139,7 +139,7 @@ interface UpdateGroupErrorData {
 export const useUpdateGroupMutation = () =>
   useMutation<unknown, AxiosError<UpdateGroupErrorData>, UpdateGroupProps>(
     ({ groupPrimaryKey, updatedGroupData }) =>
-      apiClient.patch(`/group/${groupPrimaryKey}/`, updatedGroupData)
+      apiClient.patch(`/group/${groupPrimaryKey}/`, updatedGroupData),
   );
 
 export interface MutationApplication {
@@ -159,7 +159,7 @@ export const useCreateApplicationMutation = (admissionSlug: string) => {
     ({ newApplication }) =>
       apiClient.post(
         `/admission/${admissionSlug}/application/`,
-        newApplication
+        newApplication,
       ),
     {
       onSuccess: () => {
@@ -167,6 +167,6 @@ export const useCreateApplicationMutation = (admissionSlug: string) => {
           `/admission/${admissionSlug}/application/mine/`,
         ]);
       },
-    }
+    },
   );
 };

@@ -31,8 +31,8 @@ const CSVExportHandler: React.FC<Props> = ({ csvData, csvHeaders }) => {
           onChange={(event) =>
             setCsvFormat(
               csvFormats.find(
-                (csvFormat) => csvFormat.name === event.target.value
-              ) ?? csvFormats[0]
+                (csvFormat) => csvFormat.name === event.target.value,
+              ) ?? csvFormats[0],
             )
           }
         >
