@@ -5,14 +5,14 @@ name: default
 
 steps:
   - name: yarn-install
-    image: node:16
+    image: node:22
     when:
       event: [push]
     commands:
       - yarn
   
   - name: lint-frontend
-    image: node:16
+    image: node:22
     when:
       event: [push]
     depends_on:
@@ -21,7 +21,7 @@ steps:
       - yarn lint
 
   - name: typescript
-    image: node:16
+    image: node:22
     when:
       event: [push]
     depends_on:
@@ -30,7 +30,7 @@ steps:
       - yarn types
 
   - name: build-frontend
-    image: node:16
+    image: node:22
     when:
       event: [push]
     depends_on:
@@ -85,7 +85,7 @@ steps:
       - tox -e black
   
   - name: cypress-install
-    image: node:16
+    image: node:22
     when:
       event: [push]
     depends_on:
