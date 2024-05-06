@@ -50,7 +50,7 @@ export default ManageAdmissions;
 
 /** Styles **/
 
-export const PageWrapper = styled.div`
+const PageWrapper = styled.div`
   background-color: #ffffff;
   display: flex;
   flex-direction: column;

@@ -4,7 +4,7 @@ import Icon from "src/components/Icon";
 import FormatTime from "src/components/Time/FormatTime";
 import { AdmissionsTableValues } from ".";
 import { InnerTableValues } from "./InnerTable";
-import DeleteApplication from "src/components/Application/DeleteApplication";
+import DeleteApplication from "src/components/DeleteApplication";
 
 const columnHelper = createColumnHelper<AdmissionsTableValues>();
 

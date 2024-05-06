@@ -40,6 +40,15 @@ steps:
     commands:
       - yarn build
   
+  - name: check-unused
+    image: node:22
+    when:
+      event: [push]
+    depends_on:
+      - yarn-install
+    commands:
+      - yarn knip
+  
   - name: missing-migrations
     image: abakus/lego-testbase:poetry
     when:
@@ -92,6 +101,7 @@ steps:
       - lint-frontend
       - typescript
       - build-frontend
+      - check-unused
       - missing-migrations
       - coverage
       - isort

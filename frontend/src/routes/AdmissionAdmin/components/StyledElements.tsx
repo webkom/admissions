@@ -45,7 +45,7 @@ export const TableWrapper = styled.div`
   width: 100%;
 `;
 
-export const LinkLink = styled(Link)`
+const LinkLink = styled(Link)`
   padding: 1em 0;
   display: block;
   font-weight: bold;

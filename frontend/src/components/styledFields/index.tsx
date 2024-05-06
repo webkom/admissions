@@ -75,7 +75,7 @@ export const InputValidationFeedback: React.FC<
   InputValidationFeedbackProps
 > = ({ error }) => (error ? <ValidationError>{error}</ValidationError> : null);
 
-export const ValidationError = styled.div`
+const ValidationError = styled.div`
   color: var(--lego-red);
   font-weight: 500;
   font-size: 0.9rem;

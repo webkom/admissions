@@ -197,7 +197,7 @@ export default ViewApplications;
 
 /** Styles **/
 
-export const PageWrapper = styled.div`
+const PageWrapper = styled.div`
   display: flex;
   flex-direction: column;
   align-items: center;
