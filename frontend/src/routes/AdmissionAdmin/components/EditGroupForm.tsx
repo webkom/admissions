@@ -120,7 +120,7 @@ const InnerForm: React.FC<InnerFormProps> = ({
         <SubmitButton
           onClick={submitForm}
           type="submit"
-          disabled={updateGroupMutation.isLoading}
+          disabled={updateGroupMutation.isPending}
           valid={isValid}
         >
           Lagre
