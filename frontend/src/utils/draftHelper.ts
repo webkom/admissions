@@ -11,13 +11,13 @@ const getItem = (key: KeyType, defaultValue = '""') =>
   sessionStorage.getItem(KeyType[key]) ?? defaultValue;
 const getParsedJson = (
   key: KeyType,
-  defaultValue: string | boolean | null | [] = ""
+  defaultValue: string | boolean | null | [] = "",
 ) => {
   return JSON.parse(getItem(key, JSON.stringify(defaultValue)));
 };
 const saveObject = (
   key: KeyType,
-  value: string | boolean | SelectedGroupsDraft
+  value: string | boolean | SelectedGroupsDraft,
 ) => {
   if (value === undefined) {
     value = "";
@@ -30,7 +30,7 @@ export const clearAllDrafts = () => sessionStorage.clear();
 // key-specific methods
 export const saveApplicationTextDraft = ([groupName, applicationText]: [
   string,
-  string
+  string,
 ]) => {
   saveObject(KeyType.applicationText, {
     ...getParsedJson(KeyType.applicationText, []),

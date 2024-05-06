@@ -1,5 +1,4 @@
 import { CSVLink } from "react-csv";
-import { Link } from "react-router-dom";
 import styled from "styled-components";
 
 interface SmallDescriptionWrapperProps {
@@ -43,12 +42,6 @@ export const Statistics = styled.div`
 export const TableWrapper = styled.div`
   max-width: 100%;
   width: 100%;
-`;
-
-const LinkLink = styled(Link)`
-  padding: 1em 0;
-  display: block;
-  font-weight: bold;
 `;
 
 export const CSVExport = styled(CSVLink)`

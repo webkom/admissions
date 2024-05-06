@@ -24,7 +24,7 @@ import CSVExportHandler, {
 const ViewApplications = () => {
   const { admissionSlug } = useParams();
   const [sortedApplications, setSortedApplications] = useState<Application[]>(
-    []
+    [],
   );
   const [selectedGroups, setSelectedGroups] = useState<string[]>([]);
   const [filteredApplications, setFilteredApplications] = useState<
@@ -69,8 +69,8 @@ const ViewApplications = () => {
     if (!applications) return;
     setSortedApplications(
       [...applications].sort((a, b) =>
-        a.user.full_name.localeCompare(b.user.full_name)
-      )
+        a.user.full_name.localeCompare(b.user.full_name),
+      ),
     );
   }, [applications]);
 
@@ -80,9 +80,9 @@ const ViewApplications = () => {
         (application) =>
           selectedGroups.length === 0 ||
           application.group_applications.find((groupApplication) =>
-            selectedGroups.includes(groupApplication.group.name)
-          )
-      )
+            selectedGroups.includes(groupApplication.group.name),
+          ),
+      ),
     );
   }, [sortedApplications, selectedGroups]);
 
@@ -168,7 +168,7 @@ const ViewApplications = () => {
               .filter(
                 (group) =>
                   admission.userdata.is_admin ||
-                  group.name === djangoData.user.representative_of_group
+                  group.name === djangoData.user.representative_of_group,
               )
               .sort((a, b) => a.name.localeCompare(b.name))
               .map((group) => (

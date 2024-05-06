@@ -9,16 +9,16 @@ interface CountDownProps {
 
 const CountDown: React.FC<CountDownProps> = ({ title, dateString }) => {
   const [remainingTotalSeconds, setRemainingTotalSeconds] = useState(
-    getRemainingSeconds(dateString)
+    getRemainingSeconds(dateString),
   );
   const [remaining, setRemaining] = useState(
-    calculateRemainingUnits(remainingTotalSeconds)
+    calculateRemainingUnits(remainingTotalSeconds),
   );
 
   useEffect(() => {
     const interval = setInterval(() => {
       setRemainingTotalSeconds(
-        (prevRemainingTotalSeconds) => prevRemainingTotalSeconds - 1
+        (prevRemainingTotalSeconds) => prevRemainingTotalSeconds - 1,
       );
     }, 1000);
 

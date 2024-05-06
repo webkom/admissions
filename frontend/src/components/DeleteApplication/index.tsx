@@ -30,7 +30,7 @@ const DeleteApplication: React.FC<DeleteApplicationProps> = ({
 }) => {
   const { admissionSlug } = useParams();
   const deleteGroupApplicationMutation = useDeleteGroupApplicationMutation(
-    admissionSlug ?? ""
+    admissionSlug ?? "",
   );
 
   const performDelete = (applicationId: number, groupName?: string) => {
@@ -41,7 +41,7 @@ const DeleteApplication: React.FC<DeleteApplicationProps> = ({
           alert("Det skjedde en feil.... ");
           throw error;
         },
-      }
+      },
     );
   };
 

@@ -64,10 +64,10 @@ const AdmissionsContainer: React.FC<AdmissionsContainerProps> = ({
             applicationId: application.pk,
             group: groupApplication.group.name,
             text: groupApplication.text,
-          })
+          }),
         ),
       })),
-    [applications]
+    [applications],
   );
 
   const table = useReactTable({
@@ -111,7 +111,7 @@ const AdmissionsContainer: React.FC<AdmissionsContainerProps> = ({
         </SubComponentWrapper>
       </>
     ),
-    [applications]
+    [applications],
   );
 
   return (
@@ -133,7 +133,7 @@ const AdmissionsContainer: React.FC<AdmissionsContainerProps> = ({
                     >
                       {flexRender(
                         header.column.columnDef.header,
-                        header.getContext()
+                        header.getContext(),
                       )}
                       {{
                         asc: <SortArrow name="arrow-dropup" />,

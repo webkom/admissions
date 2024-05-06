@@ -45,7 +45,7 @@ const FormStructure: React.FC<FormStructureProps> = ({ toggleIsEditing }) => {
   const isRevy = admissionSlug === "revy";
   const navigate = useNavigate();
   const deleteApplicationMutation = useDeleteMyApplicationMutation(
-    admissionSlug ?? ""
+    admissionSlug ?? "",
   );
 
   const { data: myApplication } = useMyApplication(admissionSlug ?? "");
@@ -113,10 +113,10 @@ const FormStructure: React.FC<FormStructureProps> = ({ toggleIsEditing }) => {
                   {deleteApplicationMutation.isLoading
                     ? "Sletter søknad..."
                     : deleteApplicationMutation.isError
-                    ? "Klarte ikke slette søknad"
-                    : deleteApplicationMutation.isSuccess
-                    ? "Søknad slettet!"
-                    : "Slett søknad"}
+                      ? "Klarte ikke slette søknad"
+                      : deleteApplicationMutation.isSuccess
+                        ? "Søknad slettet!"
+                        : "Slett søknad"}
                 </LegoButton>
               )}
               message="Er du sikker på at du vil slette søknaden din?"
@@ -178,7 +178,7 @@ const FormStructure: React.FC<FormStructureProps> = ({ toggleIsEditing }) => {
             <Applications>
               {myApplication.group_applications.map((groupApplication) => {
                 const group = groups?.find(
-                  (group) => group.pk === groupApplication.group.pk
+                  (group) => group.pk === groupApplication.group.pk,
                 );
                 if (!group) return null;
 

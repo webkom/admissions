@@ -36,7 +36,7 @@ export type SharedApplicationProps = {
 const generateInitialValues: (
   selectedGroups: SelectedGroups,
   admission?: Admission,
-  myApplication?: Application
+  myApplication?: Application,
 ) => FormValues = (selectedGroups, admission, myApplication) => {
   const {
     text = getPriorityTextDraft(),
@@ -66,7 +66,7 @@ const generateInitialValues: (
             myApplication?.header_fields_response[field.id]) ??
           "",
       }),
-      {}
+      {},
     );
   initialValues.headerFields = blankHeaderFields;
 
@@ -91,7 +91,7 @@ const generateInitialValues: (
 
 const validationSchema = (
   selectedGroups: SelectedGroups,
-  admission?: Admission
+  admission?: Admission,
 ) => {
   return Yup.lazy(() => {
     // Iterate over all selected groups and add them to the required schema
@@ -101,8 +101,8 @@ const validationSchema = (
       .forEach(
         ([name]) =>
           (selectedGroupsSchema[name] = Yup.string().required(
-            "Søknadsteksten må fylles ut"
-          ))
+            "Søknadsteksten må fylles ut",
+          )),
       );
 
     const headerFieldsSchema = (admission?.header_fields as InputFieldModel[])
@@ -112,14 +112,14 @@ const validationSchema = (
           ...obj,
           [field.id]: Yup.string().required(`${field.title} må fylles ut`),
         }),
-        {}
+        {},
       );
 
     return Yup.object().shape({
       phoneNumber: Yup.string()
         .matches(
           /^(0047|\+47|47)?(?:\s*\d){8}$/,
-          "Skriv inn et gyldig norsk telefonnummer"
+          "Skriv inn et gyldig norsk telefonnummer",
         )
         .required("Skriv inn et gyldig norsk telefonnummer"),
       priorityText: Yup.string().optional(),
@@ -142,12 +142,12 @@ const ApplicationForm: React.FC<ApplicationFormProps> = ({
   groups,
 }) => {
   const createApplicationMutation = useCreateApplicationMutation(
-    admission?.slug ?? ""
+    admission?.slug ?? "",
   );
 
   const onSubmit: (
     values: FormValues,
-    formikHelpers: FormikHelpers<FormValues>
+    formikHelpers: FormikHelpers<FormValues>,
   ) => void = (values, { setSubmitting }) => {
     const submission: MutationApplication = {
       text: values.priorityText,
@@ -171,7 +171,7 @@ const ApplicationForm: React.FC<ApplicationFormProps> = ({
           alert("Det skjedde en feil.... ");
           setSubmitting(false);
         },
-      }
+      },
     );
   };
 
@@ -180,7 +180,7 @@ const ApplicationForm: React.FC<ApplicationFormProps> = ({
       initialValues={generateInitialValues(
         selectedGroups,
         admission,
-        myApplication
+        myApplication,
       )}
       validateOnChange={true}
       enableReinitialize={true}

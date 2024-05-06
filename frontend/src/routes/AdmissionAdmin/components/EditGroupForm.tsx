@@ -65,7 +65,7 @@ const EditGroupForm: React.FC<EditGroupFormProps> = ({
               setResetMutationTimeout(
                 setTimeout(() => {
                   updateGroupMutation.reset();
-                }, 1200)
+                }, 1200),
               );
             },
             onError: (error) => {
@@ -74,7 +74,7 @@ const EditGroupForm: React.FC<EditGroupFormProps> = ({
                 response_label: error.response?.data.response_label[0],
               });
             },
-          }
+          },
         );
       }}
     >

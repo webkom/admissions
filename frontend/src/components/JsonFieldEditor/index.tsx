@@ -41,9 +41,9 @@ const JsonFieldEditor: React.FC<Props> = ({
           <TextField key={field.text} field={field} />
         ) : field.type === "phoneinput" ? (
           <PhoneInputField key={field.id} field={field} />
-        ) : null
+        ) : null,
       ),
-    [fields]
+    [fields],
   );
 
   return <>{renderedFields}</>;

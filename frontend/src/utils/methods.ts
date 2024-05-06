@@ -9,7 +9,7 @@
 export const toggleFromArray: <T>(
   array: T[],
   item: T,
-  predicate?: (value: T, index: number, array: T[]) => boolean
+  predicate?: (value: T, index: number, array: T[]) => boolean,
 ) => void = (array, item, predicate = (value) => value === item) =>
   array.includes(item)
     ? array.filter((value, index, array) => !predicate(value, index, array))

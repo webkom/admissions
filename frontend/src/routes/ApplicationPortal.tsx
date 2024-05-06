@@ -29,7 +29,7 @@ interface SelectedGroups {
 const ApplicationPortal = () => {
   const { admissionSlug } = useParams();
   const [selectedGroups, setSelectedGroups] = useState<SelectedGroups>(
-    getSelectedGroupsDraft()
+    getSelectedGroupsDraft(),
   );
   const [isEditingApplication, setIsEditingApplication] = useState<
     boolean | null
@@ -85,7 +85,7 @@ const ApplicationPortal = () => {
     setSelectedGroups(
       myApplication.group_applications
         ?.map((a) => a.group.name.toLowerCase())
-        .reduce((obj, a) => ({ ...obj, [a]: true }), {})
+        .reduce((obj, a) => ({ ...obj, [a]: true }), {}),
     );
   }, [myApplication]);
 

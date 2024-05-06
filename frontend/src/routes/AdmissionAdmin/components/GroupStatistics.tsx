@@ -41,7 +41,7 @@ const GroupStatistics: React.FC<GroupStatisticsProps> = ({
     setSelectedGroups(
       selectedGroups.includes(groupName)
         ? selectedGroups.filter((selectedGroup) => selectedGroup !== groupName)
-        : [...selectedGroups, groupName]
+        : [...selectedGroups, groupName],
     );
 
   const count = calculateNumGroupApplications(groupName);
@@ -67,7 +67,7 @@ interface GroupStatisticsWrapperProps {
 }
 
 const GroupStatisticsWrapper = styled(
-  StatisticsWrapper
+  StatisticsWrapper,
 )<GroupStatisticsWrapperProps>`
   margin: 0.25em;
   padding: 0.5em 0.5em;
