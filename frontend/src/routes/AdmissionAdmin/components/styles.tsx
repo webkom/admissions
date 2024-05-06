@@ -67,13 +67,13 @@ export const EditGroupFormWrapper = styled.div`
   `};
 `;
 
-export const LinkLink = styled(Link)`
+const LinkLink = styled(Link)`
   padding: 1em 0;
   display: block;
   font-weight: bold;
 `;
 
-export const CSVExport = styled(CSVLink)`
+const CSVExport = styled(CSVLink)`
   padding: 1em 0;
   display: block;
   text-align: center;
@@ -87,7 +87,7 @@ export const CSVExport = styled(CSVLink)`
  * Statistics
  */
 
-export const Statistics = styled.div`
+const Statistics = styled.div`
   padding: 0.5em;
   display: flex;
   justify-content: center;
@@ -99,7 +99,7 @@ interface StatisticsWrapperProps {
   smallerMargin?: string | number;
 }
 
-export const StatisticsWrapper = styled.div<StatisticsWrapperProps>`
+const StatisticsWrapper = styled.div<StatisticsWrapperProps>`
   display: inline-flex;
   flex-direction: column;
   margin: ${(props) => (props.smallerMargin ? "0 0.5em 1em 1em" : "1em")};
@@ -113,7 +113,7 @@ interface StatisticsNameProps {
   capitalize?: boolean;
 }
 
-export const StatisticsName = styled.span<StatisticsNameProps>`
+const StatisticsName = styled.span<StatisticsNameProps>`
   font-size: 0.8em;
   font-weight: bold;
   text-transform: ${(props) => (props.capitalize ? "capitalize" : "normal")};

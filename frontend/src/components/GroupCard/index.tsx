@@ -57,7 +57,7 @@ interface GroupCardElementsStyledProps {
 
 type GroupCardStyledProps = GroupCardElementsStyledProps & { $isRevy: boolean };
 
-export const Card = styled.div<GroupCardStyledProps>`
+const Card = styled.div<GroupCardStyledProps>`
   display: grid;
   grid-template-columns: 1fr 3fr;
   grid-template-rows: 2rem 1fr ${({ $isRevy }) => !$isRevy && "1.5rem"};
@@ -95,7 +95,7 @@ export const Card = styled.div<GroupCardStyledProps>`
   `};
 `;
 
-export const Name = styled.h2`
+const Name = styled.h2`
   grid-area: name;
   margin: 0;
   font-size: 1.5rem;
@@ -110,7 +110,7 @@ export const Name = styled.h2`
     `};
 `;
 
-export const Description = styled.p`
+const Description = styled.p`
   grid-area: text;
   margin: 0;
   font-size: 0.85rem;
@@ -123,7 +123,7 @@ export const Description = styled.p`
     `};
 `;
 
-export const Logo = styled.img`
+const Logo = styled.img`
   object-fit: scale-down;
   grid-area: logo;
   width: 100%;
@@ -133,7 +133,7 @@ export const Logo = styled.img`
   `};
 `;
 
-export const LearnMoreLink = styled.a`
+const LearnMoreLink = styled.a`
   grid-area: readmore;
   font-weight: 600;
   text-align: right;
@@ -149,7 +149,7 @@ export const LearnMoreLink = styled.a`
     `};
 `;
 
-export const SelectedMark = styled.div<GroupCardElementsStyledProps>`
+const SelectedMark = styled.div<GroupCardElementsStyledProps>`
   width: 100%;
   height: 35px;
   padding: 8px 0;

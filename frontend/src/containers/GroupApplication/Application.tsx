@@ -96,13 +96,13 @@ const Container = styled.div`
     `};
 `;
 
-export const LogoNameWrapper = styled.div`
+const LogoNameWrapper = styled.div`
   grid-area: logoname;
   display: flex;
   align-items: center;
 `;
 
-export const Name = styled.h3`
+const Name = styled.h3`
   grid-area: name;
   margin: 0;
   font-size: 1.5rem;
@@ -117,7 +117,7 @@ export const Name = styled.h3`
     `};
 `;
 
-export const Logo = styled.img`
+const Logo = styled.img`
   grid-area: logo;
   justify-self: start;
   object-fit: scale-down;
@@ -125,7 +125,7 @@ export const Logo = styled.img`
   margin-right: 1rem;
 `;
 
-export const ResponseLabel = styled.div`
+const ResponseLabel = styled.div`
   grid-area: responselabel;
   background: linear-gradient(
     180deg,
@@ -141,7 +141,7 @@ export const ResponseLabel = styled.div`
   color: rgba(57, 75, 89, 0.8);
 `;
 
-export const InputWrapper = styled.div`
+const InputWrapper = styled.div`
   grid-area: input;
   font-family: var(--font-family);
   font-size: 1rem;

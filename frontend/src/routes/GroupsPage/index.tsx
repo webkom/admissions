@@ -76,7 +76,7 @@ export default GroupsPage;
 
 /** Styles **/
 
-export const PageWrapper = styled.div`
+const PageWrapper = styled.div`
   width: 100%;
   padding: 0 1rem;
   margin: 0 auto 4em auto;
@@ -88,7 +88,7 @@ export const PageWrapper = styled.div`
   justify-content: center;
 `;
 
-export const Title = styled.h1`
+const Title = styled.h1`
   color: rgba(129, 129, 129, 0.59);
   font-size: 1.3rem;
   margin: 1.6rem 0 2rem;
@@ -101,7 +101,7 @@ export const Title = styled.h1`
   `};
 `;
 
-export const GroupsWrapper = styled.div`
+const GroupsWrapper = styled.div`
   display: grid;
   max-width: calc(460px + 460px + 2rem);
   grid-template-columns: 1fr 1fr;
@@ -114,7 +114,7 @@ export const GroupsWrapper = styled.div`
     `};
 `;
 
-export const NextButtonWrapper = styled.div`
+const NextButtonWrapper = styled.div`
   width: 100%;
   margin-top: 4em;
   display: flex;
@@ -127,7 +127,7 @@ export const NextButtonWrapper = styled.div`
   `};
 `;
 
-export const ErrorMessage = styled.div`
+const ErrorMessage = styled.div`
   font-size: 0.9rem;
   font-weight: 600;
   line-height: 1.3em;
