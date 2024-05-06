@@ -3,7 +3,7 @@ import LegoButton from "src/components/LegoButton";
 import ConfirmModal from "src/components/ConfirmModal";
 import styled from "styled-components";
 import { media } from "src/styles/mediaQueries";
-import { useDeleteGroupApplicationMutation } from "src/query/mutations";
+import { useAdminDeleteApplicationMutation } from "src/query/mutations";
 import { useParams } from "react-router-dom";
 
 const DeleteWrapper = styled.div`
@@ -21,21 +21,21 @@ const DeleteWrapper = styled.div`
 
 interface DeleteApplicationProps {
   applicationId: number;
-  groupName?: string;
+  groupId?: number;
 }
 
 const DeleteApplication: React.FC<DeleteApplicationProps> = ({
   applicationId,
-  groupName,
+  groupId,
 }) => {
   const { admissionSlug } = useParams();
-  const deleteGroupApplicationMutation = useDeleteGroupApplicationMutation(
+  const deleteApplicationMutation = useAdminDeleteApplicationMutation(
     admissionSlug ?? "",
   );
 
-  const performDelete = (applicationId: number, groupName?: string) => {
-    deleteGroupApplicationMutation.mutate(
-      { applicationId, groupName },
+  const performDelete = (applicationId: number, groupId?: number) => {
+    deleteApplicationMutation.mutate(
+      { applicationId, groupId },
       {
         onError: (error) => {
           alert("Det skjedde en feil.... ");
@@ -55,7 +55,7 @@ const DeleteApplication: React.FC<DeleteApplicationProps> = ({
           </LegoButton>
         )}
         message="Er du sikker på at du vil slette denne søknaden?"
-        onConfirm={() => performDelete(applicationId, groupName)}
+        onConfirm={() => performDelete(applicationId, groupId)}
       />
     </DeleteWrapper>
   );

@@ -2,11 +2,11 @@ import React from "react";
 import { createColumnHelper } from "@tanstack/react-table";
 import Icon from "src/components/Icon";
 import FormatTime from "src/components/Time/FormatTime";
-import { AdmissionsTableValues } from ".";
+import { ApplicationTableRow } from ".";
 import { InnerTableValues } from "./InnerTable";
 import DeleteApplication from "src/components/DeleteApplication";
 
-const columnHelper = createColumnHelper<AdmissionsTableValues>();
+const columnHelper = createColumnHelper<ApplicationTableRow>();
 
 export const columns = [
   columnHelper.display({
@@ -79,7 +79,7 @@ export const columns = [
 const innerColumnHelper = createColumnHelper<InnerTableValues>();
 
 export const innerColumns = [
-  innerColumnHelper.accessor("group", {
+  innerColumnHelper.accessor("groupName", {
     header: "Gruppe",
     size: 100,
   }),
@@ -93,7 +93,7 @@ export const innerColumns = [
     cell: ({ row }) => (
       <DeleteApplication
         applicationId={row.original.applicationId}
-        groupName={row.original.group}
+        groupId={row.original.groupId}
       />
     ),
     size: 100,

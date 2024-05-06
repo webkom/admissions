@@ -5,7 +5,7 @@ import FormatTime from "src/components/Time/FormatTime";
 import LoadingBall from "src/components/LoadingBall";
 import GroupStatistics from "./components/GroupStatistics";
 import { replaceQuotationMarks } from "src/utils/methods";
-import { useAdmission, useApplications } from "src/query/hooks";
+import { useAdmission, useAdminApplications } from "src/query/hooks";
 import { useParams } from "react-router-dom";
 
 import AdmissionsContainer from "src/containers/AdmissionsContainer";
@@ -36,7 +36,7 @@ const ViewApplications = () => {
     data: applications,
     error: applicationsError,
     isFetching: applicationsIsFetching,
-  } = useApplications(admissionSlug ?? "");
+  } = useAdminApplications(admissionSlug ?? "");
   const {
     data: admission,
     error: admissionError,

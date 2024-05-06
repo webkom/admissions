@@ -9,7 +9,8 @@ import styled from "styled-components";
 
 export interface InnerTableValues {
   applicationId: number;
-  group: string;
+  groupId: number;
+  groupName: string;
   text: string;
 }
 

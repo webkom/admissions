@@ -90,7 +90,7 @@ class AdmissionPermissions(permissions.BasePermission):
 
 class ApplicationPermissions(permissions.BasePermission):
     def has_object_permission(self, request, view, obj):
-        return False
+        return user_is_privileged(view.kwargs.get("admission_slug"), request.user)
 
     def has_permission(self, request, view):
         return user_is_privileged(view.kwargs.get("admission_slug"), request.user)

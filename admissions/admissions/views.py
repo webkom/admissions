@@ -6,7 +6,7 @@ from django.db.models import Prefetch, Q
 from django.http import HttpResponse
 from django.utils import timezone
 from django.views.generic.base import TemplateView
-from rest_framework import permissions, status, viewsets
+from rest_framework import mixins, permissions, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
 
@@ -97,21 +97,86 @@ class GroupViewSet(viewsets.ModelViewSet):
     permission_classes = [permissions.IsAuthenticated, GroupPermissions]
 
 
-class ApplicationViewSet(viewsets.ModelViewSet):
+##################################################
+################## PUBLIC VIEWS ##################
+##################################################
+
+
+class PublicApplicationViewSet(mixins.CreateModelMixin, viewsets.GenericViewSet):
+    queryset = UserApplication.objects.none()
+    authentication_classes = [SessionAuthentication]
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_serializer_class(self):
+        if self.action in ("create"):
+            return ApplicationCreateUpdateSerializer
+        return UserApplicationSerializer
+
+    def perform_create(self, serializer):
+        admission_slug = self.kwargs.get("admission_slug", None)
+        serializer.save(user=self.request.user, admission_slug=admission_slug)
+
+    @action(detail=False, methods=["GET", "DELETE"])
+    def mine(self, request, admission_slug):
+        try:
+            if request.method == "GET":
+                instance = UserApplication.objects.get(
+                    user=request.user, admission__slug=admission_slug
+                )
+                serializer = self.get_serializer(instance)
+                return Response(serializer.data)
+            elif request.method == "DELETE":
+                instance = UserApplication.objects.get(
+                    user=request.user, admission__slug=admission_slug
+                )
+                serializer = self.get_serializer(instance)
+                applied_groups = [
+                    (group.get("group").get("pk"), group.get("group").get("name"))
+                    for group in serializer.data.get("group_applications")
+                ]
+                recruiters = {}
+                for group_pk, group_name in applied_groups:
+                    group_recruiters = Membership.objects.filter(
+                        Q(role=constants.RECRUITING) | Q(role=constants.LEADER),
+                        group=group_pk,
+                    )
+                    recruiters[group_name] = [
+                        recruiter.user.email for recruiter in group_recruiters
+                    ]
+
+                admission_slug = self.kwargs.get("admission_slug", None)
+                admission = Admission.objects.get(slug=admission_slug)
+                for group, group_recruiters in recruiters.items():
+                    send_message(admission, group, group_recruiters)
+                instance.delete()
+                return Response(status=status.HTTP_204_NO_CONTENT)
+        except UserApplication.DoesNotExist:
+            # HTTP 204 No Content
+            return HttpResponse(status=204)
+
+
+#################################################
+################## ADMIN VIEWS ##################
+#################################################
+
+
+class AdminApplicationViewSet(
+    mixins.ListModelMixin, mixins.DestroyModelMixin, viewsets.GenericViewSet
+):
     queryset = UserApplication.objects.all().select_related("admission", "user")
     authentication_classes = [SessionAuthentication]
+    serializer_class = UserApplicationSerializer
+    permission_classes = [permissions.IsAuthenticated]
 
     def get_permissions(self):
         """
         Instantiates and returns the list of permissions that this view requires.
         """
-        if self.action in ["mine", "create"]:
-            permission_classes = [permissions.IsAuthenticated]
-        elif self.action in ["delete_group_application"]:
-            permission_classes = [GroupApplicationPermissions]
+        if self.action in ["delete_group_application"]:
+            self.permission_classes.append(GroupApplicationPermissions)
         else:
-            permission_classes = [permissions.IsAuthenticated, ApplicationPermissions]
-        return [permission() for permission in permission_classes]
+            self.permission_classes.append(ApplicationPermissions)
+        return super(AdminApplicationViewSet, self).get_permissions()
 
     def get_queryset(self):
         admission_slug = self.kwargs.get("admission_slug", None)
@@ -153,83 +218,52 @@ class ApplicationViewSet(viewsets.ModelViewSet):
         # No permissions
         return UserApplication.objects.none()
 
-    def get_serializer_class(self):
-        if self.action in ("create"):
-            return ApplicationCreateUpdateSerializer
-        return UserApplicationSerializer
-
-    def perform_create(self, serializer):
+    def destroy(self, request, *args, **kwargs):
         admission_slug = self.kwargs.get("admission_slug", None)
-        serializer.save(user=self.request.user, admission_slug=admission_slug)
+        admission = Admission.objects.get(slug=admission_slug)
+        self.request.user.__class__ = LegoUser
 
-    @action(detail=True, methods=["DELETE"], url_name="delete_group_application")
-    def delete_group_application(self, request, admission_slug, pk=None):
-        try:
-            admission_slug = self.kwargs.get("admission_slug", None)
-            admission = Admission.objects.get(slug=admission_slug)
-            self.request.user.__class__ = LegoUser
+        group_id = request.query_params.get("groupId", None)
+        user_is_admin = user_is_admission_admin(admission, self.request.user)
 
-            representing_group = get_representing_group(admission, self.request.user)
-            if user_is_admission_admin(admission, self.request.user):
-                group_name = request.query_params.get("group", None)
-                group = Group.objects.get(name=group_name)
-            elif representing_group is not None:
-                group = representing_group
+        # Only admins can delete UserApplication objects
+        if group_id is None:
+            if user_is_admin:
+                return super().destroy(request, *args, **kwargs)
             else:
                 return Response(status=status.HTTP_400_BAD_REQUEST)
 
-            GroupApplication.objects.get(application=pk, group=group).delete()
+        # Verify that the user is permitted to delete the group application
+        representing_group = get_representing_group(admission, self.request.user)
+        if not user_is_admin and (
+            representing_group is None or str(representing_group.pk) != group_id
+        ):
+            return Response(
+                status=status.HTTP_403_FORBIDDEN,
+                data="You are not permitted to delete applications for this group",
+            )
 
-            if not GroupApplication.objects.filter(application=pk).exists():
-                # If this is the only application the user had left, we can
-                # delete the entire userApplication
-                UserApplication.objects.get(pk=pk).delete()
-            return Response(status=status.HTTP_200_OK)
+        # Perform the deletion
+        user_application = self.get_object()
+        GroupApplication.objects.get(
+            application=user_application.pk, group=group_id
+        ).delete()
 
-        except UserApplication.DoesNotExist:
-            # HTTP 204 No Content
-            return HttpResponse(status=204)
+        # Delete the UserApplication if all GroupApplications are deleted
+        if not GroupApplication.objects.filter(
+            application=user_application.pk
+        ).exists():
+            self.perform_destroy(user_application)
 
-    @action(detail=False, methods=["GET", "DELETE"])
-    def mine(self, request, admission_slug):
-        try:
-            if request.method == "GET":
-                instance = UserApplication.objects.get(
-                    user=request.user, admission__slug=admission_slug
-                )
-                serializer = self.get_serializer(instance)
-                return Response(serializer.data)
-            elif request.method == "DELETE":
-                instance = UserApplication.objects.get(
-                    user=request.user, admission__slug=admission_slug
-                )
-                serializer = self.get_serializer(instance)
-                applied_groups = [
-                    (group.get("group").get("pk"), group.get("group").get("name"))
-                    for group in serializer.data.get("group_applications")
-                ]
-                recruiters = {}
-                for group_pk, group_name in applied_groups:
-                    group_recruiters = Membership.objects.filter(
-                        Q(role=constants.RECRUITING) | Q(role=constants.LEADER),
-                        group=group_pk,
-                    )
-                    recruiters[group_name] = [
-                        recruiter.user.email for recruiter in group_recruiters
-                    ]
-
-                admission_slug = self.kwargs.get("admission_slug", None)
-                admission = Admission.objects.get(slug=admission_slug)
-                for group, group_recruiters in recruiters.items():
-                    send_message(admission, group, group_recruiters)
-                instance.delete()
-                return Response(status=status.HTTP_204_NO_CONTENT)
-        except UserApplication.DoesNotExist:
-            # HTTP 204 No Content
-            return HttpResponse(status=204)
+        return Response(status=status.HTTP_204_NO_CONTENT)
 
 
-class AdminAdmissionViewSet(viewsets.ModelViewSet):
+##################################################
+################## MANAGE VIEWS ##################
+##################################################
+
+
+class ManageAdmissionViewSet(viewsets.ModelViewSet):
     authentication_classes = [SessionAuthentication]
     permission_classes = [
         permissions.IsAuthenticated,

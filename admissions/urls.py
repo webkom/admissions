@@ -21,19 +21,27 @@ from django.urls import include, path, re_path
 from rest_framework import routers
 
 from admissions.admissions.views import (
-    AdminAdmissionViewSet,
+    AdminApplicationViewSet,
     AdmissionViewSet,
-    ApplicationViewSet,
     AppView,
     GroupViewSet,
+    ManageAdmissionViewSet,
+    PublicApplicationViewSet,
 )
 
 adminRouter = routers.DefaultRouter()
-adminRouter.register(r"admission", AdminAdmissionViewSet, "admin-admission")
+adminRouter.register(r"admission", ManageAdmissionViewSet, "admin-admission")
 
 router = routers.DefaultRouter()
 router.register(r"admission", AdmissionViewSet)
-router.register(r"admission/(?P<admission_slug>[-\w]+)/application", ApplicationViewSet)
+router.register(
+    r"admission/(?P<admission_slug>[-\w]+)/application", PublicApplicationViewSet
+)
+router.register(
+    r"admission/(?P<admission_slug>[-\w]+)/admin/application",
+    AdminApplicationViewSet,
+    "admin-userapplication",
+)
 router.register(r"group", GroupViewSet)
 urlpatterns = [
     re_path(r"logout/$", auth_views.LogoutView.as_view(), name="logout"),
