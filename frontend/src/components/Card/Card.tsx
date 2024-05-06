@@ -9,12 +9,7 @@ interface CardProps {
   primary?: boolean;
 }
 
-const Card = styled.div.attrs((props: CardProps) => ({
-  margin: props.margin || "1rem",
-  padding: props.padding || "1rem",
-  width: props.width || "auto",
-  "max-width": props.maxWidth || "auto",
-}))<CardProps>`
+const Card = styled.div<CardProps>`
   border: 1px solid rgba(0, 0, 0, 0.09);
   border-radius: 3px;
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.04);
@@ -22,10 +17,10 @@ const Card = styled.div.attrs((props: CardProps) => ({
   background: ${(props) => (props.primary ? "gray" : "white")};
   color: ${(props) => (props.primary ? "white" : "black")};
 
-  margin: ${(props) => props.margin};
-  padding: ${(props) => props.padding};
-  width: ${(props) => props.width};
-  max-width: ${(props) => props.maxWidth};
+  margin: ${(props) => props.margin || "1rem"};
+  padding: ${(props) => props.padding || "1rem"};
+  width: ${(props) => props.width || "auto"};
+  max-width: ${(props) => props.maxWidth || "auto"};
 
   ${media.handheld`
     margin: 0.3rem 0;

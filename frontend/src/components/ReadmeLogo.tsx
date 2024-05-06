@@ -36,4 +36,4 @@ const Readme = styled.div`
   text-transform: lowercase;
 `;
 
-const ReadmeBody = Readme.withComponent("span");
+const ReadmeBody = styled(Readme).attrs({ as: "span" })``;

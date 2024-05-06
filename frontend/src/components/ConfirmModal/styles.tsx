@@ -45,18 +45,15 @@ export const ButtonGroup = styled.div`
 `;
 
 interface ActionButtonProps {
-  background: string;
-  border: string | number;
+  background?: string;
+  border?: string | number;
 }
 
-export const ActionButton = styled.button.attrs((props: ActionButtonProps) => ({
-  background: props.background || "var(--lego-red)",
-  border: props.border || "1px solid var(--abakus-red)",
-}))`
+export const ActionButton = styled.button<ActionButtonProps>`
   color: #fff;
   font-weight: bold;
-  background: ${(props) => props.background};
-  border: ${(props) => props.border};
+  background: ${(props) => props.background || "var(--lego-red)"};
+  border: ${(props) => props.border || "1px solid var(--abakus-red)"};
   padding: 10px 30px;
   border-radius: 4px;
   width: 100px;

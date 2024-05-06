@@ -325,9 +325,7 @@ const Input = styled.input`
   border: 1px solid #d6d6d6;
 `;
 
-const ResultText = styled.span.attrs((props: ReturnedData) => ({
-  type: props.type,
-}))`
+const ResultText = styled.span<{ type: ReturnedData["type"] }>`
   padding: 0.3rem 1rem;
   border-radius: 10px;
   background: ${({ type }) =>

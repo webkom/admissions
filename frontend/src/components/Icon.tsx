@@ -40,15 +40,10 @@ interface IconStyleProps {
   styles?: Interpolation<React.CSSProperties>;
 }
 
-const Ionicon = styled.i.attrs((props: IconStyleProps) => ({
-  size: props.size || "2rem",
-  color: props.color || "inherit",
-  padding: props.padding || "0",
-  styles: props.styles,
-}))`
+const Ionicon = styled.i<IconStyleProps>`
   ${({ styles }) => styles}
-  font-size: ${(props) => props.size};
+  font-size: ${(props) => props.size || "2rem"};
   line-height: 1;
-  color: ${(props) => props.color};
-  padding: ${(props) => props.padding};
+  color: ${(props) => props.color || "inherit"};
+  padding: ${(props) => props.padding || "0"};
 `;

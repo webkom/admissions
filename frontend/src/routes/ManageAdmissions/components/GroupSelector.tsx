@@ -21,10 +21,7 @@ const GroupSelector: React.FC<GroupSelectorProps> = ({
 
   return (
     <>
-      <Select
-        placeholder="Skriv inn navnet på en gruppe"
-        onChange={(e) => toggleSelectedGroup(Number(e.target.value))}
-      >
+      <Select onChange={(e) => toggleSelectedGroup(Number(e.target.value))}>
         <option>Legg til gruppe</option>
         {groups
           ?.filter((group) => !selectedGroups.includes(group.pk))
