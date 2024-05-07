@@ -3082,10 +3082,10 @@ kind-of@^6.0.2:
   resolved "https://registry.yarnpkg.com/kind-of/-/kind-of-6.0.3.tgz#07c05034a6c349fa06e24fa35aa76db4580ce4dd"
   integrity sha512-dcS1ul+9tmeD95T+x28/ehLgd9mENa3LsvDTtzm3vyBEO7RPptvAD+t44WVXaUjTBRcrpFeFlC8WCruUR456hw==
 
-knip@^5.12.2:
-  version "5.12.2"
-  resolved "https://registry.yarnpkg.com/knip/-/knip-5.12.2.tgz#dcf817f9b6f6e560781da08166ae41dec2c3a6ec"
-  integrity sha512-js9PY49o3xEkheceQqwVGSE2xJb4HAwOSDNk51aBSZFQch6tkT2P1aipT2VnsyvOD25eBo1SXvJdSQhOBTUYsA==
+knip@^5.13.0:
+  version "5.13.0"
+  resolved "https://registry.yarnpkg.com/knip/-/knip-5.13.0.tgz#13e9e6a087a1346a930aa2a35f81a4235f7ea7cf"
+  integrity sha512-CvGvUkb4SIpLWNYOwv8sqGp9WlWe7i57Qw3w/cvEMOdbPxIyzCWBKuD+xpty4zKtdrWxwdV5Jr0LtSKcxxA6Yw==
   dependencies:
     "@ericcornelissen/bash-parser" "0.5.2"
     "@nodelib/fs.walk" "2.0.0"
