@@ -572,13 +572,13 @@ Django = ">=3.2"
 
 [[package]]
 name = "django-vite"
-version = "3.0.3"
+version = "3.0.4"
 description = "Integration of Vite in a Django project."
 optional = false
 python-versions = "*"
 files = [
-    {file = "django-vite-3.0.3.tar.gz", hash = "sha256:0738e6fe49ed097ab8e9e22ac78776584735948e118d3875817f78a87acaac82"},
-    {file = "django_vite-3.0.3-py3-none-any.whl", hash = "sha256:3efe96d93cd77dfca4d8274c49db9dd43c545c95daab3c6b1e3dabf2236df943"},
+    {file = "django-vite-3.0.4.tar.gz", hash = "sha256:043ab5068b4c66eb33cb26c5215a6dfe275d3c4de15d59b0b7b97b4567912fb0"},
+    {file = "django_vite-3.0.4-py3-none-any.whl", hash = "sha256:e4088e0c79b7c9cf013ebb2ae0117a8fa57646337a40e90209ba916d65f359d3"},
 ]
 
 [package.dependencies]
@@ -1690,4 +1690,4 @@ files = [
 [metadata]
 lock-version = "2.0"
 python-versions = "^3.9"
-content-hash = "746222b27a4b562fe607aa69078e74c68edbe8472aecc7170e176f9b79e63339"
+content-hash = "1ae295844be9ba0c3b4101c0cb3825e234a29ed0a016319079cd1247487c2a64"
