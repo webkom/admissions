@@ -739,76 +739,87 @@
   resolved "https://registry.yarnpkg.com/@remix-run/router/-/router-1.16.0.tgz#0e10181e5fec1434eb071a9bc4bdaac843f16dcc"
   integrity sha512-Quz1KOffeEf/zwkCBM3kBtH4ZoZ+pT3xIXBG4PPW/XFtDP7EGhtTiC2+gpL9GnR7+Qdet5Oa6cYSvwKYg6kN9Q==
 
-"@sentry-internal/feedback@7.101.1":
-  version "7.101.1"
-  resolved "https://registry.yarnpkg.com/@sentry-internal/feedback/-/feedback-7.101.1.tgz#d7e27ebcc46bd7306cfaa89b591293a394d75672"
-  integrity sha512-fOKDMVvLX+FuJHJszKBvRg1m7+fd4hchqRnZ9DDfitT6P5Ppl0gbEt/LStqu8Wq5M0tna+hpdwHlVEt7gZVKzw==
+"@sentry-internal/feedback@7.114.0":
+  version "7.114.0"
+  resolved "https://registry.yarnpkg.com/@sentry-internal/feedback/-/feedback-7.114.0.tgz#8a1c3d8bbd014c1823d30b9b1128eb244d357c3e"
+  integrity sha512-kUiLRUDZuh10QE9JbSVVLgqxFoD9eDPOzT0MmzlPuas8JlTmJuV4FtSANNcqctd5mBuLt2ebNXH0MhRMwyae4A==
   dependencies:
-    "@sentry/core" "7.101.1"
-    "@sentry/types" "7.101.1"
-    "@sentry/utils" "7.101.1"
+    "@sentry/core" "7.114.0"
+    "@sentry/types" "7.114.0"
+    "@sentry/utils" "7.114.0"
 
-"@sentry-internal/replay-canvas@7.101.1":
-  version "7.101.1"
-  resolved "https://registry.yarnpkg.com/@sentry-internal/replay-canvas/-/replay-canvas-7.101.1.tgz#6856431a6360dd456c693d0510410dcd46f28150"
-  integrity sha512-09l6nD+lxWvwkpXLlIZuzj/z79Llbo6mcH33TJvxrUTjAqSGF/i3Pd5bTLWro9atippOyQgIV/yTGG4Bc5FhyQ==
+"@sentry-internal/replay-canvas@7.114.0":
+  version "7.114.0"
+  resolved "https://registry.yarnpkg.com/@sentry-internal/replay-canvas/-/replay-canvas-7.114.0.tgz#b81e2c2ebec01c436ad6e687e563ba456e33b615"
+  integrity sha512-6rTiqmKi/FYtesdM2TM2U+rh6BytdPjLP65KTUodtxohJ+r/3m+termj2o4BhIYPE1YYOZNmbZfwebkuQPmWeg==
   dependencies:
-    "@sentry/core" "7.101.1"
-    "@sentry/replay" "7.101.1"
-    "@sentry/types" "7.101.1"
-    "@sentry/utils" "7.101.1"
+    "@sentry/core" "7.114.0"
+    "@sentry/replay" "7.114.0"
+    "@sentry/types" "7.114.0"
+    "@sentry/utils" "7.114.0"
 
-"@sentry-internal/tracing@7.101.1":
-  version "7.101.1"
-  resolved "https://registry.yarnpkg.com/@sentry-internal/tracing/-/tracing-7.101.1.tgz#9504e29c3c2c3ef5f652777e487b596cf8f78e1a"
-  integrity sha512-ihjWG8x4x0ozx6t+EHoXLKbsPrgzYLCpeBLWyS+M6n3hn6cmHM76c8nZw3ldhUQi5UYL3LFC/JZ50b4oSxtlrg==
+"@sentry-internal/tracing@7.114.0":
+  version "7.114.0"
+  resolved "https://registry.yarnpkg.com/@sentry-internal/tracing/-/tracing-7.114.0.tgz#bdcd364f511e2de45db6e3004faf5685ca2e0f86"
+  integrity sha512-dOuvfJN7G+3YqLlUY4HIjyWHaRP8vbOgF+OsE5w2l7ZEn1rMAaUbPntAR8AF9GBA6j2zWNoSo8e7GjbJxVofSg==
   dependencies:
-    "@sentry/core" "7.101.1"
-    "@sentry/types" "7.101.1"
-    "@sentry/utils" "7.101.1"
+    "@sentry/core" "7.114.0"
+    "@sentry/types" "7.114.0"
+    "@sentry/utils" "7.114.0"
 
-"@sentry/browser@^7.101.1":
-  version "7.101.1"
-  resolved "https://registry.yarnpkg.com/@sentry/browser/-/browser-7.101.1.tgz#bab1257de499ed0e928bb4264a2e64d16cecccb5"
-  integrity sha512-+rIFoWPdO29AHVYsAwq8QEl2Ihv17Xh9Bt2aPFvLTGDA0caHjnx98g2jSOvLIOah6HI7Nwp3Njg2zBEzDtHkNw==
+"@sentry/browser@^7.114.0":
+  version "7.114.0"
+  resolved "https://registry.yarnpkg.com/@sentry/browser/-/browser-7.114.0.tgz#b0741bff89189d16c8b19f0775fe6e078147ec33"
+  integrity sha512-ijJ0vOEY6U9JJADVYGkUbLrAbpGSQgA4zV+KW3tcsBLX9M1jaWq4BV1PWHdzDPPDhy4OgfOjIfaMb5BSPn1U+g==
   dependencies:
-    "@sentry-internal/feedback" "7.101.1"
-    "@sentry-internal/replay-canvas" "7.101.1"
-    "@sentry-internal/tracing" "7.101.1"
-    "@sentry/core" "7.101.1"
-    "@sentry/replay" "7.101.1"
-    "@sentry/types" "7.101.1"
-    "@sentry/utils" "7.101.1"
+    "@sentry-internal/feedback" "7.114.0"
+    "@sentry-internal/replay-canvas" "7.114.0"
+    "@sentry-internal/tracing" "7.114.0"
+    "@sentry/core" "7.114.0"
+    "@sentry/integrations" "7.114.0"
+    "@sentry/replay" "7.114.0"
+    "@sentry/types" "7.114.0"
+    "@sentry/utils" "7.114.0"
 
-"@sentry/core@7.101.1":
-  version "7.101.1"
-  resolved "https://registry.yarnpkg.com/@sentry/core/-/core-7.101.1.tgz#929841b7734129803b6dcd4d16bf0d3f53af4657"
-  integrity sha512-XSmXXeYT1d4O14eDF3OXPJFUgaN2qYEeIGUztqPX9nBs9/ij8y/kZOayFqlIMnfGvjOUM+63sy/2xDBOpFn6ug==
+"@sentry/core@7.114.0":
+  version "7.114.0"
+  resolved "https://registry.yarnpkg.com/@sentry/core/-/core-7.114.0.tgz#3efe86b92a5379c44dfd0fd4685266b1a30fa898"
+  integrity sha512-YnanVlmulkjgZiVZ9BfY9k6I082n+C+LbZo52MTvx3FY6RE5iyiPMpaOh67oXEZRWcYQEGm+bKruRxLVP6RlbA==
   dependencies:
-    "@sentry/types" "7.101.1"
-    "@sentry/utils" "7.101.1"
+    "@sentry/types" "7.114.0"
+    "@sentry/utils" "7.114.0"
 
-"@sentry/replay@7.101.1":
-  version "7.101.1"
-  resolved "https://registry.yarnpkg.com/@sentry/replay/-/replay-7.101.1.tgz#129ca5ac70690e78468b037a71a9b756bc3d965f"
-  integrity sha512-l4jmj2Rf/myzk3TA83PdMiomassG8okdBh1b2Hp1+ycBRVZFDmsR81gKPvnefSXwGwGNGKEmp6Q2bdGzekpp3Q==
+"@sentry/integrations@7.114.0":
+  version "7.114.0"
+  resolved "https://registry.yarnpkg.com/@sentry/integrations/-/integrations-7.114.0.tgz#baf249cfa9e359510f41e486a75bf184db18927d"
+  integrity sha512-BJIBWXGKeIH0ifd7goxOS29fBA8BkEgVVCahs6xIOXBjX1IRS6PmX0zYx/GP23nQTfhJiubv2XPzoYOlZZmDxg==
   dependencies:
-    "@sentry-internal/tracing" "7.101.1"
-    "@sentry/core" "7.101.1"
-    "@sentry/types" "7.101.1"
-    "@sentry/utils" "7.101.1"
+    "@sentry/core" "7.114.0"
+    "@sentry/types" "7.114.0"
+    "@sentry/utils" "7.114.0"
+    localforage "^1.8.1"
 
-"@sentry/types@7.101.1":
-  version "7.101.1"
-  resolved "https://registry.yarnpkg.com/@sentry/types/-/types-7.101.1.tgz#7f936022d9b373f85ebf357634bf03a9e433a3d0"
-  integrity sha512-bwtkQvrCZ6JGc7vqX7TEAKBgkbQFORt84FFS3JQQb8G3efTt9fZd2ReY4buteKQdlALl8h1QWVngTLmI+kyUuw==
-
-"@sentry/utils@7.101.1":
-  version "7.101.1"
-  resolved "https://registry.yarnpkg.com/@sentry/utils/-/utils-7.101.1.tgz#97399b1e6a63a15e8f9fec5112ac4834239f1db6"
-  integrity sha512-Nrg0nrEI3nrOCd9SLJ/WGzxS5KMQE4cryLOvrDcHJRWpsSyGBF1hLLerk84Nsw/0myMsn7zTYU+xoq7idNsX5A==
+"@sentry/replay@7.114.0":
+  version "7.114.0"
+  resolved "https://registry.yarnpkg.com/@sentry/replay/-/replay-7.114.0.tgz#f552e4803cacb233a2f5f2a4afbf5bed9052a744"
+  integrity sha512-UvEajoLIX9n2poeW3R4Ybz7D0FgCGXoFr/x/33rdUEMIdTypknxjJWxg6fJngIduzwrlrvWpvP8QiZXczYQy2Q==
   dependencies:
-    "@sentry/types" "7.101.1"
+    "@sentry-internal/tracing" "7.114.0"
+    "@sentry/core" "7.114.0"
+    "@sentry/types" "7.114.0"
+    "@sentry/utils" "7.114.0"
+
+"@sentry/types@7.114.0":
+  version "7.114.0"
+  resolved "https://registry.yarnpkg.com/@sentry/types/-/types-7.114.0.tgz#ab8009d5f6df23b7342121083bed34ee2452e856"
+  integrity sha512-tsqkkyL3eJtptmPtT0m9W/bPLkU7ILY7nvwpi1hahA5jrM7ppoU0IMaQWAgTD+U3rzFH40IdXNBFb8Gnqcva4w==
+
+"@sentry/utils@7.114.0":
+  version "7.114.0"
+  resolved "https://registry.yarnpkg.com/@sentry/utils/-/utils-7.114.0.tgz#59d30a79f4acff3c9268de0b345f0bcbc6335112"
+  integrity sha512-319N90McVpupQ6vws4+tfCy/03AdtsU0MurIE4+W5cubHME08HtiEWlfacvAxX+yuKFhvdsO4K4BB/dj54ideg==
+  dependencies:
+    "@sentry/types" "7.114.0"
 
 "@snyk/github-codeowners@1.1.0":
   version "1.1.0"
@@ -2875,6 +2886,11 @@ ignore@^5.1.8, ignore@^5.2.0, ignore@^5.3.1:
   resolved "https://registry.yarnpkg.com/ignore/-/ignore-5.3.1.tgz#5073e554cd42c5b33b394375f538b8593e34d4ef"
   integrity sha512-5Fytz/IraMjqpwfd34ke28PTVMjZjJG2MPn5t7OE4eUCUNf8BAa7b5WUS9/Qvr6mwOQS7Mk6vdsMno5he+T8Xw==
 
+immediate@~3.0.5:
+  version "3.0.6"
+  resolved "https://registry.yarnpkg.com/immediate/-/immediate-3.0.6.tgz#9db1dbd0faf8de6fbe0f5dd5e56bb606280de69b"
+  integrity sha512-XXOFtyqDjNDAQxVfYxuF7g9Il/IbWmmlQg2MYKOH8ExIT1qg6xc4zyS3HaEEATgs1btfzxq15ciUiY7gjSXRGQ==
+
 import-fresh@^3.2.1, import-fresh@^3.3.0:
   version "3.3.0"
   resolved "https://registry.yarnpkg.com/import-fresh/-/import-fresh-3.3.0.tgz#37162c25fcb9ebaa2e6e53d5b4d88ce17d9e0c2b"
@@ -3380,6 +3396,13 @@ levn@^0.4.1:
     prelude-ls "^1.2.1"
     type-check "~0.4.0"
 
+lie@3.1.1:
+  version "3.1.1"
+  resolved "https://registry.yarnpkg.com/lie/-/lie-3.1.1.tgz#9a436b2cc7746ca59de7a41fa469b3efb76bd87e"
+  integrity sha512-RiNhHysUjhrDQntfYSfY4MU24coXXdEOgw9WGcKHNeEwffDYbF//u87M1EWaMGzuFoSbqW0C9C6lEEhDOAswfw==
+  dependencies:
+    immediate "~3.0.5"
+
 lines-and-columns@^1.1.6:
   version "1.2.4"
   resolved "https://registry.yarnpkg.com/lines-and-columns/-/lines-and-columns-1.2.4.tgz#eca284f75d2965079309dc0ad9255abb2ebc1632"
@@ -3398,6 +3421,13 @@ listr2@^3.8.3:
     rxjs "^7.5.1"
     through "^2.3.8"
     wrap-ansi "^7.0.0"
+
+localforage@^1.8.1:
+  version "1.10.0"
+  resolved "https://registry.yarnpkg.com/localforage/-/localforage-1.10.0.tgz#5c465dc5f62b2807c3a84c0c6a1b1b3212781dd4"
+  integrity sha512-14/H1aX7hzBBmmh7sGPd+AOMkkIrHM3Z1PAyGgZigA1H1p5O5ANnMyWzvpAETtG68/dC4pC0ncy3+PPGzXZHPg==
+  dependencies:
+    lie "3.1.1"
 
 locate-path@^6.0.0:
   version "6.0.0"
