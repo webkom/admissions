@@ -1,7 +1,7 @@
 import React from "react";
 import styled from "styled-components";
 import { Link, Route, Routes } from "react-router-dom";
-import { useAdminAdmissions } from "src/query/hooks";
+import { useManageAdmissions } from "src/query/hooks";
 import { media } from "src/styles/mediaQueries";
 import LoadingBall from "src/components/LoadingBall";
 import NavBar from "./components/NavBar";
@@ -9,7 +9,7 @@ import CreateAdmission from "./CreateAdmission";
 import Icon from "src/components/Icon";
 
 const ManageAdmissions: React.FC = () => {
-  const { data, isFetching, error } = useAdminAdmissions();
+  const { data, isFetching, error } = useManageAdmissions();
 
   if (error) {
     return <div>Error: {error.message}</div>;

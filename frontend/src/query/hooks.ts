@@ -38,13 +38,15 @@ export const useAdminApplications = (admissionSlug: string) => {
 
 // Manage hooks
 
-export const useAdminAdmissions = () => {
-  return useQuery<Admission[], AxiosError>({ queryKey: ["/admin/admission/"] });
+export const useManageAdmissions = () => {
+  return useQuery<Admission[], AxiosError>({
+    queryKey: ["/manage/admission/"],
+  });
 };
 
-export const useAdminAdmission = (slug: string, enabled = true) => {
+export const useManageAdmission = (slug: string, enabled = true) => {
   return useQuery<Admission, AxiosError>({
-    queryKey: [`/admin/admission/${slug}/`],
+    queryKey: [`/manage/admission/${slug}/`],
     enabled,
   });
 };

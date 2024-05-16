@@ -109,7 +109,7 @@ export interface AdmissionMutationResponse extends MutationAdmission {
   created_by: number;
 }
 
-export const useAdminCreateAdmission = () => {
+export const useManageCreateAdmission = () => {
   const queryClient = useQueryClient();
   return useMutation<
     AdmissionMutationResponse,
@@ -117,9 +117,9 @@ export const useAdminCreateAdmission = () => {
     CreateAdmissionProps
   >({
     mutationFn: async ({ admission }) =>
-      (await apiClient.post("/admin/admission/", admission)).data,
+      (await apiClient.post("/manage/admission/", admission)).data,
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: [`/admin/admission/`] });
+      queryClient.invalidateQueries({ queryKey: [`/manage/admission/`] });
     },
   });
 };
@@ -128,7 +128,7 @@ interface UpdateAdmissionProps extends CreateAdmissionProps {
   slug: string;
 }
 
-export const useAdminUpdateAdmission = () => {
+export const useManageUpdateAdmission = () => {
   const queryClient = useQueryClient();
   return useMutation<
     AdmissionMutationResponse,
@@ -136,11 +136,11 @@ export const useAdminUpdateAdmission = () => {
     UpdateAdmissionProps
   >({
     mutationFn: async ({ slug, admission }) =>
-      (await apiClient.patch(`/admin/admission/${slug}/`, admission)).data,
+      (await apiClient.patch(`/manage/admission/${slug}/`, admission)).data,
     onSuccess: (_, variables) => {
-      queryClient.invalidateQueries({ queryKey: [`/admin/admission/`] });
+      queryClient.invalidateQueries({ queryKey: [`/manage/admission/`] });
       queryClient.invalidateQueries({
-        queryKey: [`/admin/admission/${variables.slug}/`],
+        queryKey: [`/manage/admission/${variables.slug}/`],
       });
     },
   });
@@ -150,7 +150,7 @@ interface DeleteAdmissionProps {
   slug: string;
 }
 
-export const useAdminDeleteAdmission = () => {
+export const useManageDeleteAdmission = () => {
   const queryClient = useQueryClient();
   return useMutation<
     AdmissionMutationResponse,
@@ -158,11 +158,11 @@ export const useAdminDeleteAdmission = () => {
     DeleteAdmissionProps
   >({
     mutationFn: async ({ slug }) =>
-      (await apiClient.delete(`/admin/admission/${slug}/`)).data,
+      (await apiClient.delete(`/manage/admission/${slug}/`)).data,
     onSuccess: (_, variables) => {
-      queryClient.invalidateQueries({ queryKey: [`/admin/admission/`] });
+      queryClient.invalidateQueries({ queryKey: [`/manage/admission/`] });
       queryClient.invalidateQueries({
-        queryKey: [`/admin/admission/${variables.slug}/`],
+        queryKey: [`/manage/admission/${variables.slug}/`],
       });
     },
   });

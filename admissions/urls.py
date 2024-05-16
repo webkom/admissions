@@ -29,8 +29,8 @@ from admissions.admissions.views import (
     PublicApplicationViewSet,
 )
 
-adminRouter = routers.DefaultRouter()
-adminRouter.register(r"admission", ManageAdmissionViewSet, "admin-admission")
+manageRouter = routers.DefaultRouter()
+manageRouter.register(r"admission", ManageAdmissionViewSet, "manage-admission")
 
 router = routers.DefaultRouter()
 router.register(r"admission", AdmissionViewSet)
@@ -45,7 +45,7 @@ router.register(
 router.register(r"group", GroupViewSet)
 urlpatterns = [
     re_path(r"logout/$", auth_views.LogoutView.as_view(), name="logout"),
-    path("api/admin/", include(adminRouter.urls)),
+    path("api/manage/", include(manageRouter.urls)),
     path("api-auth/", include("rest_framework.urls", namespace="rest_framework")),
     path("api/", include(router.urls)),
     re_path("", include("social_django.urls", namespace="social")),
