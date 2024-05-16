@@ -19,13 +19,15 @@ import styled from "styled-components";
 import Icon from "src/components/Icon";
 import { TableWrapper } from "src/routes/AdmissionAdmin/components/StyledElements";
 import { InputResponseModel } from "src/utils/jsonFields";
+import DeleteApplication from "src/components/DeleteApplication";
 
 interface AdmissionsContainerProps {
   admission: Admission;
   applications: Application[];
 }
 
-export interface AdmissionsTableValues {
+export interface ApplicationTableRow {
+  id: number;
   username: string;
   fullname: string;
   email: string;
@@ -62,7 +64,8 @@ const AdmissionsContainer: React.FC<AdmissionsContainerProps> = ({
         groupApplications: application.group_applications.map(
           (groupApplication) => ({
             applicationId: application.pk,
-            group: groupApplication.group.name,
+            groupId: groupApplication.group.pk,
+            groupName: groupApplication.group.name,
             text: groupApplication.text,
           }),
         ),
@@ -85,7 +88,7 @@ const AdmissionsContainer: React.FC<AdmissionsContainerProps> = ({
   });
 
   const subComponent = React.useCallback(
-    ({ row }: { row: Row<AdmissionsTableValues> }) => (
+    ({ row }: { row: Row<ApplicationTableRow> }) => (
       <>
         <SubComponentWrapper>
           {admission.userdata.is_admin && (
@@ -108,6 +111,9 @@ const AdmissionsContainer: React.FC<AdmissionsContainerProps> = ({
           <AdmissionsInnerTable
             groupApplications={row.original.groupApplications}
           />
+          {admission.userdata.is_admin && (
+            <DeleteApplication applicationId={row.original.id} />
+          )}
         </SubComponentWrapper>
       </>
     ),

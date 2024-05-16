@@ -3,7 +3,92 @@ import { AxiosError } from "axios";
 import { FieldModel, InputResponseModel } from "src/utils/jsonFields";
 import { apiClient } from "../utils/callApi";
 
+// Public mutations
+
+export const useDeleteMyApplicationMutation = (slug: string) => {
+  const queryClient = useQueryClient();
+  return useMutation<unknown, AxiosError>({
+    mutationFn: () => apiClient.delete(`/admission/${slug}/application/mine/`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({
+        queryKey: [`/admission/${slug}/application/mine/`],
+      });
+    },
+  });
+};
+
+export interface MutationApplication {
+  text: string;
+  phone_number: string;
+  applications: Record<string, string>;
+  header_fields_response: InputResponseModel;
+}
+
+interface CreateApplicationProps {
+  newApplication: MutationApplication;
+}
+
+export const useCreateApplicationMutation = (admissionSlug: string) => {
+  const queryClient = useQueryClient();
+  return useMutation<unknown, AxiosError, CreateApplicationProps>({
+    mutationFn: ({ newApplication }) =>
+      apiClient.post(
+        `/admission/${admissionSlug}/application/`,
+        newApplication,
+      ),
+    onSuccess: () => {
+      queryClient.invalidateQueries({
+        queryKey: [`/admission/${admissionSlug}/application/mine/`],
+      });
+    },
+  });
+};
+
 // Admin mutations
+
+interface UpdateGroupProps {
+  groupPrimaryKey: number;
+  updatedGroupData: {
+    description: string;
+    response_label: string;
+  };
+}
+
+interface UpdateGroupErrorData {
+  description: string[];
+  response_label: string[];
+}
+
+export const useUpdateGroupMutation = () =>
+  useMutation<unknown, AxiosError<UpdateGroupErrorData>, UpdateGroupProps>({
+    mutationFn: ({ groupPrimaryKey, updatedGroupData }) =>
+      apiClient.patch(`/group/${groupPrimaryKey}/`, updatedGroupData),
+  });
+
+interface DeleteGroupApplicationProps {
+  applicationId: number;
+  groupId?: number;
+}
+
+export const useAdminDeleteApplicationMutation = (admissionSlug: string) => {
+  const queryClient = useQueryClient();
+  return useMutation<unknown, AxiosError, DeleteGroupApplicationProps>({
+    mutationFn: ({ applicationId, groupId }) =>
+      apiClient.delete(
+        `/admission/${admissionSlug}/admin/application/${applicationId}/${
+          groupId ? "?groupId=" + groupId : ""
+        }`,
+      ),
+
+    onSuccess: () => {
+      queryClient.invalidateQueries({
+        queryKey: [`/admission/${admissionSlug}/admin/application/`],
+      });
+    },
+  });
+};
+
+// Manage mutations
 
 export interface MutationAdmission {
   title: string;
@@ -78,88 +163,6 @@ export const useAdminDeleteAdmission = () => {
       queryClient.invalidateQueries({ queryKey: [`/admin/admission/`] });
       queryClient.invalidateQueries({
         queryKey: [`/admin/admission/${variables.slug}/`],
-      });
-    },
-  });
-};
-
-// User mutations
-
-export const useDeleteMyApplicationMutation = (slug: string) => {
-  const queryClient = useQueryClient();
-  return useMutation<unknown, AxiosError>({
-    mutationFn: () => apiClient.delete(`/admission/${slug}/application/mine/`),
-    onSuccess: () => {
-      queryClient.invalidateQueries({
-        queryKey: [`/admission/${slug}/application/mine/`],
-      });
-    },
-  });
-};
-
-interface DeleteGroupApplicationProps {
-  applicationId: number;
-  groupName?: string;
-}
-
-export const useDeleteGroupApplicationMutation = (admissionSlug: string) => {
-  const queryClient = useQueryClient();
-  return useMutation<unknown, AxiosError, DeleteGroupApplicationProps>({
-    mutationFn: ({ applicationId, groupName }) =>
-      apiClient.delete(
-        `/admission/${admissionSlug}/application/${applicationId}/delete_group_application/${
-          groupName ? `?group=${groupName}` : ""
-        }`,
-      ),
-    onSuccess: () => {
-      queryClient.invalidateQueries({
-        queryKey: [`/admission/${admissionSlug}/application/`],
-      });
-    },
-  });
-};
-
-interface UpdateGroupProps {
-  groupPrimaryKey: number;
-  updatedGroupData: {
-    description: string;
-    response_label: string;
-  };
-}
-
-interface UpdateGroupErrorData {
-  description: string[];
-  response_label: string[];
-}
-
-export const useUpdateGroupMutation = () =>
-  useMutation<unknown, AxiosError<UpdateGroupErrorData>, UpdateGroupProps>({
-    mutationFn: ({ groupPrimaryKey, updatedGroupData }) =>
-      apiClient.patch(`/group/${groupPrimaryKey}/`, updatedGroupData),
-  });
-
-export interface MutationApplication {
-  text: string;
-  phone_number: string;
-  applications: Record<string, string>;
-  header_fields_response: InputResponseModel;
-}
-
-interface CreateApplicationProps {
-  newApplication: MutationApplication;
-}
-
-export const useCreateApplicationMutation = (admissionSlug: string) => {
-  const queryClient = useQueryClient();
-  return useMutation<unknown, AxiosError, CreateApplicationProps>({
-    mutationFn: ({ newApplication }) =>
-      apiClient.post(
-        `/admission/${admissionSlug}/application/`,
-        newApplication,
-      ),
-    onSuccess: () => {
-      queryClient.invalidateQueries({
-        queryKey: [`/admission/${admissionSlug}/application/mine/`],
       });
     },
   });
