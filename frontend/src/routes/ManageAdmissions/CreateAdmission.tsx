@@ -4,7 +4,6 @@ import { DateTime } from "luxon";
 import React, { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import ConfirmModal from "src/components/ConfirmModal";
-import LegoButton from "src/components/LegoButton";
 import { useManageAdmission } from "src/query/hooks";
 import {
   AdmissionMutationResponse,
@@ -16,6 +15,7 @@ import {
 import { toggleFromArray } from "src/utils/methods";
 import styled from "styled-components";
 import GroupSelector from "./components/GroupSelector";
+import { Button } from "@webkom/lego-bricks";
 
 interface ReturnedData {
   type: "error" | "success";
@@ -258,33 +258,33 @@ const CreateAdmission: React.FC = () => {
       )}
       <FormGroup>
         <InputWrapper>
-          <LegoButton type="submit" disabled={!formik.isValid}>
+          <Button type="submit" disabled={!formik.isValid} success>
             {isNew ? "Opprett opptak" : "Lagre endringer"}
-          </LegoButton>
+          </Button>
         </InputWrapper>
         {!isNew && (
           <InputWrapper>
             <ConfirmModal
               title="Slett opptak"
-              Component={({ onClick }) => (
-                <LegoButton
-                  size="small"
+              trigger={({ onClick }) => (
+                <Button
                   disabled={
                     DateTime.fromISO(admission?.closed_from ?? "")
                       .diffNow()
                       .valueOf() > 0
                   }
                   onClick={onClick}
+                  danger
                 >
                   Slett opptak
-                </LegoButton>
+                </Button>
               )}
               message="Er du sikker på at du vil slette opptaket?"
               cancelText="Nei"
               onConfirm={handleDeleteAdmission}
             />
             <InputDescription>
-              Et opptak kan kun slettes etter det har stengt
+              Opptaket kan kun slettes etter det har stengt
             </InputDescription>
           </InputWrapper>
         )}
@@ -319,6 +319,7 @@ const InputTitle = styled.p`
 
 const InputDescription = styled.span`
   display: block;
+  color: var(--color-gray-6);
   line-height: 1.5;
   margin-bottom: 0.5em;
 `;
@@ -336,5 +337,5 @@ const ResultText = styled.span<{ type: ReturnedData["type"] }>`
   padding: 0.3rem 1rem;
   border-radius: 10px;
   background: ${({ type }) =>
-    type === "success" ? "var(--lego-green)" : "var(--abakus-red-light)"};
+    type === "success" ? "var(--color-green-7)" : "var(--lego-red-color)"};
 `;

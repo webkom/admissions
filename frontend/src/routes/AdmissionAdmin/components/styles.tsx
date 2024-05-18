@@ -1,6 +1,5 @@
 import styled from "styled-components";
 import { media } from "src/styles/mediaQueries";
-import Button from "src/components/Button";
 import { Card } from "src/components/Card";
 
 export const Wrapper = styled(Card)`
@@ -11,20 +10,6 @@ export const Wrapper = styled(Card)`
   ${media.handheld`
      width: 100%;
   `};
-`;
-
-interface SubmitButtonProps {
-  valid: boolean;
-}
-
-export const SubmitButton = styled(Button)<SubmitButtonProps>`
-  background: ${(props) => (props.valid ? "#db3737" : "gray")};
-  border: 1px solid ${(props) => (props.valid ? "#a82a2a" : "darkgray")};
-  width: 10em;
-
-  &:active {
-    opacity: 0.9;
-  }
 `;
 
 export const FormWrapper = styled.div`

@@ -47,6 +47,16 @@ class LegoOAuth2(BaseOAuth2):
     def access_token_url(self):
         return urljoin(self.api_url(), "/authorization/oauth2/token/")
 
+    def get_user_id(self, details, response):
+        """
+        Required to counteract bug introduced in v5.4.1.
+
+        Casts the id to a string so a strict compare with the string value that is stored in the database will be true.
+
+        Issue tracked in https://github.com/python-social-auth/social-app-django/issues/578
+        """
+        return str(super().get_user_id(details, response))
+
     def get_user_details(self, response):
         """Return user details from Lego account"""
         fullname, first_name, last_name = self.get_user_names(
@@ -100,7 +110,7 @@ class LegoOAuth2(BaseOAuth2):
             )
 
 
-def parse_group_data(response):
+def _parse_group_data(response):
     """This will parse group data,
     and return a [(group, membership),] structure"""
     user_memberships = response["memberships"]
@@ -122,7 +132,7 @@ def update_custom_user_details(strategy, details, user=None, *args, **kwargs):
     if not user:
         return
 
-    group_data = parse_group_data(kwargs["response"])
+    group_data = _parse_group_data(kwargs["response"])
     with transaction.atomic():
         # Remove old memberships before creating the new ones
         Membership.objects.filter(user=user).delete()

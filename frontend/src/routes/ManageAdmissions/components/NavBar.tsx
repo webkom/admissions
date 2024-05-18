@@ -1,6 +1,6 @@
 import React from "react";
 import { Link } from "react-router-dom";
-import LegoButton from "src/components/LegoButton";
+import LinkButton from "src/components/LinkButton";
 import { Admission } from "src/types";
 import styled from "styled-components";
 
@@ -24,14 +24,9 @@ const NavBar: React.FC<Props> = ({ admissions }) => {
         <p>Du har ikke redigeringstilgang til noen opptak.</p>
       )}
       <CreateNewWrapper>
-        <LegoButton
-          buttonStyle="primary"
-          to="/manage/create"
-          icon="add"
-          size="small"
-        >
+        <LinkButton to="/manage/create" dark size="small">
           Lag nytt
-        </LegoButton>
+        </LinkButton>
       </CreateNewWrapper>
     </Wrapper>
   );

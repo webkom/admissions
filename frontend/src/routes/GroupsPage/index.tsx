@@ -1,11 +1,11 @@
 import React from "react";
 import GroupCard from "src/components/GroupCard";
-import LegoButton from "src/components/LegoButton";
 import Icon from "src/components/Icon";
 import styled from "styled-components";
 import { media } from "src/styles/mediaQueries";
 import { useAdmission } from "src/query/hooks";
 import { useParams } from "react-router-dom";
+import LinkButton from "src/components/LinkButton";
 
 interface GroupsPageProps {
   selectedGroups: { [key: string]: boolean };
@@ -52,14 +52,13 @@ const GroupsPage: React.FC<GroupsPageProps> = ({
       </Title>
       <GroupsWrapper>{GroupCards}</GroupsWrapper>
       <NextButtonWrapper>
-        <LegoButton
+        <LinkButton
           to={`/${admissionSlug}/min-soknad`}
-          icon="arrow-forward"
-          iconPrefix="ios"
           disabled={!hasSelectedAnything()}
+          secondary
         >
           Gå videre
-        </LegoButton>
+        </LinkButton>
         {!hasSelectedAnything() && (
           <ErrorMessage>
             <Icon name="information-circle-outline" />
@@ -138,7 +137,7 @@ const ErrorMessage = styled.div`
   > i {
     font-size: 1.5rem;
     margin-right: 0.8rem;
-    color: var(--lego-red);
+    color: var(--lego-red-color);
   }
 
   ${media.handheld`

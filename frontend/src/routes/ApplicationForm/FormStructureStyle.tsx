@@ -41,7 +41,7 @@ export const Title = styled.h1`
 
 export const SeparatorLine = styled.div`
   display: block;
-  background: var(--lego-gray-medium);
+  background: var(--color-gray-3);
   height: 1px;
 `;
 
@@ -139,7 +139,7 @@ export const HelpText = styled.span`
   margin-left: calc(-2.6rem + 4px);
 
   i {
-    color: var(--lego-gray-medium);
+    color: var(--color-gray-3);
     font-size: 1.6rem;
     margin-right: 1rem;
   }
@@ -217,7 +217,7 @@ export const Applications = styled.div`
 
 export const SubmitSection = styled.div`
   display: grid;
-  grid-template-columns: 4fr 1fr;
+  grid-template-columns: 4fr 1.25fr;
   max-width: 750px;
   margin-top: 2rem;
   align-items: center;
@@ -232,13 +232,13 @@ export const SubmitSection = styled.div`
 `;
 
 interface StyledSpanProps {
-  red?: boolean;
-  bold?: boolean;
+  $red?: boolean;
+  $bold?: boolean;
 }
 
 export const StyledSpan = styled.span<StyledSpanProps>`
-  color: ${(props) => (props.red ? "var(--lego-red)" : "inherit")};
-  font-weight: ${(props) => (props.bold ? "600" : "normal")};
+  color: ${(props) => (props.$red ? "var(--lego-red-color)" : "inherit")};
+  font-weight: ${(props) => (props.$bold ? "600" : "normal")};
 `;
 
 export const ApplicationDateInfo = styled.p`
@@ -276,7 +276,6 @@ export const NoChosenTitle = styled(Title).attrs({ as: "h3" })``;
 
 export const NoChosenSubTitle = styled.span`
   font-size: 1rem;
-  font-family: var(--font-family);
   font-weight: 500;
   color: rgba(129, 129, 129, 0.4);
   max-width: 50%;
@@ -302,11 +301,11 @@ export const RecievedApplicationBanner = styled.div`
   justify-content: center;
   align-items: center;
   align-items: space-between;
-  background: var(--lego-green);
+  background: var(--color-green-6);
   border: 1px solid #809e33;
   border-radius: 13px;
   padding: 0.8rem 2rem;
-  color: var(--lego-white);
+  color: var(--color-white);
   font-weight: 600;
   font-size: 1.1rem;
 
@@ -353,10 +352,6 @@ export const TimeStamp = styled.p`
   text-align: center;
   font-size: 1.1rem;
   line-height: 1.8rem;
-
-  span {
-    margin-left: 0.3rem;
-  }
 
   i {
     margin-right: 0.7rem;

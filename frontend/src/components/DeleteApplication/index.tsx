@@ -1,16 +1,14 @@
 import React from "react";
-import LegoButton from "src/components/LegoButton";
 import ConfirmModal from "src/components/ConfirmModal";
 import styled from "styled-components";
 import { media } from "src/styles/mediaQueries";
 import { useAdminDeleteApplicationMutation } from "src/query/mutations";
 import { useParams } from "react-router-dom";
+import { Button } from "@webkom/lego-bricks";
 
 const DeleteWrapper = styled.div`
   display: flex;
   justify-content: center;
-  margin: 0.8rem 0;
-  padding: 0.5rem;
 
   ${media.handheld`
     margin: 0.3rem 0;
@@ -49,10 +47,10 @@ const DeleteApplication: React.FC<DeleteApplicationProps> = ({
     <DeleteWrapper>
       <ConfirmModal
         title="Slett søknad"
-        Component={({ onClick }) => (
-          <LegoButton icon="trash" onClick={onClick} size="small">
+        trigger={({ onClick }) => (
+          <Button danger onClick={onClick} size="small">
             Slett søknad
-          </LegoButton>
+          </Button>
         )}
         message="Er du sikker på at du vil slette denne søknaden?"
         onConfirm={() => performDelete(applicationId, groupId)}

@@ -27,6 +27,7 @@ export default defineConfig({
     alias: {
       src: path.resolve(projectRootDir, "frontend/src"),
       assets: path.resolve(projectRootDir, "frontend/src/assets"),
+      "~": path.resolve(projectRootDir, "node_modules"),
     },
   },
 });

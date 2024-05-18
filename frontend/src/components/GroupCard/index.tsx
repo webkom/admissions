@@ -23,7 +23,7 @@ const GroupCard: React.FC<GroupCardProps> = ({
   isRevy,
 }) => {
   return (
-    <Card onClick={() => onToggle(name)} isChosen={isChosen} $isRevy={isRevy}>
+    <Card onClick={() => onToggle(name)} $isChosen={isChosen} $isRevy={isRevy}>
       {!isRevy && <Logo src={logo} />}
       <Name>{readmeIfy(name)}</Name>
       <Description>{readmeIfy(description, true)}</Description>
@@ -32,9 +32,9 @@ const GroupCard: React.FC<GroupCardProps> = ({
           Les mer på abakus.no
         </LearnMoreLink>
       )}
-      <SelectedMark isChosen={isChosen}>
+      <SelectedMark $isChosen={isChosen}>
         {isChosen ? (
-          <SelectedMarkText isChosen={isChosen}>
+          <SelectedMarkText $isChosen={isChosen}>
             Valgt <span>- klikk for å fjerne</span>
           </SelectedMarkText>
         ) : (
@@ -52,7 +52,7 @@ export default GroupCard;
 /** Styles **/
 
 interface GroupCardElementsStyledProps {
-  isChosen?: boolean;
+  $isChosen?: boolean;
 }
 
 type GroupCardStyledProps = GroupCardElementsStyledProps & { $isRevy: boolean };
@@ -66,9 +66,9 @@ const Card = styled.div<GroupCardStyledProps>`
     "${({ $isRevy }) => ($isRevy ? "text" : "logo")} text"
     ". readmore";
   grid-gap: 10px 20px;
-  background: var(--lego-white);
+  background: var(--color-white);
   box-shadow: ${(props) =>
-    props.isChosen
+    props.$isChosen
       ? "1px 3px 5px rgba(129, 129, 129, 0.5)"
       : "1px 3px 5px rgba(129, 129, 129, 0.3)"};
   box-sizing: border-box;
@@ -160,7 +160,7 @@ const SelectedMark = styled.div<GroupCardElementsStyledProps>`
   justify-content: center;
   align-items: center;
   background: ${(props) =>
-    props.isChosen
+    props.$isChosen
       ? "linear-gradient(180deg, #C0392B 0%, #BD1C1C 100%)"
       : "linear-gradient(180deg, #394B59 0%, #283642 100%)"};
   border-radius: 0px 0px 10px 10px;
@@ -168,7 +168,7 @@ const SelectedMark = styled.div<GroupCardElementsStyledProps>`
 
 const SelectedMarkText = styled.span<GroupCardElementsStyledProps>`
   color: ${(props) =>
-    props.isChosen ? "var(--lego-white);" : "var(--lego-gray-light);"};
+    props.$isChosen ? "var(--color-white);" : "var(--color-gray-2);"};
   font-size: 1rem;
   font-weight: bold;
   line-height: 1.2rrem;

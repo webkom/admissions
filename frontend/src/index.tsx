@@ -9,12 +9,13 @@ import NotFoundPage from "src/routes/NotFoundPage";
 import LandingPage from "src/routes/LandingPage/";
 import ErrorBoundary from "src/containers/ErrorBoundary/";
 import ApplicationPortal from "src/routes/ApplicationPortal";
+import "@webkom/lego-bricks/dist/style.css";
 
 import ScrollToTop from "./scrollToTop";
 import * as Sentry from "@sentry/browser";
 import "src/styles/globals.css";
 import config from "src/utils/config";
-import djangoData from "src/utils/djangoData";
+import djangoData, { isLoggedIn, isManager } from "src/utils/djangoData";
 import "@babel/polyfill";
 import ManageAdmissions from "src/routes/ManageAdmissions";
 import RequireAuth from "src/components/RequireAuth";
@@ -60,11 +61,7 @@ const AppRoutes = () =>
     {
       path: "/manage/*",
       element: (
-        <RequireAuth
-          auth={
-            !!djangoData.user.is_staff || !!djangoData.user.is_member_of_webkom
-          }
-        >
+        <RequireAuth auth={isManager()}>
           <ManageAdmissions />
         </RequireAuth>
       ),
@@ -72,7 +69,7 @@ const AppRoutes = () =>
     {
       path: ":admissionSlug/*",
       element: (
-        <RequireAuth auth={!!djangoData.user.full_name}>
+        <RequireAuth auth={isLoggedIn()}>
           <ApplicationPortal />
         </RequireAuth>
       ),

@@ -14,10 +14,10 @@ export const StyledField = styled(Field)<StyledFieldProps>`
   padding: 0.5rem 1rem;
   margin-top: 4px;
   font-size: 0.9rem;
-  font-family: var(--font-family);
   color: var(--lego-font-color);
   border: 2px solid
-    ${(props) => (props.error ? "var(--lego-red)" : "var(--lego-gray-medium)")};
+    ${(props) =>
+      props.error ? "var(--lego-red-color)" : "var(--color-gray-3)"};
   border-radius: 13px;
   box-shadow: inset 0px 4px 4px rgba(129, 129, 129, 0.1);
   resize: none;
@@ -31,7 +31,7 @@ export const StyledField = styled(Field)<StyledFieldProps>`
   }
 
   &:disabled {
-    background: var(--lego-gray-light);
+    background: var(--color-gray-2);
   }
 `;
 
@@ -41,10 +41,10 @@ export const StyledTextAreaField = styled(Textarea)<StyledFieldProps>`
   padding: 1rem;
   margin-top: 4px;
   font-size: 0.9rem;
-  font-family: var(--font-family);
   color: var(--lego-font-color);
   border: 2px solid
-    ${({ $error }) => ($error ? "var(--lego-red)" : "var(--lego-gray-medium)")};
+    ${({ $error }) =>
+      $error ? "var(--lego-red-color)" : "var(--color-gray-3)"};
   border-radius: 13px;
   box-shadow: inset 0px 4px 4px rgba(129, 129, 129, 0.1);
   overflow: hidden;
@@ -60,7 +60,7 @@ export const StyledTextAreaField = styled(Textarea)<StyledFieldProps>`
   }
 
   &:disabled {
-    background: var(--lego-gray-light);
+    background: var(--color-gray-2);
   }
 `;
 
@@ -80,7 +80,7 @@ export const InputValidationFeedback: React.FC<
 > = ({ error }) => (error ? <ValidationError>{error}</ValidationError> : null);
 
 const ValidationError = styled.div`
-  color: var(--lego-red);
+  color: var(--lego-red-color);
   font-weight: 500;
   font-size: 0.9rem;
 `;

@@ -84,7 +84,7 @@ const Container = styled.div`
   align-items: center;
   margin: 2rem 0rem;
   padding-bottom: 2rem;
-  border-bottom: 1px solid var(--lego-gray-medium);
+  border-bottom: 1px solid var(--color-gray-3);
 
   &:last-of-type {
     border-bottom: 0;
@@ -143,7 +143,6 @@ const ResponseLabel = styled.div`
 
 const InputWrapper = styled.div`
   grid-area: input;
-  font-family: var(--font-family);
   font-size: 1rem;
 `;
 

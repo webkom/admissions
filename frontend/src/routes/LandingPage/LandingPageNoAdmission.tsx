@@ -3,15 +3,15 @@ import styled from "styled-components";
 import { media } from "src/styles/mediaQueries";
 
 import DecorativeLine from "src/components/DecorativeLine";
-import LegoButton from "src/components/LegoButton";
 import LandingPageSkeleton from "./LandingPageSkeleton";
+import LinkButton from "src/components/LinkButton";
 
 const LandingPageNoAdmission = () => {
   return (
     <LandingPageSkeleton>
       <SubTitle>Ingen åpne opptak for øyeblikket</SubTitle>
       <InfoBox>
-        <DecorativeLine vertical />
+        <DecorativeLine $vertical />
         <p>
           Opptak til{" "}
           <a href="https://abakus.no/pages/grupper/104-revyen">revyen</a> og{" "}
@@ -35,14 +35,9 @@ const LandingPageNoAdmission = () => {
           for kunngjøringer!
         </p>
       </InfoBox>
-      <LegoButton
-        href="https://abakus.no"
-        icon="arrow-forward"
-        iconPrefix="ios"
-        buttonStyle="secondary"
-      >
+      <LinkButton to="https://abakus.no" secondary>
         Gå til abakus.no
-      </LegoButton>
+      </LinkButton>
     </LandingPageSkeleton>
   );
 };
@@ -55,7 +50,7 @@ const SubTitle = styled.h2`
   margin-bottom: 0.6rem;
   font-size: 1.8rem;
   font-weight: 500;
-  color: var(--lego-gray-dark);
+  color: var(--color-gray-7);
   ${media.handheld`
     margin-top: 2rem;
     font-size: 1.5rem;

@@ -61,8 +61,10 @@ const PageWrapper = styled.div`
 
 const Header = styled.div`
   width: 100%;
-  background: var(--lego-background);
+  background: var(--lego-background-color);
   margin-bottom: 1rem;
+  padding-bottom: 0.5rem;
+
   a,
   h2 {
     margin-left: 1rem;

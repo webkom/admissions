@@ -2,20 +2,16 @@ import React from "react";
 import styled from "styled-components";
 import { media } from "src/styles/mediaQueries";
 import avatar from "assets/avatar.png";
-import { DjangoUserData } from "src/utils/djangoData";
+import djangoData from "src/utils/djangoData";
 
-interface UserInfoProps {
-  user: DjangoUserData;
-}
-
-const UserInfo: React.FC<UserInfoProps> = ({ user }) => {
+const UserInfo: React.FC = () => {
   return (
     <Container>
       <NameLogOutWrapper>
-        <Name>{user.full_name}</Name>
-        <LogoutBtn href="/logout/">Logg ut</LogoutBtn>
+        <Name>{djangoData.user.full_name}</Name>
+        <LogoutButton href="/logout/">Logg ut</LogoutButton>
       </NameLogOutWrapper>
-      <ProfilePicture src={user.profile_picture || avatar} />
+      <ProfilePicture src={djangoData.user.profile_picture || avatar} />
     </Container>
   );
 };
@@ -59,10 +55,6 @@ const NameLogOutWrapper = styled.div`
 `;
 
 const Name = styled.span`
-  font-weight: 600;
-  line-height: 1.7rem;
-  text-align: right;
-
   ${media.portrait`        
     font-size: 0.8rem;
     margin-bottom: 5px;
@@ -76,15 +68,14 @@ const Name = styled.span`
   `}
 `;
 
-const LogoutBtn = styled.a`
-  background: rgba(57, 75, 89, 0.14);
+const LogoutButton = styled.a`
+  background: var(--color-gray-3);
   border-radius: 4px;
   display: inline;
-  font-size: 0.7rem;
+  font-size: var(--font-size-xs);
   line-height: 1rem;
-  padding: 1px 10px 4px 10px;
+  padding: 0.12rem 0.5rem;
   color: var(--lego-font-color);
-  font-weight: 600;
 `;
 
 const ProfilePicture = styled.img`

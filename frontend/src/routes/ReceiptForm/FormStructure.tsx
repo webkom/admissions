@@ -2,7 +2,6 @@ import React from "react";
 import { Form, Field } from "formik";
 import FormatTime from "src/components/Time/FormatTime";
 import Icon from "src/components/Icon";
-import LegoButton from "src/components/LegoButton";
 import ConfirmModal from "src/components/ConfirmModal";
 import Application from "src/containers/GroupApplication/Application";
 import PhoneNumberField from "src/routes/ApplicationForm/PhoneNumberField";
@@ -35,6 +34,8 @@ import {
 } from "src/routes/ApplicationForm/FormStructureStyle";
 import { clearAllDrafts } from "src/utils/draftHelper";
 import JsonFieldEditor from "src/components/JsonFieldEditor";
+import { Button } from "@webkom/lego-bricks";
+import LinkButton from "src/components/LinkButton";
 
 interface FormStructureProps {
   toggleIsEditing: () => void;
@@ -66,22 +67,20 @@ const FormStructure: React.FC<FormStructureProps> = ({ toggleIsEditing }) => {
         </RecievedApplicationBanner>
         <TimeStamp>
           <Icon name="time" />
-          Søknaden ble sist registrert
-          {myApplication && (
-            <StyledSpan bold>
-              <FormatTime format="EEEE d. MMMM, kl. HH:mm:ss">
-                {myApplication.updated_at}
-              </FormatTime>
-            </StyledSpan>
-          )}
+          Søknaden ble sist registrert{" "}
+          <StyledSpan $bold>
+            <FormatTime format="EEEE d. MMMM, kl. HH:mm:ss">
+              {myApplication.updated_at}
+            </FormatTime>
+          </StyledSpan>
         </TimeStamp>
         <EditWrapper>
           <EditInfo>
             <Text>
               Du kan
-              <StyledSpan bold> fritt endre søknaden</StyledSpan> din frem til{" "}
+              <StyledSpan $bold> fritt endre søknaden</StyledSpan> din frem til{" "}
               {admission && (
-                <StyledSpan bold red>
+                <StyledSpan $bold $red>
                   <FormatTime format="EEEE d. MMMM">
                     {admission.public_deadline}
                   </FormatTime>
@@ -91,25 +90,20 @@ const FormStructure: React.FC<FormStructureProps> = ({ toggleIsEditing }) => {
               versjonen.
             </Text>
             <Notice>
-              <StyledSpan bold>Merk:</StyledSpan> Oppdateringer etter
+              <StyledSpan $bold>Merk:</StyledSpan> Oppdateringer etter
               søknadsfristen kan ikke garanteres å bli sett av{" "}
               {isRevy ? "revystyret" : "komiteen(e) du søker deg til"}.
             </Notice>
           </EditInfo>
           <EditActions>
             {admission && admission.is_open && (
-              <LegoButton
-                icon="arrow-forward"
-                iconPrefix="ios"
-                onClick={toggleIsEditing}
-              >
-                Endre søknad
-              </LegoButton>
+              <Button onClick={toggleIsEditing}>Endre søknad</Button>
             )}
+            <span />
             <ConfirmModal
               title="Slett søknad"
-              Component={({ onClick }) => (
-                <LegoButton onClick={onClick} buttonStyle="secondary">
+              trigger={({ onClick }) => (
+                <Button onClick={onClick} danger>
                   {deleteApplicationMutation.isPending
                     ? "Sletter søknad..."
                     : deleteApplicationMutation.isError
@@ -117,7 +111,7 @@ const FormStructure: React.FC<FormStructureProps> = ({ toggleIsEditing }) => {
                       : deleteApplicationMutation.isSuccess
                         ? "Søknad slettet!"
                         : "Slett søknad"}
-                </LegoButton>
+                </Button>
               )}
               message="Er du sikker på at du vil slette søknaden din?"
               onConfirm={() =>
@@ -203,13 +197,9 @@ const FormStructure: React.FC<FormStructureProps> = ({ toggleIsEditing }) => {
                 Send inn en ny søknad for å velge{" "}
                 {isRevy ? "grupper" : "komiteer"}.
               </NoChosenSubTitle>
-              <LegoButton
-                icon="arrow-forward"
-                iconPrefix="ios"
-                to={`/${admissionSlug}/velg-grupper`}
-              >
+              <LinkButton to={`/${admissionSlug}/velg-grupper`}>
                 Velg {isRevy ? "grupper" : "komiteer"}
-              </LegoButton>
+              </LinkButton>
             </NoChosenGroupsWrapper>
           )}
         </GroupsSection>
