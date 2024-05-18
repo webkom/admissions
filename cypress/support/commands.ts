@@ -32,6 +32,27 @@
 //   }
 // }
 
-// Cypress.Commands.add("clearDb", () => {
-//   cy.exec("poetry run python manage.py flush --no-input");
-// });
+type UserData = {
+  sessionid: string;
+  csrftoken: string;
+};
+
+const sessions: Record<string, UserData> = {
+  webkom: {
+    sessionid: "ln6y4kwaqp3y5mxv1ft19p6or1a018xq",
+    csrftoken: "vKaIGVmBwUPuNkZyvFVy0Ep2IH4B0mG4",
+  },
+};
+
+Cypress.Commands.add("login", (username) => {
+  if (username in sessions) {
+    cy.setCookie("sessionid", sessions[username].sessionid);
+    cy.setCookie("csrftoken", sessions[username].csrftoken);
+  } else {
+    throw new Error("Unknown user");
+  }
+});
+
+Cypress.Commands.add("logout", () => {
+  cy.clearCookie("sessionid");
+});

@@ -1,0 +1,101 @@
+[
+{
+  "model": "admissions.group",
+  "pk": 4,
+  "fields": {
+    "name": "Arrkom",
+    "description": "",
+    "response_label": "",
+    "logo": "http://127.0.0.1:10000/9kRAPiApVp8i2ztD7nzvjzN9bu0=/400x400/abakus_arrkom.png",
+    "detail_link": "https://abakus.no/pages/komiteer/4"
+  }
+},
+{
+  "model": "admissions.group",
+  "pk": 6,
+  "fields": {
+    "name": "Bankkom",
+    "description": "",
+    "response_label": "",
+    "logo": "http://127.0.0.1:10000/AgTk7CLe9E-NMtlCRSTsA049994=/400x400/abakus_bankkom.png",
+    "detail_link": "https://abakus.no/pages/komiteer/6"
+  }
+},
+{
+  "model": "admissions.group",
+  "pk": 7,
+  "fields": {
+    "name": "Bedkom",
+    "description": "",
+    "response_label": "",
+    "logo": "http://127.0.0.1:10000/9sUcNwLJ8j7E9RnLMqGbWhIKpSs=/400x400/abakus_bedkom.png",
+    "detail_link": "https://abakus.no/pages/komiteer/7"
+  }
+},
+{
+  "model": "admissions.group",
+  "pk": 8,
+  "fields": {
+    "name": "Fagkom",
+    "description": "",
+    "response_label": "",
+    "logo": "http://127.0.0.1:10000/zxtB57tF1Y0Kwe8qVoFPHSKXbI8=/400x400/abakus_fagkom.png",
+    "detail_link": "https://abakus.no/pages/komiteer/8"
+  }
+},
+{
+  "model": "admissions.group",
+  "pk": 9,
+  "fields": {
+    "name": "Koskom",
+    "description": "",
+    "response_label": "",
+    "logo": "http://127.0.0.1:10000/KwysEveCArPBuM0jTeulYBMObfE=/400x400/abakus_koskom.png",
+    "detail_link": "https://abakus.no/pages/komiteer/9"
+  }
+},
+{
+  "model": "admissions.group",
+  "pk": 10,
+  "fields": {
+    "name": "LaBamba",
+    "description": "",
+    "response_label": "",
+    "logo": "http://127.0.0.1:10000/q-DHQ_5Du8aIoRaEPXUeAxGEr6E=/400x400/abakus_labamba.png",
+    "detail_link": "https://abakus.no/pages/komiteer/10"
+  }
+},
+{
+  "model": "admissions.group",
+  "pk": 11,
+  "fields": {
+    "name": "PR",
+    "description": "",
+    "response_label": "",
+    "logo": "http://127.0.0.1:10000/ODpN7TrM7QrKbDs1zW7ax5O4AfI=/400x400/abakus_pr.png",
+    "detail_link": "https://abakus.no/pages/komiteer/11"
+  }
+},
+{
+  "model": "admissions.group",
+  "pk": 12,
+  "fields": {
+    "name": "readme",
+    "description": "",
+    "response_label": "",
+    "logo": "http://127.0.0.1:10000/4UOKTtqcKLFAfBEsgcQ9sdBWYAc=/400x400/abakus_readme.png",
+    "detail_link": "https://abakus.no/pages/komiteer/12"
+  }
+},
+{
+  "model": "admissions.group",
+  "pk": 13,
+  "fields": {
+    "name": "Webkom",
+    "description": "",
+    "response_label": "",
+    "logo": "http://127.0.0.1:10000/XuS4emGIQ7Zl2Qhkvgz5HDHfGDs=/400x400/abakus_webkom.png",
+    "detail_link": "https://abakus.no/pages/komiteer/13"
+  }
+}
+]

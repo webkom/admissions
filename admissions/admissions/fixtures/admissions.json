@@ -1,0 +1,23 @@
+[
+{
+  "model": "admissions.admission",
+  "pk": 1,
+  "fields": {
+    "created_by": null,
+    "title": "Opptak 2024",
+    "slug": "opptak-2024",
+    "description": "",
+    "header_fields": [],
+    "open_from": "2024-05-06T12:15:00Z",
+    "public_deadline": "2024-05-14T23:59:59Z",
+    "closed_from": "2024-05-16T23:59:59Z",
+    "groups": [
+      4,
+      13
+    ],
+    "admin_groups": [
+      4
+    ]
+  }
+}
+]

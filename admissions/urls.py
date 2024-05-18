@@ -43,6 +43,7 @@ router.register(
     "admin-userapplication",
 )
 router.register(r"group", GroupViewSet)
+
 urlpatterns = [
     re_path(r"logout/$", auth_views.LogoutView.as_view(), name="logout"),
     path("api/manage/", include(manageRouter.urls)),

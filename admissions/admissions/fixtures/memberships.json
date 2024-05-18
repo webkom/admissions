@@ -1,0 +1,11 @@
+[
+{
+  "model": "admissions.membership",
+  "pk": 1,
+  "fields": {
+    "user": 1,
+    "group": 13,
+    "role": "leader"
+  }
+}
+]
