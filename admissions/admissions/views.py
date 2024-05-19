@@ -89,6 +89,22 @@ class AdmissionViewSet(viewsets.ModelViewSet):
 
         return AdmissionListPublicSerializer
 
+    def list(self, request, *args, **kwargs):
+        serializer = self.get_serializer(self.get_queryset(), many=True)
+
+        # Sorting after the data has been fetched to be able to use the models properties
+        serializer_data = sorted(
+            serializer.data,
+            key=lambda admission: (
+                -admission["is_open"],
+                -admission["is_appliable"],
+                admission["is_closed"],
+                admission["public_deadline"],
+            ),
+        )
+
+        return Response(serializer_data)
+
 
 class GroupViewSet(viewsets.ModelViewSet):
     queryset = Group.objects.all()
