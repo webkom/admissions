@@ -47,14 +47,14 @@ const GroupStatistics: React.FC<GroupStatisticsProps> = ({
   const count = calculateNumGroupApplications(groupName);
   return (
     <GroupStatisticsWrapper
-      smallerMargin
+      $smallerMargin
       selected={
         selectedGroups.includes(groupName) || selectedGroups.length === 0
       }
       onClick={toggleSelectedGroup}
     >
       <StatisticsGroupLogo src={groupLogo} />
-      <StatisticsName capitalize>{groupName}</StatisticsName>
+      <StatisticsName $capitalize>{groupName}</StatisticsName>
       {count} stk
     </GroupStatisticsWrapper>
   );
@@ -76,7 +76,7 @@ const GroupStatisticsWrapper = styled(
   border-radius: 2px;
 
   &:hover {
-    background-color: var(--lego-gray-light);
+    background-color: var(--color-gray-2);
     cursor: pointer;
   }
 `;

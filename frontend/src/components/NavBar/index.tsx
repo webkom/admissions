@@ -6,14 +6,12 @@ import NavItem from "./NavItem";
 import { media } from "src/styles/mediaQueries";
 import { useParams } from "react-router-dom";
 import { useAdmission } from "src/query/hooks";
-import { DjangoUserData } from "src/utils/djangoData";
 
 interface NavBarProps {
-  user: DjangoUserData;
   isEditing: boolean;
 }
 
-const NavBar: React.FC<NavBarProps> = ({ user, isEditing }) => {
+const NavBar: React.FC<NavBarProps> = ({ isEditing }) => {
   const { admissionSlug, ...params } = useParams();
   const { data: admission } = useAdmission(admissionSlug ?? "");
   const isRevy = admissionSlug === "revy";
@@ -37,7 +35,7 @@ const NavBar: React.FC<NavBarProps> = ({ user, isEditing }) => {
           </>
         )}
       </NavItemsContainer>
-      <UserInfo user={user} />
+      <UserInfo />
     </Container>
   );
 };
@@ -50,7 +48,7 @@ const Container = styled.nav`
   display: flex;
   align-items: center;
   justify-content: space-between;
-  background: var(--lego-gray-lightest);
+  background: var(--color-gray-1);
   width: 100%;
   height: 70px;
   border-bottom: 3px solid rgba(192, 57, 43, 0.08);
@@ -83,6 +81,6 @@ const NavItemsContainer = styled.ul`
     order: 3;
     margin-bottom: 1rem;
     padding-top: 0.5rem;
-    border-top: 1px solid var(--lego-gray-medium);
+    border-top: 1px solid var(--color-gray-3);
   `}
 `;

@@ -1,7 +1,6 @@
-@import url("https://fonts.googleapis.com/css?family=Cardo");
 @import url("https://unpkg.com/ionicons@4.5.10-0/dist/css/ionicons.min.css");
-@import url("./variables.css");
 @import url("./fonts.css");
+@import url("~/@webkom/lego-bricks/dist/style.css");
 
 html {
   box-sizing: border-box;
@@ -19,12 +18,31 @@ html {
 body {
   margin: 0;
   line-height: 1.8;
-  font-family: Rawline, "Helvetica Neue", Arial, sans-serif;
-  background: var(--lego-background);
+  background: var(--lego-background-color);
   color: var(--lego-font-color);
   position: relative;
-  background-repeat: no-repeat;
-  background-attachment: fixed;
+}
+
+h1,
+h2,
+h3,
+h4 {
+  font-weight: 400;
+}
+
+h1 {
+  font-size: 3rem;
+  text-align: center;
+  margin: 0.2em 0 0;
+  line-height: 1.2em;
+}
+
+h2 {
+  font-size: var(--font-size-xl);
+}
+
+h3 {
+  font-size: var(--font-size-lg);
 }
 
 a {
@@ -47,39 +65,6 @@ ul {
   list-style: none;
 }
 
-h1 {
-  font-size: 3rem;
-  text-align: center;
-  margin: 0.2em 0 0;
-  line-height: 1.2em;
-}
-
-h1,
-h2,
-h3,
-h4 {
-  font-weight: 600;
-}
-
-h2 {
-  font-size: 24px;
-}
-
-h3 {
-  font-size: 22px;
-}
-
-button {
-  background-color: transparent;
-  border: 0;
-  outline: none;
-  cursor: pointer;
-}
-
-i {
-  display: inline;
-}
-
 table {
   border-collapse: collapse;
 }
@@ -88,11 +73,12 @@ th {
   padding: 5px 0;
   border-top: 1px solid #aaa;
   border-bottom: 1px solid #aaa !important;
-  font-weight: 500;
+  font-weight: 400;
 }
 
 th,
 td {
+  font-size: var(--font-size-sm);
   padding-left: 7px;
   width: 140px;
   border-bottom: 1px dashed #aaa;
@@ -102,15 +88,11 @@ td {
   hyphens: auto;
 }
 
+th:first-child,
+th:last-child {
+  border-radius: 0;
+}
+
 tr:last-of-type > td {
   border-bottom: 0;
-}
-
-thead {
-  font-weight: bold;
-  background-color: #eee;
-}
-
-time {
-  white-space: nowrap;
 }

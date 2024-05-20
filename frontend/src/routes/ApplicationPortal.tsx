@@ -8,7 +8,7 @@ import {
   saveIsEditingDraft,
   saveSelectedGroupsDraft,
 } from "src/utils/draftHelper";
-import djangoData from "src/utils/djangoData";
+import { isLoggedIn } from "src/utils/djangoData";
 
 import { useAdmission, useMyApplication } from "src/query/hooks";
 
@@ -99,7 +99,7 @@ const ApplicationPortal = () => {
     saveIsEditingDraft(isEditingApplication);
   }, [isEditingApplication]);
 
-  if (!djangoData.user) {
+  if (!isLoggedIn()) {
     return null;
   } else if (error) {
     if (error.response?.status === 404) {
@@ -111,7 +111,7 @@ const ApplicationPortal = () => {
   } else {
     return (
       <PageWrapper>
-        <NavBar user={djangoData.user} isEditing={!!isEditingApplication} />
+        <NavBar isEditing={!!isEditingApplication} />
         <ContentContainer>
           <Routes>
             <Route

@@ -96,6 +96,6 @@ export const innerColumns = [
         groupId={row.original.groupId}
       />
     ),
-    size: 100,
+    size: 160,
   }),
 ];

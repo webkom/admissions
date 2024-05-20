@@ -3,8 +3,8 @@ import styled from "styled-components";
 import { media } from "src/styles/mediaQueries";
 
 import AbakusLogo from "src/components/AbakusLogo";
-import djangoData from "src/utils/djangoData";
-import LegoButton from "src/components/LegoButton";
+import { isLoggedIn, isManager } from "src/utils/djangoData";
+import LinkButton from "src/components/LinkButton";
 
 const LandingPageSkeleton: React.FC<PropsWithChildren> = ({ children }) => {
   return (
@@ -14,20 +14,17 @@ const LandingPageSkeleton: React.FC<PropsWithChildren> = ({ children }) => {
       </BrandContainer>
       <Title>Opptak</Title>
       {children}
-      {(djangoData.user.is_staff || djangoData.user.is_member_of_webkom) && (
+      {isManager() && (
         <LegoButtonWrapper>
-          <LegoButton
-            to={`/manage/`}
-            icon="arrow-forward"
-            iconPrefix="ios"
-            buttonStyle="secondary"
-          >
-            Administrer opptak
-          </LegoButton>
+          <LinkButton to={`/manage/`}>Administrer opptak</LinkButton>
         </LegoButtonWrapper>
       )}
       <BottomLinkWrapper>
-        {!djangoData.user.full_name && <a href="/login/lego/">Logg inn</a>}
+        {!isLoggedIn() ? (
+          <a href="/login/lego/">Logg inn</a>
+        ) : (
+          <a href="/logout/">Logg ut</a>
+        )}
       </BottomLinkWrapper>
     </Container>
   );

@@ -2,13 +2,14 @@ import { CSVLink } from "react-csv";
 import styled from "styled-components";
 
 interface SmallDescriptionWrapperProps {
-  smallerMargin?: boolean;
+  $smallerMargin?: boolean;
 }
 
 export const StatisticsWrapper = styled.div<SmallDescriptionWrapperProps>`
   display: inline-flex;
   flex-direction: column;
-  margin: ${(props) => (props.smallerMargin ? "0 0.5em 1em 1em" : "1em")};
+  gap: 0.25rem;
+  margin: ${(props) => (props.$smallerMargin ? "0 0.5em 1em 1em" : "1em")};
 
   justify-content: flex-start;
   line-height: 1;
@@ -16,13 +17,13 @@ export const StatisticsWrapper = styled.div<SmallDescriptionWrapperProps>`
 `;
 
 interface SmallDescriptionProps {
-  capitalize?: boolean;
+  $capitalize?: boolean;
 }
 
 export const StatisticsName = styled.span<SmallDescriptionProps>`
-  font-size: 0.8em;
-  font-weight: bold;
-  text-transform: ${(props) => (props.capitalize ? "capitalize" : "normal")};
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+  text-transform: ${(props) => (props.$capitalize ? "capitalize" : "normal")};
 `;
 
 export const StatisticsGroupLogo = styled.img`

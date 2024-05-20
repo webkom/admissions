@@ -154,11 +154,11 @@ const ViewApplications = () => {
           </StatisticsWrapper>
         </Statistics>
         <Statistics>
-          <StatisticsWrapper smallerMargin>
+          <StatisticsWrapper $smallerMargin>
             <StatisticsName>Antall søkere</StatisticsName>
             {numApplicants} {numApplicants == 1 ? "søker" : "søkere"}
           </StatisticsWrapper>
-          <StatisticsWrapper smallerMargin>
+          <StatisticsWrapper $smallerMargin>
             <StatisticsName>Totalt antall søknader</StatisticsName>
             {numApplications} {numApplications == 1 ? "søknad" : "søknader"}
           </StatisticsWrapper>

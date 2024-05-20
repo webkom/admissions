@@ -31,8 +31,7 @@ export default readmeIfy;
 /** Styles **/
 
 const Readme = styled.div`
-  font-family: "OCR A Extended", var(--font-family);
-  font-weight: 400;
+  font-family: "OCR A Extended";
   text-transform: lowercase;
 `;
 

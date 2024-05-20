@@ -1,11 +1,11 @@
 import React from "react";
 import styled from "styled-components";
-import djangoData from "src/utils/djangoData";
-import LegoButton from "src/components/LegoButton";
+import { isLoggedIn } from "src/utils/djangoData";
 import { media } from "src/styles/mediaQueries";
 import FormatTime from "src/components/Time/FormatTime";
 import { Admission as AdmissionInterface } from "src/types";
 import CountDown from "./CountDown";
+import LinkButton from "src/components/LinkButton";
 
 interface AdmissionProps {
   admission: AdmissionInterface;
@@ -74,48 +74,31 @@ const Admission: React.FC<AdmissionProps> = ({ admission }) => {
             />
           )}
           <LinkWrapper>
-            {(admission.is_open || admission.userdata.has_application) &&
-              (djangoData.user.full_name ? (
-                <li>
-                  <LegoButton
-                    to={
-                      `/${admission.slug}/` +
-                      (admission.userdata.has_application
-                        ? "min-soknad"
-                        : "velg-grupper")
-                    }
-                    icon="arrow-forward"
-                    iconPrefix="ios"
-                  >
-                    Gå til søknad
-                  </LegoButton>
-                </li>
-              ) : (
-                <li>
-                  <LegoButton
-                    icon="arrow-forward"
-                    iconPrefix="ios"
-                    disabled={!admission.is_open}
-                    onClick={(e) => {
-                      (window as Window).location = "/login/lego/";
-                      e.preventDefault();
-                    }}
-                  >
-                    Gå til søknad
-                  </LegoButton>
-                </li>
-              ))}
+            {(admission.is_open || admission.userdata.has_application) && (
+              <li>
+                <LinkButton
+                  dark
+                  to={
+                    isLoggedIn()
+                      ? `/${admission.slug}/` +
+                        (admission.userdata.has_application
+                          ? "min-soknad"
+                          : "velg-grupper")
+                      : "/login/lego/"
+                  }
+                  external={!isLoggedIn()}
+                  disabled={!isLoggedIn() && !admission.is_open}
+                >
+                  Gå til søknad
+                </LinkButton>
+              </li>
+            )}
 
             {admission.userdata.is_privileged && (
               <li>
-                <LegoButton
-                  to={`/${admission.slug}/admin/`}
-                  icon="arrow-forward"
-                  iconPrefix="ios"
-                  buttonStyle="secondary"
-                >
+                <LinkButton to={`/${admission.slug}/admin/`}>
                   Gå til admin panel
-                </LegoButton>
+                </LinkButton>
               </li>
             )}
           </LinkWrapper>
@@ -131,7 +114,7 @@ const Admission: React.FC<AdmissionProps> = ({ admission }) => {
         )}
         .
       </p>
-      {isRevy && admission.is_open && !djangoData.user.full_name && (
+      {isRevy && admission.is_open && !isLoggedIn() && (
         <p>
           Er du ikke medlem av Abakus? Søk via{" "}
           <a href="https://docs.google.com/forms/d/e/1FAIpQLSf7TzGamFXYLA5jM1hrw4XhL0Y_nRgRcl1qjAHbGBlyC0ALxw/viewform?pli=1">
@@ -159,7 +142,7 @@ const TimeLineItem: React.FC<TimeLineItemProps> = ({
 }) => {
   const dateHasPassed = new Date().toISOString().localeCompare(dateString) > 0;
   return (
-    <TimeLineItemWrapper dateHasPassed={dateHasPassed}>
+    <TimeLineItemWrapper $dateHasPassed={dateHasPassed}>
       <TimeLineItemIcon />
       <TimeLineItemTitle>{title}</TimeLineItemTitle>
       <TimeLineItemTime>
@@ -221,7 +204,7 @@ const TimeLineWrapper = styled.div`
 `;
 
 interface StyledTimeLineItemProps {
-  dateHasPassed: boolean;
+  $dateHasPassed: boolean;
 }
 
 const TimeLineItemWrapper = styled.div<StyledTimeLineItemProps>`
@@ -229,7 +212,7 @@ const TimeLineItemWrapper = styled.div<StyledTimeLineItemProps>`
   flex-wrap: wrap;
   align-items: center;
   margin-bottom: 10px;
-  opacity: ${(props) => (props.dateHasPassed ? 0.6 : 1)};
+  opacity: ${(props) => (props.$dateHasPassed ? 0.6 : 1)};
 `;
 
 const TimeLineItemIcon = styled.i`
@@ -237,7 +220,7 @@ const TimeLineItemIcon = styled.i`
   width: 25px;
   height: 25px;
   border-radius: 12.5px;
-  background-color: var(--abakus-red);
+  background-color: var(--lego-red-color);
   margin-right: 10px;
   ${media.handheld`
     width: 20px;
@@ -271,6 +254,7 @@ const TimeLineItemTime = styled(TimeLineItemHeader)`
 `;
 
 const TimeLineItemDetail = styled.span`
+  color: var(--color-gray-7);
   flex-basis: 100%;
   margin-left: 35px;
   margin-top: 6px;

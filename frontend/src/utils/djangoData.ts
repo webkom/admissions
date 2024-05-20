@@ -16,3 +16,8 @@ const config = window.__DJANGO__
   : defaultConfig;
 
 export default config;
+
+export const isLoggedIn: () => boolean = () => !!config.user.full_name;
+
+export const isManager: () => boolean = () =>
+  !!config.user.is_staff || !!config.user.is_member_of_webkom;

@@ -1,4 +1,4 @@
-import "src/styles/variables.css";
+import "~/@webkom/lego-bricks/dist/style.css";
 import styled from "styled-components";
 
 export const Overlay = styled.div`
@@ -35,37 +35,11 @@ export const Message = styled.div`
   color: var(--lego-font-color);
 `;
 
-export const ButtonGroup = styled.div`
+export const ActionButtonsWrapper = styled.div`
   display: flex;
   flex-direction: row;
   width: 100%;
   justify-content: space-between;
   margin-top: 20px;
   padding: 0;
-`;
-
-interface ActionButtonProps {
-  background?: string;
-  border?: string | number;
-}
-
-export const ActionButton = styled.button<ActionButtonProps>`
-  color: #fff;
-  font-weight: bold;
-  background: ${(props) => props.background || "var(--lego-red)"};
-  border: ${(props) => props.border || "1px solid var(--abakus-red)"};
-  padding: 10px 30px;
-  border-radius: 4px;
-  width: 100px;
-`;
-
-export const TriggerText = styled.div`
-  cursor: pointer;
-  font-size: 1em;
-  color: gray;
-  font-weight: bold;
-
-  &:hover {
-    text-shadow: 0.5px 0.5px darkgray;
-  }
 `;

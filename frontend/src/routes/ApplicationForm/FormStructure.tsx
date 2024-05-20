@@ -2,7 +2,6 @@ import React, { ReactNode } from "react";
 import { Form, Field, FormikValues } from "formik";
 import FormatTime from "src/components/Time/FormatTime";
 import Icon from "src/components/Icon";
-import LegoButton from "src/components/LegoButton";
 import PhoneNumberField from "./PhoneNumberField";
 import ToggleGroups from "./ToggleGroups";
 import ErrorFocus from "./ErrorFocus";
@@ -30,6 +29,8 @@ import {
 import { Admission, Group } from "src/types";
 import { SelectedGroups } from ".";
 import JsonFieldEditor from "src/components/JsonFieldEditor";
+import { Button } from "@webkom/lego-bricks";
+import LinkButton from "src/components/LinkButton";
 
 interface FormStructureProps extends FormikValues {
   admission?: Admission;
@@ -60,15 +61,9 @@ const FormStructure: React.FC<FormStructureProps> = ({
         <Title>Skriv din søknad og send inn!</Title>
         {myApplication && (
           <CancelButtonContainer>
-            <LegoButton
-              icon="arrow-back"
-              iconPrefix="ios"
-              onClick={onCancel}
-              disabled={!isValid}
-              buttonStyle="primary"
-            >
+            <Button onClick={onCancel} disabled={!isValid}>
               Avbryt
-            </LegoButton>
+            </Button>
           </CancelButtonContainer>
         )}
       </FormHeader>
@@ -123,13 +118,9 @@ const FormStructure: React.FC<FormStructureProps> = ({
                 Velg i sidemargen eller gå til {isRevy ? "gruppe" : "komite"}
                 oversikten
               </NoChosenSubTitle>
-              <LegoButton
-                icon="arrow-forward"
-                iconPrefix="ios"
-                to={`/${admission?.slug}/velg-grupper`}
-              >
+              <LinkButton secondary to={`/${admission?.slug}/velg-grupper`}>
                 Velg {isRevy ? "grupper" : "komiteer"}
-              </LegoButton>
+              </LinkButton>
             </NoChosenGroupsWrapper>
           )}
         </GroupsSection>
@@ -139,13 +130,13 @@ const FormStructure: React.FC<FormStructureProps> = ({
             {admission && (
               <div>
                 <ApplicationDateInfo>
-                  <StyledSpan bold>Søknadsfristen</StyledSpan> er{" "}
-                  <StyledSpan bold red>
+                  <StyledSpan $bold>Søknadsfristen</StyledSpan> er{" "}
+                  <StyledSpan $bold $red>
                     <FormatTime format="EEEE d. MMMM">
                       {admission.public_deadline}
                     </FormatTime>
                   </StyledSpan>
-                  <StyledSpan red>
+                  <StyledSpan $red>
                     <FormatTime format=", kl. HH:mm:ss">
                       {admission.public_deadline}
                     </FormatTime>
@@ -168,15 +159,13 @@ const FormStructure: React.FC<FormStructureProps> = ({
           </div>
           {hasSelected && (
             <div>
-              <LegoButton
-                icon="arrow-forward"
-                iconPrefix="ios"
+              <Button
                 onClick={handleSubmit}
                 disabled={isSubmitting || !isValid}
-                buttonStyle="tertiary"
+                success
               >
                 Send inn søknad
-              </LegoButton>
+              </Button>
             </div>
           )}
         </SubmitSection>

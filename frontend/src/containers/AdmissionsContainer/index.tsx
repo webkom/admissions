@@ -164,7 +164,10 @@ const AdmissionsContainer: React.FC<AdmissionsContainerProps> = ({
               </tr>
               {row.getIsExpanded() ? (
                 <tr>
-                  <td colSpan={row.getVisibleCells().length}>
+                  <td
+                    colSpan={row.getVisibleCells().length}
+                    style={{ padding: 0 }}
+                  >
                     {subComponent({ row })}
                   </td>
                 </tr>

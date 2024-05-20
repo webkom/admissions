@@ -7,8 +7,9 @@ import { useUpdateGroupMutation } from "src/query/mutations";
 import TextAreaField from "src/components/TextAreaField";
 
 import CSRFToken from "./csrftoken";
-import { EditGroupFormWrapper, FormWrapper, SubmitButton } from "./styles";
+import { EditGroupFormWrapper, FormWrapper } from "./styles";
 import { Group } from "src/types";
+import { Button } from "@webkom/lego-bricks";
 
 const signupSchema = Yup.object().shape({
   description: Yup.string()
@@ -117,14 +118,13 @@ const InnerForm: React.FC<InnerFormProps> = ({
             placeholder="Skriv hva komiteen ønsker å vite om søkeren..."
           />
         </EditGroupFormWrapper>
-        <SubmitButton
+        <Button
+          submit
           onClick={submitForm}
-          type="submit"
-          disabled={updateGroupMutation.isPending}
-          valid={isValid}
+          disabled={!isValid || updateGroupMutation.isPending}
         >
           Lagre
-        </SubmitButton>
+        </Button>
         {updateGroupMutation.isSuccess && <p>Lagret!</p>}
       </FormWrapper>
     </Form>
