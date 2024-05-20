@@ -35,6 +35,8 @@ export const StyledField = styled(Field)<StyledFieldProps>`
   }
 `;
 
+export const StyledInput = styled(StyledField).attrs({ as: "input" })``;
+
 export const StyledTextAreaField = styled(Textarea)<StyledFieldProps>`
   width: 100%;
   min-height: 8rem;
@@ -69,6 +71,13 @@ export const FieldLabel = styled.label`
   font-size: 0.95rem;
   line-height: 1.2rem;
   display: inline-block;
+`;
+
+export const FieldDescription = styled.label`
+  display: block;
+  font-size: 0.9rem;
+  line-height: 1rem;
+  margin-bottom: 0.5rem;
 `;
 
 interface InputValidationFeedbackProps {

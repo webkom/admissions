@@ -28,9 +28,9 @@ import {
 } from "./FormStructureStyle";
 import { Admission, Group } from "src/types";
 import { SelectedGroups } from ".";
-import JsonFieldEditor from "src/components/JsonFieldEditor";
 import { Button } from "@webkom/lego-bricks";
 import LinkButton from "src/components/LinkButton";
+import JsonFieldRenderer from "src/components/JsonField/Renderer";
 
 interface FormStructureProps extends FormikValues {
   admission?: Admission;
@@ -76,7 +76,7 @@ const FormStructure: React.FC<FormStructureProps> = ({
             Mobilnummeret vil bli brukt til å kalle deg inn på intervju.
           </HelpText>
           <Field name="phoneNumber" component={PhoneNumberField} />
-          <JsonFieldEditor
+          <JsonFieldRenderer
             sectionName="headerFields"
             fields={admission?.header_fields}
           />

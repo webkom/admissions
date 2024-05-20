@@ -33,9 +33,9 @@ import {
   Title,
 } from "src/routes/ApplicationForm/FormStructureStyle";
 import { clearAllDrafts } from "src/utils/draftHelper";
-import JsonFieldEditor from "src/components/JsonFieldEditor";
 import { Button } from "@webkom/lego-bricks";
 import LinkButton from "src/components/LinkButton";
+import JsonFieldRenderer from "src/components/JsonField/Renderer";
 
 interface FormStructureProps {
   toggleIsEditing: () => void;
@@ -143,7 +143,7 @@ const FormStructure: React.FC<FormStructureProps> = ({ toggleIsEditing }) => {
             component={PhoneNumberField}
             disabled={true}
           />
-          <JsonFieldEditor
+          <JsonFieldRenderer
             sectionName="headerFields"
             fields={admission?.header_fields}
             disabled={true}

@@ -1,5 +1,6 @@
 import React, { FocusEvent } from "react";
 import {
+  FieldDescription,
   FieldLabel,
   InputValidationFeedback,
   StyledField,
@@ -17,6 +18,8 @@ const PhoneNumberField: React.FC<PhoneNumberFieldProps> = ({
   disabled,
   placeholder = "Fyll inn mobilnummer...",
   title = "Mobilnummer",
+  label,
+  required,
 }) => {
   const nameSplit = name.split(".");
   const error =
@@ -29,7 +32,11 @@ const PhoneNumberField: React.FC<PhoneNumberFieldProps> = ({
 
   return (
     <Wrapper>
-      <FieldLabel htmlFor={name}>{title}</FieldLabel>
+      <FieldLabel htmlFor={name}>
+        {title}
+        {required && <Required>*</Required>}
+      </FieldLabel>
+      {label && <FieldDescription htmlFor={name}>{label}</FieldDescription>}
 
       <StyledField
         type="tel"
@@ -58,4 +65,10 @@ const Wrapper = styled.div`
   ${media.portrait`
     margin-top: 1.5rem;
   `};
+`;
+
+const Required = styled.span`
+  color: var(--lego-red);
+  font-weight: 900;
+  margin-left: 2px;
 `;

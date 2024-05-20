@@ -1,15 +1,14 @@
 import React, { useMemo } from "react";
-import { Link } from "react-router-dom";
+import { Link, useParams } from "react-router-dom";
 import Icon from "src/components/Icon";
-import { Admission } from "src/types";
+import { useAdmission } from "src/query/hooks";
 import djangoData from "src/utils/djangoData";
 import styled from "styled-components";
 
-interface Props {
-  admission?: Admission;
-}
+const NavBar: React.FC = () => {
+  const { admissionSlug } = useParams();
+  const { data: admission } = useAdmission(admissionSlug ?? "");
 
-const NavBar: React.FC<Props> = ({ admission }) => {
   const representingGroup = useMemo(
     () =>
       admission?.groups.find(
@@ -18,6 +17,10 @@ const NavBar: React.FC<Props> = ({ admission }) => {
     [admission],
   );
 
+  if (!admission) return null;
+
+  const { userdata, slug } = admission;
+
   return (
     <Wrapper>
       <Link to={"/"}>
@@ -25,7 +28,10 @@ const NavBar: React.FC<Props> = ({ admission }) => {
       </Link>
 
       <NavHeader>Administrer opptak</NavHeader>
-      <NavLink to={"../admin/"}>Se søknader</NavLink>
+      {userdata.is_admin && (
+        <NavLink to={`/${slug}/admin/edit`}>Rediger opptak</NavLink>
+      )}
+      <NavLink to={`/${slug}/admin/`}>Se søknader</NavLink>
       <NavHeader>Administrer grupper</NavHeader>
       {representingGroup ? (
         <NavLink to={"./groups/" + representingGroup.pk}>

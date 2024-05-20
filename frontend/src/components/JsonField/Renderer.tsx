@@ -11,7 +11,7 @@ type Props = {
   disabled?: boolean;
 };
 
-const JsonFieldEditor: React.FC<Props> = ({
+const JsonFieldRenderer: React.FC<Props> = ({
   sectionName,
   fields,
   disabled = false,
@@ -30,6 +30,7 @@ const JsonFieldEditor: React.FC<Props> = ({
       title={field.title}
       label={field.label}
       placeholder={field.placeholder}
+      required={field.required}
       disabled={disabled}
     />
   );
@@ -49,4 +50,4 @@ const JsonFieldEditor: React.FC<Props> = ({
   return <>{renderedFields}</>;
 };
 
-export default JsonFieldEditor;
+export default JsonFieldRenderer;

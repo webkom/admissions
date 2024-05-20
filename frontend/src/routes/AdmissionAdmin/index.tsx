@@ -1,24 +1,22 @@
 import React from "react";
-import { Route, Routes, useParams } from "react-router-dom";
+import { Route, Routes } from "react-router-dom";
 import styled from "styled-components";
 import ViewApplications from "./ViewApplications";
 import NavBar from "./components/NavBar";
-import { useAdmission } from "src/query/hooks";
 import EditGroup from "./EditGroup";
+import EditFields from "./EditFields";
 
 const AdminPage: React.FC = () => {
-  const { admissionSlug } = useParams();
-  const { data: admission } = useAdmission(admissionSlug ?? "");
-
   return (
     <PageWrapper>
       <Wrapper>
         <LeftSide>
-          <NavBar admission={admission} />
+          <NavBar />
         </LeftSide>
         <RightSide>
           <Routes>
             <Route path="" element={<ViewApplications />} />
+            <Route path="edit" element={<EditFields />} />
             <Route path="groups/:groupId" element={<EditGroup />} />
           </Routes>
         </RightSide>
