@@ -16,6 +16,7 @@ import { toggleFromArray } from "src/utils/methods";
 import styled from "styled-components";
 import GroupSelector from "./components/GroupSelector";
 import { Button } from "@webkom/lego-bricks";
+import LoadingBall from "src/components/LoadingBall";
 
 interface ReturnedData {
   type: "error" | "success";
@@ -138,6 +139,10 @@ const CreateAdmission: React.FC = () => {
       });
     }
   }, [admission]);
+
+  if (!isNew && isLoading) {
+    return <LoadingBall />;
+  }
 
   if ((!isNew && !admission && !isLoading) || error?.response?.status === 404) {
     return <p>Fant ikke opptaket {admissionSlug}</p>;

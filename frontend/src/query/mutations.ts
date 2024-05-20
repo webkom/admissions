@@ -59,10 +59,10 @@ interface UpdateGroupErrorData {
   response_label: string[];
 }
 
-export const useUpdateGroupMutation = () =>
+export const useAdminUpdateGroupMutation = () =>
   useMutation<unknown, AxiosError<UpdateGroupErrorData>, UpdateGroupProps>({
     mutationFn: ({ groupPrimaryKey, updatedGroupData }) =>
-      apiClient.patch(`/group/${groupPrimaryKey}/`, updatedGroupData),
+      apiClient.patch(`/admin/group/${groupPrimaryKey}/`, updatedGroupData),
   });
 
 interface DeleteGroupApplicationProps {
@@ -75,14 +75,14 @@ export const useAdminDeleteApplicationMutation = (admissionSlug: string) => {
   return useMutation<unknown, AxiosError, DeleteGroupApplicationProps>({
     mutationFn: ({ applicationId, groupId }) =>
       apiClient.delete(
-        `/admission/${admissionSlug}/admin/application/${applicationId}/${
+        `/admin/admission/${admissionSlug}/application/${applicationId}/${
           groupId ? "?groupId=" + groupId : ""
         }`,
       ),
 
     onSuccess: () => {
       queryClient.invalidateQueries({
-        queryKey: [`/admission/${admissionSlug}/admin/application/`],
+        queryKey: [`/admin/admission/${admissionSlug}/application/`],
       });
     },
   });

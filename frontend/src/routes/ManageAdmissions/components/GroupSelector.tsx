@@ -1,5 +1,5 @@
 import React from "react";
-import { useGroups } from "src/query/hooks";
+import { useManageGroups } from "src/query/hooks";
 import { Group } from "src/types";
 import styled from "styled-components";
 
@@ -12,7 +12,7 @@ const GroupSelector: React.FC<GroupSelectorProps> = ({
   value: selectedGroups,
   toggleGroup,
 }) => {
-  const { data: groups } = useGroups();
+  const { data: groups } = useManageGroups();
 
   const toggleSelectedGroup = (groupId: number) => {
     const group = groups?.find((group) => group.pk === groupId);

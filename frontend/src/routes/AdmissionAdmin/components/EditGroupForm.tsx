@@ -2,7 +2,7 @@ import React, { useState } from "react";
 import { Field, Form, Formik, FormikProps } from "formik";
 import * as Yup from "yup";
 
-import { useUpdateGroupMutation } from "src/query/mutations";
+import { useAdminUpdateGroupMutation } from "src/query/mutations";
 
 import TextAreaField from "src/components/TextAreaField";
 
@@ -41,7 +41,7 @@ const EditGroupForm: React.FC<EditGroupFormProps> = ({
   const [resetMutationTimeout, setResetMutationTimeout] =
     useState<NodeJS.Timeout>();
 
-  const updateGroupMutation = useUpdateGroupMutation();
+  const updateGroupMutation = useAdminUpdateGroupMutation();
 
   return (
     <Formik
@@ -92,7 +92,7 @@ const EditGroupForm: React.FC<EditGroupFormProps> = ({
 };
 
 type InnerFormProps = {
-  updateGroupMutation: ReturnType<typeof useUpdateGroupMutation>;
+  updateGroupMutation: ReturnType<typeof useAdminUpdateGroupMutation>;
 } & FormikProps<FormValues>;
 
 const InnerForm: React.FC<InnerFormProps> = ({

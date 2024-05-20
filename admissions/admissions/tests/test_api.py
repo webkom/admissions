@@ -39,7 +39,7 @@ class EditGroupTestCase(APITestCase):
         self.client.force_authenticate(user=self.pleb)
 
         res = self.client.patch(
-            reverse("group-detail", kwargs={"pk": self.arrkom.pk}),
+            reverse("admin-group-detail", kwargs={"pk": self.arrkom.pk}),
             self.edit_group_data,
         )
 
@@ -49,7 +49,7 @@ class EditGroupTestCase(APITestCase):
         self.client.force_authenticate(user=self.webkom_leader)
 
         res = self.client.patch(
-            reverse("group-detail", kwargs={"pk": self.arrkom.pk}),
+            reverse("admin-group-detail", kwargs={"pk": self.arrkom.pk}),
             self.edit_group_data,
         )
 
@@ -59,7 +59,7 @@ class EditGroupTestCase(APITestCase):
         self.client.force_authenticate(user=self.webkom_leader)
 
         res = self.client.patch(
-            reverse("group-detail", kwargs={"pk": self.webkom.pk}),
+            reverse("admin-group-detail", kwargs={"pk": self.webkom.pk}),
             self.edit_group_data,
         )
 
@@ -69,7 +69,7 @@ class EditGroupTestCase(APITestCase):
         self.client.force_authenticate(user=self.webkom_recruiter)
 
         res = self.client.patch(
-            reverse("group-detail", kwargs={"pk": self.webkom.pk}),
+            reverse("admin-group-detail", kwargs={"pk": self.webkom.pk}),
             self.edit_group_data,
         )
 
@@ -80,7 +80,7 @@ class EditGroupTestCase(APITestCase):
         self.client.force_authenticate(user=staff_user)
 
         res = self.client.patch(
-            reverse("group-detail", kwargs={"pk": self.arrkom.pk}),
+            reverse("admin-group-detail", kwargs={"pk": self.arrkom.pk}),
             self.edit_group_data,
         )
 
@@ -96,10 +96,16 @@ class EditGroupTestCase(APITestCase):
 
 class EditAdmissionTestCase(APITestCase):
     def setUp(self):
-        self.admission = create_admission()
+        self.staff_user = LegoUser.objects.create(
+            username="bigsupremeleader", is_staff=True
+        )
+        self.admission = create_admission(created_by=self.staff_user)
         self.edit_admission_data = {
             "title": "Plebkom opptak 2020",
             "open_from": fake_timedelta(days=10),
+            "header_fields": [],
+            "admin_groups": [],
+            "groups": [],
         }
 
     def test_pleb_cannot_edit_admission(self):
@@ -107,55 +113,87 @@ class EditAdmissionTestCase(APITestCase):
         self.client.force_authenticate(user=pleb)
 
         res = self.client.patch(
-            reverse("admission-detail", kwargs={"slug": self.admission.slug}),
+            reverse("manage-admission-detail", kwargs={"slug": self.admission.slug}),
             self.edit_admission_data,
+            format="json",
         )
 
         self.assertEqual(res.status_code, status.HTTP_403_FORBIDDEN)
 
     def test_group_leader_cannot_edit_admission(self):
-        webkom_leader = LegoUser.objects.create(username="webkomleader")
-        webkom = Group.objects.create(name="Webkom")
-        Membership.objects.create(user=webkom_leader, role=LEADER, group=webkom)
+        bedkom_leader = LegoUser.objects.create(username="bedkomleader")
+        bedkom = Group.objects.create(name="Bedkom")
+        Membership.objects.create(user=bedkom_leader, role=LEADER, group=bedkom)
 
-        self.client.force_authenticate(user=webkom_leader)
+        self.client.force_authenticate(user=bedkom_leader)
 
         res = self.client.patch(
-            reverse("admission-detail", kwargs={"slug": self.admission.slug}),
+            reverse("manage-admission-detail", kwargs={"slug": self.admission.slug}),
             self.edit_admission_data,
+            format="json",
         )
 
         self.assertEqual(res.status_code, status.HTTP_403_FORBIDDEN)
 
     def test_group_member_cannot_edit_admission(self):
-        webkom_member = LegoUser.objects.create(username="webkommember")
+        bedkom_member = LegoUser.objects.create(username="bedkommember")
+        bedkom = Group.objects.create(name="Bedkom")
+        Membership.objects.create(user=bedkom_member, role=MEMBER, group=bedkom)
+
+        self.client.force_authenticate(user=bedkom_member)
+
+        res = self.client.patch(
+            reverse("manage-admission-detail", kwargs={"slug": self.admission.slug}),
+            self.edit_admission_data,
+            format="json",
+        )
+        self.assertEqual(res.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_unauthorized_user_cannot_edit_admission(self):
+        res = self.client.patch(
+            reverse("manage-admission-detail", kwargs={"slug": self.admission.slug}),
+            self.edit_admission_data,
+            format="json",
+        )
+
+        self.assertEqual(res.status_code, status.HTTP_401_UNAUTHORIZED)
+
+    def test_webkom_can_edit_admission(self):
+        webkom_member = LegoUser.objects.create(username="webber", is_staff=True)
         webkom = Group.objects.create(name="Webkom")
         Membership.objects.create(user=webkom_member, role=MEMBER, group=webkom)
 
         self.client.force_authenticate(user=webkom_member)
 
         res = self.client.patch(
-            reverse("admission-detail", kwargs={"slug": self.admission.slug}),
+            reverse("manage-admission-detail", kwargs={"slug": self.admission.slug}),
             self.edit_admission_data,
+            format="json",
         )
-        self.assertEqual(res.status_code, status.HTTP_403_FORBIDDEN)
 
-    def test_unauthorized_user_cannot_edit_admission(self):
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+
+    def test_staff_user_creator_can_edit_admission(self):
+
+        self.client.force_authenticate(user=self.staff_user)
+
         res = self.client.patch(
-            reverse("admission-detail", kwargs={"slug": self.admission.slug}),
+            reverse("manage-admission-detail", kwargs={"slug": self.admission.slug}),
             self.edit_admission_data,
+            format="json",
         )
 
-        self.assertEqual(res.status_code, status.HTTP_401_UNAUTHORIZED)
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
 
-    def test_staff_user_can_edit_admission(self):
-        staff_user = LegoUser.objects.create(username="bigsupremeleader", is_staff=True)
+    def test_staff_user_nocreator_cannot_edit_admission(self):
+        staff_user = LegoUser.objects.create(username="staffie", is_staff=True)
 
         self.client.force_authenticate(user=staff_user)
 
         res = self.client.patch(
-            reverse("admission-detail", kwargs={"slug": self.admission.slug}),
+            reverse("manage-admission-detail", kwargs={"slug": self.admission.slug}),
             self.edit_admission_data,
+            format="json",
         )
 
-        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.assertEqual(res.status_code, status.HTTP_404_NOT_FOUND)

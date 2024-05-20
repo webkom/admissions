@@ -19,6 +19,8 @@ class LegoOAuth2(BaseOAuth2):
     ]
 
     LEGO_GROUP_NAMES = [
+        # Committee admissions
+        "Abakus-leder",
         "Arrkom",
         "Bankkom",
         "Bedkom",
@@ -28,6 +30,19 @@ class LegoOAuth2(BaseOAuth2):
         "readme",
         "PR",
         "Webkom",
+        # Revue admissions
+        "RevyStyret",
+        "Band",
+        "Dans",
+        "Kostyme",
+        "Manus",
+        "PR-revy",
+        "Scene",
+        "Skuespill",
+        "Sosial",
+        "Teknikk",
+        # backup admissions
+        "backup",
     ]
 
     def get_scope(self):
