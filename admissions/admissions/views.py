@@ -73,18 +73,21 @@ class AppView(TemplateView):
         return context
 
 
-class AdmissionViewSet(viewsets.ModelViewSet):
+##################################################
+################## PUBLIC VIEWS ##################
+##################################################
+
+
+class PublicAdmissionViewSet(
+    mixins.ListModelMixin, mixins.RetrieveModelMixin, viewsets.GenericViewSet
+):
     queryset = Admission.objects.all()
     authentication_classes = [SessionAuthentication]
     permission_classes = [AdmissionPermissions]
     lookup_field = "slug"
 
     def get_serializer_class(self):
-        if self.action == "list":
-            user = self.request.user
-            if user and user.is_staff:
-                return AdminAdmissionSerializer
-        elif self.action == "retrieve":
+        if self.action == "retrieve":
             return AdmissionPublicSerializer
 
         return AdmissionListPublicSerializer
@@ -104,18 +107,6 @@ class AdmissionViewSet(viewsets.ModelViewSet):
         )
 
         return Response(serializer_data)
-
-
-class GroupViewSet(viewsets.ModelViewSet):
-    queryset = Group.objects.all()
-    serializer_class = GroupSerializer
-    authentication_classes = [SessionAuthentication]
-    permission_classes = [permissions.IsAuthenticated, GroupPermissions]
-
-
-##################################################
-################## PUBLIC VIEWS ##################
-##################################################
 
 
 class PublicApplicationViewSet(mixins.CreateModelMixin, viewsets.GenericViewSet):
@@ -174,6 +165,14 @@ class PublicApplicationViewSet(mixins.CreateModelMixin, viewsets.GenericViewSet)
 #################################################
 ################## ADMIN VIEWS ##################
 #################################################
+
+
+class AdminAdmissionViewSet(mixins.RetrieveModelMixin, viewsets.GenericViewSet):
+    queryset = Admission.objects.all().order_by("title")
+    authentication_classes = [SessionAuthentication]
+    permission_classes = [AdmissionPermissions]
+    serializer_class = AdminAdmissionSerializer
+    lookup_field = "slug"
 
 
 class AdminApplicationViewSet(
@@ -274,6 +273,18 @@ class AdminApplicationViewSet(
         return Response(status=status.HTTP_204_NO_CONTENT)
 
 
+class AdminGroupViewSet(
+    mixins.ListModelMixin,
+    mixins.RetrieveModelMixin,
+    mixins.UpdateModelMixin,
+    viewsets.GenericViewSet,
+):
+    queryset = Group.objects.all()
+    serializer_class = GroupSerializer
+    authentication_classes = [SessionAuthentication]
+    permission_classes = [permissions.IsAuthenticated, GroupPermissions]
+
+
 ##################################################
 ################## MANAGE VIEWS ##################
 ##################################################
@@ -295,7 +306,7 @@ class ManageAdmissionViewSet(viewsets.ModelViewSet):
             return AdminCreateUpdateAdmissionSerializer
 
     def get_queryset(self):
-        qs = Admission.objects.all().order_by("open_from")
+        qs = Admission.objects.all().order_by("title")
         if not self.request.user.is_member_of_webkom:
             return qs.filter(created_by=self.request.user)
         return qs
@@ -311,3 +322,10 @@ class ManageAdmissionViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST,
             )
         return super().destroy(request, *args, **kwargs)
+
+
+class ManageGroupViewSet(mixins.ListModelMixin, viewsets.GenericViewSet):
+    queryset = Group.objects.all()
+    serializer_class = GroupSerializer
+    authentication_classes = [SessionAuthentication]
+    permission_classes = [permissions.IsAuthenticated, GroupPermissions]

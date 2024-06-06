@@ -35,7 +35,7 @@ const LandingPageNoAdmission = () => {
           for kunngjøringer!
         </p>
       </InfoBox>
-      <LinkButton to="https://abakus.no" secondary>
+      <LinkButton to="https://abakus.no" external secondary>
         Gå til abakus.no
       </LinkButton>
     </LandingPageSkeleton>

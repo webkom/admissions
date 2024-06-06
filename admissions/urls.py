@@ -21,34 +21,42 @@ from django.urls import include, path, re_path
 from rest_framework import routers
 
 from admissions.admissions.views import (
+    AdminAdmissionViewSet,
     AdminApplicationViewSet,
-    AdmissionViewSet,
+    AdminGroupViewSet,
     AppView,
-    GroupViewSet,
     ManageAdmissionViewSet,
+    ManageGroupViewSet,
+    PublicAdmissionViewSet,
     PublicApplicationViewSet,
 )
 
-manageRouter = routers.DefaultRouter()
-manageRouter.register(r"admission", ManageAdmissionViewSet, "manage-admission")
-
-router = routers.DefaultRouter()
-router.register(r"admission", AdmissionViewSet)
-router.register(
+publicRouter = routers.DefaultRouter()
+publicRouter.register(r"admission", PublicAdmissionViewSet)
+publicRouter.register(
     r"admission/(?P<admission_slug>[-\w]+)/application", PublicApplicationViewSet
 )
-router.register(
-    r"admission/(?P<admission_slug>[-\w]+)/admin/application",
+
+adminRouter = routers.DefaultRouter()
+adminRouter.register(r"admission", AdminAdmissionViewSet, "admin-admission")
+adminRouter.register(
+    r"admission/(?P<admission_slug>[-\w]+)/application",
     AdminApplicationViewSet,
     "admin-userapplication",
 )
-router.register(r"group", GroupViewSet)
+adminRouter.register(r"group", AdminGroupViewSet, "admin-group")
+
+manageRouter = routers.DefaultRouter()
+manageRouter.register(r"admission", ManageAdmissionViewSet, "manage-admission")
+manageRouter.register(r"group", ManageGroupViewSet, "manage-group")
+
 
 urlpatterns = [
     re_path(r"logout/$", auth_views.LogoutView.as_view(), name="logout"),
+    path("api/admin/", include(adminRouter.urls)),
     path("api/manage/", include(manageRouter.urls)),
     path("api-auth/", include("rest_framework.urls", namespace="rest_framework")),
-    path("api/", include(router.urls)),
+    path("api/", include(publicRouter.urls)),
     re_path("", include("social_django.urls", namespace="social")),
     re_path(r"^$", AppView.as_view(), name="home"),
 ]
