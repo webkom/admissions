@@ -50,7 +50,7 @@
     "@vitejs/plugin-react": "^4.3.1",
     "cypress": "^13.11.0",
     "eslint": "^8.57.0",
-    "eslint-plugin-react": "^7.34.2",
+    "eslint-plugin-react": "^7.34.3",
     "knip": "^5.21.2",
     "prettier": "3.3.2",
     "stylelint": "^16.6.1",
