@@ -51,7 +51,7 @@
     "cypress": "^13.13.0",
     "eslint": "^8.57.0",
     "eslint-plugin-react": "^7.34.3",
-    "knip": "^5.23.3",
+    "knip": "^5.24.1",
     "prettier": "3.3.2",
     "stylelint": "^16.6.1",
     "stylelint-config-standard": "^36.0.1",
