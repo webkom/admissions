@@ -25,7 +25,7 @@ pydantic = "^2.7.1"
 
 
 [tool.poetry.group.dev.dependencies]
-django-debug-toolbar = "^4.4.2"
+django-debug-toolbar = "^4.4.5"
 factory-boy = "^3.3.0"
 tox = "^4.16.0"
 isort = "^5.12.0"
