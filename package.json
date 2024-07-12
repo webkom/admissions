@@ -53,7 +53,7 @@
     "eslint-plugin-react": "^7.34.3",
     "knip": "^5.25.2",
     "prettier": "3.3.2",
-    "stylelint": "^16.6.1",
+    "stylelint": "^16.7.0",
     "stylelint-config-standard": "^36.0.1",
     "typescript": "^5.5.3",
     "vite": "^4.5.3",
