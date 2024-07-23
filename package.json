@@ -55,7 +55,7 @@
     "prettier": "3.3.3",
     "stylelint": "^16.7.0",
     "stylelint-config-standard": "^36.0.1",
-    "typescript": "^5.5.3",
+    "typescript": "^5.5.4",
     "vite": "^4.5.3",
     "yup": "^1.4.0"
   },
