@@ -100,7 +100,9 @@ const validationSchema = (
       .filter(
         ([groupName, isSelected]) =>
           isSelected &&
-          admission?.groups.some((group) => group.name === groupName),
+          admission?.groups.some(
+            (group) => group.name.toLowerCase() === groupName,
+          ),
       )
       .forEach(
         ([groupName]) =>
@@ -163,7 +165,9 @@ const ApplicationForm: React.FC<ApplicationFormProps> = ({
       .filter(
         (groupName) =>
           selectedGroups[groupName] &&
-          admission?.groups.some((group) => group.name === groupName),
+          admission?.groups.some(
+            (group) => group.name.toLowerCase() === groupName,
+          ),
       )
       .forEach((name) => {
         submission.applications[name] = values.groups[name];
