@@ -97,10 +97,14 @@ const validationSchema = (
     // Iterate over all selected groups and add them to the required schema
     const selectedGroupsSchema: { [x: string]: Yup.StringSchema } = {};
     Object.entries(selectedGroups)
-      .filter(([, isSelected]) => isSelected)
+      .filter(
+        ([groupName, isSelected]) =>
+          isSelected &&
+          admission?.groups.some((group) => group.name === groupName),
+      )
       .forEach(
-        ([name]) =>
-          (selectedGroupsSchema[name] = Yup.string().required(
+        ([groupName]) =>
+          (selectedGroupsSchema[groupName] = Yup.string().required(
             "Søknadsteksten må fylles ut",
           )),
       );
@@ -156,7 +160,11 @@ const ApplicationForm: React.FC<ApplicationFormProps> = ({
       header_fields_response: values.headerFields,
     };
     Object.keys(values.groups)
-      .filter((group) => selectedGroups[group])
+      .filter(
+        (groupName) =>
+          selectedGroups[groupName] &&
+          admission?.groups.some((group) => group.name === groupName),
+      )
       .forEach((name) => {
         submission.applications[name] = values.groups[name];
       });
