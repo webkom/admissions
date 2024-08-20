@@ -7,6 +7,10 @@ import LandingPageSkeleton from "./LandingPageSkeleton";
 import LinkButton from "src/components/LinkButton";
 
 const LandingPageNoAdmission = () => {
+  const committeeList = [4, 231, 6, 7, 98, 8, 9, 11, 5, 10];
+  const randomCommitteeId =
+    committeeList[Math.floor(Math.random() * committeeList.length)];
+
   return (
     <LandingPageSkeleton>
       <SubTitle>Ingen åpne opptak for øyeblikket</SubTitle>
@@ -15,8 +19,12 @@ const LandingPageNoAdmission = () => {
         <p>
           Opptak til{" "}
           <a href="https://abakus.no/pages/grupper/104-revyen">revyen</a> og{" "}
-          <a href="https://abakus.no/pages/komiteer/4">komiteene</a> skjer
-          vanligvis i september etter semesterstart.{" "}
+          <a
+            href={`https://abakus.no/pages/komiteer/${randomCommitteeId ?? 11}`}
+          >
+            komiteene
+          </a>{" "}
+          skjer vanligvis i september etter semesterstart.{" "}
           <a href="https://abakus.no/pages/komiteer/5">backup</a> har vanligvis
           opptak i februar.
           <br />
