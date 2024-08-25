@@ -51,6 +51,10 @@ const EditGroupForm: React.FC<EditGroupFormProps> = ({
       }}
       validationSchema={signupSchema}
       enableReinitialize={true}
+      initialTouched={{
+        description: true,
+        response_label: true,
+      }}
       onSubmit={(values, { setErrors }) => {
         const updatedGroupData = {
           description: values.description,
@@ -107,15 +111,15 @@ const InnerForm: React.FC<InnerFormProps> = ({
         <EditGroupFormWrapper>
           <Field
             component={TextAreaField}
-            title="Endre beskrivelsen av komiteen"
+            title="Endre beskrivelsen av gruppa*"
             name="description"
-            placeholder="Skriv en beskrivelse av komiteen..."
+            placeholder="Skriv en beskrivelse av gruppa..."
           />
           <Field
             component={TextAreaField}
-            title="Endre hva komiteen ønsker å høre om fra søkere"
+            title="Endre hva gruppa ønsker å høre om fra søkere*"
             name="response_label"
-            placeholder="Skriv hva komiteen ønsker å vite om søkeren..."
+            placeholder="Skriv hva gruppa ønsker å vite om søkeren..."
           />
         </EditGroupFormWrapper>
         <Button

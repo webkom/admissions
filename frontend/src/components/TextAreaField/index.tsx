@@ -40,6 +40,7 @@ const TextAreaField: React.FC<TextAreaFieldProps> = ({
         placeholder={placeholder}
         value={value}
         rows={10}
+        $error={!!error}
       />
     </div>
   );
