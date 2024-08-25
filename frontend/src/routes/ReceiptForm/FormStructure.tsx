@@ -36,6 +36,7 @@ import { clearAllDrafts } from "src/utils/draftHelper";
 import JsonFieldEditor from "src/components/JsonFieldEditor";
 import { Button } from "@webkom/lego-bricks";
 import LinkButton from "src/components/LinkButton";
+import PriorityTextField from "../ApplicationForm/PriorityTextField";
 
 interface FormStructureProps {
   toggleIsEditing: () => void;
@@ -141,6 +142,26 @@ const FormStructure: React.FC<FormStructureProps> = ({ toggleIsEditing }) => {
           <Field
             name="phoneNumber"
             component={PhoneNumberField}
+            disabled={true}
+          />
+          <HelpText>
+            {!isRevy && (
+              <>
+                <Icon name="information-circle-outline" />
+                Kun leder av Abakus kan se det du skriver inn i prioriterings-
+                og kommentarfeltet.
+              </>
+            )}
+            <Icon name="information-circle-outline" />
+            Det er ikke sikkert prioriteringslisten vil bli tatt hensyn til.
+            Ikke søk på en {isRevy ? "gruppe" : "komité"} du ikke ønsker å bli
+            med i.
+          </HelpText>
+          <Field
+            name="priorityText"
+            component={PriorityTextField}
+            label="Prioriteringer, og andre kommentarer"
+            optional
             disabled={true}
           />
           <JsonFieldEditor
