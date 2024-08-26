@@ -81,14 +81,14 @@ const FormStructure: React.FC<FormStructureProps> = ({
             {!isRevy && (
               <>
                 <Icon name="information-circle-outline" />
-                Kun leder av Abakus kan se det du skriver inn i prioriterings-
-                og kommentarfeltet.
+                Kun leder og nestleder av Abakus kan se det du skriver inn i
+                prioriterings- og kommentarfeltet.
               </>
             )}
             <Icon name="information-circle-outline" />
-            Det er ikke sikkert prioriteringslisten vil bli tatt hensyn til.
-            Ikke søk på en {isRevy ? "gruppe" : "komité"} du ikke ønsker å bli
-            med i.
+            Prioriteringslisten vil bli tatt hensyn til så langt det lar seg
+            gjøre, men garanterer ingenting. Ikke søk på en{" "}
+            {isRevy ? "gruppe" : "komité"} du ikke ønsker å bli med i.
           </HelpText>
           <Field
             name="priorityText"
