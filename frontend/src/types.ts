@@ -1,7 +1,7 @@
 import { FieldModel, InputResponseModel } from "src/utils/jsonFields";
 
 export interface Group {
-  pk: number;
+  pk: string;
   name: string;
   description: string;
   logo: string;
@@ -23,7 +23,7 @@ export interface GroupApplication {
 }
 
 export interface Application {
-  pk: number;
+  pk: string;
   user: User;
   created_at: string;
   updated_at: string;
@@ -41,7 +41,7 @@ interface AdmissionUserData {
 }
 
 export interface Admission {
-  pk: number;
+  pk: string;
   slug: string;
   title: string;
   description: string;

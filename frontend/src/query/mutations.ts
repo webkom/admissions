@@ -47,7 +47,7 @@ export const useCreateApplicationMutation = (admissionSlug: string) => {
 // Admin mutations
 
 interface UpdateGroupProps {
-  groupPrimaryKey: number;
+  groupPrimaryKey: string;
   updatedGroupData: {
     description: string;
     response_label: string;
@@ -66,8 +66,8 @@ export const useAdminUpdateGroupMutation = () =>
   });
 
 interface DeleteGroupApplicationProps {
-  applicationId: number;
-  groupId?: number;
+  applicationId: string;
+  groupId?: string;
 }
 
 export const useAdminDeleteApplicationMutation = (admissionSlug: string) => {
@@ -98,15 +98,15 @@ export interface MutationAdmission {
   open_from: string;
   public_deadline: string;
   closed_from: string;
-  admin_groups: number[];
-  groups: number[];
+  admin_groups: string[];
+  groups: string[];
 }
 interface CreateAdmissionProps {
   admission: MutationAdmission;
 }
 
 export interface AdmissionMutationResponse extends MutationAdmission {
-  created_by: number;
+  created_by: string;
 }
 
 export const useManageCreateAdmission = () => {

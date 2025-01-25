@@ -12,11 +12,11 @@
     "public_deadline": "2024-05-14T23:59:59Z",
     "closed_from": "2024-05-16T23:59:59Z",
     "groups": [
-      4,
-      13
+      "dd9c88fb-b876-4fa0-8da4-a53cf5e951dd",
+      "cb52868a-3051-49b0-932b-3b413aae0acc"
     ],
     "admin_groups": [
-      4
+      "dd9c88fb-b876-4fa0-8da4-a53cf5e951dd"
     ]
   }
 }

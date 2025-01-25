@@ -138,6 +138,7 @@ DJANGO_VITE_ASSETS_PATH = BASE_PROJECT_DIR.path("assets/bundles")
 DJANGO_VITE_MANIFEST_PATH = BASE_PROJECT_DIR.path("assets/vite-manifest.json")()
 
 AUTH_USER_MODEL = "admissions.LegoUser"
+SOCIAL_AUTH_USER_FIELDS = ["lego_id", "username", "email", "first_name", "last_name"]
 
 SOCIAL_AUTH_LEGO_KEY = os.environ.get("AUTH_LEGO_KEY")
 SOCIAL_AUTH_LEGO_SECRET = os.environ.get("AUTH_LEGO_SECRET")

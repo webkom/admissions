@@ -3,8 +3,8 @@
   "model": "admissions.membership",
   "pk": 1,
   "fields": {
-    "user": 1,
-    "group": 13,
+    "user": "65ca1129-450b-427b-9ccb-1c20e2914a0e",
+    "group": "cb52868a-3051-49b0-932b-3b413aae0acc",
     "role": "leader"
   }
 }

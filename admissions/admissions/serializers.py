@@ -1,5 +1,6 @@
 from django.core.validators import MinLengthValidator
 from django.db.models import Q
+from django.utils import timezone
 from rest_framework import serializers
 
 from admissions.admissions import constants
@@ -337,7 +338,11 @@ class ApplicationCreateUpdateSerializer(serializers.HyperlinkedModelSerializer):
             validated_data.pop("header_fields_response")
         ).model_dump()
 
-        admission = Admission.objects.get(slug=validated_data.get("admission_slug"))
+        admission = Admission.objects.get(
+            slug=validated_data.get("admission_slug"),
+            closed_from__gte=timezone.now(),
+            open_from__lte=timezone.now(),
+        )
 
         user_application, created = UserApplication.objects.update_or_create(
             admission=admission,

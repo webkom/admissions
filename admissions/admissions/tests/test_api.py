@@ -11,21 +11,27 @@ class EditGroupTestCase(APITestCase):
     def setUp(self):
         self.webkom = Group.objects.create(
             name="Webkom",
+            lego_id=3,
             description="Webkom styrer tekniske ting",
             response_label="Søk Webkom fordi du lærer deg nyttige ting!",
         )
         self.arrkom = Group.objects.create(
             name="Arrkom",
+            lego_id=4,
             description="Arrkom arrangerer ting",
             response_label="Søk Arrkom fordi vi har det kult!",
         )
 
-        self.pleb = LegoUser.objects.create()
-        self.webkom_leader = LegoUser.objects.create(username="webkom_leader")
+        self.pleb = LegoUser.objects.create(lego_id=3)
+        self.webkom_leader = LegoUser.objects.create(
+            username="webkom_leader", lego_id=4
+        )
         Membership.objects.create(
             user=self.webkom_leader, role=LEADER, group=self.webkom
         )
-        self.webkom_recruiter = LegoUser.objects.create(username="webkom_recruiter")
+        self.webkom_recruiter = LegoUser.objects.create(
+            username="webkom_recruiter", lego_id=5
+        )
         Membership.objects.create(
             user=self.webkom_recruiter, role=RECRUITING, group=self.webkom
         )
@@ -76,7 +82,9 @@ class EditGroupTestCase(APITestCase):
         self.assertEqual(res.status_code, status.HTTP_200_OK)
 
     def test_staff_user_cannot_edit_group(self):
-        staff_user = LegoUser.objects.create(username="bigsupremeleader", is_staff=True)
+        staff_user = LegoUser.objects.create(
+            username="bigsupremeleader", lego_id=6, is_staff=True
+        )
         self.client.force_authenticate(user=staff_user)
 
         res = self.client.patch(
@@ -97,7 +105,7 @@ class EditGroupTestCase(APITestCase):
 class EditAdmissionTestCase(APITestCase):
     def setUp(self):
         self.staff_user = LegoUser.objects.create(
-            username="bigsupremeleader", is_staff=True
+            username="bigsupremeleader", lego_id=1, is_staff=True
         )
         self.admission = create_admission(created_by=self.staff_user)
         self.edit_admission_data = {
@@ -109,7 +117,7 @@ class EditAdmissionTestCase(APITestCase):
         }
 
     def test_pleb_cannot_edit_admission(self):
-        pleb = LegoUser.objects.create()
+        pleb = LegoUser.objects.create(lego_id=7)
         self.client.force_authenticate(user=pleb)
 
         res = self.client.patch(
@@ -121,8 +129,8 @@ class EditAdmissionTestCase(APITestCase):
         self.assertEqual(res.status_code, status.HTTP_403_FORBIDDEN)
 
     def test_group_leader_cannot_edit_admission(self):
-        bedkom_leader = LegoUser.objects.create(username="bedkomleader")
-        bedkom = Group.objects.create(name="Bedkom")
+        bedkom_leader = LegoUser.objects.create(username="bedkomleader", lego_id=8)
+        bedkom = Group.objects.create(name="Bedkom", lego_id=7)
         Membership.objects.create(user=bedkom_leader, role=LEADER, group=bedkom)
 
         self.client.force_authenticate(user=bedkom_leader)
@@ -136,8 +144,8 @@ class EditAdmissionTestCase(APITestCase):
         self.assertEqual(res.status_code, status.HTTP_403_FORBIDDEN)
 
     def test_group_member_cannot_edit_admission(self):
-        bedkom_member = LegoUser.objects.create(username="bedkommember")
-        bedkom = Group.objects.create(name="Bedkom")
+        bedkom_member = LegoUser.objects.create(username="bedkommember", lego_id=9)
+        bedkom = Group.objects.create(name="Bedkom", lego_id=6)
         Membership.objects.create(user=bedkom_member, role=MEMBER, group=bedkom)
 
         self.client.force_authenticate(user=bedkom_member)
@@ -159,8 +167,10 @@ class EditAdmissionTestCase(APITestCase):
         self.assertEqual(res.status_code, status.HTTP_401_UNAUTHORIZED)
 
     def test_webkom_can_edit_admission(self):
-        webkom_member = LegoUser.objects.create(username="webber", is_staff=True)
-        webkom = Group.objects.create(name="Webkom")
+        webkom_member = LegoUser.objects.create(
+            username="webber", lego_id=10, is_staff=True
+        )
+        webkom = Group.objects.create(name="Webkom", lego_id=13)
         Membership.objects.create(user=webkom_member, role=MEMBER, group=webkom)
 
         self.client.force_authenticate(user=webkom_member)
@@ -186,7 +196,9 @@ class EditAdmissionTestCase(APITestCase):
         self.assertEqual(res.status_code, status.HTTP_200_OK)
 
     def test_staff_user_nocreator_cannot_edit_admission(self):
-        staff_user = LegoUser.objects.create(username="staffie", is_staff=True)
+        staff_user = LegoUser.objects.create(
+            username="staffie", lego_id=11, is_staff=True
+        )
 
         self.client.force_authenticate(user=staff_user)
 

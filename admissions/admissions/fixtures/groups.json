@@ -1,8 +1,9 @@
 [
 {
   "model": "admissions.group",
-  "pk": 4,
+  "pk": "dd9c88fb-b876-4fa0-8da4-a53cf5e951dd",
   "fields": {
+    "lego_id": 4,
     "name": "Arrkom",
     "description": "",
     "response_label": "",
@@ -12,8 +13,9 @@
 },
 {
   "model": "admissions.group",
-  "pk": 6,
+  "pk": "52dc253c-4124-4af7-9bf4-a468cda6f51a",
   "fields": {
+    "lego_id": 6,
     "name": "Bankkom",
     "description": "",
     "response_label": "",
@@ -23,8 +25,9 @@
 },
 {
   "model": "admissions.group",
-  "pk": 7,
+  "pk": "a5431295-723e-4c1e-ac19-bf67b91e345c",
   "fields": {
+    "lego_id": 7,
     "name": "Bedkom",
     "description": "",
     "response_label": "",
@@ -34,8 +37,9 @@
 },
 {
   "model": "admissions.group",
-  "pk": 8,
+  "pk": "c2a37269-1ca2-4895-92a6-0eb062be3032",
   "fields": {
+    "lego_id": 8,
     "name": "Fagkom",
     "description": "",
     "response_label": "",
@@ -45,8 +49,9 @@
 },
 {
   "model": "admissions.group",
-  "pk": 9,
+  "pk": "40a51af3-570f-44db-849d-8ebb3342225f",
   "fields": {
+    "lego_id": 9,
     "name": "Koskom",
     "description": "",
     "response_label": "",
@@ -56,8 +61,9 @@
 },
 {
   "model": "admissions.group",
-  "pk": 10,
+  "pk": "47012e82-8a57-41b9-9278-a9ee2efeba65",
   "fields": {
+    "lego_id": 10,
     "name": "LaBamba",
     "description": "",
     "response_label": "",
@@ -67,8 +73,9 @@
 },
 {
   "model": "admissions.group",
-  "pk": 11,
+  "pk": "5e12bb5e-bcf2-47f7-aaf8-413a18ed456a",
   "fields": {
+    "lego_id": 11,
     "name": "PR",
     "description": "",
     "response_label": "",
@@ -78,8 +85,9 @@
 },
 {
   "model": "admissions.group",
-  "pk": 12,
+  "pk": "2b7d7ccb-c0cf-41eb-b27e-fc0af986190a",
   "fields": {
+    "lego_id": 12,
     "name": "readme",
     "description": "",
     "response_label": "",
@@ -89,8 +97,9 @@
 },
 {
   "model": "admissions.group",
-  "pk": 13,
+  "pk": "cb52868a-3051-49b0-932b-3b413aae0acc",
   "fields": {
+    "lego_id": 13,
     "name": "Webkom",
     "description": "",
     "response_label": "",

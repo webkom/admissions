@@ -18,22 +18,24 @@ class ListApplicationsTestCase(APITestCase):
         global DEFAULT_ADMISSION_SLUG
         self.admission_slug = DEFAULT_ADMISSION_SLUG
 
-        self.pleb = LegoUser.objects.create()
-        leader_group = Group.objects.create(name="Abakus-Leder")
+        self.pleb = LegoUser.objects.create(lego_id=2)
+        leader_group = Group.objects.create(name="Abakus-Leder", lego_id=1)
 
         self.admission = create_admission()
         self.admission.admin_groups.add(leader_group)
 
         # Abakus leader
-        self.staff_user = LegoUser.objects.create(username="staff_user", is_staff=True)
+        self.staff_user = LegoUser.objects.create(
+            username="staff_user", lego_id=3, is_staff=True
+        )
 
         Membership.objects.create(user=self.staff_user, role=MEMBER, group=leader_group)
 
         # Webkom
-        self.webkom_leader = LegoUser.objects.create(username="webkomleader")
-        self.webkom_rec = LegoUser.objects.create(username="webkomrec")
+        self.webkom_leader = LegoUser.objects.create(username="webkomleader", lego_id=4)
+        self.webkom_rec = LegoUser.objects.create(username="webkomrec", lego_id=5)
 
-        self.webkom = Group.objects.create(name="Webkom")
+        self.webkom = Group.objects.create(name="Webkom", lego_id=2)
         self.admission.groups.add(self.webkom)
 
         Membership.objects.create(
@@ -44,10 +46,10 @@ class ListApplicationsTestCase(APITestCase):
         )
 
         # Bedkom
-        self.bedkom_leader = LegoUser.objects.create(username="bedkomleader")
-        self.bedkom_rec = LegoUser.objects.create(username="bedkomrec")
+        self.bedkom_leader = LegoUser.objects.create(username="bedkomleader", lego_id=6)
+        self.bedkom_rec = LegoUser.objects.create(username="bedkomrec", lego_id=7)
 
-        self.bedkom = Group.objects.create(name="Bedkom")
+        self.bedkom = Group.objects.create(name="Bedkom", lego_id=3)
         self.admission.groups.add(self.bedkom)
 
         Membership.objects.create(
@@ -290,18 +292,18 @@ class DeleteGroupApplicationsTestCase(APITestCase):
         self.admission_slug = DEFAULT_ADMISSION_SLUG
         self.admission = create_admission()
 
-        self.webkom_leader = LegoUser.objects.create(username="webkomleader")
-        self.pleb = LegoUser.objects.create()
+        self.webkom_leader = LegoUser.objects.create(username="webkomleader", lego_id=6)
+        self.pleb = LegoUser.objects.create(lego_id=7)
 
-        self.webkom = Group.objects.create(name="Webkom")
-        self.arrkom = Group.objects.create(name="Arrkom")
+        self.webkom = Group.objects.create(name="Webkom", lego_id=1)
+        self.arrkom = Group.objects.create(name="Arrkom", lego_id=2)
 
         Membership.objects.create(
             user=self.webkom_leader, role=LEADER, group=self.webkom
         )
 
         self.staff_user = LegoUser.objects.create(
-            username="bigsupremeleader", is_staff=True
+            username="bigsupremeleader", lego_id=8, is_staff=True
         )
 
     def unauthorized_user_cannot_delete_application(self):

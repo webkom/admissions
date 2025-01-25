@@ -13,7 +13,7 @@ ENV RELEASE ${RELEASE}
 
 RUN yarn build
 
-FROM python:3.9
+FROM python:3.12
 MAINTAINER Abakus Webkom <webkom@abakus.no>
 
 ARG RELEASE
@@ -24,7 +24,7 @@ ENV PYTHONUNBUFFERED 1
 ENV ENV_CONFIG 1
 ENV RELEASE ${RELEASE}
 
-RUN pip install "poetry==1.4.0"
+RUN pip install "poetry==1.8.5"
 
 RUN mkdir /app
 COPY poetry.lock pyproject.toml /app/

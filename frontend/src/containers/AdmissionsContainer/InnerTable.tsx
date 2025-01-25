@@ -8,8 +8,8 @@ import { innerColumns } from "./Columns";
 import styled from "styled-components";
 
 export interface InnerTableValues {
-  applicationId: number;
-  groupId: number;
+  applicationId: string;
+  groupId: string;
   groupName: string;
   text: string;
 }

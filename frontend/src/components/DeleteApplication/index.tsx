@@ -18,8 +18,8 @@ const DeleteWrapper = styled.div`
 `;
 
 interface DeleteApplicationProps {
-  applicationId: number;
-  groupId?: number;
+  applicationId: string;
+  groupId?: string;
 }
 
 const DeleteApplication: React.FC<DeleteApplicationProps> = ({
@@ -31,7 +31,7 @@ const DeleteApplication: React.FC<DeleteApplicationProps> = ({
     admissionSlug ?? "",
   );
 
-  const performDelete = (applicationId: number, groupId?: number) => {
+  const performDelete = (applicationId: string, groupId?: string) => {
     deleteApplicationMutation.mutate(
       { applicationId, groupId },
       {
