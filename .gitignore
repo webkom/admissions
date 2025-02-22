@@ -93,3 +93,5 @@ yarn-error.log*
 admissions/settings/local.py
 package-lock.json
 .vscode
+
+/cypress/screenshots

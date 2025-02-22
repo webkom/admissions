@@ -7,7 +7,13 @@ from django.core.management import call_command
 from django.core.management.base import BaseCommand
 from django.utils import timezone
 
-from admissions.admissions.models import Admission, Group, LegoUser, Membership
+from admissions.admissions.models import (
+    Admission,
+    AdmissionGroup,
+    Group,
+    LegoUser,
+    Membership,
+)
 
 log = logging.getLogger(__name__)
 
@@ -35,6 +41,7 @@ class Command(BaseCommand):
             ("users.json", LegoUser),
             ("memberships.json", Membership),
             ("admissions.json", Admission),
+            ("admission_group.json", AdmissionGroup),
         ]
 
         if not options["generate"] or options["gen_sessions"]:

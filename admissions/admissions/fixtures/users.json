@@ -1,11 +1,10 @@
 [
 {
   "model": "admissions.legouser",
-  "pk": "65ca1129-450b-427b-9ccb-1c20e2914a0e",
+  "pk": "40667e62-e5fc-4f97-83f0-f5d6b4326652",
   "fields": {
-    "lego_id": 1,
-    "password": "!W6bpQDTHBqNhW2iHurip7hOro0pMikKCBTwmbrqY",
-    "last_login": "2024-05-16T06:33:20.316Z",
+    "password": "!MpfQDdmMj2tI2kxRjyfnI2IpvzNtYxVvQRMsvler",
+    "last_login": "2025-02-22T11:29:41.094Z",
     "is_superuser": false,
     "username": "webkom",
     "first_name": "webkom",
@@ -13,7 +12,8 @@
     "email": "webkom@aba.wtf",
     "is_staff": false,
     "is_active": true,
-    "date_joined": "2024-05-16T06:33:20.293Z",
+    "date_joined": "2025-02-22T11:29:41.079Z",
+    "lego_id": 3,
     "profile_picture": "http://127.0.0.1:10000/ZsCuwmwEskT4EQxmucyDPrhDrxo=/200x200/default_other_avatar.png",
     "groups": [],
     "user_permissions": []

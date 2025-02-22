@@ -1,0 +1,154 @@
+[
+{
+  "model": "admissions.admissiongroup",
+  "pk": "6ffa8fcc-1855-4482-87e7-d072dd70e363",
+  "fields": {
+    "admission": "9cb0db0f-0139-439c-ad4b-149533a05b33",
+    "group": "946a7ffd-ccd7-45b9-87be-1db8c5551ae1"
+  }
+},
+{
+  "model": "admissions.admissiongroup",
+  "pk": "c5225ac2-7a9b-484b-af13-a204285b6343",
+  "fields": {
+    "admission": "64fc34b6-d597-4df2-8ecd-48c3380df456",
+    "group": "3de753b7-c2a1-458d-9c57-97aed27cfb05"
+  }
+},
+{
+  "model": "admissions.admissiongroup",
+  "pk": "6a5fdd50-a412-44ec-905a-d23cdcff6ab4",
+  "fields": {
+    "admission": "64fc34b6-d597-4df2-8ecd-48c3380df456",
+    "group": "b190ece7-3a10-448c-9c9c-3e1a634e5415"
+  }
+},
+{
+  "model": "admissions.admissiongroup",
+  "pk": "f56fc664-2aea-474b-a547-df7bdfe4882b",
+  "fields": {
+    "admission": "64fc34b6-d597-4df2-8ecd-48c3380df456",
+    "group": "7823814e-7bb2-4e51-9653-03f27216f2be"
+  }
+},
+{
+  "model": "admissions.admissiongroup",
+  "pk": "82ce027d-851e-4701-ae6e-99bcc40c450c",
+  "fields": {
+    "admission": "64fc34b6-d597-4df2-8ecd-48c3380df456",
+    "group": "9b860b9a-a4e7-4cf1-8d92-2ded9cf93036"
+  }
+},
+{
+  "model": "admissions.admissiongroup",
+  "pk": "5e3b61bb-44f7-4abf-b9b8-7c2c032a50d0",
+  "fields": {
+    "admission": "64fc34b6-d597-4df2-8ecd-48c3380df456",
+    "group": "fa57a2a8-1960-4e48-aa1b-596ec1ce6747"
+  }
+},
+{
+  "model": "admissions.admissiongroup",
+  "pk": "698cbfe8-ec0e-4d32-865a-fae222fab36d",
+  "fields": {
+    "admission": "64fc34b6-d597-4df2-8ecd-48c3380df456",
+    "group": "74262b9d-e632-4012-8ae8-948424a0add9"
+  }
+},
+{
+  "model": "admissions.admissiongroup",
+  "pk": "b58947fa-5814-4ae3-bedf-0a2d3e3f3141",
+  "fields": {
+    "admission": "64fc34b6-d597-4df2-8ecd-48c3380df456",
+    "group": "3596c621-1c71-44dc-8252-6657dd89d5fc"
+  }
+},
+{
+  "model": "admissions.admissiongroup",
+  "pk": "b0176903-a700-4065-8c96-859eee64ef22",
+  "fields": {
+    "admission": "64fc34b6-d597-4df2-8ecd-48c3380df456",
+    "group": "56074718-de69-4df5-9309-0051bfe826ad"
+  }
+},
+{
+  "model": "admissions.admissiongroup",
+  "pk": "2b006dcb-9c47-408d-ab5e-b0e5bd30e04e",
+  "fields": {
+    "admission": "64fc34b6-d597-4df2-8ecd-48c3380df456",
+    "group": "8c58aac9-871e-428c-ad4e-28abfc594715"
+  }
+},
+{
+  "model": "admissions.admissiongroup",
+  "pk": "2394ba6f-c39b-4d64-8fd0-48bc2fb6d466",
+  "fields": {
+    "admission": "a5a113af-ed26-4f61-80d5-3b0c4923c28c",
+    "group": "5815f47b-af7f-48a1-896f-7696b7abac16"
+  }
+},
+{
+  "model": "admissions.admissiongroup",
+  "pk": "e1249bf5-a4bb-47e5-9a81-2b1996aaf21f",
+  "fields": {
+    "admission": "a5a113af-ed26-4f61-80d5-3b0c4923c28c",
+    "group": "c222d3f6-9893-49fb-ba56-ce83f1417cfa"
+  }
+},
+{
+  "model": "admissions.admissiongroup",
+  "pk": "8837edba-3254-4ca7-9ae0-e8313dad6d03",
+  "fields": {
+    "admission": "a5a113af-ed26-4f61-80d5-3b0c4923c28c",
+    "group": "e8a949e2-d6e0-4cf5-923f-aee4e4db12c8"
+  }
+},
+{
+  "model": "admissions.admissiongroup",
+  "pk": "0caf4f3a-615d-47e6-8b9a-2861dfba3d12",
+  "fields": {
+    "admission": "a5a113af-ed26-4f61-80d5-3b0c4923c28c",
+    "group": "7c69ea96-63c7-4d2a-94a2-30545f17b11c"
+  }
+},
+{
+  "model": "admissions.admissiongroup",
+  "pk": "d87b5388-aa5f-4dce-80a2-743002a15fcc",
+  "fields": {
+    "admission": "a5a113af-ed26-4f61-80d5-3b0c4923c28c",
+    "group": "087b3394-424c-4da2-a5a5-b58b667f887b"
+  }
+},
+{
+  "model": "admissions.admissiongroup",
+  "pk": "4887368f-a9c5-458d-bdb3-7e352583c651",
+  "fields": {
+    "admission": "a5a113af-ed26-4f61-80d5-3b0c4923c28c",
+    "group": "194fa583-7353-4214-a4e4-530dd359874d"
+  }
+},
+{
+  "model": "admissions.admissiongroup",
+  "pk": "a09205f2-bf40-44d5-b8c2-b9539536a4a6",
+  "fields": {
+    "admission": "a5a113af-ed26-4f61-80d5-3b0c4923c28c",
+    "group": "9cf86971-60e5-4f3d-a6cf-3a0b1aed8cc5"
+  }
+},
+{
+  "model": "admissions.admissiongroup",
+  "pk": "3ca0bba7-b5df-42da-b615-dfd7cbc7e7ca",
+  "fields": {
+    "admission": "a5a113af-ed26-4f61-80d5-3b0c4923c28c",
+    "group": "013b8827-17df-4a2c-8501-7390a18ce517"
+  }
+},
+{
+  "model": "admissions.admissiongroup",
+  "pk": "bc9f0b52-403d-46d4-bcdd-eae249b29be3",
+  "fields": {
+    "admission": "a5a113af-ed26-4f61-80d5-3b0c4923c28c",
+    "group": "e5f4bf98-2f15-4e60-be83-9a02928cbb5d"
+  }
+}
+]

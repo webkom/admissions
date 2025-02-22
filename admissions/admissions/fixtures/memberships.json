@@ -1,10 +1,10 @@
 [
 {
   "model": "admissions.membership",
-  "pk": 1,
+  "pk": "075caaf7-dd22-4974-8991-d3bb8b0a57ff",
   "fields": {
-    "user": "65ca1129-450b-427b-9ccb-1c20e2914a0e",
-    "group": "cb52868a-3051-49b0-932b-3b413aae0acc",
+    "user": "40667e62-e5fc-4f97-83f0-f5d6b4326652",
+    "group": "7823814e-7bb2-4e51-9653-03f27216f2be",
     "role": "leader"
   }
 }
