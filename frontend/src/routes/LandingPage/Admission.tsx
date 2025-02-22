@@ -13,6 +13,7 @@ interface AdmissionProps {
 
 const Admission: React.FC<AdmissionProps> = ({ admission }) => {
   const isRevy = admission.slug === "revy";
+  const isSingleGroupAdmission = admission?.groups.length === 1;
 
   return (
     <AdmissionWrapper>
@@ -81,7 +82,8 @@ const Admission: React.FC<AdmissionProps> = ({ admission }) => {
                   to={
                     isLoggedIn()
                       ? `/${admission.slug}/` +
-                        (admission.userdata.has_application
+                        (admission.userdata.has_application ||
+                        isSingleGroupAdmission
                           ? "min-soknad"
                           : "velg-grupper")
                       : "/login/lego/"
