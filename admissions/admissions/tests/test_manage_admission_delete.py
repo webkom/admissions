@@ -24,9 +24,10 @@ class DeleteAdmissionAuthorizationTestCase(APITestCase):
         self.admission = create_admission(closed_from=yesterday)
 
     def test_webkom_can_delete_admission(self):
-        webkom_user = LegoUser.objects.create(username="webkom_member")
+        webkom_user = LegoUser.objects.create(username="webkom_member", lego_id=2)
         webkom = Group.objects.create(
             name="Webkom",
+            lego_id=13,
             description="Webkom styrer tekniske ting",
             response_label="Søk Webkom fordi du lærer deg nyttige ting!",
         )
@@ -69,7 +70,7 @@ class DeleteAdmissionAuthorizationTestCase(APITestCase):
         )
 
     def test_staff_noncreator_cannot_delete_admission(self):
-        staff_user = LegoUser.objects.create(username="staff", is_staff=True)
+        staff_user = LegoUser.objects.create(username="staff", lego_id=2, is_staff=True)
         self.client.force_authenticate(user=staff_user)
 
         self.assertNotEqual(
@@ -103,7 +104,7 @@ class DeleteAdmissionAuthorizationTestCase(APITestCase):
         self.assertEqual(Admission.objects.count(), 1, "The admission got deleted")
 
     def test_pleb_cannot_delete_admission(self):
-        pleb = LegoUser.objects.create(username="pleb")
+        pleb = LegoUser.objects.create(username="pleb", lego_id=2)
         self.client.force_authenticate(user=pleb)
 
         self.assertEqual(
@@ -158,7 +159,7 @@ class DeleteAdmissionCompleteTestCase(APITestCase):
         self.admission.created_by.is_staff = True
         self.admission.created_by.save()
 
-        self.pleb = LegoUser.objects.create()
+        self.pleb = LegoUser.objects.create(lego_id=2)
 
         self.user_application = UserApplication.objects.create(
             admission=self.admission,
@@ -167,7 +168,7 @@ class DeleteAdmissionCompleteTestCase(APITestCase):
             phone_number="004712345678",
         )
 
-        self.group = Group.objects.create(name="Testgruppe")
+        self.group = Group.objects.create(name="Testgruppe", lego_id=3)
 
         GroupApplication.objects.create(
             application=self.user_application,

@@ -33,7 +33,7 @@ OAuth through [abakus.no](https://abakus.no/)
 
 To run this project, you need
 
-1. python 3.9
+1. python 3.12
 2. Docker OR a `postgresql` database
 3. [poetry](https://python-poetry.org/) ([installation guide](https://python-poetry.org/docs/#installation))
 4. Node and yarn

@@ -1,3 +1,5 @@
+import uuid
+
 from django.conf import settings
 from django.contrib.auth.models import AbstractUser
 from django.db import models
@@ -9,6 +11,9 @@ from admissions.utils.models import TimeStampModel
 
 
 class LegoUser(AbstractUser):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    lego_id = models.IntegerField(unique=True, null=False, editable=False)
+
     profile_picture = models.URLField(null=True, blank=True)
 
     @property
@@ -39,11 +44,14 @@ class LegoUser(AbstractUser):
 
 
 class Group(models.Model):
-    name = models.CharField(max_length=50, unique=True)
-    description = models.TextField(blank=True, max_length=300)
-    response_label = models.TextField(blank=True, max_length=300)
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    lego_id = models.IntegerField(unique=True, null=False, editable=False)
+    name = models.CharField(max_length=80, unique=True)
     logo = models.URLField(null=True, blank=True)
     detail_link = models.CharField(max_length=150, default="")
+
+    response_label = models.TextField(blank=True, max_length=300)
+    description = models.TextField(blank=True, max_length=300)
 
     class Meta:
         ordering = ["name"]
@@ -53,6 +61,7 @@ class Group(models.Model):
 
 
 class Admission(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     created_by = models.ForeignKey(
         LegoUser, null=True, related_name="admissions", on_delete=models.CASCADE
     )
@@ -85,6 +94,7 @@ class Admission(models.Model):
 
 
 class AdmissionGroup(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     admission = models.ForeignKey(Admission, on_delete=models.CASCADE)
     group = models.ForeignKey(Group, on_delete=models.CASCADE)
 
@@ -97,6 +107,7 @@ class AdmissionGroup(models.Model):
 
 
 class UserApplication(TimeStampModel):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     admission = models.ForeignKey(
         Admission, related_name="applications", on_delete=models.CASCADE
     )
@@ -133,6 +144,7 @@ class UserApplication(TimeStampModel):
 
 
 class GroupApplication(TimeStampModel):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     application = models.ForeignKey(
         UserApplication, related_name="group_applications", on_delete=models.CASCADE
     )
@@ -143,6 +155,7 @@ class GroupApplication(TimeStampModel):
 
 
 class Membership(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
     group = models.ForeignKey(Group, on_delete=models.CASCADE)
     role = models.CharField(

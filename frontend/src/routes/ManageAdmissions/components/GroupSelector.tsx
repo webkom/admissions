@@ -5,7 +5,7 @@ import styled from "styled-components";
 
 interface GroupSelectorProps {
   value: Group["pk"][];
-  toggleGroup: (groupId: number) => void;
+  toggleGroup: (groupId: string) => void;
 }
 
 const GroupSelector: React.FC<GroupSelectorProps> = ({
@@ -14,14 +14,14 @@ const GroupSelector: React.FC<GroupSelectorProps> = ({
 }) => {
   const { data: groups } = useManageGroups();
 
-  const toggleSelectedGroup = (groupId: number) => {
+  const toggleSelectedGroup = (groupId: string) => {
     const group = groups?.find((group) => group.pk === groupId);
     if (group) toggleGroup(group.pk);
   };
 
   return (
     <>
-      <Select onChange={(e) => toggleSelectedGroup(Number(e.target.value))}>
+      <Select onChange={(e) => toggleSelectedGroup(e.target.value)}>
         <option>Legg til gruppe</option>
         {groups
           ?.filter((group) => !selectedGroups.includes(group.pk))

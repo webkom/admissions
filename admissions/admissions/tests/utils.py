@@ -24,7 +24,7 @@ def create_admission(
     global DEFAULT_ADMISSION_SLUG
 
     if created_by is None:
-        created_by = LegoUser.objects.create(username="creator")
+        created_by = LegoUser.objects.create(username="creator", lego_id=1)
 
     if slug is None:
         slug = DEFAULT_ADMISSION_SLUG

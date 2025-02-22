@@ -50,7 +50,7 @@ steps:
       - yarn knip
   
   - name: missing-migrations
-    image: abakus/lego-testbase:poetry
+    image: abakus/lego-testbase:python3.12poetry1.8.5
     when:
       event: [push]
     environment:
@@ -60,7 +60,7 @@ steps:
       - tox -e missing-migrations
   
   - name: tests
-    image: abakus/lego-testbase:poetry
+    image: abakus/lego-testbase:python3.12poetry1.8.5
     when:
       event: [push]
     environment:
@@ -69,7 +69,7 @@ steps:
       - tox -e tests
 
   - name: coverage
-    image: abakus/lego-testbase:poetry
+    image: abakus/lego-testbase:python3.12poetry1.8.5
     when:
       event: [push]
     depends_on:
@@ -80,14 +80,14 @@ steps:
       - tox -e coverage
 
   - name: isort
-    image: abakus/lego-testbase:poetry
+    image: abakus/lego-testbase:python3.12poetry1.8.5
     when:
       event: [push]
     commands:
       - tox -e isort
   
   - name: black
-    image: abakus/lego-testbase:poetry
+    image: abakus/lego-testbase:python3.12poetry1.8.5
     when:
       event: [push]
     commands:
@@ -112,7 +112,7 @@ steps:
       - yarn cypress install
 
   - name: cypress-backend
-    image: abakus/lego-testbase:python3.11
+    image: abakus/lego-testbase:python3.12poetry1.8.5
     detach: true
     when:
       event: [push]

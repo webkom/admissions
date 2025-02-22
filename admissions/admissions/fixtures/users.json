@@ -1,8 +1,9 @@
 [
 {
   "model": "admissions.legouser",
-  "pk": 1,
+  "pk": "65ca1129-450b-427b-9ccb-1c20e2914a0e",
   "fields": {
+    "lego_id": 1,
     "password": "!W6bpQDTHBqNhW2iHurip7hOro0pMikKCBTwmbrqY",
     "last_login": "2024-05-16T06:33:20.316Z",
     "is_superuser": false,

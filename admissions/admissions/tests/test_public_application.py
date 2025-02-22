@@ -12,11 +12,11 @@ class CreateApplicationTestCase(APITestCase):
         self.admission_slug = DEFAULT_ADMISSION_SLUG
         # Create admission and group
         self.admission = create_admission()
-        self.webkom = Group.objects.create(name="Webkom")
-        self.koskom = Group.objects.create(name="Koskom")
+        self.webkom = Group.objects.create(name="Webkom", lego_id=13)
+        self.koskom = Group.objects.create(name="Koskom", lego_id=9)
 
         # Setup Anna
-        self.pleb_anna = LegoUser.objects.create(username="Anna")
+        self.pleb_anna = LegoUser.objects.create(username="Anna", lego_id=2)
 
         self.application_data = {
             "text": "Ønsker Webkom mest",
@@ -29,7 +29,7 @@ class CreateApplicationTestCase(APITestCase):
         }
 
         # Setup Bob
-        self.pleb_bob = LegoUser.objects.create(username="Bob")
+        self.pleb_bob = LegoUser.objects.create(username="Bob", lego_id=3)
 
     def test_cannot_apply_for_someone_else(self):
         # Login as Bob, and try to apply as Anna. User should then be Bob
