@@ -158,7 +158,11 @@ export const HelpText = styled.span`
 
 /* Groups section */
 
-export const GroupsSection = styled.div`
+type GroupsSectionProps = {
+  $isSingleGroupAdmission: boolean;
+};
+
+export const GroupsSection = styled.div<GroupsSectionProps>`
   display: grid;
   grid-template-columns: 1fr 1.5fr;
   grid-template-areas: "sidebar applications";
@@ -176,6 +180,11 @@ export const GroupsSection = styled.div`
       margin-top: 1.5rem;;
     }
   `};
+
+  ${({ $isSingleGroupAdmission }) =>
+    $isSingleGroupAdmission &&
+    `grid-template-areas: "applications";
+    grid-template-columns: 100%`};
 `;
 
 export const Sidebar = styled.div`

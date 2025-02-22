@@ -99,6 +99,12 @@ const ApplicationPortal = () => {
     saveIsEditingDraft(isEditingApplication);
   }, [isEditingApplication]);
 
+  useEffect(() => {
+    if (admission?.groups.length === 1) {
+      setSelectedGroups({ [admission.groups[0].name]: true });
+    }
+  }, [admission]);
+
   if (!isLoggedIn()) {
     return null;
   } else if (error) {

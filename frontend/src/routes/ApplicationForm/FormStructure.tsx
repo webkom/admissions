@@ -55,6 +55,7 @@ const FormStructure: React.FC<FormStructureProps> = ({
 }) => {
   const { data: myApplication } = useMyApplication(String(admission?.slug));
   const isRevy = admission?.slug === "revy";
+  const isSingleGroupAdmission = admission?.groups.length === 1;
 
   return (
     <PageWrapper>
@@ -77,56 +78,62 @@ const FormStructure: React.FC<FormStructureProps> = ({
             Mobilnummeret vil bli brukt til å kalle deg inn på intervju.
           </HelpText>
           <Field name="phoneNumber" component={PhoneNumberField} />
-          <HelpText>
-            {!isRevy && (
-              <>
+          {!isSingleGroupAdmission && (
+            <>
+              <HelpText>
+                {!isRevy && (
+                  <>
+                    <Icon name="information-circle-outline" />
+                    Kun leder og nestleder av Abakus kan se det du skriver inn i
+                    prioriterings- og kommentarfeltet.
+                  </>
+                )}
                 <Icon name="information-circle-outline" />
-                Kun leder og nestleder av Abakus kan se det du skriver inn i
-                prioriterings- og kommentarfeltet.
-              </>
-            )}
-            <Icon name="information-circle-outline" />
-            Prioriteringslisten vil bli tatt hensyn til så langt det lar seg
-            gjøre, men garanterer ingenting. Ikke søk på en{" "}
-            {isRevy ? "gruppe" : "komité"} du ikke ønsker å bli med i.
-          </HelpText>
-          <Field
-            name="priorityText"
-            component={PriorityTextField}
-            label="Prioriteringer, og andre kommentarer"
-            optional
-          />
+                Prioriteringslisten vil bli tatt hensyn til så langt det lar seg
+                gjøre, men garanterer ingenting. Ikke søk på en{" "}
+                {isRevy ? "gruppe" : "komité"} du ikke ønsker å bli med i.
+              </HelpText>
+              <Field
+                name="priorityText"
+                component={PriorityTextField}
+                label="Prioriteringer, og andre kommentarer"
+                optional
+              />
+            </>
+          )}
           <JsonFieldEditor
             sectionName="headerFields"
             fields={admission?.header_fields}
           />
         </GeneralInfoSection>
         <SeparatorLine />
-        <GroupsSection>
-          <Sidebar>
-            <div>
-              <SectionHeader>{isRevy ? "Grupper" : "Komiteer"}</SectionHeader>
-              <HelpText>
-                <Icon name="information-circle-outline" />
-                {isRevy
-                  ? "Her skriver du søknaden til gruppen(e) du har valgt."
-                  : "Her skriver du søknaden til komiteen(e) du har valgt. Hver komité kan kun se søknaden til sin egen komité."}
-              </HelpText>
-              <HelpText>
-                <Icon name="information-circle-outline" />
-                Søknadene vil brukes i opptaksprosessen, men alle søkere vil bli
-                kalt inn til intervju.
-              </HelpText>
+        <GroupsSection $isSingleGroupAdmission={isSingleGroupAdmission}>
+          {!isSingleGroupAdmission && (
+            <Sidebar>
+              <div>
+                <SectionHeader>{isRevy ? "Grupper" : "Komiteer"}</SectionHeader>
+                <HelpText>
+                  <Icon name="information-circle-outline" />
+                  {isRevy
+                    ? "Her skriver du søknaden til gruppen(e) du har valgt."
+                    : "Her skriver du søknaden til komiteen(e) du har valgt. Hver komité kan kun se søknaden til sin egen komité."}
+                </HelpText>
+                <HelpText>
+                  <Icon name="information-circle-outline" />
+                  Søknadene vil brukes i opptaksprosessen, men alle søkere vil
+                  bli kalt inn til intervju.
+                </HelpText>
 
-              {!isRevy && (
-                <ToggleGroups
-                  groups={groups}
-                  selectedGroups={selectedGroups}
-                  toggleGroup={toggleGroup}
-                />
-              )}
-            </div>
-          </Sidebar>
+                {!isRevy && (
+                  <ToggleGroups
+                    groups={groups}
+                    selectedGroups={selectedGroups}
+                    toggleGroup={toggleGroup}
+                  />
+                )}
+              </div>
+            </Sidebar>
+          )}
           {hasSelected ? (
             <Applications>{SelectedGroupItems}</Applications>
           ) : (
@@ -167,7 +174,10 @@ const FormStructure: React.FC<FormStructureProps> = ({
             )}
             <SubmitInfo>
               Oppdateringer etter søknadsfristen kan ikke garanteres å bli sett
-              {!isRevy && " av komiteen(e) du søker deg til"}.
+              {!isRevy &&
+                !isSingleGroupAdmission &&
+                " av komiteen(e) du søker deg til"}
+              .
             </SubmitInfo>
             <SubmitInfo>
               {isRevy
