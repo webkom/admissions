@@ -13,6 +13,7 @@ interface AdmissionProps {
 
 const Admission: React.FC<AdmissionProps> = ({ admission }) => {
   const isRevy = admission.slug === "revy";
+  const isBackup = admission.slug === "backup";
   const isSingleGroupAdmission = admission?.groups.length === 1;
 
   return (
@@ -111,6 +112,10 @@ const Admission: React.FC<AdmissionProps> = ({ admission }) => {
         Hvis det ikke fungerer å slette søknaden, send en mail til{" "}
         {isRevy ? (
           <a href="mailto:revysjef@abakus.no">revysjef@abakus.no</a>
+        ) : isBackup ? (
+          <a href="mailto:backup-rekruttering@abakus.no">
+            backup-rekruttering@abakus.no
+          </a>
         ) : (
           <a href="mailto:leder@abakus.no">leder@abakus.no</a>
         )}

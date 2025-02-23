@@ -17,6 +17,7 @@ import {
   GeneralInfoSection,
   GroupsSection,
   HelpText,
+  InfoText,
   NoChosenGroupsWrapper,
   NoChosenSubTitle,
   NoChosenTitle,
@@ -54,6 +55,7 @@ const FormStructure: React.FC<FormStructureProps> = ({ toggleIsEditing }) => {
   const { data: admission } = useAdmission(admissionSlug ?? "");
   const { groups } = admission ?? {};
 
+  const isBackup = admission?.slug === "backup";
   const isSingleGroupAdmission = admission?.groups.length === 1;
 
   if (!admission) {
@@ -136,6 +138,46 @@ const FormStructure: React.FC<FormStructureProps> = ({ toggleIsEditing }) => {
           </EditActions>
         </EditWrapper>
       </RecieptInfo>
+
+      {isBackup && (
+        <>
+          <FormHeader>
+            <Title>Informasjon</Title>
+          </FormHeader>
+          <GeneralInfoSection $columnCount={1}>
+            <SeparatorLine />
+            <InfoText>
+              Tusen takk for din søknad! Dersom du har noen spørsmål eller
+              innspill til prosessen kan dette gjøres ved å sende en e-post til{" "}
+              <a href="mailto:backup-rekruttering@abakus.no">
+                backup-rekruttering@abakus.no
+              </a>
+              .
+            </InfoText>
+            <InfoText>
+              Planen videre:
+              <ul>
+                <li>07. mars kl. 23:59: Søknadsfrist</li>
+                <li>27. februar - 07. mars: Kaffeprat*</li>
+                <li>
+                  10/11. mars: Du får svar på om du kommer med eller ikke.{" "}
+                  <br />
+                  Kommer du ikke med i år anbefaler vi deg å søke til neste år
+                  igjen! Hold gjerne av ettermiddagen 12. mars i tilfelle du
+                  blir tatt opp.
+                </li>
+              </ul>
+            </InfoText>
+            <InfoText>
+              *Dette er en lavterskelsamtale for at du skal bli bedre kjent med
+              oss og vi blir bedre kjent med deg. Dersom du er på utveksling vil
+              samtalene foregå over Zoom. Du vil bli kontaktet av to backupere
+              for å finne tid som passer:)
+            </InfoText>
+          </GeneralInfoSection>
+          <SeparatorLine />
+        </>
+      )}
 
       <FormHeader>
         <Title>Innsendt data</Title>
