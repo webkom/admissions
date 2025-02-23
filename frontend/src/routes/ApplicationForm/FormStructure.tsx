@@ -14,6 +14,7 @@ import {
   GeneralInfoSection,
   GroupsSection,
   HelpText,
+  InfoText,
   NoChosenGroupsWrapper,
   NoChosenSubTitle,
   NoChosenTitle,
@@ -55,6 +56,7 @@ const FormStructure: React.FC<FormStructureProps> = ({
 }) => {
   const { data: myApplication } = useMyApplication(String(admission?.slug));
   const isRevy = admission?.slug === "revy";
+  const isBackup = admission?.slug === "backup";
   const isSingleGroupAdmission = admission?.groups.length === 1;
 
   return (
@@ -70,6 +72,64 @@ const FormStructure: React.FC<FormStructureProps> = ({
         )}
       </FormHeader>
       <Form>
+        {isBackup && (
+          <>
+            <SeparatorLine />
+            <GeneralInfoSection $columnCount={1}>
+              <SectionHeader>Informasjon</SectionHeader>
+              <InfoText>
+                Aller først - tusen takk for din interesse for å søke backup!
+                Lurer du på mer om oss kan du lese{" "}
+                <a
+                  href="https://abakus.no/articles/553-backup-har-opptak"
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  denne artikkelen på abakus.no
+                </a>
+                .
+              </InfoText>
+              <InfoText>
+                Kriteriet for å søke er at du har interesse for Abakus og har
+                vært medlem i Abakus i minst 3 måneder. Absolutt alle kan søke
+                uavhengig om man har hatt tidligere verv eller ikke. For å søke
+                må du være i Trondheim det påfølgende høstsemesteret. Søkere som
+                blir værende hele det neste året vil bli prioritert, men
+                søknader fra de som kun er borte et halvt år vil likevel bli
+                vurdert.
+              </InfoText>
+              <InfoText>
+                Planen videre:
+                <ul>
+                  <li>07. mars kl. 23:59: Søknadsfrist</li>
+                  <li>27. februar - 07. mars: Kaffeprat*</li>
+                  <li>
+                    10/11. mars: Du får svar på om du kommer med eller ikke.{" "}
+                    <br />
+                    Kommer du ikke med i år anbefaler vi deg å søke til neste år
+                    igjen! Hold gjerne av ettermiddagen 12. mars i tilfelle du
+                    blir tatt opp.
+                  </li>
+                </ul>
+              </InfoText>
+              <InfoText>
+                *Dette er en lavterskelsamtale for at du skal bli bedre kjent
+                med oss og vi blir bedre kjent med deg. Dersom du er på
+                utveksling vil samtalene foregå over Zoom. Du vil bli kontaktet
+                av to backupere for å finne tid som passer:)
+              </InfoText>
+              <InfoText>
+                Vi håper du er motivert for å søke og ønsker deg lykke til i
+                prosessen. Dersom du har noen spørsmål eller innspill til
+                prosessen kan dette gjøres ved å sende en e-post til{" "}
+                <a href="mailto:backup-rekruttering@abakus.no">
+                  backup-rekruttering@abakus.no
+                </a>
+                .
+              </InfoText>
+            </GeneralInfoSection>
+          </>
+        )}
         <SeparatorLine />
         <GeneralInfoSection>
           <SectionHeader>Generelt</SectionHeader>
@@ -182,7 +242,9 @@ const FormStructure: React.FC<FormStructureProps> = ({
             <SubmitInfo>
               {isRevy
                 ? "Søknaden din kan kun ses av revystyret."
-                : "Din søknad til hver komité kan kun ses av den aktuelle komiteen og leder av Abakus."}{" "}
+                : isBackup
+                  ? "Søknaden din kan kun ses av medlemmer av backup."
+                  : "Din søknad til hver komité kan kun ses av den aktuelle komiteen og leder av Abakus."}{" "}
               All søknadsinformasjon slettes etter opptaket er gjennomført.
             </SubmitInfo>
             <SubmitInfo>Du kan når som helst trekke søknaden din.</SubmitInfo>
