@@ -1,12 +1,12 @@
 ---
 kind: pipeline
 type: docker
-name: default
+name: testing
 
 trigger:
-  event:
-    exclude:
-      - pull_request
+  event: [push]
+  branch:
+    exclude: [build]
 
 steps:
   - name: yarn-install
@@ -18,8 +18,6 @@ steps:
   
   - name: lint-frontend
     image: node:22
-    when:
-      event: [push]
     depends_on:
       - yarn-install
     commands:
@@ -27,8 +25,6 @@ steps:
 
   - name: typescript
     image: node:22
-    when:
-      event: [push]
     depends_on:
       - yarn-install
     commands:
@@ -36,8 +32,6 @@ steps:
 
   - name: build-frontend
     image: node:22
-    when:
-      event: [push]
     depends_on:
       - yarn-install
     environment:
@@ -47,8 +41,6 @@ steps:
   
   - name: check-unused
     image: node:22
-    when:
-      event: [push]
     depends_on:
       - yarn-install
     commands:
@@ -56,8 +48,6 @@ steps:
   
   - name: missing-migrations
     image: abakus/lego-testbase:python3.12poetry1.8.5
-    when:
-      event: [push]
     environment:
       DATABASE: database
     commands:
@@ -66,8 +56,6 @@ steps:
   
   - name: tests
     image: abakus/lego-testbase:python3.12poetry1.8.5
-    when:
-      event: [push]
     environment:
       DATABASE: database
     commands:
@@ -75,8 +63,6 @@ steps:
 
   - name: coverage
     image: abakus/lego-testbase:python3.12poetry1.8.5
-    when:
-      event: [push]
     depends_on:
       - tests
     environment:
@@ -86,22 +72,16 @@ steps:
 
   - name: isort
     image: abakus/lego-testbase:python3.12poetry1.8.5
-    when:
-      event: [push]
     commands:
       - tox -e isort
   
   - name: black
     image: abakus/lego-testbase:python3.12poetry1.8.5
-    when:
-      event: [push]
     commands:
       - tox -e black
   
   - name: cypress-install
     image: node:22
-    when:
-      event: [push]
     depends_on:
       - lint-frontend
       - typescript
@@ -150,17 +130,31 @@ steps:
     commands:
       - ./wait-for-it.sh -t 420 cypress-backend:5000
       - yarn cypress:run --record
-  
+
+services:
+  - name: database
+    image: postgres:14.4
+    environment:
+      POSTGRES_USER: admissions
+      POSTGRES_HOST_AUTH_METHOD: trust
+
+---
+kind: pipeline
+type: docker
+name: deployment
+
+trigger:
+  event: [push]
+  branch: [build]
+
+steps:
   - name: docker
     image: plugins/docker
     when:
       branch:
-        - staging
-        - prod
+        - build
       status: [success]
       event: [push]
-    depends_on:
-      - cypress
     settings:
       registry: https://registry.webkom.dev
       repo: registry.webkom.dev/webkom/admissions
@@ -173,56 +167,27 @@ steps:
         - version-${DRONE_COMMIT_SHA:0:7}
       build_args:
         - "RELEASE=${DRONE_BRANCH}-${DRONE_COMMIT_SHA:0:7}"
-  
-  - name: Deploy staging
-    image: abakus/ansible-deploy
-    depends_on:
-      - docker
-    when:
-      branch:
-        - staging
-      event: [push]
-      status: [success]
-    settings:
-      playbook: /infrastructure/esas/playbooks/deploy.yml
-      repository:
-        from_secret: infra_repository
-      tags:
-        - admissions-staging
-      limit: esas
-      extra_vars: admissions_version=version-${DRONE_COMMIT_SHA:0:7}
-      inventory: /infrastructure/inventory
-      vault_password:
-        from_secret: ansible_vault_password
-      private_key:
-        from_secret: infra_deploy_key
 
-  - name: Deploy prod
+  - name: Deploy
     image: abakus/ansible-deploy
-    depends_on:
-      - docker
-    when:
-      branch:
-        - prod
-      event: [push]
-      status: [success]
     settings:
       playbook: /infrastructure/esas/playbooks/deploy.yml
       repository:
         from_secret: infra_repository
       tags:
         - admissions
-      limit: esas
+      # limit: esas
+      limit: ${DRONE_DEPLOY_TO}
       extra_vars: admissions_version=version-${DRONE_COMMIT_SHA:0:7}
       inventory: /infrastructure/inventory
       vault_password:
         from_secret: ansible_vault_password
       private_key:
         from_secret: infra_deploy_key
-
-services:
-  - name: database
-    image: postgres:14.4
-    environment:
-      POSTGRES_USER: admissions
-      POSTGRES_HOST_AUTH_METHOD: trust
+    when:
+      event:
+        - promote
+        - rollback
+      branch:
+        - build
+      status: [success]
