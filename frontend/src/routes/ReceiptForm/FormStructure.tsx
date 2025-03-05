@@ -157,7 +157,7 @@ const FormStructure: React.FC<FormStructureProps> = ({ toggleIsEditing }) => {
             <InfoText>
               Planen videre:
               <ul>
-                <li>07. mars kl. 23:59: Søknadsfrist</li>
+                <li>05. mars kl. 23:59: Søknadsfrist</li>
                 <li>27. februar - 07. mars: Kaffeprat*</li>
                 <li>
                   10/11. mars: Du får svar på om du kommer med eller ikke.{" "}
