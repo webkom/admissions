@@ -67,7 +67,11 @@ export const CancelButtonContainer = styled.div`
 `;
 
 /* General info section, mobile number, priorities */
-export const GeneralInfoSection = styled.div`
+type InfoSectionProps = {
+  $columnCount?: number;
+};
+
+export const GeneralInfoSection = styled.div<InfoSectionProps>`
   display: flex;
   flex-wrap: wrap;
   gap: 1rem 2rem;
@@ -76,12 +80,11 @@ export const GeneralInfoSection = styled.div`
 
   > h2 {
     flex-basis: 100%;
-    margin-bottom: -1.5rem;
   }
 
   > span {
-    flex-basis: 50%;
-    margin-top: calc(1rem + 16px);
+    flex-basis: ${({ $columnCount = 2 }) =>
+      `calc(${(1 / $columnCount) * 100}% - ${($columnCount - 1) * 1}rem)`};
   }
 
   > div {
@@ -131,12 +134,24 @@ export const Text = styled.p`
   `}
 `;
 
-export const HelpText = styled.span`
-  color: rgba(57, 75, 89, 0.75);
+export const InfoText = styled.span`
   font-size: 0.9rem;
-  line-height: 1.2rem;
-  display: flex;
+  line-height: 1.5rem;
+
+  ${media.portrait`
+    font-size: 0.8rem;
+  `};
+
+  ul {
+    list-style-type: disc;
+    margin-left: 1rem;
+  }
+`;
+
+export const HelpText = styled(InfoText)`
+  color: rgba(57, 75, 89, 0.75);
   margin-left: calc(-2.6rem + 4px);
+  display: flex;
 
   i {
     color: var(--color-gray-3);
@@ -146,7 +161,6 @@ export const HelpText = styled.span`
 
   ${media.portrait`
     margin-left: 0;
-    font-size: 0.8rem;
 
     i {
       margin-right: 0.5rem;
@@ -158,7 +172,11 @@ export const HelpText = styled.span`
 
 /* Groups section */
 
-export const GroupsSection = styled.div`
+type GroupsSectionProps = {
+  $isSingleGroupAdmission: boolean;
+};
+
+export const GroupsSection = styled.div<GroupsSectionProps>`
   display: grid;
   grid-template-columns: 1fr 1.5fr;
   grid-template-areas: "sidebar applications";
@@ -176,6 +194,11 @@ export const GroupsSection = styled.div`
       margin-top: 1.5rem;;
     }
   `};
+
+  ${({ $isSingleGroupAdmission }) =>
+    $isSingleGroupAdmission &&
+    `grid-template-areas: "applications";
+    grid-template-columns: 100%`};
 `;
 
 export const Sidebar = styled.div`

@@ -1,101 +1,254 @@
 [
 {
   "model": "admissions.group",
-  "pk": 4,
+  "pk": "e32bda54-be23-42e4-9fb8-d90cb89ac1ef",
   "fields": {
+    "lego_id": 10,
+    "name": "Abakus-leder",
+    "logo": null,
+    "detail_link": "https://abakus.no/pages/komiteer/10",
+    "response_label": "",
+    "description": ""
+  }
+},
+{
+  "model": "admissions.group",
+  "pk": "8c58aac9-871e-428c-ad4e-28abfc594715",
+  "fields": {
+    "lego_id": 4,
     "name": "Arrkom",
-    "description": "",
-    "response_label": "",
     "logo": "http://127.0.0.1:10000/9kRAPiApVp8i2ztD7nzvjzN9bu0=/400x400/abakus_arrkom.png",
-    "detail_link": "https://abakus.no/pages/komiteer/4"
+    "detail_link": "https://abakus.no/pages/komiteer/4",
+    "response_label": "",
+    "description": ""
   }
 },
 {
   "model": "admissions.group",
-  "pk": 6,
+  "pk": "946a7ffd-ccd7-45b9-87be-1db8c5551ae1",
   "fields": {
+    "lego_id": 5,
+    "name": "backup",
+    "logo": "http://127.0.0.1:10000/D1c7AuQTr9sqDzBGS6yp-QlM5H4=/400x400/abakus_backup.png",
+    "detail_link": "https://abakus.no/pages/komiteer/5",
+    "response_label": "",
+    "description": ""
+  }
+},
+{
+  "model": "admissions.group",
+  "pk": "e8a949e2-d6e0-4cf5-923f-aee4e4db12c8",
+  "fields": {
+    "lego_id": 27,
+    "name": "Band",
+    "logo": null,
+    "detail_link": "https://abakus.no/pages/revy/27",
+    "response_label": "",
+    "description": ""
+  }
+},
+{
+  "model": "admissions.group",
+  "pk": "3de753b7-c2a1-458d-9c57-97aed27cfb05",
+  "fields": {
+    "lego_id": 6,
     "name": "Bankkom",
-    "description": "",
-    "response_label": "",
     "logo": "http://127.0.0.1:10000/AgTk7CLe9E-NMtlCRSTsA049994=/400x400/abakus_bankkom.png",
-    "detail_link": "https://abakus.no/pages/komiteer/6"
+    "detail_link": "https://abakus.no/pages/komiteer/6",
+    "response_label": "",
+    "description": ""
   }
 },
 {
   "model": "admissions.group",
-  "pk": 7,
+  "pk": "9b860b9a-a4e7-4cf1-8d92-2ded9cf93036",
   "fields": {
+    "lego_id": 7,
     "name": "Bedkom",
-    "description": "",
-    "response_label": "",
     "logo": "http://127.0.0.1:10000/9sUcNwLJ8j7E9RnLMqGbWhIKpSs=/400x400/abakus_bedkom.png",
-    "detail_link": "https://abakus.no/pages/komiteer/7"
+    "detail_link": "https://abakus.no/pages/komiteer/7",
+    "response_label": "",
+    "description": ""
   }
 },
 {
   "model": "admissions.group",
-  "pk": 8,
+  "pk": "087b3394-424c-4da2-a5a5-b58b667f887b",
   "fields": {
+    "lego_id": 28,
+    "name": "Dans",
+    "logo": null,
+    "detail_link": "https://abakus.no/pages/revy/28",
+    "response_label": "",
+    "description": ""
+  }
+},
+{
+  "model": "admissions.group",
+  "pk": "56074718-de69-4df5-9309-0051bfe826ad",
+  "fields": {
+    "lego_id": 8,
     "name": "Fagkom",
-    "description": "",
-    "response_label": "",
     "logo": "http://127.0.0.1:10000/zxtB57tF1Y0Kwe8qVoFPHSKXbI8=/400x400/abakus_fagkom.png",
-    "detail_link": "https://abakus.no/pages/komiteer/8"
+    "detail_link": "https://abakus.no/pages/komiteer/8",
+    "response_label": "",
+    "description": ""
   }
 },
 {
   "model": "admissions.group",
-  "pk": 9,
+  "pk": "fa57a2a8-1960-4e48-aa1b-596ec1ce6747",
   "fields": {
+    "lego_id": 13,
     "name": "Koskom",
-    "description": "",
-    "response_label": "",
     "logo": "http://127.0.0.1:10000/KwysEveCArPBuM0jTeulYBMObfE=/400x400/abakus_koskom.png",
-    "detail_link": "https://abakus.no/pages/komiteer/9"
+    "detail_link": "https://abakus.no/pages/komiteer/13",
+    "response_label": "",
+    "description": ""
   }
 },
 {
   "model": "admissions.group",
-  "pk": 10,
+  "pk": "194fa583-7353-4214-a4e4-530dd359874d",
   "fields": {
+    "lego_id": 30,
+    "name": "Kostyme",
+    "logo": null,
+    "detail_link": "https://abakus.no/pages/revy/30",
+    "response_label": "",
+    "description": ""
+  }
+},
+{
+  "model": "admissions.group",
+  "pk": "3596c621-1c71-44dc-8252-6657dd89d5fc",
+  "fields": {
+    "lego_id": 14,
     "name": "LaBamba",
-    "description": "",
-    "response_label": "",
     "logo": "http://127.0.0.1:10000/q-DHQ_5Du8aIoRaEPXUeAxGEr6E=/400x400/abakus_labamba.png",
-    "detail_link": "https://abakus.no/pages/komiteer/10"
+    "detail_link": "https://abakus.no/pages/komiteer/14",
+    "response_label": "",
+    "description": ""
   }
 },
 {
   "model": "admissions.group",
-  "pk": 11,
+  "pk": "b190ece7-3a10-448c-9c9c-3e1a634e5415",
   "fields": {
+    "lego_id": 15,
     "name": "PR",
-    "description": "",
-    "response_label": "",
     "logo": "http://127.0.0.1:10000/ODpN7TrM7QrKbDs1zW7ax5O4AfI=/400x400/abakus_pr.png",
-    "detail_link": "https://abakus.no/pages/komiteer/11"
+    "detail_link": "https://abakus.no/pages/komiteer/15",
+    "response_label": "",
+    "description": ""
   }
 },
 {
   "model": "admissions.group",
-  "pk": 12,
+  "pk": "5815f47b-af7f-48a1-896f-7696b7abac16",
   "fields": {
+    "lego_id": 31,
+    "name": "PR-revy",
+    "logo": null,
+    "detail_link": "https://abakus.no/pages/revy/31",
+    "response_label": "",
+    "description": ""
+  }
+},
+{
+  "model": "admissions.group",
+  "pk": "74262b9d-e632-4012-8ae8-948424a0add9",
+  "fields": {
+    "lego_id": 16,
     "name": "readme",
-    "description": "",
-    "response_label": "",
     "logo": "http://127.0.0.1:10000/4UOKTtqcKLFAfBEsgcQ9sdBWYAc=/400x400/abakus_readme.png",
-    "detail_link": "https://abakus.no/pages/komiteer/12"
+    "detail_link": "https://abakus.no/pages/komiteer/16",
+    "response_label": "",
+    "description": ""
   }
 },
 {
   "model": "admissions.group",
-  "pk": 13,
+  "pk": "c222d3f6-9893-49fb-ba56-ce83f1417cfa",
   "fields": {
-    "name": "Webkom",
-    "description": "",
+    "lego_id": 32,
+    "name": "Regi",
+    "logo": null,
+    "detail_link": "https://abakus.no/pages/revy/32",
     "response_label": "",
+    "description": ""
+  }
+},
+{
+  "model": "admissions.group",
+  "pk": "788e9e21-b5ec-4fcd-be9b-c2e2bc15ef4a",
+  "fields": {
+    "lego_id": 33,
+    "name": "RevyStyret",
+    "logo": null,
+    "detail_link": "https://abakus.no/pages/komiteer/33",
+    "response_label": "",
+    "description": ""
+  }
+},
+{
+  "model": "admissions.group",
+  "pk": "7c69ea96-63c7-4d2a-94a2-30545f17b11c",
+  "fields": {
+    "lego_id": 34,
+    "name": "Scene",
+    "logo": null,
+    "detail_link": "https://abakus.no/pages/revy/34",
+    "response_label": "",
+    "description": ""
+  }
+},
+{
+  "model": "admissions.group",
+  "pk": "013b8827-17df-4a2c-8501-7390a18ce517",
+  "fields": {
+    "lego_id": 35,
+    "name": "Skuespill",
+    "logo": null,
+    "detail_link": "https://abakus.no/pages/revy/35",
+    "response_label": "",
+    "description": ""
+  }
+},
+{
+  "model": "admissions.group",
+  "pk": "9cf86971-60e5-4f3d-a6cf-3a0b1aed8cc5",
+  "fields": {
+    "lego_id": 36,
+    "name": "Sosial",
+    "logo": null,
+    "detail_link": "https://abakus.no/pages/revy/36",
+    "response_label": "",
+    "description": ""
+  }
+},
+{
+  "model": "admissions.group",
+  "pk": "e5f4bf98-2f15-4e60-be83-9a02928cbb5d",
+  "fields": {
+    "lego_id": 37,
+    "name": "Teknikk",
+    "logo": null,
+    "detail_link": "https://abakus.no/pages/revy/37",
+    "response_label": "",
+    "description": ""
+  }
+},
+{
+  "model": "admissions.group",
+  "pk": "7823814e-7bb2-4e51-9653-03f27216f2be",
+  "fields": {
+    "lego_id": 17,
+    "name": "Webkom",
     "logo": "http://127.0.0.1:10000/XuS4emGIQ7Zl2Qhkvgz5HDHfGDs=/400x400/abakus_webkom.png",
-    "detail_link": "https://abakus.no/pages/komiteer/13"
+    "detail_link": "https://abakus.no/pages/komiteer/17",
+    "response_label": "",
+    "description": ""
   }
 }
 ]

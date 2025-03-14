@@ -27,7 +27,7 @@ interface AdmissionsContainerProps {
 }
 
 export interface ApplicationTableRow {
-  id: number;
+  id: string;
   username: string;
   fullname: string;
   email: string;

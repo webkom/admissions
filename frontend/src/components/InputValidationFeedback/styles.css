@@ -1,4 +1,4 @@
 .input-feedback {
-  color: gray;
+  color: var(--lego-red-color);
   margin-top: 0.25rem;
 }

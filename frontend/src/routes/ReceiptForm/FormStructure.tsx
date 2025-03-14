@@ -17,6 +17,7 @@ import {
   GeneralInfoSection,
   GroupsSection,
   HelpText,
+  InfoText,
   NoChosenGroupsWrapper,
   NoChosenSubTitle,
   NoChosenTitle,
@@ -36,6 +37,7 @@ import { clearAllDrafts } from "src/utils/draftHelper";
 import JsonFieldEditor from "src/components/JsonFieldEditor";
 import { Button } from "@webkom/lego-bricks";
 import LinkButton from "src/components/LinkButton";
+import PriorityTextField from "../ApplicationForm/PriorityTextField";
 
 interface FormStructureProps {
   toggleIsEditing: () => void;
@@ -52,6 +54,13 @@ const FormStructure: React.FC<FormStructureProps> = ({ toggleIsEditing }) => {
   const { data: myApplication } = useMyApplication(admissionSlug ?? "");
   const { data: admission } = useAdmission(admissionSlug ?? "");
   const { groups } = admission ?? {};
+
+  const isBackup = admission?.slug === "backup";
+  const isSingleGroupAdmission = admission?.groups.length === 1;
+
+  if (!admission) {
+    return <p>Opptaket finnes ikke</p>;
+  }
 
   if (!myApplication) {
     return <p>Du har ingen innsendte søknader.</p>;
@@ -79,24 +88,27 @@ const FormStructure: React.FC<FormStructureProps> = ({ toggleIsEditing }) => {
             <Text>
               Du kan
               <StyledSpan $bold> fritt endre søknaden</StyledSpan> din frem til{" "}
-              {admission && (
-                <StyledSpan $bold $red>
-                  <FormatTime format="EEEE d. MMMM">
-                    {admission.public_deadline}
-                  </FormatTime>
-                </StyledSpan>
-              )}{" "}
-              og {isRevy ? "revystyret" : "komiteene"} vil kun se den siste
-              versjonen.
+              <StyledSpan $bold $red>
+                <FormatTime format="EEEE d. MMMM">
+                  {admission.public_deadline}
+                </FormatTime>
+              </StyledSpan>
+              {!isSingleGroupAdmission &&
+                ` og ${isRevy ? "revystyret" : "komiteene"} vil kun se den siste
+              versjonen`}
+              .
             </Text>
             <Notice>
               <StyledSpan $bold>Merk:</StyledSpan> Oppdateringer etter
-              søknadsfristen kan ikke garanteres å bli sett av{" "}
-              {isRevy ? "revystyret" : "komiteen(e) du søker deg til"}.
+              søknadsfristen kan ikke garanteres å bli sett
+              {!isRevy &&
+                !isSingleGroupAdmission &&
+                " av komiteen(e) du søker deg til"}
+              .
             </Notice>
           </EditInfo>
           <EditActions>
-            {admission && admission.is_open && (
+            {admission.is_open && (
               <Button onClick={toggleIsEditing}>Endre søknad</Button>
             )}
             <span />
@@ -127,6 +139,46 @@ const FormStructure: React.FC<FormStructureProps> = ({ toggleIsEditing }) => {
         </EditWrapper>
       </RecieptInfo>
 
+      {isBackup && (
+        <>
+          <FormHeader>
+            <Title>Informasjon</Title>
+          </FormHeader>
+          <GeneralInfoSection $columnCount={1}>
+            <SeparatorLine />
+            <InfoText>
+              Tusen takk for din søknad! Dersom du har noen spørsmål eller
+              innspill til prosessen kan dette gjøres ved å sende en e-post til{" "}
+              <a href="mailto:backup-rekruttering@abakus.no">
+                backup-rekruttering@abakus.no
+              </a>
+              .
+            </InfoText>
+            <InfoText>
+              Planen videre:
+              <ul>
+                <li>05. mars kl. 23:59: Søknadsfrist</li>
+                <li>27. februar - 07. mars: Kaffeprat*</li>
+                <li>
+                  10/11. mars: Du får svar på om du kommer med eller ikke.{" "}
+                  <br />
+                  Kommer du ikke med i år anbefaler vi deg å søke til neste år
+                  igjen! Hold gjerne av ettermiddagen 12. mars i tilfelle du
+                  blir tatt opp.
+                </li>
+              </ul>
+            </InfoText>
+            <InfoText>
+              *Dette er en lavterskelsamtale for at du skal bli bedre kjent med
+              oss og vi blir bedre kjent med deg. Dersom du er på utveksling vil
+              samtalene foregå over Zoom. Du vil bli kontaktet av to backupere
+              for å finne tid som passer:)
+            </InfoText>
+          </GeneralInfoSection>
+          <SeparatorLine />
+        </>
+      )}
+
       <FormHeader>
         <Title>Innsendt data</Title>
       </FormHeader>
@@ -143,31 +195,57 @@ const FormStructure: React.FC<FormStructureProps> = ({ toggleIsEditing }) => {
             component={PhoneNumberField}
             disabled={true}
           />
+          {!isSingleGroupAdmission && (
+            <>
+              <HelpText>
+                {!isRevy && (
+                  <>
+                    <Icon name="information-circle-outline" />
+                    Kun leder og nestleder av Abakus kan se det du skriver inn i
+                    prioriterings- og kommentarfeltet.
+                  </>
+                )}
+                <Icon name="information-circle-outline" />
+                Prioriteringslisten vil bli tatt hensyn til så langt det lar seg
+                gjøre, men garanterer ingenting. Ikke søk på en{" "}
+                {isRevy ? "gruppe" : "komité"} du ikke ønsker å bli med i.
+              </HelpText>
+              <Field
+                name="priorityText"
+                component={PriorityTextField}
+                label="Prioriteringer, og andre kommentarer"
+                optional
+                disabled={true}
+              />
+            </>
+          )}
           <JsonFieldEditor
             sectionName="headerFields"
-            fields={admission?.header_fields}
+            fields={admission.header_fields}
             disabled={true}
           />
         </GeneralInfoSection>
         <SeparatorLine />
-        <GroupsSection>
-          <Sidebar>
-            <div>
-              <SectionHeader>{isRevy ? "Grupper" : "Komiteer"}</SectionHeader>
-              <HelpText>
-                <Icon name="information-circle-outline" />
-                Her skriver du søknaden til{" "}
-                {isRevy ? "gruppen(e)" : "komiteen(e)"} du har valgt.
-                {!isRevy &&
-                  "Hver komité kan kun se søknaden til sin egen komité."}
-              </HelpText>
-              <HelpText>
-                <Icon name="information-circle-outline" />
-                Søknadene vil brukes i opptaksprosessen, men alle søkere vil bli
-                kalt inn til intervju.
-              </HelpText>
-            </div>
-          </Sidebar>
+        <GroupsSection $isSingleGroupAdmission={isSingleGroupAdmission}>
+          {!isSingleGroupAdmission && (
+            <Sidebar>
+              <div>
+                <SectionHeader>{isRevy ? "Grupper" : "Komiteer"}</SectionHeader>
+                <HelpText>
+                  <Icon name="information-circle-outline" />
+                  Her skriver du søknaden til{" "}
+                  {isRevy ? "gruppen(e)" : "komiteen(e)"} du har valgt.
+                  {!isRevy &&
+                    "Hver komité kan kun se søknaden til sin egen komité."}
+                </HelpText>
+                <HelpText>
+                  <Icon name="information-circle-outline" />
+                  Søknadene vil brukes i opptaksprosessen, men alle søkere vil
+                  bli kalt inn til intervju.
+                </HelpText>
+              </div>
+            </Sidebar>
+          )}
           {myApplication.group_applications.length > 0 ? (
             <Applications>
               {myApplication.group_applications.map((groupApplication) => {

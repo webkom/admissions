@@ -1,22 +1,52 @@
 [
 {
   "model": "admissions.admission",
-  "pk": 1,
+  "pk": "9cb0db0f-0139-439c-ad4b-149533a05b33",
   "fields": {
-    "created_by": null,
-    "title": "Opptak 2024",
-    "slug": "opptak-2024",
+    "created_by": "40667e62-e5fc-4f97-83f0-f5d6b4326652",
+    "title": "backup",
+    "slug": "backup",
     "description": "",
     "header_fields": [],
-    "open_from": "2024-05-06T12:15:00Z",
-    "public_deadline": "2024-05-14T23:59:59Z",
-    "closed_from": "2024-05-16T23:59:59Z",
-    "groups": [
-      4,
-      13
-    ],
+    "open_from": "2025-02-21T16:15:00Z",
+    "public_deadline": "2030-03-05T20:15:00Z",
+    "closed_from": "2030-03-05T20:15:00Z",
     "admin_groups": [
-      4
+      "946a7ffd-ccd7-45b9-87be-1db8c5551ae1"
+    ]
+  }
+},
+{
+  "model": "admissions.admission",
+  "pk": "64fc34b6-d597-4df2-8ecd-48c3380df456",
+  "fields": {
+    "created_by": "40667e62-e5fc-4f97-83f0-f5d6b4326652",
+    "title": "Komitéopptak",
+    "slug": "opptak",
+    "description": "",
+    "header_fields": [],
+    "open_from": "2025-02-21T16:15:00Z",
+    "public_deadline": "2030-02-21T20:15:00Z",
+    "closed_from": "2030-02-21T20:15:00Z",
+    "admin_groups": [
+      "e32bda54-be23-42e4-9fb8-d90cb89ac1ef"
+    ]
+  }
+},
+{
+  "model": "admissions.admission",
+  "pk": "a5a113af-ed26-4f61-80d5-3b0c4923c28c",
+  "fields": {
+    "created_by": "40667e62-e5fc-4f97-83f0-f5d6b4326652",
+    "title": "Revyopptak",
+    "slug": "revy",
+    "description": "",
+    "header_fields": [],
+    "open_from": "2025-02-21T16:15:00Z",
+    "public_deadline": "2030-03-04T20:15:00Z",
+    "closed_from": "2030-03-04T20:15:00Z",
+    "admin_groups": [
+      "788e9e21-b5ec-4fcd-be9b-c2e2bc15ef4a"
     ]
   }
 }

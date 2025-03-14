@@ -13,6 +13,8 @@ interface AdmissionProps {
 
 const Admission: React.FC<AdmissionProps> = ({ admission }) => {
   const isRevy = admission.slug === "revy";
+  const isBackup = admission.slug === "backup";
+  const isSingleGroupAdmission = admission?.groups.length === 1;
 
   return (
     <AdmissionWrapper>
@@ -81,7 +83,8 @@ const Admission: React.FC<AdmissionProps> = ({ admission }) => {
                   to={
                     isLoggedIn()
                       ? `/${admission.slug}/` +
-                        (admission.userdata.has_application
+                        (admission.userdata.has_application ||
+                        isSingleGroupAdmission
                           ? "min-soknad"
                           : "velg-grupper")
                       : "/login/lego/"
@@ -108,7 +111,11 @@ const Admission: React.FC<AdmissionProps> = ({ admission }) => {
         Du kan til enhver tid trekke søknaden din hvis du skulle ombestemme deg.
         Hvis det ikke fungerer å slette søknaden, send en mail til{" "}
         {isRevy ? (
-          <a href="mailto:revy@abakus.no">revy@abakus.no</a>
+          <a href="mailto:revysjef@abakus.no">revysjef@abakus.no</a>
+        ) : isBackup ? (
+          <a href="mailto:backup-rekruttering@abakus.no">
+            backup-rekruttering@abakus.no
+          </a>
         ) : (
           <a href="mailto:leder@abakus.no">leder@abakus.no</a>
         )}
@@ -117,10 +124,7 @@ const Admission: React.FC<AdmissionProps> = ({ admission }) => {
       {isRevy && admission.is_open && !isLoggedIn() && (
         <p>
           Er du ikke medlem av Abakus? Søk via{" "}
-          <a href="https://docs.google.com/forms/d/e/1FAIpQLSf7TzGamFXYLA5jM1hrw4XhL0Y_nRgRcl1qjAHbGBlyC0ALxw/viewform?pli=1">
-            dette skjemaet
-          </a>
-          .
+          <a href="https://nettskjema.no/a/443791">dette skjemaet</a>.
         </p>
       )}
     </AdmissionWrapper>

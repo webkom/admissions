@@ -39,8 +39,8 @@ type UserData = {
 
 const sessions: Record<string, UserData> = {
   webkom: {
-    sessionid: "ln6y4kwaqp3y5mxv1ft19p6or1a018xq",
-    csrftoken: "vKaIGVmBwUPuNkZyvFVy0Ep2IH4B0mG4",
+    sessionid: "rm4i3g0ok3phcy0moqyk09c0ljjnvftd",
+    csrftoken: "D9FJfTguk1zQGiZhgXSURh9q3VlAxK4K",
   },
 };
 

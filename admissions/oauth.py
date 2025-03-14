@@ -80,6 +80,7 @@ class LegoOAuth2(BaseOAuth2):
             response.get("lastName"),
         )
         return {
+            "lego_id": response.get("id"),
             "username": response.get("username"),
             "email": response.get("emailAddress") or "",
             "fullname": fullname,
@@ -107,12 +108,14 @@ class LegoOAuth2(BaseOAuth2):
                 name = group["name"]
                 if name not in self.LEGO_GROUP_NAMES:
                     continue
-                pk = group["id"]
+                id = group["id"]
                 description = group["description"]
                 logo = group["logo"]
-                detail_link = f"https://abakus.no/pages/komiteer/{pk}"
+                detail_link = f"https://abakus.no/pages/komiteer/{id}"
+                if group["type"] == "revy":
+                    detail_link = f"https://abakus.no/pages/revy/{id}"
                 Group.objects.create(
-                    pk=pk,
+                    lego_id=id,
                     description=description,
                     name=name,
                     detail_link=detail_link,
@@ -151,6 +154,7 @@ def update_custom_user_details(strategy, details, user=None, *args, **kwargs):
     with transaction.atomic():
         # Remove old memberships before creating the new ones
         Membership.objects.filter(user=user).delete()
+        user.is_staff = False
         for group, membership in group_data:
             # Leaders of certain groups have staff_permission, which allows them to manage admissions
             if (
@@ -160,7 +164,7 @@ def update_custom_user_details(strategy, details, user=None, *args, **kwargs):
                 user.is_staff = True
 
             try:
-                group = Group.objects.get(pk=group["id"])
+                group = Group.objects.get(lego_id=group["id"])
             except Group.DoesNotExist:
                 # Do not save the membership if the group is not part of this admission
                 continue
