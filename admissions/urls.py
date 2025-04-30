@@ -15,8 +15,6 @@ Including another URLconf
 """
 
 from django.conf import settings
-from django.contrib import admin
-from django.contrib.auth import views as auth_views
 from django.urls import include, path, re_path
 from rest_framework import routers
 
@@ -29,6 +27,7 @@ from admissions.admissions.views import (
     ManageGroupViewSet,
     PublicAdmissionViewSet,
     PublicApplicationViewSet,
+    logout,
 )
 
 publicRouter = routers.DefaultRouter()
@@ -52,7 +51,7 @@ manageRouter.register(r"group", ManageGroupViewSet, "manage-group")
 
 
 urlpatterns = [
-    re_path(r"logout/$", auth_views.LogoutView.as_view(), name="logout"),
+    re_path(r"logout/$", logout, name="logout"),
     path("api/admin/", include(adminRouter.urls)),
     path("api/manage/", include(manageRouter.urls)),
     path("api-auth/", include("rest_framework.urls", namespace="rest_framework")),
