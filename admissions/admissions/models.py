@@ -165,8 +165,7 @@ class Membership(models.Model):
     class Meta:
         constraints = [
             models.UniqueConstraint(
-                fields=["user", "group"],
-                name="unique_user_group_combination",
+                fields=["user", "group", "role"], name="unique_user_group_role"
             )
         ]
 
