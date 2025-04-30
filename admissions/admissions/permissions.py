@@ -64,6 +64,15 @@ class GroupPermissions(permissions.BasePermission):
         if request.method in permissions.SAFE_METHODS:
             return True
 
+        # Allow a user to edit a group if it is the admin in an admission it is used
+        admissions = Admission.objects.filter(groups__pk__contains=obj.pk)
+        for admission in admissions:
+            for admin_group in admission.admin_groups.all():
+                if Membership.objects.filter(
+                    user=request.user.pk, group=admin_group.pk
+                ).exists():
+                    return True
+
         # Allow a user to edit a group if it is a leader or recruiter in that group
         return (
             Membership.objects.filter(user=request.user.pk, group=obj.pk)

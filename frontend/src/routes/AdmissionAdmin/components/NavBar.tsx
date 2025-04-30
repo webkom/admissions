@@ -10,10 +10,12 @@ interface Props {
 }
 
 const NavBar: React.FC<Props> = ({ admission }) => {
-  const representingGroup = useMemo(
+  const administrateGroups = useMemo(
     () =>
-      admission?.groups.find(
-        (group) => group.name === djangoData.user.representative_of_group,
+      admission?.groups.filter(
+        (group) =>
+          admission?.userdata.is_admin ||
+          group.name === djangoData.user.representative_of_group,
       ),
     [admission],
   );
@@ -27,10 +29,15 @@ const NavBar: React.FC<Props> = ({ admission }) => {
       <NavHeader>Administrer opptak</NavHeader>
       <NavLink to={"../admin/"}>Se søknader</NavLink>
       <NavHeader>Administrer grupper</NavHeader>
-      {representingGroup ? (
-        <NavLink to={"./groups/" + representingGroup.pk}>
-          {representingGroup.name}
-        </NavLink>
+      {administrateGroups?.length !== 0 ? (
+        administrateGroups?.map((administrateGroup) => (
+          <NavLink
+            key={administrateGroup.pk}
+            to={"./groups/" + administrateGroup.pk}
+          >
+            {administrateGroup.name}
+          </NavLink>
+        ))
       ) : (
         <p>
           Du har ikke tilgang til å redigere noen av gruppene i dette opptaket.
