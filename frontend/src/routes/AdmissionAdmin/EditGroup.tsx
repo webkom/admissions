@@ -2,7 +2,6 @@ import React from "react";
 import styled from "styled-components";
 import { useParams } from "react-router-dom";
 import { useAdmission } from "src/query/hooks";
-import djangoData from "src/utils/djangoData";
 import LoadingBall from "src/components/LoadingBall";
 import EditGroupForm from "./components/EditGroupForm";
 import { Wrapper, GroupLogo, GroupLogoWrapper } from "./components/styles";
@@ -19,7 +18,7 @@ export interface CsvData {
 }
 
 const EditGroup = () => {
-  const { admissionSlug } = useParams();
+  const { admissionSlug, groupId } = useParams();
 
   const {
     data: admission,
@@ -35,16 +34,15 @@ const EditGroup = () => {
   } else if (!groups) {
     return <div>Feil: klarte ikke laste inn grupper.</div>;
   } else {
-    const group = (groups ?? []).find(
-      (group) => group.name === djangoData.user.representative_of_group,
-    );
+    const group = (groups ?? []).find((group) => group.pk === groupId);
+    console.log(group);
     if (!group) return <div>Feil: Ugyldig gruppe</div>;
 
     return (
       <PageWrapper>
         <GroupLogoWrapper>
           <GroupLogo src={group.logo} />
-          <h2>{djangoData.user.representative_of_group}</h2>
+          <h2>{group.name}</h2>
         </GroupLogoWrapper>
 
         <Wrapper>
