@@ -1,9 +1,11 @@
 from datetime import datetime
 
 from django.conf import settings
+from django.contrib.auth import logout as auth_logout
 from django.contrib.auth.models import User
 from django.db.models import Prefetch, Q
 from django.http import HttpResponse
+from django.shortcuts import redirect
 from django.utils import timezone
 from django.views.generic.base import TemplateView
 from rest_framework import mixins, permissions, status, viewsets
@@ -76,6 +78,11 @@ class AppView(TemplateView):
 ##################################################
 ################## PUBLIC VIEWS ##################
 ##################################################
+
+
+def logout(request):
+    auth_logout(request)
+    return redirect("/")
 
 
 class PublicAdmissionViewSet(
