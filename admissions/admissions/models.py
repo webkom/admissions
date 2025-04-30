@@ -168,6 +168,6 @@ class Membership(models.Model):
                 fields=["user", "group", "role"], name="unique_user_group_role"
             )
         ]
-        
+
     def __str__(self):
         return f"{self.user} is in {self.group}"
