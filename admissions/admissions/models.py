@@ -50,8 +50,8 @@ class Group(models.Model):
     logo = models.URLField(null=True, blank=True)
     detail_link = models.CharField(max_length=150, default="")
 
-    response_label = models.TextField(blank=True, max_length=300)
-    description = models.TextField(blank=True, max_length=300)
+    response_label = models.TextField(blank=True, max_length=600)
+    description = models.TextField(blank=True, max_length=600)
 
     class Meta:
         ordering = ["name"]

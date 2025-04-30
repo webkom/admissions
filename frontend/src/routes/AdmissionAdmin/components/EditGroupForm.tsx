@@ -14,11 +14,11 @@ import { Button } from "@webkom/lego-bricks";
 const signupSchema = Yup.object().shape({
   description: Yup.string()
     .min(30, "Skriv mer enn 30 tegn da!")
-    .max(300, "Nå er det nok!")
+    .max(600, "Nå er det nok!")
     .required("Beskrivelsen kan ikke være tom!"),
   response_label: Yup.string()
     .min(30, "Skriv mer enn 30 tegn da!")
-    .max(300, "Nå er det nok!")
+    .max(600, "Nå er det nok!")
     .required("Boksen kan ikke være tom!"),
 });
 
