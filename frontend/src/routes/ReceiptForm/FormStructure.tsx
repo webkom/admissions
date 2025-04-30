@@ -46,6 +46,7 @@ interface FormStructureProps {
 const FormStructure: React.FC<FormStructureProps> = ({ toggleIsEditing }) => {
   const { admissionSlug } = useParams();
   const isRevy = admissionSlug === "revy";
+  const isRevyBoard = admissionSlug === "revystyret";
   const navigate = useNavigate();
   const deleteApplicationMutation = useDeleteMyApplicationMutation(
     admissionSlug ?? "",
@@ -94,14 +95,14 @@ const FormStructure: React.FC<FormStructureProps> = ({ toggleIsEditing }) => {
                 </FormatTime>
               </StyledSpan>
               {!isSingleGroupAdmission &&
-                ` og ${isRevy ? "revystyret" : "komiteene"} vil kun se den siste
+                ` og ${isRevy || isRevyBoard ? "revystyret" : "komiteene"} vil kun se den siste
               versjonen`}
               .
             </Text>
             <Notice>
               <StyledSpan $bold>Merk:</StyledSpan> Oppdateringer etter
               søknadsfristen kan ikke garanteres å bli sett
-              {!isRevy &&
+              {!(isRevy || isRevyBoard) &&
                 !isSingleGroupAdmission &&
                 " av komiteen(e) du søker deg til"}
               .
@@ -198,7 +199,7 @@ const FormStructure: React.FC<FormStructureProps> = ({ toggleIsEditing }) => {
           {!isSingleGroupAdmission && (
             <>
               <HelpText>
-                {!isRevy && (
+                {!(isRevy || isRevyBoard) && (
                   <>
                     <Icon name="information-circle-outline" />
                     Kun leder og nestleder av Abakus kan se det du skriver inn i
@@ -208,7 +209,8 @@ const FormStructure: React.FC<FormStructureProps> = ({ toggleIsEditing }) => {
                 <Icon name="information-circle-outline" />
                 Prioriteringslisten vil bli tatt hensyn til så langt det lar seg
                 gjøre, men garanterer ingenting. Ikke søk på en{" "}
-                {isRevy ? "gruppe" : "komité"} du ikke ønsker å bli med i.
+                {isRevy ? "gruppe" : isRevyBoard ? "stilling" : "komité"} du
+                ikke ønsker å bli med i.
               </HelpText>
               <Field
                 name="priorityText"
@@ -230,13 +232,20 @@ const FormStructure: React.FC<FormStructureProps> = ({ toggleIsEditing }) => {
           {!isSingleGroupAdmission && (
             <Sidebar>
               <div>
-                <SectionHeader>{isRevy ? "Grupper" : "Komiteer"}</SectionHeader>
+                <SectionHeader>
+                  {isRevy ? "Grupper" : isRevyBoard ? "Stillinger" : "Komiteer"}
+                </SectionHeader>
                 <HelpText>
                   <Icon name="information-circle-outline" />
                   Her skriver du søknaden til{" "}
-                  {isRevy ? "gruppen(e)" : "komiteen(e)"} du har valgt.
-                  {!isRevy &&
-                    "Hver komité kan kun se søknaden til sin egen komité."}
+                  {isRevy
+                    ? "gruppen(e)"
+                    : isRevyBoard
+                      ? "stillingen(e)"
+                      : "komiteen(e)"}{" "}
+                  du har valgt.
+                  {!(isRevy || isRevyBoard) &&
+                    " Hver komité kan kun se søknaden til sin egen komité."}
                 </HelpText>
                 <HelpText>
                   <Icon name="information-circle-outline" />
@@ -269,14 +278,16 @@ const FormStructure: React.FC<FormStructureProps> = ({ toggleIsEditing }) => {
           ) : (
             <NoChosenGroupsWrapper>
               <NoChosenTitle>
-                Du har ikke valgt noen {isRevy ? "grupper" : "komiteer"}.
+                Du har ikke valgt noen{" "}
+                {isRevy ? "grupper" : isRevyBoard ? "stillinger" : "komiteer"}.
               </NoChosenTitle>
               <NoChosenSubTitle>
                 Send inn en ny søknad for å velge{" "}
-                {isRevy ? "grupper" : "komiteer"}.
+                {isRevy ? "grupper" : isRevyBoard ? "stillinger" : "komiteer"}.
               </NoChosenSubTitle>
               <LinkButton to={`/${admissionSlug}/velg-grupper`}>
-                Velg {isRevy ? "grupper" : "komiteer"}
+                Velg{" "}
+                {isRevy ? "grupper" : isRevyBoard ? "stillinger" : "komiteer"}
               </LinkButton>
             </NoChosenGroupsWrapper>
           )}

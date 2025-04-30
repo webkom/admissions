@@ -11,6 +11,7 @@ interface GroupCardProps {
   readMoreLink: string;
   logo: string;
   isRevy: boolean;
+  isRevyBoard: boolean;
 }
 
 const GroupCard: React.FC<GroupCardProps> = ({
@@ -21,13 +22,19 @@ const GroupCard: React.FC<GroupCardProps> = ({
   readMoreLink,
   logo,
   isRevy,
+  isRevyBoard,
 }) => {
   return (
-    <Card onClick={() => onToggle(name)} $isChosen={isChosen} $isRevy={isRevy}>
-      {!isRevy && <Logo src={logo} />}
+    <Card
+      onClick={() => onToggle(name)}
+      $isChosen={isChosen}
+      $isRevy={isRevy}
+      $isRevyBoard={isRevyBoard}
+    >
+      {!(isRevy || isRevyBoard) && <Logo src={logo} />}
       <Name>{readmeIfy(name)}</Name>
       <Description>{readmeIfy(description, true)}</Description>
-      {!isRevy && (
+      {!(isRevy || isRevyBoard) && (
         <LearnMoreLink href={`${readMoreLink}`} target="_blank">
           Les mer på abakus.no
         </LearnMoreLink>
@@ -39,7 +46,7 @@ const GroupCard: React.FC<GroupCardProps> = ({
           </SelectedMarkText>
         ) : (
           <SelectedMarkText>
-            Velg {isRevy ? "gruppe" : "komité"}
+            Velg {isRevy ? "gruppe" : isRevyBoard ? "stilling" : "komité"}
           </SelectedMarkText>
         )}
       </SelectedMark>
@@ -55,7 +62,10 @@ interface GroupCardElementsStyledProps {
   $isChosen?: boolean;
 }
 
-type GroupCardStyledProps = GroupCardElementsStyledProps & { $isRevy: boolean };
+type GroupCardStyledProps = GroupCardElementsStyledProps & {
+  $isRevy: boolean;
+  $isRevyBoard: boolean;
+};
 
 const Card = styled.div<GroupCardStyledProps>`
   display: grid;
