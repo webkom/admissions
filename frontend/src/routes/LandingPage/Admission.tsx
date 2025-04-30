@@ -13,6 +13,7 @@ interface AdmissionProps {
 
 const Admission: React.FC<AdmissionProps> = ({ admission }) => {
   const isRevy = admission.slug === "revy";
+  const isRevyBoard = admission.slug === "revystyret";
   const isBackup = admission.slug === "backup";
   const isSingleGroupAdmission = admission?.groups.length === 1;
 
@@ -110,7 +111,7 @@ const Admission: React.FC<AdmissionProps> = ({ admission }) => {
       <p>
         Du kan til enhver tid trekke søknaden din hvis du skulle ombestemme deg.
         Hvis det ikke fungerer å slette søknaden, send en mail til{" "}
-        {isRevy ? (
+        {isRevy || isRevyBoard ? (
           <a href="mailto:revysjef@abakus.no">revysjef@abakus.no</a>
         ) : isBackup ? (
           <a href="mailto:backup-rekruttering@abakus.no">
@@ -125,6 +126,15 @@ const Admission: React.FC<AdmissionProps> = ({ admission }) => {
         <p>
           Er du ikke medlem av Abakus? Søk via{" "}
           <a href="https://nettskjema.no/a/443791">dette skjemaet</a>.
+        </p>
+      )}
+      {isRevyBoard && admission.is_open && !isLoggedIn() && (
+        <p>
+          Er du ikke medlem av Abakus? Søk via{" "}
+          <a href="https://docs.google.com/forms/d/e/1FAIpQLSdLzkn2RC_CIW3EHPKSn0f60xTP17LdnrvVb1ubVeRVHTsz1A/viewform?usp=sharing">
+            dette skjemaet
+          </a>
+          .
         </p>
       )}
     </AdmissionWrapper>

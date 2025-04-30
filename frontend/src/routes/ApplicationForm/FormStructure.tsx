@@ -56,6 +56,7 @@ const FormStructure: React.FC<FormStructureProps> = ({
 }) => {
   const { data: myApplication } = useMyApplication(String(admission?.slug));
   const isRevy = admission?.slug === "revy";
+  const isRevyBoard = admission?.slug === "revystyret";
   const isBackup = admission?.slug === "backup";
   const isSingleGroupAdmission = admission?.groups.length === 1;
 
@@ -141,7 +142,7 @@ const FormStructure: React.FC<FormStructureProps> = ({
           {!isSingleGroupAdmission && (
             <>
               <HelpText>
-                {!isRevy && (
+                {!(isRevy || isRevyBoard) && (
                   <>
                     <Icon name="information-circle-outline" />
                     Kun leder og nestleder av Abakus kan se det du skriver inn i
@@ -151,7 +152,8 @@ const FormStructure: React.FC<FormStructureProps> = ({
                 <Icon name="information-circle-outline" />
                 Prioriteringslisten vil bli tatt hensyn til så langt det lar seg
                 gjøre, men garanterer ingenting. Ikke søk på en{" "}
-                {isRevy ? "gruppe" : "komité"} du ikke ønsker å bli med i.
+                {isRevy ? "gruppe" : isRevyBoard ? "stilling" : "komité"} du
+                ikke ønsker å bli med i.
               </HelpText>
               <Field
                 name="priorityText"
@@ -171,12 +173,16 @@ const FormStructure: React.FC<FormStructureProps> = ({
           {!isSingleGroupAdmission && (
             <Sidebar>
               <div>
-                <SectionHeader>{isRevy ? "Grupper" : "Komiteer"}</SectionHeader>
+                <SectionHeader>
+                  {isRevy ? "Grupper" : isRevyBoard ? "Stillinger" : "Komiteer"}
+                </SectionHeader>
                 <HelpText>
                   <Icon name="information-circle-outline" />
                   {isRevy
                     ? "Her skriver du søknaden til gruppen(e) du har valgt."
-                    : "Her skriver du søknaden til komiteen(e) du har valgt. Hver komité kan kun se søknaden til sin egen komité."}
+                    : isRevyBoard
+                      ? "Her skriver du søknaden til stillingen(e) du har valgt."
+                      : "Her skriver du søknaden til komiteen(e) du har valgt. Hver komité kan kun se søknaden til sin egen komité."}
                 </HelpText>
                 <HelpText>
                   <Icon name="information-circle-outline" />
@@ -184,7 +190,7 @@ const FormStructure: React.FC<FormStructureProps> = ({
                   bli kalt inn til intervju.
                 </HelpText>
 
-                {!isRevy && (
+                {!(isRevy || isRevyBoard) && (
                   <ToggleGroups
                     groups={groups}
                     selectedGroups={selectedGroups}
@@ -199,14 +205,18 @@ const FormStructure: React.FC<FormStructureProps> = ({
           ) : (
             <NoChosenGroupsWrapper>
               <NoChosenTitle>
-                Du har ikke valgt noen {isRevy ? "grupper" : "komiteer"}.
+                Du har ikke valgt noen{" "}
+                {isRevy ? "grupper" : isRevyBoard ? "stillinger" : "komiteer"}.
               </NoChosenTitle>
-              <NoChosenSubTitle>
-                Velg i sidemargen eller gå til {isRevy ? "gruppe" : "komite"}
-                oversikten
-              </NoChosenSubTitle>
+              {!isRevyBoard && (
+                <NoChosenSubTitle>
+                  Velg i sidemargen eller gå til {isRevy ? "gruppe" : "komite"}
+                  oversikten
+                </NoChosenSubTitle>
+              )}
               <LinkButton secondary to={`/${admission?.slug}/velg-grupper`}>
-                Velg {isRevy ? "grupper" : "komiteer"}
+                Velg{" "}
+                {isRevy ? "grupper" : isRevyBoard ? "stillinger" : "komiteer"}
               </LinkButton>
             </NoChosenGroupsWrapper>
           )}
@@ -234,13 +244,13 @@ const FormStructure: React.FC<FormStructureProps> = ({
             )}
             <SubmitInfo>
               Oppdateringer etter søknadsfristen kan ikke garanteres å bli sett
-              {!isRevy &&
+              {!(isRevy || isRevyBoard) &&
                 !isSingleGroupAdmission &&
                 " av komiteen(e) du søker deg til"}
               .
             </SubmitInfo>
             <SubmitInfo>
-              {isRevy
+              {isRevy || isRevyBoard
                 ? "Søknaden din kan kun ses av revystyret."
                 : isBackup
                   ? "Søknaden din kan kun ses av medlemmer av backup."

@@ -15,6 +15,7 @@ const NavBar: React.FC<NavBarProps> = ({ isEditing }) => {
   const { admissionSlug, ...params } = useParams();
   const { data: admission } = useAdmission(admissionSlug ?? "");
   const isRevy = admissionSlug === "revy";
+  const isRevyBoard = admissionSlug === "revystyret";
   const isSingleGroupAdmission = admission?.groups.length === 1;
 
   return (
@@ -29,7 +30,13 @@ const NavBar: React.FC<NavBarProps> = ({ isEditing }) => {
               (!admission?.userdata.has_application || isEditing) && (
                 <NavItem
                   to={`/${admissionSlug}/velg-grupper`}
-                  text={isRevy ? "Velg grupper" : "Velg komiteer"}
+                  text={
+                    isRevy
+                      ? "Velg grupper"
+                      : isRevyBoard
+                        ? "Velg stillinger"
+                        : "Velg komiteer"
+                  }
                 />
               )}
             <NavItem to={`/${admissionSlug}/min-soknad`} text="Min søknad" />
