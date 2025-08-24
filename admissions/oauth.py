@@ -35,12 +35,13 @@ class LegoOAuth2(BaseOAuth2):
         "Band",
         "Dans",
         "Kostyme",
-        "Regi",
+        "Manus",
         "PR-revy",
         "Scene",
         "Skuespill",
         "Sosial",
         "Teknikk",
+        "Arring",
         # backup admissions
         "backup",
     ]

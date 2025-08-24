@@ -125,7 +125,7 @@ const Admission: React.FC<AdmissionProps> = ({ admission }) => {
       {isRevy && admission.is_open && !isLoggedIn() && (
         <p>
           Er du ikke medlem av Abakus? Søk via{" "}
-          <a href="https://nettskjema.no/a/443791">dette skjemaet</a>.
+          <a href="https://forms.gle/SKPRvGNwuKhcZQP26">dette skjemaet</a>.
         </p>
       )}
       {isRevyBoard && admission.is_open && !isLoggedIn() && (

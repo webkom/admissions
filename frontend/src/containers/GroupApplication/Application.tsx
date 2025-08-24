@@ -50,6 +50,13 @@ const Application: React.FC<ApplicationProps> = ({
       {responseLabel && (
         <ResponseLabel>{readmeIfy(responseLabel, true)}</ResponseLabel>
       )}
+      {group.name === "Bankkom" && (
+        <p>
+          <b>NB!</b> I Bankkom kan du søke både <b>Investeringsansvarlig</b> og{" "}
+          <b>vanlig Bankkom-medlem</b>. Tydeliggjør godt i søknaden din hvilken
+          stilling du søker på, eller om du søker begge to.
+        </p>
+      )}
       <InputWrapper>
         <FieldLabel htmlFor={name}>Søknadstekst</FieldLabel>
         <InputArea
