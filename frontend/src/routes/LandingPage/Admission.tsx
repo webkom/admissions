@@ -48,7 +48,7 @@ const Admission: React.FC<AdmissionProps> = ({ admission }) => {
           />
           {(admission.is_open || admission.is_closed) && (
             <TimeLineItem
-              title="Redigeringsfrist"
+              title="Redigeringsfrist / Siste søknadsfrist"
               dateString={admission.closed_from}
               details={[
                 "Du kan fortsatt søke og redigere søknaden din, men det er ikke sikkert at de som behandler søknaden får det med seg.",
