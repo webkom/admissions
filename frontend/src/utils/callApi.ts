@@ -13,7 +13,7 @@ export const apiClient = axios.create({
     "Content-Type": "application/json",
     "X-CSRFToken": Cookie.get("csrftoken") ?? "",
   },
-  timeout: 20000,
+  timeout: 50000,
 });
 
 /**
