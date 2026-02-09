@@ -158,22 +158,20 @@ const FormStructure: React.FC<FormStructureProps> = ({ toggleIsEditing }) => {
             <InfoText>
               Planen videre:
               <ul>
-                <li>05. mars kl. 23:59: Søknadsfrist</li>
+                <li>
+                  23-27. februar - Lavterskel intervjuer der du skal bli bedre
+                  kjent med oss og vi blir bedre kjent med deg.
+                </li>
                 <li>27. februar - 07. mars: Kaffeprat*</li>
                 <li>
-                  10/11. mars: Du får svar på om du kommer med eller ikke.{" "}
-                  <br />
-                  Kommer du ikke med i år anbefaler vi deg å søke til neste år
-                  igjen! Hold gjerne av ettermiddagen 12. mars i tilfelle du
-                  blir tatt opp.
+                  3. mars: Du får svar på om du kommer med eller ikke. Om du
+                  ikke kommer med, så anbefaler vi deg å søke til neste år
+                  igjen!
+                </li>
+                <li>
+                  Hold gjerne av kvelden 3. mars i tilfelle du blir tatt opp.
                 </li>
               </ul>
-            </InfoText>
-            <InfoText>
-              *Dette er en lavterskelsamtale for at du skal bli bedre kjent med
-              oss og vi blir bedre kjent med deg. Dersom du er på utveksling vil
-              samtalene foregå over Zoom. Du vil bli kontaktet av to backupere
-              for å finne tid som passer:)
             </InfoText>
           </GeneralInfoSection>
           <SeparatorLine />
