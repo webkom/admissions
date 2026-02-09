@@ -80,7 +80,12 @@ const FormStructure: React.FC<FormStructureProps> = ({
               <SectionHeader>Informasjon</SectionHeader>
               <InfoText>
                 Aller først - tusen takk for din interesse for å søke backup!
-                Lurer du på mer om oss kan du lese{" "}
+                Absolutt alle kan søke uavhengig om man har hatt tidligere verv
+                eller ikke. For å søke må du være tilgjengelig i Trondheim det
+                kommende høstsemesteret. Søkere som blir værende hele det neste
+                året vil bli prioritert, men søknader fra de som kun er borte et
+                halvt år vil likevel bli vurdert.
+                {/* Lurer du på mer om oss kan du lese{" "}
                 <a
                   href="https://abakus.no/articles/553-backup-har-opptak"
                   target="_blank"
@@ -88,41 +93,37 @@ const FormStructure: React.FC<FormStructureProps> = ({
                 >
                   denne artikkelen på abakus.no
                 </a>
-                .
+                . */}
               </InfoText>
               <InfoText>
-                Kriteriet for å søke er at du har interesse for Abakus og har
-                vært medlem i Abakus i minst 3 måneder. Absolutt alle kan søke
-                uavhengig om man har hatt tidligere verv eller ikke. For å søke
-                må du være i Trondheim det påfølgende høstsemesteret. Søkere som
-                blir værende hele det neste året vil bli prioritert, men
-                søknader fra de som kun er borte et halvt år vil likevel bli
-                vurdert.
-              </InfoText>
-              <InfoText>
-                Planen videre:
+                Vi ønsker at søknaden gir oss et bilde av hvem du er, dine
+                erfaringer, og din motivasjon til å bli en del av backup. Vi
+                setter pris på at du svarer på følgende:
                 <ul>
-                  <li>05. mars kl. 23:59: Søknadsfrist</li>
-                  <li>27. februar - 07. mars: Kaffeprat*</li>
+                  <li>Hvilken linje og trinn går du?</li>
                   <li>
-                    10/11. mars: Du får svar på om du kommer med eller ikke.{" "}
-                    <br />
-                    Kommer du ikke med i år anbefaler vi deg å søke til neste år
-                    igjen! Hold gjerne av ettermiddagen 12. mars i tilfelle du
-                    blir tatt opp.
+                    Hvilke tidligere erfaringer har du? (verv, idrett, forsvaret
+                    etc.){" "}
                   </li>
+                  <li>
+                    Kan du fortelle om et prosjekt/verv/arrangement du har vært
+                    motivert for å jobbe for, og hvorfor?
+                  </li>
+                  <li>Hva motiverer deg til å søke backup?</li>
+                  <li>
+                    Hvilke oppgaver eller områder du kunne tenke deg å jobbe med
+                    i backup?
+                  </li>
+                  <li>
+                    Skal du på utveksling i løpet av det kommende høst- og/eller
+                    vårsemsteret?
+                  </li>
+                  <li>Noe annet du mener det er relevant for oss å vite?</li>
                 </ul>
               </InfoText>
               <InfoText>
-                *Dette er en lavterskelsamtale for at du skal bli bedre kjent
-                med oss og vi blir bedre kjent med deg. Dersom du er på
-                utveksling vil samtalene foregå over Zoom. Du vil bli kontaktet
-                av to backupere for å finne tid som passer:)
-              </InfoText>
-              <InfoText>
-                Vi håper du er motivert for å søke og ønsker deg lykke til i
-                prosessen. Dersom du har noen spørsmål eller innspill til
-                prosessen kan dette gjøres ved å sende en e-post til{" "}
+                Dersom du har noen spørsmål eller innspill til prosessen kan
+                dette gjøres ved å sende en e-post til{" "}
                 <a href="mailto:backup-rekruttering@abakus.no">
                   backup-rekruttering@abakus.no
                 </a>
