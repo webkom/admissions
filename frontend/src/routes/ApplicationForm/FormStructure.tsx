@@ -84,16 +84,16 @@ const FormStructure: React.FC<FormStructureProps> = ({
                 eller ikke. For å søke må du være tilgjengelig i Trondheim det
                 kommende høstsemesteret. Søkere som blir værende hele det neste
                 året vil bli prioritert, men søknader fra de som kun er borte et
-                halvt år vil likevel bli vurdert.
-                {/* Lurer du på mer om oss kan du lese{" "}
+                halvt år vil likevel bli vurdert. Lurer du på mer om oss kan du
+                lese{" "}
                 <a
-                  href="https://abakus.no/articles/553-backup-har-opptak"
+                  href="https://abakus.no/articles/595-backup-apner-for-opptak"
                   target="_blank"
                   rel="noreferrer"
                 >
                   denne artikkelen på abakus.no
                 </a>
-                . */}
+                .
               </InfoText>
               <InfoText>
                 Vi ønsker at søknaden gir oss et bilde av hvem du er, dine

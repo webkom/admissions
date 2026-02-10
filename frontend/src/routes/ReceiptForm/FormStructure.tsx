@@ -162,7 +162,6 @@ const FormStructure: React.FC<FormStructureProps> = ({ toggleIsEditing }) => {
                   23-27. februar - Lavterskel intervjuer der du skal bli bedre
                   kjent med oss og vi blir bedre kjent med deg.
                 </li>
-                <li>27. februar - 07. mars: Kaffeprat*</li>
                 <li>
                   3. mars: Du får svar på om du kommer med eller ikke. Om du
                   ikke kommer med, så anbefaler vi deg å søke til neste år
