@@ -16,6 +16,8 @@ const Admission: React.FC<AdmissionProps> = ({ admission }) => {
   const isRevyBoard = admission.slug === "revystyret";
   const isBackup = admission.slug === "backup";
   const isSingleGroupAdmission = admission?.groups.length === 1;
+  const isAdmissionMember =
+    (admission.userdata.committee_groups?.length ?? 0) > 0;
 
   return (
     <AdmissionWrapper>
@@ -98,13 +100,22 @@ const Admission: React.FC<AdmissionProps> = ({ admission }) => {
               </li>
             )}
 
-            {admission.userdata.is_privileged && (
-              <li>
-                <LinkButton to={`/${admission.slug}/admin/`}>
-                  Gå til admin panel
-                </LinkButton>
-              </li>
-            )}
+            <CommiteeButtons>
+              {admission.userdata.is_privileged && (
+                <li>
+                  <LinkButton to={`/${admission.slug}/admin/`}>
+                    Admin panel
+                  </LinkButton>
+                </li>
+              )}
+              {isAdmissionMember && (
+                <li>
+                  <LinkButton to={`/${admission.slug}/schedule/`}>
+                    Velg intervjutider
+                  </LinkButton>
+                </li>
+              )}
+            </CommiteeButtons>
           </LinkWrapper>
         </CountDownWrapper>
       </AdmissionDetails>
@@ -300,4 +311,8 @@ const LinkWrapper = styled.ul`
   ${media.handheld`
     margin-bottom: 1rem;
   `}
+`;
+
+const CommiteeButtons = styled.div`
+  display: flex;
 `;

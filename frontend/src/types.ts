@@ -38,6 +38,7 @@ interface AdmissionUserData {
   has_application: boolean;
   is_privileged: boolean;
   is_admin: boolean;
+  committee_groups: Group[];
 }
 
 export interface Admission {
@@ -55,4 +56,23 @@ export interface Admission {
   groups: Group[];
   header_fields: FieldModel[];
   userdata: AdmissionUserData;
+}
+
+export interface Candidate {
+  id: string;
+  name: string;
+  gender: string;
+}
+
+export interface Interviewer {
+  id: string;
+  name: string;
+  gender: string;
+  availability: number[];
+}
+
+export interface ScheduleItem {
+  candidate: string;
+  time: number;
+  panel: string[];
 }

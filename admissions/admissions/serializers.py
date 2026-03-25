@@ -1,3 +1,5 @@
+from email.policy import default
+
 from django.core.validators import MinLengthValidator
 from django.db.models import Q
 from django.utils import timezone
@@ -80,6 +82,7 @@ class AdmissionListPublicSerializer(serializers.HyperlinkedModelSerializer):
             "has_application": False,
             "is_privileged": False,
             "is_admin": False,
+            "committee_groups": [],
         }
         request = self.context.get("request")
         if not request or not hasattr(request, "user"):
@@ -88,12 +91,15 @@ class AdmissionListPublicSerializer(serializers.HyperlinkedModelSerializer):
             user=request.user.pk, admission=obj.pk
         ).exists()
         for group in obj.groups.all():
+            if Membership.objects.filter(user=request.user.pk, group=group.pk).exists():
+                res["committee_groups"].append(group.name)
             if (
                 Membership.objects.filter(user=request.user.pk, group=group.pk)
                 .filter(Q(role=constants.LEADER) | Q(role=constants.RECRUITING))
                 .exists()
             ):
                 res["is_privileged"] = True
+
         for group in obj.admin_groups.all():
             if Membership.objects.filter(user=request.user.pk, group=group.pk).exists():
                 res["is_privileged"] = True
@@ -382,3 +388,17 @@ class ApplicationCreateUpdateSerializer(serializers.HyperlinkedModelSerializer):
             )
 
         return user_application
+
+class CandidateSerializer(serializers.Serializer):
+    id = serializers.CharField()
+    name = serializers.CharField()
+    gender = serializers.CharField(required=False, allow_null=True)
+
+class InterviewerSerializer(CandidateSerializer):
+    availability = serializers.ListField(child=serializers.IntegerField(), default=list)
+    biased = serializers.ListField(child=serializers.CharField(), default=list)
+
+class ScheduleRequestsSerializer(serializers.Serializer):
+    candidates = CandidateSerializer(many=True)
+    interviewers = InterviewerSerializer(many=True)
+    panel_size = serializers.IntegerField(default=4)

@@ -11,6 +11,8 @@ from django.views.generic.base import TemplateView
 from rest_framework import mixins, permissions, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
+from rest_framework.views import APIView
+from rest_framework.permissions import IsAuthenticated
 
 from admissions.admissions import constants
 from admissions.admissions.models import (
@@ -29,8 +31,10 @@ from admissions.admissions.serializers import (
     ApplicationCreateUpdateSerializer,
     GroupSerializer,
     UserApplicationSerializer,
+    ScheduleRequestsSerializer,
 )
 from admissions.utils.email import send_message
+from .solve_schedule import solve_schedule
 
 from .authentication import SessionAuthentication
 from .permissions import (
@@ -336,3 +340,22 @@ class ManageGroupViewSet(mixins.ListModelMixin, viewsets.GenericViewSet):
     serializer_class = GroupSerializer
     authentication_classes = [SessionAuthentication]
     permission_classes = [permissions.IsAuthenticated, GroupPermissions]
+
+class SolveScheduleView(APIView):
+    authentication_classes = [SessionAuthentication]
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request):
+        serializer = ScheduleRequestsSerializer(data=request.data)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+        data = serializer.validated_data
+
+        result = solve_schedule(
+            candidates_data=data['candidates'],
+            interviewers_data=data['interviewers'],
+            panel_size=data['panel_size']
+        )
+
+        return Response(result, status=status.HTTP_200_OK)

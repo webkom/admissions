@@ -115,3 +115,19 @@ class GroupApplicationPermissions(permissions.BasePermission):
 
     def has_permission(self, request, view):
         return user_is_privileged(view.kwargs.get("admission_slug"), request.user)
+
+class IsAdmissionCommitteeMember(permissions.BasePermission):
+    """
+    Allows access if the user is a member of ANY group participating
+    in the specific admission.
+    """
+    def has_permission(self, request, view):
+        # 1. Get the admission slug from the URL
+        admission_slug = view.kwargs.get("admission_slug")
+        if not admission_slug:
+            return False
+
+        return Admission.objects.filter(
+            slug=admission_slug,
+            groups__memberships__user=request.user
+        ).exists()

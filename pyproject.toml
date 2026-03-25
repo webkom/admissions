@@ -22,6 +22,7 @@ sentry-sdk = "^2.20.0"
 uwsgi = "^2.0.28"
 premailer = "^3.10.0"
 pydantic = "^2.10.6"
+ortools = "^9.15.6755"
 
 
 [tool.poetry.group.dev.dependencies]

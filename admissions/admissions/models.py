@@ -31,16 +31,24 @@ class LegoUser(AbstractUser):
         return membership.group
 
     @property
+    def member_of_group(self):
+        membership = (Membership.objects.filter(user=self).first())
+        if not membership:
+            return None
+        return membership.group
+
+    @property
     def is_member_of_webkom(self):
         """
         Return whether the user is a member of the webkom-group or not
         """
-        try:
-            webkom = Group.objects.get(name=constants.WEBKOM_GROUPNAME)
-        except Group.DoesNotExist:
-            # Allow the project to run without a group named "webkom" initialized
-            return False
-        return Membership.objects.filter(user=self, group=webkom).exists()
+        return self.is_member_of(constants.WEBKOM_GROUPNAME)
+
+    def is_member_of(self, group_name):
+        """
+        Return whether the user is a member of the given group or not
+        """
+        return Membership.objects.filter(user=self, group__name=group_name).exists()
 
 
 class Group(models.Model):
