@@ -18,7 +18,6 @@ export function ScheduleTester({
   endHour = 18,
   title,
 }: ScheduleTesterProps) {
-  // ... (Keep your existing state logic exactly as it was) ...
   const [internalSelectedSlots, setInternalSelectedSlots] = useState<Set<string>>(new Set());
   const selectedSlots = externalSelectedSlots ?? internalSelectedSlots;
   const setSelectedSlots = onSlotsChange ?? setInternalSelectedSlots;
@@ -30,10 +29,6 @@ export function ScheduleTester({
 
   const HOURS = Array.from({ length: endHour - startHour }, (_, i) => i + startHour);
   const slotKey = (day: number, hour: number) => `${day}-${hour}`;
-
-  // ... (Keep helper functions: getSlotsInRange, handleMouseDown, handleMouseEnter, handleMouseUp) ...
-  // For brevity, I'm skipping the logic copy-paste, assuming you keep the functions you wrote.
-  // Ensure you include getSlotsInRange, handleMouseDown, etc. here.
 
   const getSlotsInRange = (start: {day: number, hour: number}, end: {day: number, hour: number}): Set<string> => {
       const slots = new Set<string>()
@@ -118,7 +113,7 @@ export function ScheduleTester({
 
       <ScrollContainer>
         <Grid>
-          <div /> {/* Empty top-left corner */}
+          <div />
 
           {DAYS.map((day) => (
             <DayHeader key={day}>{day}</DayHeader>
@@ -153,7 +148,6 @@ export function ScheduleTester({
 
 export default ScheduleTester;
 
-// --- Styles ---
 
 const Container = styled.div`
   background: var(--lego-card-color);
@@ -214,7 +208,7 @@ const Grid = styled.div`
   /* 8 columns: 1 for time labels, 7 for days */
   grid-template-columns: 40px repeat(7, minmax(40px, 1fr));
   gap: 1px;
-  background: var(--color-gray-2); /* Gap color */
+  background: var(--color-gray-2); 
   border: 1px solid var(--color-gray-2);
   border-radius: var(--border-radius-sm);
   min-width: 100%;

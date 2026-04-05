@@ -79,7 +79,7 @@ const calculateRemainingUnits = (remainingSeconds: number) => {
 
 const Wrapper = styled.div`
   display: flex;
-  background-color: #fff;
+  background-color: transparent;
   padding: 0.5em;
   justify-content: center;
   align-items: center;
@@ -91,14 +91,16 @@ const Wrapper = styled.div`
 `;
 
 const Title = styled.h3`
-  font-size: 23px;
+  font-size: 1.125rem;
+  font-weight: 700;
   text-align: center;
   margin: 0;
-  margin-bottom: 10px;
+  margin-bottom: 1.5rem;
   flex-basis: 100%;
+  color: #374151;
 
   ${media.handheld`
-    font-size: 1.3rem;
+    font-size: 1rem;
   `}
 `;
 
@@ -114,23 +116,32 @@ const ContentRow = styled.div`
 `;
 
 const Item = styled.div`
-  margin: 0 20px;
+  margin: 0 15px;
   margin-bottom: 1em;
   text-align: center;
-  width: 80px;
-  line-height: 1.4;
+  width: 70px;
+  line-height: 1.2;
 
   span {
-    font-size: 1.8rem;
-    font-weight: 700;
+    font-size: 2rem;
+    font-weight: 800;
+    color: #111827;
   }
 
   p {
     margin: 0;
-    font-size: 0.85rem;
+    font-size: 0.625rem;
+    font-weight: 700;
+    color: #9ca3af;
+    letter-spacing: 0.05em;
   }
 
   ${media.handheld`
-    margin: 0 0.2em;
+    margin: 0 0.5rem;
+    width: 60px;
+    
+    span {
+      font-size: 1.5rem;
+    }
   `}
 `;

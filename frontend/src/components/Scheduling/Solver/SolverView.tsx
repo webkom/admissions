@@ -2,6 +2,14 @@ import React, { useState } from "react";
 import styled from "styled-components";
 import type { Candidate, Interviewer } from "../types";
 import { apiClient } from "../../../utils/callApi";
+import SolverCalendarView from "./SolverCalendarView";
+import Icon from "../../Icon";
+import {
+  primaryAction,
+  scheduleInset,
+  scheduleLabel,
+  scheduleSurface,
+} from "../shared";
 
 interface Props {
   candidates: Candidate[];
@@ -26,12 +34,14 @@ export default function SolverView({ candidates, interviewers }: Props) {
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<SolveResponse | null>(null);
   const [error, setError] = useState("");
+  const [viewType, setViewType] = useState<"list" | "calendar">("list");
 
   const handleSolve = async () => {
     if (candidates.length === 0 || interviewers.length === 0) {
       setError("Legg til minst én kandidat og én intervjuer.");
       return;
     }
+
     setLoading(true);
     setError("");
     setResult(null);
@@ -46,7 +56,6 @@ export default function SolverView({ candidates, interviewers }: Props) {
     } finally {
       setLoading(false);
     }
-    console.log(result);
   };
 
   return (
@@ -54,28 +63,51 @@ export default function SolverView({ candidates, interviewers }: Props) {
       <MainCard>
         <Header>
           <TitleSection>
-            <Title>Planleggingsverktøy</Title>
+            <Eyebrow>Intervjuforslag</Eyebrow>
+            <Title>Generer et planutkast</Title>
             <Subtitle>
-              Generer en optimalisert intervjuplan basert på tilgjengelighet.
+              Bruk tilgjengeligheten dere allerede har registrert til å få et
+              konkret forslag som kan kvalitetssikres videre.
             </Subtitle>
           </TitleSection>
 
           <Controls>
             <InputGroup>
-              <Label>Panelstørrelse</Label>
+              <Label htmlFor="panel-size">Panelstørrelse</Label>
               <Input
+                id="panel-size"
                 type="number"
                 min="1"
                 max="5"
                 value={panelSize}
-                onChange={(e) => setPanelSize(parseInt(e.target.value))}
+                onChange={(e) => {
+                  const nextValue = parseInt(e.target.value, 10);
+                  if (!isNaN(nextValue)) {
+                    setPanelSize(nextValue);
+                  }
+                }}
               />
             </InputGroup>
-            <RunButton onClick={handleSolve} disabled={loading}>
+            <RunButton type="button" onClick={handleSolve} disabled={loading}>
               {loading ? "Optimaliserer..." : "Generer plan"}
             </RunButton>
           </Controls>
         </Header>
+
+        <StatRow>
+          <StatCard>
+            <StatLabel>Kandidater</StatLabel>
+            <StatValue>{candidates.length}</StatValue>
+          </StatCard>
+          <StatCard>
+            <StatLabel>Intervjuere</StatLabel>
+            <StatValue>{interviewers.length}</StatValue>
+          </StatCard>
+          <StatCard>
+            <StatLabel>Panelstørrelse</StatLabel>
+            <StatValue>{panelSize}</StatValue>
+          </StatCard>
+        </StatRow>
 
         {error && <ErrorMessage>{error}</ErrorMessage>}
 
@@ -83,8 +115,8 @@ export default function SolverView({ candidates, interviewers }: Props) {
           <StatusBox $type="error">
             <StatusTitle>Ingen løsning funnet</StatusTitle>
             <StatusDesc>
-              Det er umulig å lage en plan med nåværende begrensninger. Prøv å
-              redusere panelstørrelsen eller øke tilgjengeligheten.
+              Nåværende begrensninger er for stramme. Start med lavere
+              panelstørrelse eller åpne flere slotter før dere prøver igjen.
             </StatusDesc>
           </StatusBox>
         )}
@@ -92,45 +124,76 @@ export default function SolverView({ candidates, interviewers }: Props) {
         {result?.status === "SUCCESS" && (
           <ResultSection>
             <SectionHeader>
-              <SectionTitle>Generert intervjuplan</SectionTitle>
-              <StatsBadge>{result.schedule.length} intervjuer</StatsBadge>
+              <SectionTitleWrapper>
+                <div>
+                  <SectionEyebrow>Resultat</SectionEyebrow>
+                  <SectionTitle>Generert intervjuplan</SectionTitle>
+                </div>
+                <StatsBadge>{result.schedule.length} intervjuer</StatsBadge>
+              </SectionTitleWrapper>
+
+              <ViewToggle>
+                <ToggleButton
+                  type="button"
+                  $active={viewType === "list"}
+                  onClick={() => setViewType("list")}
+                  title="Liste-visning"
+                >
+                  <Icon name="list" size="1.2rem" prefix="ios" />
+                </ToggleButton>
+                <ToggleButton
+                  type="button"
+                  $active={viewType === "calendar"}
+                  onClick={() => setViewType("calendar")}
+                  title="Kalender-visning"
+                >
+                  <Icon name="calendar" size="1.2rem" prefix="ios" />
+                </ToggleButton>
+              </ViewToggle>
             </SectionHeader>
 
-            <TableWrapper>
-              <Table>
-                <thead>
-                  <tr>
-                    <Th>Tidspunkt</Th>
-                    <Th>Kandidat</Th>
-                    <Th>Intervjupanel</Th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {result.schedule
-                    .sort((a, b) => a.time - b.time)
-                    .map((item, idx) => {
-                      const dayIndex = Math.floor(item.time / 24);
-                      const hour = item.time % 24;
-                      const dayName = DAYS[dayIndex];
-                      return (
-                        <Tr key={idx}>
-                          <TdTime>
-                            {dayName} {hour}:00
-                          </TdTime>
-                          <TdCandidate>{item.candidate}</TdCandidate>
-                          <Td>
-                            <PanelList>
-                              {item.panel.map((p, i) => (
-                                <InterviewerBadge key={i}>{p}</InterviewerBadge>
-                              ))}
-                            </PanelList>
-                          </Td>
-                        </Tr>
-                      );
-                    })}
-                </tbody>
-              </Table>
-            </TableWrapper>
+            {viewType === "list" ? (
+              <TableWrapper>
+                <Table>
+                  <thead>
+                    <tr>
+                      <Th>Tidspunkt</Th>
+                      <Th>Kandidat</Th>
+                      <Th>Intervjupanel</Th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {[...result.schedule]
+                      .sort((a, b) => a.time - b.time)
+                      .map((item, idx) => {
+                        const dayIndex = Math.floor(item.time / 24);
+                        const hour = item.time % 24;
+                        const dayName = DAYS[dayIndex];
+
+                        return (
+                          <Tr key={idx}>
+                            <TdTime>
+                              {dayName} {hour}:00
+                            </TdTime>
+                            <TdCandidate>{item.candidate}</TdCandidate>
+                            <Td>
+                              <PanelList>
+                                {item.panel.map((p, i) => (
+                                  <InterviewerBadge key={i}>
+                                    {p}
+                                  </InterviewerBadge>
+                                ))}
+                              </PanelList>
+                            </Td>
+                          </Tr>
+                        );
+                      })}
+                  </tbody>
+                </Table>
+              </TableWrapper>
+            ) : (
+              <SolverCalendarView schedule={result.schedule} />
+            )}
           </ResultSection>
         )}
       </MainCard>
@@ -141,153 +204,162 @@ export default function SolverView({ candidates, interviewers }: Props) {
 const Container = styled.div`
   display: flex;
   flex-direction: column;
-  gap: 1.5rem;
+  gap: 1rem;
 `;
 
 const MainCard = styled.div`
-  background: var(--lego-card-color);
-  border: 1px solid var(--border-gray);
-  border-radius: 1rem;
-  padding: 2rem;
-  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+  ${scheduleSurface};
+  padding: 1.25rem;
 `;
 
 const Header = styled.div`
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
-  gap: 2rem;
-  margin-bottom: 2.5rem;
-
-  @media (max-width: 768px) {
-    flex-direction: column;
-  }
+  gap: 1rem;
+  margin-bottom: 1rem;
+  flex-wrap: wrap;
 `;
 
 const TitleSection = styled.div`
   flex: 1;
+  min-width: 260px;
+`;
+
+const Eyebrow = styled.span`
+  ${scheduleLabel};
+  display: block;
+  margin-bottom: 0.3rem;
 `;
 
 const Title = styled.h2`
-  font-size: 1.5rem;
+  font-size: 1.2rem;
   font-weight: 800;
-  color: var(--lego-font-color);
-  margin: 0 0 0.5rem 0;
+  color: #111827;
+  margin: 0 0 0.5rem;
 `;
 
 const Subtitle = styled.p`
-  color: var(--color-gray-6);
-  font-size: 0.9375rem;
-  line-height: 1.5;
+  color: #5b554c;
+  font-size: 0.94rem;
+  line-height: 1.7;
+  margin: 0;
+  max-width: 38rem;
 `;
 
 const Controls = styled.div`
+  ${scheduleInset};
   display: flex;
   align-items: flex-end;
-  gap: 1rem;
-  background: var(--color-gray-1);
-  padding: 1rem;
-  border-radius: 0.75rem;
-  border: 1px solid var(--border-gray);
+  gap: 0.9rem;
+  padding: 0.85rem;
+  flex-wrap: wrap;
 `;
 
 const InputGroup = styled.div`
   display: flex;
   flex-direction: column;
-  gap: 0.4rem;
+  gap: 0.35rem;
 `;
 
 const Label = styled.label`
-  font-size: 0.7rem;
-  font-weight: 800;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  color: var(--color-gray-5);
+  ${scheduleLabel};
 `;
 
 const Input = styled.input`
-  width: 4rem;
-  padding: 0.5rem;
-  background: var(--lego-card-color);
-  border: 1px solid var(--border-gray);
-  border-radius: 0.5rem;
-  color: var(--lego-font-color);
+  width: 4.5rem;
+  padding: 0.65rem 0.55rem;
+  background: rgba(255, 255, 255, 0.86);
+  border: 1px solid #d7cbbb;
+  border-radius: 0.8rem;
+  color: #111827;
   text-align: center;
-  font-weight: 600;
+  font-weight: 700;
 
   &:focus {
     outline: none;
-    border-color: var(--lego-font-color);
-    box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.05);
+    border-color: #8a1f16;
+    box-shadow: 0 0 0 3px rgba(178, 18, 7, 0.08);
   }
 `;
 
 const RunButton = styled.button`
-  background: var(--lego-font-color);
-  color: white;
-  padding: 0.6rem 1.25rem;
-  border-radius: 0.5rem;
-  font-size: 0.875rem;
+  ${primaryAction};
+  padding: 0.78rem 1.15rem;
+  border-radius: 0.9rem;
+  font-size: 0.9rem;
   font-weight: 700;
-  border: none;
   cursor: pointer;
-  transition: all 0.2s ease;
   white-space: nowrap;
+`;
 
-  &:hover:not(:disabled) {
-    transform: translateY(-1px);
-    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-  }
+const StatRow = styled.div`
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+`;
 
-  &:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
-  }
+const StatCard = styled.div`
+  ${scheduleInset};
+  padding: 0.85rem 0.95rem;
+`;
+
+const StatLabel = styled.span`
+  ${scheduleLabel};
+  display: block;
+  margin-bottom: 0.25rem;
+`;
+
+const StatValue = styled.span`
+  display: block;
+  font-size: 1.25rem;
+  font-weight: 800;
+  color: #111827;
 `;
 
 const ErrorMessage = styled.div`
-  background: var(--color-red-1);
-  color: var(--color-red-7);
-  padding: 1rem;
-  border-radius: 0.75rem;
-  border: 1px solid var(--color-red-2);
-  font-size: 0.875rem;
-  font-weight: 500;
-  margin-bottom: 1.5rem;
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
+  background: rgba(185, 28, 28, 0.08);
+  color: #991b1b;
+  padding: 0.95rem 1rem;
+  border-radius: 1rem;
+  border: 1px solid rgba(185, 28, 28, 0.14);
+  font-size: 0.9rem;
+  font-weight: 600;
+  margin-bottom: 1rem;
 `;
 
 const StatusBox = styled.div<{ $type: "error" | "success" }>`
-  background: var(--color-gray-1);
-  border: 1px solid var(--border-gray);
-  padding: 2.5rem;
-  border-radius: 1rem;
+  ${scheduleInset};
+  padding: 2rem 1.25rem;
   text-align: center;
-  margin-bottom: 2rem;
+  margin-bottom: 1rem;
+  border-color: ${(props) =>
+    props.$type === "error" ? "rgba(185, 28, 28, 0.16)" : "#e7dccd"};
 `;
 
 const StatusTitle = styled.h4`
   font-weight: 800;
-  font-size: 1.25rem;
-  margin-bottom: 0.75rem;
-  color: var(--lego-font-color);
+  font-size: 1.2rem;
+  margin: 0 0 0.75rem;
+  color: #111827;
 `;
 
 const StatusDesc = styled.p`
-  font-size: 0.9375rem;
-  color: var(--color-gray-6);
-  max-width: 500px;
+  font-size: 0.94rem;
+  color: #5b554c;
+  max-width: 34rem;
   margin: 0 auto;
+  line-height: 1.7;
 `;
 
 const ResultSection = styled.div`
-  animation: fadeIn 0.4s ease-out;
+  animation: fadeIn 0.35s ease-out;
+
   @keyframes fadeIn {
     from {
       opacity: 0;
-      transform: translateY(10px);
+      transform: translateY(8px);
     }
     to {
       opacity: 1;
@@ -300,57 +372,97 @@ const SectionHeader = styled.div`
   display: flex;
   justify-content: space-between;
   align-items: center;
+  gap: 1rem;
   margin-bottom: 1rem;
+  flex-wrap: wrap;
+`;
+
+const SectionTitleWrapper = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  flex-wrap: wrap;
+`;
+
+const SectionEyebrow = styled.span`
+  ${scheduleLabel};
+  display: block;
+  margin-bottom: 0.25rem;
+`;
+
+const ViewToggle = styled.div`
+  ${scheduleInset};
+  display: flex;
+  padding: 0.25rem;
+  gap: 0.25rem;
+`;
+
+const ToggleButton = styled.button<{ $active: boolean }>`
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.4rem;
+  height: 2.4rem;
+  background: ${(props) =>
+    props.$active ? "rgba(178, 18, 7, 0.08)" : "transparent"};
+  border: 1px solid
+    ${(props) => (props.$active ? "rgba(178, 18, 7, 0.18)" : "transparent")};
+  border-radius: 0.7rem;
+  cursor: pointer;
+  color: ${(props) => (props.$active ? "#8a1f16" : "#6b7280")};
+  transition: background-color 0.18s ease;
+
+  &:hover {
+    color: #111827;
+  }
 `;
 
 const SectionTitle = styled.h3`
-  font-size: 0.75rem;
+  font-size: 1.05rem;
   font-weight: 800;
-  text-transform: uppercase;
-  letter-spacing: 0.1em;
-  color: var(--color-gray-5);
+  color: #111827;
+  margin: 0;
 `;
 
 const StatsBadge = styled.span`
-  background: var(--color-blue-1);
-  color: var(--color-blue-7);
-  padding: 0.25rem 0.75rem;
-  border-radius: 1rem;
-  font-size: 0.75rem;
+  display: inline-flex;
+  align-items: center;
+  padding: 0.45rem 0.8rem;
+  border-radius: 999px;
+  background: rgba(31, 122, 92, 0.08);
+  color: #166534;
+  font-size: 0.82rem;
   font-weight: 700;
 `;
 
 const TableWrapper = styled.div`
-  border: 1px solid var(--border-gray);
-  border-radius: 0.75rem;
+  ${scheduleInset};
+  padding: 0.35rem;
   overflow: hidden;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
 `;
 
 const Table = styled.table`
   width: 100%;
-  border-collapse: collapse;
+  border-collapse: separate;
+  border-spacing: 0;
 `;
 
 const Th = styled.th`
+  ${scheduleLabel};
   text-align: left;
   padding: 1rem;
-  background: var(--color-gray-1);
-  border-bottom: 1px solid var(--border-gray);
-  font-size: 0.7rem;
-  font-weight: 800;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  color: var(--color-gray-5);
+  color: #7a6a5a;
 `;
 
 const Tr = styled.tr`
   transition: background-color 0.2s ease;
-  &:not(:last-child) {
-    border-bottom: 1px solid var(--border-gray);
+
+  &:not(:last-child) td {
+    border-bottom: 1px solid #e7dccd;
   }
+
   &:hover {
-    background-color: var(--color-gray-1);
+    background-color: rgba(255, 255, 255, 0.62);
   }
 `;
 
@@ -359,29 +471,29 @@ const Td = styled.td`
 `;
 
 const TdTime = styled(Td)`
-  font-family: monospace;
-  font-weight: 700;
-  color: var(--lego-font-color);
-  width: 100px;
+  font-family: "OCR A Extended", var(--font-family);
+  color: #7a6a5a;
+  width: 110px;
 `;
 
 const TdCandidate = styled(Td)`
-  font-weight: 600;
-  color: var(--lego-font-color);
+  font-weight: 700;
+  color: #111827;
 `;
 
 const PanelList = styled.div`
   display: flex;
   flex-wrap: wrap;
-  gap: 0.5rem;
+  gap: 0.45rem;
 `;
 
 const InterviewerBadge = styled.span`
-  background: var(--lego-card-color);
-  border: 1px solid var(--border-gray);
-  padding: 0.2rem 0.6rem;
-  border-radius: 0.5rem;
-  font-size: 0.75rem;
+  display: inline-flex;
+  align-items: center;
+  padding: 0.35rem 0.65rem;
+  border-radius: 999px;
+  background: rgba(17, 24, 39, 0.06);
+  color: #374151;
+  font-size: 0.78rem;
   font-weight: 600;
-  color: var(--color-gray-7);
 `;

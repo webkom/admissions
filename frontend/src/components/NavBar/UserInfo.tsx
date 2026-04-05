@@ -76,6 +76,9 @@ const LogoutButton = styled.a`
   line-height: 1rem;
   padding: 0.12rem 0.5rem;
   color: var(--lego-font-color);
+  &:hover {
+    color: var(--lego-red-color);
+  }
 `;
 
 const ProfilePicture = styled.img`

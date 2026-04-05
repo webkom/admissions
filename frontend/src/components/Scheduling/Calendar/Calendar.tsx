@@ -1,5 +1,11 @@
 import * as React from "react";
 import styled, { css } from "styled-components";
+import {
+  primaryAction,
+  scheduleInset,
+  scheduleLabel,
+  scheduleSurface,
+} from "../shared";
 
 const DAYS = [
   "Mandag",
@@ -18,6 +24,7 @@ interface TimeSchedulerProps {
   startHour?: number;
   endHour?: number;
   onSave?: (slots: Set<string>) => Promise<void>;
+  sessionDuration: number;
 }
 
 const TimeScheduler: React.FC<TimeSchedulerProps> = ({
@@ -25,8 +32,9 @@ const TimeScheduler: React.FC<TimeSchedulerProps> = ({
   selectedSlots: externalSelectedSlots,
   onSlotsChange,
   startHour = 8,
-  endHour = 16,
+  endHour = 18,
   onSave,
+  sessionDuration,
 }) => {
   const [internalSelectedSlots, setInternalSelectedSlots] = React.useState<
     Set<string>
@@ -38,30 +46,39 @@ const TimeScheduler: React.FC<TimeSchedulerProps> = ({
   const [addMode, setAddMode] = React.useState(false);
   const [isSaving, setIsSaving] = React.useState(false);
 
-  const HOURS = React.useMemo(
-    () =>
-      Array.from(
-        { length: endHour - startHour },
-        (_, i) => `${i + startHour}:00`,
-      ),
-    [startHour, endHour],
-  );
+  const startMinute = startHour * 60;
+  const endMinute = endHour * 60;
 
-  const isSlotEnabled = (dayIndex: number, hour: number): boolean => {
+  const TIME_SLOTS = React.useMemo(() => {
+    const slots = [];
+    const step = sessionDuration > 0 ? sessionDuration : 60;
+    for (let m = startMinute; m < endMinute; m += step) {
+      slots.push(m);
+    }
+    return slots;
+  }, [startMinute, endMinute, sessionDuration]);
+
+  const formatTime = (totalMinutes: number) => {
+    const hours = Math.floor(totalMinutes / 60);
+    const minutes = totalMinutes % 60;
+    return `${hours}:${minutes.toString().padStart(2, "0")}`;
+  };
+
+  const isSlotEnabled = (dayIndex: number, minute: number): boolean => {
     if (!enabledSlots) return true;
-    return enabledSlots.has(`${dayIndex}-${hour}`);
+    return enabledSlots.has(`${dayIndex}-${minute}`);
   };
 
   const toggleSlot = React.useCallback(
     (
       dayIndex: number,
-      hour: number,
+      minute: number,
       mode: boolean,
       currentSlots: Set<string>,
     ) => {
-      if (!isSlotEnabled(dayIndex, hour)) return;
+      if (!isSlotEnabled(dayIndex, minute)) return;
 
-      const slotId = `${dayIndex}-${hour}`;
+      const slotId = `${dayIndex}-${minute}`;
       const next = new Set(currentSlots);
 
       if (mode) {
@@ -75,20 +92,20 @@ const TimeScheduler: React.FC<TimeSchedulerProps> = ({
     [isSlotEnabled, setSelectedSlots],
   );
 
-  const handleMouseDown = (dayIndex: number, hour: number) => {
-    if (!isSlotEnabled(dayIndex, hour)) return;
+  const handleMouseDown = (dayIndex: number, minute: number) => {
+    if (!isSlotEnabled(dayIndex, minute)) return;
 
-    const slotId = `${dayIndex}-${hour}`;
+    const slotId = `${dayIndex}-${minute}`;
     const newAddMode = !selectedSlots.has(slotId);
 
     setAddMode(newAddMode);
     setIsDragging(true);
-    toggleSlot(dayIndex, hour, newAddMode, selectedSlots);
+    toggleSlot(dayIndex, minute, newAddMode, selectedSlots);
   };
 
-  const handleMouseEnter = (dayIndex: number, hour: number) => {
-    if (isDragging && isSlotEnabled(dayIndex, hour)) {
-      toggleSlot(dayIndex, hour, addMode, selectedSlots);
+  const handleMouseEnter = (dayIndex: number, minute: number) => {
+    if (isDragging && isSlotEnabled(dayIndex, minute)) {
+      toggleSlot(dayIndex, minute, addMode, selectedSlots);
     }
   };
 
@@ -113,41 +130,66 @@ const TimeScheduler: React.FC<TimeSchedulerProps> = ({
 
   return (
     <Wrapper>
-      <Grid>
-        <div />
+      <HeaderRow>
+        <div>
+          <Eyebrow>Egen kapasitet</Eyebrow>
+          <Title>Marker tilgjengelige slotter</Title>
+        </div>
+        <Legend>
+          <LegendItem>
+            <LegendDot $variant="selected" />
+            Valgt
+          </LegendItem>
+          <LegendItem>
+            <LegendDot $variant="open" />
+            Ledig
+          </LegendItem>
+          <LegendItem>
+            <LegendDot $variant="disabled" />
+            Stengt
+          </LegendItem>
+        </Legend>
+      </HeaderRow>
 
-        {DAYS.map((day) => (
-          <HeaderCell key={day}>{day}</HeaderCell>
-        ))}
+      <GridWrapper>
+        <Grid $columns={DAYS.length + 1}>
+          <div />
 
-        {HOURS.map((hourLabel) => {
-          const hour = parseInt(hourLabel);
-          return (
-            <React.Fragment key={hourLabel}>
-              <TimeLabel>{hourLabel}</TimeLabel>
+          {DAYS.map((day) => (
+            <HeaderCell key={day}>{day}</HeaderCell>
+          ))}
 
-              {DAYS.map((day, dayIndex) => {
-                const enabled = isSlotEnabled(dayIndex, hour);
-                const isSelected = selectedSlots.has(`${dayIndex}-${hour}`);
+          {TIME_SLOTS.map((minute) => (
+            <React.Fragment key={minute}>
+              <TimeLabel>{formatTime(minute)}</TimeLabel>
+
+              {DAYS.map((_, dayIndex) => {
+                const enabled = isSlotEnabled(dayIndex, minute);
+                const isSelected = selectedSlots.has(`${dayIndex}-${minute}`);
 
                 return (
                   <Slot
-                    key={`${dayIndex}-${hour}`}
-                    onMouseDown={() => handleMouseDown(dayIndex, hour)}
-                    onMouseEnter={() => handleMouseEnter(dayIndex, hour)}
+                    key={`${dayIndex}-${minute}`}
+                    onMouseDown={() => handleMouseDown(dayIndex, minute)}
+                    onMouseEnter={() => handleMouseEnter(dayIndex, minute)}
                     $isSelected={isSelected}
                     $isEnabled={enabled}
                   />
                 );
               })}
             </React.Fragment>
-          );
-        })}
-      </Grid>
+          ))}
+        </Grid>
+      </GridWrapper>
 
       <Footer>
         <FooterInfo>
-          <strong>{selectedSlots.size}</strong> tidsluker valgt
+          <span>Valgte slotter</span>
+          <strong>{selectedSlots.size}</strong>
+        </FooterInfo>
+        <FooterInfo>
+          <span>Intervjulengde</span>
+          <strong>{sessionDuration} min</strong>
         </FooterInfo>
         <SaveButton onClick={handleSave} disabled={isSaving || !onSave}>
           {isSaving ? "Lagrer..." : "Lagre tilgjengelighet"}
@@ -160,138 +202,189 @@ const TimeScheduler: React.FC<TimeSchedulerProps> = ({
 export default TimeScheduler;
 
 const Wrapper = styled.div`
+  ${scheduleSurface};
   display: flex;
   flex-direction: column;
-  gap: 1.5rem;
+  gap: 1rem;
+  padding: 1.25rem;
   user-select: none;
 `;
 
-const Grid = styled.div`
+const HeaderRow = styled.div`
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  align-items: flex-start;
+  flex-wrap: wrap;
+`;
+
+const Eyebrow = styled.span`
+  ${scheduleLabel};
+  display: block;
+  margin-bottom: 0.3rem;
+`;
+
+const Title = styled.h3`
+  margin: 0;
+  color: #111827;
+  font-size: 1.1rem;
+`;
+
+const Legend = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+`;
+
+const LegendItem = styled.span`
+  ${scheduleInset};
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.45rem 0.7rem;
+  color: #4b5563;
+  font-size: 0.82rem;
+`;
+
+const LegendDot = styled.span<{ $variant: "selected" | "open" | "disabled" }>`
+  width: 0.8rem;
+  height: 0.8rem;
+  border-radius: 999px;
+
+  ${(props) =>
+    props.$variant === "selected"
+      ? css`
+          background: linear-gradient(135deg, #1f7a5c 0%, #14532d 100%);
+        `
+      : props.$variant === "open"
+        ? css`
+            background: #ffffff;
+            border: 1px solid #d6ccbf;
+          `
+        : css`
+            background: repeating-linear-gradient(
+              45deg,
+              #ece4d7,
+              #ece4d7 4px,
+              #f8f3ed 4px,
+              #f8f3ed 8px
+            );
+            border: 1px solid #d7cebf;
+          `}
+`;
+
+const GridWrapper = styled.div`
+  ${scheduleInset};
+  padding: 0.9rem;
+  overflow-x: auto;
+`;
+
+const Grid = styled.div<{ $columns: number }>`
   display: grid;
-  grid-template-columns: 50px repeat(7, 1fr);
-  gap: 4px;
-  background-color: var(--border-gray);
-  padding: 1px;
-  border-radius: var(--border-radius-sm);
-  overflow: hidden;
+  grid-template-columns: 68px repeat(${(props) => props.$columns - 1}, 1fr);
+  gap: 8px;
+  min-width: 760px;
 `;
 
 const HeaderCell = styled.div`
-  background-color: var(--lego-card-color);
-  font-size: var(--font-size-xs);
-  font-weight: 600;
-  text-align: center;
-  color: var(--color-gray-6);
-  padding: 0.75rem 0.25rem;
-  text-transform: uppercase;
-  letter-spacing: 0.025em;
+  ${scheduleLabel};
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 3rem;
+  border-radius: 0.95rem;
+  background: rgba(255, 255, 255, 0.72);
+  color: #6e6256;
 `;
 
 const TimeLabel = styled.div`
-  background-color: var(--lego-card-color);
-  font-size: 11px;
-  font-weight: 500;
-  color: var(--color-gray-5);
-  text-align: right;
-  padding-right: 0.75rem;
+  ${scheduleLabel};
   display: flex;
   align-items: center;
   justify-content: flex-end;
+  padding-right: 0.6rem;
+  color: #8a7b6b;
 `;
 
 const Slot = styled.div<{ $isSelected: boolean; $isEnabled: boolean }>`
-  height: 2.25rem;
+  height: 2.9rem;
   width: 100%;
-  transition: all 0.1s ease-in-out;
+  border-radius: 0.95rem;
+  transition:
+    transform 0.12s ease,
+    box-shadow 0.12s ease,
+    background-color 0.12s ease;
   position: relative;
 
   ${(props) =>
     !props.$isEnabled
       ? css`
-          background-color: var(--lego-background-color);
-          cursor: not-allowed;
-          background-image: repeating-linear-gradient(
+          background: repeating-linear-gradient(
             45deg,
-            transparent,
-            transparent 5px,
-            rgba(0, 0, 0, 0.02) 5px,
-            rgba(0, 0, 0, 0.02) 10px
+            #f1e8db,
+            #f1e8db 6px,
+            #faf6ef 6px,
+            #faf6ef 12px
           );
+          border: 1px solid #e3d7c7;
+          cursor: not-allowed;
         `
       : props.$isSelected
         ? css`
-            background-color: var(--success-color);
+            background: linear-gradient(135deg, #1f7a5c 0%, #14532d 100%);
+            border: 1px solid #166534;
             cursor: pointer;
 
             &:hover {
-              background-color: var(--color-green-5);
-              transform: scale(0.98);
-            }
-
-            &::after {
-              content: "";
-              position: absolute;
-              top: 0;
-              left: 0;
-              right: 0;
-              bottom: 0;
-              border: 1px solid rgba(0, 0, 0, 0.05);
+              transform: translateY(-1px);
+              box-shadow: 0 10px 20px -16px rgba(21, 83, 45, 0.8);
             }
           `
         : css`
-            background-color: var(--lego-card-color);
+            background: rgba(255, 255, 255, 0.9);
+            border: 1px solid #e2d8ca;
             cursor: pointer;
 
             &:hover {
-              background-color: var(--color-gray-1);
-              z-index: 1;
-              box-shadow: inset 0 0 0 2px var(--color-gray-2);
+              transform: translateY(-1px);
+              box-shadow: 0 12px 18px -16px rgba(53, 42, 32, 0.4);
+              border-color: #cfc2b0;
             }
           `}
 `;
 
 const Footer = styled.div`
+  ${scheduleInset};
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 0 0.5rem;
+  gap: 0.75rem;
+  padding: 0.8rem;
+  flex-wrap: wrap;
 `;
 
 const FooterInfo = styled.div`
-  font-size: var(--font-size-sm);
-  color: var(--color-gray-6);
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  min-width: 110px;
+
+  span {
+    ${scheduleLabel};
+    color: #8a7b6b;
+  }
 
   strong {
-    color: var(--lego-font-color);
-    font-weight: 700;
+    color: #111827;
+    font-size: 1.15rem;
   }
 `;
 
 const SaveButton = styled.button`
-  padding: 0.6rem 1.5rem;
-  font-size: var(--font-size-sm);
-  font-weight: 600;
-  background: var(--lego-font-color);
-  border: none;
-  border-radius: var(--border-radius-sm);
-  color: white;
+  ${primaryAction};
+  padding: 0.8rem 1.2rem;
+  border-radius: 0.9rem;
+  font-size: 0.9rem;
+  font-weight: 700;
   cursor: pointer;
-  transition: all 0.2s ease;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-
-  &:hover:not(:disabled) {
-    transform: translateY(-1px);
-    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.15);
-    background: var(--color-black);
-  }
-
-  &:active:not(:disabled) {
-    transform: translateY(0);
-  }
-
-  &:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
-    box-shadow: none;
-  }
 `;

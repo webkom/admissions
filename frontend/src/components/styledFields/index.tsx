@@ -9,66 +9,74 @@ interface StyledFieldProps {
 
 export const StyledField = styled(Field)<StyledFieldProps>`
   display: block;
-  width: 20em;
-  overflow: hidden;
-  padding: 0.5rem 1rem;
-  margin-top: 4px;
-  font-size: 0.9rem;
-  color: var(--lego-font-color);
-  border: 2px solid
-    ${(props) =>
-      props.error ? "var(--lego-red-color)" : "var(--color-gray-3)"};
-  border-radius: 13px;
-  box-shadow: inset 0px 4px 4px rgba(129, 129, 129, 0.1);
-  resize: none;
+  width: 100%;
+  max-width: 400px;
+  padding: 0.75rem 1rem;
+  margin-top: 0.5rem;
+  font-size: 0.9375rem;
+  color: #111827;
+  border: 1px solid
+    ${(props) => (props.error ? "var(--lego-red-color, #e11d48)" : "#d1d5db")};
+  border-radius: var(--border-radius-md);
+  background-color: white;
+  transition: var(--transition-base);
+
+  &::placeholder {
+    color: #9ca3af;
+  }
 
   &:focus {
-    border: 2px solid #52b0eccc;
-    box-shadow:
-      0 1px 1px #52b0ec13 inset,
-      0 0 4px #52b0ec99;
-    outline: 0 none;
+    border-color: #2563eb;
+    box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.1);
+    outline: none;
   }
 
   &:disabled {
-    background: var(--color-gray-2);
+    background-color: #f3f4f6;
+    color: #9ca3af;
+    cursor: not-allowed;
   }
 `;
 
 export const StyledTextAreaField = styled(Textarea)<StyledFieldProps>`
+  display: block;
   width: 100%;
-  min-height: 8rem;
+  min-height: 10rem;
   padding: 1rem;
-  margin-top: 4px;
-  font-size: 0.9rem;
-  color: var(--lego-font-color);
-  border: 2px solid
-    ${({ $error }) =>
-      $error ? "var(--lego-red-color)" : "var(--color-gray-3)"};
-  border-radius: 13px;
-  box-shadow: inset 0px 4px 4px rgba(129, 129, 129, 0.1);
-  overflow: hidden;
-  resize: none;
+  margin-top: 0.5rem;
+  font-size: 0.9375rem;
+  color: #111827;
+  line-height: 1.6;
+  border: 1px solid
+    ${({ $error }) => ($error ? "var(--lego-red-color, #e11d48)" : "#d1d5db")};
+  border-radius: var(--border-radius-md);
+  background-color: white;
+  transition: var(--transition-base);
+  resize: vertical;
+
+  &::placeholder {
+    color: #9ca3af;
+  }
 
   &:focus {
-    border: 2px solid #52b0eccc;
-    box-shadow:
-      0 1px 1px #52b0ec13 inset,
-      0 0 4px #52b0ec99,
-      inset 0px 4px 4px rgba(129, 129, 129, 0.05);
-    outline: 0 none;
+    border-color: #2563eb;
+    box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.1);
+    outline: none;
   }
 
   &:disabled {
-    background: var(--color-gray-2);
+    background-color: #f3f4f6;
+    color: #9ca3af;
+    cursor: not-allowed;
   }
 `;
 
 export const FieldLabel = styled.label`
-  font-weight: 500;
-  font-size: 0.95rem;
-  line-height: 1.2rem;
-  display: inline-block;
+  font-weight: 600;
+  font-size: 0.875rem;
+  color: #374151;
+  display: block;
+  margin-bottom: 0.25rem;
 `;
 
 interface InputValidationFeedbackProps {

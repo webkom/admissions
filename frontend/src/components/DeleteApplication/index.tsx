@@ -4,7 +4,7 @@ import styled from "styled-components";
 import { media } from "src/styles/mediaQueries";
 import { useAdminDeleteApplicationMutation } from "src/query/mutations";
 import { useParams } from "react-router-dom";
-import { Button } from "@webkom/lego-bricks";
+import { StyledButton } from "src/components/LinkButton";
 
 const DeleteWrapper = styled.div`
   display: flex;
@@ -48,9 +48,9 @@ const DeleteApplication: React.FC<DeleteApplicationProps> = ({
       <ConfirmModal
         title="Slett søknad"
         trigger={({ onClick }) => (
-          <Button danger onClick={onClick} size="small">
+          <StyledButton danger onClick={onClick} size="small">
             Slett søknad
-          </Button>
+          </StyledButton>
         )}
         message="Er du sikker på at du vil slette denne søknaden?"
         onConfirm={() => performDelete(applicationId, groupId)}

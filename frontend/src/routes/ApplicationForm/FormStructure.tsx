@@ -30,8 +30,7 @@ import {
 import { Admission, Group } from "src/types";
 import { SelectedGroups } from ".";
 import JsonFieldEditor from "src/components/JsonFieldEditor";
-import { Button } from "@webkom/lego-bricks";
-import LinkButton from "src/components/LinkButton";
+import LinkButton, { StyledButton } from "src/components/LinkButton";
 import PriorityTextField from "./PriorityTextField";
 
 interface FormStructureProps extends FormikValues {
@@ -66,9 +65,9 @@ const FormStructure: React.FC<FormStructureProps> = ({
         <Title>Skriv din søknad og send inn!</Title>
         {myApplication && (
           <CancelButtonContainer>
-            <Button onClick={onCancel} disabled={!isValid}>
+            <StyledButton onClick={onCancel} disabled={!isValid}>
               Avbryt
-            </Button>
+            </StyledButton>
           </CancelButtonContainer>
         )}
       </FormHeader>
@@ -261,13 +260,13 @@ const FormStructure: React.FC<FormStructureProps> = ({
           </div>
           {hasSelected && (
             <div>
-              <Button
+              <StyledButton
                 onClick={handleSubmit}
                 disabled={isSubmitting || !isValid}
                 success
               >
                 Send inn søknad
-              </Button>
+              </StyledButton>
             </div>
           )}
         </SubmitSection>

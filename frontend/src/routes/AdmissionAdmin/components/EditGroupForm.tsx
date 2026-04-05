@@ -9,7 +9,7 @@ import TextAreaField from "src/components/TextAreaField";
 import CSRFToken from "./csrftoken";
 import { EditGroupFormWrapper, FormWrapper } from "./styles";
 import { Group } from "src/types";
-import { Button } from "@webkom/lego-bricks";
+import { StyledButton } from "src/components/LinkButton";
 
 const signupSchema = Yup.object().shape({
   description: Yup.string()
@@ -122,13 +122,13 @@ const InnerForm: React.FC<InnerFormProps> = ({
             placeholder="Skriv hva gruppa ønsker å vite om søkeren..."
           />
         </EditGroupFormWrapper>
-        <Button
+        <StyledButton
           submit
           onClick={submitForm}
           disabled={!isValid || updateGroupMutation.isPending}
         >
           Lagre
-        </Button>
+        </StyledButton>
         {updateGroupMutation.isSuccess && <p>Lagret!</p>}
       </FormWrapper>
     </Form>

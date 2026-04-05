@@ -3,6 +3,7 @@ import styled from "styled-components";
 import type { Candidate, Interviewer } from "../types";
 import { DAYS_MAP } from "../utils/timeutils";
 import AvailabilityBar from "../Availability/AvailabilityBar";
+import { scheduleInset, scheduleLabel } from "../shared";
 
 interface PersonListViewProps {
   data: Candidate[] | Interviewer[];
@@ -13,28 +14,27 @@ const PersonListView = ({ data }: PersonListViewProps) => {
     <List>
       {data.map((person) => {
         const isInterviewer = "availability" in person;
+        const personName = person.name?.trim() || "Ukjent person";
 
         return (
           <Card key={person.id}>
             <CardMain>
-              <Avatar $gender={person.gender}>{person.name.charAt(0)}</Avatar>
+              <Avatar $gender={person.gender}>{personName.charAt(0)}</Avatar>
 
               <Info>
                 <HeaderRow>
-                  <Name>{person.name}</Name>
+                  <Name>{personName}</Name>
                   <GenderBadge $gender={person.gender}>
                     {person.gender}
                   </GenderBadge>
                 </HeaderRow>
                 <Id>#{person.id}</Id>
               </Info>
-
-              <ActionArea>{/* Action buttons could go here */}</ActionArea>
             </CardMain>
 
             {isInterviewer && (
               <AvailabilityTimelineWrapper>
-                <TimelineTitle>Tilgjengelighet:</TimelineTitle>
+                <TimelineTitle>Tilgjengelighet</TimelineTitle>
                 <TimelineBars>
                   {DAYS_MAP.map((dayLabel, dayIndex) => {
                     const hasAvailability = (
@@ -61,8 +61,11 @@ const PersonListView = ({ data }: PersonListViewProps) => {
 
       {data.length === 0 && (
         <EmptyState>
-          <EmptyIcon>🔍</EmptyIcon>
-          <EmptyText>Ingen funnet</EmptyText>
+          <EmptyTitle>Ingen registrerte personer</EmptyTitle>
+          <EmptyText>
+            Listen blir fylt når kandidater eller intervjuere er tilgjengelige i
+            denne visningen.
+          </EmptyText>
         </EmptyState>
       )}
     </List>
@@ -81,18 +84,8 @@ const List = styled.ul`
 `;
 
 const Card = styled.li`
-  background: var(--lego-card-color);
-  border: 1px solid var(--border-gray);
-  border-radius: 1rem;
+  ${scheduleInset};
   padding: 1rem;
-  transition: all 0.2s ease;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
-
-  &:hover {
-    border-color: var(--color-gray-4);
-    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
-    transform: translateY(-1px);
-  }
 `;
 
 const CardMain = styled.div`
@@ -105,18 +98,18 @@ const Avatar = styled.div<{ $gender: string }>`
   width: 44px;
   height: 44px;
   background: ${(props) =>
-    props.$gender === "F" ? "var(--color-red-1)" : "var(--color-blue-1)"};
-  color: ${(props) =>
-    props.$gender === "F" ? "var(--color-red-7)" : "var(--color-blue-7)"};
-  border-radius: 50%;
+    props.$gender === "F"
+      ? "rgba(178, 18, 7, 0.08)"
+      : "rgba(31, 122, 92, 0.08)"};
+  color: ${(props) => (props.$gender === "F" ? "#8a1f16" : "#166534")};
+  border-radius: 0.95rem;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-weight: 700;
-  font-size: 1.25rem;
+  font-weight: 800;
+  font-size: 1.05rem;
   flex-shrink: 0;
-  border: 2px solid var(--lego-card-color);
-  box-shadow: 0 0 0 1px var(--border-gray);
+  border: 1px solid #ddd2c3;
 `;
 
 const Info = styled.div`
@@ -127,79 +120,68 @@ const HeaderRow = styled.div`
   display: flex;
   align-items: center;
   gap: 0.5rem;
+  flex-wrap: wrap;
 `;
 
 const Name = styled.h3`
   font-size: 1rem;
   font-weight: 700;
-  color: var(--lego-font-color);
+  color: #111827;
   margin: 0;
 `;
 
 const Id = styled.span`
-  font-size: 0.75rem;
-  color: var(--color-gray-5);
-  font-family: var(--font-family-mono, monospace);
+  ${scheduleLabel};
+  color: #8a7b6b;
 `;
 
 const GenderBadge = styled.span<{ $gender: string }>`
-  font-size: 0.625rem;
+  font-size: 0.68rem;
   font-weight: 800;
-  padding: 0.1rem 0.4rem;
-  border-radius: 4px;
+  padding: 0.22rem 0.45rem;
+  border-radius: 999px;
   background: ${(props) =>
-    props.$gender === "F" ? "var(--color-red-1)" : "var(--color-blue-1)"};
-  color: ${(props) =>
-    props.$gender === "F" ? "var(--color-red-6)" : "var(--color-blue-6)"};
+    props.$gender === "F"
+      ? "rgba(178, 18, 7, 0.08)"
+      : "rgba(31, 122, 92, 0.08)"};
+  color: ${(props) => (props.$gender === "F" ? "#8a1f16" : "#166534")};
   border: 1px solid
     ${(props) =>
-      props.$gender === "F" ? "var(--color-red-2)" : "var(--color-blue-2)"};
-`;
-
-const ActionArea = styled.div`
-  display: flex;
-  gap: 0.5rem;
+      props.$gender === "F"
+        ? "rgba(178, 18, 7, 0.14)"
+        : "rgba(31, 122, 92, 0.14)"};
 `;
 
 const AvailabilityTimelineWrapper = styled.div`
-  margin-top: 1rem;
-  padding-top: 1rem;
-  border-top: 1px solid var(--border-gray);
+  margin-top: 0.95rem;
+  padding-top: 0.95rem;
+  border-top: 1px solid #e3d8ca;
 `;
 
 const TimelineTitle = styled.div`
-  font-size: 0.7rem;
-  font-weight: 700;
-  color: var(--color-gray-5);
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
+  ${scheduleLabel};
   margin-bottom: 0.5rem;
 `;
 
 const TimelineBars = styled.div`
   display: flex;
-  gap: 3px;
+  gap: 4px;
 `;
 
 const EmptyState = styled.div`
-  padding: 3rem 1rem;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  border: 2px dashed var(--border-gray);
-  border-radius: 1rem;
-  background: var(--color-gray-1);
+  ${scheduleInset};
+  padding: 2rem 1rem;
+  text-align: center;
 `;
 
-const EmptyIcon = styled.div`
-  font-size: 2rem;
-  margin-bottom: 0.5rem;
-  opacity: 0.5;
+const EmptyTitle = styled.h4`
+  margin: 0 0 0.4rem;
+  color: #111827;
+  font-size: 1rem;
 `;
 
 const EmptyText = styled.p`
-  font-size: 0.875rem;
-  color: var(--color-gray-5);
-  font-weight: 500;
+  margin: 0;
+  color: #6b7280;
+  line-height: 1.6;
 `;

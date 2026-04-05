@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import styled from "styled-components";
+import { scheduleLabel } from "../shared";
 import { formatAvailabilityForDay } from "../utils/timeutils";
 import AvailabilityTooltip from "./AvailabilityTooltip";
 
@@ -48,27 +49,22 @@ const Wrapper = styled.div`
 const Bar = styled.div<{ $isActive: boolean }>`
   height: 6px;
   width: 100%;
-  border-radius: 3px;
+  border-radius: 999px;
   transition: all 0.2s ease;
 
-  background-color: ${(props) =>
-    props.$isActive ? "var(--success-color)" : "var(--color-gray-2)"};
+  background-color: ${(props) => (props.$isActive ? "#166534" : "#d8cec0")};
 
   &:hover {
     transform: scaleY(1.5);
-    background-color: ${(props) =>
-      props.$isActive ? "var(--color-green-7)" : "var(--color-gray-3)"};
+    background-color: ${(props) => (props.$isActive ? "#14532d" : "#c9bcab")};
   }
 `;
 
 const DayLabel = styled.div<{ $isActive: boolean }>`
-  font-size: 10px;
+  ${scheduleLabel};
   text-align: center;
   margin-top: 6px;
-  font-weight: 700;
-  text-transform: uppercase;
   transition: color 0.2s ease;
 
-  color: ${(props) =>
-    props.$isActive ? "var(--lego-font-color)" : "var(--color-gray-4)"};
+  color: ${(props) => (props.$isActive ? "#111827" : "#a39584")};
 `;

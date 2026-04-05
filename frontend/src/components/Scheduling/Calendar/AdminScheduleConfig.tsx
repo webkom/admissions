@@ -1,6 +1,14 @@
 import React, { useState, useEffect, useCallback } from "react";
 import styled, { css } from "styled-components";
+import { media } from "src/styles/mediaQueries";
 import { Check } from "lucide-react";
+import {
+  primaryAction,
+  scheduleInset,
+  scheduleLabel,
+  scheduleSurface,
+  secondaryAction,
+} from "../shared";
 import { MOCK_CANDIDATES } from "../../../routes/SchedulePage/mockData";
 
 const DAYS = [
@@ -19,6 +27,8 @@ interface AdminScheduleConfigProps {
   startHour?: number;
   endHour?: number;
   onSave?: (slots: Set<string>) => Promise<void>;
+  sessionDuration: number;
+  onSessionDurationChange: (duration: number) => void;
 }
 
 const AdminScheduleConfig: React.FC<AdminScheduleConfigProps> = ({
@@ -27,28 +37,32 @@ const AdminScheduleConfig: React.FC<AdminScheduleConfigProps> = ({
   startHour = 8,
   endHour = 18,
   onSave,
+  sessionDuration,
+  onSessionDurationChange,
 }) => {
   const [isDragging, setIsDragging] = useState(false);
   const [dragMode, setDragMode] = useState<"add" | "remove">("add");
   const [isSaving, setIsSaving] = useState(false);
+  const [inputValue, setInputValue] = useState<string>(
+    sessionDuration.toString(),
+  );
 
-  // NEW: State for the custom session duration
-  const [sessionDuration, setSessionDuration] = useState<number>(60);
+  useEffect(() => {
+    setInputValue(sessionDuration.toString());
+  }, [sessionDuration]);
 
-  // NEW: Calculate slots based on minutes, safely avoiding infinite loops
   const startMinute = startHour * 60;
   const endMinute = endHour * 60;
 
   const TIME_SLOTS = React.useMemo(() => {
     const slots = [];
-    const step = sessionDuration > 0 ? sessionDuration : 60; // Fallback to prevent crash
+    const step = sessionDuration > 0 ? sessionDuration : 60;
     for (let m = startMinute; m < endMinute; m += step) {
       slots.push(m);
     }
     return slots;
   }, [startMinute, endMinute, sessionDuration]);
 
-  // NEW: Format minutes back to readable HH:MM
   const formatTime = (totalMinutes: number) => {
     const hours = Math.floor(totalMinutes / 60);
     const minutes = totalMinutes % 60;
@@ -101,7 +115,7 @@ const AdminScheduleConfig: React.FC<AdminScheduleConfigProps> = ({
   }, [handleMouseUp]);
 
   const handleSave = async () => {
-    if (!onSave) return;
+    if (!onSave || sessionDuration === 0) return;
     setIsSaving(true);
     try {
       await onSave(enabledSlots);
@@ -142,43 +156,72 @@ const AdminScheduleConfig: React.FC<AdminScheduleConfigProps> = ({
 
   return (
     <Container>
-      <HeaderActions>
-        <div style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
-          <ActionButton onClick={selectAll}>Velg alle</ActionButton>
-          <ActionButton onClick={clearAll}>Tøm alle</ActionButton>
+      <HeaderCard>
+        <HeaderMain>
+          <div>
+            <Eyebrow>Rammer</Eyebrow>
+            <Title>Styr hvilke slotter som er åpne</Title>
+          </div>
+          <SupportText>
+            Sett et tydelig tidsrom først. Da blir både tilgjengelighet og
+            planforslag langt mer forutsigbare.
+          </SupportText>
+        </HeaderMain>
 
-          {/* NEW: Input for session duration */}
+        <HeaderActions>
+          <ActionGroup>
+            <ActionButton type="button" onClick={selectAll}>
+              Velg alle
+            </ActionButton>
+            <ActionButton type="button" onClick={clearAll}>
+              Tøm alle
+            </ActionButton>
+          </ActionGroup>
+
           <DurationWrapper>
-            <DurationLabel>Varighet (min)</DurationLabel>
+            <DurationLabel htmlFor="session-duration">Varighet</DurationLabel>
             <DurationInput
+              id="session-duration"
               type="number"
-              min="5"
+              min="0"
               max="120"
               step="5"
-              value={sessionDuration}
+              value={inputValue}
               onChange={(e) => {
-                const val = parseInt(e.target.value);
-                if (!isNaN(val) && val > 0) {
-                  setSessionDuration(val);
+                const valStr = e.target.value;
+                setInputValue(valStr);
+                const val = parseInt(valStr, 10);
+                if (!isNaN(val)) {
+                  onSessionDurationChange(val);
+                } else if (valStr === "") {
+                  onSessionDurationChange(0);
                 }
               }}
             />
+            <DurationUnit>min</DurationUnit>
           </DurationWrapper>
-        </div>
-        {onSave && (
-          <SaveButton onClick={handleSave} disabled={isSaving}>
-            {isSaving ? "Lagrer..." : "Lagre oppsett"}
-          </SaveButton>
-        )}
-      </HeaderActions>
+
+          {onSave && (
+            <SaveButton
+              type="button"
+              onClick={handleSave}
+              disabled={isSaving || sessionDuration === 0}
+            >
+              {isSaving ? "Lagrer..." : "Lagre oppsett"}
+            </SaveButton>
+          )}
+        </HeaderActions>
+      </HeaderCard>
 
       <GridWrapper>
         <Grid $columns={DAYS.length + 1}>
           <div />
           {DAYS.map((day, dayIndex) => {
-            const isAllSelected = TIME_SLOTS.every((minute) =>
-              enabledSlots.has(`${dayIndex}-${minute}`),
-            );
+            const isAllSelected =
+              TIME_SLOTS.length > 0 &&
+              TIME_SLOTS.every((minute) =>
+                enabledSlots.has(`${dayIndex}-${minute}`),
+              );
             const isSomeSelected = TIME_SLOTS.some((minute) =>
               enabledSlots.has(`${dayIndex}-${minute}`),
             );
@@ -186,28 +229,31 @@ const AdminScheduleConfig: React.FC<AdminScheduleConfigProps> = ({
             return (
               <DayHeader key={day}>
                 <DayName>{day}</DayName>
-                <input
-                  type="checkbox"
-                  checked={isAllSelected}
-                  ref={(input) => {
-                    if (input)
-                      input.indeterminate = isSomeSelected && !isAllSelected;
-                  }}
-                  onChange={() => {
-                    if (isAllSelected) {
-                      clearAllForDay(dayIndex);
-                    } else {
-                      selectAllForDay(dayIndex);
-                    }
-                  }}
-                />
+                <DayToggle>
+                  <input
+                    type="checkbox"
+                    disabled={TIME_SLOTS.length === 0}
+                    checked={isAllSelected}
+                    ref={(input) => {
+                      if (input)
+                        input.indeterminate = isSomeSelected && !isAllSelected;
+                    }}
+                    onChange={() => {
+                      if (isAllSelected) {
+                        clearAllForDay(dayIndex);
+                      } else {
+                        selectAllForDay(dayIndex);
+                      }
+                    }}
+                  />
+                  Hele dagen
+                </DayToggle>
               </DayHeader>
             );
           })}
 
           {TIME_SLOTS.map((minute) => (
             <React.Fragment key={minute}>
-              {/* NEW: Use the formatter for the Y-axis label */}
               <TimeLabel>{formatTime(minute)}</TimeLabel>
               {DAYS.map((_, dayIndex) => {
                 const slotKey = `${dayIndex}-${minute}`;
@@ -220,7 +266,7 @@ const AdminScheduleConfig: React.FC<AdminScheduleConfigProps> = ({
                     onMouseDown={() => handleMouseDown(dayIndex, minute)}
                     onMouseEnter={() => handleMouseEnter(dayIndex, minute)}
                   >
-                    {isEnabled && <Check size={12} />}
+                    {isEnabled && <Check size={14} />}
                   </ConfigSlot>
                 );
               })}
@@ -231,11 +277,15 @@ const AdminScheduleConfig: React.FC<AdminScheduleConfigProps> = ({
 
       <StatsRow>
         <StatCard>
-          <StatLabel>aktiverte tidsluker</StatLabel>
+          <StatLabel>Åpne slotter</StatLabel>
           <StatValue>{enabledSlots.size}</StatValue>
         </StatCard>
         <StatCard>
-          <StatLabel>Antall søkere</StatLabel>
+          <StatLabel>Varighet</StatLabel>
+          <StatValue>{sessionDuration || 0} min</StatValue>
+        </StatCard>
+        <StatCard>
+          <StatLabel>Søkere</StatLabel>
           <StatValue>{MOCK_CANDIDATES.length}</StatValue>
         </StatCard>
       </StatsRow>
@@ -243,213 +293,224 @@ const AdminScheduleConfig: React.FC<AdminScheduleConfigProps> = ({
   );
 };
 
-// --- Styles ---
-// Note: I only included the *new* or modified styles here. Keep your existing ones!
-
-const DurationWrapper = styled.div`
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  margin-left: 1rem;
-  background: var(--color-gray-1);
-  padding: 0.2rem 0.5rem;
-  border-radius: 0.4rem;
-  border: 1px solid var(--border-gray);
-`;
-
-const DurationLabel = styled.label`
-  font-size: 0.7rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  color: var(--color-gray-6);
-  letter-spacing: 0.05em;
-`;
-
-const DurationInput = styled.input`
-  width: 3.5rem;
-  padding: 0.2rem;
-  border: 1px solid var(--border-gray);
-  border-radius: 0.25rem;
-  text-align: center;
-  font-weight: 600;
-  color: var(--lego-font-color);
-  font-size: 0.8rem;
-
-  &:focus {
-    outline: none;
-    border-color: var(--lego-font-color);
-  }
-`;
-
 const Container = styled.div`
   display: flex;
   flex-direction: column;
-  gap: 1.5rem;
+  gap: 1rem;
   user-select: none;
+`;
+
+const HeaderCard = styled.div`
+  ${scheduleSurface};
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  padding: 1.25rem;
+`;
+
+const HeaderMain = styled.div`
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  align-items: flex-start;
+  flex-wrap: wrap;
+`;
+
+const Eyebrow = styled.span`
+  ${scheduleLabel};
+  display: block;
+  margin-bottom: 0.3rem;
+`;
+
+const Title = styled.h3`
+  margin: 0;
+  font-size: 1.1rem;
+  color: #111827;
+`;
+
+const SupportText = styled.p`
+  max-width: 34rem;
+  margin: 0;
+  color: #5b554c;
+  line-height: 1.7;
+  font-size: 0.92rem;
 `;
 
 const HeaderActions = styled.div`
   display: flex;
   justify-content: space-between;
   align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+
+  ${media.handheld`
+    align-items: stretch;
+  `};
+`;
+
+const ActionGroup = styled.div`
+  display: flex;
   gap: 0.6rem;
-  margin-bottom: 0.5rem;
+  flex-wrap: wrap;
 `;
 
 const ActionButton = styled.button`
-  padding: 0.5rem 0.75rem;
-  font-size: 0.7rem;
+  ${secondaryAction};
+  padding: 0.7rem 0.95rem;
+  border-radius: 0.9rem;
+  font-size: 0.82rem;
   font-weight: 700;
-  background: var(--color-gray-1);
-  border: 1px solid var(--border-gray);
-  border-radius: 0.4rem;
-  color: var(--color-gray-7);
   cursor: pointer;
-  transition: all 0.2s ease;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
+`;
 
-  &:hover {
-    background: var(--color-gray-2);
-    color: var(--lego-font-color);
+const DurationWrapper = styled.div`
+  ${scheduleInset};
+  display: inline-flex;
+  align-items: center;
+  gap: 0.65rem;
+  padding: 0.55rem 0.75rem;
+`;
+
+const DurationLabel = styled.label`
+  ${scheduleLabel};
+  color: #7b6b5c;
+`;
+
+const DurationInput = styled.input`
+  width: 4.5rem;
+  padding: 0.5rem 0.55rem;
+  border-radius: 0.75rem;
+  border: 1px solid #d7cbbb;
+  background: rgba(255, 255, 255, 0.85);
+  color: #111827;
+  text-align: center;
+  font-weight: 700;
+  font-size: 0.95rem;
+
+  &:focus {
+    outline: none;
+    border-color: #8a1f16;
+    box-shadow: 0 0 0 3px rgba(178, 18, 7, 0.08);
   }
+`;
+
+const DurationUnit = styled.span`
+  color: #6b7280;
+  font-size: 0.85rem;
+  font-weight: 600;
 `;
 
 const SaveButton = styled.button`
-  padding: 0.6rem 1.25rem;
-  font-size: 0.875rem;
+  ${primaryAction};
+  padding: 0.8rem 1.15rem;
+  border-radius: 0.9rem;
+  font-size: 0.9rem;
   font-weight: 700;
-  background: var(--lego-font-color);
-  border: none;
-  border-radius: 0.5rem;
-  color: white;
   cursor: pointer;
-  transition: all 0.2s ease;
-
-  &:hover:not(:disabled) {
-    background: var(--color-black);
-  }
-
-  &:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
-  }
 `;
 
 const GridWrapper = styled.div`
-  background-color: var(--border-gray);
-  padding: 1px;
-  border-radius: var(--border-radius-sm);
-  overflow: hidden;
+  ${scheduleSurface};
+  overflow-x: auto;
+  padding: 0.95rem;
 `;
 
 const Grid = styled.div<{ $columns: number }>`
   display: grid;
-  grid-template-columns: 50px repeat(${(props) => props.$columns - 1}, 1fr);
-  gap: 4px;
+  grid-template-columns: 70px repeat(${(props) => props.$columns - 1}, 1fr);
+  gap: 8px;
+  min-width: 820px;
 `;
 
 const DayHeader = styled.div`
-  background-color: var(--lego-card-color);
+  ${scheduleInset};
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 0.5rem;
-  padding: 0.75rem 0.25rem;
+  gap: 0.65rem;
+  padding: 0.9rem 0.4rem;
 `;
 
 const DayName = styled.div`
-  font-size: 0.75rem;
-  font-weight: 700;
-  color: var(--color-gray-5);
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
+  ${scheduleLabel};
+  color: #6e6256;
+  text-align: center;
 `;
 
-const DayActions = styled.div`
-  display: flex;
-  gap: 0.25rem;
-`;
-
-const SmallButton = styled.button`
-  aspect-ratio: 1;
+const DayToggle = styled.label`
   display: flex;
   align-items: center;
-  justify-content: center;
-  background: var(--color-gray-1);
-  border: 1px solid var(--border-gray);
-  border-radius: 4px;
-  color: var(--color-gray-6);
-  cursor: pointer;
-  transition: all 0.2s ease;
-
-  &:hover {
-    background: var(--color-gray-8);
-    color: white;
-    border-color: var(--color-gray-8);
-  }
+  gap: 0.35rem;
+  color: #6b7280;
+  font-size: 0.76rem;
+  font-weight: 600;
 `;
 
 const TimeLabel = styled.div`
-  background-color: var(--lego-card-color);
-  font-size: 11px;
-  font-weight: 600;
-  color: var(--color-gray-4);
-  text-align: right;
-  padding-right: 0.75rem;
+  ${scheduleLabel};
   display: flex;
   align-items: center;
   justify-content: flex-end;
+  padding-right: 0.6rem;
+  color: #8a7b6b;
 `;
 
 const ConfigSlot = styled.div<{ $isEnabled: boolean }>`
-  height: 2.25rem;
+  height: 2.9rem;
+  border-radius: 0.95rem;
   display: flex;
   align-items: center;
   justify-content: center;
-  background-color: ${(props) =>
-    props.$isEnabled ? "var(--success-color)" : "var(--lego-card-color)"};
+  transition:
+    transform 0.12s ease,
+    box-shadow 0.12s ease,
+    background-color 0.12s ease;
   cursor: pointer;
-  transition: all 0.1s ease;
-  position: relative;
 
   ${(props) =>
     props.$isEnabled
       ? css`
           color: white;
+          background: linear-gradient(135deg, #8a1f16 0%, #6d1a13 100%);
+          border: 1px solid #7f1d1d;
+
           &:hover {
-            background: var(--color-green-7);
+            transform: translateY(-1px);
+            box-shadow: 0 14px 20px -18px rgba(109, 26, 19, 0.9);
           }
         `
       : css`
+          background: rgba(255, 255, 255, 0.88);
+          border: 1px solid #dfd4c6;
+
           &:hover {
-            background: var(--color-gray-1);
+            border-color: #c8b9a5;
+            box-shadow: 0 12px 18px -18px rgba(51, 37, 24, 0.45);
           }
         `}
 `;
 
 const StatsRow = styled.div`
-  display: flex;
-  justify-content: space-between;
-  padding: 0 0.5rem;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 0.75rem;
 `;
 
 const StatCard = styled.div`
-  display: flex;
-  align-items: baseline;
-  gap: 0.5rem;
+  ${scheduleSurface};
+  padding: 0.95rem 1rem;
 `;
 
 const StatValue = styled.span`
-  font-size: 1rem;
+  display: block;
+  margin-top: 0.3rem;
+  font-size: 1.35rem;
   font-weight: 800;
-  color: var(--lego-font-color);
+  color: #111827;
 `;
 
 const StatLabel = styled.span`
-  font-size: 0.75rem;
-  font-weight: 700;
-  color: var(--color-gray-5);
+  ${scheduleLabel};
 `;
 
 export default AdminScheduleConfig;

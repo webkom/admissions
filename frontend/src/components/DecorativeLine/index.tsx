@@ -8,7 +8,7 @@ interface DecorativeLineProps {
 const DecorativeLine = styled.div<DecorativeLineProps>`
   display: block;
   background: ${(props) =>
-    props.$red ? "var(--lego-red-color)" : "var(--color-gray-3)"};
+    props.$red !== false ? "var(--lego-red-color)" : "var(--color-gray-3)"};
   width: ${(props) => (props.$vertical ? "5px" : "auto")};
   height: ${(props) => (props.$vertical ? "auto" : "5px")};
   min-height: ${(props) => (props.$vertical ? "10px" : "0")};

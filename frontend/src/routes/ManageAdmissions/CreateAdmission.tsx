@@ -15,7 +15,7 @@ import {
 import { toggleFromArray } from "src/utils/methods";
 import styled from "styled-components";
 import GroupSelector from "./components/GroupSelector";
-import { Button } from "@webkom/lego-bricks";
+import { StyledButton } from "src/components/LinkButton";
 import LoadingBall from "src/components/LoadingBall";
 
 interface ReturnedData {
@@ -263,16 +263,16 @@ const CreateAdmission: React.FC = () => {
       )}
       <FormGroup>
         <InputWrapper>
-          <Button type="submit" disabled={!formik.isValid} success>
+          <StyledButton type="submit" disabled={!formik.isValid} success>
             {isNew ? "Opprett opptak" : "Lagre endringer"}
-          </Button>
+          </StyledButton>
         </InputWrapper>
         {!isNew && (
           <InputWrapper>
             <ConfirmModal
               title="Slett opptak"
               trigger={({ onClick }) => (
-                <Button
+                <StyledButton
                   disabled={
                     DateTime.fromISO(admission?.closed_from ?? "")
                       .diffNow()
@@ -282,7 +282,7 @@ const CreateAdmission: React.FC = () => {
                   danger
                 >
                   Slett opptak
-                </Button>
+                </StyledButton>
               )}
               message="Er du sikker på at du vil slette opptaket?"
               cancelText="Nei"

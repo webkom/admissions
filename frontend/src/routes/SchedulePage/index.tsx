@@ -1,9 +1,22 @@
-import React, { useState, useMemo } from "react";
+import React, { useMemo, useState } from "react";
 import { useParams } from "react-router-dom";
-import { useAdmission, useAdmissions } from "src/query/hooks";
+import styled, { css } from "styled-components";
+import type { LucideIcon } from "lucide-react";
+import {
+  BarChart3,
+  CalendarRange,
+  LayoutPanelTop,
+  ShieldCheck,
+  Sparkles,
+} from "lucide-react";
+import { useAdmission } from "src/query/hooks";
+import { media } from "src/styles/mediaQueries";
+import {
+  scheduleInset,
+  scheduleLabel,
+  scheduleSurface,
+} from "src/components/Scheduling/shared";
 import { Group, Candidate, Interviewer } from "../../types";
-import styled from "styled-components";
-
 import TimeScheduler from "src/components/Scheduling/Calendar/Calendar";
 import PersonListView from "src/components/Scheduling/PersonList/PersonListView";
 import SolverView from "src/components/Scheduling/Solver/SolverView";
@@ -24,25 +37,33 @@ const SchedulePage: React.FC = () => {
 
   return (
     <CommonScheduleView
+      admissionTitle={admission.title}
       committees={groupsToShow}
       isAdmin={is_privileged}
-      currentAdmissionSlug={admissionSlug ?? ""}
     />
   );
 };
 
 interface CommonScheduleViewProps {
+  admissionTitle: string;
   committees: Group[];
   isAdmin: boolean;
-  currentAdmissionSlug: string;
 }
 
 type TabType = "my-availability" | "heatmap" | "config" | "solver";
 
+interface TabDefinition {
+  key: TabType;
+  title: string;
+  description: string;
+  icon: LucideIcon;
+  adminOnly?: boolean;
+}
+
 const CommonScheduleView: React.FC<CommonScheduleViewProps> = ({
+  admissionTitle,
   committees,
   isAdmin,
-  currentAdmissionSlug,
 }) => {
   const [activeSection, setActiveSection] =
     useState<TabType>("my-availability");
@@ -50,16 +71,16 @@ const CommonScheduleView: React.FC<CommonScheduleViewProps> = ({
   const [enabledSlots, setEnabledSlots] = useState<Set<string>>(() => {
     const slots = new Set<string>();
     for (let day = 0; day < 5; day++) {
-      // Man-Fre
       for (let hour = 8; hour < 17; hour++) {
-        slots.add(`${day}-${hour}`);
+        slots.add(`${day}-${hour * 60}`);
       }
     }
     return slots;
   });
 
   const [candidates] = useState<Candidate[]>(MOCK_CANDIDATES);
-  const [interviewers] = useState<Candidate[]>(MOCK_INTERVIEWERS);
+  const [interviewers] = useState<Interviewer[]>(MOCK_INTERVIEWERS);
+  const [sessionDuration, setSessionDuration] = useState<number>(60);
 
   const handleSaveConfig = async (slots: Set<string>) => {
     console.log("Saving config:", Array.from(slots));
@@ -67,476 +88,477 @@ const CommonScheduleView: React.FC<CommonScheduleViewProps> = ({
     alert("Konfigurasjon lagret!");
   };
 
+  const availableDays = useMemo(
+    () => new Set(Array.from(enabledSlots, (slot) => slot.split("-")[0])).size,
+    [enabledSlots],
+  );
+
+  const plannedHours = useMemo(
+    () => Math.round((enabledSlots.size * sessionDuration) / 60),
+    [enabledSlots.size, sessionDuration],
+  );
+
+  const tabDefinitions = useMemo<TabDefinition[]>(
+    () =>
+      [
+        {
+          key: "config",
+          title: "Rammer",
+          description: "Sett hvilke slotter og hvilken varighet som gjelder.",
+          icon: LayoutPanelTop,
+          adminOnly: true,
+        },
+        {
+          key: "my-availability",
+          title: "Min tilgjengelighet",
+          description: "Marker når du faktisk kan sitte i intervju.",
+          icon: CalendarRange,
+        },
+        {
+          key: "heatmap",
+          title: "Fordeling",
+          description: "Se dekning og kandidatlisten i samme arbeidsflate.",
+          icon: BarChart3,
+        },
+        {
+          key: "solver",
+          title: "Intervjuforslag",
+          description: "Generer et forslag når datagrunnlaget er klart.",
+          icon: Sparkles,
+          adminOnly: true,
+        },
+      ].filter((tab) => !tab.adminOnly || isAdmin),
+    [isAdmin],
+  );
+
+  const activeTab =
+    tabDefinitions.find((tab) => tab.key === activeSection) ??
+    tabDefinitions[0];
+  const ActiveTabIcon = activeTab.icon;
+
+  const compactMetrics = [
+    { label: "Intervjuere", value: interviewers.length },
+    { label: "Kandidater", value: candidates.length },
+    { label: "Dager", value: availableDays },
+    { label: "Kapasitet", value: `${plannedHours} t` },
+  ];
+
   return (
-    <PageContainer>
-      <PageHeader>
-        <HeaderContent>
-          <h1>
-            {isAdmin ? "Intervjuplanlegging - Admin" : "Intervjufordeling"}
-          </h1>
-          <p>
-            Administrer tilgjengelighet og planlegg intervjuer for opptaket.
-          </p>
-        </HeaderContent>
-        {isAdmin && <Badge>{"Test"}</Badge>}
-      </PageHeader>
+    <PageBackground>
+      <PageContainer>
+        <HeaderBlock>
+          <HeaderMain>
+            <HeaderTopline>
+              <Eyebrow>Intervjuplanlegging</Eyebrow>
+              <RoleBadge>
+                <ShieldCheck size={14} />
+                {isAdmin ? "Admin" : "Intervjuer"}
+              </RoleBadge>
+            </HeaderTopline>
+            <Title>{admissionTitle}</Title>
+            <Lead>
+              En enklere arbeidsflate for rammer, tilgjengelighet og fordeling.
+            </Lead>
+          </HeaderMain>
 
-      <TabsContainer>
-        {isAdmin && (
-          <Tab
-            $active={activeSection === "config"}
-            onClick={() => setActiveSection("config")}
-          >
-            Oppsett
-          </Tab>
-        )}
-        <Tab
-          $active={activeSection === "my-availability"}
-          onClick={() => setActiveSection("my-availability")}
-        >
-          Min tilgjengelighet
-        </Tab>
-        <Tab
-          $active={activeSection === "heatmap"}
-          onClick={() => setActiveSection("heatmap")}
-        >
-          Oversikt
-        </Tab>
-        {isAdmin && (
-          <Tab
-            $active={activeSection === "solver"}
-            onClick={() => setActiveSection("solver")}
-          >
-            Generer plan
-          </Tab>
-        )}
-      </TabsContainer>
+          <StatsRow>
+            {compactMetrics.map((item) => (
+              <StatPill key={item.label}>
+                <span>{item.label}</span>
+                <strong>{item.value}</strong>
+              </StatPill>
+            ))}
+          </StatsRow>
+        </HeaderBlock>
 
-      <ContentGrid>
-        <MainSection>
+        <TabBar>
+          {tabDefinitions.map((tab) => {
+            const Icon = tab.icon;
+
+            return (
+              <TabButton
+                key={tab.key}
+                type="button"
+                $active={tab.key === activeSection}
+                onClick={() => setActiveSection(tab.key)}
+              >
+                <Icon size={16} />
+                {tab.title}
+              </TabButton>
+            );
+          })}
+        </TabBar>
+
+        <SectionHeader>
+          <SectionMeta>
+            <SectionIcon>
+              <ActiveTabIcon size={16} />
+            </SectionIcon>
+            <div>
+              <SectionTitle>{activeTab.title}</SectionTitle>
+              <SectionDescription>{activeTab.description}</SectionDescription>
+            </div>
+          </SectionMeta>
+
+          <MetaChips>
+            <MetaChip>
+              <span>Slotter åpne</span>
+              <strong>{enabledSlots.size}</strong>
+            </MetaChip>
+            <MetaChip>
+              <span>Varighet</span>
+              <strong>{sessionDuration} min</strong>
+            </MetaChip>
+            {committees.length > 0 && (
+              <MetaChip>
+                <span>Komiteer</span>
+                <strong>{committees.length}</strong>
+              </MetaChip>
+            )}
+          </MetaChips>
+        </SectionHeader>
+
+        {committees.length > 0 && (
+          <CommitteeStrip>
+            {committees.map((committee) => {
+              const committeeName = committee.name?.trim() || "Ukjent komite";
+
+              return (
+                <CommitteeChip key={committee.pk}>
+                  <CommitteeInitial>{committeeName.charAt(0)}</CommitteeInitial>
+                  <span>{committeeName}</span>
+                </CommitteeChip>
+              );
+            })}
+          </CommitteeStrip>
+        )}
+
+        <ContentStack>
           {activeSection === "my-availability" && (
-            <Section animate>
-              <SectionHeader>
-                <h2>Marker din tilgjengelighet</h2>
-                <p>
-                  Velg tidslukene som passer for deg. Du kan klikke og dra for å
-                  velge flere områder samtidig.
-                </p>
-              </SectionHeader>
-
-              <CalendarWrapper>
-                <TimeScheduler
-                  enabledSlots={enabledSlots}
-                  onSave={async (slots) => {
-                    console.log("Saving availability:", Array.from(slots));
-                    await new Promise((resolve) => setTimeout(resolve, 500));
-                    alert("Tilgjengelighet lagret!");
-                  }}
-                />
-              </CalendarWrapper>
-            </Section>
+            <TimeScheduler
+              enabledSlots={enabledSlots}
+              sessionDuration={sessionDuration}
+              onSave={async (slots) => {
+                console.log("Saving availability:", Array.from(slots));
+                await new Promise((resolve) => setTimeout(resolve, 500));
+                alert("Tilgjengelighet lagret!");
+              }}
+            />
           )}
 
           {activeSection === "heatmap" && (
-            <Section animate>
-              <SectionHeader>
-                <h2>Tilgjengelighetsoversikt</h2>
-                <p>
-                  Se når flest intervjuere er tilgjengelige. Dette hjelper med å
-                  finne gode fellestider.
-                </p>
-              </SectionHeader>
-
+            <>
               <AvailabilityHeatmap
                 interviewers={interviewers}
                 availableSlots={enabledSlots}
+                sessionDuration={sessionDuration}
               />
 
-              <Divider />
-
-              <SectionHeader>
-                <h2>Kandidater ({candidates.length})</h2>
-                <p>Oversikt over kandidater som skal intervjues.</p>
-              </SectionHeader>
-
-              <PersonListView data={candidates} />
-            </Section>
+              <SubSection>
+                <SubSectionHeader>
+                  <div>
+                    <SubEyebrow>Kandidater</SubEyebrow>
+                    <SubTitle>Hvem som skal fordeles</SubTitle>
+                  </div>
+                  <SubCount>{candidates.length}</SubCount>
+                </SubSectionHeader>
+                <PersonListView data={candidates} />
+              </SubSection>
+            </>
           )}
 
           {activeSection === "config" && isAdmin && (
-            <Section animate>
-              <SectionHeader>
-                <h2>Konfigurer tilgjengelige tider</h2>
-                <p>
-                  Marker hvilke tidsrom intervjuerne kan velge mellom. Dette
-                  avgrenser tidsrammen for hele opptaket.
-                </p>
-              </SectionHeader>
-
-              <CalendarWrapper>
-                <AdminScheduleConfig
-                  enabledSlots={enabledSlots}
-                  onSlotsChange={setEnabledSlots}
-                  onSave={handleSaveConfig}
-                />
-              </CalendarWrapper>
-            </Section>
+            <AdminScheduleConfig
+              enabledSlots={enabledSlots}
+              onSlotsChange={setEnabledSlots}
+              onSave={handleSaveConfig}
+              sessionDuration={sessionDuration}
+              onSessionDurationChange={setSessionDuration}
+            />
           )}
 
           {activeSection === "solver" && isAdmin && (
-            <Section animate>
-              <SolverView candidates={candidates} interviewers={interviewers} />
-            </Section>
+            <SolverView candidates={candidates} interviewers={interviewers} />
           )}
-        </MainSection>
-
-        {/*<CommitteesSidebar>
-          <SidebarTitle>Dine Komiteer</SidebarTitle>
-          <CommitteeList>
-            {committees.map((committee) => (
-              <CommitteeCard key={committee.pk}>
-                <CommitteeInfo>
-                  <CommitteeName>{committee.name}</CommitteeName>
-                  <CommitteeRole>Intervjuer</CommitteeRole>
-                </CommitteeInfo>
-              </CommitteeCard>
-            ))}
-          </CommitteeList>
-
-          <HelpCard>
-            <h4>Trenger du hjelp?</h4>
-            <p>Ta kontakt med Webkom dersom du opplever problemer med planleggeren.</p>
-          </HelpCard>
-        </CommitteesSidebar>*/}
-      </ContentGrid>
-    </PageContainer>
+        </ContentStack>
+      </PageContainer>
+    </PageBackground>
   );
 };
 
 export default SchedulePage;
 
-const PageContainer = styled.div`
-  max-width: 1200px;
-  margin: 0 auto;
-  padding: 2rem 1rem;
-
-  @media (min-width: 768px) {
-    padding: 3rem 2rem;
-  }
+const PageBackground = styled.div`
+  min-height: calc(100vh - 80px);
+  background: #f4efe7;
 `;
 
-const PageHeader = styled.header`
+const PageContainer = styled.div`
+  width: 100%;
+  max-width: 1080px;
+  margin: 0 auto;
+  padding: 2rem 1rem 3rem;
+
+  ${media.handheld`
+    padding: 1.25rem 0.85rem 2rem;
+  `};
+`;
+
+const HeaderBlock = styled.header`
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  margin-bottom: 1.25rem;
+`;
+
+const HeaderMain = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+`;
+
+const HeaderTopline = styled.div`
   display: flex;
   justify-content: space-between;
-  align-items: flex-start;
-  margin-bottom: 2.5rem;
-`;
-
-const HeaderContent = styled.div`
-  h1 {
-    font-size: 2.25rem;
-    font-weight: 800;
-    color: var(--lego-font-color);
-    margin-bottom: 0.5rem;
-    letter-spacing: -0.025em;
-  }
-
-  p {
-    color: var(--color-gray-6);
-    font-size: 1.125rem;
-  }
-`;
-
-const Badge = styled.span`
-  background: var(--color-red-1);
-  color: var(--color-red-7);
-  padding: 0.4rem 0.8rem;
-  border-radius: 2rem;
-  font-size: 0.75rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  border: 1px solid var(--color-red-2);
-`;
-
-const TabsContainer = styled.div`
-  display: flex;
-  gap: 0.5rem;
-  margin-bottom: 2rem;
-  background: var(--color-gray-1);
-  padding: 0.4rem;
-  border-radius: 0.75rem;
-  width: fit-content;
-  border: 1px solid var(--border-gray);
-`;
-
-const Tab = styled.button<{ $active: boolean }>`
-  padding: 0.6rem 1.25rem;
-  background: ${(props) =>
-    props.$active ? "var(--lego-card-color)" : "transparent"};
-  border: none;
-  border-radius: 0.5rem;
-  font-size: 0.875rem;
-  font-weight: 600;
-  color: ${(props) =>
-    props.$active ? "var(--lego-font-color)" : "var(--color-gray-6)"};
-  cursor: pointer;
-  transition: all 0.2s ease;
-  box-shadow: ${(props) =>
-    props.$active ? "0 1px 2px rgba(0,0,0,0.08)" : "none"};
-
-  &:hover {
-    color: var(--lego-font-color);
-    background: ${(props) =>
-      props.$active ? "var(--lego-card-color)" : "var(--color-gray-2)"};
-  }
-`;
-
-const ContentGrid = styled.div`
-  gap: 2.5rem;
-
-  @media (min-width: 1024px) {
-    grid-template-columns: 1fr 300px;
-  }
-`;
-
-const MainSection = styled.div`
-  min-width: 0;
-`;
-
-const Section = styled.div<{ animate?: boolean }>`
-  animation: ${(props) => (props.animate ? "fadeIn 0.4s ease-out" : "none")};
-
-  @keyframes fadeIn {
-    from {
-      opacity: 0;
-      transform: translateY(10px);
-    }
-    to {
-      opacity: 1;
-      transform: translateY(0);
-    }
-  }
-`;
-
-const SectionHeader = styled.div`
-  margin-bottom: 1.5rem;
-
-  h2 {
-    font-size: 1.5rem;
-    font-weight: 700;
-    color: var(--lego-font-color);
-    margin-bottom: 0.4rem;
-  }
-
-  p {
-    color: var(--color-gray-6);
-    line-height: 1.5;
-  }
-`;
-
-const CalendarWrapper = styled.div`
-  background: var(--lego-card-color);
-  border: 1px solid var(--border-gray);
-  border-radius: 1rem;
-  padding: 1.5rem;
-  box-shadow:
-    0 4px 6px -1px rgba(0, 0, 0, 0.05),
-    0 2px 4px -1px rgba(0, 0, 0, 0.03);
-
-  @media (min-width: 768px) {
-    padding: 2rem;
-  }
-`;
-
-const Divider = styled.hr`
-  border: 0;
-  border-top: 1px solid var(--border-gray);
-  margin: 3rem 0;
-`;
-
-const CommitteesSidebar = styled.aside`
-  display: flex;
-  flex-direction: column;
-  gap: 1.5rem;
-`;
-
-const SidebarTitle = styled.h3`
-  font-size: 0.75rem;
-  font-weight: 700;
-  color: var(--color-gray-5);
-  text-transform: uppercase;
-  letter-spacing: 0.1em;
-  margin-bottom: -0.5rem;
-`;
-
-const CommitteeList = styled.div`
-  display: flex;
-  flex-direction: column;
+  align-items: center;
   gap: 0.75rem;
+  flex-wrap: wrap;
 `;
 
-const CommitteeCard = styled.div`
-  background: var(--lego-card-color);
-  border: 1px solid var(--border-gray);
-  border-radius: 0.75rem;
-  padding: 1rem;
+const Eyebrow = styled.span`
+  ${scheduleLabel};
+`;
+
+const RoleBadge = styled.span`
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.35rem 0.7rem;
+  border-radius: 999px;
+  background: rgba(17, 24, 39, 0.06);
+  color: #374151;
+  font-size: 0.8rem;
+  font-weight: 700;
+`;
+
+const Title = styled.h1`
+  margin: 0;
+  color: #111827;
+  font-size: clamp(1.8rem, 4vw, 2.6rem);
+  line-height: 1.05;
+  letter-spacing: -0.04em;
+  text-align: left;
+`;
+
+const Lead = styled.p`
+  margin: 0;
+  color: #5b554c;
+  font-size: 0.98rem;
+  line-height: 1.6;
+`;
+
+const StatsRow = styled.div`
   display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+`;
+
+const StatPill = styled.div`
+  ${scheduleInset};
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.45rem;
+  padding: 0.55rem 0.8rem;
+
+  span {
+    ${scheduleLabel};
+  }
+
+  strong {
+    color: #111827;
+    font-size: 0.95rem;
+  }
+`;
+
+const TabBar = styled.div`
+  ${scheduleSurface};
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  padding: 0.45rem;
+  margin-bottom: 1rem;
+`;
+
+const TabButton = styled.button<{ $active: boolean }>`
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.7rem 0.95rem;
+  border-radius: 0.8rem;
+  border: 1px solid transparent;
+  cursor: pointer;
+  font-size: 0.9rem;
+  font-weight: 700;
+  transition:
+    background-color 0.18s ease,
+    border-color 0.18s ease;
+
+  ${(props) =>
+    props.$active
+      ? css`
+          background: #ffffff;
+          color: #111827;
+          border-color: #ddd2c3;
+        `
+      : css`
+          background: transparent;
+          color: #6b7280;
+
+          &:hover {
+            background: rgba(255, 255, 255, 0.6);
+            color: #111827;
+          }
+        `}
+`;
+
+const SectionHeader = styled.section`
+  ${scheduleSurface};
+  display: flex;
+  justify-content: space-between;
   align-items: center;
   gap: 1rem;
-  transition: transform 0.2s ease;
-
-  &:hover {
-    transform: translateX(4px);
-    border-color: var(--color-gray-3);
-  }
+  padding: 1rem;
+  margin-bottom: 0.85rem;
+  flex-wrap: wrap;
 `;
 
-const CommitteeIcon = styled.div`
-  width: 40px;
-  height: 40px;
-  background: var(--color-gray-1);
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 1.25rem;
-`;
-
-const CommitteeInfo = styled.div`
-  display: flex;
-  flex-direction: column;
-`;
-
-const CommitteeName = styled.span`
-  font-size: 0.9375rem;
-  font-weight: 600;
-  color: var(--lego-font-color);
-`;
-
-const CommitteeRole = styled.span`
-  font-size: 0.75rem;
-  color: var(--color-gray-5);
-`;
-
-const HelpCard = styled.div`
-  background: linear-gradient(
-    135deg,
-    var(--color-gray-8) 0%,
-    var(--color-black) 100%
-  );
-  color: white;
-  padding: 1.5rem;
-  border-radius: 1rem;
-
-  h4 {
-    font-weight: 700;
-    margin-bottom: 0.5rem;
-  }
-
-  p {
-    font-size: 0.8125rem;
-    opacity: 0.8;
-    line-height: 1.4;
-  }
-`;
-
-const ImportContainer = styled.div`
-  background: var(--lego-card-color);
-  border: 1px solid var(--border-gray);
-  border-radius: var(--border-radius-md);
-  padding: var(--spacing-lg);
-  margin-bottom: var(--spacing-lg);
-`;
-
-const ImportHeader = styled.div`
+const SectionMeta = styled.div`
   display: flex;
   align-items: flex-start;
-  gap: var(--spacing-md);
-  margin-bottom: var(--spacing-md);
+  gap: 0.8rem;
 `;
 
-const ImportIcon = styled.span`
-  font-size: 1.5rem;
+const SectionIcon = styled.span`
+  width: 2rem;
+  height: 2rem;
+  border-radius: 0.7rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(17, 24, 39, 0.06);
+  color: #374151;
 `;
 
-const ImportTitle = styled.h4`
-  font-size: var(--font-size-md);
-  font-weight: 600;
-  color: var(--lego-font-color);
-  margin: 0 0 var(--spacing-xs) 0;
+const SectionTitle = styled.h2`
+  margin: 0 0 0.2rem;
+  color: #111827;
+  font-size: 1.05rem;
 `;
 
-const ImportDescription = styled.p`
-  font-size: var(--font-size-sm);
-  color: var(--color-gray-5);
+const SectionDescription = styled.p`
   margin: 0;
+  color: #6b7280;
+  line-height: 1.55;
+  font-size: 0.9rem;
 `;
 
-const ImportControls = styled.div`
+const MetaChips = styled.div`
   display: flex;
-  gap: var(--spacing-md);
-  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+`;
 
-  @media (max-width: 500px) {
-    flex-direction: column;
-    align-items: stretch;
+const MetaChip = styled.div`
+  ${scheduleInset};
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.45rem;
+  padding: 0.5rem 0.75rem;
+
+  span {
+    ${scheduleLabel};
+  }
+
+  strong {
+    color: #111827;
+    font-size: 0.92rem;
   }
 `;
 
-const SelectWrapper = styled.div`
-  flex: 1;
-`;
-
-const Select = styled.select`
-  width: 100%;
-  padding: var(--spacing-sm) var(--spacing-md);
-  background: var(--lego-background-color);
-  border: 1px solid var(--border-gray);
-  border-radius: var(--border-radius-sm);
-  color: var(--lego-font-color);
-  font-size: var(--font-size-sm);
-  cursor: pointer;
-
-  &:focus {
-    outline: none;
-    border-color: var(--lego-font-color);
-  }
-`;
-
-const ImportButton = styled.button`
-  padding: var(--spacing-sm) var(--spacing-lg);
-  background: var(--lego-font-color);
-  color: var(--color-white);
-  border: none;
-  border-radius: var(--border-radius-sm);
-  font-size: var(--font-size-sm);
-  font-weight: 500;
-  cursor: pointer;
-  transition: opacity var(--easing-fast);
-
-  &:hover:not(:disabled) {
-    opacity: 0.9;
-  }
-
-  &:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
-  }
-`;
-
-const AdminBadge = styled.div`
-  background: var(--lego-card-color);
-  border: 1px solid var(--border-gray);
-  border-radius: var(--border-radius-sm);
-  padding: var(--spacing-md);
-  margin-top: var(--spacing-md);
+const CommitteeStrip = styled.div`
   display: flex;
-  align-items: center;
-  gap: var(--spacing-sm);
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-bottom: 0.85rem;
 `;
 
-const AdminIcon = styled.span`
-  font-size: 1.2rem;
-  color: var(--lego-font-color);
+const CommitteeChip = styled.div`
+  ${scheduleInset};
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55rem;
+  padding: 0.5rem 0.75rem;
+
+  span {
+    color: #4b5563;
+    font-size: 0.9rem;
+    font-weight: 600;
+  }
+`;
+
+const CommitteeInitial = styled.span`
+  width: 1.65rem;
+  height: 1.65rem;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(178, 18, 7, 0.08);
+  color: #8a1f16;
+  font-size: 0.78rem;
+  font-weight: 800;
+`;
+
+const ContentStack = styled.main`
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+`;
+
+const SubSection = styled.section`
+  ${scheduleSurface};
+  padding: 1rem;
+`;
+
+const SubSectionHeader = styled.div`
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 0.9rem;
+`;
+
+const SubEyebrow = styled.span`
+  ${scheduleLabel};
+  display: block;
+  margin-bottom: 0.15rem;
+`;
+
+const SubTitle = styled.h3`
+  margin: 0;
+  color: #111827;
+  font-size: 1rem;
+`;
+
+const SubCount = styled.span`
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 2rem;
+  height: 2rem;
+  padding: 0 0.6rem;
+  border-radius: 999px;
+  background: rgba(17, 24, 39, 0.06);
+  color: #111827;
+  font-weight: 800;
 `;

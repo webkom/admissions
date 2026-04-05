@@ -82,35 +82,37 @@ export default GroupsPage;
 
 const PageWrapper = styled.div`
   width: 100%;
-  padding: 0 1rem;
-  margin: 0 auto 4em auto;
-  min-height: calc(
-    100vh - 70px - 2rem - 4em
-  ); /* Calculated to never overflow navbar/padding/margin */
+  padding: 4rem 2rem;
+  max-width: 1200px;
+  margin: 0 auto;
+  min-height: calc(100vh - 80px);
   display: flex;
   flex-direction: column;
-  justify-content: center;
+
+  ${media.handheld`
+    padding: 2rem 1rem;
+  `};
 `;
 
 const Title = styled.h1`
-  color: rgba(129, 129, 129, 0.59);
-  font-size: 1.3rem;
-  margin: 1.6rem 0 2rem;
-  line-height: 1.5em;
+  color: #4b5563;
+  font-size: 1.5rem;
+  font-weight: 500;
+  margin-bottom: 3rem;
+  text-align: center;
+  line-height: 1.4;
 
   ${media.handheld`
-    margin: 1.5rem 1rem;
-    font-size: 1.2rem;
-    line-height: 1.2em;
+    font-size: 1.25rem;
+    margin-bottom: 2rem;
   `};
 `;
 
 const GroupsWrapper = styled.div`
   display: grid;
-  max-width: calc(460px + 460px + 2rem);
-  grid-template-columns: 1fr 1fr;
-  grid-gap: 2rem 1.5rem;
-  margin: auto;
+  grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+  grid-gap: 2rem;
+  width: 100%;
 
   ${media.handheld`
     grid-template-columns: 1fr;
@@ -120,33 +122,27 @@ const GroupsWrapper = styled.div`
 
 const NextButtonWrapper = styled.div`
   width: 100%;
-  margin-top: 4em;
+  margin-top: 4rem;
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
-
-  ${media.handheld`
-    margin-top: 2.5rem;
-  `};
+  gap: 1.5rem;
 `;
 
 const ErrorMessage = styled.div`
-  font-size: 0.9rem;
-  font-weight: 600;
-  line-height: 1.3em;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: #6b7280;
   display: flex;
   align-items: center;
-  margin-top: 1rem;
+  gap: 0.75rem;
+  padding: 1rem 1.5rem;
+  background-color: #fef2f2;
+  border-radius: var(--border-radius-md);
+  border: 1px solid #fee2e2;
 
   > i {
-    font-size: 1.5rem;
-    margin-right: 0.8rem;
-    color: var(--lego-red-color);
+    font-size: 1.25rem;
+    color: var(--lego-red-color, #e11d48);
   }
-
-  ${media.handheld`
-    font-size: 0.9rem;
-    max-width: 70vw;
-  `};
 `;
