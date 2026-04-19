@@ -1,7 +1,4 @@
 import React from "react";
-import styled from "styled-components";
-import { media } from "src/styles/mediaQueries";
-
 import DecorativeLine from "src/components/DecorativeLine";
 import LandingPageSkeleton from "./LandingPageSkeleton";
 import LinkButton from "src/components/LinkButton";
@@ -9,10 +6,12 @@ import LinkButton from "src/components/LinkButton";
 const LandingPageNoAdmission = () => {
   return (
     <LandingPageSkeleton>
-      <SubTitle>Ingen åpne opptak for øyeblikket</SubTitle>
-      <InfoBox>
+      <h2 className="mb-[0.6rem] text-[1.8rem] font-medium text-[var(--color-gray-7)] max-[500px]:mt-8 max-[500px]:text-center max-[500px]:text-[1.5rem] max-[500px]:leading-8">
+        Ingen åpne opptak for øyeblikket
+      </h2>
+      <div className="mb-8 flex max-w-[420px] max-[500px]:mx-4">
         <DecorativeLine $vertical />
-        <p>
+        <p className="mb-0 px-0 py-[7px] text-[1.1rem] leading-[1.8rem] max-[500px]:text-base max-[500px]:leading-6 [&_a]:whitespace-nowrap">
           Opptak til{" "}
           <a href="https://abakus.no/pages/grupper/104-revyen">revyen</a> og{" "}
           <a href="https://abakus.no/pages/komiteer/4">komiteene</a> skjer
@@ -34,7 +33,7 @@ const LandingPageNoAdmission = () => {
           </a>{" "}
           for kunngjøringer!
         </p>
-      </InfoBox>
+      </div>
       <LinkButton to="https://abakus.no" external secondary>
         Gå til abakus.no
       </LinkButton>
@@ -43,41 +42,3 @@ const LandingPageNoAdmission = () => {
 };
 
 export default LandingPageNoAdmission;
-
-/** Styles **/
-
-const SubTitle = styled.h2`
-  margin-bottom: 0.6rem;
-  font-size: 1.8rem;
-  font-weight: 500;
-  color: var(--color-gray-7);
-  ${media.handheld`
-    margin-top: 2rem;
-    font-size: 1.5rem;
-    line-height: 2rem;
-    text-align: center;
-  `};
-`;
-
-const InfoBox = styled.div`
-  display: flex;
-  max-width: 420px;
-  margin-bottom: 2rem;
-
-  > p {
-    font-size: 1.1rem;
-    line-height: 1.8rem;
-    padding: 7px 0;
-    a {
-      white-space: nowrap;
-    }
-  }
-
-  ${media.handheld`
-  margin: 0 1rem;
-
-    > p {
-    font-size: 1rem;
-    line-height: 1.5rem;
-  `};
-`;

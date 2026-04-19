@@ -1,12 +1,12 @@
 import React, { useMemo } from "react";
-import styled from "styled-components";
 import type { ScheduleItem } from "../../../types";
 import {
-  scheduleGridHeaderCell,
-  scheduleGridShell,
-  scheduleGridTimeLabel,
+  scheduleGridHeaderCellClass,
+  scheduleGridShellClass,
+  scheduleGridTimeLabelClass,
 } from "../shared";
 import { formatDateHeader } from "../scheduleUtils";
+import cn from "src/utils/cn";
 
 interface Props {
   schedule: ScheduleItem[];
@@ -17,7 +17,7 @@ const SolverCalendarView: React.FC<Props> = ({ schedule, dates }) => {
   const startHour = 8;
   const endHour = 18;
 
-  const HOURS = useMemo(
+  const hours = useMemo(
     () =>
       Array.from(
         { length: endHour - startHour },
@@ -39,37 +39,65 @@ const SolverCalendarView: React.FC<Props> = ({ schedule, dates }) => {
     return map;
   }, [schedule]);
 
+  const columns = dates.length + 1;
+
   return (
-    <Wrapper>
-      <Grid $columns={dates.length + 1}>
+    <div className={cn(scheduleGridShellClass, "min-w-0 w-full")}>
+      <div
+        className="grid gap-1.5"
+        style={{
+          gridTemplateColumns: `56px repeat(${columns - 1}, minmax(110px, 1fr))`,
+          minWidth: `max(680px, ${(columns - 1) * 110 + 56}px)`,
+        }}
+      >
         <div />
-        {dates.map((date, dayIndex) => {
+        {dates.map((date) => {
           const { weekday, dayMonth } = formatDateHeader(date);
           return (
-            <HeaderCell key={date}>
+            <div key={date} className={scheduleGridHeaderCellClass}>
               <span>{weekday}</span>
-              <DateSub>{dayMonth}</DateSub>
-            </HeaderCell>
+              <span className="block text-[0.688rem] font-semibold text-[#a0a0a0]">
+                {dayMonth}
+              </span>
+            </div>
           );
         })}
 
-        {HOURS.map((hourLabel) => {
+        {hours.map((hourLabel) => {
           const hour = parseInt(hourLabel, 10);
           return (
             <React.Fragment key={hourLabel}>
-              <TimeLabel>{hourLabel}</TimeLabel>
+              <div className={scheduleGridTimeLabelClass}>{hourLabel}</div>
               {dates.map((_, dayIndex) => {
                 const items = scheduleMap.get(`${dayIndex}-${hour}`) ?? [];
                 return (
-                  <Slot key={`${dayIndex}-${hour}`} $hasInterview={items.length > 0}>
+                  <div
+                    key={`${dayIndex}-${hour}`}
+                    className={cn(
+                      "flex min-h-[4.5rem] flex-col gap-1 rounded-md border p-1",
+                      items.length > 0
+                        ? "border-[#e4e4e4] bg-white"
+                        : "border-[#ebebeb] bg-[#f5f5f5]",
+                    )}
+                  >
                     {items.map((item, index) => (
-                      <InterviewCard key={`${item.candidate}-${index}`}>
-                        <CandidateName>{item.candidate}</CandidateName>
-                        <PanelList>
+                      <div
+                        key={`${item.candidate}-${index}`}
+                        className="flex flex-col gap-[0.3rem] rounded border border-[#e4e4e4] border-l-2 border-l-[var(--lego-red-color)] bg-white px-[0.6rem] py-2"
+                      >
+                        <div className="truncate whitespace-nowrap text-xs font-bold text-[#111111]">
+                          {item.candidate}
+                        </div>
+                        <div className="flex flex-wrap gap-1">
                           {item.panel.map((p, i) => (
-                            <PanelMember
+                            <span
                               key={i}
-                              $isOvertime={p.is_overtime}
+                              className={cn(
+                                "whitespace-nowrap rounded-full border px-1.5 py-[0.15rem] text-[0.688rem]",
+                                p.is_overtime
+                                  ? "border-[rgba(178,18,7,0.2)] bg-[rgba(178,18,7,0.08)] text-[#b21207]"
+                                  : "border-transparent bg-[#f0f0f0] text-[#6b6b6b]",
+                              )}
                               title={
                                 p.is_overtime
                                   ? "Utenfor registrert tilgjengelighet"
@@ -77,98 +105,20 @@ const SolverCalendarView: React.FC<Props> = ({ schedule, dates }) => {
                               }
                             >
                               {p.name}
-                            </PanelMember>
+                            </span>
                           ))}
-                        </PanelList>
-                      </InterviewCard>
+                        </div>
+                      </div>
                     ))}
-                  </Slot>
+                  </div>
                 );
               })}
             </React.Fragment>
           );
         })}
-      </Grid>
-    </Wrapper>
+      </div>
+    </div>
   );
 };
 
 export default SolverCalendarView;
-
-const Wrapper = styled.div`
-  ${scheduleGridShell};
-  min-width: 0;
-  width: 100%;
-`;
-
-const Grid = styled.div<{ $columns: number }>`
-  display: grid;
-  grid-template-columns: 56px repeat(${(props) => props.$columns - 1}, minmax(110px, 1fr));
-  gap: 6px;
-  min-width: max(680px, ${(props) => (props.$columns - 1) * 110 + 56}px);
-`;
-
-const DateSub = styled.span`
-  font-size: 0.688rem;
-  font-weight: 600;
-  color: #a0a0a0;
-  display: block;
-`;
-
-const HeaderCell = styled.div`
-  ${scheduleGridHeaderCell};
-`;
-
-const TimeLabel = styled.div`
-  ${scheduleGridTimeLabel};
-`;
-
-const Slot = styled.div<{ $hasInterview: boolean }>`
-  min-height: 4.5rem;
-  border-radius: 6px;
-  padding: 4px;
-  background: ${(props) => (props.$hasInterview ? "#ffffff" : "#f5f5f5")};
-  border: 1px solid ${(props) => (props.$hasInterview ? "#e4e4e4" : "#ebebeb")};
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-`;
-
-const InterviewCard = styled.div`
-  background: #ffffff;
-  border: 1px solid #e4e4e4;
-  border-left: 2px solid var(--lego-red-color);
-  padding: 0.5rem 0.6rem;
-  border-radius: 4px;
-  display: flex;
-  flex-direction: column;
-  gap: 0.3rem;
-`;
-
-const CandidateName = styled.div`
-  font-size: 0.75rem;
-  font-weight: 700;
-  color: #111111;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-`;
-
-const PanelList = styled.div`
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.25rem;
-`;
-
-const PanelMember = styled.span<{ $isOvertime: boolean }>`
-  font-size: 0.688rem;
-  color: ${(props) => (props.$isOvertime ? "#b21207" : "#6b6b6b")};
-  background: ${(props) =>
-    props.$isOvertime ? "rgba(178, 18, 7, 0.08)" : "#f0f0f0"};
-  border: 1px solid
-    ${(props) =>
-      props.$isOvertime ? "rgba(178, 18, 7, 0.2)" : "transparent"};
-  padding: 0.15rem 0.4rem;
-  border-radius: 999px;
-  white-space: nowrap;
-`;

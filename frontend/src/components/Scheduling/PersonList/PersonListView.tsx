@@ -1,10 +1,10 @@
 import React from "react";
-import styled from "styled-components";
 import TimelineWrapper from "../TimelineWrapper";
 import type { Candidate, Interviewer } from "../types";
 import { DAYS_MAP } from "../utils/timeutils";
 import AvailabilityBar from "../Availability/AvailabilityBar";
-import { scheduleInset, scheduleLabel } from "../shared";
+import { scheduleInsetClass, scheduleLabelClass } from "../shared";
+import cn from "src/utils/cn";
 
 interface PersonListViewProps {
   data: Candidate[] | Interviewer[];
@@ -12,30 +12,54 @@ interface PersonListViewProps {
 
 const PersonListView = ({ data }: PersonListViewProps) => {
   return (
-    <List>
+    <ul className="m-0 flex list-none flex-col gap-2 p-0">
       {data.map((person) => {
         const isInterviewer = "availability" in person;
         const personName = person.name?.trim() || "Ukjent person";
+        const isFemale = person.gender === "F";
 
         return (
-          <Card key={person.id}>
-            <CardMain>
-              <Avatar $gender={person.gender}>{personName.charAt(0)}</Avatar>
+          <li
+            key={person.id}
+            className="rounded-lg border border-[#e4e4e4] bg-white px-4 py-3.5"
+          >
+            <div className="flex items-center gap-3">
+              <div
+                className={cn(
+                  "flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-[#e4e4e4] text-sm font-bold",
+                  isFemale
+                    ? "bg-[rgba(178,18,7,0.07)] text-[#b21207]"
+                    : "bg-[#f0f0f0] text-[#6b6b6b]",
+                )}
+              >
+                {personName.charAt(0)}
+              </div>
 
-              <Info>
-                <HeaderRow>
-                  <Name>{personName}</Name>
-                  <GenderBadge $gender={person.gender}>
+              <div className="min-w-0 flex-1">
+                <div className="flex flex-wrap items-center gap-2">
+                  <h3 className="m-0 text-sm font-bold text-[#111111]">
+                    {personName}
+                  </h3>
+                  <span
+                    className={cn(
+                      "rounded-full border px-1.5 py-[0.15rem] text-[0.688rem] font-bold",
+                      isFemale
+                        ? "border-[rgba(178,18,7,0.16)] bg-[rgba(178,18,7,0.07)] text-[#b21207]"
+                        : "border-[#e4e4e4] bg-[#f0f0f0] text-[#6b6b6b]",
+                    )}
+                  >
                     {person.gender}
-                  </GenderBadge>
-                </HeaderRow>
-                <Id>#{person.id}</Id>
-              </Info>
-            </CardMain>
+                  </span>
+                </div>
+                <span className={scheduleLabelClass}>#{person.id}</span>
+              </div>
+            </div>
 
             {isInterviewer && (
-              <AvailabilityTimelineWrapper>
-                <TimelineTitle>Tilgjengelighet</TimelineTitle>
+              <div className="mt-3 border-t border-[#f0f0f0] pt-3">
+                <div className={cn(scheduleLabelClass, "mb-[0.4rem]")}>
+                  Tilgjengelighet
+                </div>
                 <TimelineWrapper $gap="4px">
                   {DAYS_MAP.map((dayLabel, dayIndex) => {
                     const hasAvailability = (
@@ -54,128 +78,25 @@ const PersonListView = ({ data }: PersonListViewProps) => {
                     );
                   })}
                 </TimelineWrapper>
-              </AvailabilityTimelineWrapper>
+              </div>
             )}
-          </Card>
+          </li>
         );
       })}
 
       {data.length === 0 && (
-        <EmptyState>
-          <EmptyTitle>Ingen registrerte personer</EmptyTitle>
-          <EmptyText>
+        <div className={cn(scheduleInsetClass, "px-4 py-8 text-center")}>
+          <h4 className="mb-[0.3rem] mt-0 text-sm font-bold text-[#111111]">
+            Ingen registrerte personer
+          </h4>
+          <p className="m-0 text-[0.813rem] leading-[1.6] text-[#a0a0a0]">
             Listen blir fylt når kandidater eller intervjuere er tilgjengelige i
             denne visningen.
-          </EmptyText>
-        </EmptyState>
+          </p>
+        </div>
       )}
-    </List>
+    </ul>
   );
 };
 
 export default PersonListView;
-
-const List = styled.ul`
-  list-style: none;
-  padding: 0;
-  margin: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-`;
-
-const Card = styled.li`
-  padding: 0.875rem 1rem;
-  border: 1px solid #e4e4e4;
-  border-radius: 8px;
-  background: #ffffff;
-`;
-
-const CardMain = styled.div`
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-`;
-
-const Avatar = styled.div<{ $gender: string }>`
-  width: 36px;
-  height: 36px;
-  background: ${(props) =>
-    props.$gender === "F" ? "rgba(178, 18, 7, 0.07)" : "#f0f0f0"};
-  color: ${(props) => (props.$gender === "F" ? "#b21207" : "#6b6b6b")};
-  border-radius: 8px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-weight: 700;
-  font-size: 0.875rem;
-  flex-shrink: 0;
-  border: 1px solid #e4e4e4;
-`;
-
-const Info = styled.div`
-  flex: 1;
-  min-width: 0;
-`;
-
-const HeaderRow = styled.div`
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  flex-wrap: wrap;
-`;
-
-const Name = styled.h3`
-  font-size: 0.875rem;
-  font-weight: 700;
-  color: #111111;
-  margin: 0;
-`;
-
-const Id = styled.span`
-  ${scheduleLabel};
-`;
-
-const GenderBadge = styled.span<{ $gender: string }>`
-  font-size: 0.688rem;
-  font-weight: 700;
-  padding: 0.15rem 0.4rem;
-  border-radius: 999px;
-  background: ${(props) =>
-    props.$gender === "F" ? "rgba(178, 18, 7, 0.07)" : "#f0f0f0"};
-  color: ${(props) => (props.$gender === "F" ? "#b21207" : "#6b6b6b")};
-  border: 1px solid
-    ${(props) =>
-      props.$gender === "F" ? "rgba(178, 18, 7, 0.16)" : "#e4e4e4"};
-`;
-
-const AvailabilityTimelineWrapper = styled.div`
-  margin-top: 0.75rem;
-  padding-top: 0.75rem;
-  border-top: 1px solid #f0f0f0;
-`;
-
-const TimelineTitle = styled.div`
-  ${scheduleLabel};
-  margin-bottom: 0.4rem;
-`;
-
-const EmptyState = styled.div`
-  ${scheduleInset};
-  padding: 2rem 1rem;
-  text-align: center;
-`;
-
-const EmptyTitle = styled.h4`
-  margin: 0 0 0.3rem;
-  color: #111111;
-  font-size: 0.875rem;
-  font-weight: 700;
-`;
-
-const EmptyText = styled.p`
-  margin: 0;
-  color: #a0a0a0;
-  font-size: 0.813rem;
-  line-height: 1.6;
-`;

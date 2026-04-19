@@ -2,6 +2,10 @@
 @import url("./fonts.css");
 @import url("~/@webkom/lego-bricks/dist/style.css");
 
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
 :root {
   --lego-red-color: #b21207;
   --font-family: "Inter", -apple-system, blinkmacsystemfont, "Segoe UI", roboto,
@@ -42,6 +46,36 @@ body {
   color: var(--lego-font-color, #111827);
   font-family: var(--font-family);
   position: relative;
+}
+
+#root {
+  min-height: 100vh;
+}
+
+@keyframes timeline-pulse {
+  0% {
+    box-shadow: 0 0 0 0 rgb(196 30 58 / 45%);
+  }
+
+  70% {
+    box-shadow: 0 0 0 10px rgb(196 30 58 / 0%);
+  }
+
+  100% {
+    box-shadow: 0 0 0 0 rgb(196 30 58 / 0%);
+  }
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 h1,

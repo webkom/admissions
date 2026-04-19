@@ -1,19 +1,15 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
-import styled, { css } from "styled-components";
 import { Check } from "lucide-react";
 import {
-  primaryAction,
-  scheduleGridShell,
-  scheduleGridTimeLabel,
-  scheduleLabel,
-  scheduleSurface,
-  secondaryAction,
+  primaryActionClass,
+  scheduleGridShellClass,
+  scheduleGridTimeLabelClass,
+  scheduleLabelClass,
+  scheduleSurfaceClass,
+  secondaryActionClass,
 } from "../shared";
-import {
-  dateRangeDates,
-  formatDateHeader,
-  makeSlotKey,
-} from "../scheduleUtils";
+import { dateRangeDates, formatDateHeader, makeSlotKey } from "../scheduleUtils";
+import cn from "src/utils/cn";
 
 const MAX_RANGE_DAYS = 21;
 
@@ -41,7 +37,21 @@ interface TimeSegmentInputProps {
   id?: string;
 }
 
-const TimeSegmentInput: React.FC<TimeSegmentInputProps> = ({ value, onChange, id }) => {
+const fieldLabelClass = cn(
+  scheduleLabelClass,
+  "cursor-default select-none whitespace-nowrap border-r border-[#e4e4e4] bg-[#f5f5f5] px-[0.6rem] py-0 flex items-center",
+);
+
+const fieldBodyClass = "flex items-center gap-1 px-2";
+
+const plainInputClass =
+  "border-none bg-transparent p-0 text-[0.813rem] font-semibold text-[#111111] focus:text-[var(--lego-red-color)] focus:outline-none";
+
+const TimeSegmentInput: React.FC<TimeSegmentInputProps> = ({
+  value,
+  onChange,
+  id,
+}) => {
   const minRef = useRef<HTMLInputElement>(null);
   const [hStr, setHStr] = useState(String(value.h).padStart(2, "0"));
   const [mStr, setMStr] = useState(String(value.m).padStart(2, "0"));
@@ -57,14 +67,15 @@ const TimeSegmentInput: React.FC<TimeSegmentInputProps> = ({ value, onChange, id
   };
 
   return (
-    <TimeSegWrapper>
-      <SegInput
+    <div className="flex items-center gap-px">
+      <input
         id={id}
         type="text"
         inputMode="numeric"
         maxLength={2}
         value={hStr}
         placeholder="HH"
+        className="w-7 border-none bg-transparent p-0 text-center text-sm font-semibold text-[#111111] caret-[var(--lego-red-color)] placeholder:text-[#d0d0d0] focus:text-[var(--lego-red-color)] focus:outline-none"
         onChange={(e) => {
           const s = e.target.value.replace(/\D/g, "").slice(0, 2);
           setHStr(s);
@@ -79,14 +90,17 @@ const TimeSegmentInput: React.FC<TimeSegmentInputProps> = ({ value, onChange, id
           }
         }}
       />
-      <SegColon>:</SegColon>
-      <SegInput
+      <span className="select-none text-sm font-medium leading-none text-[#c8c8c8]">
+        :
+      </span>
+      <input
         ref={minRef}
         type="text"
         inputMode="numeric"
         maxLength={2}
         value={mStr}
         placeholder="MM"
+        className="w-7 border-none bg-transparent p-0 text-center text-sm font-semibold text-[#111111] caret-[var(--lego-red-color)] placeholder:text-[#d0d0d0] focus:text-[var(--lego-red-color)] focus:outline-none"
         onChange={(e) => {
           const s = e.target.value.replace(/\D/g, "").slice(0, 2);
           setMStr(s);
@@ -94,7 +108,7 @@ const TimeSegmentInput: React.FC<TimeSegmentInputProps> = ({ value, onChange, id
         }}
         onFocus={(e) => e.target.select()}
       />
-    </TimeSegWrapper>
+    </div>
   );
 };
 
@@ -121,9 +135,9 @@ const AdminScheduleConfig: React.FC<AdminScheduleConfigProps> = ({
 
   const [localStartDate, setLocalStartDate] = useState(startDate);
   const [localEndDate, setLocalEndDate] = useState(endDate);
-
-  // Draft slot state — only flushed to parent on save
-  const [draftSlots, setDraftSlots] = useState<Set<string>>(() => new Set(enabledSlots));
+  const [draftSlots, setDraftSlots] = useState<Set<string>>(
+    () => new Set(enabledSlots),
+  );
 
   const hasPendingChanges =
     localStartDate !== startDate ||
@@ -135,19 +149,18 @@ const AdminScheduleConfig: React.FC<AdminScheduleConfigProps> = ({
     setLocalStartDate(startDate);
     setLocalEndDate(endDate);
     setDraftSlots(new Set(enabledSlots));
-  }, [startDate, endDate]);
+  }, [startDate, endDate, enabledSlots]);
 
   const startMinute = pendingStart.h * 60 + pendingStart.m;
   const endMinute = pendingEnd.h * 60 + pendingEnd.m;
   const isInvalidRange = startMinute >= endMinute;
 
-  // Grid uses local draft dates, not the committed parent dates
   const dates = React.useMemo(
     () => dateRangeDates(localStartDate, localEndDate).slice(0, MAX_RANGE_DAYS),
     [localStartDate, localEndDate],
   );
 
-  const TIME_SLOTS = React.useMemo(() => {
+  const timeSlots = React.useMemo(() => {
     if (isInvalidRange) return [];
     const slots = [];
     const step = pendingDuration > 0 ? pendingDuration : 60;
@@ -197,7 +210,6 @@ const AdminScheduleConfig: React.FC<AdminScheduleConfigProps> = ({
     if (!onSave || pendingDuration === 0 || isInvalidRange) return;
     setIsSaving(true);
     try {
-      // Flush all draft state to parent before saving
       onSlotsChange(draftSlots);
       if (localStartDate && localEndDate && localStartDate <= localEndDate) {
         onDateRangeChange(localStartDate, localEndDate);
@@ -209,83 +221,87 @@ const AdminScheduleConfig: React.FC<AdminScheduleConfigProps> = ({
     }
   };
 
-  const handleDateRangeCommit = () => {
-    // Only updates local state; parent is not notified until save
-  };
-
   const selectAllForDay = (date: string) => {
     const newSlots = new Set(draftSlots);
-    TIME_SLOTS.forEach((m) => newSlots.add(makeSlotKey(date, m)));
+    timeSlots.forEach((m) => newSlots.add(makeSlotKey(date, m)));
     setDraftSlots(newSlots);
   };
 
   const clearAllForDay = (date: string) => {
     const newSlots = new Set(draftSlots);
-    TIME_SLOTS.forEach((m) => newSlots.delete(makeSlotKey(date, m)));
+    timeSlots.forEach((m) => newSlots.delete(makeSlotKey(date, m)));
     setDraftSlots(newSlots);
   };
 
   const selectAll = () => {
     const newSlots = new Set<string>();
     dates.forEach((date) => {
-      TIME_SLOTS.forEach((m) => newSlots.add(makeSlotKey(date, m)));
+      timeSlots.forEach((m) => newSlots.add(makeSlotKey(date, m)));
     });
     setDraftSlots(newSlots);
   };
 
   const clearAll = () => setDraftSlots(new Set());
 
-  const dateRangeValid = localStartDate && localEndDate && localStartDate <= localEndDate;
+  const dateRangeValid =
+    localStartDate && localEndDate && localStartDate <= localEndDate;
+  const columns = dates.length + 1;
 
   return (
-    <Container>
-      <HeaderCard>
-        <ControlBar>
-          <ControlInputs>
-            {/* Date range */}
-            <FieldGroup>
-              <FieldLabel>Intervjuperiode</FieldLabel>
-              <FieldBody>
-                <DateInput
+    <div className="flex min-w-0 select-none flex-col gap-2.5">
+      <div className={cn(scheduleSurfaceClass, "p-[0.875rem_1rem]")}>
+        <div className="flex flex-wrap items-center gap-2.5">
+          <div className="flex flex-wrap items-center gap-1.5">
+            <div className="inline-flex h-8 items-stretch overflow-hidden rounded-lg border border-[#e4e4e4] bg-white">
+              <label className={fieldLabelClass}>Intervjuperiode</label>
+              <div className={fieldBodyClass}>
+                <input
                   type="date"
                   value={localStartDate}
+                  className={cn(plainInputClass, "cursor-pointer select-none")}
                   onChange={(e) => setLocalStartDate(e.target.value)}
-                  onBlur={handleDateRangeCommit}
                 />
-                <FieldArrow>→</FieldArrow>
-                <DateInput
+                <span className="select-none px-[0.1rem] text-xs text-[#c8c8c8]">
+                  →
+                </span>
+                <input
                   type="date"
                   value={localEndDate}
                   min={localStartDate}
+                  className={cn(plainInputClass, "cursor-pointer select-none")}
                   onChange={(e) => setLocalEndDate(e.target.value)}
-                  onBlur={handleDateRangeCommit}
                 />
-              </FieldBody>
-            </FieldGroup>
+              </div>
+            </div>
 
-            <FieldGroup>
-              <FieldLabel>Tidsrom</FieldLabel>
-              <FieldBody>
+            <div className="inline-flex h-8 items-stretch overflow-hidden rounded-lg border border-[#e4e4e4] bg-white">
+              <label className={fieldLabelClass}>Tidsrom</label>
+              <div className={fieldBodyClass}>
                 <TimeSegmentInput
                   id="start-time"
                   value={pendingStart}
                   onChange={setPendingStart}
                 />
-                <FieldArrow>→</FieldArrow>
+                <span className="select-none px-[0.1rem] text-xs text-[#c8c8c8]">
+                  →
+                </span>
                 <TimeSegmentInput value={pendingEnd} onChange={setPendingEnd} />
-              </FieldBody>
-            </FieldGroup>
+              </div>
+            </div>
 
-            <FieldGroup>
-              <FieldLabel htmlFor="session-duration">Varighet</FieldLabel>
-              <FieldBody>
-                <FieldInput
+            <div className="inline-flex h-8 items-stretch overflow-hidden rounded-lg border border-[#e4e4e4] bg-white">
+              <label className={fieldLabelClass} htmlFor="session-duration">
+                Varighet
+              </label>
+              <div className={fieldBodyClass}>
+                <input
                   id="session-duration"
                   type="number"
                   min="5"
                   max="120"
                   step="5"
                   value={durationInput}
+                  className="w-10 border-none bg-transparent p-0 text-center text-sm font-semibold text-[#111111] [-moz-appearance:textfield] focus:text-[var(--lego-red-color)] focus:outline-none [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
                   onChange={(e) => {
                     setDurationInput(e.target.value);
                     const val = parseInt(e.target.value, 10);
@@ -294,82 +310,121 @@ const AdminScheduleConfig: React.FC<AdminScheduleConfigProps> = ({
                   }}
                   onFocus={(e) => e.target.select()}
                 />
-                <FieldUnit>min</FieldUnit>
-              </FieldBody>
-            </FieldGroup>
-          </ControlInputs>
+                <span className="select-none text-[0.813rem] font-medium text-[#a0a0a0]">
+                  min
+                </span>
+              </div>
+            </div>
+          </div>
 
-          <ControlActions>
+          <div className="ml-auto flex flex-wrap items-center gap-1.5">
             {!dateRangeValid && (
-              <ValidationHint>Ugyldig datoperiode</ValidationHint>
+              <span className="text-xs font-semibold text-[#b21207]">
+                Ugyldig datoperiode
+              </span>
             )}
-            {isInvalidRange && <ValidationHint>Ugyldig tidsrom</ValidationHint>}
+            {isInvalidRange && (
+              <span className="text-xs font-semibold text-[#b21207]">
+                Ugyldig tidsrom
+              </span>
+            )}
             {hasPendingChanges && !isSaving && (
-              <PendingHint>Ulagrede endringer</PendingHint>
+              <span className="text-xs font-semibold italic text-[#a0a0a0]">
+                Ulagrede endringer
+              </span>
             )}
-            <ActionButton type="button" onClick={selectAll}>
+            <button
+              type="button"
+              className={cn(
+                secondaryActionClass,
+                "cursor-pointer px-[0.7rem] py-[0.35rem] text-[0.813rem] font-semibold",
+              )}
+              onClick={selectAll}
+            >
               Velg alle
-            </ActionButton>
-            <ActionButton type="button" onClick={clearAll}>
+            </button>
+            <button
+              type="button"
+              className={cn(
+                secondaryActionClass,
+                "cursor-pointer px-[0.7rem] py-[0.35rem] text-[0.813rem] font-semibold",
+              )}
+              onClick={clearAll}
+            >
               Tøm alle
-            </ActionButton>
+            </button>
             {onSave && (
-              <SaveButton
+              <button
                 type="button"
+                className={cn(
+                  primaryActionClass,
+                  "cursor-pointer whitespace-nowrap px-4 py-[0.45rem] text-[0.813rem] font-bold",
+                )}
                 onClick={handleSave}
-                disabled={isSaving || pendingDuration === 0 || isInvalidRange || !dateRangeValid}
+                disabled={
+                  isSaving ||
+                  pendingDuration === 0 ||
+                  isInvalidRange ||
+                  !dateRangeValid
+                }
               >
                 {isSaving ? "Lagrer..." : "Lagre oppsett"}
-              </SaveButton>
+              </button>
             )}
-          </ControlActions>
-        </ControlBar>
-      </HeaderCard>
+          </div>
+        </div>
+      </div>
 
-      <GridToolbar>
-        <ToolbarStats>
-          <ToolbarStat>
-            <strong>{dates.length}</strong> dager
-          </ToolbarStat>
+      <div className="flex items-center justify-end gap-4 px-1">
+        <div className="flex flex-wrap items-center gap-2">
+          <ToolbarStat value={String(dates.length)} label="dager" />
           <ToolbarDot />
-          <ToolbarStat>
-            <strong>{draftSlots.size}</strong> ledige slots
-          </ToolbarStat>
+          <ToolbarStat value={String(draftSlots.size)} label="ledige slots" />
           <ToolbarDot />
-          <ToolbarStat>
-            <strong>{candidateCount}</strong> kandidater
-          </ToolbarStat>
+          <ToolbarStat value={String(candidateCount)} label="kandidater" />
           <ToolbarDot />
-          <ToolbarStat>
-            <strong>{interviewerCount}</strong> intervjuere
-          </ToolbarStat>
-        </ToolbarStats>
-      </GridToolbar>
+          <ToolbarStat value={String(interviewerCount)} label="intervjuere" />
+        </div>
+      </div>
 
-      <GridWrapper>
-        <Grid $columns={dates.length + 1}>
+      <div className={cn(scheduleGridShellClass, "min-w-0")}>
+        <div
+          className="grid gap-[5px]"
+          style={{
+            gridTemplateColumns: `56px repeat(${columns - 1}, minmax(70px, 1fr))`,
+            minWidth: `max(680px, ${(columns - 1) * 70 + 56}px)`,
+          }}
+        >
           <div />
           {dates.map((date) => {
             const { weekday, dayMonth } = formatDateHeader(date);
             const isAllSelected =
-              TIME_SLOTS.length > 0 &&
-              TIME_SLOTS.every((m) => draftSlots.has(makeSlotKey(date, m)));
-            const isSomeSelected = TIME_SLOTS.some((m) =>
+              timeSlots.length > 0 &&
+              timeSlots.every((m) => draftSlots.has(makeSlotKey(date, m)));
+            const isSomeSelected = timeSlots.some((m) =>
               draftSlots.has(makeSlotKey(date, m)),
             );
 
             return (
-              <DayHeader key={date}>
-                <DayWeekday>{weekday}</DayWeekday>
-                <DayDate>{dayMonth}</DayDate>
-                <DayToggle>
+              <div
+                key={date}
+                className="flex flex-col items-center gap-[0.2rem] rounded-md border border-[#e4e4e4] bg-white px-1 py-2"
+              >
+                <div className={cn(scheduleLabelClass, "text-center text-[#6b6b6b]")}>
+                  {weekday}
+                </div>
+                <div className="text-center text-[0.813rem] font-bold text-[#111111]">
+                  {dayMonth}
+                </div>
+                <label className="flex cursor-pointer items-center gap-1 text-[0.688rem] font-semibold text-[#a0a0a0]">
                   <input
                     type="checkbox"
-                    disabled={TIME_SLOTS.length === 0}
+                    disabled={timeSlots.length === 0}
                     checked={isAllSelected}
                     ref={(input) => {
-                      if (input)
+                      if (input) {
                         input.indeterminate = isSomeSelected && !isAllSelected;
+                      }
                     }}
                     onChange={() => {
                       if (isAllSelected) clearAllForDay(date);
@@ -377,362 +432,68 @@ const AdminScheduleConfig: React.FC<AdminScheduleConfigProps> = ({
                     }}
                   />
                   Alle
-                </DayToggle>
-              </DayHeader>
+                </label>
+              </div>
             );
           })}
 
-          {TIME_SLOTS.length === 0 ? (
-            <EmptyGrid>
+          {timeSlots.length === 0 ? (
+            <div
+              className={cn(
+                scheduleLabelClass,
+                "col-[1/-1] px-4 py-10 text-center text-[#c0c0c0]",
+              )}
+            >
               {dates.length === 0
                 ? "Velg en datoperiode for å se tidsplanen."
                 : "Ingen slotter — endre tidsrom og lagre."}
-            </EmptyGrid>
+            </div>
           ) : (
-            TIME_SLOTS.map((minute) => (
+            timeSlots.map((minute) => (
               <React.Fragment key={minute}>
-                <TimeLabel>{formatTime(minute)}</TimeLabel>
+                <div className={scheduleGridTimeLabelClass}>{formatTime(minute)}</div>
                 {dates.map((date) => {
                   const key = makeSlotKey(date, minute);
                   const isEnabled = draftSlots.has(key);
                   return (
-                    <ConfigSlot
+                    <div
                       key={key}
-                      $isEnabled={isEnabled}
                       onMouseDown={() => handleMouseDown(date, minute)}
                       onMouseEnter={() => handleMouseEnter(date, minute)}
+                      className={cn(
+                        "flex h-9 cursor-pointer items-center justify-center rounded-[5px] border transition-[background-color,border-color] duration-100",
+                        isEnabled
+                          ? "border-[var(--lego-red-color)] bg-[var(--lego-red-color)] text-white hover:bg-[#9a1006]"
+                          : "border-[#e4e4e4] bg-white hover:border-[rgba(178,18,7,0.28)] hover:bg-[rgba(178,18,7,0.03)]",
+                      )}
                     >
                       {isEnabled && <Check size={12} strokeWidth={2.5} />}
-                    </ConfigSlot>
+                    </div>
                   );
                 })}
               </React.Fragment>
             ))
           )}
-        </Grid>
-      </GridWrapper>
-    </Container>
+        </div>
+      </div>
+    </div>
   );
 };
 
+interface ToolbarStatProps {
+  value: string;
+  label: string;
+}
+
+const ToolbarStat = ({ value, label }: ToolbarStatProps) => (
+  <span className={cn(scheduleLabelClass, "text-[#a0a0a0]")}>
+    <strong className="text-[0.813rem] font-bold normal-case tracking-normal text-[#111111] [font-variant-numeric:tabular-nums]">
+      {value}
+    </strong>{" "}
+    {label}
+  </span>
+);
+
+const ToolbarDot = () => <span className="h-[3px] w-[3px] shrink-0 rounded-full bg-[#d0d0d0]" />;
+
 export default AdminScheduleConfig;
-
-const Container = styled.div`
-  display: flex;
-  flex-direction: column;
-  gap: 0.625rem;
-  user-select: none;
-  min-width: 0;
-`;
-
-const HeaderCard = styled.div`
-  ${scheduleSurface};
-  padding: 0.875rem 1rem;
-`;
-
-const ControlBar = styled.div`
-  display: flex;
-  align-items: center;
-  gap: 0.625rem;
-  flex-wrap: wrap;
-`;
-
-const Eyebrow = styled.span`
-  ${scheduleLabel};
-  flex-shrink: 0;
-  margin-right: 0.25rem;
-`;
-
-const ControlInputs = styled.div`
-  display: flex;
-  align-items: center;
-  gap: 0.375rem;
-  flex-wrap: wrap;
-`;
-
-const ControlActions = styled.div`
-  display: flex;
-  align-items: center;
-  gap: 0.375rem;
-  margin-left: auto;
-  flex-wrap: wrap;
-`;
-
-const ValidationHint = styled.span`
-  font-size: 0.75rem;
-  font-weight: 600;
-  color: #b21207;
-`;
-
-const PendingHint = styled.span`
-  font-size: 0.75rem;
-  font-weight: 600;
-  color: #a0a0a0;
-  font-style: italic;
-`;
-
-const FieldGroup = styled.div`
-  display: inline-flex;
-  align-items: stretch;
-  border: 1px solid #e4e4e4;
-  border-radius: 8px;
-  background: #ffffff;
-  overflow: hidden;
-  height: 2rem;
-`;
-
-const FieldLabel = styled.label`
-  display: flex;
-  align-items: center;
-  padding: 0 0.6rem;
-  background: #f5f5f5;
-  border-right: 1px solid #e4e4e4;
-  ${scheduleLabel};
-  white-space: nowrap;
-  cursor: default;
-  user-select: none;
-`;
-
-const FieldBody = styled.div`
-  display: flex;
-  align-items: center;
-  gap: 0.25rem;
-  padding: 0 0.5rem;
-`;
-
-const FieldArrow = styled.span`
-  color: #c8c8c8;
-  font-size: 0.75rem;
-  user-select: none;
-  padding: 0 0.1rem;
-`;
-
-const DateInput = styled.input`
-  border: none;
-  background: transparent;
-  font-size: 0.813rem;
-  font-weight: 600;
-  color: #111111;
-  padding: 0;
-  cursor: pointer;
-  user-select: none;
-
-  &:focus {
-    outline: none;
-    color: var(--lego-red-color);
-  }
-
-  &::-webkit-calendar-picker-indicator {
-    opacity: 0.4;
-    cursor: pointer;
-  }
-`;
-
-const FieldInput = styled.input`
-  width: 2.5rem;
-  border: none;
-  background: transparent;
-  text-align: center;
-  font-size: 0.875rem;
-  font-weight: 600;
-  color: #111111;
-  padding: 0;
-
-  -moz-appearance: textfield;
-  &::-webkit-outer-spin-button,
-  &::-webkit-inner-spin-button {
-    -webkit-appearance: none;
-    margin: 0;
-  }
-
-  &:focus {
-    outline: none;
-    color: var(--lego-red-color);
-  }
-`;
-
-const FieldUnit = styled.span`
-  color: #a0a0a0;
-  font-size: 0.813rem;
-  font-weight: 500;
-  user-select: none;
-`;
-
-const TimeSegWrapper = styled.div`
-  display: flex;
-  align-items: center;
-  gap: 1px;
-`;
-
-const SegInput = styled.input`
-  width: 1.75rem;
-  border: none;
-  background: transparent;
-  text-align: center;
-  font-size: 0.875rem;
-  font-weight: 600;
-  color: #111111;
-  padding: 0;
-  caret-color: var(--lego-red-color);
-
-  &:focus {
-    outline: none;
-    color: var(--lego-red-color);
-  }
-
-  &::placeholder {
-    color: #d0d0d0;
-  }
-`;
-
-const SegColon = styled.span`
-  color: #c8c8c8;
-  font-size: 0.875rem;
-  font-weight: 500;
-  user-select: none;
-  line-height: 1;
-`;
-
-const GridToolbar = styled.div`
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 1rem;
-  padding: 0 0.25rem;
-`;
-
-const ActionButton = styled.button`
-  ${secondaryAction};
-  padding: 0.35rem 0.7rem;
-  border-radius: 6px;
-  font-size: 0.813rem;
-  font-weight: 600;
-  cursor: pointer;
-`;
-
-const ToolbarStats = styled.div`
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-`;
-
-const ToolbarStat = styled.span`
-  ${scheduleLabel};
-  color: #a0a0a0;
-
-  strong {
-    font-size: 0.813rem;
-    font-weight: 700;
-    color: #111111;
-    font-variant-numeric: tabular-nums;
-    text-transform: none;
-    letter-spacing: 0;
-  }
-`;
-
-const ToolbarDot = styled.span`
-  width: 3px;
-  height: 3px;
-  border-radius: 50%;
-  background: #d0d0d0;
-  flex-shrink: 0;
-`;
-
-const GridWrapper = styled.div`
-  ${scheduleGridShell};
-  min-width: 0;
-`;
-
-const Grid = styled.div<{ $columns: number }>`
-  display: grid;
-  grid-template-columns: 56px repeat(${(props) => props.$columns - 1}, minmax(70px, 1fr));
-  gap: 5px;
-  min-width: max(680px, ${(props) => (props.$columns - 1) * 70 + 56}px);
-`;
-
-const EmptyGrid = styled.div`
-  grid-column: 1 / -1;
-  padding: 2.5rem 1rem;
-  text-align: center;
-  ${scheduleLabel};
-  color: #c0c0c0;
-`;
-
-const DayHeader = styled.div`
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 0.2rem;
-  padding: 0.5rem 0.25rem;
-  border-radius: 6px;
-  background: #ffffff;
-  border: 1px solid #e4e4e4;
-`;
-
-const DayWeekday = styled.div`
-  ${scheduleLabel};
-  text-align: center;
-  color: #6b6b6b;
-`;
-
-const DayDate = styled.div`
-  font-size: 0.813rem;
-  font-weight: 700;
-  color: #111111;
-  text-align: center;
-`;
-
-const DayToggle = styled.label`
-  display: flex;
-  align-items: center;
-  gap: 0.25rem;
-  color: #a0a0a0;
-  font-size: 0.688rem;
-  font-weight: 600;
-  cursor: pointer;
-`;
-
-const TimeLabel = styled.div`
-  ${scheduleGridTimeLabel};
-`;
-
-const ConfigSlot = styled.div<{ $isEnabled: boolean }>`
-  height: 2.25rem;
-  border-radius: 5px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: background-color 0.1s ease, border-color 0.1s ease;
-  cursor: pointer;
-
-  ${(props) =>
-    props.$isEnabled
-      ? css`
-          color: #ffffff;
-          background: var(--lego-red-color);
-          border: 1px solid var(--lego-red-color);
-
-          &:hover {
-            background: #9a1006;
-          }
-        `
-      : css`
-          background: #ffffff;
-          border: 1px solid #e4e4e4;
-
-          &:hover {
-            border-color: rgba(178, 18, 7, 0.28);
-            background: rgba(178, 18, 7, 0.03);
-          }
-        `}
-`;
-
-const SaveButton = styled.button`
-  ${primaryAction};
-  padding: 0.45rem 1rem;
-  border-radius: 8px;
-  font-size: 0.813rem;
-  font-weight: 700;
-  cursor: pointer;
-  white-space: nowrap;
-`;

@@ -1,5 +1,4 @@
 import React, { useMemo, useState } from "react";
-import styled from "styled-components";
 import { ChevronDown } from "lucide-react";
 import type {
   Candidate,
@@ -11,15 +10,16 @@ import { apiClient } from "../../../utils/callApi";
 import SolverCalendarView from "./SolverCalendarView";
 import Icon from "../../Icon";
 import {
-  primaryAction,
-  scheduleBadge,
-  scheduleInput,
-  scheduleInset,
-  scheduleLabel,
-  scheduleSurface,
+  primaryActionClass,
+  scheduleBadgeClass,
+  scheduleInputClass,
+  scheduleInsetClass,
+  scheduleLabelClass,
+  scheduleSurfaceClass,
 } from "../shared";
 import { formatDateHeader, generateIcs } from "../scheduleUtils";
 import { useSavedSchedule } from "../../../query/hooks";
+import cn from "src/utils/cn";
 
 interface Props {
   candidates: Candidate[];
@@ -155,6 +155,13 @@ export default function SolverView({
           preset.loadBalanceWeight === solverOptions.load_balance_weight,
       )?.key ?? "custom",
     [solverOptions.load_balance_weight, solverOptions.overtime_weight],
+  );
+
+  const selectedPriorityMeta = useMemo(
+    () =>
+      PRIORITY_PRESETS.find((preset) => preset.key === selectedPriorityPreset) ??
+      null,
+    [selectedPriorityPreset],
   );
 
   const formatSlotTime = (timeValue: number) => {
@@ -340,7 +347,7 @@ export default function SolverView({
             </OptionsLead>
           </OptionsIntro>
 
-          <OptionsGrid>
+          <ToggleRow>
             <ToggleCard
               role="button"
               tabIndex={0}
@@ -350,17 +357,17 @@ export default function SolverView({
               onKeyDown={(event) =>
                 handleToggleCardKeyDown(event, "enforce_same_gender")
               }
-            >
-              <OptionHeader>
-                <OptionEyebrow>Panelregel</OptionEyebrow>
+              >
+                <OptionHeader>
+                  <OptionEyebrow>Panelregel</OptionEyebrow>
                 <ToggleState $active={solverOptions.enforce_same_gender}>
                   {solverOptions.enforce_same_gender ? "På" : "Av"}
                 </ToggleState>
               </OptionHeader>
-              <OptionTitle>Samme kjønn i panelet</OptionTitle>
-              <OptionHint>
-                Krev minst én intervjuer av samme kjønn som kandidaten.
-              </OptionHint>
+                <OptionTitle>Samme kjønn i panelet</OptionTitle>
+                <OptionHint>
+                  Krev minst én intervjuer av samme kjønn som kandidaten.
+                </OptionHint>
               <OptionDetails
                 onClick={(event) => event.stopPropagation()}
                 onKeyDown={(event) => event.stopPropagation()}
@@ -387,16 +394,16 @@ export default function SolverView({
                 handleToggleCardKeyDown(event, "allow_overtime")
               }
             >
-              <OptionHeader>
-                <OptionEyebrow>Tilgjengelighet</OptionEyebrow>
+                <OptionHeader>
+                  <OptionEyebrow>Tilgjengelighet</OptionEyebrow>
                 <ToggleState $active={solverOptions.allow_overtime}>
                   {solverOptions.allow_overtime ? "På" : "Av"}
                 </ToggleState>
               </OptionHeader>
-              <OptionTitle>Tillat overtid</OptionTitle>
-              <OptionHint>
-                La solveren bruke intervjuere utenfor registrert
-                tilgjengelighet når det trengs.
+                <OptionTitle>Tillat overtid</OptionTitle>
+                <OptionHint>
+                  La solveren bruke intervjuere utenfor registrert
+                  tilgjengelighet når det trengs.
               </OptionHint>
               <OptionDetails
                 onClick={(event) => event.stopPropagation()}
@@ -413,55 +420,66 @@ export default function SolverView({
                 </OptionDetailsBody>
               </OptionDetails>
             </ToggleCard>
+          </ToggleRow>
 
-            <PriorityCard>
-              <OptionHeader>
-                <OptionEyebrow>Prioritering</OptionEyebrow>
-                <PriorityBadge>
-                  {selectedPriorityPreset === "custom"
-                    ? "Tilpasset"
-                    : "Forhåndsvalg"}
-                </PriorityBadge>
-              </OptionHeader>
-              <OptionTitle>Hva skal solveren ofre først?</OptionTitle>
-              <OptionHint>
-                Dette styrer hva som teller mest når ikke alt kan oppfylles
-                samtidig.
-              </OptionHint>
-              <PriorityGrid>
-                {PRIORITY_PRESETS.map((preset) => (
-                  <PriorityOption
-                    key={preset.key}
-                    type="button"
-                    $active={selectedPriorityPreset === preset.key}
-                    onClick={() =>
-                      applyPriorityPreset(
-                        preset.overtimeWeight,
-                        preset.loadBalanceWeight,
-                      )
-                    }
-                  >
-                    <PriorityTitle>{preset.label}</PriorityTitle>
-                    <PriorityDescription>{preset.description}</PriorityDescription>
-                  </PriorityOption>
-                ))}
-              </PriorityGrid>
-              <OptionDetails>
-                <OptionSummary>
-                  <SummaryLabel>Hva betyr dette i praksis?</SummaryLabel>
-                  <SummaryIcon />
-                </OptionSummary>
-                <OptionDetailsBody>
-                  Overtidsvekten sier hvor dyrt det er å bruke folk utenfor
-                  tilgjengeligheten sin. Fordelingsvekten sier hvor hardt
-                  solveren skal prøve å unngå at noen får klart flere intervjuer
-                  enn resten.
-                </OptionDetailsBody>
-                <ManualHeading>Finjuster manuelt</ManualHeading>
-                <OptionHint>
-                  Hvis presetene ikke passer helt, kan du justere tallene direkte
-                  her.
-                </OptionHint>
+          <PrioritySection>
+            <OptionHeader>
+              <OptionEyebrow>Prioritering</OptionEyebrow>
+              <PriorityBadge>
+                {selectedPriorityPreset === "custom"
+                  ? "Tilpasset"
+                  : "Forhåndsvalg"}
+              </PriorityBadge>
+            </OptionHeader>
+            <OptionTitle>Hva skal solveren ofre først?</OptionTitle>
+            <OptionHint>
+              Velg hva som er viktigst når tilgjengelighet, kapasitet og jevn
+              fordeling trekker i ulike retninger.
+            </OptionHint>
+            <PriorityPills>
+              {PRIORITY_PRESETS.map((preset) => (
+                <PriorityOption
+                  key={preset.key}
+                  type="button"
+                  $active={selectedPriorityPreset === preset.key}
+                  onClick={() =>
+                    applyPriorityPreset(
+                      preset.overtimeWeight,
+                      preset.loadBalanceWeight,
+                    )
+                  }
+                >
+                  {preset.label}
+                </PriorityOption>
+              ))}
+            </PriorityPills>
+            <PriorityCurrent>
+              {selectedPriorityMeta ? (
+                <>
+                  <PriorityCurrentLabel>
+                    {selectedPriorityMeta.label}
+                  </PriorityCurrentLabel>
+                  {selectedPriorityMeta.description}
+                </>
+              ) : (
+                <>
+                  <PriorityCurrentLabel>Tilpasset</PriorityCurrentLabel>
+                  Du har manuelt valgt egne vekter for overtid og fordeling.
+                </>
+              )}
+            </PriorityCurrent>
+            <OptionDetails>
+              <OptionSummary>
+                <SummaryLabel>Forklaring og finjustering</SummaryLabel>
+                <SummaryIcon />
+              </OptionSummary>
+              <OptionDetailsBody>
+                Overtidsvekten sier hvor dyrt det er å bruke folk utenfor
+                tilgjengeligheten sin. Fordelingsvekten sier hvor hardt
+                solveren skal prøve å unngå at noen får klart flere intervjuer
+                enn resten.
+              </OptionDetailsBody>
+              <ManualGrid>
                 <InputGroup>
                   <Label htmlFor="overtime-weight">Overtidsvekt</Label>
                   <NumberInput
@@ -493,9 +511,9 @@ export default function SolverView({
                     }
                   />
                 </InputGroup>
-              </OptionDetails>
-            </PriorityCard>
-          </OptionsGrid>
+              </ManualGrid>
+            </OptionDetails>
+          </PrioritySection>
         </OptionsPanel>
 
         {error && <ErrorMessage>{error}</ErrorMessage>}
@@ -740,678 +758,576 @@ export default function SolverView({
   );
 }
 
-const Container = styled.div`
-  display: flex;
-  flex-direction: column;
-  gap: 0.75rem;
-`;
-
-const MainCard = styled.div`
-  ${scheduleSurface};
-  padding: 1.25rem;
-`;
-
-const Header = styled.div`
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  gap: 1rem;
-  margin-bottom: 1rem;
-  flex-wrap: wrap;
-`;
-
-const TitleSection = styled.div`
-  flex: 1;
-  min-width: 200px;
-`;
-
-const Title = styled.h2`
-  font-size: 0.875rem;
-  font-weight: 700;
-  color: #111111;
-  margin: 0 0 0.25rem;
-`;
-
-const Controls = styled.div`
-  display: flex;
-  align-items: flex-end;
-  gap: 0.75rem;
-  flex-wrap: wrap;
-`;
-
-const InputGroup = styled.div`
-  display: flex;
-  flex-direction: column;
-  gap: 0.25rem;
-`;
-
-const Label = styled.label`
-  ${scheduleLabel};
-`;
-
-const Input = styled.input`
-  width: 4rem;
-  ${scheduleInput};
-  text-align: center;
-  font-weight: 700;
-`;
-
-const RunButton = styled.button`
-  ${primaryAction};
-  padding: 0.55rem 1.1rem;
-  border-radius: 8px;
-  font-size: 0.813rem;
-  font-weight: 700;
-  cursor: pointer;
-  white-space: nowrap;
-`;
-
-const StatRow = styled.div`
-  display: flex;
-  flex-wrap: wrap;
-  gap: 1rem;
-  margin-bottom: 1rem;
-  padding-bottom: 1rem;
-  border-bottom: 1px solid #e4e4e4;
-`;
-
-const StatCard = styled.div`
-  display: inline-flex;
-  align-items: baseline;
-  gap: 0.4rem;
-`;
-
-const StatLabel = styled.span`
-  ${scheduleLabel};
-`;
-
-const StatValue = styled.span`
-  font-size: 0.875rem;
-  font-weight: 700;
-  color: #111111;
-`;
-
-const OptionsPanel = styled.div`
-  ${scheduleInset};
-  display: flex;
-  flex-direction: column;
-  gap: 0.9rem;
-  padding: 1rem;
-  margin-bottom: 1rem;
-`;
-
-const OptionsIntro = styled.div`
-  display: flex;
-  flex-direction: column;
-  gap: 0.2rem;
-`;
-
-const OptionsLead = styled.p`
-  margin: 0;
-  color: #6b6b6b;
-  font-size: 0.813rem;
-  line-height: 1.55;
-  max-width: 42rem;
-`;
-
-const OptionsGrid = styled.div`
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-  gap: 0.75rem;
-`;
-
-const BaseOptionCard = styled.div`
-  ${scheduleSurface};
-  display: flex;
-  flex-direction: column;
-  gap: 0.85rem;
-  padding: 0.95rem;
-`;
-
-const ToggleCard = styled(BaseOptionCard)<{ $active: boolean }>`
-  cursor: pointer;
-  border-color: ${(props) =>
-    props.$active ? "rgba(178, 18, 7, 0.22)" : "#e4e4e4"};
-  background: ${(props) =>
-    props.$active
-      ? "linear-gradient(180deg, rgba(178, 18, 7, 0.05) 0%, #ffffff 100%)"
-      : "#ffffff"};
-  box-shadow: ${(props) =>
-    props.$active ? "0 12px 28px rgba(178, 18, 7, 0.08)" : "none"};
-  transition:
-    border-color 0.16s ease,
-    box-shadow 0.16s ease,
-    transform 0.16s ease;
-
-  &:hover {
-    transform: translateY(-1px);
-    border-color: rgba(178, 18, 7, 0.18);
-  }
-
-  &:focus-visible {
-    outline: 2px solid rgba(178, 18, 7, 0.25);
-    outline-offset: 2px;
-  }
-`;
-
-const PriorityCard = styled(BaseOptionCard)`
-  grid-column: 1 / -1;
-`;
-
-const OptionHeader = styled.div`
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.3rem;
-`;
-
-const OptionEyebrow = styled.span`
-  ${scheduleLabel};
-`;
-
-const OptionTitle = styled.h4`
-  font-size: 0.875rem;
-  font-weight: 700;
-  color: #111111;
-  margin: 0;
-`;
-
-const OptionHint = styled.p`
-  margin: 0;
-  color: #6b6b6b;
-  font-size: 0.813rem;
-  line-height: 1.5;
-`;
-
-const ToggleState = styled.span<{ $active: boolean }>`
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 3rem;
-  padding: 0.25rem 0.6rem;
-  border-radius: 999px;
-  background: ${(props) =>
-    props.$active ? "rgba(178, 18, 7, 0.12)" : "#f0f0f0"};
-  color: ${(props) => (props.$active ? "#b21207" : "#6b6b6b")};
-  font-size: 0.75rem;
-  font-weight: 700;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-`;
-
-const PriorityBadge = styled(ToggleState).attrs({ as: "span" })`
-  background: rgba(17, 17, 17, 0.05);
-  color: #4b4b4b;
-`;
-
-const OptionDetails = styled.details`
-  display: grid;
-  gap: 0.55rem;
-  padding-top: 0.1rem;
-
-  &[open] svg {
-    transform: rotate(180deg);
-  }
-`;
-
-const OptionSummary = styled.summary`
-  display: inline-flex;
-  align-items: center;
-  gap: 0.35rem;
-  cursor: pointer;
-  list-style: none;
-  width: fit-content;
-  color: #6b6b6b;
-
-  &::-webkit-details-marker {
-    display: none;
-  }
-`;
-
-const SummaryLabel = styled.span`
-  ${scheduleLabel};
-  letter-spacing: 0.03em;
-`;
-
-const SummaryIcon = styled(ChevronDown)`
-  width: 0.9rem;
-  height: 0.9rem;
-  transition: transform 0.16s ease;
-`;
-
-const OptionDetailsBody = styled.p`
-  margin: 0;
-  color: #4b4b4b;
-  font-size: 0.813rem;
-  line-height: 1.6;
-`;
-
-const PriorityGrid = styled.div`
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-  gap: 0.6rem;
-`;
-
-const PriorityOption = styled.button<{ $active: boolean }>`
-  ${scheduleInset};
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 0.35rem;
-  padding: 0.85rem 0.95rem;
-  text-align: left;
-  cursor: pointer;
-  border-color: ${(props) =>
-    props.$active ? "rgba(178, 18, 7, 0.22)" : "#e4e4e4"};
-  background: ${(props) =>
-    props.$active ? "rgba(178, 18, 7, 0.06)" : "#f7f7f7"};
-  transition:
-    border-color 0.16s ease,
-    transform 0.16s ease,
-    background 0.16s ease;
-
-  &:hover {
-    transform: translateY(-1px);
-    border-color: rgba(178, 18, 7, 0.18);
-  }
-`;
-
-const PriorityTitle = styled.span`
-  font-size: 0.813rem;
-  font-weight: 700;
-  color: #111111;
-`;
-
-const PriorityDescription = styled.span`
-  color: #6b6b6b;
-  font-size: 0.78rem;
-  line-height: 1.45;
-`;
-
-const ManualHeading = styled.h5`
-  margin: 0.2rem 0 0;
-  font-size: 0.75rem;
-  font-weight: 700;
-  color: #111111;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-`;
-
-const NumberInput = styled(Input)`
-  width: 100%;
-  text-align: left;
-`;
-
-const ErrorMessage = styled.div`
-  background: rgba(178, 18, 7, 0.06);
-  color: #b21207;
-  padding: 0.75rem 1rem;
-  border-radius: 8px;
-  border: 1px solid rgba(178, 18, 7, 0.14);
-  font-size: 0.813rem;
-  font-weight: 600;
-  margin-bottom: 0.75rem;
-`;
-
-const StatusBox = styled.div<{ $type: "error" | "success" }>`
-  ${scheduleInset};
-  padding: 2rem 1.25rem;
-  text-align: center;
-  margin-bottom: 0.75rem;
-  border-color: ${(props) =>
-    props.$type === "error" ? "rgba(178, 18, 7, 0.14)" : "#e4e4e4"};
-`;
-
-const StatusTitle = styled.h4`
-  font-weight: 700;
-  font-size: 1rem;
-  margin: 0 0 0.5rem;
-  color: #111111;
-`;
-
-const StatusDesc = styled.p`
-  font-size: 0.813rem;
-  color: #a0a0a0;
-  max-width: 32rem;
-  margin: 0 auto;
-  line-height: 1.7;
-`;
-
-const ResultSection = styled.div`
-  animation: fadeIn 0.25s ease-out;
-
-  @keyframes fadeIn {
-    from {
-      opacity: 0;
-      transform: translateY(6px);
-    }
-    to {
-      opacity: 1;
-      transform: translateY(0);
-    }
-  }
-`;
-
-const SectionHeader = styled.div`
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 0.75rem;
-  margin-bottom: 0.875rem;
-  flex-wrap: wrap;
-`;
-
-const SectionTitleWrapper = styled.div`
-  display: flex;
-  align-items: center;
-  gap: 0.65rem;
-  flex-wrap: wrap;
-`;
-
-const SectionEyebrow = styled.span`
-  ${scheduleLabel};
-  display: block;
-  margin-bottom: 0.2rem;
-`;
-
-const FilterGroup = styled.div`
-  display: flex;
-  flex-direction: column;
-  gap: 0.25rem;
-`;
-
-const FilterSelect = styled.select`
-  ${scheduleInput};
-  min-width: 14rem;
-  font-weight: 600;
-`;
-
-const ViewToggle = styled.div`
-  display: flex;
-  padding: 3px;
-  gap: 3px;
-  background: #f5f5f5;
-  border: 1px solid #e4e4e4;
-  border-radius: 8px;
-`;
-
-const ToggleButton = styled.button<{ $active: boolean }>`
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 2rem;
-  height: 2rem;
-  background: ${(props) => (props.$active ? "#ffffff" : "transparent")};
-  border: 1px solid ${(props) => (props.$active ? "#e4e4e4" : "transparent")};
-  border-radius: 6px;
-  cursor: pointer;
-  color: ${(props) => (props.$active ? "#111111" : "#a0a0a0")};
-  transition: all 0.12s ease;
-
-  &:hover {
-    color: #111111;
-  }
-`;
-
-const ToggleLabelButton = styled(ToggleButton)`
-  width: auto;
-  padding: 0 0.75rem;
-  font-size: 0.75rem;
-  font-weight: 700;
-`;
-
-const SectionTitle = styled.h3`
-  font-size: 0.875rem;
-  font-weight: 700;
-  color: #111111;
-  margin: 0;
-`;
-
-const StatsBadge = styled.span`
-  ${scheduleBadge};
-  color: #b21207;
-  border-color: rgba(178, 18, 7, 0.14);
-  background: rgba(178, 18, 7, 0.05);
-`;
-
-const DistributionSection = styled.div`
-  margin-bottom: 1rem;
-`;
-
-const PersonPane = styled.div`
-  display: flex;
-  flex-direction: column;
-  gap: 1rem;
-`;
-
-const PersonControls = styled.div`
-  display: flex;
-  justify-content: flex-end;
-`;
-
-const DistributionHeader = styled.div`
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 0.75rem;
-  margin-bottom: 0.6rem;
-  flex-wrap: wrap;
-`;
-
-const DistributionHint = styled.p`
-  margin: 0;
-  color: #a0a0a0;
-  font-size: 0.813rem;
-`;
-
-const DistributionGrid = styled.div`
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-  gap: 0.6rem;
-`;
-
-const DistributionCard = styled.button<{ $active: boolean }>`
-  ${scheduleInset};
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 0.3rem;
-  padding: 0.8rem 0.9rem;
-  cursor: pointer;
-  text-align: left;
-  transition: border-color 0.12s ease, background 0.12s ease;
-  border-color: ${(props) =>
-    props.$active ? "rgba(178, 18, 7, 0.2)" : "#e4e4e4"};
-  background: ${(props) =>
-    props.$active ? "rgba(178, 18, 7, 0.05)" : "#f5f5f5"};
-
-  &:hover {
-    border-color: rgba(178, 18, 7, 0.2);
-  }
-`;
-
-const DistributionName = styled.span`
-  font-size: 0.813rem;
-  font-weight: 700;
-  color: #111111;
-`;
-
-const DistributionValue = styled.span`
-  font-size: 1.25rem;
-  font-weight: 800;
-  color: #111111;
-`;
-
-const DistributionMeta = styled.span`
-  ${scheduleLabel};
-`;
-
-const TableWrapper = styled.div`
-  border: 1px solid #e4e4e4;
-  border-radius: 8px;
-  overflow: hidden;
-`;
-
-const Table = styled.table`
-  width: 100%;
-  border-collapse: collapse;
-`;
-
-const Th = styled.th`
-  ${scheduleLabel};
-  text-align: left;
-  padding: 0.75rem 1rem;
-  background: #f8f8f8;
-  border-bottom: 1px solid #e4e4e4;
-`;
-
-const Tr = styled.tr`
-  &:not(:last-child) td {
-    border-bottom: 1px solid #f0f0f0;
-  }
-
-  &:hover td {
-    background: #fafafa;
-  }
-`;
-
-const Td = styled.td`
-  padding: 0.75rem 1rem;
-  font-size: 0.875rem;
-`;
-
-const TdTime = styled(Td)`
-  font-weight: 600;
-  color: #6b6b6b;
-  width: 100px;
-  white-space: nowrap;
-`;
-
-const TdCandidate = styled(Td)`
-  font-weight: 600;
-  color: #111111;
-`;
-
-const PanelList = styled.div`
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.35rem;
-`;
-
-const InterviewerBadge = styled.span<{ $isOvertime: boolean }>`
-  display: inline-flex;
-  align-items: center;
-  padding: 0.2rem 0.55rem;
-  border-radius: 999px;
-  background: ${(props) =>
-    props.$isOvertime ? "rgba(178, 18, 7, 0.08)" : "#f0f0f0"};
-  border: 1px solid
-    ${(props) =>
-      props.$isOvertime ? "rgba(178, 18, 7, 0.2)" : "#e4e4e4"};
-  color: ${(props) => (props.$isOvertime ? "#b21207" : "#4b4b4b")};
-  font-size: 0.75rem;
-  font-weight: 600;
-`;
-
-const EmptyState = styled.div`
-  ${scheduleInset};
-  padding: 1rem;
-  color: #6b6b6b;
-  font-size: 0.875rem;
-  font-weight: 600;
-  text-align: center;
-`;
-
-const ResultFooter = styled.div`
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  padding-top: 0.875rem;
-  margin-top: 0.875rem;
-  border-top: 1px solid #e4e4e4;
-  flex-wrap: wrap;
-`;
-
-const ActionGroup = styled.div`
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  margin-left: auto;
-  flex-wrap: wrap;
-`;
-
-const ExportButton = styled.button`
-  display: inline-flex;
-  align-items: center;
-  gap: 0.4rem;
-  padding: 0.45rem 0.9rem;
-  border-radius: 8px;
-  border: 1px solid #e0e0e0;
-  background: #ffffff;
-  color: #4b4b4b;
-  font-size: 0.813rem;
-  font-weight: 600;
-  cursor: pointer;
-  transition: border-color 0.12s ease, background 0.12s ease;
-
-  &:hover {
-    border-color: #c8c8c8;
-    background: #f8f8f8;
-  }
-`;
-
-const SecondaryBtn = styled.button`
-  padding: 0.45rem 0.9rem;
-  border-radius: 8px;
-  border: 1px solid #e0e0e0;
-  background: #ffffff;
-  color: #4b4b4b;
-  font-size: 0.813rem;
-  font-weight: 600;
-  cursor: pointer;
-  transition: border-color 0.12s ease;
-
-  &:hover:not(:disabled) {
-    border-color: #c8c8c8;
-    background: #f8f8f8;
-  }
-
-  &:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
-  }
-`;
-
-const DistributeButton = styled.button`
-  ${primaryAction};
-  padding: 0.45rem 1rem;
-  border-radius: 8px;
-  font-size: 0.813rem;
-  font-weight: 700;
-  cursor: pointer;
-
-  &:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
-  }
-`;
-
-const DistributedBadge = styled.span`
-  display: inline-flex;
-  align-items: center;
-  padding: 0.25rem 0.7rem;
-  border-radius: 999px;
-  background: rgba(22, 160, 88, 0.08);
-  border: 1px solid rgba(22, 160, 88, 0.2);
-  color: #0f8a4a;
-  font-size: 0.75rem;
-  font-weight: 700;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-`;
-
-const SaveErrorMsg = styled.span`
-  font-size: 0.75rem;
-  font-weight: 600;
-  color: #b21207;
-`;
+const Container = ({ children }: React.PropsWithChildren) => (
+  <div className="flex flex-col gap-3">{children}</div>
+);
+
+const MainCard = ({ children }: React.PropsWithChildren) => (
+  <div className={cn(scheduleSurfaceClass, "p-5")}>{children}</div>
+);
+
+const Header = ({ children }: React.PropsWithChildren) => (
+  <div className="mb-4 flex flex-wrap items-start justify-between gap-4">
+    {children}
+  </div>
+);
+
+const TitleSection = ({ children }: React.PropsWithChildren) => (
+  <div className="min-w-[200px] flex-1">{children}</div>
+);
+
+const Title = ({ children }: React.PropsWithChildren) => (
+  <h2 className="m-0 mb-1 text-sm font-bold text-[#111111]">{children}</h2>
+);
+
+const Controls = ({ children }: React.PropsWithChildren) => (
+  <div className="flex flex-wrap items-end gap-3">{children}</div>
+);
+
+const InputGroup = ({
+  children,
+  ...props
+}: React.ComponentProps<"div">) => (
+  <div className="flex flex-col gap-1" {...props}>
+    {children}
+  </div>
+);
+
+const Label = ({
+  children,
+  className,
+  ...props
+}: React.ComponentProps<"label">) => (
+  <label className={cn(scheduleLabelClass, className)} {...props}>
+    {children}
+  </label>
+);
+
+const Input = ({ className, ...props }: React.ComponentProps<"input">) => (
+  <input
+    className={cn(scheduleInputClass, "w-16 text-center font-bold", className)}
+    {...props}
+  />
+);
+
+const RunButton = ({ children, className, ...props }: React.ComponentProps<"button">) => (
+  <button
+    className={cn(
+      primaryActionClass,
+      "cursor-pointer whitespace-nowrap px-[1.1rem] py-[0.55rem] text-[0.813rem] font-bold",
+      className,
+    )}
+    {...props}
+  >
+    {children}
+  </button>
+);
+
+const StatRow = ({ children }: React.PropsWithChildren) => (
+  <div className="mb-4 flex flex-wrap gap-4 border-b border-[#e4e4e4] pb-4">
+    {children}
+  </div>
+);
+
+const StatCard = ({ children }: React.PropsWithChildren) => (
+  <div className="inline-flex items-baseline gap-[0.4rem]">{children}</div>
+);
+
+const StatLabel = ({ children }: React.PropsWithChildren) => (
+  <span className={scheduleLabelClass}>{children}</span>
+);
+
+const StatValue = ({ children }: React.PropsWithChildren) => (
+  <span className="text-sm font-bold text-[#111111]">{children}</span>
+);
+
+const OptionsPanel = ({ children }: React.PropsWithChildren) => (
+  <div className={cn(scheduleInsetClass, "mb-4 flex flex-col gap-[0.9rem] p-4")}>
+    {children}
+  </div>
+);
+
+const OptionsIntro = ({ children }: React.PropsWithChildren) => (
+  <div className="flex flex-col gap-[0.2rem]">{children}</div>
+);
+
+const OptionsLead = ({ children }: React.PropsWithChildren) => (
+  <p className="m-0 max-w-[42rem] text-[0.813rem] leading-[1.55] text-[#6b6b6b]">
+    {children}
+  </p>
+);
+
+const ToggleRow = ({ children }: React.PropsWithChildren) => (
+  <div className="grid grid-cols-[repeat(auto-fit,minmax(220px,1fr))] gap-[0.65rem]">
+    {children}
+  </div>
+);
+
+interface ToggleActiveProps {
+  $active: boolean;
+}
+
+const ToggleCard = ({
+  children,
+  $active,
+  className,
+  ...props
+}: React.ComponentProps<"div"> & ToggleActiveProps) => (
+  <div
+    className={cn(
+      "flex cursor-pointer flex-col gap-[0.65rem] rounded-[10px] border px-[0.95rem] py-[0.85rem] transition-[border-color,box-shadow,transform] duration-150 hover:-translate-y-px hover:border-[rgba(178,18,7,0.18)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[rgba(178,18,7,0.25)]",
+      $active
+        ? "border-[rgba(178,18,7,0.22)] bg-[linear-gradient(180deg,rgba(178,18,7,0.05)_0%,rgba(255,255,255,0.92)_100%)] shadow-[0_8px_18px_rgba(178,18,7,0.06)]"
+        : "border-[#e4e4e4] bg-[rgba(255,255,255,0.9)]",
+      className,
+    )}
+    {...props}
+  >
+    {children}
+  </div>
+);
+
+const PrioritySection = ({ children }: React.PropsWithChildren) => (
+  <div className="flex flex-col gap-[0.65rem] pt-[0.15rem]">{children}</div>
+);
+
+const OptionHeader = ({ children }: React.PropsWithChildren) => (
+  <div className="flex items-center justify-between gap-[0.3rem]">{children}</div>
+);
+
+const OptionEyebrow = ({ children }: React.PropsWithChildren) => (
+  <span className={scheduleLabelClass}>{children}</span>
+);
+
+const OptionTitle = ({ children }: React.PropsWithChildren) => (
+  <h4 className="m-0 text-sm font-bold text-[#111111]">{children}</h4>
+);
+
+const OptionHint = ({ children }: React.PropsWithChildren) => (
+  <p className="m-0 text-[0.79rem] leading-[1.45] text-[#6b6b6b]">{children}</p>
+);
+
+const ToggleState = ({ children, $active }: React.PropsWithChildren<ToggleActiveProps>) => (
+  <span
+    className={cn(
+      "flex min-w-12 items-center justify-center rounded-full px-[0.6rem] py-1 text-xs font-bold uppercase tracking-[0.04em]",
+      $active
+        ? "bg-[rgba(178,18,7,0.12)] text-[#b21207]"
+        : "bg-[#f0f0f0] text-[#6b6b6b]",
+    )}
+  >
+    {children}
+  </span>
+);
+
+const PriorityBadge = ({ children }: React.PropsWithChildren) => (
+  <span className="flex min-w-12 items-center justify-center rounded-full bg-[rgba(17,17,17,0.05)] px-[0.6rem] py-1 text-xs font-bold uppercase tracking-[0.04em] text-[#4b4b4b]">
+    {children}
+  </span>
+);
+
+const OptionDetails = ({
+  children,
+  className,
+  ...props
+}: React.ComponentProps<"details">) => (
+  <details
+    className={cn(
+      "grid gap-[0.55rem] pt-[0.1rem] [&[open]_.summary-icon]:rotate-180",
+      className,
+    )}
+    {...props}
+  >
+    {children}
+  </details>
+);
+
+const OptionSummary = ({
+  children,
+  className,
+  ...props
+}: React.ComponentProps<"summary">) => (
+  <summary
+    className={cn(
+      "inline-flex w-fit cursor-pointer list-none items-center gap-[0.35rem] text-[#6b6b6b] [&::-webkit-details-marker]:hidden",
+      className,
+    )}
+    {...props}
+  >
+    {children}
+  </summary>
+);
+
+const SummaryLabel = ({ children }: React.PropsWithChildren) => (
+  <span className={cn(scheduleLabelClass, "tracking-[0.03em]")}>{children}</span>
+);
+
+const SummaryIcon = () => (
+  <ChevronDown className="summary-icon h-[0.9rem] w-[0.9rem] transition-transform duration-150" />
+);
+
+const OptionDetailsBody = ({ children }: React.PropsWithChildren) => (
+  <p className="m-0 text-[0.813rem] leading-[1.6] text-[#4b4b4b]">{children}</p>
+);
+
+const PriorityPills = ({ children }: React.PropsWithChildren) => (
+  <div className="flex flex-wrap gap-[0.45rem]">{children}</div>
+);
+
+const PriorityOption = ({
+  children,
+  $active,
+  className,
+  ...props
+}: React.ComponentProps<"button"> & ToggleActiveProps) => (
+  <button
+    className={cn(
+      "inline-flex cursor-pointer items-center justify-center rounded-full border px-3 py-[0.45rem] text-[0.78rem] font-bold transition-[border-color,background] duration-150 hover:border-[rgba(178,18,7,0.18)]",
+      $active
+        ? "border-[rgba(178,18,7,0.22)] bg-[rgba(178,18,7,0.08)] text-[#b21207]"
+        : "border-[#e4e4e4] bg-[rgba(255,255,255,0.72)] text-[#4b4b4b]",
+      className,
+    )}
+    {...props}
+  >
+    {children}
+  </button>
+);
+
+const PriorityCurrent = ({ children }: React.PropsWithChildren) => (
+  <p className="m-0 text-[0.8rem] leading-[1.5] text-[#4b4b4b]">{children}</p>
+);
+
+const PriorityCurrentLabel = ({ children }: React.PropsWithChildren) => (
+  <span className="mr-[0.35rem] font-bold text-[#111111]">{children}</span>
+);
+
+const ManualGrid = ({ children }: React.PropsWithChildren) => (
+  <div className="grid grid-cols-[repeat(auto-fit,minmax(140px,1fr))] gap-3">
+    {children}
+  </div>
+);
+
+const NumberInput = ({ className, ...props }: React.ComponentProps<"input">) => (
+  <Input className={cn("w-full text-left font-semibold", className)} {...props} />
+);
+
+const ErrorMessage = ({ children }: React.PropsWithChildren) => (
+  <div className="mb-3 rounded-lg border border-[rgba(178,18,7,0.14)] bg-[rgba(178,18,7,0.06)] px-4 py-3 text-[0.813rem] font-semibold text-[#b21207]">
+    {children}
+  </div>
+);
+
+const StatusBox = ({
+  children,
+  $type,
+}: React.PropsWithChildren<{ $type: "error" | "success" }>) => (
+  <div
+    className={cn(
+      scheduleInsetClass,
+      "mb-3 px-5 py-8 text-center",
+      $type === "error" && "border-[rgba(178,18,7,0.14)]",
+    )}
+  >
+    {children}
+  </div>
+);
+
+const StatusTitle = ({ children }: React.PropsWithChildren) => (
+  <h4 className="m-0 mb-2 text-base font-bold text-[#111111]">{children}</h4>
+);
+
+const StatusDesc = ({ children }: React.PropsWithChildren) => (
+  <p className="m-0 mx-auto max-w-[32rem] text-[0.813rem] leading-[1.7] text-[#a0a0a0]">
+    {children}
+  </p>
+);
+
+const ResultSection = ({ children }: React.PropsWithChildren) => (
+  <div className="animate-[fade-in_0.25s_ease-out]">
+    {children}
+  </div>
+);
+
+const SectionHeader = ({ children }: React.PropsWithChildren) => (
+  <div className="mb-[0.875rem] flex flex-wrap items-center justify-between gap-3">
+    {children}
+  </div>
+);
+
+const SectionTitleWrapper = ({ children }: React.PropsWithChildren) => (
+  <div className="flex flex-wrap items-center gap-[0.65rem]">{children}</div>
+);
+
+const SectionEyebrow = ({ children }: React.PropsWithChildren) => (
+  <span className={cn(scheduleLabelClass, "mb-[0.2rem] block")}>{children}</span>
+);
+
+const FilterGroup = InputGroup;
+
+const FilterSelect = ({
+  children,
+  className,
+  ...props
+}: React.ComponentProps<"select">) => (
+  <select
+    className={cn(scheduleInputClass, "min-w-56 font-semibold", className)}
+    {...props}
+  >
+    {children}
+  </select>
+);
+
+const ViewToggle = ({ children }: React.PropsWithChildren) => (
+  <div className="flex gap-[3px] rounded-lg border border-[#e4e4e4] bg-[#f5f5f5] p-[3px]">
+    {children}
+  </div>
+);
+
+const ToggleButton = ({
+  children,
+  $active,
+  className,
+  ...props
+}: React.ComponentProps<"button"> & ToggleActiveProps) => (
+  <button
+    className={cn(
+      "flex h-8 w-8 cursor-pointer items-center justify-center rounded-md border transition-all duration-100 hover:text-[#111111]",
+      $active
+        ? "border-[#e4e4e4] bg-white text-[#111111]"
+        : "border-transparent bg-transparent text-[#a0a0a0]",
+      className,
+    )}
+    {...props}
+  >
+    {children}
+  </button>
+);
+
+const ToggleLabelButton = ({
+  children,
+  ...props
+}: React.ComponentProps<"button"> & ToggleActiveProps) => (
+  <ToggleButton className="w-auto px-3 text-xs font-bold" {...props}>
+    {children}
+  </ToggleButton>
+);
+
+const SectionTitle = ({ children }: React.PropsWithChildren) => (
+  <h3 className="m-0 text-sm font-bold text-[#111111]">{children}</h3>
+);
+
+const StatsBadge = ({ children }: React.PropsWithChildren) => (
+  <span
+    className={cn(
+      scheduleBadgeClass,
+      "border-[rgba(178,18,7,0.14)] bg-[rgba(178,18,7,0.05)] text-[#b21207]",
+    )}
+  >
+    {children}
+  </span>
+);
+
+const DistributionSection = ({ children }: React.PropsWithChildren) => (
+  <div className="mb-4">{children}</div>
+);
+
+const PersonPane = ({ children }: React.PropsWithChildren) => (
+  <div className="flex flex-col gap-4">{children}</div>
+);
+
+const PersonControls = ({ children }: React.PropsWithChildren) => (
+  <div className="flex justify-end">{children}</div>
+);
+
+const DistributionHeader = ({ children }: React.PropsWithChildren) => (
+  <div className="mb-[0.6rem] flex flex-wrap items-baseline justify-between gap-3">
+    {children}
+  </div>
+);
+
+const DistributionHint = ({ children }: React.PropsWithChildren) => (
+  <p className="m-0 text-[0.813rem] text-[#a0a0a0]">{children}</p>
+);
+
+const DistributionGrid = ({ children }: React.PropsWithChildren) => (
+  <div className="grid grid-cols-[repeat(auto-fit,minmax(160px,1fr))] gap-[0.6rem]">
+    {children}
+  </div>
+);
+
+const DistributionCard = ({
+  children,
+  $active,
+  className,
+  ...props
+}: React.ComponentProps<"button"> & ToggleActiveProps) => (
+  <button
+    className={cn(
+      scheduleInsetClass,
+      "flex cursor-pointer flex-col items-start gap-[0.3rem] px-[0.9rem] py-[0.8rem] text-left transition-[border-color,background] duration-100 hover:border-[rgba(178,18,7,0.2)]",
+      $active
+        ? "border-[rgba(178,18,7,0.2)] bg-[rgba(178,18,7,0.05)]"
+        : "border-[#e4e4e4] bg-[#f5f5f5]",
+      className,
+    )}
+    {...props}
+  >
+    {children}
+  </button>
+);
+
+const DistributionName = ({ children }: React.PropsWithChildren) => (
+  <span className="text-[0.813rem] font-bold text-[#111111]">{children}</span>
+);
+
+const DistributionValue = ({ children }: React.PropsWithChildren) => (
+  <span className="text-xl font-extrabold text-[#111111]">{children}</span>
+);
+
+const DistributionMeta = ({ children }: React.PropsWithChildren) => (
+  <span className={scheduleLabelClass}>{children}</span>
+);
+
+const TableWrapper = ({ children }: React.PropsWithChildren) => (
+  <div className="overflow-hidden rounded-lg border border-[#e4e4e4]">
+    {children}
+  </div>
+);
+
+const Table = ({ children }: React.PropsWithChildren) => (
+  <table className="w-full border-collapse">{children}</table>
+);
+
+const Th = ({ children }: React.PropsWithChildren) => (
+  <th
+    className={cn(
+      scheduleLabelClass,
+      "border-b border-[#e4e4e4] bg-[#f8f8f8] px-4 py-3 text-left",
+    )}
+  >
+    {children}
+  </th>
+);
+
+const Tr = ({ children }: React.PropsWithChildren) => (
+  <tr className="group [&:not(:last-child)>td]:border-b [&:not(:last-child)>td]:border-b-[#f0f0f0] hover:[&>td]:bg-[#fafafa]">
+    {children}
+  </tr>
+);
+
+const Td = ({ children, className }: React.PropsWithChildren<{ className?: string }>) => (
+  <td className={cn("px-4 py-3 text-sm", className)}>{children}</td>
+);
+
+const TdTime = ({ children }: React.PropsWithChildren) => (
+  <Td className="w-[100px] whitespace-nowrap font-semibold text-[#6b6b6b]">
+    {children}
+  </Td>
+);
+
+const TdCandidate = ({ children }: React.PropsWithChildren) => (
+  <Td className="font-semibold text-[#111111]">{children}</Td>
+);
+
+const PanelList = ({ children }: React.PropsWithChildren) => (
+  <div className="flex flex-wrap gap-[0.35rem]">{children}</div>
+);
+
+const InterviewerBadge = ({
+  children,
+  $isOvertime,
+  ...props
+}: React.PropsWithChildren<{ $isOvertime: boolean } & React.ComponentProps<"span">>) => (
+  <span
+    className={cn(
+      "inline-flex items-center rounded-full border px-[0.55rem] py-[0.2rem] text-xs font-semibold",
+      $isOvertime
+        ? "border-[rgba(178,18,7,0.2)] bg-[rgba(178,18,7,0.08)] text-[#b21207]"
+        : "border-[#e4e4e4] bg-[#f0f0f0] text-[#4b4b4b]",
+    )}
+    {...props}
+  >
+    {children}
+  </span>
+);
+
+const EmptyState = ({ children }: React.PropsWithChildren) => (
+  <div
+    className={cn(
+      scheduleInsetClass,
+      "p-4 text-center text-sm font-semibold text-[#6b6b6b]",
+    )}
+  >
+    {children}
+  </div>
+);
+
+const ResultFooter = ({ children }: React.PropsWithChildren) => (
+  <div className="mt-[0.875rem] flex flex-wrap items-center gap-3 border-t border-[#e4e4e4] pt-[0.875rem]">
+    {children}
+  </div>
+);
+
+const ActionGroup = ({ children }: React.PropsWithChildren) => (
+  <div className="ml-auto flex flex-wrap items-center gap-2">{children}</div>
+);
+
+const ExportButton = ({
+  children,
+  className,
+  ...props
+}: React.ComponentProps<"button">) => (
+  <button
+    className={cn(
+      "inline-flex cursor-pointer items-center gap-[0.4rem] rounded-lg border border-[#e0e0e0] bg-white px-[0.9rem] py-[0.45rem] text-[0.813rem] font-semibold text-[#4b4b4b] transition-[border-color,background] duration-100 hover:border-[#c8c8c8] hover:bg-[#f8f8f8]",
+      className,
+    )}
+    {...props}
+  >
+    {children}
+  </button>
+);
+
+const SecondaryBtn = ({
+  children,
+  className,
+  ...props
+}: React.ComponentProps<"button">) => (
+  <button
+    className={cn(
+      "cursor-pointer rounded-lg border border-[#e0e0e0] bg-white px-[0.9rem] py-[0.45rem] text-[0.813rem] font-semibold text-[#4b4b4b] transition-[border-color,background] duration-100 hover:border-[#c8c8c8] hover:bg-[#f8f8f8] disabled:cursor-not-allowed disabled:opacity-50",
+      className,
+    )}
+    {...props}
+  >
+    {children}
+  </button>
+);
+
+const DistributeButton = ({
+  children,
+  className,
+  ...props
+}: React.ComponentProps<"button">) => (
+  <button
+    className={cn(
+      primaryActionClass,
+      "cursor-pointer px-4 py-[0.45rem] text-[0.813rem] font-bold disabled:cursor-not-allowed disabled:opacity-50",
+      className,
+    )}
+    {...props}
+  >
+    {children}
+  </button>
+);
+
+const DistributedBadge = ({ children }: React.PropsWithChildren) => (
+  <span className="inline-flex items-center rounded-full border border-[rgba(22,160,88,0.2)] bg-[rgba(22,160,88,0.08)] px-[0.7rem] py-[0.25rem] text-xs font-bold uppercase tracking-[0.04em] text-[#0f8a4a]">
+    {children}
+  </span>
+);
+
+const SaveErrorMsg = ({ children }: React.PropsWithChildren) => (
+  <span className="text-xs font-semibold text-[#b21207]">{children}</span>
+);

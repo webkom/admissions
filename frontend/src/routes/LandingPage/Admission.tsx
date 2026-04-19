@@ -1,7 +1,5 @@
 import React from "react";
-import styled from "styled-components";
 import { isLoggedIn } from "src/utils/djangoData";
-import { media } from "src/styles/mediaQueries";
 import { Admission as AdmissionInterface } from "src/types";
 import AdmissionTimeline, {
   type AdmissionTimelineItem,
@@ -9,10 +7,24 @@ import AdmissionTimeline, {
 import CountDown from "./CountDown";
 import LinkButton from "src/components/LinkButton";
 import Icon from "src/components/Icon";
+import cn from "src/utils/cn";
 
 interface AdmissionProps {
   admission: AdmissionInterface;
 }
+
+const baseActionButtonClass =
+  "!min-h-14 !box-border !rounded-[var(--border-radius-md)] !font-bold !transition-[background-color,border-color,color,transform,box-shadow] !duration-200";
+
+const primaryActionButtonClass = cn(
+  baseActionButtonClass,
+  "!min-h-[3.75rem] !border-2 !border-[var(--lego-red-color)] !bg-[var(--lego-red-color)] !text-[1.0625rem] !text-white hover:!translate-y-[-2px] hover:!border-[#8e0e06] hover:!bg-[#8e0e06] hover:!shadow-[0_10px_15px_-3px_rgba(178,18,7,0.2)] active:!translate-y-0 disabled:!cursor-not-allowed disabled:!opacity-50",
+);
+
+const secondaryActionButtonClass = cn(
+  baseActionButtonClass,
+  "!border-2 !border-[var(--lego-red-color)] !bg-white !text-sm !text-[var(--lego-red-color)] hover:!translate-y-[-1px] hover:!bg-[#fff5f5]",
+);
 
 const Admission: React.FC<AdmissionProps> = ({ admission }) => {
   const isRevy = admission.slug === "revy";
@@ -42,21 +54,35 @@ const Admission: React.FC<AdmissionProps> = ({ admission }) => {
   const now = new Date();
   const nextCountDown = (() => {
     if (new Date(admission.open_from) > now)
-      return { title: "Opptaket åpner", dateString: admission.open_from, completedLabel: "Åpnet" };
+      return {
+        title: "Opptaket åpner",
+        dateString: admission.open_from,
+        completedLabel: "Åpnet",
+      };
     if (new Date(admission.public_deadline) > now)
-      return { title: "Søknadsfrist", dateString: admission.public_deadline, completedLabel: "Søknadsfrist passert" };
+      return {
+        title: "Søknadsfrist",
+        dateString: admission.public_deadline,
+        completedLabel: "Søknadsfrist passert",
+      };
     if (new Date(admission.closed_from) > now)
-      return { title: "Redigeringsfrist", dateString: admission.closed_from, completedLabel: "Redigering stengt" };
+      return {
+        title: "Redigeringsfrist",
+        dateString: admission.closed_from,
+        completedLabel: "Redigering stengt",
+      };
     return null;
   })();
 
   return (
-    <AdmissionWrapper>
-      <AdmissionDetails>
+    <div className="mt-12 w-full max-w-[1100px] rounded-[var(--border-radius-lg)] border border-[#f3f4f6] bg-white p-14 shadow-[0_10px_15px_-3px_rgba(0,0,0,0.05),0_4px_6px_-2px_rgba(0,0,0,0.02)] transition-[box-shadow] duration-200 hover:shadow-[0_20px_25px_-5px_rgba(0,0,0,0.08)] max-[1000px]:p-10 max-[500px]:mt-8 max-[500px]:p-6">
+      <div className="mb-14 grid grid-cols-[1.4fr_1fr] gap-20 max-[1000px]:grid-cols-1 max-[1000px]:gap-14">
         <div>
-          <AdmissionTitle>{admission.title}</AdmissionTitle>
+          <h2 className="mb-4 text-[2.5rem] font-extrabold tracking-[-0.05em] text-[#111827] max-[500px]:text-[1.875rem]">
+            {admission.title}
+          </h2>
           {admission.description && (
-            <AdmissionDescription>
+            <p className="mb-12 text-[1.125rem] leading-[1.6] text-[#4b5563] max-[500px]:mb-8 max-[500px]:text-base">
               {admission.description
                 .split("\n")
                 .map((descriptionLine, index) => (
@@ -65,24 +91,26 @@ const Admission: React.FC<AdmissionProps> = ({ admission }) => {
                     <br />
                   </React.Fragment>
                 ))}
-            </AdmissionDescription>
+            </p>
           )}
           <AdmissionTimeline items={timelineItems} />
         </div>
-        <ActionsContainer>
+
+        <div className="flex flex-col justify-start">
           {nextCountDown && (
-            <CountDownSection>
+            <div className="flex flex-wrap gap-4 rounded-[var(--border-radius-lg)] border border-[#f3f4f6] bg-[#f9fafb] p-8">
               <CountDown
                 title={nextCountDown.title}
                 dateString={nextCountDown.dateString}
                 completedLabel={nextCountDown.completedLabel}
               />
-            </CountDownSection>
+            </div>
           )}
 
-          <LinkWrapper>
+          <div className="mt-8 flex w-full flex-col gap-4">
             {(admission.is_open || admission.userdata.has_application) && (
-              <PrimaryActionButton
+              <LinkButton
+                className={primaryActionButtonClass}
                 fullWidth
                 to={
                   isLoggedIn()
@@ -96,52 +124,49 @@ const Admission: React.FC<AdmissionProps> = ({ admission }) => {
                 external={!isLoggedIn()}
                 disabled={!isLoggedIn() && !admission.is_open}
               >
-                <ActionButtonContent>
-                  <ActionButtonIcon>
-                    <Icon name="paper-plane" size={20} />
-                  </ActionButtonIcon>
-                  <ActionButtonLabel>Gå til søknad</ActionButtonLabel>
-                  <ActionButtonSpacer />
-                </ActionButtonContent>
-              </PrimaryActionButton>
+                <ActionButtonContent
+                  icon={<Icon name="paper-plane" size={20} />}
+                  label="Gå til søknad"
+                />
+              </LinkButton>
             )}
 
-            <SecondaryActions>
+            <div className="flex w-full flex-col items-stretch gap-3">
               {admission.userdata.is_privileged && (
-                <SecondaryActionButton
+                <LinkButton
+                  className={secondaryActionButtonClass}
                   fullWidth
                   to={`/${admission.slug}/admin/`}
                 >
-                  <ActionButtonContent>
-                    <ActionButtonIcon>
-                      <Icon name="settings" size={18} />
-                    </ActionButtonIcon>
-                    <ActionButtonLabel>Admin panel</ActionButtonLabel>
-                  </ActionButtonContent>
-                </SecondaryActionButton>
+                  <ActionButtonContent
+                    icon={<Icon name="settings" size={18} />}
+                    label="Admin panel"
+                  />
+                </LinkButton>
               )}
-            </SecondaryActions>
-            <SecondaryActions>
+            </div>
+
+            <div className="flex w-full flex-col items-stretch gap-3">
               {isAdmissionMember && (
-                <SecondaryActionButton
+                <LinkButton
+                  className={secondaryActionButtonClass}
                   fullWidth
                   to={`/${admission.slug}/schedule/`}
                 >
-                  <ActionButtonContent>
-                    <ActionButtonIcon>
-                      <Icon name="calendar" size={18} />
-                    </ActionButtonIcon>
-                    <ActionButtonLabel>Velg intervjutider</ActionButtonLabel>
-                  </ActionButtonContent>
-                </SecondaryActionButton>
+                  <ActionButtonContent
+                    icon={<Icon name="calendar" size={18} />}
+                    label="Velg intervjutider"
+                  />
+                </LinkButton>
               )}
-              </SecondaryActions>
-          </LinkWrapper>
-        </ActionsContainer>
-      </AdmissionDetails>
-      <FooterNote>
-        Du kan til enhver tid trekke søknaden din hvis du skulle ombestemme deg.
-        Hvis det ikke fungerer å slette søknaden, send en mail til{" "}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <p className="m-0 border-t border-[#f3f4f6] pt-8 text-sm text-[#9ca3af] [&_a]:font-semibold [&_a]:text-[#6b7280] [&_a]:underline [&_a]:underline-offset-2 [&_a:hover]:text-[#111827]">
+        Du kan til enhver tid trekke søknaden din hvis du skulle ombestemme
+        deg. Hvis det ikke fungerer å slette søknaden, send en mail til{" "}
         {isRevy || isRevyBoard ? (
           <a href="mailto:revysjef@abakus.no">revysjef@abakus.no</a>
         ) : isBackup ? (
@@ -152,225 +177,43 @@ const Admission: React.FC<AdmissionProps> = ({ admission }) => {
           <a href="mailto:leder@abakus.no">leder@abakus.no</a>
         )}
         .
-      </FooterNote>
+      </p>
+
       {isRevy && admission.is_open && !isLoggedIn() && (
-        <ExternalLinkNote>
+        <p className="m-0 pt-4 text-sm text-[#9ca3af] [&_a]:font-semibold [&_a]:text-[#6b7280] [&_a]:underline [&_a]:underline-offset-2 [&_a:hover]:text-[#111827]">
           Er du ikke medlem av Abakus? Søk via{" "}
           <a href="https://forms.gle/SKPRvGNwuKhcZQP26">dette skjemaet</a>.
-        </ExternalLinkNote>
+        </p>
       )}
       {isRevyBoard && admission.is_open && !isLoggedIn() && (
-        <ExternalLinkNote>
+        <p className="m-0 pt-4 text-sm text-[#9ca3af] [&_a]:font-semibold [&_a]:text-[#6b7280] [&_a]:underline [&_a]:underline-offset-2 [&_a:hover]:text-[#111827]">
           Er du ikke medlem av Abakus? Søk via{" "}
           <a href="https://docs.google.com/forms/d/e/1FAIpQLSdLzkn2RC_CIW3EHPKSn0f60xTP17LdnrvVb1ubVeRVHTsz1A/viewform?usp=sharing">
             dette skjemaet
           </a>
           .
-        </ExternalLinkNote>
+        </p>
       )}
-    </AdmissionWrapper>
+    </div>
   );
 };
 
+interface ActionButtonContentProps {
+  icon: React.ReactNode;
+  label: string;
+}
+
+const ActionButtonContent = ({
+  icon,
+  label,
+}: ActionButtonContentProps) => (
+  <span className="grid w-full grid-cols-[1.25rem_minmax(0,1fr)_1.25rem] items-center">
+    <span className="inline-flex h-5 w-5 items-center justify-center">
+      {icon}
+    </span>
+    <span className="text-center">{label}</span>
+    <span className="invisible h-5 w-5" />
+  </span>
+);
+
 export default Admission;
-
-/** Styles **/
-
-const AdmissionWrapper = styled.div`
-  background-color: #fff;
-  padding: 3.5rem;
-  border-radius: var(--border-radius-lg);
-  box-shadow:
-    0 10px 15px -3px rgba(0, 0, 0, 0.05),
-    0 4px 6px -2px rgba(0, 0, 0, 0.02);
-  max-width: 1100px;
-  width: 100%;
-  margin-top: 3rem;
-  border: 1px solid #f3f4f6;
-  transition: var(--transition-base);
-
-  &:hover {
-    box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.08);
-  }
-
-  ${media.portrait`
-    padding: 2.5rem;
-  `}
-  ${media.handheld`
-    padding: 1.5rem;
-    margin-top: 2rem;
-  `}
-`;
-
-const AdmissionDetails = styled.div`
-  display: grid;
-  grid-template-columns: 1.4fr 1fr;
-  gap: 5rem;
-  margin-bottom: 3.5rem;
-
-  ${media.portrait`
-    grid-template-columns: 1fr;
-    gap: 3.5rem;
-  `}
-`;
-
-const AdmissionTitle = styled.h2`
-  font-size: 2.5rem;
-  font-weight: 800;
-  margin: 0;
-  margin-bottom: 1rem;
-  color: #111827;
-  letter-spacing: -0.05em;
-
-  ${media.handheld`
-    font-size: 1.875rem;
-  `}
-`;
-
-const AdmissionDescription = styled.p`
-  font-size: 1.125rem;
-  color: #4b5563;
-  line-height: 1.6;
-  margin: 0;
-  margin-bottom: 3rem;
-
-  ${media.handheld`
-    font-size: 1rem;
-    margin-bottom: 2rem;
-  `}
-`;
-
-const ActionsContainer = styled.div`
-  display: flex;
-  flex-direction: column;
-  justify-content: flex-start;
-`;
-
-const CountDownSection = styled.div`
-  background: #f9fafb;
-  padding: 2rem;
-  border-radius: var(--border-radius-lg);
-  border: 1px solid #f3f4f6;
-  display: flex;
-  gap: 1rem;
-  flex-wrap: wrap;
-`;
-
-const LinkWrapper = styled.div`
-  margin-top: 2rem;
-  display: flex;
-  flex-direction: column;
-  gap: 1rem;
-  width: 100%;
-`;
-
-const ActionButtonBase = styled(LinkButton)`
-  && {
-    min-height: 3.5rem;
-    border-radius: var(--border-radius-md);
-    font-weight: 700;
-    transition:
-      background-color 0.2s ease,
-      border-color 0.2s ease,
-      color 0.2s ease,
-      transform 0.2s ease,
-      box-shadow 0.2s ease;
-  }
-`;
-
-const PrimaryActionButton = styled(ActionButtonBase)`
-  && {
-    min-height: 3.75rem;
-    font-size: 1.0625rem;
-    background: var(--lego-red-color);
-    color: white;
-    border: 2px solid var(--lego-red-color);
-
-    &:hover:not(:disabled) {
-      background: #8e0e06;
-      border-color: #8e0e06;
-      transform: translateY(-2px);
-      box-shadow: 0 10px 15px -3px rgba(178, 18, 7, 0.2);
-    }
-
-    &:active:not(:disabled) {
-      transform: translateY(0);
-    }
-
-    &:disabled {
-      opacity: 0.5;
-      cursor: not-allowed;
-    }
-  }
-`;
-
-const SecondaryActions = styled.div`
-  display: flex;
-  flex-direction: column;
-  gap: 0.75rem;
-  width: 100%;
-  align-items: stretch;
-`;
-
-const SecondaryActionButton = styled(ActionButtonBase)`
-  && {
-    min-height: 3.5rem;
-    font-size: 0.875rem;
-    background: white;
-    color: var(--lego-red-color);
-    border: 2px solid var(--lego-red-color);
-
-    &:hover:not(:disabled) {
-      background: #fff5f5;
-      transform: translateY(-1px);
-    }
-  }
-`;
-
-const ActionButtonContent = styled.span`
-  display: grid;
-  grid-template-columns: 1.25rem minmax(0, 1fr) 1.25rem;
-  align-items: center;
-  width: 100%;
-`;
-
-const ActionButtonIcon = styled.span`
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 1.25rem;
-  height: 1.25rem;
-`;
-
-const ActionButtonLabel = styled.span`
-  text-align: center;
-`;
-
-const ActionButtonSpacer = styled.span`
-  width: 1.25rem;
-  height: 1.25rem;
-  visibility: hidden;
-`;
-
-const FooterNote = styled.p`
-  font-size: 0.875rem;
-  color: #9ca3af;
-  margin: 0;
-  padding-top: 2rem;
-  border-top: 1px solid #f3f4f6;
-  li a {
-    color: #6b7280;
-    font-weight: 600;
-    text-decoration: underline;
-    text-underline-offset: 2px;
-
-    &:hover {
-      color: #111827;
-    }
-  }
-`;
-
-const ExternalLinkNote = styled(FooterNote)`
-  border-top: none;
-  padding-top: 1rem;
-`;

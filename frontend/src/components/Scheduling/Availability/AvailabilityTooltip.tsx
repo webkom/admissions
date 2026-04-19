@@ -1,5 +1,4 @@
 import React from "react";
-import styled from "styled-components";
 
 interface AvailabilityTooltipProps {
   dayLabel: string;
@@ -11,63 +10,18 @@ const AvailabilityTooltip = ({
   hoursText,
 }: AvailabilityTooltipProps) => {
   return (
-    <TooltipWrapper>
-      <TooltipContent>
-        <TooltipHeader>{dayLabel}</TooltipHeader>
-        <TooltipBody>{hoursText}</TooltipBody>
-      </TooltipContent>
-      <Arrow />
-    </TooltipWrapper>
+    <div className="pointer-events-none absolute bottom-full left-1/2 z-50 mb-[var(--spacing-sm)] w-max max-w-[150px] -translate-x-1/2">
+      <div className="rounded-[var(--border-radius-sm)] bg-[#111827] px-3 py-1.5 text-center text-[var(--color-white)] shadow-[var(--shadow-md)]">
+        <div className="mb-1 border-b border-[var(--color-gray-7)] pb-1 text-[10px] font-bold uppercase text-[var(--color-gray-3)]">
+          {dayLabel}
+        </div>
+        <div className="font-mono text-[10px] text-[var(--color-white)]">
+          {hoursText}
+        </div>
+      </div>
+      <div className="absolute bottom-[-4px] left-1/2 h-2 w-2 -translate-x-1/2 rotate-45 bg-[#111827]" />
+    </div>
   );
 };
 
 export default AvailabilityTooltip;
-
-// --- Styles ---
-
-const TooltipWrapper = styled.div`
-  position: absolute;
-  bottom: 100%;
-  left: 50%;
-  transform: translateX(-50%);
-  margin-bottom: var(--spacing-sm);
-  width: max-content;
-  max-width: 150px;
-  z-index: 50;
-  pointer-events: none; /* Let mouse pass through so it doesn't flicker */
-`;
-
-const TooltipContent = styled.div`
-  background: var(--color-gray-9); /* Dark background */
-  color: var(--color-white);
-  border-radius: var(--border-radius-sm);
-  padding: 6px 12px;
-  box-shadow: var(--shadow-md);
-  text-align: center;
-`;
-
-const TooltipHeader = styled.div`
-  font-weight: bold;
-  font-size: 10px;
-  border-bottom: 1px solid var(--color-gray-7);
-  padding-bottom: 4px;
-  margin-bottom: 4px;
-  color: var(--color-gray-3);
-  text-transform: uppercase;
-`;
-
-const TooltipBody = styled.div`
-  font-family: monospace;
-  font-size: 10px;
-  color: var(--color-white);
-`;
-
-const Arrow = styled.div`
-  width: 8px;
-  height: 8px;
-  background: var(--color-gray-9);
-  transform: rotate(45deg) translateX(-50%);
-  position: absolute;
-  left: 50%;
-  bottom: -4px;
-`;

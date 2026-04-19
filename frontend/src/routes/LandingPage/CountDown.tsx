@@ -1,6 +1,4 @@
 import React, { useEffect, useState } from "react";
-import styled from "styled-components";
-import { media } from "src/styles/mediaQueries";
 
 interface CountDownProps {
   title: string;
@@ -31,42 +29,52 @@ const CountDown: React.FC<CountDownProps> = ({
   const isCompleted = remainingTotalSeconds <= 0;
 
   return (
-    <Wrapper>
-      <Title>{title}</Title>
+    <div className="flex min-w-0 flex-1 basis-[220px] flex-col items-center rounded-2xl border border-[#eceff3] bg-white px-2 py-4 max-[500px]:w-full">
+      <h3 className="mb-4 text-center text-base font-bold text-[#374151]">
+        {title}
+      </h3>
       {isCompleted ? (
-        <CompletedState>
-          <CompletedBadge>{completedLabel}</CompletedBadge>
-          <CompletedDate>{formatMilestoneDate(dateString)}</CompletedDate>
-        </CompletedState>
+        <div className="flex min-h-[138px] flex-col items-center justify-center gap-2 text-center">
+          <span className="inline-flex items-center rounded-full border border-[rgba(178,18,7,0.14)] bg-[rgba(178,18,7,0.08)] px-3 py-[0.35rem] text-xs font-bold uppercase tracking-[0.04em] text-[#b21207]">
+            {completedLabel}
+          </span>
+          <p className="m-0 text-sm font-semibold text-[#6b7280]">
+            {formatMilestoneDate(dateString)}
+          </p>
+        </div>
       ) : (
-        <ContentWrapper>
-          <ContentRow>
-            <Item>
-              <span>{remaining.days}</span>
-              <p>DAGER</p>
-            </Item>
-            <Item>
-              <span>{remaining.hours}</span>
-              <p>TIMER</p>
-            </Item>
-          </ContentRow>
-          <ContentRow>
-            <Item>
-              <span>{remaining.minutes}</span>
-              <p>MINUTTER</p>
-            </Item>
-            <Item>
-              <span>{remaining.seconds}</span>
-              <p>SEKUNDER</p>
-            </Item>
-          </ContentRow>
-        </ContentWrapper>
+        <div className="flex w-full flex-wrap justify-center">
+          <div className="flex">
+            <CountdownItem value={remaining.days} label="DAGER" />
+            <CountdownItem value={remaining.hours} label="TIMER" />
+          </div>
+          <div className="flex">
+            <CountdownItem value={remaining.minutes} label="MINUTTER" />
+            <CountdownItem value={remaining.seconds} label="SEKUNDER" />
+          </div>
+        </div>
       )}
-    </Wrapper>
+    </div>
   );
 };
 
 export default CountDown;
+
+interface CountdownItemProps {
+  value: number;
+  label: string;
+}
+
+const CountdownItem = ({ value, label }: CountdownItemProps) => (
+  <div className="mb-4 mx-[15px] w-[70px] text-center leading-[1.2] max-[500px]:mx-2 max-[500px]:w-[60px]">
+    <span className="text-[2rem] font-extrabold text-[#111827] max-[500px]:text-[1.5rem]">
+      {value}
+    </span>
+    <p className="m-0 text-[0.625rem] font-bold tracking-[0.05em] text-[#9ca3af]">
+      {label}
+    </p>
+  </div>
+);
 
 const getRemainingSeconds = (dateString: string) =>
   Math.round((new Date(dateString).valueOf() - new Date().valueOf()) / 1000);
@@ -91,107 +99,3 @@ const formatMilestoneDate = (dateString: string) =>
     hour: "2-digit",
     minute: "2-digit",
   }).format(new Date(dateString));
-
-/** Styles **/
-
-const Wrapper = styled.div`
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  padding: 1rem 0.5rem;
-  border-radius: 16px;
-  background: #ffffff;
-  border: 1px solid #eceff3;
-  min-width: 0;
-  flex: 1 1 220px;
-
-  ${media.handheld`
-    width: 100%;
-  `}
-`;
-
-const Title = styled.h3`
-  font-size: 1rem;
-  font-weight: 700;
-  text-align: center;
-  margin: 0;
-  margin-bottom: 1rem;
-  color: #374151;
-
-  ${media.handheld`
-    font-size: 1rem;
-  `}
-`;
-
-const ContentWrapper = styled.div`
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
-  width: 100%;
-`;
-
-const ContentRow = styled.div`
-  display: flex;
-`;
-
-const Item = styled.div`
-  margin: 0 15px;
-  margin-bottom: 1em;
-  text-align: center;
-  width: 70px;
-  line-height: 1.2;
-
-  span {
-    font-size: 2rem;
-    font-weight: 800;
-    color: #111827;
-  }
-
-  p {
-    margin: 0;
-    font-size: 0.625rem;
-    font-weight: 700;
-    color: #9ca3af;
-    letter-spacing: 0.05em;
-  }
-
-  ${media.handheld`
-    margin: 0 0.5rem;
-    width: 60px;
-
-    span {
-      font-size: 1.5rem;
-    }
-  `}
-`;
-
-const CompletedState = styled.div`
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 0.5rem;
-  min-height: 138px;
-  text-align: center;
-`;
-
-const CompletedBadge = styled.span`
-  display: inline-flex;
-  align-items: center;
-  padding: 0.35rem 0.75rem;
-  border-radius: 999px;
-  background: rgba(178, 18, 7, 0.08);
-  border: 1px solid rgba(178, 18, 7, 0.14);
-  color: #b21207;
-  font-size: 0.75rem;
-  font-weight: 700;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-`;
-
-const CompletedDate = styled.p`
-  margin: 0;
-  color: #6b7280;
-  font-size: 0.875rem;
-  font-weight: 600;
-`;

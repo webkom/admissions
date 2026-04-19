@@ -1,100 +1,42 @@
 import React, { PropsWithChildren } from "react";
-import styled from "styled-components";
-import { media } from "src/styles/mediaQueries";
-
 import AbakusLogo from "src/components/AbakusLogo";
 import { isLoggedIn, isManager } from "src/utils/djangoData";
 import LinkButton from "src/components/LinkButton";
 
 const LandingPageSkeleton: React.FC<PropsWithChildren> = ({ children }) => {
   return (
-    <Container>
-      <BrandContainer>
+    <div className="mx-auto flex min-h-screen w-full max-w-[1200px] flex-col items-center px-8 py-16 max-[500px]:px-4 max-[500px]:py-8">
+      <div className="mb-8 max-w-[180px] transition-[transform] duration-200 hover:scale-[1.02] max-[500px]:max-w-[140px]">
         <AbakusLogo />
-      </BrandContainer>
-      <Title>Opptak</Title>
+      </div>
+      <h1 className="mb-4 text-center text-[3rem] font-extrabold tracking-[-0.04em] text-[#111827] max-[500px]:text-[2rem]">
+        Opptak
+      </h1>
       {children}
       {isManager() && (
-        <LegoButtonWrapper>
+        <div className="mt-16">
           <LinkButton to={`/manage/`}>Administrer opptak</LinkButton>
-        </LegoButtonWrapper>
+        </div>
       )}
-      <BottomLinkWrapper>
+      <div className="mt-24 flex w-full justify-center border-t border-[#f3f4f6] pt-8 pb-8">
         {!isLoggedIn() ? (
-          <a href="/login/lego/">Logg inn</a>
+          <a
+            className="text-sm font-medium text-[#6b7280] transition-colors duration-200 hover:text-[#111827]"
+            href="/login/lego/"
+          >
+            Logg inn
+          </a>
         ) : (
-          <a href="/logout/">Logg ut</a>
+          <a
+            className="text-sm font-medium text-[#6b7280] transition-colors duration-200 hover:text-[#111827]"
+            href="/logout/"
+          >
+            Logg ut
+          </a>
         )}
-      </BottomLinkWrapper>
-    </Container>
+      </div>
+    </div>
   );
 };
 
 export default LandingPageSkeleton;
-
-/** Styles **/
-
-const Container = styled.div`
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  margin: 0 auto;
-  padding: 4rem 2rem;
-  width: 100%;
-  max-width: 1200px;
-  min-height: 100vh;
-
-  ${media.handheld`
-    padding: 2rem 1rem;
-  `};
-`;
-
-const BrandContainer = styled.div`
-  max-width: 180px;
-  margin-bottom: 2rem;
-  transition: var(--transition-base);
-
-  &:hover {
-    transform: scale(1.02);
-  }
-
-  ${media.handheld`
-    max-width: 140px;
-  `};
-`;
-
-const Title = styled.h1`
-  font-size: 3rem;
-  font-weight: 800;
-  margin-bottom: 1rem;
-  color: #111827;
-  letter-spacing: -0.04em;
-
-  ${media.handheld`
-    font-size: 2rem;
-  `};
-`;
-
-const LegoButtonWrapper = styled.div`
-  margin-top: 4rem;
-`;
-
-const BottomLinkWrapper = styled.div`
-  display: flex;
-  justify-content: center;
-  margin-top: 6rem;
-  padding-bottom: 2rem;
-  width: 100%;
-  border-top: 1px solid #f3f4f6;
-  padding-top: 2rem;
-
-  a {
-    color: #6b7280;
-    font-size: 0.875rem;
-    font-weight: 500;
-
-    &:hover {
-      color: #111827;
-    }
-  }
-`;
