@@ -1,5 +1,6 @@
 import React from "react";
 import styled from "styled-components";
+import TimelineWrapper from "../TimelineWrapper";
 import type { Candidate, Interviewer } from "../types";
 import { DAYS_MAP } from "../utils/timeutils";
 import AvailabilityBar from "../Availability/AvailabilityBar";
@@ -35,7 +36,7 @@ const PersonListView = ({ data }: PersonListViewProps) => {
             {isInterviewer && (
               <AvailabilityTimelineWrapper>
                 <TimelineTitle>Tilgjengelighet</TimelineTitle>
-                <TimelineBars>
+                <TimelineWrapper $gap="4px">
                   {DAYS_MAP.map((dayLabel, dayIndex) => {
                     const hasAvailability = (
                       person as Interviewer
@@ -52,7 +53,7 @@ const PersonListView = ({ data }: PersonListViewProps) => {
                       />
                     );
                   })}
-                </TimelineBars>
+                </TimelineWrapper>
               </AvailabilityTimelineWrapper>
             )}
           </Card>
@@ -80,40 +81,41 @@ const List = styled.ul`
   margin: 0;
   display: flex;
   flex-direction: column;
-  gap: 0.75rem;
+  gap: 0.5rem;
 `;
 
 const Card = styled.li`
-  ${scheduleInset};
-  padding: 1rem;
+  padding: 0.875rem 1rem;
+  border: 1px solid #e4e4e4;
+  border-radius: 8px;
+  background: #ffffff;
 `;
 
 const CardMain = styled.div`
   display: flex;
   align-items: center;
-  gap: 1rem;
+  gap: 0.75rem;
 `;
 
 const Avatar = styled.div<{ $gender: string }>`
-  width: 44px;
-  height: 44px;
+  width: 36px;
+  height: 36px;
   background: ${(props) =>
-    props.$gender === "F"
-      ? "rgba(178, 18, 7, 0.08)"
-      : "rgba(31, 122, 92, 0.08)"};
-  color: ${(props) => (props.$gender === "F" ? "#8a1f16" : "#166534")};
-  border-radius: 0.95rem;
+    props.$gender === "F" ? "rgba(178, 18, 7, 0.07)" : "#f0f0f0"};
+  color: ${(props) => (props.$gender === "F" ? "#b21207" : "#6b6b6b")};
+  border-radius: 8px;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-weight: 800;
-  font-size: 1.05rem;
+  font-weight: 700;
+  font-size: 0.875rem;
   flex-shrink: 0;
-  border: 1px solid #ddd2c3;
+  border: 1px solid #e4e4e4;
 `;
 
 const Info = styled.div`
   flex: 1;
+  min-width: 0;
 `;
 
 const HeaderRow = styled.div`
@@ -124,48 +126,38 @@ const HeaderRow = styled.div`
 `;
 
 const Name = styled.h3`
-  font-size: 1rem;
+  font-size: 0.875rem;
   font-weight: 700;
-  color: #111827;
+  color: #111111;
   margin: 0;
 `;
 
 const Id = styled.span`
   ${scheduleLabel};
-  color: #8a7b6b;
 `;
 
 const GenderBadge = styled.span<{ $gender: string }>`
-  font-size: 0.68rem;
-  font-weight: 800;
-  padding: 0.22rem 0.45rem;
+  font-size: 0.688rem;
+  font-weight: 700;
+  padding: 0.15rem 0.4rem;
   border-radius: 999px;
   background: ${(props) =>
-    props.$gender === "F"
-      ? "rgba(178, 18, 7, 0.08)"
-      : "rgba(31, 122, 92, 0.08)"};
-  color: ${(props) => (props.$gender === "F" ? "#8a1f16" : "#166534")};
+    props.$gender === "F" ? "rgba(178, 18, 7, 0.07)" : "#f0f0f0"};
+  color: ${(props) => (props.$gender === "F" ? "#b21207" : "#6b6b6b")};
   border: 1px solid
     ${(props) =>
-      props.$gender === "F"
-        ? "rgba(178, 18, 7, 0.14)"
-        : "rgba(31, 122, 92, 0.14)"};
+      props.$gender === "F" ? "rgba(178, 18, 7, 0.16)" : "#e4e4e4"};
 `;
 
 const AvailabilityTimelineWrapper = styled.div`
-  margin-top: 0.95rem;
-  padding-top: 0.95rem;
-  border-top: 1px solid #e3d8ca;
+  margin-top: 0.75rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid #f0f0f0;
 `;
 
 const TimelineTitle = styled.div`
   ${scheduleLabel};
-  margin-bottom: 0.5rem;
-`;
-
-const TimelineBars = styled.div`
-  display: flex;
-  gap: 4px;
+  margin-bottom: 0.4rem;
 `;
 
 const EmptyState = styled.div`
@@ -175,13 +167,15 @@ const EmptyState = styled.div`
 `;
 
 const EmptyTitle = styled.h4`
-  margin: 0 0 0.4rem;
-  color: #111827;
-  font-size: 1rem;
+  margin: 0 0 0.3rem;
+  color: #111111;
+  font-size: 0.875rem;
+  font-weight: 700;
 `;
 
 const EmptyText = styled.p`
   margin: 0;
-  color: #6b7280;
+  color: #a0a0a0;
+  font-size: 0.813rem;
   line-height: 1.6;
 `;

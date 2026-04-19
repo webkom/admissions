@@ -14,7 +14,7 @@ interface NavBarProps {
 const NavBar: React.FC<NavBarProps> = ({ isEditing }) => {
   const { admissionSlug, ...params } = useParams();
   const { data: admission } = useAdmission(admissionSlug ?? "");
-  const isRevy = admissionSlug === "revy";
+  const isRevy = admissionSlug?.includes("revy");
   const isRevyBoard = admissionSlug === "revystyret";
   const isSingleGroupAdmission = admission?.groups.length === 1;
 

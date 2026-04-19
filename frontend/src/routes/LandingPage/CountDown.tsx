@@ -5,55 +5,63 @@ import { media } from "src/styles/mediaQueries";
 interface CountDownProps {
   title: string;
   dateString: string;
+  completedLabel?: string;
 }
 
-const CountDown: React.FC<CountDownProps> = ({ title, dateString }) => {
-  const [remainingTotalSeconds, setRemainingTotalSeconds] = useState(
+const CountDown: React.FC<CountDownProps> = ({
+  title,
+  dateString,
+  completedLabel = "Passert",
+}) => {
+  const [remainingTotalSeconds, setRemainingTotalSeconds] = useState(() =>
     getRemainingSeconds(dateString),
-  );
-  const [remaining, setRemaining] = useState(
-    calculateRemainingUnits(remainingTotalSeconds),
   );
 
   useEffect(() => {
+    setRemainingTotalSeconds(getRemainingSeconds(dateString));
+
     const interval = setInterval(() => {
-      setRemainingTotalSeconds(
-        (prevRemainingTotalSeconds) => prevRemainingTotalSeconds - 1,
-      );
+      setRemainingTotalSeconds(getRemainingSeconds(dateString));
     }, 1000);
 
     return () => clearInterval(interval);
-  }, []);
+  }, [dateString]);
 
-  useEffect(() => {
-    setRemaining(calculateRemainingUnits(remainingTotalSeconds));
-  }, [remainingTotalSeconds]);
+  const remaining = calculateRemainingUnits(remainingTotalSeconds);
+  const isCompleted = remainingTotalSeconds <= 0;
 
   return (
     <Wrapper>
       <Title>{title}</Title>
-      <ContentWrapper>
-        <ContentRow>
-          <Item>
-            <span>{remaining.days}</span>
-            <p>DAGER</p>
-          </Item>
-          <Item>
-            <span>{remaining.hours}</span>
-            <p>TIMER</p>
-          </Item>
-        </ContentRow>
-        <ContentRow>
-          <Item>
-            <span>{remaining.minutes}</span>
-            <p>MINUTTER</p>
-          </Item>
-          <Item>
-            <span>{remaining.seconds}</span>
-            <p>SEKUNDER</p>
-          </Item>
-        </ContentRow>
-      </ContentWrapper>
+      {isCompleted ? (
+        <CompletedState>
+          <CompletedBadge>{completedLabel}</CompletedBadge>
+          <CompletedDate>{formatMilestoneDate(dateString)}</CompletedDate>
+        </CompletedState>
+      ) : (
+        <ContentWrapper>
+          <ContentRow>
+            <Item>
+              <span>{remaining.days}</span>
+              <p>DAGER</p>
+            </Item>
+            <Item>
+              <span>{remaining.hours}</span>
+              <p>TIMER</p>
+            </Item>
+          </ContentRow>
+          <ContentRow>
+            <Item>
+              <span>{remaining.minutes}</span>
+              <p>MINUTTER</p>
+            </Item>
+            <Item>
+              <span>{remaining.seconds}</span>
+              <p>SEKUNDER</p>
+            </Item>
+          </ContentRow>
+        </ContentWrapper>
+      )}
     </Wrapper>
   );
 };
@@ -64,39 +72,50 @@ const getRemainingSeconds = (dateString: string) =>
   Math.round((new Date(dateString).valueOf() - new Date().valueOf()) / 1000);
 
 const calculateRemainingUnits = (remainingSeconds: number) => {
-  let remaining = remainingSeconds;
-  const seconds = Math.round(remaining % 60);
+  let remaining = Math.max(remainingSeconds, 0);
+  const seconds = remaining % 60;
   remaining = (remaining - seconds) / 60;
-  const minutes = Math.round(remaining % 60);
+  const minutes = remaining % 60;
   remaining = (remaining - minutes) / 60;
-  const hours = Math.round(remaining % 24);
+  const hours = remaining % 24;
   remaining = (remaining - hours) / 24;
-  const days = Math.round(remaining);
+  const days = remaining;
   return { days, hours, minutes, seconds };
 };
+
+const formatMilestoneDate = (dateString: string) =>
+  new Intl.DateTimeFormat("nb-NO", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(new Date(dateString));
 
 /** Styles **/
 
 const Wrapper = styled.div`
   display: flex;
-  background-color: transparent;
-  padding: 0.5em;
-  justify-content: center;
+  flex-direction: column;
   align-items: center;
-  flex-wrap: wrap;
+  padding: 1rem 0.5rem;
+  border-radius: 16px;
+  background: #ffffff;
+  border: 1px solid #eceff3;
+  min-width: 0;
+  flex: 1 1 220px;
+
   ${media.handheld`
-    margin-top: 0.4em;
-    margin-bottom: 1em;
+    width: 100%;
   `}
 `;
 
 const Title = styled.h3`
-  font-size: 1.125rem;
+  font-size: 1rem;
   font-weight: 700;
   text-align: center;
   margin: 0;
-  margin-bottom: 1.5rem;
-  flex-basis: 100%;
+  margin-bottom: 1rem;
   color: #374151;
 
   ${media.handheld`
@@ -108,7 +127,7 @@ const ContentWrapper = styled.div`
   display: flex;
   flex-wrap: wrap;
   justify-content: center;
-  margin-bottom: 0.5em;
+  width: 100%;
 `;
 
 const ContentRow = styled.div`
@@ -139,9 +158,40 @@ const Item = styled.div`
   ${media.handheld`
     margin: 0 0.5rem;
     width: 60px;
-    
+
     span {
       font-size: 1.5rem;
     }
   `}
+`;
+
+const CompletedState = styled.div`
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  min-height: 138px;
+  text-align: center;
+`;
+
+const CompletedBadge = styled.span`
+  display: inline-flex;
+  align-items: center;
+  padding: 0.35rem 0.75rem;
+  border-radius: 999px;
+  background: rgba(178, 18, 7, 0.08);
+  border: 1px solid rgba(178, 18, 7, 0.14);
+  color: #b21207;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+`;
+
+const CompletedDate = styled.p`
+  margin: 0;
+  color: #6b7280;
+  font-size: 0.875rem;
+  font-weight: 600;
 `;

@@ -1,8 +1,8 @@
 import React from "react";
+import TimelineWrapper from "../TimelineWrapper";
 import { DAYS_MAP } from "../utils/timeutils";
 import type { Interviewer } from "../types";
 import AvailabilityBar from "./AvailabilityBar";
-import styled from "styled-components";
 
 interface AvailabilityTimelineProps {
   availability: Interviewer["availability"];
@@ -31,11 +31,3 @@ const AvailabilityTimeline = ({ availability }: AvailabilityTimelineProps) => {
 };
 
 export default AvailabilityTimeline;
-
-// --- Lego Styled Components ---
-
-const TimelineWrapper = styled.div`
-  display: flex;
-  gap: 3px;
-  width: 100%;
-`;

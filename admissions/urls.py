@@ -27,8 +27,9 @@ from admissions.admissions.views import (
     ManageGroupViewSet,
     PublicAdmissionViewSet,
     PublicApplicationViewSet,
+    SavedScheduleView,
     logout,
-    SolveScheduleView
+    SolveScheduleView,
 )
 
 publicRouter = routers.DefaultRouter()
@@ -58,6 +59,11 @@ urlpatterns = [
     path("api-auth/", include("rest_framework.urls", namespace="rest_framework")),
     path("api/", include(publicRouter.urls)),
     path("api/solve/", SolveScheduleView.as_view(), name="solve-schedule"),
+    path(
+        "api/admin/admission/<slug:admission_slug>/schedule/",
+        SavedScheduleView.as_view(),
+        name="saved-schedule",
+    ),
     re_path("", include("social_django.urls", namespace="social")),
     re_path(r"^$", AppView.as_view(), name="home"),
 ]

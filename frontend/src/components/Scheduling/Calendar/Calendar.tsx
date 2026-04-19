@@ -2,20 +2,14 @@ import * as React from "react";
 import styled, { css } from "styled-components";
 import {
   primaryAction,
+  scheduleGridHeaderCell,
+  scheduleGridShell,
+  scheduleGridTimeLabel,
   scheduleInset,
   scheduleLabel,
   scheduleSurface,
 } from "../shared";
-
-const DAYS = [
-  "Mandag",
-  "Tysdag",
-  "Onsdag",
-  "Torsdag",
-  "Fredag",
-  "Lørdag",
-  "Søndag",
-];
+import { formatDateHeader, makeSlotKey } from "../scheduleUtils";
 
 interface TimeSchedulerProps {
   enabledSlots?: Set<string>;
@@ -25,6 +19,7 @@ interface TimeSchedulerProps {
   endHour?: number;
   onSave?: (slots: Set<string>) => Promise<void>;
   sessionDuration: number;
+  dates: string[];
 }
 
 const TimeScheduler: React.FC<TimeSchedulerProps> = ({
@@ -35,6 +30,7 @@ const TimeScheduler: React.FC<TimeSchedulerProps> = ({
   endHour = 18,
   onSave,
   sessionDuration,
+  dates,
 }) => {
   const [internalSelectedSlots, setInternalSelectedSlots] = React.useState<
     Set<string>
@@ -64,48 +60,36 @@ const TimeScheduler: React.FC<TimeSchedulerProps> = ({
     return `${hours}:${minutes.toString().padStart(2, "0")}`;
   };
 
-  const isSlotEnabled = (dayIndex: number, minute: number): boolean => {
+  const isSlotEnabled = (date: string, minute: number): boolean => {
     if (!enabledSlots) return true;
-    return enabledSlots.has(`${dayIndex}-${minute}`);
+    return enabledSlots.has(makeSlotKey(date, minute));
   };
 
   const toggleSlot = React.useCallback(
-    (
-      dayIndex: number,
-      minute: number,
-      mode: boolean,
-      currentSlots: Set<string>,
-    ) => {
-      if (!isSlotEnabled(dayIndex, minute)) return;
+    (date: string, minute: number, mode: boolean, currentSlots: Set<string>) => {
+      if (!enabledSlots || !enabledSlots.has(makeSlotKey(date, minute))) return;
 
-      const slotId = `${dayIndex}-${minute}`;
+      const slotId = makeSlotKey(date, minute);
       const next = new Set(currentSlots);
-
-      if (mode) {
-        next.add(slotId);
-      } else {
-        next.delete(slotId);
-      }
-
+      if (mode) next.add(slotId);
+      else next.delete(slotId);
       setSelectedSlots(next);
     },
-    [isSlotEnabled, setSelectedSlots],
+    [enabledSlots, setSelectedSlots],
   );
 
-  const handleMouseDown = (dayIndex: number, minute: number) => {
-    if (!isSlotEnabled(dayIndex, minute)) return;
-
-    const slotId = `${dayIndex}-${minute}`;
+  const handleMouseDown = (date: string, minute: number) => {
+    if (!isSlotEnabled(date, minute)) return;
+    const slotId = makeSlotKey(date, minute);
     const newAddMode = !selectedSlots.has(slotId);
-
     setAddMode(newAddMode);
     setIsDragging(true);
-    toggleSlot(dayIndex, minute, newAddMode, selectedSlots);
+    toggleSlot(date, minute, newAddMode, selectedSlots);
   };
 
-  const handleMouseEnter = (dayIndex: number, minute: number) => {
-    if (isDragging && isSlotEnabled(dayIndex, minute)) {
-      toggleSlot(dayIndex, minute, addMode, selectedSlots);
+  const handleMouseEnter = (date: string, minute: number) => {
+    if (isDragging && isSlotEnabled(date, minute)) {
+      toggleSlot(date, minute, addMode, selectedSlots);
     }
   };
 
@@ -131,10 +115,7 @@ const TimeScheduler: React.FC<TimeSchedulerProps> = ({
   return (
     <Wrapper>
       <HeaderRow>
-        <div>
-          <Eyebrow>Egen kapasitet</Eyebrow>
-          <Title>Marker tilgjengelige slotter</Title>
-        </div>
+        <Title>Marker tilgjengelige slots</Title>
         <Legend>
           <LegendItem>
             <LegendDot $variant="selected" />
@@ -152,26 +133,32 @@ const TimeScheduler: React.FC<TimeSchedulerProps> = ({
       </HeaderRow>
 
       <GridWrapper>
-        <Grid $columns={DAYS.length + 1}>
+        <Grid $columns={dates.length + 1}>
           <div />
 
-          {DAYS.map((day) => (
-            <HeaderCell key={day}>{day}</HeaderCell>
-          ))}
+          {dates.map((date) => {
+            const { weekday, dayMonth } = formatDateHeader(date);
+            return (
+              <HeaderCell key={date}>
+                <span>{weekday}</span>
+                <DateSubLabel>{dayMonth}</DateSubLabel>
+              </HeaderCell>
+            );
+          })}
 
           {TIME_SLOTS.map((minute) => (
             <React.Fragment key={minute}>
               <TimeLabel>{formatTime(minute)}</TimeLabel>
 
-              {DAYS.map((_, dayIndex) => {
-                const enabled = isSlotEnabled(dayIndex, minute);
-                const isSelected = selectedSlots.has(`${dayIndex}-${minute}`);
+              {dates.map((date) => {
+                const enabled = isSlotEnabled(date, minute);
+                const isSelected = selectedSlots.has(makeSlotKey(date, minute));
 
                 return (
                   <Slot
-                    key={`${dayIndex}-${minute}`}
-                    onMouseDown={() => handleMouseDown(dayIndex, minute)}
-                    onMouseEnter={() => handleMouseEnter(dayIndex, minute)}
+                    key={makeSlotKey(date, minute)}
+                    onMouseDown={() => handleMouseDown(date, minute)}
+                    onMouseEnter={() => handleMouseEnter(date, minute)}
                     $isSelected={isSelected}
                     $isEnabled={enabled}
                   />
@@ -184,7 +171,7 @@ const TimeScheduler: React.FC<TimeSchedulerProps> = ({
 
       <Footer>
         <FooterInfo>
-          <span>Valgte slotter</span>
+          <span>Valgte slots</span>
           <strong>{selectedSlots.size}</strong>
         </FooterInfo>
         <FooterInfo>
@@ -208,183 +195,158 @@ const Wrapper = styled.div`
   gap: 1rem;
   padding: 1.25rem;
   user-select: none;
+  min-width: 0;
 `;
 
 const HeaderRow = styled.div`
   display: flex;
   justify-content: space-between;
-  gap: 1rem;
-  align-items: flex-start;
+  align-items: center;
+  gap: 0.75rem;
   flex-wrap: wrap;
-`;
-
-const Eyebrow = styled.span`
-  ${scheduleLabel};
-  display: block;
-  margin-bottom: 0.3rem;
 `;
 
 const Title = styled.h3`
   margin: 0;
-  color: #111827;
-  font-size: 1.1rem;
+  color: #111111;
+  font-size: 0.875rem;
+  font-weight: 700;
 `;
 
 const Legend = styled.div`
   display: flex;
   flex-wrap: wrap;
-  gap: 0.5rem;
+  gap: 0.375rem;
 `;
 
 const LegendItem = styled.span`
-  ${scheduleInset};
   display: inline-flex;
   align-items: center;
-  gap: 0.45rem;
-  padding: 0.45rem 0.7rem;
-  color: #4b5563;
-  font-size: 0.82rem;
+  gap: 0.4rem;
+  padding: 0.3rem 0.6rem;
+  border-radius: 999px;
+  background: #f5f5f5;
+  border: 1px solid #e4e4e4;
+  color: #6b6b6b;
+  font-size: 0.75rem;
+  font-weight: 600;
 `;
 
 const LegendDot = styled.span<{ $variant: "selected" | "open" | "disabled" }>`
-  width: 0.8rem;
-  height: 0.8rem;
-  border-radius: 999px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
 
   ${(props) =>
     props.$variant === "selected"
       ? css`
-          background: linear-gradient(135deg, #1f7a5c 0%, #14532d 100%);
+          background: var(--lego-red-color);
         `
       : props.$variant === "open"
         ? css`
             background: #ffffff;
-            border: 1px solid #d6ccbf;
+            border: 1px solid #c8c8c8;
           `
         : css`
-            background: repeating-linear-gradient(
-              45deg,
-              #ece4d7,
-              #ece4d7 4px,
-              #f8f3ed 4px,
-              #f8f3ed 8px
-            );
-            border: 1px solid #d7cebf;
+            background: #e4e4e4;
           `}
 `;
 
 const GridWrapper = styled.div`
-  ${scheduleInset};
-  padding: 0.9rem;
-  overflow-x: auto;
+  ${scheduleGridShell};
+  min-width: 0;
 `;
 
 const Grid = styled.div<{ $columns: number }>`
   display: grid;
-  grid-template-columns: 68px repeat(${(props) => props.$columns - 1}, 1fr);
-  gap: 8px;
-  min-width: 760px;
+  grid-template-columns: 56px repeat(${(props) => props.$columns - 1}, minmax(70px, 1fr));
+  gap: 5px;
+  min-width: max(680px, ${(props) => (props.$columns - 1) * 70 + 56}px);
+`;
+
+const DateSubLabel = styled.span`
+  font-size: 0.688rem;
+  font-weight: 600;
+  color: #a0a0a0;
+  display: block;
 `;
 
 const HeaderCell = styled.div`
-  ${scheduleLabel};
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 3rem;
-  border-radius: 0.95rem;
-  background: rgba(255, 255, 255, 0.72);
-  color: #6e6256;
+  ${scheduleGridHeaderCell};
+  flex-direction: column;
+  gap: 0.1rem;
 `;
 
 const TimeLabel = styled.div`
-  ${scheduleLabel};
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  padding-right: 0.6rem;
-  color: #8a7b6b;
+  ${scheduleGridTimeLabel};
 `;
 
 const Slot = styled.div<{ $isSelected: boolean; $isEnabled: boolean }>`
-  height: 2.9rem;
+  height: 2.5rem;
   width: 100%;
-  border-radius: 0.95rem;
-  transition:
-    transform 0.12s ease,
-    box-shadow 0.12s ease,
-    background-color 0.12s ease;
-  position: relative;
+  border-radius: 6px;
+  transition: background-color 0.1s ease, border-color 0.1s ease;
+  cursor: pointer;
 
   ${(props) =>
     !props.$isEnabled
       ? css`
-          background: repeating-linear-gradient(
-            45deg,
-            #f1e8db,
-            #f1e8db 6px,
-            #faf6ef 6px,
-            #faf6ef 12px
-          );
-          border: 1px solid #e3d7c7;
+          background: #f0f0f0;
+          border: 1px solid #e4e4e4;
           cursor: not-allowed;
         `
       : props.$isSelected
         ? css`
-            background: linear-gradient(135deg, #1f7a5c 0%, #14532d 100%);
-            border: 1px solid #166534;
-            cursor: pointer;
+            background: var(--lego-red-color);
+            border: 1px solid var(--lego-red-color);
 
             &:hover {
-              transform: translateY(-1px);
-              box-shadow: 0 10px 20px -16px rgba(21, 83, 45, 0.8);
+              background: #9a1006;
             }
           `
         : css`
-            background: rgba(255, 255, 255, 0.9);
-            border: 1px solid #e2d8ca;
-            cursor: pointer;
+            background: #ffffff;
+            border: 1px solid #e4e4e4;
 
             &:hover {
-              transform: translateY(-1px);
-              box-shadow: 0 12px 18px -16px rgba(53, 42, 32, 0.4);
-              border-color: #cfc2b0;
+              border-color: rgba(178, 18, 7, 0.3);
+              background: rgba(178, 18, 7, 0.03);
             }
           `}
 `;
 
 const Footer = styled.div`
-  ${scheduleInset};
   display: flex;
   justify-content: space-between;
   align-items: center;
   gap: 0.75rem;
-  padding: 0.8rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid #e4e4e4;
   flex-wrap: wrap;
 `;
 
 const FooterInfo = styled.div`
   display: flex;
-  flex-direction: column;
-  gap: 0.15rem;
-  min-width: 110px;
+  align-items: baseline;
+  gap: 0.5rem;
 
   span {
     ${scheduleLabel};
-    color: #8a7b6b;
   }
 
   strong {
-    color: #111827;
-    font-size: 1.15rem;
+    color: #111111;
+    font-size: 0.875rem;
+    font-weight: 700;
   }
 `;
 
 const SaveButton = styled.button`
   ${primaryAction};
-  padding: 0.8rem 1.2rem;
-  border-radius: 0.9rem;
-  font-size: 0.9rem;
+  padding: 0.55rem 1.1rem;
+  border-radius: 8px;
+  font-size: 0.813rem;
   font-weight: 700;
   cursor: pointer;
 `;

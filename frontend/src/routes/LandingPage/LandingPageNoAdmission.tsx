@@ -65,7 +65,6 @@ const InfoBox = styled.div`
   margin-bottom: 2rem;
 
   > p {
-    margin: 0 0 0 1rem;
     font-size: 1.1rem;
     line-height: 1.8rem;
     padding: 7px 0;

@@ -2,8 +2,10 @@ import React from "react";
 import styled from "styled-components";
 import { isLoggedIn } from "src/utils/djangoData";
 import { media } from "src/styles/mediaQueries";
-import FormatTime from "src/components/Time/FormatTime";
 import { Admission as AdmissionInterface } from "src/types";
+import AdmissionTimeline, {
+  type AdmissionTimelineItem,
+} from "src/components/AdmissionTimeline";
 import CountDown from "./CountDown";
 import LinkButton from "src/components/LinkButton";
 import Icon from "src/components/Icon";
@@ -19,11 +21,39 @@ const Admission: React.FC<AdmissionProps> = ({ admission }) => {
   const isSingleGroupAdmission = admission?.groups.length === 1;
   const isAdmissionMember =
     (admission.userdata.committee_groups?.length ?? 0) > 0;
+  const timelineItems: AdmissionTimelineItem[] = [
+    {
+      title: "Opptaket åpner",
+      dateString: admission.open_from,
+      details: [],
+    },
+    {
+      title: "Søknadsfrist",
+      dateString: admission.public_deadline,
+      details: ["Alle søknader er garantert å bli behandlet."],
+    },
+    {
+      title: "Redigeringsfrist",
+      dateString: admission.closed_from,
+      details: ["Siste frist for redigering og nye søknader."],
+    },
+  ];
+
+  const now = new Date();
+  const nextCountDown = (() => {
+    if (new Date(admission.open_from) > now)
+      return { title: "Opptaket åpner", dateString: admission.open_from, completedLabel: "Åpnet" };
+    if (new Date(admission.public_deadline) > now)
+      return { title: "Søknadsfrist", dateString: admission.public_deadline, completedLabel: "Søknadsfrist passert" };
+    if (new Date(admission.closed_from) > now)
+      return { title: "Redigeringsfrist", dateString: admission.closed_from, completedLabel: "Redigering stengt" };
+    return null;
+  })();
 
   return (
     <AdmissionWrapper>
       <AdmissionDetails>
-        <TimeLineWrapper>
+        <div>
           <AdmissionTitle>{admission.title}</AdmissionTitle>
           {admission.description && (
             <AdmissionDescription>
@@ -37,82 +67,75 @@ const Admission: React.FC<AdmissionProps> = ({ admission }) => {
                 ))}
             </AdmissionDescription>
           )}
-          {!admission.is_open && !admission.is_closed && (
-            <TimeLineItem
-              title="Opptaket åpner"
-              dateString={admission.open_from}
-              details={[]}
-            />
-          )}
-          <TimeLineItem
-            title="Søknadsfrist"
-            dateString={admission.public_deadline}
-            details={["Alle søknader er garantert å bli behandlet."]}
-          />
-          {(admission.is_open || admission.is_closed) && (
-            <TimeLineItem
-              title="Redigeringsfrist"
-              dateString={admission.closed_from}
-              details={["Siste frist for redigering og nye søknader."]}
-            />
-          )}
-        </TimeLineWrapper>
+          <AdmissionTimeline items={timelineItems} />
+        </div>
         <ActionsContainer>
-          <CountDownSection>
-            {!admission.is_open && !admission.is_closed && (
-              <CountDown title="Åpner om" dateString={admission.open_from} />
-            )}
-            {admission.is_appliable && (
+          {nextCountDown && (
+            <CountDownSection>
               <CountDown
-                title="Frist om"
-                dateString={admission.public_deadline}
+                title={nextCountDown.title}
+                dateString={nextCountDown.dateString}
+                completedLabel={nextCountDown.completedLabel}
               />
-            )}
-            {!admission.is_appliable && admission.is_open && (
-              <CountDown
-                title="Stenger om"
-                dateString={admission.closed_from}
-              />
-            )}
-          </CountDownSection>
+            </CountDownSection>
+          )}
 
           <LinkWrapper>
             {(admission.is_open || admission.userdata.has_application) && (
-              <PrimaryAction>
-                <LinkButton
-                  dark
-                  to={
-                    isLoggedIn()
-                      ? `/${admission.slug}/` +
-                        (admission.userdata.has_application ||
-                        isSingleGroupAdmission
-                          ? "min-soknad"
-                          : "velg-grupper")
-                      : "/login/lego/"
-                  }
-                  external={!isLoggedIn()}
-                  disabled={!isLoggedIn() && !admission.is_open}
-                >
-                  <Icon name="paper-plane" size={20} />
-                  Gå til søknad
-                </LinkButton>
-              </PrimaryAction>
+              <PrimaryActionButton
+                fullWidth
+                to={
+                  isLoggedIn()
+                    ? `/${admission.slug}/` +
+                      (admission.userdata.has_application ||
+                      isSingleGroupAdmission
+                        ? "min-soknad"
+                        : "velg-grupper")
+                    : "/login/lego/"
+                }
+                external={!isLoggedIn()}
+                disabled={!isLoggedIn() && !admission.is_open}
+              >
+                <ActionButtonContent>
+                  <ActionButtonIcon>
+                    <Icon name="paper-plane" size={20} />
+                  </ActionButtonIcon>
+                  <ActionButtonLabel>Gå til søknad</ActionButtonLabel>
+                  <ActionButtonSpacer />
+                </ActionButtonContent>
+              </PrimaryActionButton>
             )}
 
             <SecondaryActions>
               {admission.userdata.is_privileged && (
-                <LinkButton secondary to={`/${admission.slug}/admin/`}>
-                  <Icon name="settings" size={18} />
-                  Admin panel
-                </LinkButton>
-              )}
-              {isAdmissionMember && (
-                <LinkButton secondary to={`/${admission.slug}/schedule/`}>
-                  <Icon name="calendar" size={18} />
-                  Velg intervjutider
-                </LinkButton>
+                <SecondaryActionButton
+                  fullWidth
+                  to={`/${admission.slug}/admin/`}
+                >
+                  <ActionButtonContent>
+                    <ActionButtonIcon>
+                      <Icon name="settings" size={18} />
+                    </ActionButtonIcon>
+                    <ActionButtonLabel>Admin panel</ActionButtonLabel>
+                  </ActionButtonContent>
+                </SecondaryActionButton>
               )}
             </SecondaryActions>
+            <SecondaryActions>
+              {isAdmissionMember && (
+                <SecondaryActionButton
+                  fullWidth
+                  to={`/${admission.slug}/schedule/`}
+                >
+                  <ActionButtonContent>
+                    <ActionButtonIcon>
+                      <Icon name="calendar" size={18} />
+                    </ActionButtonIcon>
+                    <ActionButtonLabel>Velg intervjutider</ActionButtonLabel>
+                  </ActionButtonContent>
+                </SecondaryActionButton>
+              )}
+              </SecondaryActions>
           </LinkWrapper>
         </ActionsContainer>
       </AdmissionDetails>
@@ -150,37 +173,6 @@ const Admission: React.FC<AdmissionProps> = ({ admission }) => {
 };
 
 export default Admission;
-
-interface TimeLineItemProps {
-  dateString: string;
-  title: string;
-  details: string[];
-}
-
-const TimeLineItem: React.FC<TimeLineItemProps> = ({
-  dateString,
-  title,
-  details,
-}) => {
-  const dateHasPassed = new Date().toISOString().localeCompare(dateString) > 0;
-  return (
-    <TimeLineItemWrapper $dateHasPassed={dateHasPassed}>
-      <TimeLineItemIcon $dateHasPassed={dateHasPassed} />
-      <TimeLineItemContent>
-        <TimeLineItemTitle $dateHasPassed={dateHasPassed}>
-          {title}
-        </TimeLineItemTitle>
-        <TimeLineItemTime>
-          <Icon name="time" size={14} />
-          <FormatTime format="EEEE d. MMMM HH:mm:ss">{dateString}</FormatTime>
-        </TimeLineItemTime>
-        {details.map((detail, index) => (
-          <TimeLineItemDetail key={index}>{detail}</TimeLineItemDetail>
-        ))}
-      </TimeLineItemContent>
-    </TimeLineItemWrapper>
-  );
-};
 
 /** Styles **/
 
@@ -248,85 +240,6 @@ const AdmissionDescription = styled.p`
   `}
 `;
 
-const TimeLineWrapper = styled.div``;
-
-interface StyledTimeLineItemProps {
-  $dateHasPassed: boolean;
-}
-
-const TimeLineItemWrapper = styled.div<StyledTimeLineItemProps>`
-  display: flex;
-  position: relative;
-  padding-left: 3rem;
-  margin-bottom: 2.5rem;
-
-  &:last-child {
-    margin-bottom: 0;
-  }
-
-  &:not(:last-of-type)::after {
-    content: "";
-    position: absolute;
-    left: 11px;
-    top: 32px;
-    bottom: -24px;
-    width: 2px;
-    background: #fecaca;
-  }
-`;
-
-const TimeLineItemIcon = styled.div<{ $dateHasPassed: boolean }>`
-  position: absolute;
-  left: 0;
-  top: 4px;
-  width: 24px;
-  height: 24px;
-  border-radius: 50%;
-  background-color: ${(props) =>
-    props.$dateHasPassed ? "#e5e7eb" : "var(--lego-red-color)"};
-  border: 4px solid #fff;
-  box-shadow: 0 0 0 1px
-    ${(props) => (props.$dateHasPassed ? "#e5e7eb" : "var(--lego-red-color)")};
-  z-index: 1;
-`;
-
-const TimeLineItemContent = styled.div`
-  display: flex;
-  flex-direction: column;
-`;
-
-const TimeLineItemTitle = styled.span<{ $dateHasPassed: boolean }>`
-  font-size: 1.125rem;
-  font-weight: 700;
-  color: ${(props) => (props.$dateHasPassed ? "#9ca3af" : "#111827")};
-
-  ${media.handheld`
-    font-size: 1rem;
-  `}
-`;
-
-const TimeLineItemTime = styled.div`
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  font-size: 0.9375rem;
-  font-weight: 600;
-  color: #6b7280;
-  margin-top: 0.25rem;
-
-  i {
-    color: #9ca3af;
-  }
-`;
-
-const TimeLineItemDetail = styled.span`
-  color: #9ca3af;
-  font-size: 0.875rem;
-  margin-top: 0.75rem;
-  line-height: 1.5;
-  max-width: 400px;
-`;
-
 const ActionsContainer = styled.div`
   display: flex;
   flex-direction: column;
@@ -338,6 +251,9 @@ const CountDownSection = styled.div`
   padding: 2rem;
   border-radius: var(--border-radius-lg);
   border: 1px solid #f3f4f6;
+  display: flex;
+  gap: 1rem;
+  flex-wrap: wrap;
 `;
 
 const LinkWrapper = styled.div`
@@ -348,47 +264,37 @@ const LinkWrapper = styled.div`
   width: 100%;
 `;
 
-const PrimaryAction = styled.div`
-  width: 100%;
+const ActionButtonBase = styled(LinkButton)`
+  && {
+    min-height: 3.5rem;
+    border-radius: var(--border-radius-md);
+    font-weight: 700;
+    transition:
+      background-color 0.2s ease,
+      border-color 0.2s ease,
+      color 0.2s ease,
+      transform 0.2s ease,
+      box-shadow 0.2s ease;
+  }
+`;
 
-  button,
-  a {
-    width: 100% !important;
-    display: flex !important;
-    justify-content: center !important;
-    align-items: center !important;
-    gap: 0.75rem !important;
-    height: 3.75rem !important;
-    font-size: 1.125rem !important;
-    font-weight: 700 !important;
-    border-radius: var(--border-radius-md) !important;
-    background: var(--lego-red-color) !important;
-    color: white !important;
-    border: 2px solid var(--lego-red-color) !important;
-    transition: all 0.2s ease !important;
-    cursor: pointer;
-    position: relative;
-
-    &::before {
-      content: "";
-      width: 0.625rem;
-      height: 0.625rem;
-      border-radius: 50%;
-      background: currentColor;
-      display: inline-block;
-      flex-shrink: 0;
-      opacity: 0.8;
-    }
+const PrimaryActionButton = styled(ActionButtonBase)`
+  && {
+    min-height: 3.75rem;
+    font-size: 1.0625rem;
+    background: var(--lego-red-color);
+    color: white;
+    border: 2px solid var(--lego-red-color);
 
     &:hover:not(:disabled) {
-      background: #8e0e06 !important;
-      border-color: #8e0e06 !important;
-      transform: translateY(-2px) !important;
-      box-shadow: 0 10px 15px -3px rgba(178, 18, 7, 0.2) !important;
+      background: #8e0e06;
+      border-color: #8e0e06;
+      transform: translateY(-2px);
+      box-shadow: 0 10px 15px -3px rgba(178, 18, 7, 0.2);
     }
 
-    &:active {
-      transform: translateY(0) !important;
+    &:active:not(:disabled) {
+      transform: translateY(0);
     }
 
     &:disabled {
@@ -399,44 +305,51 @@ const PrimaryAction = styled.div`
 `;
 
 const SecondaryActions = styled.div`
-  display: grid;
+  display: flex;
+  flex-direction: column;
   gap: 0.75rem;
   width: 100%;
+  align-items: stretch;
+`;
 
-  button,
-  a {
-    width: 100% !important;
-    display: flex !important;
-    justify-content: center !important;
-    align-items: center !important;
-    gap: 0.625rem !important;
-    height: 3.5rem !important;
-    font-size: 0.875rem !important;
-    font-weight: 700 !important;
-    border-radius: var(--border-radius-md) !important;
-    background: white !important;
-    color: var(--lego-red-color) !important;
-    border: 2px solid var(--lego-red-color) !important;
-    transition: all 0.2s ease !important;
-    cursor: pointer;
-    position: relative;
-
-    &::before {
-      content: "";
-      width: 0.5rem;
-      height: 0.5rem;
-      border-radius: 50%;
-      background: currentColor;
-      display: inline-block;
-      flex-shrink: 0;
-      opacity: 0.8;
-    }
+const SecondaryActionButton = styled(ActionButtonBase)`
+  && {
+    min-height: 3.5rem;
+    font-size: 0.875rem;
+    background: white;
+    color: var(--lego-red-color);
+    border: 2px solid var(--lego-red-color);
 
     &:hover:not(:disabled) {
-      background: #fff5f5 !important;
-      transform: translateY(-1px) !important;
+      background: #fff5f5;
+      transform: translateY(-1px);
     }
   }
+`;
+
+const ActionButtonContent = styled.span`
+  display: grid;
+  grid-template-columns: 1.25rem minmax(0, 1fr) 1.25rem;
+  align-items: center;
+  width: 100%;
+`;
+
+const ActionButtonIcon = styled.span`
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.25rem;
+  height: 1.25rem;
+`;
+
+const ActionButtonLabel = styled.span`
+  text-align: center;
+`;
+
+const ActionButtonSpacer = styled.span`
+  width: 1.25rem;
+  height: 1.25rem;
+  visibility: hidden;
 `;
 
 const FooterNote = styled.p`
@@ -445,9 +358,7 @@ const FooterNote = styled.p`
   margin: 0;
   padding-top: 2rem;
   border-top: 1px solid #f3f4f6;
-  line-height: 1.6;
-
-  a {
+  li a {
     color: #6b7280;
     font-weight: 600;
     text-decoration: underline;

@@ -1,21 +1,21 @@
 import React, { useState, useMemo } from "react";
 import styled, { css } from "styled-components";
-import { scheduleInset, scheduleLabel, scheduleSurface } from "../shared";
+import {
+  scheduleGridHeaderCell,
+  scheduleGridShell,
+  scheduleGridTimeLabel,
+  scheduleInset,
+  scheduleInput,
+  scheduleLabel,
+  scheduleSurface,
+} from "../shared";
 import type { Interviewer } from "../types";
-
-const DAYS = [
-  "Mandag",
-  "Tysdag",
-  "Onsdag",
-  "Torsdag",
-  "Fredag",
-  "Lørdag",
-  "Søndag",
-];
+import { formatDateHeader, makeSlotKey, parseSlotKey } from "../scheduleUtils";
 
 interface AvailabilityHeatmapProps {
   interviewers: Interviewer[];
   availableSlots: Set<string>;
+  dates: string[];
   startHour?: number;
   endHour?: number;
   sessionDuration: number;
@@ -26,6 +26,7 @@ type FilterMode = "all" | "male" | "female" | "people";
 const AvailabilityHeatmap: React.FC<AvailabilityHeatmapProps> = ({
   interviewers,
   availableSlots,
+  dates,
   startHour = 8,
   endHour = 18,
   sessionDuration,
@@ -73,16 +74,17 @@ const AvailabilityHeatmap: React.FC<AvailabilityHeatmapProps> = ({
 
     filteredInterviewers.forEach((interviewer) => {
       interviewer.availability.forEach((slot) => {
-        const slotKey =
-          typeof slot === "string"
-            ? slot
-            : `${Math.floor(slot / 24)}-${(slot % 24) * 60}`;
-        counts.set(slotKey, (counts.get(slotKey) || 0) + 1);
+        const dayIndex = Math.floor(slot / 24);
+        const hour = slot % 24;
+        const date = dates[dayIndex];
+        if (!date) return;
+        const key = makeSlotKey(date, hour * 60);
+        counts.set(key, (counts.get(key) || 0) + 1);
       });
     });
 
     return counts;
-  }, [filteredInterviewers]);
+  }, [filteredInterviewers, dates]);
 
   const maxCount = useMemo(
     () => Math.max(1, ...Array.from(slotAvailability.values())),
@@ -100,28 +102,24 @@ const AvailabilityHeatmap: React.FC<AvailabilityHeatmapProps> = ({
       }
     });
 
-    if (!bestKey || bestValue === 0) {
-      return "Ingen dekning";
-    }
+    if (!bestKey || bestValue === 0) return "Ingen dekning";
 
-    const [dayIndex, minute] = bestKey.split("-");
-    return `${DAYS[Number(dayIndex)].slice(0, 3)} ${formatTime(Number(minute))}`;
+    const { date, minute } = parseSlotKey(bestKey);
+    const { weekday } = formatDateHeader(date);
+    return `${weekday} ${formatTime(minute)}`;
   }, [availableSlots, slotAvailability]);
 
-  const getHeatIntensity = (dayIndex: number, minute: number): number => {
-    const slotKey = `${dayIndex}-${minute}`;
-    const count = slotAvailability.get(slotKey) || 0;
+  const getHeatIntensity = (date: string, minute: number): number => {
+    const count = slotAvailability.get(makeSlotKey(date, minute)) || 0;
     return count / maxCount;
   };
 
-  const getAvailableCount = (dayIndex: number, minute: number): number => {
-    const slotKey = `${dayIndex}-${minute}`;
-    return slotAvailability.get(slotKey) || 0;
+  const getAvailableCount = (date: string, minute: number): number => {
+    return slotAvailability.get(makeSlotKey(date, minute)) || 0;
   };
 
-  const isSlotEnabled = (dayIndex: number, minute: number): boolean => {
-    const slotKey = `${dayIndex}-${minute}`;
-    return availableSlots.has(slotKey);
+  const isSlotEnabled = (date: string, minute: number): boolean => {
+    return availableSlots.has(makeSlotKey(date, minute));
   };
 
   const setMode = (mode: FilterMode) => {
@@ -194,35 +192,35 @@ const AvailabilityHeatmap: React.FC<AvailabilityHeatmapProps> = ({
               <LegendInfo>0 til {maxCount}</LegendInfo>
             </LegendScale>
           </div>
-          <LegendSummary>
-            Beste åpne luke
-            <strong>{bestSlotLabel}</strong>
-          </LegendSummary>
         </HeatmapHeader>
 
         <GridWrapper>
-          <Grid $columns={DAYS.length + 1}>
+          <Grid $columns={dates.length + 1}>
             <div />
-            {DAYS.map((day) => (
-              <HeaderCell key={day}>{day}</HeaderCell>
-            ))}
+            {dates.map((date) => {
+              const { weekday, dayMonth } = formatDateHeader(date);
+              return (
+                <HeaderCell key={date}>
+                  <span>{weekday}</span>
+                  <DateSubLabel>{dayMonth}</DateSubLabel>
+                </HeaderCell>
+              );
+            })}
 
             {TIME_SLOTS.map((minute) => (
               <React.Fragment key={minute}>
                 <TimeLabel>{formatTime(minute)}</TimeLabel>
-                {DAYS.map((_, dayIndex) => {
-                  const enabled = isSlotEnabled(dayIndex, minute);
-                  const intensity = getHeatIntensity(dayIndex, minute);
-                  const count = getAvailableCount(dayIndex, minute);
+                {dates.map((date) => {
+                  const enabled = isSlotEnabled(date, minute);
+                  const intensity = getHeatIntensity(date, minute);
+                  const count = getAvailableCount(date, minute);
 
                   return (
                     <HeatmapSlot
-                      key={`${dayIndex}-${minute}`}
+                      key={makeSlotKey(date, minute)}
                       $intensity={intensity}
                       $enabled={enabled}
-                      title={
-                        enabled ? `${count} tilgjengelig` : "Ikke tilgjengelig"
-                      }
+                      title={enabled ? `${count} tilgjengelig` : "Ikke tilgjengelig"}
                     >
                       {enabled && count > 0 && (
                         <SlotCount $darkText={intensity < 0.45}>
@@ -261,7 +259,8 @@ export default AvailabilityHeatmap;
 const Container = styled.div`
   display: flex;
   flex-direction: column;
-  gap: 1rem;
+  gap: 0.75rem;
+  min-width: 0;
 `;
 
 const FilterBar = styled.div`
@@ -269,46 +268,44 @@ const FilterBar = styled.div`
   display: flex;
   justify-content: space-between;
   align-items: center;
-  gap: 0.85rem;
+  gap: 0.75rem;
   flex-wrap: wrap;
-  padding: 1rem;
+  padding: 0.875rem 1rem;
 `;
 
 const FilterButtons = styled.div`
   display: flex;
-  gap: 0.45rem;
+  gap: 0.375rem;
   flex-wrap: wrap;
 `;
 
 const FilterButton = styled.button<{ $active: boolean }>`
-  padding: 0.7rem 0.95rem;
-  border-radius: 0.9rem;
+  padding: 0.35rem 0.75rem;
+  border-radius: 999px;
   cursor: pointer;
-  transition:
-    transform 0.18s ease,
-    border-color 0.18s ease;
+  transition: all 0.12s ease;
   display: inline-flex;
   align-items: center;
-  gap: 0.45rem;
-  font-weight: 700;
-  font-size: 0.86rem;
+  gap: 0.35rem;
+  font-weight: 600;
+  font-size: 0.813rem;
 
   ${(props) =>
     props.$active
       ? css`
-          background: rgba(178, 18, 7, 0.08);
-          color: #8a1f16;
-          border: 1px solid rgba(178, 18, 7, 0.2);
+          background: rgba(178, 18, 7, 0.07);
+          color: var(--lego-red-color);
+          border: 1px solid rgba(178, 18, 7, 0.18);
         `
       : css`
-          background: rgba(255, 255, 255, 0.82);
-          color: #4b5563;
-          border: 1px solid #ddd2c3;
+          background: transparent;
+          color: #6b6b6b;
+          border: 1px solid transparent;
 
           &:hover {
-            transform: translateY(-1px);
-            border-color: #ccbca5;
-            color: #111827;
+            background: #f0f0f0;
+            border-color: #e4e4e4;
+            color: #111111;
           }
         `}
 
@@ -316,22 +313,20 @@ const FilterButton = styled.button<{ $active: boolean }>`
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    min-width: 1.7rem;
-    height: 1.7rem;
-    padding: 0 0.4rem;
+    min-width: 1.4rem;
+    height: 1.4rem;
+    padding: 0 0.3rem;
     border-radius: 999px;
-    background: rgba(17, 24, 39, 0.06);
-    color: inherit;
-    font-size: 0.76rem;
+    background: rgba(0, 0, 0, 0.06);
+    font-size: 0.688rem;
+    font-weight: 700;
   }
 `;
 
 const SelectWrap = styled.div`
-  ${scheduleInset};
   display: flex;
   align-items: center;
-  gap: 0.6rem;
-  padding: 0.55rem 0.7rem;
+  gap: 0.5rem;
 `;
 
 const SelectLabel = styled.label`
@@ -339,31 +334,21 @@ const SelectLabel = styled.label`
 `;
 
 const IndividualSelect = styled.select`
-  min-width: 190px;
-  padding: 0.55rem 0.75rem;
-  font-size: 0.875rem;
-  border: 1px solid #d7cbbb;
-  border-radius: 0.75rem;
-  background: rgba(255, 255, 255, 0.86);
-  color: #111827;
+  min-width: 170px;
+  ${scheduleInput};
   cursor: pointer;
-
-  &:focus {
-    outline: none;
-    border-color: #8a1f16;
-    box-shadow: 0 0 0 3px rgba(178, 18, 7, 0.08);
-  }
 `;
 
 const HeatmapSection = styled.div`
   ${scheduleSurface};
-  padding: 1.15rem;
+  padding: 1.25rem;
+  min-width: 0;
 `;
 
 const HeatmapHeader = styled.div`
   display: flex;
   justify-content: space-between;
-  align-items: flex-end;
+  align-items: center;
   gap: 1rem;
   margin-bottom: 1rem;
   flex-wrap: wrap;
@@ -372,146 +357,128 @@ const HeatmapHeader = styled.div`
 const LegendLabel = styled.span`
   ${scheduleLabel};
   display: block;
-  margin-bottom: 0.4rem;
+  margin-bottom: 0.35rem;
 `;
 
 const LegendScale = styled.div`
   display: flex;
   align-items: center;
-  gap: 4px;
-  flex-wrap: wrap;
+  gap: 3px;
 `;
 
 const LegendBox = styled.div<{ $intensity: number }>`
-  width: 1.65rem;
-  height: 0.9rem;
-  border-radius: 0.3rem;
+  width: 1.4rem;
+  height: 0.75rem;
+  border-radius: 3px;
   background: ${(props) => {
-    if (props.$intensity === 0) return "#f0e8dd";
-    const intensity = 0.14 + props.$intensity * 0.86;
-    return `rgba(31, 122, 92, ${intensity})`;
+    if (props.$intensity === 0) return "#f0f0f0";
+    const intensity = 0.12 + props.$intensity * 0.78;
+    return `rgba(178, 18, 7, ${intensity})`;
   }};
 `;
 
 const LegendInfo = styled.span`
   margin-left: 0.4rem;
-  color: #6b7280;
-  font-size: 0.82rem;
+  color: #a0a0a0;
+  font-size: 0.75rem;
   font-weight: 600;
 `;
 
 const LegendSummary = styled.div`
-  ${scheduleInset};
   display: flex;
   flex-direction: column;
-  gap: 0.2rem;
-  padding: 0.75rem 0.85rem;
-  color: #6b7280;
-  font-size: 0.82rem;
+  gap: 0.15rem;
+  color: #a0a0a0;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-align: right;
 
   strong {
-    color: #111827;
-    font-size: 1rem;
+    color: #111111;
+    font-size: 0.875rem;
+    font-weight: 700;
   }
 `;
 
 const GridWrapper = styled.div`
-  ${scheduleInset};
-  overflow-x: auto;
-  padding: 0.85rem;
+  ${scheduleGridShell};
+  min-width: 0;
 `;
 
 const Grid = styled.div<{ $columns: number }>`
   display: grid;
-  grid-template-columns: 68px repeat(${(props) => props.$columns - 1}, 1fr);
-  gap: 8px;
-  min-width: 760px;
+  grid-template-columns: 56px repeat(${(props) => props.$columns - 1}, minmax(70px, 1fr));
+  gap: 5px;
+  min-width: max(680px, ${(props) => (props.$columns - 1) * 70 + 56}px);
+`;
+
+const DateSubLabel = styled.span`
+  font-size: 0.688rem;
+  font-weight: 600;
+  color: #a0a0a0;
+  display: block;
 `;
 
 const HeaderCell = styled.div`
-  ${scheduleLabel};
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 3rem;
-  border-radius: 0.95rem;
-  background: rgba(255, 255, 255, 0.72);
-  color: #6e6256;
+  ${scheduleGridHeaderCell};
+  flex-direction: column;
+  gap: 0.1rem;
 `;
 
 const TimeLabel = styled.div`
-  ${scheduleLabel};
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  padding-right: 0.6rem;
-  color: #8a7b6b;
+  ${scheduleGridTimeLabel};
 `;
 
 const HeatmapSlot = styled.div<{ $intensity: number; $enabled: boolean }>`
-  height: 2.8rem;
+  height: 2.4rem;
   display: flex;
   align-items: center;
   justify-content: center;
-  border-radius: 0.95rem;
-  transition:
-    transform 0.18s ease,
-    box-shadow 0.18s ease;
+  border-radius: 6px;
+  transition: background-color 0.1s ease;
 
   ${(props) =>
     !props.$enabled
       ? css`
-          background: repeating-linear-gradient(
-            45deg,
-            #efe6d8,
-            #efe6d8 6px,
-            #faf5ee 6px,
-            #faf5ee 12px
-          );
-          border: 1px solid #ddd2c3;
-          opacity: 0.5;
+          background: #f0f0f0;
+          border: 1px solid #e4e4e4;
+          opacity: 0.4;
         `
       : css`
           background: ${props.$intensity === 0
-            ? "rgba(255, 255, 255, 0.86)"
-            : `rgba(31, 122, 92, ${0.14 + props.$intensity * 0.86})`};
+            ? "#ffffff"
+            : `rgba(178, 18, 7, ${0.12 + props.$intensity * 0.78})`};
           border: 1px solid
-            ${props.$intensity === 0 ? "#dfd4c6" : "rgba(20, 83, 45, 0.18)"};
-
-          &:hover {
-            transform: translateY(-1px) scale(1.02);
-            box-shadow: 0 14px 18px -18px rgba(21, 83, 45, 0.7);
-          }
+            ${props.$intensity === 0 ? "#e4e4e4" : "rgba(178, 18, 7, 0.15)"};
         `}
 `;
 
 const SlotCount = styled.span<{ $darkText: boolean }>`
-  font-size: 0.82rem;
-  font-weight: 800;
-  color: ${(props) => (props.$darkText ? "#14532d" : "#ffffff")};
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: ${(props) => (props.$darkText ? "#b21207" : "#ffffff")};
 `;
 
 const SummaryGrid = styled.div`
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-  gap: 0.75rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  padding-top: 0.875rem;
+  border-top: 1px solid #e4e4e4;
 `;
 
 const SummaryCard = styled.div`
-  ${scheduleSurface};
-  padding: 0.95rem 1rem;
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.4rem;
 `;
 
 const SummaryLabel = styled.span`
   ${scheduleLabel};
-  display: block;
-  margin-bottom: 0.3rem;
 `;
 
 const SummaryValue = styled.span`
-  display: block;
-  color: #111827;
-  font-size: 1.15rem;
-  font-weight: 800;
-  line-height: 1.4;
+  color: #111111;
+  font-size: 0.875rem;
+  font-weight: 700;
 `;

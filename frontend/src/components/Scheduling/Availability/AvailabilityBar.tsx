@@ -52,11 +52,12 @@ const Bar = styled.div<{ $isActive: boolean }>`
   border-radius: 999px;
   transition: all 0.2s ease;
 
-  background-color: ${(props) => (props.$isActive ? "#166534" : "#d8cec0")};
+  background-color: ${(props) =>
+    props.$isActive ? "var(--lego-red-color)" : "#e5e7eb"};
 
   &:hover {
     transform: scaleY(1.5);
-    background-color: ${(props) => (props.$isActive ? "#14532d" : "#c9bcab")};
+    background-color: ${(props) => (props.$isActive ? "#8e0e06" : "#d1d5db")};
   }
 `;
 
@@ -66,5 +67,5 @@ const DayLabel = styled.div<{ $isActive: boolean }>`
   margin-top: 6px;
   transition: color 0.2s ease;
 
-  color: ${(props) => (props.$isActive ? "#111827" : "#a39584")};
+  color: ${(props) => (props.$isActive ? "#111827" : "#9ca3af")};
 `;

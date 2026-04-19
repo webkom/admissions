@@ -1,11 +1,14 @@
 import styled from "styled-components";
 import { media } from "src/styles/mediaQueries";
-import { Card } from "src/components/Card";
 
-export const Wrapper = styled(Card)`
-  width: 50em;
+export const Wrapper = styled.div`
+  width: 100%;
+  max-width: 980px;
   min-height: 10em;
   padding: 0;
+  border-radius: 1rem;
+  background: #fff;
+  border: 1px solid #e5e7eb;
 
   ${media.handheld`
      width: 100%;
@@ -13,11 +16,11 @@ export const Wrapper = styled(Card)`
 `;
 
 export const FormWrapper = styled.div`
-  padding: 1em 2em;
+  padding: 1.5rem;
   display: flex;
   flex-direction: column;
-  justify-content: center;
-  align-items: center;
+  justify-content: flex-start;
+  align-items: stretch;
   flex-wrap: wrap;
   ${media.handheld`
      padding: 1em;
@@ -26,13 +29,14 @@ export const FormWrapper = styled.div`
 
 export const GroupLogo = styled.img`
   object-fit: scale-down;
-  max-height: 2em;
-  margin-right: 0.5em;
+  width: 3.5rem;
+  height: 3.5rem;
 `;
 
 export const GroupLogoWrapper = styled.div`
   display: flex;
   align-items: center;
+  gap: 1rem;
 `;
 
 export const EditGroupFormWrapper = styled.div`

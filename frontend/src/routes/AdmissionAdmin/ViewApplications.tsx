@@ -11,9 +11,11 @@ import { useParams } from "react-router-dom";
 import AdmissionsContainer from "src/containers/AdmissionsContainer";
 import { Application } from "src/types";
 import {
-  Statistics,
-  StatisticsName,
-  StatisticsWrapper,
+  GroupFilterGrid,
+  SectionCard,
+  SectionDescription,
+  SectionEyebrow,
+  SectionTitle,
 } from "./components/StyledElements";
 import djangoData from "src/utils/djangoData";
 import { InputFieldModel } from "src/utils/jsonFields";
@@ -113,6 +115,12 @@ const ViewApplications = () => {
   }, [filteredApplications]);
 
   const numApplicants = sortedApplications.length;
+  const selectedGroupCount = selectedGroups.length;
+  const visibleGroupCount = (groups ?? []).filter(
+    (group) =>
+      admission?.userdata.is_admin ||
+      group.name === djangoData.user.representative_of_group,
+  ).length;
 
   let numApplications = 0;
   sortedApplications.forEach((application) => {
@@ -133,37 +141,71 @@ const ViewApplications = () => {
   } else {
     return (
       <PageWrapper>
-        <Statistics>
-          <StatisticsWrapper>
-            <StatisticsName>Søknader åpner</StatisticsName>
-            <FormatTime format="HH:mm:ss EEEE d. MMMM">
-              {admission.open_from}
-            </FormatTime>
-          </StatisticsWrapper>
-          <StatisticsWrapper>
-            <StatisticsName>Søknadsfrist</StatisticsName>
-            <FormatTime format="HH:mm:ss EEEE d. MMMM">
-              {admission.public_deadline}
-            </FormatTime>
-          </StatisticsWrapper>
-          <StatisticsWrapper>
-            <StatisticsName>Redigeringsfrist</StatisticsName>
-            <FormatTime format="HH:mm:ss EEEE d. MMMM">
-              {admission.closed_from}
-            </FormatTime>
-          </StatisticsWrapper>
-        </Statistics>
-        <Statistics>
-          <StatisticsWrapper $smallerMargin>
-            <StatisticsName>Antall søkere</StatisticsName>
-            {numApplicants} {numApplicants == 1 ? "søker" : "søkere"}
-          </StatisticsWrapper>
-          <StatisticsWrapper $smallerMargin>
-            <StatisticsName>Totalt antall søknader</StatisticsName>
-            {numApplications} {numApplications == 1 ? "søknad" : "søknader"}
-          </StatisticsWrapper>
+        <SectionCard>
+          <HeaderRow>
+            <div>
+              <SectionEyebrow>Opptaksadmin</SectionEyebrow>
+              <AdmissionTitle>{admission.title}</AdmissionTitle>
+              <SectionDescription>
+                Hold oversikt over frister, filtrer på grupper og gå rett videre
+                til behandling av søknadene.
+              </SectionDescription>
+              <SummaryLine>
+                {numApplicants} {numApplicants === 1 ? "søker" : "søkere"} og{" "}
+                {numApplications}{" "}
+                {numApplications === 1 ? "søknad" : "søknader"}
+              </SummaryLine>
+            </div>
+          </HeaderRow>
 
-          <Statistics>
+          <TimelineGrid>
+            <TimelineItem>
+              <TimelineLabel>Søknader åpner</TimelineLabel>
+              <TimelineValue>
+                <FormatTime format="HH:mm:ss EEEE d. MMMM">
+                  {admission.open_from}
+                </FormatTime>
+              </TimelineValue>
+            </TimelineItem>
+            <TimelineItem>
+              <TimelineLabel>Søknadsfrist</TimelineLabel>
+              <TimelineValue>
+                <FormatTime format="HH:mm:ss EEEE d. MMMM">
+                  {admission.public_deadline}
+                </FormatTime>
+              </TimelineValue>
+            </TimelineItem>
+            <TimelineItem>
+              <TimelineLabel>Redigeringsfrist</TimelineLabel>
+              <TimelineValue>
+                <FormatTime format="HH:mm:ss EEEE d. MMMM">
+                  {admission.closed_from}
+                </FormatTime>
+              </TimelineValue>
+            </TimelineItem>
+          </TimelineGrid>
+        </SectionCard>
+
+        <SectionCard>
+          <FilterHeader>
+            <div>
+              <SectionEyebrow>Filtrering</SectionEyebrow>
+              <SectionTitle>Gruppeoversikt</SectionTitle>
+              <SectionDescription>
+                Trykk på en eller flere grupper for å snevre inn tabellen. Når
+                ingen grupper er valgt, vises alle søknadene.
+              </SectionDescription>
+            </div>
+            <FilterStatus>
+              {selectedGroupCount === 0
+                ? `Alle ${visibleGroupCount} grupper vises`
+                : `${selectedGroupCount} ${
+                    selectedGroupCount === 1 ? "gruppe" : "grupper"
+                  } valgt`}
+            </FilterStatus>
+          </FilterHeader>
+
+          <GroupFilterGrid>
             {(groups !== undefined ? [...groups] : [])
               .filter(
                 (group) =>
@@ -181,8 +223,8 @@ const ViewApplications = () => {
                   setSelectedGroups={setSelectedGroups}
                 />
               ))}
-          </Statistics>
-        </Statistics>
+          </GroupFilterGrid>
+        </SectionCard>
         <CSVExportHandler csvData={csvData} csvHeaders={csvHeaders} />
         <AdmissionsContainer
           admission={admission}
@@ -200,8 +242,70 @@ export default ViewApplications;
 const PageWrapper = styled.div`
   display: flex;
   flex-direction: column;
-  align-items: center;
-  margin: 1em;
-  border: 1px solid rgba(0, 0, 0, 0.09);
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.04);
+  gap: 1rem;
+  width: 100%;
+`;
+
+const HeaderRow = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+`;
+
+const AdmissionTitle = styled.h1`
+  margin: 0;
+  font-size: 2rem;
+  font-weight: 800;
+  letter-spacing: -0.04em;
+  color: #1f2937;
+`;
+
+const SummaryLine = styled.p`
+  margin: 0.65rem 0 0;
+  color: #374151;
+  font-size: 0.95rem;
+  font-weight: 600;
+`;
+
+const TimelineGrid = styled.div`
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 0.9rem;
+  margin-top: 1rem;
+  padding-top: 1rem;
+  border-top: 1px solid #e5e7eb;
+`;
+
+const TimelineItem = styled.div`
+  padding-right: 0.5rem;
+`;
+
+const TimelineLabel = styled.span`
+  display: block;
+  margin-bottom: 0.4rem;
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #6b7280;
+`;
+
+const TimelineValue = styled.span`
+  color: #1f2937;
+  font-weight: 600;
+  line-height: 1.5;
+`;
+
+const FilterHeader = styled.div`
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+`;
+
+const FilterStatus = styled.span`
+  color: #6b7280;
+  font-size: 0.9rem;
+  font-weight: 600;
 `;

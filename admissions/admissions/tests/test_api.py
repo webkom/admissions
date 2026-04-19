@@ -209,3 +209,101 @@ class EditAdmissionTestCase(APITestCase):
         )
 
         self.assertEqual(res.status_code, status.HTTP_404_NOT_FOUND)
+
+
+class SolveScheduleViewTestCase(APITestCase):
+    def setUp(self):
+        self.user = LegoUser.objects.create(username="solver-user", lego_id=999)
+        self.client.force_authenticate(user=self.user)
+        self.url = reverse("solve-schedule")
+
+    def test_same_gender_constraint_can_be_enforced(self):
+        payload = {
+            "candidates": [
+                {"id": "candidate-1", "name": "Anna", "gender": "F"},
+            ],
+            "interviewers": [
+                {"id": "interviewer-1", "name": "Ola", "gender": "M", "availability": [8]},
+                {"id": "interviewer-2", "name": "Per", "gender": "M", "availability": [8]},
+                {"id": "interviewer-3", "name": "Ida", "gender": "F", "availability": []},
+            ],
+            "panel_size": 2,
+            "options": {
+                "enforce_same_gender": True,
+                "allow_overtime": False,
+            },
+        }
+
+        res = self.client.post(self.url, payload, format="json")
+
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.assertEqual(res.data["status"], "INFEASIBLE")
+
+    def test_same_gender_constraint_can_be_disabled(self):
+        payload = {
+            "candidates": [
+                {"id": "candidate-1", "name": "Anna", "gender": "F"},
+            ],
+            "interviewers": [
+                {"id": "interviewer-1", "name": "Ola", "gender": "M", "availability": [8]},
+                {"id": "interviewer-2", "name": "Per", "gender": "M", "availability": [8]},
+                {"id": "interviewer-3", "name": "Ida", "gender": "F", "availability": []},
+            ],
+            "panel_size": 2,
+            "options": {
+                "enforce_same_gender": False,
+                "allow_overtime": False,
+            },
+        }
+
+        res = self.client.post(self.url, payload, format="json")
+
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.assertEqual(res.data["status"], "SUCCESS")
+        self.assertEqual(len(res.data["schedule"]), 1)
+
+    def test_overtime_can_be_disabled(self):
+        payload = {
+            "candidates": [
+                {"id": "candidate-1", "name": "Erik", "gender": "M"},
+            ],
+            "interviewers": [
+                {"id": "interviewer-1", "name": "Ola", "gender": "M", "availability": [8]},
+                {"id": "interviewer-2", "name": "Per", "gender": "M", "availability": []},
+            ],
+            "panel_size": 2,
+            "options": {
+                "enforce_same_gender": False,
+                "allow_overtime": False,
+            },
+        }
+
+        res = self.client.post(self.url, payload, format="json")
+
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.assertEqual(res.data["status"], "INFEASIBLE")
+
+    def test_overtime_can_be_enabled(self):
+        payload = {
+            "candidates": [
+                {"id": "candidate-1", "name": "Erik", "gender": "M"},
+            ],
+            "interviewers": [
+                {"id": "interviewer-1", "name": "Ola", "gender": "M", "availability": [8]},
+                {"id": "interviewer-2", "name": "Per", "gender": "M", "availability": []},
+            ],
+            "panel_size": 2,
+            "options": {
+                "enforce_same_gender": False,
+                "allow_overtime": True,
+            },
+        }
+
+        res = self.client.post(self.url, payload, format="json")
+
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.assertEqual(res.data["status"], "SUCCESS")
+        self.assertEqual(len(res.data["schedule"]), 1)
+        self.assertTrue(
+            any(member["is_overtime"] for member in res.data["schedule"][0]["panel"])
+        )

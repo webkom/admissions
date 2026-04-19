@@ -71,8 +71,30 @@ export interface Interviewer {
   availability: number[];
 }
 
+export interface SolverOptions {
+  enforce_same_gender: boolean;
+  allow_overtime: boolean;
+  overtime_weight: number;
+  load_balance_weight: number;
+  max_solver_seconds: number;
+}
+
+export interface SchedulePanelMember {
+  name: string;
+  is_overtime: boolean;
+}
+
 export interface ScheduleItem {
   candidate: string;
   time: number;
-  panel: string[];
+  panel: SchedulePanelMember[];
+}
+
+export interface SavedSchedule {
+  id: number;
+  schedule: ScheduleItem[];
+  start_date: string;
+  session_duration: number;
+  is_distributed: boolean;
+  updated_at: string;
 }

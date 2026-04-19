@@ -1,67 +1,161 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import styled, { css } from "styled-components";
-import { media } from "src/styles/mediaQueries";
 import { Check } from "lucide-react";
 import {
   primaryAction,
-  scheduleInset,
+  scheduleGridShell,
+  scheduleGridTimeLabel,
   scheduleLabel,
   scheduleSurface,
   secondaryAction,
 } from "../shared";
-import { MOCK_CANDIDATES } from "../../../routes/SchedulePage/mockData";
+import {
+  dateRangeDates,
+  formatDateHeader,
+  makeSlotKey,
+} from "../scheduleUtils";
 
-const DAYS = [
-  "Mandag",
-  "Tysdag",
-  "Onsdag",
-  "Torsdag",
-  "Fredag",
-  "Lørdag",
-  "Søndag",
-];
+const MAX_RANGE_DAYS = 21;
 
-interface AdminScheduleConfigProps {
-  enabledSlots: Set<string>;
-  onSlotsChange: (slots: Set<string>) => void;
-  startHour?: number;
-  endHour?: number;
-  onSave?: (slots: Set<string>) => Promise<void>;
-  sessionDuration: number;
-  onSessionDurationChange: (duration: number) => void;
+interface TimeValue {
+  h: number;
+  m: number;
 }
 
+interface AdminScheduleConfigProps {
+  startDate: string;
+  endDate: string;
+  onDateRangeChange: (start: string, end: string) => void;
+  enabledSlots: Set<string>;
+  onSlotsChange: (slots: Set<string>) => void;
+  onSave?: () => Promise<void>;
+  sessionDuration: number;
+  onSessionDurationChange: (duration: number) => void;
+  candidateCount: number;
+  interviewerCount: number;
+}
+
+interface TimeSegmentInputProps {
+  value: TimeValue;
+  onChange: (v: TimeValue) => void;
+  id?: string;
+}
+
+const TimeSegmentInput: React.FC<TimeSegmentInputProps> = ({ value, onChange, id }) => {
+  const minRef = useRef<HTMLInputElement>(null);
+  const [hStr, setHStr] = useState(String(value.h).padStart(2, "0"));
+  const [mStr, setMStr] = useState(String(value.m).padStart(2, "0"));
+
+  const commitHour = (s: string) => {
+    const h = parseInt(s, 10);
+    if (!isNaN(h) && h >= 0 && h <= 23) onChange({ h, m: value.m });
+  };
+
+  const commitMinute = (s: string) => {
+    const m = parseInt(s, 10);
+    if (!isNaN(m) && m >= 0 && m <= 59) onChange({ h: value.h, m });
+  };
+
+  return (
+    <TimeSegWrapper>
+      <SegInput
+        id={id}
+        type="text"
+        inputMode="numeric"
+        maxLength={2}
+        value={hStr}
+        placeholder="HH"
+        onChange={(e) => {
+          const s = e.target.value.replace(/\D/g, "").slice(0, 2);
+          setHStr(s);
+          commitHour(s);
+          if (s.length === 2) minRef.current?.focus();
+        }}
+        onFocus={(e) => e.target.select()}
+        onKeyDown={(e) => {
+          if (e.key === ":" || e.key === " ") {
+            e.preventDefault();
+            minRef.current?.focus();
+          }
+        }}
+      />
+      <SegColon>:</SegColon>
+      <SegInput
+        ref={minRef}
+        type="text"
+        inputMode="numeric"
+        maxLength={2}
+        value={mStr}
+        placeholder="MM"
+        onChange={(e) => {
+          const s = e.target.value.replace(/\D/g, "").slice(0, 2);
+          setMStr(s);
+          commitMinute(s);
+        }}
+        onFocus={(e) => e.target.select()}
+      />
+    </TimeSegWrapper>
+  );
+};
+
 const AdminScheduleConfig: React.FC<AdminScheduleConfigProps> = ({
+  startDate,
+  endDate,
+  onDateRangeChange,
   enabledSlots,
   onSlotsChange,
-  startHour = 8,
-  endHour = 18,
   onSave,
   sessionDuration,
   onSessionDurationChange,
+  candidateCount,
+  interviewerCount,
 }) => {
   const [isDragging, setIsDragging] = useState(false);
   const [dragMode, setDragMode] = useState<"add" | "remove">("add");
   const [isSaving, setIsSaving] = useState(false);
-  const [inputValue, setInputValue] = useState<string>(
-    sessionDuration.toString(),
-  );
+
+  const [pendingStart, setPendingStart] = useState<TimeValue>({ h: 8, m: 0 });
+  const [pendingEnd, setPendingEnd] = useState<TimeValue>({ h: 18, m: 0 });
+  const [pendingDuration, setPendingDuration] = useState(sessionDuration);
+  const [durationInput, setDurationInput] = useState(String(sessionDuration));
+
+  const [localStartDate, setLocalStartDate] = useState(startDate);
+  const [localEndDate, setLocalEndDate] = useState(endDate);
+
+  // Draft slot state — only flushed to parent on save
+  const [draftSlots, setDraftSlots] = useState<Set<string>>(() => new Set(enabledSlots));
+
+  const hasPendingChanges =
+    localStartDate !== startDate ||
+    localEndDate !== endDate ||
+    draftSlots.size !== enabledSlots.size ||
+    [...draftSlots].some((k) => !enabledSlots.has(k));
 
   useEffect(() => {
-    setInputValue(sessionDuration.toString());
-  }, [sessionDuration]);
+    setLocalStartDate(startDate);
+    setLocalEndDate(endDate);
+    setDraftSlots(new Set(enabledSlots));
+  }, [startDate, endDate]);
 
-  const startMinute = startHour * 60;
-  const endMinute = endHour * 60;
+  const startMinute = pendingStart.h * 60 + pendingStart.m;
+  const endMinute = pendingEnd.h * 60 + pendingEnd.m;
+  const isInvalidRange = startMinute >= endMinute;
+
+  // Grid uses local draft dates, not the committed parent dates
+  const dates = React.useMemo(
+    () => dateRangeDates(localStartDate, localEndDate).slice(0, MAX_RANGE_DAYS),
+    [localStartDate, localEndDate],
+  );
 
   const TIME_SLOTS = React.useMemo(() => {
+    if (isInvalidRange) return [];
     const slots = [];
-    const step = sessionDuration > 0 ? sessionDuration : 60;
+    const step = pendingDuration > 0 ? pendingDuration : 60;
     for (let m = startMinute; m < endMinute; m += step) {
       slots.push(m);
     }
     return slots;
-  }, [startMinute, endMinute, sessionDuration]);
+  }, [startMinute, endMinute, pendingDuration, isInvalidRange]);
 
   const formatTime = (totalMinutes: number) => {
     const hours = Math.floor(totalMinutes / 60);
@@ -70,44 +164,29 @@ const AdminScheduleConfig: React.FC<AdminScheduleConfigProps> = ({
   };
 
   const applyToggle = useCallback(
-    (
-      dayIndex: number,
-      minute: number,
-      mode: "add" | "remove",
-      currentSlots: Set<string>,
-    ) => {
-      const slotKey = `${dayIndex}-${minute}`;
+    (date: string, minute: number, mode: "add" | "remove", currentSlots: Set<string>) => {
+      const key = makeSlotKey(date, minute);
       const newSlots = new Set(currentSlots);
-
-      if (mode === "add") {
-        newSlots.add(slotKey);
-      } else {
-        newSlots.delete(slotKey);
-      }
-
-      onSlotsChange(newSlots);
+      if (mode === "add") newSlots.add(key);
+      else newSlots.delete(key);
+      setDraftSlots(newSlots);
     },
-    [onSlotsChange],
+    [],
   );
 
-  const handleMouseDown = (dayIndex: number, minute: number) => {
-    const slotKey = `${dayIndex}-${minute}`;
-    const isSelected = enabledSlots.has(slotKey);
-    const newMode = isSelected ? "remove" : "add";
+  const handleMouseDown = (date: string, minute: number) => {
+    const key = makeSlotKey(date, minute);
+    const newMode = draftSlots.has(key) ? "remove" : "add";
     setDragMode(newMode);
     setIsDragging(true);
-    applyToggle(dayIndex, minute, newMode, enabledSlots);
+    applyToggle(date, minute, newMode, draftSlots);
   };
 
-  const handleMouseEnter = (dayIndex: number, minute: number) => {
-    if (isDragging) {
-      applyToggle(dayIndex, minute, dragMode, enabledSlots);
-    }
+  const handleMouseEnter = (date: string, minute: number) => {
+    if (isDragging) applyToggle(date, minute, dragMode, draftSlots);
   };
 
-  const handleMouseUp = useCallback(() => {
-    setIsDragging(false);
-  }, []);
+  const handleMouseUp = useCallback(() => setIsDragging(false), []);
 
   useEffect(() => {
     window.addEventListener("mouseup", handleMouseUp);
@@ -115,120 +194,174 @@ const AdminScheduleConfig: React.FC<AdminScheduleConfigProps> = ({
   }, [handleMouseUp]);
 
   const handleSave = async () => {
-    if (!onSave || sessionDuration === 0) return;
+    if (!onSave || pendingDuration === 0 || isInvalidRange) return;
     setIsSaving(true);
     try {
-      await onSave(enabledSlots);
+      // Flush all draft state to parent before saving
+      onSlotsChange(draftSlots);
+      if (localStartDate && localEndDate && localStartDate <= localEndDate) {
+        onDateRangeChange(localStartDate, localEndDate);
+      }
+      onSessionDurationChange(pendingDuration);
+      await onSave();
     } finally {
       setIsSaving(false);
     }
   };
 
-  const selectAllForDay = (dayIndex: number) => {
-    const newSlots = new Set(enabledSlots);
-    TIME_SLOTS.forEach((minute) => {
-      newSlots.add(`${dayIndex}-${minute}`);
-    });
-    onSlotsChange(newSlots);
+  const handleDateRangeCommit = () => {
+    // Only updates local state; parent is not notified until save
   };
 
-  const clearAllForDay = (dayIndex: number) => {
-    const newSlots = new Set(enabledSlots);
-    TIME_SLOTS.forEach((minute) => {
-      newSlots.delete(`${dayIndex}-${minute}`);
-    });
-    onSlotsChange(newSlots);
+  const selectAllForDay = (date: string) => {
+    const newSlots = new Set(draftSlots);
+    TIME_SLOTS.forEach((m) => newSlots.add(makeSlotKey(date, m)));
+    setDraftSlots(newSlots);
+  };
+
+  const clearAllForDay = (date: string) => {
+    const newSlots = new Set(draftSlots);
+    TIME_SLOTS.forEach((m) => newSlots.delete(makeSlotKey(date, m)));
+    setDraftSlots(newSlots);
   };
 
   const selectAll = () => {
     const newSlots = new Set<string>();
-    DAYS.forEach((_, dayIndex) => {
-      TIME_SLOTS.forEach((minute) => {
-        newSlots.add(`${dayIndex}-${minute}`);
-      });
+    dates.forEach((date) => {
+      TIME_SLOTS.forEach((m) => newSlots.add(makeSlotKey(date, m)));
     });
-    onSlotsChange(newSlots);
+    setDraftSlots(newSlots);
   };
 
-  const clearAll = () => {
-    onSlotsChange(new Set());
-  };
+  const clearAll = () => setDraftSlots(new Set());
+
+  const dateRangeValid = localStartDate && localEndDate && localStartDate <= localEndDate;
 
   return (
     <Container>
       <HeaderCard>
-        <HeaderMain>
-          <div>
-            <Eyebrow>Rammer</Eyebrow>
-            <Title>Styr hvilke slotter som er åpne</Title>
-          </div>
-          <SupportText>
-            Sett et tydelig tidsrom først. Da blir både tilgjengelighet og
-            planforslag langt mer forutsigbare.
-          </SupportText>
-        </HeaderMain>
+        <ControlBar>
+          <ControlInputs>
+            {/* Date range */}
+            <FieldGroup>
+              <FieldLabel>Intervjuperiode</FieldLabel>
+              <FieldBody>
+                <DateInput
+                  type="date"
+                  value={localStartDate}
+                  onChange={(e) => setLocalStartDate(e.target.value)}
+                  onBlur={handleDateRangeCommit}
+                />
+                <FieldArrow>→</FieldArrow>
+                <DateInput
+                  type="date"
+                  value={localEndDate}
+                  min={localStartDate}
+                  onChange={(e) => setLocalEndDate(e.target.value)}
+                  onBlur={handleDateRangeCommit}
+                />
+              </FieldBody>
+            </FieldGroup>
 
-        <HeaderActions>
-          <ActionGroup>
+            <FieldGroup>
+              <FieldLabel>Tidsrom</FieldLabel>
+              <FieldBody>
+                <TimeSegmentInput
+                  id="start-time"
+                  value={pendingStart}
+                  onChange={setPendingStart}
+                />
+                <FieldArrow>→</FieldArrow>
+                <TimeSegmentInput value={pendingEnd} onChange={setPendingEnd} />
+              </FieldBody>
+            </FieldGroup>
+
+            <FieldGroup>
+              <FieldLabel htmlFor="session-duration">Varighet</FieldLabel>
+              <FieldBody>
+                <FieldInput
+                  id="session-duration"
+                  type="number"
+                  min="5"
+                  max="120"
+                  step="5"
+                  value={durationInput}
+                  onChange={(e) => {
+                    setDurationInput(e.target.value);
+                    const val = parseInt(e.target.value, 10);
+                    if (!isNaN(val)) setPendingDuration(val);
+                    else if (e.target.value === "") setPendingDuration(0);
+                  }}
+                  onFocus={(e) => e.target.select()}
+                />
+                <FieldUnit>min</FieldUnit>
+              </FieldBody>
+            </FieldGroup>
+          </ControlInputs>
+
+          <ControlActions>
+            {!dateRangeValid && (
+              <ValidationHint>Ugyldig datoperiode</ValidationHint>
+            )}
+            {isInvalidRange && <ValidationHint>Ugyldig tidsrom</ValidationHint>}
+            {hasPendingChanges && !isSaving && (
+              <PendingHint>Ulagrede endringer</PendingHint>
+            )}
             <ActionButton type="button" onClick={selectAll}>
               Velg alle
             </ActionButton>
             <ActionButton type="button" onClick={clearAll}>
               Tøm alle
             </ActionButton>
-          </ActionGroup>
-
-          <DurationWrapper>
-            <DurationLabel htmlFor="session-duration">Varighet</DurationLabel>
-            <DurationInput
-              id="session-duration"
-              type="number"
-              min="0"
-              max="120"
-              step="5"
-              value={inputValue}
-              onChange={(e) => {
-                const valStr = e.target.value;
-                setInputValue(valStr);
-                const val = parseInt(valStr, 10);
-                if (!isNaN(val)) {
-                  onSessionDurationChange(val);
-                } else if (valStr === "") {
-                  onSessionDurationChange(0);
-                }
-              }}
-            />
-            <DurationUnit>min</DurationUnit>
-          </DurationWrapper>
-
-          {onSave && (
-            <SaveButton
-              type="button"
-              onClick={handleSave}
-              disabled={isSaving || sessionDuration === 0}
-            >
-              {isSaving ? "Lagrer..." : "Lagre oppsett"}
-            </SaveButton>
-          )}
-        </HeaderActions>
+            {onSave && (
+              <SaveButton
+                type="button"
+                onClick={handleSave}
+                disabled={isSaving || pendingDuration === 0 || isInvalidRange || !dateRangeValid}
+              >
+                {isSaving ? "Lagrer..." : "Lagre oppsett"}
+              </SaveButton>
+            )}
+          </ControlActions>
+        </ControlBar>
       </HeaderCard>
 
+      <GridToolbar>
+        <ToolbarStats>
+          <ToolbarStat>
+            <strong>{dates.length}</strong> dager
+          </ToolbarStat>
+          <ToolbarDot />
+          <ToolbarStat>
+            <strong>{draftSlots.size}</strong> ledige slots
+          </ToolbarStat>
+          <ToolbarDot />
+          <ToolbarStat>
+            <strong>{candidateCount}</strong> kandidater
+          </ToolbarStat>
+          <ToolbarDot />
+          <ToolbarStat>
+            <strong>{interviewerCount}</strong> intervjuere
+          </ToolbarStat>
+        </ToolbarStats>
+      </GridToolbar>
+
       <GridWrapper>
-        <Grid $columns={DAYS.length + 1}>
+        <Grid $columns={dates.length + 1}>
           <div />
-          {DAYS.map((day, dayIndex) => {
+          {dates.map((date) => {
+            const { weekday, dayMonth } = formatDateHeader(date);
             const isAllSelected =
               TIME_SLOTS.length > 0 &&
-              TIME_SLOTS.every((minute) =>
-                enabledSlots.has(`${dayIndex}-${minute}`),
-              );
-            const isSomeSelected = TIME_SLOTS.some((minute) =>
-              enabledSlots.has(`${dayIndex}-${minute}`),
+              TIME_SLOTS.every((m) => draftSlots.has(makeSlotKey(date, m)));
+            const isSomeSelected = TIME_SLOTS.some((m) =>
+              draftSlots.has(makeSlotKey(date, m)),
             );
 
             return (
-              <DayHeader key={day}>
-                <DayName>{day}</DayName>
+              <DayHeader key={date}>
+                <DayWeekday>{weekday}</DayWeekday>
+                <DayDate>{dayMonth}</DayDate>
                 <DayToggle>
                   <input
                     type="checkbox"
@@ -239,278 +372,367 @@ const AdminScheduleConfig: React.FC<AdminScheduleConfigProps> = ({
                         input.indeterminate = isSomeSelected && !isAllSelected;
                     }}
                     onChange={() => {
-                      if (isAllSelected) {
-                        clearAllForDay(dayIndex);
-                      } else {
-                        selectAllForDay(dayIndex);
-                      }
+                      if (isAllSelected) clearAllForDay(date);
+                      else selectAllForDay(date);
                     }}
                   />
-                  Hele dagen
+                  Alle
                 </DayToggle>
               </DayHeader>
             );
           })}
 
-          {TIME_SLOTS.map((minute) => (
-            <React.Fragment key={minute}>
-              <TimeLabel>{formatTime(minute)}</TimeLabel>
-              {DAYS.map((_, dayIndex) => {
-                const slotKey = `${dayIndex}-${minute}`;
-                const isEnabled = enabledSlots.has(slotKey);
-
-                return (
-                  <ConfigSlot
-                    key={slotKey}
-                    $isEnabled={isEnabled}
-                    onMouseDown={() => handleMouseDown(dayIndex, minute)}
-                    onMouseEnter={() => handleMouseEnter(dayIndex, minute)}
-                  >
-                    {isEnabled && <Check size={14} />}
-                  </ConfigSlot>
-                );
-              })}
-            </React.Fragment>
-          ))}
+          {TIME_SLOTS.length === 0 ? (
+            <EmptyGrid>
+              {dates.length === 0
+                ? "Velg en datoperiode for å se tidsplanen."
+                : "Ingen slotter — endre tidsrom og lagre."}
+            </EmptyGrid>
+          ) : (
+            TIME_SLOTS.map((minute) => (
+              <React.Fragment key={minute}>
+                <TimeLabel>{formatTime(minute)}</TimeLabel>
+                {dates.map((date) => {
+                  const key = makeSlotKey(date, minute);
+                  const isEnabled = draftSlots.has(key);
+                  return (
+                    <ConfigSlot
+                      key={key}
+                      $isEnabled={isEnabled}
+                      onMouseDown={() => handleMouseDown(date, minute)}
+                      onMouseEnter={() => handleMouseEnter(date, minute)}
+                    >
+                      {isEnabled && <Check size={12} strokeWidth={2.5} />}
+                    </ConfigSlot>
+                  );
+                })}
+              </React.Fragment>
+            ))
+          )}
         </Grid>
       </GridWrapper>
-
-      <StatsRow>
-        <StatCard>
-          <StatLabel>Åpne slotter</StatLabel>
-          <StatValue>{enabledSlots.size}</StatValue>
-        </StatCard>
-        <StatCard>
-          <StatLabel>Varighet</StatLabel>
-          <StatValue>{sessionDuration || 0} min</StatValue>
-        </StatCard>
-        <StatCard>
-          <StatLabel>Søkere</StatLabel>
-          <StatValue>{MOCK_CANDIDATES.length}</StatValue>
-        </StatCard>
-      </StatsRow>
     </Container>
   );
 };
 
+export default AdminScheduleConfig;
+
 const Container = styled.div`
   display: flex;
   flex-direction: column;
-  gap: 1rem;
+  gap: 0.625rem;
   user-select: none;
+  min-width: 0;
 `;
 
 const HeaderCard = styled.div`
   ${scheduleSurface};
-  display: flex;
-  flex-direction: column;
-  gap: 1rem;
-  padding: 1.25rem;
+  padding: 0.875rem 1rem;
 `;
 
-const HeaderMain = styled.div`
+const ControlBar = styled.div`
   display: flex;
-  justify-content: space-between;
-  gap: 1rem;
-  align-items: flex-start;
+  align-items: center;
+  gap: 0.625rem;
   flex-wrap: wrap;
 `;
 
 const Eyebrow = styled.span`
   ${scheduleLabel};
-  display: block;
-  margin-bottom: 0.3rem;
+  flex-shrink: 0;
+  margin-right: 0.25rem;
 `;
 
-const Title = styled.h3`
-  margin: 0;
-  font-size: 1.1rem;
-  color: #111827;
-`;
-
-const SupportText = styled.p`
-  max-width: 34rem;
-  margin: 0;
-  color: #5b554c;
-  line-height: 1.7;
-  font-size: 0.92rem;
-`;
-
-const HeaderActions = styled.div`
+const ControlInputs = styled.div`
   display: flex;
-  justify-content: space-between;
   align-items: center;
-  gap: 0.75rem;
+  gap: 0.375rem;
   flex-wrap: wrap;
-
-  ${media.handheld`
-    align-items: stretch;
-  `};
 `;
 
-const ActionGroup = styled.div`
+const ControlActions = styled.div`
   display: flex;
-  gap: 0.6rem;
+  align-items: center;
+  gap: 0.375rem;
+  margin-left: auto;
   flex-wrap: wrap;
+`;
+
+const ValidationHint = styled.span`
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #b21207;
+`;
+
+const PendingHint = styled.span`
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #a0a0a0;
+  font-style: italic;
+`;
+
+const FieldGroup = styled.div`
+  display: inline-flex;
+  align-items: stretch;
+  border: 1px solid #e4e4e4;
+  border-radius: 8px;
+  background: #ffffff;
+  overflow: hidden;
+  height: 2rem;
+`;
+
+const FieldLabel = styled.label`
+  display: flex;
+  align-items: center;
+  padding: 0 0.6rem;
+  background: #f5f5f5;
+  border-right: 1px solid #e4e4e4;
+  ${scheduleLabel};
+  white-space: nowrap;
+  cursor: default;
+  user-select: none;
+`;
+
+const FieldBody = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0 0.5rem;
+`;
+
+const FieldArrow = styled.span`
+  color: #c8c8c8;
+  font-size: 0.75rem;
+  user-select: none;
+  padding: 0 0.1rem;
+`;
+
+const DateInput = styled.input`
+  border: none;
+  background: transparent;
+  font-size: 0.813rem;
+  font-weight: 600;
+  color: #111111;
+  padding: 0;
+  cursor: pointer;
+  user-select: none;
+
+  &:focus {
+    outline: none;
+    color: var(--lego-red-color);
+  }
+
+  &::-webkit-calendar-picker-indicator {
+    opacity: 0.4;
+    cursor: pointer;
+  }
+`;
+
+const FieldInput = styled.input`
+  width: 2.5rem;
+  border: none;
+  background: transparent;
+  text-align: center;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #111111;
+  padding: 0;
+
+  -moz-appearance: textfield;
+  &::-webkit-outer-spin-button,
+  &::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+  }
+
+  &:focus {
+    outline: none;
+    color: var(--lego-red-color);
+  }
+`;
+
+const FieldUnit = styled.span`
+  color: #a0a0a0;
+  font-size: 0.813rem;
+  font-weight: 500;
+  user-select: none;
+`;
+
+const TimeSegWrapper = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 1px;
+`;
+
+const SegInput = styled.input`
+  width: 1.75rem;
+  border: none;
+  background: transparent;
+  text-align: center;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #111111;
+  padding: 0;
+  caret-color: var(--lego-red-color);
+
+  &:focus {
+    outline: none;
+    color: var(--lego-red-color);
+  }
+
+  &::placeholder {
+    color: #d0d0d0;
+  }
+`;
+
+const SegColon = styled.span`
+  color: #c8c8c8;
+  font-size: 0.875rem;
+  font-weight: 500;
+  user-select: none;
+  line-height: 1;
+`;
+
+const GridToolbar = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 1rem;
+  padding: 0 0.25rem;
 `;
 
 const ActionButton = styled.button`
   ${secondaryAction};
-  padding: 0.7rem 0.95rem;
-  border-radius: 0.9rem;
-  font-size: 0.82rem;
-  font-weight: 700;
+  padding: 0.35rem 0.7rem;
+  border-radius: 6px;
+  font-size: 0.813rem;
+  font-weight: 600;
   cursor: pointer;
 `;
 
-const DurationWrapper = styled.div`
-  ${scheduleInset};
-  display: inline-flex;
+const ToolbarStats = styled.div`
+  display: flex;
   align-items: center;
-  gap: 0.65rem;
-  padding: 0.55rem 0.75rem;
+  gap: 0.5rem;
 `;
 
-const DurationLabel = styled.label`
+const ToolbarStat = styled.span`
   ${scheduleLabel};
-  color: #7b6b5c;
-`;
+  color: #a0a0a0;
 
-const DurationInput = styled.input`
-  width: 4.5rem;
-  padding: 0.5rem 0.55rem;
-  border-radius: 0.75rem;
-  border: 1px solid #d7cbbb;
-  background: rgba(255, 255, 255, 0.85);
-  color: #111827;
-  text-align: center;
-  font-weight: 700;
-  font-size: 0.95rem;
-
-  &:focus {
-    outline: none;
-    border-color: #8a1f16;
-    box-shadow: 0 0 0 3px rgba(178, 18, 7, 0.08);
+  strong {
+    font-size: 0.813rem;
+    font-weight: 700;
+    color: #111111;
+    font-variant-numeric: tabular-nums;
+    text-transform: none;
+    letter-spacing: 0;
   }
 `;
 
-const DurationUnit = styled.span`
-  color: #6b7280;
-  font-size: 0.85rem;
-  font-weight: 600;
-`;
-
-const SaveButton = styled.button`
-  ${primaryAction};
-  padding: 0.8rem 1.15rem;
-  border-radius: 0.9rem;
-  font-size: 0.9rem;
-  font-weight: 700;
-  cursor: pointer;
+const ToolbarDot = styled.span`
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  background: #d0d0d0;
+  flex-shrink: 0;
 `;
 
 const GridWrapper = styled.div`
-  ${scheduleSurface};
-  overflow-x: auto;
-  padding: 0.95rem;
+  ${scheduleGridShell};
+  min-width: 0;
 `;
 
 const Grid = styled.div<{ $columns: number }>`
   display: grid;
-  grid-template-columns: 70px repeat(${(props) => props.$columns - 1}, 1fr);
-  gap: 8px;
-  min-width: 820px;
+  grid-template-columns: 56px repeat(${(props) => props.$columns - 1}, minmax(70px, 1fr));
+  gap: 5px;
+  min-width: max(680px, ${(props) => (props.$columns - 1) * 70 + 56}px);
+`;
+
+const EmptyGrid = styled.div`
+  grid-column: 1 / -1;
+  padding: 2.5rem 1rem;
+  text-align: center;
+  ${scheduleLabel};
+  color: #c0c0c0;
 `;
 
 const DayHeader = styled.div`
-  ${scheduleInset};
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 0.65rem;
-  padding: 0.9rem 0.4rem;
+  gap: 0.2rem;
+  padding: 0.5rem 0.25rem;
+  border-radius: 6px;
+  background: #ffffff;
+  border: 1px solid #e4e4e4;
 `;
 
-const DayName = styled.div`
+const DayWeekday = styled.div`
   ${scheduleLabel};
-  color: #6e6256;
+  text-align: center;
+  color: #6b6b6b;
+`;
+
+const DayDate = styled.div`
+  font-size: 0.813rem;
+  font-weight: 700;
+  color: #111111;
   text-align: center;
 `;
 
 const DayToggle = styled.label`
   display: flex;
   align-items: center;
-  gap: 0.35rem;
-  color: #6b7280;
-  font-size: 0.76rem;
+  gap: 0.25rem;
+  color: #a0a0a0;
+  font-size: 0.688rem;
   font-weight: 600;
+  cursor: pointer;
 `;
 
 const TimeLabel = styled.div`
-  ${scheduleLabel};
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  padding-right: 0.6rem;
-  color: #8a7b6b;
+  ${scheduleGridTimeLabel};
 `;
 
 const ConfigSlot = styled.div<{ $isEnabled: boolean }>`
-  height: 2.9rem;
-  border-radius: 0.95rem;
+  height: 2.25rem;
+  border-radius: 5px;
   display: flex;
   align-items: center;
   justify-content: center;
-  transition:
-    transform 0.12s ease,
-    box-shadow 0.12s ease,
-    background-color 0.12s ease;
+  transition: background-color 0.1s ease, border-color 0.1s ease;
   cursor: pointer;
 
   ${(props) =>
     props.$isEnabled
       ? css`
-          color: white;
-          background: linear-gradient(135deg, #8a1f16 0%, #6d1a13 100%);
-          border: 1px solid #7f1d1d;
+          color: #ffffff;
+          background: var(--lego-red-color);
+          border: 1px solid var(--lego-red-color);
 
           &:hover {
-            transform: translateY(-1px);
-            box-shadow: 0 14px 20px -18px rgba(109, 26, 19, 0.9);
+            background: #9a1006;
           }
         `
       : css`
-          background: rgba(255, 255, 255, 0.88);
-          border: 1px solid #dfd4c6;
+          background: #ffffff;
+          border: 1px solid #e4e4e4;
 
           &:hover {
-            border-color: #c8b9a5;
-            box-shadow: 0 12px 18px -18px rgba(51, 37, 24, 0.45);
+            border-color: rgba(178, 18, 7, 0.28);
+            background: rgba(178, 18, 7, 0.03);
           }
         `}
 `;
 
-const StatsRow = styled.div`
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-  gap: 0.75rem;
+const SaveButton = styled.button`
+  ${primaryAction};
+  padding: 0.45rem 1rem;
+  border-radius: 8px;
+  font-size: 0.813rem;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
 `;
-
-const StatCard = styled.div`
-  ${scheduleSurface};
-  padding: 0.95rem 1rem;
-`;
-
-const StatValue = styled.span`
-  display: block;
-  margin-top: 0.3rem;
-  font-size: 1.35rem;
-  font-weight: 800;
-  color: #111827;
-`;
-
-const StatLabel = styled.span`
-  ${scheduleLabel};
-`;
-
-export default AdminScheduleConfig;
