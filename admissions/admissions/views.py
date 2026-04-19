@@ -21,6 +21,7 @@ from admissions.admissions.models import (
     GroupApplication,
     LegoUser,
     Membership,
+    SavedSchedule,
     UserApplication,
 )
 from admissions.admissions.serializers import (
@@ -30,6 +31,8 @@ from admissions.admissions.serializers import (
     AdmissionPublicSerializer,
     ApplicationCreateUpdateSerializer,
     GroupSerializer,
+    SavedScheduleSerializer,
+    SaveScheduleInputSerializer,
     UserApplicationSerializer,
     ScheduleRequestsSerializer,
 )
@@ -355,7 +358,73 @@ class SolveScheduleView(APIView):
         result = solve_schedule(
             candidates_data=data['candidates'],
             interviewers_data=data['interviewers'],
-            panel_size=data['panel_size']
+            panel_size=data['panel_size'],
+            options_data=data.get('options', {}),
         )
 
         return Response(result, status=status.HTTP_200_OK)
+
+
+class SavedScheduleView(APIView):
+    authentication_classes = [SessionAuthentication]
+    permission_classes = [IsAuthenticated]
+
+    def _get_admission_and_check(self, request, admission_slug, require_admin=False):
+        try:
+            admission = Admission.objects.get(slug=admission_slug)
+        except Admission.DoesNotExist:
+            return None, Response(status=status.HTTP_404_NOT_FOUND)
+
+        user = request.user
+        user.__class__ = LegoUser
+
+        is_admin = user_is_admission_admin(admission, user)
+        is_member = get_representing_group(admission, user) is not None
+
+        if require_admin and not is_admin:
+            return None, Response(status=status.HTTP_403_FORBIDDEN)
+
+        if not is_admin and not is_member:
+            # Allow viewing distributed schedule for any authenticated user in the admission
+            try:
+                saved = admission.saved_schedule
+                if not saved.is_distributed:
+                    return None, Response(status=status.HTTP_403_FORBIDDEN)
+            except SavedSchedule.DoesNotExist:
+                return None, Response(status=status.HTTP_403_FORBIDDEN)
+
+        return admission, None
+
+    def get(self, request, admission_slug):
+        admission, err = self._get_admission_and_check(request, admission_slug)
+        if err:
+            return err
+
+        try:
+            saved = admission.saved_schedule
+            return Response(SavedScheduleSerializer(saved).data)
+        except SavedSchedule.DoesNotExist:
+            return Response(status=status.HTTP_404_NOT_FOUND)
+
+    def post(self, request, admission_slug):
+        admission, err = self._get_admission_and_check(
+            request, admission_slug, require_admin=True
+        )
+        if err:
+            return err
+
+        serializer = SaveScheduleInputSerializer(data=request.data)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+        data = serializer.validated_data
+        saved, _ = SavedSchedule.objects.update_or_create(
+            admission=admission,
+            defaults={
+                "schedule": data["schedule"],
+                "start_date": data["start_date"],
+                "session_duration": data["session_duration"],
+                "is_distributed": data["is_distributed"],
+            },
+        )
+        return Response(SavedScheduleSerializer(saved).data, status=status.HTTP_200_OK)

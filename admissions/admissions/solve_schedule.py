@@ -7,147 +7,155 @@ from ortools.sat.python import cp_model
 class Candidate:
     id: str
     name: str
-    gender: str
+    gender: str | None = None
 
 @dataclass
 class Interviewer(Candidate):
     availability: List[int] = field(default_factory=list)
-    biased: List[str] = field(default_factory=list) # List of which candidates that the interviewer is biased against
+    biased: List[str] = field(default_factory=list)
+
+@dataclass
+class SolveOptions:
+    enforce_same_gender: bool = True
+    allow_overtime: bool = True
+    overtime_weight: int = 100
+    load_balance_weight: int = 1
+    max_solver_seconds: float = 10.0
+
 
 def solve_schedule(
         candidates_data: List[dict],
         interviewers_data: List[dict],
         panel_size: int,
+        options_data: Dict[str, Any] | None = None,
 ) -> Dict[str, Any]:
     candidates = [Candidate(**c) for c in candidates_data]
     interviewers = [Interviewer(**i) for i in interviewers_data]
+    options = SolveOptions(**(options_data or {}))
 
     model = cp_model.CpModel()
+
+    avail_set   = {i.id: set(i.availability) for i in interviewers}
+    bias_set    = {i.id: set(i.biased) for i in interviewers}
+    iview_map   = {i.id: i for i in interviewers}
+    male_iids   = frozenset(i.id for i in interviewers if i.gender == 'M')
+    female_iids = frozenset(i.id for i in interviewers if i.gender == 'F')
+
+    all_available = set().union(*(i.availability for i in interviewers))
+    sorted_slots = sorted(all_available) if all_available else [
+        d + h for d in (0, 24, 48, 72, 96) for h in range(8, 17)
+    ]
+
     schedule = {}
-    assign = {}
+    assign   = {}
 
-    # 1. DEFINE THE TIME UNIVERSE
-    all_possible_slots = set()
-    for i in interviewers:
-        all_possible_slots.update(i.availability)
+    valid_for        = {}
+    iview_time_vars  = {}
+    iview_all_vars   = {i.id: [] for i in interviewers}
+    overtime_vars    = []
 
-    if not all_possible_slots:
-        for day_start in [0, 24, 48, 72, 96]:
-            for hour in range(9, 17):
-                all_possible_slots.add(day_start + hour)
-
-    sorted_slots = sorted(list(all_possible_slots))
-
-    # Pre-calculate lists of interviewer IDs by gender for easy lookup
-    male_interviewers = [i.id for i in interviewers if i.gender == 'M']
-    female_interviewers = [i.id for i in interviewers if i.gender == 'F']
-
-    # --- 2. CREATE VARIABLES ---
-    for candidate in candidates:
+    for c in candidates:
         for t in sorted_slots:
-            # Main Schedule Variable
-            schedule[(candidate.id, t)] = model.NewBoolVar(f"sched_{candidate.id}_{t}")
+            schedule[(c.id, t)] = model.NewBoolVar(f"s_{c.id}_{t}")
 
-            for interviewer in interviewers:
-                if candidate.id not in interviewer.biased:
-                    assign[(interviewer.id, candidate.id, t)] = model.NewBoolVar(f"assign_{interviewer.id}_{candidate.id}_{t}")
+            v_ids = []
+            for i in interviewers:
+                if c.id in bias_set[i.id]:
+                    continue
+                if not options.allow_overtime and t not in avail_set[i.id]:
+                    continue
 
-                    # Soft Constraint: Overtime penalty
-                    if t not in interviewer.availability:
-                        model.AddImplication(assign[(interviewer.id, candidate.id, t)], True)
+                var = model.NewBoolVar(f"a_{i.id}_{c.id}_{t}")
+                key = (i.id, c.id, t)
+                assign[key] = var
+                v_ids.append(i.id)
 
-    # --- 3. HARD CONSTRAINTS ---
+                iview_time_vars.setdefault((i.id, t), []).append(var)
 
-    # A. Each candidate = exactly 1 interview
-    for candidate in candidates:
-        model.Add(sum(schedule[(candidate.id, t)] for t in sorted_slots) == 1)
+                iview_all_vars[i.id].append(var)
 
-    # B. Panel Size & Linkage
-    for candidate in candidates:
-        for t in sorted_slots:
-            valid_ids = [i.id for i in interviewers if (i.id, candidate.id, t) in assign]
+                if t not in avail_set[i.id]:
+                    overtime_vars.append(var)
 
-            model.Add(sum(assign[(i_id, candidate.id, t)] for i_id in valid_ids) ==
-                      schedule[(candidate.id, t)] * panel_size)
+            valid_for[(c.id, t)] = v_ids
 
-            # --- C. GENDER CONSTRAINT (UPDATED) ---
-            # Logic: If Candidate is Male -> Require >= 1 Male interviewer.
-            #        If Candidate is Female -> Require >= 1 Female interviewer.
+    # CONSTRAINTS
 
-            # Gather relevant assignment variables for this candidate/time
-            male_vars = [assign[(mid, candidate.id, t)] for mid in male_interviewers if (mid, candidate.id, t) in assign]
-            female_vars = [assign[(fid, candidate.id, t)] for fid in female_interviewers if (fid, candidate.id, t) in assign]
-
-            # We use standard Python IF statements to decide which rule to enforce
-            if candidate.gender == 'M':
-                # Candidate is Male: Enforce at least one Male interviewer
-                if male_vars:
-                    model.Add(sum(male_vars) >= 1).OnlyEnforceIf(schedule[(candidate.id, t)])
-                # We do NOT add a constraint for females here.
-
-            elif candidate.gender == 'F':
-                # Candidate is Female: Enforce at least one Female interviewer
-                if female_vars:
-                    model.Add(sum(female_vars) >= 1).OnlyEnforceIf(schedule[(candidate.id, t)])
-                # We do NOT add a constraint for males here.
-
-    # D. No Parallel Interviews
-    for interviewer in interviewers:
-        for t in sorted_slots:
-            concurrent = []
-            for c in candidates:
-                if (interviewer.id, c.id, t) in assign:
-                    concurrent.append(assign[(interviewer.id, c.id, t)])
-            if concurrent:
-                model.Add(sum(concurrent) <= 1)
+    # Each candidate gets exactly one interview
+    for c in candidates:
+        model.AddExactlyOne(schedule[(c.id, t)] for t in sorted_slots)
 
 
-    # --- OBJECTIVES (Unchanged) ---
-    penalty_terms = []
+    # Each timeslot can at most have 1 interview
     for t in sorted_slots:
-        for i in interviewers:
-            if t not in i.availability:
-                for c in candidates:
-                    if (i.id, c.id, t) in assign:
-                        penalty_terms.append(assign[(i.id, c.id, t)] * 100)
+        model.AddAtMostOne(schedule[(c.id, t)] for c in candidates)
 
+    for c in candidates:
+        for t in sorted_slots:
+            sv    = schedule[(c.id, t)]
+            v_ids = valid_for[(c.id, t)]
+            if not v_ids:
+                continue
+
+            a_vars = [assign[(iid, c.id, t)] for iid in v_ids]
+
+            model.Add(sum(a_vars) == panel_size).OnlyEnforceIf(sv)
+            model.Add(sum(a_vars) == 0).OnlyEnforceIf(sv.Not())
+
+            # Gender parameter
+            if options.enforce_same_gender and c.gender in {'M', 'F'}:
+                if c.gender == 'M':
+                    same_gender_vars = [
+                        assign[(iid, c.id, t)] for iid in v_ids if iid in male_iids
+                    ]
+                else:
+                    same_gender_vars = [
+                        assign[(iid, c.id, t)] for iid in v_ids if iid in female_iids
+                    ]
+
+                if same_gender_vars:
+                    model.Add(sum(same_gender_vars) >= 1).OnlyEnforceIf(sv)
+                else:
+                    model.Add(sv == 0)
+
+    for var_list in iview_time_vars.values():
+        if len(var_list) > 1:
+            model.AddAtMostOne(var_list)
+
+    # objective function
     max_load = model.NewIntVar(0, len(candidates), "max_load")
     loads = []
     for i in interviewers:
-        my_assignments = []
-        for c in candidates:
-            for t in sorted_slots:
-                if (i.id, c.id, t) in assign:
-                    my_assignments.append(assign[(i.id, c.id, t)])
-
-        load_var = model.NewIntVar(0, len(candidates), f"load_{i.id}")
-        model.Add(load_var == sum(my_assignments))
+        my = iview_all_vars[i.id]
+        load_var = model.NewIntVar(0, len(candidates), f"ld_{i.id}")
+        model.Add(load_var == sum(my) if my else load_var == 0)
         loads.append(load_var)
 
     model.AddMaxEquality(max_load, loads)
-    model.Minimize(sum(penalty_terms) + max_load)
+    model.Minimize(
+        options.overtime_weight * sum(overtime_vars)
+        + options.load_balance_weight * max_load
+    )
 
+    # ── SOLVE ─────────────────────────────────────────────────────────
     solver = cp_model.CpSolver()
-    solver.parameters.max_time_in_seconds = 10.0
+    solver.parameters.max_time_in_seconds = options.max_solver_seconds
+    solver.parameters.num_search_workers = 8
     status = solver.Solve(model)
 
     if status in (cp_model.OPTIMAL, cp_model.FEASIBLE):
         results = []
-        for candidate in candidates:
+        for c in candidates:
             for t in sorted_slots:
-                if solver.BooleanValue(schedule[(candidate.id, t)]):
-                    panel_names = []
-                    for i in interviewers:
-                        if (i.id, candidate.id, t) in assign and solver.BooleanValue(assign[(i.id, candidate.id, t)]):
-                            is_overtime = t not in i.availability
-                            marker = " (Overtime)" if is_overtime else ""
-                            panel_names.append(f"{i.name}{marker}")
-
-                    results.append({
-                        "candidate": candidate.name,
-                        "time": t,
-                        "panel": panel_names
-                    })
+                if solver.BooleanValue(schedule[(c.id, t)]):
+                    panel = [
+                        {"name": iview_map[iid].name,
+                         "is_overtime": t not in avail_set[iid]}
+                        for iid in valid_for[(c.id, t)]
+                        if solver.BooleanValue(assign[(iid, c.id, t)])
+                    ]
+                    results.append({"candidate": c.name, "time": t, "panel": panel})
+                    break          # ← slot found; skip remaining times
         return {"status": "SUCCESS", "schedule": results}
 
     return {"status": "INFEASIBLE", "schedule": []}

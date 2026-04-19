@@ -17,6 +17,7 @@ from admissions.admissions.models import (
     GroupApplication,
     LegoUser,
     Membership,
+    SavedSchedule,
     UserApplication,
 )
 from admissions.utils.email import send_message
@@ -389,6 +390,20 @@ class ApplicationCreateUpdateSerializer(serializers.HyperlinkedModelSerializer):
 
         return user_application
 
+class SavedScheduleSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = SavedSchedule
+        fields = ["id", "schedule", "start_date", "session_duration", "is_distributed", "updated_at"]
+        read_only_fields = ["id", "updated_at"]
+
+
+class SaveScheduleInputSerializer(serializers.Serializer):
+    schedule = serializers.ListField(child=serializers.DictField())
+    start_date = serializers.DateField()
+    session_duration = serializers.IntegerField(min_value=5, max_value=240)
+    is_distributed = serializers.BooleanField(default=False)
+
+
 class CandidateSerializer(serializers.Serializer):
     id = serializers.CharField()
     name = serializers.CharField()
@@ -398,7 +413,15 @@ class InterviewerSerializer(CandidateSerializer):
     availability = serializers.ListField(child=serializers.IntegerField(), default=list)
     biased = serializers.ListField(child=serializers.CharField(), default=list)
 
+class SolveOptionsSerializer(serializers.Serializer):
+    enforce_same_gender = serializers.BooleanField(default=True)
+    allow_overtime = serializers.BooleanField(default=True)
+    overtime_weight = serializers.IntegerField(min_value=0, default=100)
+    load_balance_weight = serializers.IntegerField(min_value=0, default=1)
+    max_solver_seconds = serializers.FloatField(min_value=1.0, max_value=60.0, default=10.0)
+
 class ScheduleRequestsSerializer(serializers.Serializer):
     candidates = CandidateSerializer(many=True)
     interviewers = InterviewerSerializer(many=True)
     panel_size = serializers.IntegerField(default=4)
+    options = SolveOptionsSerializer(required=False)
