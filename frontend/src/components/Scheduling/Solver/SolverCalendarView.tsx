@@ -1,10 +1,5 @@
 import React, { useMemo } from "react";
 import type { ScheduleItem } from "../../../types";
-import {
-  scheduleGridHeaderCellClass,
-  scheduleGridShellClass,
-  scheduleGridTimeLabelClass,
-} from "../shared";
 import { formatDateHeader } from "../scheduleUtils";
 import cn from "src/utils/cn";
 
@@ -42,7 +37,7 @@ const SolverCalendarView: React.FC<Props> = ({ schedule, dates }) => {
   const columns = dates.length + 1;
 
   return (
-    <div className={cn(scheduleGridShellClass, "min-w-0 w-full")}>
+    <div className="min-w-0 w-full overflow-x-auto rounded-lg border border-border bg-surface-muted p-3">
       <div
         className="grid gap-1.5"
         style={{
@@ -54,9 +49,12 @@ const SolverCalendarView: React.FC<Props> = ({ schedule, dates }) => {
         {dates.map((date) => {
           const { weekday, dayMonth } = formatDateHeader(date);
           return (
-            <div key={date} className={scheduleGridHeaderCellClass}>
+            <div
+              key={date}
+              className="flex min-h-9 items-center justify-center rounded-md border border-border bg-surface-base text-label font-bold uppercase tracking-label text-text-muted"
+            >
               <span>{weekday}</span>
-              <span className="block text-[0.688rem] font-semibold text-[#a0a0a0]">
+              <span className="block text-label font-semibold text-text-subtle">
                 {dayMonth}
               </span>
             </div>
@@ -67,7 +65,9 @@ const SolverCalendarView: React.FC<Props> = ({ schedule, dates }) => {
           const hour = parseInt(hourLabel, 10);
           return (
             <React.Fragment key={hourLabel}>
-              <div className={scheduleGridTimeLabelClass}>{hourLabel}</div>
+              <div className="flex items-center justify-end pr-2 text-label font-bold uppercase tracking-label text-border-quiet">
+                {hourLabel}
+              </div>
               {dates.map((_, dayIndex) => {
                 const items = scheduleMap.get(`${dayIndex}-${hour}`) ?? [];
                 return (
@@ -76,16 +76,16 @@ const SolverCalendarView: React.FC<Props> = ({ schedule, dates }) => {
                     className={cn(
                       "flex min-h-[4.5rem] flex-col gap-1 rounded-md border p-1",
                       items.length > 0
-                        ? "border-[#e4e4e4] bg-white"
-                        : "border-[#ebebeb] bg-[#f5f5f5]",
+                        ? "border-border-soft bg-surface-base"
+                        : "border-border-faint bg-surface-muted",
                     )}
                   >
                     {items.map((item, index) => (
                       <div
                         key={`${item.candidate}-${index}`}
-                        className="flex flex-col gap-[0.3rem] rounded border border-[#e4e4e4] border-l-2 border-l-[var(--lego-red-color)] bg-white px-[0.6rem] py-2"
+                        className="flex flex-col gap-[0.3rem] rounded border border-border-soft border-l-2 border-l-brand bg-surface-base px-[0.6rem] py-2"
                       >
-                        <div className="truncate whitespace-nowrap text-xs font-bold text-[#111111]">
+                        <div className="truncate whitespace-nowrap text-xs font-bold text-text-primary">
                           {item.candidate}
                         </div>
                         <div className="flex flex-wrap gap-1">
@@ -93,10 +93,10 @@ const SolverCalendarView: React.FC<Props> = ({ schedule, dates }) => {
                             <span
                               key={i}
                               className={cn(
-                                "whitespace-nowrap rounded-full border px-1.5 py-[0.15rem] text-[0.688rem]",
+                                "whitespace-nowrap rounded-full border px-1.5 py-0.5 text-label",
                                 p.is_overtime
-                                  ? "border-[rgba(178,18,7,0.2)] bg-[rgba(178,18,7,0.08)] text-[#b21207]"
-                                  : "border-transparent bg-[#f0f0f0] text-[#6b6b6b]",
+                                  ? "border-brand-panelBorder bg-brand-badge text-brand"
+                                  : "border-transparent bg-surface-subtle text-text-muted",
                               )}
                               title={
                                 p.is_overtime

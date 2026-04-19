@@ -9,14 +9,6 @@ import type {
 import { apiClient } from "../../../utils/callApi";
 import SolverCalendarView from "./SolverCalendarView";
 import Icon from "../../Icon";
-import {
-  primaryActionClass,
-  scheduleBadgeClass,
-  scheduleInputClass,
-  scheduleInsetClass,
-  scheduleLabelClass,
-  scheduleSurfaceClass,
-} from "../shared";
 import { formatDateHeader, generateIcs } from "../scheduleUtils";
 import { useSavedSchedule } from "../../../query/hooks";
 import cn from "src/utils/cn";
@@ -292,21 +284,29 @@ export default function SolverView({
   };
 
   return (
-    <Container>
-      <MainCard>
-        <Header>
-          <TitleSection>
-            <Title>Generer en plan</Title>
-          </TitleSection>
+    <div className="flex flex-col gap-3">
+      <div className="rounded-panel border border-border bg-surface-base p-5">
+        <div className="mb-4 flex flex-wrap items-start justify-between gap-4">
+          <div className="min-w-[200px] flex-1">
+            <h2 className="m-0 mb-1 text-sm font-bold text-text-primary">
+              Generer en plan
+            </h2>
+          </div>
 
-          <Controls>
-            <InputGroup>
-              <Label htmlFor="panel-size">Panelstørrelse</Label>
-              <Input
+          <div className="flex flex-wrap items-end gap-3">
+            <div className="flex flex-col gap-1">
+              <label
+                className="text-label font-bold uppercase tracking-label text-text-subtle"
+                htmlFor="panel-size"
+              >
+                Panelstørrelse
+              </label>
+              <input
                 id="panel-size"
                 type="number"
                 min="1"
                 max="5"
+                className="w-16 rounded-md border border-border-muted bg-surface-base px-2.5 py-2 text-center text-sm font-bold text-text-primary transition-[border-color,box-shadow] duration-150 focus:border-brand-input focus:outline-none focus:ring-3 focus:ring-brand-ringSoft"
                 value={panelSize}
                 onChange={(e) => {
                   const nextValue = parseInt(e.target.value, 10);
@@ -315,133 +315,201 @@ export default function SolverView({
                   }
                 }}
               />
-            </InputGroup>
-            <RunButton type="button" onClick={handleSolve} disabled={loading}>
+            </div>
+            <button
+              type="button"
+              className="cursor-pointer whitespace-nowrap rounded-lg border border-brand bg-brand px-4 py-2 text-ui font-bold text-white transition-[background,border-color,box-shadow] duration-150 hover:border-brand-hover hover:bg-brand-hover focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-brand-ring active:bg-brand-pressed disabled:cursor-not-allowed disabled:opacity-40"
+              onClick={handleSolve}
+              disabled={loading}
+            >
               {loading ? "Optimaliserer..." : "Generer plan"}
-            </RunButton>
-          </Controls>
-        </Header>
+            </button>
+          </div>
+        </div>
 
-        <StatRow>
-          <StatCard>
-            <StatLabel>Kandidater</StatLabel>
-            <StatValue>{candidates.length}</StatValue>
-          </StatCard>
-          <StatCard>
-            <StatLabel>Intervjuere</StatLabel>
-            <StatValue>{interviewers.length}</StatValue>
-          </StatCard>
-          <StatCard>
-            <StatLabel>Antall intervjuere</StatLabel>
-            <StatValue>{panelSize}</StatValue>
-          </StatCard>
-        </StatRow>
+        <div className="mb-4 flex flex-wrap gap-4 border-b border-border-soft pb-4">
+          <div className="inline-flex items-baseline gap-[0.4rem]">
+            <span className="text-label font-bold uppercase tracking-label text-text-subtle">
+              Kandidater
+            </span>
+            <span className="text-sm font-bold text-text-primary">
+              {candidates.length}
+            </span>
+          </div>
+          <div className="inline-flex items-baseline gap-[0.4rem]">
+            <span className="text-label font-bold uppercase tracking-label text-text-subtle">
+              Intervjuere
+            </span>
+            <span className="text-sm font-bold text-text-primary">
+              {interviewers.length}
+            </span>
+          </div>
+          <div className="inline-flex items-baseline gap-[0.4rem]">
+            <span className="text-label font-bold uppercase tracking-label text-text-subtle">
+              Antall intervjuere
+            </span>
+            <span className="text-sm font-bold text-text-primary">
+              {panelSize}
+            </span>
+          </div>
+        </div>
 
-        <OptionsPanel>
-          <OptionsIntro>
-            <SectionEyebrow>Før du genererer</SectionEyebrow>
-            <SectionTitle>Velg krav og prioriteringer</SectionTitle>
-            <OptionsLead>
+        <div className="mb-4 flex flex-col gap-[0.9rem] rounded-lg border border-border bg-surface-muted p-4">
+          <div className="flex flex-col gap-1">
+            <span className="mb-1 block text-label font-bold uppercase tracking-label text-text-subtle">
+              Før du genererer
+            </span>
+            <h3 className="m-0 text-sm font-bold text-text-primary">
+              Velg krav og prioriteringer
+            </h3>
+            <p className="m-0 max-w-[42rem] text-ui leading-relaxed text-text-muted">
               Klikk på et kort for å slå en regel av eller på. Åpne detaljene
               bare når du vil lese forklaringen.
-            </OptionsLead>
-          </OptionsIntro>
+            </p>
+          </div>
 
-          <ToggleRow>
-            <ToggleCard
+          <div className="grid grid-cols-[repeat(auto-fit,minmax(220px,1fr))] gap-[0.65rem]">
+            <div
               role="button"
               tabIndex={0}
-              $active={solverOptions.enforce_same_gender}
               aria-pressed={solverOptions.enforce_same_gender}
+              className={cn(
+                "flex cursor-pointer flex-col gap-[0.65rem] rounded-[10px] border px-[0.95rem] py-[0.85rem] transition-[border-color,box-shadow,transform] duration-150 hover:-translate-y-px hover:border-brand-strongBorder focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-focus",
+                solverOptions.enforce_same_gender
+                  ? "border-brand-activeBorder bg-surface-base bg-brand-panel shadow-toggle"
+                  : "border-border-soft bg-surface-base",
+              )}
               onClick={() => toggleSolverOption("enforce_same_gender")}
               onKeyDown={(event) =>
                 handleToggleCardKeyDown(event, "enforce_same_gender")
               }
-              >
-                <OptionHeader>
-                  <OptionEyebrow>Panelregel</OptionEyebrow>
-                <ToggleState $active={solverOptions.enforce_same_gender}>
+            >
+              <div className="flex items-center justify-between gap-[0.3rem]">
+                <span className="text-label font-bold uppercase tracking-label text-text-subtle">
+                  Panelregel
+                </span>
+                <span
+                  className={cn(
+                    "flex min-w-12 items-center justify-center rounded-full px-2.5 py-1 text-xs font-bold uppercase tracking-badge",
+                    solverOptions.enforce_same_gender
+                      ? "bg-brand-fill text-brand"
+                      : "bg-surface-subtle text-text-muted",
+                  )}
+                >
                   {solverOptions.enforce_same_gender ? "På" : "Av"}
-                </ToggleState>
-              </OptionHeader>
-                <OptionTitle>Samme kjønn i panelet</OptionTitle>
-                <OptionHint>
-                  Krev minst én intervjuer av samme kjønn som kandidaten.
-                </OptionHint>
-              <OptionDetails
+                </span>
+              </div>
+              <h4 className="m-0 text-sm font-bold text-text-primary">
+                Samme kjønn i panelet
+              </h4>
+              <p className="m-0 text-detail leading-[1.45] text-text-muted">
+                Krev minst én intervjuer av samme kjønn som kandidaten.
+              </p>
+              <details
+                className="grid gap-[0.55rem] pt-[0.1rem] [&[open]_.summary-icon]:rotate-180"
                 onClick={(event) => event.stopPropagation()}
                 onKeyDown={(event) => event.stopPropagation()}
               >
-                <OptionSummary>
-                  <SummaryLabel>Les detaljene</SummaryLabel>
-                  <SummaryIcon />
-                </OptionSummary>
-                <OptionDetailsBody>
+                <summary className="inline-flex w-fit cursor-pointer list-none items-center gap-[0.35rem] text-text-muted [&::-webkit-details-marker]:hidden">
+                  <span className="text-label font-bold uppercase tracking-label text-text-subtle">
+                    Les detaljene
+                  </span>
+                  <ChevronDown className="summary-icon h-[0.9rem] w-[0.9rem] transition-transform duration-150" />
+                </summary>
+                <p className="m-0 text-ui leading-relaxed text-text-soft">
                   Når denne regelen er på, må hvert intervju ha minst én person
                   i panelet som matcher kandidatens kjønn. Hvis det ikke finnes,
                   blir akkurat det oppsettet vurdert som ugyldig.
-                </OptionDetailsBody>
-              </OptionDetails>
-            </ToggleCard>
+                </p>
+              </details>
+            </div>
 
-            <ToggleCard
+            <div
               role="button"
               tabIndex={0}
-              $active={solverOptions.allow_overtime}
               aria-pressed={solverOptions.allow_overtime}
+              className={cn(
+                "flex cursor-pointer flex-col gap-[0.65rem] rounded-[10px] border px-[0.95rem] py-[0.85rem] transition-[border-color,box-shadow,transform] duration-150 hover:-translate-y-px hover:border-brand-strongBorder focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-focus",
+                solverOptions.allow_overtime
+                  ? "border-brand-activeBorder bg-surface-base bg-brand-panel shadow-toggle"
+                  : "border-border-soft bg-surface-base",
+              )}
               onClick={() => toggleSolverOption("allow_overtime")}
               onKeyDown={(event) =>
                 handleToggleCardKeyDown(event, "allow_overtime")
               }
             >
-                <OptionHeader>
-                  <OptionEyebrow>Tilgjengelighet</OptionEyebrow>
-                <ToggleState $active={solverOptions.allow_overtime}>
+              <div className="flex items-center justify-between gap-[0.3rem]">
+                <span className="text-label font-bold uppercase tracking-label text-text-subtle">
+                  Tilgjengelighet
+                </span>
+                <span
+                  className={cn(
+                    "flex min-w-12 items-center justify-center rounded-full px-2.5 py-1 text-xs font-bold uppercase tracking-badge",
+                    solverOptions.allow_overtime
+                      ? "bg-brand-fill text-brand"
+                      : "bg-surface-subtle text-text-muted",
+                  )}
+                >
                   {solverOptions.allow_overtime ? "På" : "Av"}
-                </ToggleState>
-              </OptionHeader>
-                <OptionTitle>Tillat overtid</OptionTitle>
-                <OptionHint>
-                  La solveren bruke intervjuere utenfor registrert
-                  tilgjengelighet når det trengs.
-              </OptionHint>
-              <OptionDetails
+                </span>
+              </div>
+              <h4 className="m-0 text-sm font-bold text-text-primary">
+                Tillat overtid
+              </h4>
+              <p className="m-0 text-detail leading-[1.45] text-text-muted">
+                La solveren bruke intervjuere utenfor registrert tilgjengelighet
+                når det trengs.
+              </p>
+              <details
+                className="grid gap-[0.55rem] pt-[0.1rem] [&[open]_.summary-icon]:rotate-180"
                 onClick={(event) => event.stopPropagation()}
                 onKeyDown={(event) => event.stopPropagation()}
               >
-                <OptionSummary>
-                  <SummaryLabel>Les detaljene</SummaryLabel>
-                  <SummaryIcon />
-                </OptionSummary>
-                <OptionDetailsBody>
+                <summary className="inline-flex w-fit cursor-pointer list-none items-center gap-[0.35rem] text-text-muted [&::-webkit-details-marker]:hidden">
+                  <span className="text-label font-bold uppercase tracking-label text-text-subtle">
+                    Les detaljene
+                  </span>
+                  <ChevronDown className="summary-icon h-[0.9rem] w-[0.9rem] transition-transform duration-150" />
+                </summary>
+                <p className="m-0 text-ui leading-relaxed text-text-soft">
                   Når denne er av, får solveren bare bruke slotter folk faktisk
                   har merket som tilgjengelige. Når den er på, kan den bruke
                   andre slotter også, men markere dem som overtid i resultatet.
-                </OptionDetailsBody>
-              </OptionDetails>
-            </ToggleCard>
-          </ToggleRow>
+                </p>
+              </details>
+            </div>
+          </div>
 
-          <PrioritySection>
-            <OptionHeader>
-              <OptionEyebrow>Prioritering</OptionEyebrow>
-              <PriorityBadge>
+          <div className="flex flex-col gap-[0.65rem] pt-[0.15rem]">
+            <div className="flex items-center justify-between gap-[0.3rem]">
+              <span className="text-label font-bold uppercase tracking-label text-text-subtle">
+                Prioritering
+              </span>
+              <span className="flex min-w-12 items-center justify-center rounded-full bg-black/5 px-2.5 py-1 text-xs font-bold uppercase tracking-badge text-text-soft">
                 {selectedPriorityPreset === "custom"
                   ? "Tilpasset"
                   : "Forhåndsvalg"}
-              </PriorityBadge>
-            </OptionHeader>
-            <OptionTitle>Hva skal solveren ofre først?</OptionTitle>
-            <OptionHint>
+              </span>
+            </div>
+            <h4 className="m-0 text-sm font-bold text-text-primary">
+              Hva skal solveren ofre først?
+            </h4>
+            <p className="m-0 text-detail leading-[1.45] text-text-muted">
               Velg hva som er viktigst når tilgjengelighet, kapasitet og jevn
               fordeling trekker i ulike retninger.
-            </OptionHint>
-            <PriorityPills>
+            </p>
+            <div className="flex flex-wrap gap-[0.45rem]">
               {PRIORITY_PRESETS.map((preset) => (
-                <PriorityOption
+                <button
                   key={preset.key}
                   type="button"
-                  $active={selectedPriorityPreset === preset.key}
+                  className={cn(
+                    "inline-flex cursor-pointer items-center justify-center rounded-full border px-3 py-[0.45rem] text-[0.78rem] font-bold transition-[border-color,background] duration-150 hover:border-brand-strongBorder",
+                    selectedPriorityPreset === preset.key
+                      ? "border-brand-activeBorder bg-brand-badge text-brand"
+                      : "border-border-soft bg-surface-base text-text-body",
+                  )}
                   onClick={() =>
                     applyPriorityPreset(
                       preset.overtimeWeight,
@@ -450,42 +518,52 @@ export default function SolverView({
                   }
                 >
                   {preset.label}
-                </PriorityOption>
+                </button>
               ))}
-            </PriorityPills>
-            <PriorityCurrent>
+            </div>
+            <p className="m-0 text-helper leading-[1.5] text-text-soft">
               {selectedPriorityMeta ? (
                 <>
-                  <PriorityCurrentLabel>
+                  <span className="mr-[0.35rem] font-bold text-text-primary">
                     {selectedPriorityMeta.label}
-                  </PriorityCurrentLabel>
+                  </span>
                   {selectedPriorityMeta.description}
                 </>
               ) : (
                 <>
-                  <PriorityCurrentLabel>Tilpasset</PriorityCurrentLabel>
+                  <span className="mr-[0.35rem] font-bold text-text-primary">
+                    Tilpasset
+                  </span>
                   Du har manuelt valgt egne vekter for overtid og fordeling.
                 </>
               )}
-            </PriorityCurrent>
-            <OptionDetails>
-              <OptionSummary>
-                <SummaryLabel>Forklaring og finjustering</SummaryLabel>
-                <SummaryIcon />
-              </OptionSummary>
-              <OptionDetailsBody>
+            </p>
+            <details className="grid gap-[0.55rem] pt-[0.1rem] [&[open]_.summary-icon]:rotate-180">
+              <summary className="inline-flex w-fit cursor-pointer list-none items-center gap-[0.35rem] text-text-muted [&::-webkit-details-marker]:hidden">
+                <span className="text-label font-bold uppercase tracking-label text-text-subtle">
+                  Forklaring og finjustering
+                </span>
+                <ChevronDown className="summary-icon h-[0.9rem] w-[0.9rem] transition-transform duration-150" />
+              </summary>
+              <p className="m-0 text-ui leading-relaxed text-text-soft">
                 Overtidsvekten sier hvor dyrt det er å bruke folk utenfor
                 tilgjengeligheten sin. Fordelingsvekten sier hvor hardt
                 solveren skal prøve å unngå at noen får klart flere intervjuer
                 enn resten.
-              </OptionDetailsBody>
-              <ManualGrid>
-                <InputGroup>
-                  <Label htmlFor="overtime-weight">Overtidsvekt</Label>
-                  <NumberInput
+              </p>
+              <div className="grid grid-cols-[repeat(auto-fit,minmax(140px,1fr))] gap-3">
+                <div className="flex flex-col gap-1">
+                  <label
+                    className="text-label font-bold uppercase tracking-label text-text-subtle"
+                    htmlFor="overtime-weight"
+                  >
+                    Overtidsvekt
+                  </label>
+                  <input
                     id="overtime-weight"
                     type="number"
                     min="0"
+                    className="w-full rounded-md border border-border-muted bg-surface-base px-2.5 py-2 text-left text-sm font-semibold text-text-primary transition-[border-color,box-shadow] duration-150 focus:border-brand-input focus:outline-none focus:ring-3 focus:ring-brand-ringSoft"
                     value={solverOptions.overtime_weight}
                     onChange={(event) =>
                       updateSolverOption(
@@ -495,13 +573,19 @@ export default function SolverView({
                     }
                     disabled={!solverOptions.allow_overtime}
                   />
-                </InputGroup>
-                <InputGroup>
-                  <Label htmlFor="load-balance-weight">Fordelingsvekt</Label>
-                  <NumberInput
+                </div>
+                <div className="flex flex-col gap-1">
+                  <label
+                    className="text-label font-bold uppercase tracking-label text-text-subtle"
+                    htmlFor="load-balance-weight"
+                  >
+                    Fordelingsvekt
+                  </label>
+                  <input
                     id="load-balance-weight"
                     type="number"
                     min="0"
+                    className="w-full rounded-md border border-border-muted bg-surface-base px-2.5 py-2 text-left text-sm font-semibold text-text-primary transition-[border-color,box-shadow] duration-150 focus:border-brand-input focus:outline-none focus:ring-3 focus:ring-brand-ringSoft"
                     value={solverOptions.load_balance_weight}
                     onChange={(event) =>
                       updateSolverOption(
@@ -510,70 +594,103 @@ export default function SolverView({
                       )
                     }
                   />
-                </InputGroup>
-              </ManualGrid>
-            </OptionDetails>
-          </PrioritySection>
-        </OptionsPanel>
+                </div>
+              </div>
+            </details>
+          </div>
+        </div>
 
-        {error && <ErrorMessage>{error}</ErrorMessage>}
+        {error && (
+          <div className="mb-3 rounded-lg border border-brand-border bg-brand-muted px-4 py-3 text-ui font-semibold text-brand">
+            {error}
+          </div>
+        )}
 
         {result?.status === "INFEASIBLE" && (
-          <StatusBox $type="error">
-            <StatusTitle>Ingen løsning funnet</StatusTitle>
-            <StatusDesc>
+          <div className="mb-3 rounded-lg border border-brand-border bg-surface-muted px-5 py-8 text-center">
+            <h4 className="m-0 mb-2 text-base font-bold text-text-primary">
+              Ingen løsning funnet
+            </h4>
+            <p className="m-0 mx-auto max-w-[32rem] text-ui leading-relaxed text-text-subtle">
               Nåværende begrensninger er for stramme. Start med lavere
               panelstørrelse eller åpne flere slots før dere prøver igjen.
-            </StatusDesc>
-          </StatusBox>
+            </p>
+          </div>
         )}
 
         {result?.status === "SUCCESS" && (
-          <ResultSection>
-            <SectionHeader>
-              <SectionTitleWrapper>
+          <div className="animate-[fade-in_0.25s_ease-out]">
+            <div className="mb-[0.875rem] flex flex-wrap items-center justify-between gap-3">
+              <div className="flex flex-wrap items-center gap-[0.65rem]">
                 <div>
-                  <SectionEyebrow>Resultat</SectionEyebrow>
-                  <SectionTitle>Generert intervjuplan</SectionTitle>
+                  <span className="mb-1 block text-label font-bold uppercase tracking-label text-text-subtle">
+                    Resultat
+                  </span>
+                  <h3 className="m-0 text-sm font-bold text-text-primary">
+                    Generert intervjuplan
+                  </h3>
                 </div>
-                <StatsBadge>{result.schedule.length} intervjuer</StatsBadge>
-              </SectionTitleWrapper>
+                <span className="inline-flex items-center gap-1.5 rounded-full border border-brand-border bg-brand-subtle px-2.5 py-1 text-xs font-semibold text-brand">
+                  {result.schedule.length} intervjuer
+                </span>
+              </div>
 
-              <ViewToggle>
-                <ToggleButton
+              <div className="flex gap-[3px] rounded-lg border border-border-soft bg-surface-muted p-[3px]">
+                <button
                   type="button"
-                  $active={viewType === "list"}
+                  className={cn(
+                    "flex h-8 w-8 cursor-pointer items-center justify-center rounded-md border transition-all duration-100 hover:text-text-primary",
+                    viewType === "list"
+                      ? "border-border-soft bg-surface-base text-text-primary"
+                      : "border-transparent bg-transparent text-text-faded",
+                  )}
                   onClick={() => setViewType("list")}
                   title="Liste-visning"
                 >
                   <Icon name="list" size="1.2rem" prefix="ios" />
-                </ToggleButton>
-                <ToggleButton
+                </button>
+                <button
                   type="button"
-                  $active={viewType === "calendar"}
+                  className={cn(
+                    "flex h-8 w-8 cursor-pointer items-center justify-center rounded-md border transition-all duration-100 hover:text-text-primary",
+                    viewType === "calendar"
+                      ? "border-border-soft bg-surface-base text-text-primary"
+                      : "border-transparent bg-transparent text-text-faded",
+                  )}
                   onClick={() => setViewType("calendar")}
                   title="Kalender-visning"
                 >
                   <Icon name="calendar" size="1.2rem" prefix="ios" />
-                </ToggleButton>
-                <ToggleLabelButton
+                </button>
+                <button
                   type="button"
-                  $active={viewType === "person"}
+                  className={cn(
+                    "flex h-8 cursor-pointer items-center justify-center rounded-md border px-3 text-xs font-bold transition-all duration-100 hover:text-text-primary",
+                    viewType === "person"
+                      ? "border-border-soft bg-surface-base text-text-primary"
+                      : "border-transparent bg-transparent text-text-faded",
+                  )}
                   onClick={() => setViewType("person")}
                   title="Personvisning"
                 >
                   Person
-                </ToggleLabelButton>
-              </ViewToggle>
-            </SectionHeader>
+                </button>
+              </div>
+            </div>
 
             {viewType === "person" ? (
-              <PersonPane>
-                <PersonControls>
-                  <FilterGroup>
-                    <Label htmlFor="interviewer-filter">Velg intervjuer</Label>
-                    <FilterSelect
+              <div className="flex flex-col gap-4">
+                <div className="flex justify-end">
+                  <div className="flex flex-col gap-1">
+                    <label
+                      className="text-label font-bold uppercase tracking-label text-text-subtle"
+                      htmlFor="interviewer-filter"
+                    >
+                      Velg intervjuer
+                    </label>
+                    <select
                       id="interviewer-filter"
+                      className="min-w-56 rounded-md border border-border-muted bg-surface-base px-2.5 py-2 text-sm font-semibold text-text-primary transition-[border-color,box-shadow] duration-150 focus:border-brand-input focus:outline-none focus:ring-3 focus:ring-brand-ringSoft"
                       value={selectedInterviewer}
                       onChange={(event) =>
                         setSelectedInterviewer(event.target.value)
@@ -585,749 +702,242 @@ export default function SolverView({
                           {interviewer.name}
                         </option>
                       ))}
-                    </FilterSelect>
-                  </FilterGroup>
-                </PersonControls>
+                    </select>
+                  </div>
+                </div>
 
-                <DistributionSection>
-                  <DistributionHeader>
-                    <SectionEyebrow>Fordeling</SectionEyebrow>
-                    <DistributionHint>
+                <div className="mb-4">
+                  <div className="mb-[0.6rem] flex flex-wrap items-baseline justify-between gap-3">
+                    <span className="mb-1 block text-label font-bold uppercase tracking-label text-text-subtle">
+                      Fordeling
+                    </span>
+                    <p className="m-0 text-ui text-text-subtle">
                       Klikk på en person for å åpne intervjuene deres.
-                    </DistributionHint>
-                  </DistributionHeader>
+                    </p>
+                  </div>
 
-                  <DistributionGrid>
-                    <DistributionCard type="button" $active={false}>
-                      <DistributionName>Alle intervjuere</DistributionName>
-                      <DistributionValue>{totalAssignments}</DistributionValue>
-                      <DistributionMeta>Totale tildelinger</DistributionMeta>
-                    </DistributionCard>
+                  <div className="grid grid-cols-[repeat(auto-fit,minmax(160px,1fr))] gap-[0.6rem]">
+                    <button
+                      type="button"
+                      className="rounded-lg border border-border-soft bg-surface-muted px-4 py-3 text-left transition-[border-color,background] duration-100 hover:border-brand-panelBorder"
+                    >
+                      <span className="text-ui font-bold text-text-primary">
+                        Alle intervjuere
+                      </span>
+                      <span className="block text-xl font-extrabold text-text-primary">
+                        {totalAssignments}
+                      </span>
+                      <span className="text-label font-bold uppercase tracking-label text-text-subtle">
+                        Totale tildelinger
+                      </span>
+                    </button>
 
                     {interviewerDistribution.map((interviewer) => (
-                      <DistributionCard
+                      <button
                         key={interviewer.name}
                         type="button"
-                        $active={selectedInterviewer === interviewer.name}
+                        className={cn(
+                          "rounded-lg border px-4 py-3 text-left transition-[border-color,background] duration-100 hover:border-brand-panelBorder",
+                          selectedInterviewer === interviewer.name
+                            ? "border-brand-panelBorder bg-brand-subtle"
+                            : "border-border-soft bg-surface-muted",
+                        )}
                         onClick={() => setSelectedInterviewer(interviewer.name)}
                       >
-                        <DistributionName>{interviewer.name}</DistributionName>
-                        <DistributionValue>{interviewer.count}</DistributionValue>
-                        <DistributionMeta>
+                        <span className="text-ui font-bold text-text-primary">
+                          {interviewer.name}
+                        </span>
+                        <span className="block text-xl font-extrabold text-text-primary">
+                          {interviewer.count}
+                        </span>
+                        <span className="text-label font-bold uppercase tracking-label text-text-subtle">
                           {interviewer.overtimeCount > 0
                             ? `${interviewer.overtimeCount} overtid`
                             : "Ingen overtid"}
-                        </DistributionMeta>
-                      </DistributionCard>
+                        </span>
+                      </button>
                     ))}
-                  </DistributionGrid>
-                </DistributionSection>
+                  </div>
+                </div>
 
                 {!selectedInterviewer ? (
-                  <EmptyState>Velg en intervjuer for å se intervjuene.</EmptyState>
+                  <div className="rounded-lg border border-border bg-surface-muted p-4 text-center text-sm font-semibold text-text-muted">
+                    Velg en intervjuer for å se intervjuene.
+                  </div>
                 ) : selectedInterviewerSchedule.length === 0 ? (
-                  <EmptyState>
+                  <div className="rounded-lg border border-border bg-surface-muted p-4 text-center text-sm font-semibold text-text-muted">
                     {selectedInterviewer} har ingen tildelte intervjuer.
-                  </EmptyState>
+                  </div>
                 ) : (
-                  <TableWrapper>
-                    <Table>
+                  <div className="overflow-hidden rounded-lg border border-border-soft">
+                    <table className="w-full border-collapse">
                       <thead>
                         <tr>
-                          <Th>Tidspunkt</Th>
-                          <Th>Kandidat</Th>
-                          <Th>Intervjupanel</Th>
+                          <th className="border-b border-border-soft bg-surface-subtle px-4 py-3 text-left text-label font-bold uppercase tracking-label text-text-subtle">
+                            Tidspunkt
+                          </th>
+                          <th className="border-b border-border-soft bg-surface-subtle px-4 py-3 text-left text-label font-bold uppercase tracking-label text-text-subtle">
+                            Kandidat
+                          </th>
+                          <th className="border-b border-border-soft bg-surface-subtle px-4 py-3 text-left text-label font-bold uppercase tracking-label text-text-subtle">
+                            Intervjupanel
+                          </th>
                         </tr>
                       </thead>
                       <tbody>
-                        {selectedInterviewerSchedule.map((item, idx) => {
-                          return (
-                            <Tr key={idx}>
-                              <TdTime>
-                                {formatSlotTime(item.time)}
-                              </TdTime>
-                              <TdCandidate>{item.candidate}</TdCandidate>
-                              <Td>
-                                <PanelList>
-                                  {item.panel.map((p, i) => (
-                                    <InterviewerBadge
-                                      key={i}
-                                      $isOvertime={p.is_overtime}
-                                      title={
-                                        p.is_overtime
-                                          ? "Utenfor registrert tilgjengelighet"
-                                          : undefined
-                                      }
-                                    >
-                                      {p.name}
-                                    </InterviewerBadge>
-                                  ))}
-                                </PanelList>
-                              </Td>
-                            </Tr>
-                          );
-                        })}
+                        {selectedInterviewerSchedule.map((item, idx) => (
+                          <tr
+                            key={idx}
+                            className="group [&:not(:last-child)>td]:border-b [&:not(:last-child)>td]:border-b-border-faint hover:[&>td]:bg-surface-soft"
+                          >
+                            <td className="w-[100px] whitespace-nowrap px-4 py-3 text-sm font-semibold text-text-muted">
+                              {formatSlotTime(item.time)}
+                            </td>
+                            <td className="px-4 py-3 text-sm font-semibold text-text-primary">
+                              {item.candidate}
+                            </td>
+                            <td className="px-4 py-3 text-sm">
+                              <div className="flex flex-wrap gap-[0.35rem]">
+                                {item.panel.map((p, i) => (
+                                  <span
+                                    key={i}
+                                    className={cn(
+                                      "inline-flex items-center rounded-full border px-2 py-1 text-xs font-semibold",
+                                      p.is_overtime
+                                        ? "border-brand-panelBorder bg-brand-badge text-brand"
+                                        : "border-border-soft bg-surface-subtle text-text-body",
+                                    )}
+                                    title={
+                                      p.is_overtime
+                                        ? "Utenfor registrert tilgjengelighet"
+                                        : undefined
+                                    }
+                                  >
+                                    {p.name}
+                                  </span>
+                                ))}
+                              </div>
+                            </td>
+                          </tr>
+                        ))}
                       </tbody>
-                    </Table>
-                  </TableWrapper>
+                    </table>
+                  </div>
                 )}
-              </PersonPane>
+              </div>
             ) : viewType === "list" ? (
-              <TableWrapper>
-                <Table>
+              <div className="overflow-hidden rounded-lg border border-border-soft">
+                <table className="w-full border-collapse">
                   <thead>
                     <tr>
-                      <Th>Tidspunkt</Th>
-                      <Th>Kandidat</Th>
-                      <Th>Intervjupanel</Th>
+                      <th className="border-b border-border-soft bg-surface-subtle px-4 py-3 text-left text-label font-bold uppercase tracking-label text-text-subtle">
+                        Tidspunkt
+                      </th>
+                      <th className="border-b border-border-soft bg-surface-subtle px-4 py-3 text-left text-label font-bold uppercase tracking-label text-text-subtle">
+                        Kandidat
+                      </th>
+                      <th className="border-b border-border-soft bg-surface-subtle px-4 py-3 text-left text-label font-bold uppercase tracking-label text-text-subtle">
+                        Intervjupanel
+                      </th>
                     </tr>
                   </thead>
                   <tbody>
-                    {sortedSchedule.map((item, idx) => {
-                      return (
-                        <Tr key={idx}>
-                          <TdTime>
-                            {formatSlotTime(item.time)}
-                          </TdTime>
-                          <TdCandidate>{item.candidate}</TdCandidate>
-                          <Td>
-                            <PanelList>
-                              {item.panel.map((p, i) => (
-                                <InterviewerBadge
-                                  key={i}
-                                  $isOvertime={p.is_overtime}
-                                  title={
-                                    p.is_overtime
-                                      ? "Utenfor registrert tilgjengelighet"
-                                      : undefined
-                                  }
-                                >
-                                  {p.name}
-                                </InterviewerBadge>
-                              ))}
-                            </PanelList>
-                          </Td>
-                        </Tr>
-                      );
-                    })}
+                    {sortedSchedule.map((item, idx) => (
+                      <tr
+                        key={idx}
+                        className="group [&:not(:last-child)>td]:border-b [&:not(:last-child)>td]:border-b-border-faint hover:[&>td]:bg-surface-soft"
+                      >
+                        <td className="w-[100px] whitespace-nowrap px-4 py-3 text-sm font-semibold text-text-muted">
+                          {formatSlotTime(item.time)}
+                        </td>
+                        <td className="px-4 py-3 text-sm font-semibold text-text-primary">
+                          {item.candidate}
+                        </td>
+                        <td className="px-4 py-3 text-sm">
+                          <div className="flex flex-wrap gap-[0.35rem]">
+                            {item.panel.map((p, i) => (
+                              <span
+                                key={i}
+                                className={cn(
+                                  "inline-flex items-center rounded-full border px-2 py-1 text-xs font-semibold",
+                                  p.is_overtime
+                                    ? "border-brand-panelBorder bg-brand-badge text-brand"
+                                    : "border-border-soft bg-surface-subtle text-text-body",
+                                )}
+                                title={
+                                  p.is_overtime
+                                    ? "Utenfor registrert tilgjengelighet"
+                                    : undefined
+                                }
+                              >
+                                {p.name}
+                              </span>
+                            ))}
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
                   </tbody>
-                </Table>
-              </TableWrapper>
+                </table>
+              </div>
             ) : (
               <SolverCalendarView schedule={sortedSchedule} dates={dates} />
             )}
 
-            <ResultFooter>
-              <ExportButton type="button" onClick={handleExportIcs}>
+            <div className="mt-[0.875rem] flex flex-wrap items-center gap-3 border-t border-border-soft pt-[0.875rem]">
+              <button
+                type="button"
+                className="inline-flex cursor-pointer items-center gap-1.5 rounded-lg border border-border-muted bg-surface-base px-4 py-2 text-ui font-semibold text-text-soft transition-[border-color,background] duration-100 hover:border-border-quiet hover:bg-surface-subtle"
+                onClick={handleExportIcs}
+              >
                 <Icon name="download" size="0.9rem" prefix="ios" />
                 Eksporter til kalender (.ics)
-              </ExportButton>
-              <ActionGroup>
+              </button>
+              <div className="ml-auto flex flex-wrap items-center gap-2">
                 {savedSchedule?.is_distributed ? (
                   <>
-                    <DistributedBadge>Distribuert</DistributedBadge>
-                    <SecondaryBtn type="button" onClick={handleUnlock} disabled={isSaving}>
+                    <span className="inline-flex items-center rounded-full border border-success-border bg-success-bg px-3 py-1 text-xs font-bold uppercase tracking-badge text-success">
+                      Distribuert
+                    </span>
+                    <button
+                      type="button"
+                      className="cursor-pointer rounded-lg border border-border-muted bg-surface-base px-4 py-2 text-ui font-semibold text-text-soft transition-[border-color,background] duration-100 hover:border-border-quiet hover:bg-surface-subtle disabled:cursor-not-allowed disabled:opacity-50"
+                      onClick={handleUnlock}
+                      disabled={isSaving}
+                    >
                       Lås opp for redigering
-                    </SecondaryBtn>
+                    </button>
                   </>
                 ) : (
                   <>
-                    <SecondaryBtn
+                    <button
                       type="button"
+                      className="cursor-pointer rounded-lg border border-border-muted bg-surface-base px-4 py-2 text-ui font-semibold text-text-soft transition-[border-color,background] duration-100 hover:border-border-quiet hover:bg-surface-subtle disabled:cursor-not-allowed disabled:opacity-50"
                       onClick={() => handleSave(false)}
                       disabled={isSaving}
                     >
                       {isSaving ? "Lagrer..." : "Lagre plan"}
-                    </SecondaryBtn>
-                    <DistributeButton
+                    </button>
+                    <button
                       type="button"
+                      className="cursor-pointer rounded-lg border border-brand bg-brand px-4 py-2 text-ui font-bold text-white transition-[background,border-color,box-shadow] duration-150 hover:border-brand-hover hover:bg-brand-hover focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-brand-ring active:bg-brand-pressed disabled:cursor-not-allowed disabled:opacity-40"
                       onClick={() => handleSave(true)}
                       disabled={isSaving}
                     >
                       Lås og distribuer
-                    </DistributeButton>
+                    </button>
                   </>
                 )}
-              </ActionGroup>
-              {saveError && <SaveErrorMsg>{saveError}</SaveErrorMsg>}
-            </ResultFooter>
-          </ResultSection>
+              </div>
+              {saveError && (
+                <span className="text-xs font-semibold text-brand">
+                  {saveError}
+                </span>
+              )}
+            </div>
+          </div>
         )}
-      </MainCard>
-    </Container>
+      </div>
+    </div>
   );
 }
-
-const Container = ({ children }: React.PropsWithChildren) => (
-  <div className="flex flex-col gap-3">{children}</div>
-);
-
-const MainCard = ({ children }: React.PropsWithChildren) => (
-  <div className={cn(scheduleSurfaceClass, "p-5")}>{children}</div>
-);
-
-const Header = ({ children }: React.PropsWithChildren) => (
-  <div className="mb-4 flex flex-wrap items-start justify-between gap-4">
-    {children}
-  </div>
-);
-
-const TitleSection = ({ children }: React.PropsWithChildren) => (
-  <div className="min-w-[200px] flex-1">{children}</div>
-);
-
-const Title = ({ children }: React.PropsWithChildren) => (
-  <h2 className="m-0 mb-1 text-sm font-bold text-[#111111]">{children}</h2>
-);
-
-const Controls = ({ children }: React.PropsWithChildren) => (
-  <div className="flex flex-wrap items-end gap-3">{children}</div>
-);
-
-const InputGroup = ({
-  children,
-  ...props
-}: React.ComponentProps<"div">) => (
-  <div className="flex flex-col gap-1" {...props}>
-    {children}
-  </div>
-);
-
-const Label = ({
-  children,
-  className,
-  ...props
-}: React.ComponentProps<"label">) => (
-  <label className={cn(scheduleLabelClass, className)} {...props}>
-    {children}
-  </label>
-);
-
-const Input = ({ className, ...props }: React.ComponentProps<"input">) => (
-  <input
-    className={cn(scheduleInputClass, "w-16 text-center font-bold", className)}
-    {...props}
-  />
-);
-
-const RunButton = ({ children, className, ...props }: React.ComponentProps<"button">) => (
-  <button
-    className={cn(
-      primaryActionClass,
-      "cursor-pointer whitespace-nowrap px-[1.1rem] py-[0.55rem] text-[0.813rem] font-bold",
-      className,
-    )}
-    {...props}
-  >
-    {children}
-  </button>
-);
-
-const StatRow = ({ children }: React.PropsWithChildren) => (
-  <div className="mb-4 flex flex-wrap gap-4 border-b border-[#e4e4e4] pb-4">
-    {children}
-  </div>
-);
-
-const StatCard = ({ children }: React.PropsWithChildren) => (
-  <div className="inline-flex items-baseline gap-[0.4rem]">{children}</div>
-);
-
-const StatLabel = ({ children }: React.PropsWithChildren) => (
-  <span className={scheduleLabelClass}>{children}</span>
-);
-
-const StatValue = ({ children }: React.PropsWithChildren) => (
-  <span className="text-sm font-bold text-[#111111]">{children}</span>
-);
-
-const OptionsPanel = ({ children }: React.PropsWithChildren) => (
-  <div className={cn(scheduleInsetClass, "mb-4 flex flex-col gap-[0.9rem] p-4")}>
-    {children}
-  </div>
-);
-
-const OptionsIntro = ({ children }: React.PropsWithChildren) => (
-  <div className="flex flex-col gap-[0.2rem]">{children}</div>
-);
-
-const OptionsLead = ({ children }: React.PropsWithChildren) => (
-  <p className="m-0 max-w-[42rem] text-[0.813rem] leading-[1.55] text-[#6b6b6b]">
-    {children}
-  </p>
-);
-
-const ToggleRow = ({ children }: React.PropsWithChildren) => (
-  <div className="grid grid-cols-[repeat(auto-fit,minmax(220px,1fr))] gap-[0.65rem]">
-    {children}
-  </div>
-);
-
-interface ToggleActiveProps {
-  $active: boolean;
-}
-
-const ToggleCard = ({
-  children,
-  $active,
-  className,
-  ...props
-}: React.ComponentProps<"div"> & ToggleActiveProps) => (
-  <div
-    className={cn(
-      "flex cursor-pointer flex-col gap-[0.65rem] rounded-[10px] border px-[0.95rem] py-[0.85rem] transition-[border-color,box-shadow,transform] duration-150 hover:-translate-y-px hover:border-[rgba(178,18,7,0.18)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[rgba(178,18,7,0.25)]",
-      $active
-        ? "border-[rgba(178,18,7,0.22)] bg-[linear-gradient(180deg,rgba(178,18,7,0.05)_0%,rgba(255,255,255,0.92)_100%)] shadow-[0_8px_18px_rgba(178,18,7,0.06)]"
-        : "border-[#e4e4e4] bg-[rgba(255,255,255,0.9)]",
-      className,
-    )}
-    {...props}
-  >
-    {children}
-  </div>
-);
-
-const PrioritySection = ({ children }: React.PropsWithChildren) => (
-  <div className="flex flex-col gap-[0.65rem] pt-[0.15rem]">{children}</div>
-);
-
-const OptionHeader = ({ children }: React.PropsWithChildren) => (
-  <div className="flex items-center justify-between gap-[0.3rem]">{children}</div>
-);
-
-const OptionEyebrow = ({ children }: React.PropsWithChildren) => (
-  <span className={scheduleLabelClass}>{children}</span>
-);
-
-const OptionTitle = ({ children }: React.PropsWithChildren) => (
-  <h4 className="m-0 text-sm font-bold text-[#111111]">{children}</h4>
-);
-
-const OptionHint = ({ children }: React.PropsWithChildren) => (
-  <p className="m-0 text-[0.79rem] leading-[1.45] text-[#6b6b6b]">{children}</p>
-);
-
-const ToggleState = ({ children, $active }: React.PropsWithChildren<ToggleActiveProps>) => (
-  <span
-    className={cn(
-      "flex min-w-12 items-center justify-center rounded-full px-[0.6rem] py-1 text-xs font-bold uppercase tracking-[0.04em]",
-      $active
-        ? "bg-[rgba(178,18,7,0.12)] text-[#b21207]"
-        : "bg-[#f0f0f0] text-[#6b6b6b]",
-    )}
-  >
-    {children}
-  </span>
-);
-
-const PriorityBadge = ({ children }: React.PropsWithChildren) => (
-  <span className="flex min-w-12 items-center justify-center rounded-full bg-[rgba(17,17,17,0.05)] px-[0.6rem] py-1 text-xs font-bold uppercase tracking-[0.04em] text-[#4b4b4b]">
-    {children}
-  </span>
-);
-
-const OptionDetails = ({
-  children,
-  className,
-  ...props
-}: React.ComponentProps<"details">) => (
-  <details
-    className={cn(
-      "grid gap-[0.55rem] pt-[0.1rem] [&[open]_.summary-icon]:rotate-180",
-      className,
-    )}
-    {...props}
-  >
-    {children}
-  </details>
-);
-
-const OptionSummary = ({
-  children,
-  className,
-  ...props
-}: React.ComponentProps<"summary">) => (
-  <summary
-    className={cn(
-      "inline-flex w-fit cursor-pointer list-none items-center gap-[0.35rem] text-[#6b6b6b] [&::-webkit-details-marker]:hidden",
-      className,
-    )}
-    {...props}
-  >
-    {children}
-  </summary>
-);
-
-const SummaryLabel = ({ children }: React.PropsWithChildren) => (
-  <span className={cn(scheduleLabelClass, "tracking-[0.03em]")}>{children}</span>
-);
-
-const SummaryIcon = () => (
-  <ChevronDown className="summary-icon h-[0.9rem] w-[0.9rem] transition-transform duration-150" />
-);
-
-const OptionDetailsBody = ({ children }: React.PropsWithChildren) => (
-  <p className="m-0 text-[0.813rem] leading-[1.6] text-[#4b4b4b]">{children}</p>
-);
-
-const PriorityPills = ({ children }: React.PropsWithChildren) => (
-  <div className="flex flex-wrap gap-[0.45rem]">{children}</div>
-);
-
-const PriorityOption = ({
-  children,
-  $active,
-  className,
-  ...props
-}: React.ComponentProps<"button"> & ToggleActiveProps) => (
-  <button
-    className={cn(
-      "inline-flex cursor-pointer items-center justify-center rounded-full border px-3 py-[0.45rem] text-[0.78rem] font-bold transition-[border-color,background] duration-150 hover:border-[rgba(178,18,7,0.18)]",
-      $active
-        ? "border-[rgba(178,18,7,0.22)] bg-[rgba(178,18,7,0.08)] text-[#b21207]"
-        : "border-[#e4e4e4] bg-[rgba(255,255,255,0.72)] text-[#4b4b4b]",
-      className,
-    )}
-    {...props}
-  >
-    {children}
-  </button>
-);
-
-const PriorityCurrent = ({ children }: React.PropsWithChildren) => (
-  <p className="m-0 text-[0.8rem] leading-[1.5] text-[#4b4b4b]">{children}</p>
-);
-
-const PriorityCurrentLabel = ({ children }: React.PropsWithChildren) => (
-  <span className="mr-[0.35rem] font-bold text-[#111111]">{children}</span>
-);
-
-const ManualGrid = ({ children }: React.PropsWithChildren) => (
-  <div className="grid grid-cols-[repeat(auto-fit,minmax(140px,1fr))] gap-3">
-    {children}
-  </div>
-);
-
-const NumberInput = ({ className, ...props }: React.ComponentProps<"input">) => (
-  <Input className={cn("w-full text-left font-semibold", className)} {...props} />
-);
-
-const ErrorMessage = ({ children }: React.PropsWithChildren) => (
-  <div className="mb-3 rounded-lg border border-[rgba(178,18,7,0.14)] bg-[rgba(178,18,7,0.06)] px-4 py-3 text-[0.813rem] font-semibold text-[#b21207]">
-    {children}
-  </div>
-);
-
-const StatusBox = ({
-  children,
-  $type,
-}: React.PropsWithChildren<{ $type: "error" | "success" }>) => (
-  <div
-    className={cn(
-      scheduleInsetClass,
-      "mb-3 px-5 py-8 text-center",
-      $type === "error" && "border-[rgba(178,18,7,0.14)]",
-    )}
-  >
-    {children}
-  </div>
-);
-
-const StatusTitle = ({ children }: React.PropsWithChildren) => (
-  <h4 className="m-0 mb-2 text-base font-bold text-[#111111]">{children}</h4>
-);
-
-const StatusDesc = ({ children }: React.PropsWithChildren) => (
-  <p className="m-0 mx-auto max-w-[32rem] text-[0.813rem] leading-[1.7] text-[#a0a0a0]">
-    {children}
-  </p>
-);
-
-const ResultSection = ({ children }: React.PropsWithChildren) => (
-  <div className="animate-[fade-in_0.25s_ease-out]">
-    {children}
-  </div>
-);
-
-const SectionHeader = ({ children }: React.PropsWithChildren) => (
-  <div className="mb-[0.875rem] flex flex-wrap items-center justify-between gap-3">
-    {children}
-  </div>
-);
-
-const SectionTitleWrapper = ({ children }: React.PropsWithChildren) => (
-  <div className="flex flex-wrap items-center gap-[0.65rem]">{children}</div>
-);
-
-const SectionEyebrow = ({ children }: React.PropsWithChildren) => (
-  <span className={cn(scheduleLabelClass, "mb-[0.2rem] block")}>{children}</span>
-);
-
-const FilterGroup = InputGroup;
-
-const FilterSelect = ({
-  children,
-  className,
-  ...props
-}: React.ComponentProps<"select">) => (
-  <select
-    className={cn(scheduleInputClass, "min-w-56 font-semibold", className)}
-    {...props}
-  >
-    {children}
-  </select>
-);
-
-const ViewToggle = ({ children }: React.PropsWithChildren) => (
-  <div className="flex gap-[3px] rounded-lg border border-[#e4e4e4] bg-[#f5f5f5] p-[3px]">
-    {children}
-  </div>
-);
-
-const ToggleButton = ({
-  children,
-  $active,
-  className,
-  ...props
-}: React.ComponentProps<"button"> & ToggleActiveProps) => (
-  <button
-    className={cn(
-      "flex h-8 w-8 cursor-pointer items-center justify-center rounded-md border transition-all duration-100 hover:text-[#111111]",
-      $active
-        ? "border-[#e4e4e4] bg-white text-[#111111]"
-        : "border-transparent bg-transparent text-[#a0a0a0]",
-      className,
-    )}
-    {...props}
-  >
-    {children}
-  </button>
-);
-
-const ToggleLabelButton = ({
-  children,
-  ...props
-}: React.ComponentProps<"button"> & ToggleActiveProps) => (
-  <ToggleButton className="w-auto px-3 text-xs font-bold" {...props}>
-    {children}
-  </ToggleButton>
-);
-
-const SectionTitle = ({ children }: React.PropsWithChildren) => (
-  <h3 className="m-0 text-sm font-bold text-[#111111]">{children}</h3>
-);
-
-const StatsBadge = ({ children }: React.PropsWithChildren) => (
-  <span
-    className={cn(
-      scheduleBadgeClass,
-      "border-[rgba(178,18,7,0.14)] bg-[rgba(178,18,7,0.05)] text-[#b21207]",
-    )}
-  >
-    {children}
-  </span>
-);
-
-const DistributionSection = ({ children }: React.PropsWithChildren) => (
-  <div className="mb-4">{children}</div>
-);
-
-const PersonPane = ({ children }: React.PropsWithChildren) => (
-  <div className="flex flex-col gap-4">{children}</div>
-);
-
-const PersonControls = ({ children }: React.PropsWithChildren) => (
-  <div className="flex justify-end">{children}</div>
-);
-
-const DistributionHeader = ({ children }: React.PropsWithChildren) => (
-  <div className="mb-[0.6rem] flex flex-wrap items-baseline justify-between gap-3">
-    {children}
-  </div>
-);
-
-const DistributionHint = ({ children }: React.PropsWithChildren) => (
-  <p className="m-0 text-[0.813rem] text-[#a0a0a0]">{children}</p>
-);
-
-const DistributionGrid = ({ children }: React.PropsWithChildren) => (
-  <div className="grid grid-cols-[repeat(auto-fit,minmax(160px,1fr))] gap-[0.6rem]">
-    {children}
-  </div>
-);
-
-const DistributionCard = ({
-  children,
-  $active,
-  className,
-  ...props
-}: React.ComponentProps<"button"> & ToggleActiveProps) => (
-  <button
-    className={cn(
-      scheduleInsetClass,
-      "flex cursor-pointer flex-col items-start gap-[0.3rem] px-[0.9rem] py-[0.8rem] text-left transition-[border-color,background] duration-100 hover:border-[rgba(178,18,7,0.2)]",
-      $active
-        ? "border-[rgba(178,18,7,0.2)] bg-[rgba(178,18,7,0.05)]"
-        : "border-[#e4e4e4] bg-[#f5f5f5]",
-      className,
-    )}
-    {...props}
-  >
-    {children}
-  </button>
-);
-
-const DistributionName = ({ children }: React.PropsWithChildren) => (
-  <span className="text-[0.813rem] font-bold text-[#111111]">{children}</span>
-);
-
-const DistributionValue = ({ children }: React.PropsWithChildren) => (
-  <span className="text-xl font-extrabold text-[#111111]">{children}</span>
-);
-
-const DistributionMeta = ({ children }: React.PropsWithChildren) => (
-  <span className={scheduleLabelClass}>{children}</span>
-);
-
-const TableWrapper = ({ children }: React.PropsWithChildren) => (
-  <div className="overflow-hidden rounded-lg border border-[#e4e4e4]">
-    {children}
-  </div>
-);
-
-const Table = ({ children }: React.PropsWithChildren) => (
-  <table className="w-full border-collapse">{children}</table>
-);
-
-const Th = ({ children }: React.PropsWithChildren) => (
-  <th
-    className={cn(
-      scheduleLabelClass,
-      "border-b border-[#e4e4e4] bg-[#f8f8f8] px-4 py-3 text-left",
-    )}
-  >
-    {children}
-  </th>
-);
-
-const Tr = ({ children }: React.PropsWithChildren) => (
-  <tr className="group [&:not(:last-child)>td]:border-b [&:not(:last-child)>td]:border-b-[#f0f0f0] hover:[&>td]:bg-[#fafafa]">
-    {children}
-  </tr>
-);
-
-const Td = ({ children, className }: React.PropsWithChildren<{ className?: string }>) => (
-  <td className={cn("px-4 py-3 text-sm", className)}>{children}</td>
-);
-
-const TdTime = ({ children }: React.PropsWithChildren) => (
-  <Td className="w-[100px] whitespace-nowrap font-semibold text-[#6b6b6b]">
-    {children}
-  </Td>
-);
-
-const TdCandidate = ({ children }: React.PropsWithChildren) => (
-  <Td className="font-semibold text-[#111111]">{children}</Td>
-);
-
-const PanelList = ({ children }: React.PropsWithChildren) => (
-  <div className="flex flex-wrap gap-[0.35rem]">{children}</div>
-);
-
-const InterviewerBadge = ({
-  children,
-  $isOvertime,
-  ...props
-}: React.PropsWithChildren<{ $isOvertime: boolean } & React.ComponentProps<"span">>) => (
-  <span
-    className={cn(
-      "inline-flex items-center rounded-full border px-[0.55rem] py-[0.2rem] text-xs font-semibold",
-      $isOvertime
-        ? "border-[rgba(178,18,7,0.2)] bg-[rgba(178,18,7,0.08)] text-[#b21207]"
-        : "border-[#e4e4e4] bg-[#f0f0f0] text-[#4b4b4b]",
-    )}
-    {...props}
-  >
-    {children}
-  </span>
-);
-
-const EmptyState = ({ children }: React.PropsWithChildren) => (
-  <div
-    className={cn(
-      scheduleInsetClass,
-      "p-4 text-center text-sm font-semibold text-[#6b6b6b]",
-    )}
-  >
-    {children}
-  </div>
-);
-
-const ResultFooter = ({ children }: React.PropsWithChildren) => (
-  <div className="mt-[0.875rem] flex flex-wrap items-center gap-3 border-t border-[#e4e4e4] pt-[0.875rem]">
-    {children}
-  </div>
-);
-
-const ActionGroup = ({ children }: React.PropsWithChildren) => (
-  <div className="ml-auto flex flex-wrap items-center gap-2">{children}</div>
-);
-
-const ExportButton = ({
-  children,
-  className,
-  ...props
-}: React.ComponentProps<"button">) => (
-  <button
-    className={cn(
-      "inline-flex cursor-pointer items-center gap-[0.4rem] rounded-lg border border-[#e0e0e0] bg-white px-[0.9rem] py-[0.45rem] text-[0.813rem] font-semibold text-[#4b4b4b] transition-[border-color,background] duration-100 hover:border-[#c8c8c8] hover:bg-[#f8f8f8]",
-      className,
-    )}
-    {...props}
-  >
-    {children}
-  </button>
-);
-
-const SecondaryBtn = ({
-  children,
-  className,
-  ...props
-}: React.ComponentProps<"button">) => (
-  <button
-    className={cn(
-      "cursor-pointer rounded-lg border border-[#e0e0e0] bg-white px-[0.9rem] py-[0.45rem] text-[0.813rem] font-semibold text-[#4b4b4b] transition-[border-color,background] duration-100 hover:border-[#c8c8c8] hover:bg-[#f8f8f8] disabled:cursor-not-allowed disabled:opacity-50",
-      className,
-    )}
-    {...props}
-  >
-    {children}
-  </button>
-);
-
-const DistributeButton = ({
-  children,
-  className,
-  ...props
-}: React.ComponentProps<"button">) => (
-  <button
-    className={cn(
-      primaryActionClass,
-      "cursor-pointer px-4 py-[0.45rem] text-[0.813rem] font-bold disabled:cursor-not-allowed disabled:opacity-50",
-      className,
-    )}
-    {...props}
-  >
-    {children}
-  </button>
-);
-
-const DistributedBadge = ({ children }: React.PropsWithChildren) => (
-  <span className="inline-flex items-center rounded-full border border-[rgba(22,160,88,0.2)] bg-[rgba(22,160,88,0.08)] px-[0.7rem] py-[0.25rem] text-xs font-bold uppercase tracking-[0.04em] text-[#0f8a4a]">
-    {children}
-  </span>
-);
-
-const SaveErrorMsg = ({ children }: React.PropsWithChildren) => (
-  <span className="text-xs font-semibold text-[#b21207]">{children}</span>
-);

@@ -1,13 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { Check } from "lucide-react";
-import {
-  primaryActionClass,
-  scheduleGridShellClass,
-  scheduleGridTimeLabelClass,
-  scheduleLabelClass,
-  scheduleSurfaceClass,
-  secondaryActionClass,
-} from "../shared";
 import { dateRangeDates, formatDateHeader, makeSlotKey } from "../scheduleUtils";
 import cn from "src/utils/cn";
 
@@ -37,15 +29,13 @@ interface TimeSegmentInputProps {
   id?: string;
 }
 
-const fieldLabelClass = cn(
-  scheduleLabelClass,
-  "cursor-default select-none whitespace-nowrap border-r border-[#e4e4e4] bg-[#f5f5f5] px-[0.6rem] py-0 flex items-center",
-);
+const fieldLabelClass =
+  "flex items-center whitespace-nowrap border-r border-border-soft bg-surface-muted px-[0.6rem] py-0 text-label font-bold uppercase tracking-label text-text-subtle";
 
 const fieldBodyClass = "flex items-center gap-1 px-2";
 
 const plainInputClass =
-  "border-none bg-transparent p-0 text-[0.813rem] font-semibold text-[#111111] focus:text-[var(--lego-red-color)] focus:outline-none";
+  "border-none bg-transparent p-0 text-ui font-semibold text-text-primary focus:text-brand focus:outline-none";
 
 const TimeSegmentInput: React.FC<TimeSegmentInputProps> = ({
   value,
@@ -75,7 +65,7 @@ const TimeSegmentInput: React.FC<TimeSegmentInputProps> = ({
         maxLength={2}
         value={hStr}
         placeholder="HH"
-        className="w-7 border-none bg-transparent p-0 text-center text-sm font-semibold text-[#111111] caret-[var(--lego-red-color)] placeholder:text-[#d0d0d0] focus:text-[var(--lego-red-color)] focus:outline-none"
+        className="w-7 border-none bg-transparent p-0 text-center text-sm font-semibold text-text-primary caret-brand placeholder:text-text-disabled focus:text-brand focus:outline-none"
         onChange={(e) => {
           const s = e.target.value.replace(/\D/g, "").slice(0, 2);
           setHStr(s);
@@ -90,7 +80,7 @@ const TimeSegmentInput: React.FC<TimeSegmentInputProps> = ({
           }
         }}
       />
-      <span className="select-none text-sm font-medium leading-none text-[#c8c8c8]">
+      <span className="select-none text-sm font-medium leading-none text-text-disabled">
         :
       </span>
       <input
@@ -100,7 +90,7 @@ const TimeSegmentInput: React.FC<TimeSegmentInputProps> = ({
         maxLength={2}
         value={mStr}
         placeholder="MM"
-        className="w-7 border-none bg-transparent p-0 text-center text-sm font-semibold text-[#111111] caret-[var(--lego-red-color)] placeholder:text-[#d0d0d0] focus:text-[var(--lego-red-color)] focus:outline-none"
+        className="w-7 border-none bg-transparent p-0 text-center text-sm font-semibold text-text-primary caret-brand placeholder:text-text-disabled focus:text-brand focus:outline-none"
         onChange={(e) => {
           const s = e.target.value.replace(/\D/g, "").slice(0, 2);
           setMStr(s);
@@ -249,10 +239,10 @@ const AdminScheduleConfig: React.FC<AdminScheduleConfigProps> = ({
 
   return (
     <div className="flex min-w-0 select-none flex-col gap-2.5">
-      <div className={cn(scheduleSurfaceClass, "p-[0.875rem_1rem]")}>
+      <div className="rounded-panel border border-border bg-surface-base p-[0.875rem_1rem]">
         <div className="flex flex-wrap items-center gap-2.5">
           <div className="flex flex-wrap items-center gap-1.5">
-            <div className="inline-flex h-8 items-stretch overflow-hidden rounded-lg border border-[#e4e4e4] bg-white">
+            <div className="inline-flex h-8 items-stretch overflow-hidden rounded-lg border border-border-soft bg-surface-base">
               <label className={fieldLabelClass}>Intervjuperiode</label>
               <div className={fieldBodyClass}>
                 <input
@@ -261,7 +251,7 @@ const AdminScheduleConfig: React.FC<AdminScheduleConfigProps> = ({
                   className={cn(plainInputClass, "cursor-pointer select-none")}
                   onChange={(e) => setLocalStartDate(e.target.value)}
                 />
-                <span className="select-none px-[0.1rem] text-xs text-[#c8c8c8]">
+                <span className="select-none px-[0.1rem] text-xs text-text-disabled">
                   →
                 </span>
                 <input
@@ -274,7 +264,7 @@ const AdminScheduleConfig: React.FC<AdminScheduleConfigProps> = ({
               </div>
             </div>
 
-            <div className="inline-flex h-8 items-stretch overflow-hidden rounded-lg border border-[#e4e4e4] bg-white">
+            <div className="inline-flex h-8 items-stretch overflow-hidden rounded-lg border border-border-soft bg-surface-base">
               <label className={fieldLabelClass}>Tidsrom</label>
               <div className={fieldBodyClass}>
                 <TimeSegmentInput
@@ -282,14 +272,14 @@ const AdminScheduleConfig: React.FC<AdminScheduleConfigProps> = ({
                   value={pendingStart}
                   onChange={setPendingStart}
                 />
-                <span className="select-none px-[0.1rem] text-xs text-[#c8c8c8]">
+                <span className="select-none px-[0.1rem] text-xs text-text-disabled">
                   →
                 </span>
                 <TimeSegmentInput value={pendingEnd} onChange={setPendingEnd} />
               </div>
             </div>
 
-            <div className="inline-flex h-8 items-stretch overflow-hidden rounded-lg border border-[#e4e4e4] bg-white">
+            <div className="inline-flex h-8 items-stretch overflow-hidden rounded-lg border border-border-soft bg-surface-base">
               <label className={fieldLabelClass} htmlFor="session-duration">
                 Varighet
               </label>
@@ -301,7 +291,7 @@ const AdminScheduleConfig: React.FC<AdminScheduleConfigProps> = ({
                   max="120"
                   step="5"
                   value={durationInput}
-                  className="w-10 border-none bg-transparent p-0 text-center text-sm font-semibold text-[#111111] [-moz-appearance:textfield] focus:text-[var(--lego-red-color)] focus:outline-none [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                  className="w-10 border-none bg-transparent p-0 text-center text-sm font-semibold text-text-primary [-moz-appearance:textfield] focus:text-brand focus:outline-none [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
                   onChange={(e) => {
                     setDurationInput(e.target.value);
                     const val = parseInt(e.target.value, 10);
@@ -310,7 +300,7 @@ const AdminScheduleConfig: React.FC<AdminScheduleConfigProps> = ({
                   }}
                   onFocus={(e) => e.target.select()}
                 />
-                <span className="select-none text-[0.813rem] font-medium text-[#a0a0a0]">
+                <span className="select-none text-ui font-medium text-text-subtle">
                   min
                 </span>
               </div>
@@ -319,47 +309,38 @@ const AdminScheduleConfig: React.FC<AdminScheduleConfigProps> = ({
 
           <div className="ml-auto flex flex-wrap items-center gap-1.5">
             {!dateRangeValid && (
-              <span className="text-xs font-semibold text-[#b21207]">
+              <span className="text-xs font-semibold text-brand">
                 Ugyldig datoperiode
               </span>
             )}
             {isInvalidRange && (
-              <span className="text-xs font-semibold text-[#b21207]">
+              <span className="text-xs font-semibold text-brand">
                 Ugyldig tidsrom
               </span>
             )}
             {hasPendingChanges && !isSaving && (
-              <span className="text-xs font-semibold italic text-[#a0a0a0]">
+              <span className="text-xs font-semibold italic text-text-faded">
                 Ulagrede endringer
               </span>
             )}
-            <button
-              type="button"
-              className={cn(
-                secondaryActionClass,
-                "cursor-pointer px-[0.7rem] py-[0.35rem] text-[0.813rem] font-semibold",
-              )}
-              onClick={selectAll}
-            >
-              Velg alle
-            </button>
-            <button
-              type="button"
-              className={cn(
-                secondaryActionClass,
-                "cursor-pointer px-[0.7rem] py-[0.35rem] text-[0.813rem] font-semibold",
-              )}
-              onClick={clearAll}
-            >
-              Tøm alle
+              <button
+                type="button"
+                className="cursor-pointer rounded-md border border-border bg-surface-base px-3 py-1.5 text-ui font-semibold text-brand transition-[border-color,background,color] duration-150 hover:border-brand-strongBorder hover:bg-brand-soft hover:text-brand-dark"
+                onClick={selectAll}
+              >
+                Velg alle
+              </button>
+              <button
+                type="button"
+                className="cursor-pointer rounded-md border border-border bg-surface-base px-3 py-1.5 text-ui font-semibold text-brand transition-[border-color,background,color] duration-150 hover:border-brand-strongBorder hover:bg-brand-soft hover:text-brand-dark"
+                onClick={clearAll}
+              >
+                Tøm alle
             </button>
             {onSave && (
               <button
                 type="button"
-                className={cn(
-                  primaryActionClass,
-                  "cursor-pointer whitespace-nowrap px-4 py-[0.45rem] text-[0.813rem] font-bold",
-                )}
+                className="cursor-pointer whitespace-nowrap rounded-lg border border-brand bg-brand px-4 py-2 text-ui font-bold text-white transition-[background,border-color,box-shadow] duration-150 hover:border-brand-hover hover:bg-brand-hover focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-brand-ring active:bg-brand-pressed disabled:cursor-not-allowed disabled:opacity-40"
                 onClick={handleSave}
                 disabled={
                   isSaving ||
@@ -387,7 +368,7 @@ const AdminScheduleConfig: React.FC<AdminScheduleConfigProps> = ({
         </div>
       </div>
 
-      <div className={cn(scheduleGridShellClass, "min-w-0")}>
+      <div className="min-w-0 overflow-x-auto rounded-lg border border-border bg-surface-muted p-3">
         <div
           className="grid gap-[5px]"
           style={{
@@ -408,15 +389,15 @@ const AdminScheduleConfig: React.FC<AdminScheduleConfigProps> = ({
             return (
               <div
                 key={date}
-                className="flex flex-col items-center gap-[0.2rem] rounded-md border border-[#e4e4e4] bg-white px-1 py-2"
+                className="flex flex-col items-center gap-1 rounded-md border border-border-soft bg-surface-base px-1 py-2"
               >
-                <div className={cn(scheduleLabelClass, "text-center text-[#6b6b6b]")}>
+                <div className="text-center text-label font-bold uppercase tracking-label text-text-muted">
                   {weekday}
                 </div>
-                <div className="text-center text-[0.813rem] font-bold text-[#111111]">
+                <div className="text-center text-ui font-bold text-text-primary">
                   {dayMonth}
                 </div>
-                <label className="flex cursor-pointer items-center gap-1 text-[0.688rem] font-semibold text-[#a0a0a0]">
+                <label className="flex cursor-pointer items-center gap-1 text-label font-semibold text-text-subtle">
                   <input
                     type="checkbox"
                     disabled={timeSlots.length === 0}
@@ -440,8 +421,8 @@ const AdminScheduleConfig: React.FC<AdminScheduleConfigProps> = ({
           {timeSlots.length === 0 ? (
             <div
               className={cn(
-                scheduleLabelClass,
-                "col-[1/-1] px-4 py-10 text-center text-[#c0c0c0]",
+                "text-label font-bold uppercase tracking-label text-text-subtle",
+                "col-[1/-1] px-4 py-10 text-center text-text-disabled",
               )}
             >
               {dates.length === 0
@@ -451,7 +432,9 @@ const AdminScheduleConfig: React.FC<AdminScheduleConfigProps> = ({
           ) : (
             timeSlots.map((minute) => (
               <React.Fragment key={minute}>
-                <div className={scheduleGridTimeLabelClass}>{formatTime(minute)}</div>
+                <div className="flex items-center justify-end pr-2 text-label font-bold uppercase tracking-label text-border-quiet">
+                  {formatTime(minute)}
+                </div>
                 {dates.map((date) => {
                   const key = makeSlotKey(date, minute);
                   const isEnabled = draftSlots.has(key);
@@ -463,8 +446,8 @@ const AdminScheduleConfig: React.FC<AdminScheduleConfigProps> = ({
                       className={cn(
                         "flex h-9 cursor-pointer items-center justify-center rounded-[5px] border transition-[background-color,border-color] duration-100",
                         isEnabled
-                          ? "border-[var(--lego-red-color)] bg-[var(--lego-red-color)] text-white hover:bg-[#9a1006]"
-                          : "border-[#e4e4e4] bg-white hover:border-[rgba(178,18,7,0.28)] hover:bg-[rgba(178,18,7,0.03)]",
+                          ? "border-brand bg-brand text-text-white hover:bg-brand-hover"
+                          : "border-border-soft bg-surface-base hover:border-brand-panelBorder hover:bg-brand-soft",
                       )}
                     >
                       {isEnabled && <Check size={12} strokeWidth={2.5} />}
@@ -486,14 +469,16 @@ interface ToolbarStatProps {
 }
 
 const ToolbarStat = ({ value, label }: ToolbarStatProps) => (
-  <span className={cn(scheduleLabelClass, "text-[#a0a0a0]")}>
-    <strong className="text-[0.813rem] font-bold normal-case tracking-normal text-[#111111] [font-variant-numeric:tabular-nums]">
+  <span className="text-label font-bold uppercase tracking-label text-text-faded">
+    <strong className="text-ui font-bold normal-case tracking-normal text-text-primary [font-variant-numeric:tabular-nums]">
       {value}
     </strong>{" "}
     {label}
   </span>
 );
 
-const ToolbarDot = () => <span className="h-[3px] w-[3px] shrink-0 rounded-full bg-[#d0d0d0]" />;
+const ToolbarDot = () => (
+  <span className="h-[3px] w-[3px] shrink-0 rounded-full bg-border-muted" />
+);
 
 export default AdminScheduleConfig;

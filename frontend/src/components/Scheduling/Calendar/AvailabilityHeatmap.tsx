@@ -1,14 +1,6 @@
 import React, { useState, useMemo } from "react";
 import type { Interviewer } from "../types";
 import { formatDateHeader, makeSlotKey, parseSlotKey } from "../scheduleUtils";
-import {
-  scheduleGridHeaderCellClass,
-  scheduleGridShellClass,
-  scheduleGridTimeLabelClass,
-  scheduleInputClass,
-  scheduleLabelClass,
-  scheduleSurfaceClass,
-} from "../shared";
 import cn from "src/utils/cn";
 
 interface AvailabilityHeatmapProps {
@@ -119,6 +111,19 @@ const AvailabilityHeatmap: React.FC<AvailabilityHeatmapProps> = ({
   const isSlotEnabled = (date: string, minute: number): boolean =>
     availableSlots.has(makeSlotKey(date, minute));
 
+  const getHeatPercent = (intensity: number) => Math.round(12 + intensity * 78);
+
+  const getHeatBackground = (enabled: boolean, intensity: number) => {
+    if (!enabled) return "var(--color-surface-subtle)";
+    if (intensity === 0) return "var(--color-surface-base)";
+    return `color-mix(in srgb, var(--color-brand) ${getHeatPercent(intensity)}%, var(--color-surface-base))`;
+  };
+
+  const getHeatBorder = (enabled: boolean, intensity: number) => {
+    if (!enabled || intensity === 0) return "var(--color-border-soft)";
+    return "var(--color-brand-border)";
+  };
+
   const setMode = (mode: FilterMode) => {
     setFilterMode(mode);
     if (mode !== "people") setSelectedIndividual(null);
@@ -130,7 +135,7 @@ const AvailabilityHeatmap: React.FC<AvailabilityHeatmapProps> = ({
     <div className="flex min-w-0 flex-col gap-3">
       <div
         className={cn(
-          scheduleSurfaceClass,
+          "rounded-panel border border-border bg-surface-base",
           "flex flex-wrap items-center justify-between gap-3 px-4 py-3.5",
         )}
       >
@@ -156,13 +161,19 @@ const AvailabilityHeatmap: React.FC<AvailabilityHeatmapProps> = ({
         </div>
 
         <div className="flex items-center gap-2">
-          <label className={scheduleLabelClass} htmlFor="person-filter">
+          <label
+            className="text-label font-bold uppercase tracking-label text-text-subtle"
+            htmlFor="person-filter"
+          >
             Person
           </label>
           <select
             id="person-filter"
             value={selectedIndividual || ""}
-            className={cn(scheduleInputClass, "min-w-[170px] cursor-pointer")}
+            className={cn(
+              "rounded-md border border-border-muted bg-surface-base px-2.5 py-2 text-sm font-medium text-text-primary transition-[border-color,box-shadow] duration-150 focus:border-brand-input focus:outline-none focus:ring-3 focus:ring-brand-ringSoft",
+              "min-w-[170px] cursor-pointer",
+            )}
             onChange={(e) => {
               const value = e.target.value || null;
               setSelectedIndividual(value);
@@ -179,10 +190,10 @@ const AvailabilityHeatmap: React.FC<AvailabilityHeatmapProps> = ({
         </div>
       </div>
 
-      <div className={cn(scheduleSurfaceClass, "min-w-0 p-5")}>
+      <div className="min-w-0 rounded-panel border border-border bg-surface-base p-5">
         <div className="mb-4 flex flex-wrap items-center justify-between gap-4">
           <div>
-            <span className={cn(scheduleLabelClass, "mb-[0.35rem] block")}>
+            <span className="mb-[0.35rem] block text-label font-bold uppercase tracking-label text-text-subtle">
               Tilgjengelighet
             </span>
             <div className="flex items-center gap-[3px]">
@@ -190,22 +201,17 @@ const AvailabilityHeatmap: React.FC<AvailabilityHeatmapProps> = ({
                 <div
                   key={intensity}
                   className="h-3 w-[1.4rem] rounded-[3px]"
-                  style={{
-                    background:
-                      intensity === 0
-                        ? "#f0f0f0"
-                        : `rgba(178, 18, 7, ${0.12 + intensity * 0.78})`,
-                  }}
+                  style={{ background: getHeatBackground(true, intensity) }}
                 />
               ))}
-              <span className="ml-1.5 text-xs font-semibold text-[#a0a0a0]">
+              <span className="ml-1.5 text-xs font-semibold text-text-faded">
                 0 til {maxCount}
               </span>
             </div>
           </div>
         </div>
 
-        <div className={cn(scheduleGridShellClass, "min-w-0")}>
+        <div className="min-w-0 overflow-x-auto rounded-lg border border-border bg-surface-muted p-3">
           <div
             className="grid gap-[5px]"
             style={{
@@ -220,12 +226,12 @@ const AvailabilityHeatmap: React.FC<AvailabilityHeatmapProps> = ({
                 <div
                   key={date}
                   className={cn(
-                    scheduleGridHeaderCellClass,
+                    "flex min-h-9 items-center justify-center rounded-md border border-border bg-surface-base text-label font-bold uppercase tracking-label text-text-muted",
                     "flex-col gap-[0.1rem]",
                   )}
                 >
                   <span>{weekday}</span>
-                  <span className="block text-[0.688rem] font-semibold text-[#a0a0a0]">
+                  <span className="block text-label font-semibold text-text-subtle">
                     {dayMonth}
                   </span>
                 </div>
@@ -234,22 +240,13 @@ const AvailabilityHeatmap: React.FC<AvailabilityHeatmapProps> = ({
 
             {timeSlots.map((minute) => (
               <React.Fragment key={minute}>
-                <div className={scheduleGridTimeLabelClass}>{formatTime(minute)}</div>
+                <div className="flex items-center justify-end pr-2 text-label font-bold uppercase tracking-label text-border-quiet">
+                  {formatTime(minute)}
+                </div>
                 {dates.map((date) => {
                   const enabled = isSlotEnabled(date, minute);
                   const intensity = getHeatIntensity(date, minute);
                   const count = getAvailableCount(date, minute);
-                  const background =
-                    !enabled
-                      ? "#f0f0f0"
-                      : intensity === 0
-                        ? "#ffffff"
-                        : `rgba(178, 18, 7, ${0.12 + intensity * 0.78})`;
-                  const borderColor = !enabled
-                    ? "#e4e4e4"
-                    : intensity === 0
-                      ? "#e4e4e4"
-                      : "rgba(178, 18, 7, 0.15)";
 
                   return (
                     <div
@@ -258,14 +255,20 @@ const AvailabilityHeatmap: React.FC<AvailabilityHeatmapProps> = ({
                         "flex h-[2.4rem] items-center justify-center rounded-md border transition-[background-color] duration-100",
                         !enabled && "opacity-40",
                       )}
-                      style={{ background, borderColor }}
+                      style={{
+                        background: getHeatBackground(enabled, intensity),
+                        borderColor: getHeatBorder(enabled, intensity),
+                      }}
                       title={enabled ? `${count} tilgjengelig` : "Ikke tilgjengelig"}
                     >
                       {enabled && count > 0 && (
                         <span
                           className="text-xs font-bold"
                           style={{
-                            color: intensity < 0.45 ? "#b21207" : "#ffffff",
+                            color:
+                              intensity < 0.45
+                                ? "var(--color-brand)"
+                                : "var(--color-white)",
                           }}
                         >
                           {count}
@@ -280,7 +283,7 @@ const AvailabilityHeatmap: React.FC<AvailabilityHeatmapProps> = ({
         </div>
       </div>
 
-      <div className="flex flex-wrap gap-4 border-t border-[#e4e4e4] pt-3.5">
+      <div className="flex flex-wrap gap-4 border-t border-border-soft pt-3.5">
         <SummaryCard label="Aktive intervjuere" value={String(filteredInterviewers.length)} />
         <SummaryCard label="Dekning" value={`${slotAvailability.size} slotter`} />
         <SummaryCard label="Beste åpne luke" value={bestSlotLabel} />
@@ -300,15 +303,15 @@ const FilterButton = ({ active, onClick, label, count }: FilterButtonProps) => (
   <button
     type="button"
     className={cn(
-      "inline-flex items-center gap-[0.35rem] rounded-full border px-3 py-[0.35rem] text-[0.813rem] font-semibold transition-all duration-100",
+      "inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-ui font-semibold transition-all duration-100",
       active
-        ? "border-[rgba(178,18,7,0.18)] bg-[rgba(178,18,7,0.07)] text-[var(--lego-red-color)]"
-        : "border-transparent bg-transparent text-[#6b6b6b] hover:border-[#e4e4e4] hover:bg-[#f0f0f0] hover:text-[#111111]",
+        ? "border-brand-strongBorder bg-brand-tint text-brand"
+        : "border-transparent bg-transparent text-text-muted hover:border-border-soft hover:bg-surface-subtle hover:text-text-primary",
     )}
     onClick={onClick}
   >
     {label}
-    <span className="inline-flex h-[1.4rem] min-w-[1.4rem] items-center justify-center rounded-full bg-[rgba(0,0,0,0.06)] px-[0.3rem] text-[0.688rem] font-bold">
+    <span className="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-black/5 px-1 text-label font-bold">
       {count}
     </span>
   </button>
@@ -321,8 +324,10 @@ interface SummaryCardProps {
 
 const SummaryCard = ({ label, value }: SummaryCardProps) => (
   <div className="inline-flex items-baseline gap-[0.4rem]">
-    <span className={scheduleLabelClass}>{label}</span>
-    <span className="text-sm font-bold text-[#111111]">{value}</span>
+    <span className="text-label font-bold uppercase tracking-label text-text-subtle">
+      {label}
+    </span>
+    <span className="text-sm font-bold text-text-primary">{value}</span>
   </div>
 );
 

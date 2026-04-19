@@ -1,13 +1,4 @@
 import * as React from "react";
-import {
-  primaryActionClass,
-  scheduleBadgeClass,
-  scheduleGridHeaderCellClass,
-  scheduleGridShellClass,
-  scheduleGridTimeLabelClass,
-  scheduleLabelClass,
-  scheduleSurfaceClass,
-} from "../shared";
 import { formatDateHeader, makeSlotKey } from "../scheduleUtils";
 import cn from "src/utils/cn";
 
@@ -117,12 +108,12 @@ const TimeScheduler: React.FC<TimeSchedulerProps> = ({
   return (
     <div
       className={cn(
-        scheduleSurfaceClass,
+        "rounded-panel border border-border bg-surface-base",
         "flex min-w-0 flex-col gap-4 p-5 select-none",
       )}
     >
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <h3 className="m-0 text-sm font-bold text-[#111111]">
+        <h3 className="m-0 text-sm font-bold text-text-primary">
           Marker tilgjengelige slots
         </h3>
         <div className="flex flex-wrap gap-1.5">
@@ -132,7 +123,7 @@ const TimeScheduler: React.FC<TimeSchedulerProps> = ({
         </div>
       </div>
 
-      <div className={cn(scheduleGridShellClass, "min-w-0")}>
+      <div className="min-w-0 overflow-x-auto rounded-lg border border-border bg-surface-muted p-3">
         <div
           className="grid gap-[5px]"
           style={{
@@ -148,12 +139,12 @@ const TimeScheduler: React.FC<TimeSchedulerProps> = ({
               <div
                 key={date}
                 className={cn(
-                  scheduleGridHeaderCellClass,
+                  "flex min-h-9 items-center justify-center rounded-md border border-border bg-surface-base text-label font-bold uppercase tracking-label text-text-muted",
                   "flex-col gap-[0.1rem]",
                 )}
               >
                 <span>{weekday}</span>
-                <span className="block text-[0.688rem] font-semibold text-[#a0a0a0]">
+                <span className="block text-label font-semibold text-text-subtle">
                   {dayMonth}
                 </span>
               </div>
@@ -162,7 +153,9 @@ const TimeScheduler: React.FC<TimeSchedulerProps> = ({
 
           {timeSlots.map((minute) => (
             <React.Fragment key={minute}>
-              <div className={scheduleGridTimeLabelClass}>{formatTime(minute)}</div>
+              <div className="flex items-center justify-end pr-2 text-label font-bold uppercase tracking-label text-border-quiet">
+                {formatTime(minute)}
+              </div>
 
               {dates.map((date) => {
                 const enabled = isSlotEnabled(date, minute);
@@ -175,12 +168,11 @@ const TimeScheduler: React.FC<TimeSchedulerProps> = ({
                     onMouseEnter={() => handleMouseEnter(date, minute)}
                     className={cn(
                       "h-10 w-full rounded-md border transition-[background-color,border-color] duration-100",
-                      !enabled &&
-                        "cursor-not-allowed border-[#e4e4e4] bg-[#f0f0f0]",
-                      enabled && isSelected && "cursor-pointer border-[var(--lego-red-color)] bg-[var(--lego-red-color)] hover:bg-[#9a1006]",
+                      !enabled && "cursor-not-allowed border-border bg-surface-neutral",
+                      enabled && isSelected && "cursor-pointer border-brand bg-brand hover:bg-brand-hover",
                       enabled &&
                         !isSelected &&
-                        "cursor-pointer border-[#e4e4e4] bg-white hover:border-[rgba(178,18,7,0.3)] hover:bg-[rgba(178,18,7,0.03)]",
+                        "cursor-pointer border-border bg-surface-base hover:border-brand-strongBorder hover:bg-brand-soft",
                     )}
                   />
                 );
@@ -190,11 +182,11 @@ const TimeScheduler: React.FC<TimeSchedulerProps> = ({
         </div>
       </div>
 
-      <div className="flex flex-wrap items-center justify-between gap-3 border-t border-[#e4e4e4] pt-3">
+      <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border pt-3">
         <FooterInfo label="Valgte slots" value={String(selectedSlots.size)} />
         <FooterInfo label="Intervjulengde" value={`${sessionDuration} min`} />
         <button
-          className={cn(primaryActionClass, "cursor-pointer px-[1.1rem] py-[0.55rem] text-[0.813rem] font-bold")}
+          className="cursor-pointer rounded-lg border border-brand bg-brand px-4 py-2 text-ui font-bold text-white transition-[background,border-color,box-shadow] duration-150 hover:border-brand-hover hover:bg-brand-hover focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-brand-ring active:bg-brand-pressed disabled:cursor-not-allowed disabled:opacity-40"
           onClick={handleSave}
           disabled={isSaving || !onSave}
           type="button"
@@ -212,13 +204,13 @@ interface LegendItemProps {
 }
 
 const LegendItem = ({ label, variant }: LegendItemProps) => (
-  <span className={scheduleBadgeClass}>
+  <span className="inline-flex items-center gap-1.5 rounded-full border border-border bg-surface-muted px-2.5 py-1 text-xs font-semibold text-text-muted">
     <span
       className={cn(
         "h-[7px] w-[7px] shrink-0 rounded-full",
-        variant === "selected" && "bg-[var(--lego-red-color)]",
-        variant === "open" && "border border-[#c8c8c8] bg-white",
-        variant === "disabled" && "bg-[#e4e4e4]",
+        variant === "selected" && "bg-brand",
+        variant === "open" && "border border-border-quiet bg-surface-base",
+        variant === "disabled" && "bg-border",
       )}
     />
     {label}
@@ -232,8 +224,10 @@ interface FooterInfoProps {
 
 const FooterInfo = ({ label, value }: FooterInfoProps) => (
   <div className="flex items-baseline gap-2">
-    <span className={scheduleLabelClass}>{label}</span>
-    <strong className="text-sm font-bold text-[#111111]">{value}</strong>
+    <span className="text-label font-bold uppercase tracking-label text-text-subtle">
+      {label}
+    </span>
+    <strong className="text-sm font-bold text-text-primary">{value}</strong>
   </div>
 );
 

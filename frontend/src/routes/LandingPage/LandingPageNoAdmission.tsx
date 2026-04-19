@@ -6,12 +6,12 @@ import LinkButton from "src/components/LinkButton";
 const LandingPageNoAdmission = () => {
   return (
     <LandingPageSkeleton>
-      <h2 className="mb-[0.6rem] text-[1.8rem] font-medium text-[var(--color-gray-7)] max-[500px]:mt-8 max-[500px]:text-center max-[500px]:text-[1.5rem] max-[500px]:leading-8">
+      <h2 className="mb-2 text-display-md font-medium text-text-gray7 handheld:mt-8 handheld:text-center handheld:text-display-sm handheld:leading-8">
         Ingen åpne opptak for øyeblikket
       </h2>
-      <div className="mb-8 flex max-w-[420px] max-[500px]:mx-4">
+      <div className="mb-8 flex max-w-md handheld:mx-4">
         <DecorativeLine $vertical />
-        <p className="mb-0 px-0 py-[7px] text-[1.1rem] leading-[1.8rem] max-[500px]:text-base max-[500px]:leading-6 [&_a]:whitespace-nowrap">
+        <p className="mb-0 py-2 text-body-lg leading-7 handheld:text-base handheld:leading-6 [&_a]:whitespace-nowrap">
           Opptak til{" "}
           <a href="https://abakus.no/pages/grupper/104-revyen">revyen</a> og{" "}
           <a href="https://abakus.no/pages/komiteer/4">komiteene</a> skjer

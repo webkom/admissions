@@ -18,12 +18,12 @@ const baseActionButtonClass =
 
 const primaryActionButtonClass = cn(
   baseActionButtonClass,
-  "!min-h-[3.75rem] !border-2 !border-[var(--lego-red-color)] !bg-[var(--lego-red-color)] !text-[1.0625rem] !text-white hover:!translate-y-[-2px] hover:!border-[#8e0e06] hover:!bg-[#8e0e06] hover:!shadow-[0_10px_15px_-3px_rgba(178,18,7,0.2)] active:!translate-y-0 disabled:!cursor-not-allowed disabled:!opacity-50",
+  "!min-h-[3.75rem] !border-2 !border-brand !bg-brand !text-action !text-white hover:!-translate-y-0.5 hover:!border-brand-dark hover:!bg-brand-dark hover:!shadow-action active:!translate-y-0 disabled:!cursor-not-allowed disabled:!opacity-50",
 );
 
 const secondaryActionButtonClass = cn(
   baseActionButtonClass,
-  "!border-2 !border-[var(--lego-red-color)] !bg-white !text-sm !text-[var(--lego-red-color)] hover:!translate-y-[-1px] hover:!bg-[#fff5f5]",
+  "!border-2 !border-brand !bg-surface-base !text-sm !text-brand hover:!-translate-y-px hover:!bg-rose-50",
 );
 
 const Admission: React.FC<AdmissionProps> = ({ admission }) => {
@@ -75,14 +75,14 @@ const Admission: React.FC<AdmissionProps> = ({ admission }) => {
   })();
 
   return (
-    <div className="mt-12 w-full max-w-[1100px] rounded-[var(--border-radius-lg)] border border-[#f3f4f6] bg-white p-14 shadow-[0_10px_15px_-3px_rgba(0,0,0,0.05),0_4px_6px_-2px_rgba(0,0,0,0.02)] transition-[box-shadow] duration-200 hover:shadow-[0_20px_25px_-5px_rgba(0,0,0,0.08)] max-[1000px]:p-10 max-[500px]:mt-8 max-[500px]:p-6">
-      <div className="mb-14 grid grid-cols-[1.4fr_1fr] gap-20 max-[1000px]:grid-cols-1 max-[1000px]:gap-14">
+    <div className="mt-12 w-full max-w-6xl rounded-[var(--border-radius-lg)] border border-border-soft bg-surface-base p-14 shadow-panel transition-shadow duration-200 hover:shadow-panel-hover portrait:p-10 handheld:mt-8 handheld:p-6">
+      <div className="mb-14 grid grid-cols-[1.4fr_1fr] gap-20 portrait:grid-cols-1 portrait:gap-14">
         <div>
-          <h2 className="mb-4 text-[2.5rem] font-extrabold tracking-[-0.05em] text-[#111827] max-[500px]:text-[1.875rem]">
+          <h2 className="mb-4 text-display-lg font-extrabold tracking-tight text-text-strong handheld:text-display-md">
             {admission.title}
           </h2>
           {admission.description && (
-            <p className="mb-12 text-[1.125rem] leading-[1.6] text-[#4b5563] max-[500px]:mb-8 max-[500px]:text-base">
+            <p className="mb-12 text-body-lg leading-relaxed text-text-body handheld:mb-8 handheld:text-base">
               {admission.description
                 .split("\n")
                 .map((descriptionLine, index) => (
@@ -98,7 +98,7 @@ const Admission: React.FC<AdmissionProps> = ({ admission }) => {
 
         <div className="flex flex-col justify-start">
           {nextCountDown && (
-            <div className="flex flex-wrap gap-4 rounded-[var(--border-radius-lg)] border border-[#f3f4f6] bg-[#f9fafb] p-8">
+            <div className="flex flex-wrap gap-4 rounded-[var(--border-radius-lg)] border border-border-soft bg-surface-soft p-8">
               <CountDown
                 title={nextCountDown.title}
                 dateString={nextCountDown.dateString}
@@ -164,7 +164,7 @@ const Admission: React.FC<AdmissionProps> = ({ admission }) => {
         </div>
       </div>
 
-      <p className="m-0 border-t border-[#f3f4f6] pt-8 text-sm text-[#9ca3af] [&_a]:font-semibold [&_a]:text-[#6b7280] [&_a]:underline [&_a]:underline-offset-2 [&_a:hover]:text-[#111827]">
+      <p className="m-0 border-t border-border-soft pt-8 text-sm text-text-faded [&_a]:font-semibold [&_a]:text-text-secondary [&_a]:underline [&_a]:underline-offset-2 [&_a:hover]:text-text-strong">
         Du kan til enhver tid trekke søknaden din hvis du skulle ombestemme
         deg. Hvis det ikke fungerer å slette søknaden, send en mail til{" "}
         {isRevy || isRevyBoard ? (
@@ -180,13 +180,13 @@ const Admission: React.FC<AdmissionProps> = ({ admission }) => {
       </p>
 
       {isRevy && admission.is_open && !isLoggedIn() && (
-        <p className="m-0 pt-4 text-sm text-[#9ca3af] [&_a]:font-semibold [&_a]:text-[#6b7280] [&_a]:underline [&_a]:underline-offset-2 [&_a:hover]:text-[#111827]">
+        <p className="m-0 pt-4 text-sm text-text-faded [&_a]:font-semibold [&_a]:text-text-secondary [&_a]:underline [&_a]:underline-offset-2 [&_a:hover]:text-text-strong">
           Er du ikke medlem av Abakus? Søk via{" "}
           <a href="https://forms.gle/SKPRvGNwuKhcZQP26">dette skjemaet</a>.
         </p>
       )}
       {isRevyBoard && admission.is_open && !isLoggedIn() && (
-        <p className="m-0 pt-4 text-sm text-[#9ca3af] [&_a]:font-semibold [&_a]:text-[#6b7280] [&_a]:underline [&_a]:underline-offset-2 [&_a:hover]:text-[#111827]">
+        <p className="m-0 pt-4 text-sm text-text-faded [&_a]:font-semibold [&_a]:text-text-secondary [&_a]:underline [&_a]:underline-offset-2 [&_a:hover]:text-text-strong">
           Er du ikke medlem av Abakus? Søk via{" "}
           <a href="https://docs.google.com/forms/d/e/1FAIpQLSdLzkn2RC_CIW3EHPKSn0f60xTP17LdnrvVb1ubVeRVHTsz1A/viewform?usp=sharing">
             dette skjemaet

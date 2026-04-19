@@ -29,15 +29,15 @@ const AvailabilityBar = ({
         className={cn(
           "h-1.5 w-full rounded-full transition-all duration-200 hover:scale-y-150",
           isActive
-            ? "bg-[var(--lego-red-color)] hover:bg-[#8e0e06]"
-            : "bg-[#e5e7eb] hover:bg-[#d1d5db]",
+            ? "bg-brand hover:bg-brand-dark"
+            : "bg-border hover:bg-border-quiet",
         )}
       />
 
       <div
         className={cn(
-          "mt-1.5 text-center text-[0.688rem] font-bold uppercase tracking-[0.09em] transition-colors duration-200",
-          isActive ? "text-[#111827]" : "text-[#9ca3af]",
+          "mt-1.5 text-center text-label font-bold uppercase tracking-label transition-colors duration-200",
+          isActive ? "text-text-strong" : "text-text-faded",
         )}
       >
         {dayLabel.charAt(0)}

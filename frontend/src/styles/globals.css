@@ -1,13 +1,13 @@
 @import url("https://unpkg.com/ionicons@4.5.10-0/dist/css/ionicons.min.css");
 @import url("./fonts.css");
-@import url("~/@webkom/lego-bricks/dist/style.css");
+@import url("@webkom/lego-bricks/dist/style.css");
 
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 :root {
-  --lego-red-color: #b21207;
+  --lego-red-color: var(--color-red-7);
   --font-family: "Inter", -apple-system, blinkmacsystemfont, "Segoe UI", roboto,
     helvetica, arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji",
     "Segoe UI Symbol";
@@ -23,6 +23,67 @@
   --spacing-sm: 0.5rem;
   --spacing-md: 1rem;
   --spacing-lg: 1.5rem;
+  --color-brand: var(--lego-red-color);
+  --color-brand-hover: var(--color-red-8);
+  --color-brand-dark: var(--color-red-8);
+  --color-brand-pressed: var(--color-red-9);
+  --color-brand-input: rgb(178 28 23 / 40%);
+  --color-brand-ring: rgb(178 28 23 / 15%);
+  --color-brand-ring-soft: rgb(178 28 23 / 6%);
+  --color-brand-soft: rgb(178 28 23 / 3%);
+  --color-brand-subtle: rgb(178 28 23 / 5%);
+  --color-brand-muted: rgb(178 28 23 / 6%);
+  --color-brand-tint: rgb(178 28 23 / 7%);
+  --color-brand-badge: rgb(178 28 23 / 8%);
+  --color-brand-fill: rgb(178 28 23 / 12%);
+  --color-brand-border: rgb(178 28 23 / 14%);
+  --color-brand-strong-border: rgb(178 28 23 / 18%);
+  --color-brand-panel-border: rgb(178 28 23 / 20%);
+  --color-brand-active-border: rgb(178 28 23 / 22%);
+  --color-brand-focus: rgb(178 28 23 / 25%);
+  --color-success: var(--color-green-7);
+  --color-success-bg: var(--color-green-2);
+  --color-success-border: var(--color-green-7);
+  --color-surface-base: var(--lego-card-color);
+  --color-surface-page: var(--lego-background-color);
+  --color-surface-soft: var(--lego-background-color);
+  --color-surface-subtle: var(--color-gray-1);
+  --color-surface-muted: var(--color-gray-1);
+  --color-surface-hover: var(--lego-background-color);
+  --color-surface-neutral: var(--color-gray-2);
+  --color-surface-disabled: var(--color-gray-2);
+  --color-border-default: var(--border-gray);
+  --color-border-soft: var(--color-gray-2);
+  --color-border-muted: var(--color-gray-3);
+  --color-border-quiet: var(--color-gray-4);
+  --color-border-faint: var(--color-gray-2);
+  --color-text-primary: var(--lego-font-color);
+  --color-text-strong: var(--lego-font-color);
+  --color-text-accent: var(--color-gray-8);
+  --color-text-body: var(--color-gray-7);
+  --color-text-soft: var(--secondary-font-color);
+  --color-text-secondary: var(--color-gray-6);
+  --color-text-muted: var(--color-gray-7);
+  --color-text-subtle: var(--color-gray-5);
+  --color-text-faded: var(--color-gray-4);
+  --color-text-disabled: var(--color-gray-4);
+  --gradient-timeline-divider: linear-gradient(
+    to bottom,
+    var(--color-border-soft) 50%,
+    transparent 50%
+  );
+  --gradient-brand-panel: linear-gradient(
+    180deg,
+    var(--color-brand-subtle) 0%,
+    var(--color-surface-base) 100%
+  );
+  --shadow-panel: 0 10px 15px -3px rgb(0 0 0 / 5%),
+    0 4px 6px -2px rgb(0 0 0 / 2%);
+  --shadow-panel-hover: 0 20px 25px -5px rgb(0 0 0 / 8%);
+  --shadow-action: 0 10px 15px -3px rgb(178 28 23 / 20%);
+  --shadow-toggle: 0 8px 18px rgb(178 28 23 / 6%);
+  --color-brand-pulse-start: rgb(178 28 23 / 45%);
+  --color-brand-pulse-end: rgb(178 28 23 / 0%);
 }
 
 html {
@@ -44,7 +105,7 @@ body {
   line-height: 1.6;
   background: var(--lego-background-color, #f9fafb);
   color: var(--lego-font-color, #111827);
-  font-family: var(--font-family);
+  font-family: var(--font-family), sans-serif;
   position: relative;
 }
 
@@ -54,15 +115,15 @@ body {
 
 @keyframes timeline-pulse {
   0% {
-    box-shadow: 0 0 0 0 rgb(196 30 58 / 45%);
+    box-shadow: 0 0 0 0 var(--color-brand-pulse-start);
   }
 
   70% {
-    box-shadow: 0 0 0 10px rgb(196 30 58 / 0%);
+    box-shadow: 0 0 0 10px var(--color-brand-pulse-end);
   }
 
   100% {
-    box-shadow: 0 0 0 0 rgb(196 30 58 / 0%);
+    box-shadow: 0 0 0 0 var(--color-brand-pulse-end);
   }
 }
 
@@ -137,19 +198,19 @@ table {
 
 th {
   padding: 0.75rem;
-  border-bottom: 1px solid #e5e7eb;
+  border-bottom: 1px solid var(--color-border-soft);
   font-weight: 600;
   text-transform: uppercase;
   font-size: 0.75rem;
   letter-spacing: 0.05em;
-  color: #6b7280;
+  color: var(--color-text-secondary);
 }
 
 th,
 td {
   font-size: 0.875rem;
   padding: 1rem 0.75rem;
-  border-bottom: 1px solid #f3f4f6;
+  border-bottom: 1px solid var(--color-border-faint);
   text-align: left;
 }
 

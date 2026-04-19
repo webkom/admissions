@@ -10,12 +10,10 @@ import {
 } from "lucide-react";
 import { useAdmission, useSavedSchedule } from "src/query/hooks";
 import {
-  primaryActionClass,
-  scheduleInputClass,
-  scheduleLabelClass,
-  scheduleSurfaceClass,
-} from "src/components/Scheduling/shared";
-import { Candidate, Interviewer, SavedSchedule } from "../../types";
+  Candidate,
+  Interviewer,
+  SavedSchedule,
+} from "../../types";
 import TimeScheduler from "src/components/Scheduling/Calendar/Calendar";
 import PersonListView from "src/components/Scheduling/PersonList/PersonListView";
 import SolverView from "src/components/Scheduling/Solver/SolverView";
@@ -209,19 +207,19 @@ const CommonScheduleView: React.FC<CommonScheduleViewProps> = ({
   }, [isAdmin]);
 
   return (
-    <div className="min-h-[calc(100vh-80px)] bg-[#fafafa]">
-      <div className="mx-auto w-full max-w-[1080px] px-5 pb-12 pt-8 max-[500px]:px-4 max-[500px]:pb-8 max-[500px]:pt-5">
+    <div className="min-h-[calc(100vh-80px)] bg-surface-page">
+      <div className="mx-auto w-full max-w-6xl px-5 pb-12 pt-8 handheld:px-4 handheld:pb-8 handheld:pt-5">
         <header className="mb-6">
-          <div className="mt-[0.3rem] flex flex-wrap items-center gap-3">
-            <h1 className="m-0 text-[clamp(1.5rem,3.5vw,2rem)] font-bold leading-[1.1] tracking-[-0.03em] text-[#111111]">
+          <div className="mt-1 flex flex-wrap items-center gap-3">
+            <h1 className="m-0 text-[clamp(1.5rem,3.5vw,2rem)] font-bold leading-tight tracking-tight text-text-primary">
               {admissionTitle}
             </h1>
             <span
               className={cn(
-                "inline-flex items-center rounded-full border px-[0.6rem] py-[0.2rem] text-xs font-bold tracking-[0.04em]",
+                "inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-bold tracking-badge",
                 isAdmin
-                  ? "border-[rgba(178,18,7,0.18)] bg-[rgba(178,18,7,0.07)] text-[#b21207]"
-                  : "border-[#e4e4e4] bg-[#f0f0f0] text-[#6b6b6b]",
+                  ? "border-brand-strongBorder bg-brand-tint text-brand"
+                  : "border-border bg-surface-neutral text-text-muted",
               )}
             >
               {isAdmin ? "Admin" : "Intervjuer"}
@@ -232,21 +230,24 @@ const CommonScheduleView: React.FC<CommonScheduleViewProps> = ({
         {isAdmin && (
           <section
             className={cn(
-              scheduleSurfaceClass,
+              "rounded-panel border border-border bg-surface-base",
               "mb-3 flex flex-wrap items-start justify-between gap-4 px-5 py-4",
             )}
           >
-            <div className="flex min-w-[220px] flex-col gap-[0.2rem]">
-              <h2 className="m-0 text-sm font-bold text-[#111111]">Testdata</h2>
-              <p className="m-0 text-[0.813rem] leading-[1.5] text-[#6b6b6b]">
+            <div className="flex min-w-[220px] flex-col gap-1">
+              <h2 className="m-0 text-sm font-bold text-text-primary">Testdata</h2>
+              <p className="m-0 text-ui leading-6 text-text-muted">
                 Skru opp antall kandidater og intervjuere for å stressteste
                 planleggingen.
               </p>
             </div>
 
             <div className="flex flex-wrap gap-3">
-              <div className="flex flex-col gap-[0.3rem]">
-                <label className={scheduleLabelClass} htmlFor="candidate-count">
+              <div className="flex flex-col gap-1">
+                <label
+                  className="text-label font-bold uppercase tracking-label text-text-subtle"
+                  htmlFor="candidate-count"
+                >
                   Kandidater
                 </label>
                 <input
@@ -255,14 +256,14 @@ const CommonScheduleView: React.FC<CommonScheduleViewProps> = ({
                   min="1"
                   max="200"
                   value={candidateInput}
-                  className={cn(scheduleInputClass, "w-28 font-bold")}
+                  className="w-28 rounded-md border border-border-muted bg-surface-base px-2.5 py-2 text-sm font-bold text-text-primary transition-[border-color,box-shadow] duration-150 focus:border-brand-input focus:outline-none focus:ring-3 focus:ring-brand-ringSoft"
                   onChange={(event) => setCandidateInput(event.target.value)}
                 />
               </div>
 
-              <div className="flex flex-col gap-[0.3rem]">
+              <div className="flex flex-col gap-1">
                 <label
-                  className={scheduleLabelClass}
+                  className="text-label font-bold uppercase tracking-label text-text-subtle"
                   htmlFor="interviewer-count"
                 >
                   Intervjuere
@@ -273,7 +274,7 @@ const CommonScheduleView: React.FC<CommonScheduleViewProps> = ({
                   min="1"
                   max="200"
                   value={interviewerInput}
-                  className={cn(scheduleInputClass, "w-28 font-bold")}
+                  className="w-28 rounded-md border border-border-muted bg-surface-base px-2.5 py-2 text-sm font-bold text-text-primary transition-[border-color,box-shadow] duration-150 focus:border-brand-input focus:outline-none focus:ring-3 focus:ring-brand-ringSoft"
                   onChange={(event) => setInterviewerInput(event.target.value)}
                 />
               </div>
@@ -283,10 +284,10 @@ const CommonScheduleView: React.FC<CommonScheduleViewProps> = ({
                 onClick={handleSaveScale}
                 disabled={!hasValidScaleInput}
                 className={cn(
-                  primaryActionClass,
-                  "self-end cursor-pointer px-4 py-[0.55rem] text-[0.813rem] font-bold",
+                  "rounded-lg border border-brand bg-brand text-white transition-[background,border-color,box-shadow] duration-150 hover:border-brand-hover hover:bg-brand-hover focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-brand-ring active:bg-brand-pressed disabled:cursor-not-allowed disabled:opacity-40",
+                  "self-end cursor-pointer px-4 py-2 text-ui font-bold",
                   !hasPendingScaleChanges &&
-                    "border-[#b21207] bg-[#b21207] hover:border-[#b21207] hover:bg-[#b21207]",
+                    "border-brand bg-brand hover:border-brand hover:bg-brand",
                 )}
               >
                 {hasPendingScaleChanges ? "Lagre testdata" : "Lagret"}
@@ -295,7 +296,7 @@ const CommonScheduleView: React.FC<CommonScheduleViewProps> = ({
           </section>
         )}
 
-        <nav className="mb-3 flex flex-wrap gap-1.5 border-b border-[#e4e4e4] pb-4">
+        <nav className="mb-3 flex flex-wrap gap-1.5 border-b border-border pb-4">
           {tabDefinitions.map((tab) => {
             const Icon = tab.icon;
             return (
@@ -305,10 +306,10 @@ const CommonScheduleView: React.FC<CommonScheduleViewProps> = ({
                 onClick={() => setActiveSection(tab.key)}
                 title={tab.description}
                 className={cn(
-                  "inline-flex items-center gap-[0.3rem] rounded-full border px-[0.85rem] py-[0.4rem] text-[0.813rem] font-semibold transition-all duration-[120ms]",
+                  "inline-flex items-center gap-1 rounded-full border px-3.5 py-1.5 text-ui font-semibold transition-all duration-100",
                   tab.key === activeSection
-                    ? "border-[rgba(178,18,7,0.16)] bg-[rgba(178,18,7,0.06)] text-[var(--lego-red-color)]"
-                    : "border-transparent bg-transparent text-[#6b6b6b] hover:border-[#e4e4e4] hover:bg-[#f0f0f0] hover:text-[#111111]",
+                    ? "border-brand-border bg-brand-muted text-brand"
+                    : "border-transparent bg-transparent text-text-muted hover:border-border hover:bg-surface-neutral hover:text-text-primary",
                 )}
               >
                 <Icon size={13} />
@@ -341,12 +342,14 @@ const CommonScheduleView: React.FC<CommonScheduleViewProps> = ({
                 sessionDuration={sessionDuration}
               />
 
-              <section className={cn(scheduleSurfaceClass, "p-5")}>
+              <section className="rounded-panel border border-border bg-surface-base p-5">
                 <div className="mb-4 flex items-center justify-between">
-                  <h3 className="m-0 text-sm font-bold text-[#111111]">
+                  <h3 className="m-0 text-sm font-bold text-text-primary">
                     Kandidater
                   </h3>
-                  <span className={scheduleLabelClass}>{candidates.length}</span>
+                  <span className="text-label font-bold uppercase tracking-label text-text-subtle">
+                    {candidates.length}
+                  </span>
                 </div>
                 <PersonListView data={candidates} />
               </section>
@@ -405,11 +408,11 @@ const DistributedPlanView: React.FC<DistributedPlanViewProps> = ({
 }) => {
   if (!savedSchedule) {
     return (
-      <div className={cn(scheduleSurfaceClass, "px-6 py-12 text-center")}>
-        <h3 className="mb-2 mt-0 text-sm font-bold text-[#111111]">
+      <div className="rounded-panel border border-border bg-surface-base px-6 py-12 text-center">
+        <h3 className="mb-2 mt-0 text-sm font-bold text-text-primary">
           Ingen plan distribuert ennå
         </h3>
-        <p className="m-0 text-[0.813rem] leading-[1.6] text-[#6b6b6b]">
+        <p className="m-0 text-ui leading-relaxed text-text-muted">
           {isAdmin
             ? 'Gå til "Intervjuforslag" for å generere og distribuere en intervjuplan.'
             : "Admins har ikke distribuert en intervjuplan ennå. Kom tilbake senere."}
@@ -437,16 +440,16 @@ const DistributedPlanView: React.FC<DistributedPlanViewProps> = ({
   const sorted = [...savedSchedule.schedule].sort((a, b) => a.time - b.time);
 
   return (
-    <div className={cn(scheduleSurfaceClass, "p-5")}>
+    <div className="rounded-panel border border-border bg-surface-base p-5">
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center gap-[0.65rem]">
-          <h3 className="m-0 text-sm font-bold text-[#111111]">Intervjuplan</h3>
+        <div className="flex items-center gap-2.5">
+          <h3 className="m-0 text-sm font-bold text-text-primary">Intervjuplan</h3>
           {savedSchedule.is_distributed ? (
-            <span className="inline-flex items-center rounded-full border border-[rgba(22,160,88,0.2)] bg-[rgba(22,160,88,0.08)] px-[0.6rem] py-[0.2rem] text-[0.688rem] font-bold uppercase tracking-[0.06em] text-[#0f8a4a]">
+            <span className="inline-flex items-center rounded-full border border-success-border bg-success-bg px-2.5 py-1 text-label font-bold uppercase tracking-caps text-success">
               Distribuert
             </span>
           ) : (
-            <span className="inline-flex items-center rounded-full border border-[#e4e4e4] bg-[#f5f5f5] px-[0.6rem] py-[0.2rem] text-[0.688rem] font-bold uppercase tracking-[0.06em] text-[#6b6b6b]">
+            <span className="inline-flex items-center rounded-full border border-border bg-surface-muted px-2.5 py-1 text-label font-bold uppercase tracking-caps text-text-muted">
               Utkast
             </span>
           )}
@@ -455,38 +458,38 @@ const DistributedPlanView: React.FC<DistributedPlanViewProps> = ({
           type="button"
           onClick={handleExport}
           className={cn(
-            primaryActionClass,
-            "cursor-pointer px-4 py-[0.45rem] text-[0.813rem] font-bold",
+            "rounded-lg border border-brand bg-brand text-white transition-[background,border-color,box-shadow] duration-150 hover:border-brand-hover hover:bg-brand-hover focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-brand-ring active:bg-brand-pressed disabled:cursor-not-allowed disabled:opacity-40",
+            "cursor-pointer px-4 py-2 text-ui font-bold",
           )}
         >
           Eksporter til kalender (.ics)
         </button>
       </div>
 
-      <div className="overflow-hidden rounded-lg border border-[#e4e4e4]">
+      <div className="overflow-hidden rounded-lg border border-border">
         <table className="w-full border-collapse">
           <thead>
             <tr>
               <th
                 className={cn(
-                  scheduleLabelClass,
-                  "bg-[#f8f8f8] px-4 py-3 text-left border-b border-[#e4e4e4]",
+                  "text-label font-bold uppercase tracking-label text-text-subtle",
+                  "bg-surface-subtle px-4 py-3 text-left border-b border-border",
                 )}
               >
                 Tidspunkt
               </th>
               <th
                 className={cn(
-                  scheduleLabelClass,
-                  "bg-[#f8f8f8] px-4 py-3 text-left border-b border-[#e4e4e4]",
+                  "text-label font-bold uppercase tracking-label text-text-subtle",
+                  "bg-surface-subtle px-4 py-3 text-left border-b border-border",
                 )}
               >
                 Kandidat
               </th>
               <th
                 className={cn(
-                  scheduleLabelClass,
-                  "bg-[#f8f8f8] px-4 py-3 text-left border-b border-[#e4e4e4]",
+                  "text-label font-bold uppercase tracking-label text-text-subtle",
+                  "bg-surface-subtle px-4 py-3 text-left border-b border-border",
                 )}
               >
                 Panel
@@ -503,22 +506,22 @@ const DistributedPlanView: React.FC<DistributedPlanViewProps> = ({
                 : `Dag ${dayIndex + 1} ${hour}:00`;
               return (
                 <tr key={idx} className="group">
-                  <td className="whitespace-nowrap px-4 py-3 text-sm text-[#6b6b6b] group-hover:bg-[#fafafa]">
+                  <td className="whitespace-nowrap px-4 py-3 text-sm text-text-muted group-hover:bg-surface-hover">
                     {timeLabel}
                   </td>
-                  <td className="px-4 py-3 text-sm font-semibold text-[#111111] group-hover:bg-[#fafafa]">
+                  <td className="px-4 py-3 text-sm font-semibold text-text-primary group-hover:bg-surface-hover">
                     {item.candidate}
                   </td>
-                  <td className="px-4 py-3 text-sm text-[#111111] group-hover:bg-[#fafafa]">
-                    <div className="flex flex-wrap gap-[0.35rem]">
+                  <td className="px-4 py-3 text-sm text-text-primary group-hover:bg-surface-hover">
+                    <div className="flex flex-wrap gap-1.5">
                       {item.panel.map((p, i) => (
                         <span
                           key={i}
                           className={cn(
-                            "inline-flex items-center rounded-full border px-[0.55rem] py-[0.2rem] text-xs font-semibold",
+                            "inline-flex items-center rounded-full border px-2 py-1 text-xs font-semibold",
                             p.is_overtime
-                              ? "border-[rgba(178,18,7,0.2)] bg-[rgba(178,18,7,0.08)] text-[#b21207]"
-                              : "border-[#e4e4e4] bg-[#f0f0f0] text-[#4b4b4b]",
+                              ? "border-brand-panelBorder bg-brand-badge text-brand"
+                              : "border-border bg-surface-neutral text-text-soft",
                           )}
                         >
                           {p.name}
