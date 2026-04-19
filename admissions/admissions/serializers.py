@@ -83,6 +83,8 @@ class AdmissionListPublicSerializer(serializers.HyperlinkedModelSerializer):
             "has_application": False,
             "is_privileged": False,
             "is_admin": False,
+            "is_recruiter": False,
+            "committee_role": None,
             "committee_groups": [],
         }
         request = self.context.get("request")
@@ -91,15 +93,30 @@ class AdmissionListPublicSerializer(serializers.HyperlinkedModelSerializer):
         res["has_application"] = UserApplication.objects.filter(
             user=request.user.pk, admission=obj.pk
         ).exists()
+        is_leader = False
+        is_recruiting = False
+        is_committee_member = False
         for group in obj.groups.all():
-            if Membership.objects.filter(user=request.user.pk, group=group.pk).exists():
+            memberships = Membership.objects.filter(
+                user=request.user.pk, group=group.pk
+            )
+            if memberships.exists():
                 res["committee_groups"].append(group.name)
-            if (
-                Membership.objects.filter(user=request.user.pk, group=group.pk)
-                .filter(Q(role=constants.LEADER) | Q(role=constants.RECRUITING))
-                .exists()
-            ):
+                is_committee_member = True
+            if memberships.filter(role=constants.LEADER).exists():
+                is_leader = True
                 res["is_privileged"] = True
+            if memberships.filter(role=constants.RECRUITING).exists():
+                is_recruiting = True
+                res["is_privileged"] = True
+
+        res["is_recruiter"] = is_leader or is_recruiting
+        if is_leader:
+            res["committee_role"] = constants.LEADER
+        elif is_recruiting:
+            res["committee_role"] = constants.RECRUITING
+        elif is_committee_member:
+            res["committee_role"] = constants.MEMBER
 
         for group in obj.admin_groups.all():
             if Membership.objects.filter(user=request.user.pk, group=group.pk).exists():
@@ -393,15 +410,50 @@ class ApplicationCreateUpdateSerializer(serializers.HyperlinkedModelSerializer):
 class SavedScheduleSerializer(serializers.ModelSerializer):
     class Meta:
         model = SavedSchedule
-        fields = ["id", "schedule", "start_date", "session_duration", "is_distributed", "updated_at"]
+        fields = [
+            "id",
+            "schedule",
+            "start_date",
+            "end_date",
+            "session_duration",
+            "enabled_slots",
+            "day_start_minute",
+            "day_end_minute",
+            "chunk_size",
+            "chunk_break_minutes",
+            "is_distributed",
+            "show_candidate_names",
+            "updated_at",
+        ]
         read_only_fields = ["id", "updated_at"]
 
 
 class SaveScheduleInputSerializer(serializers.Serializer):
-    schedule = serializers.ListField(child=serializers.DictField())
-    start_date = serializers.DateField()
-    session_duration = serializers.IntegerField(min_value=5, max_value=240)
-    is_distributed = serializers.BooleanField(default=False)
+    schedule = serializers.ListField(
+        child=serializers.DictField(), required=False, default=list
+    )
+    start_date = serializers.DateField(required=False)
+    end_date = serializers.DateField(required=False, allow_null=True)
+    session_duration = serializers.IntegerField(
+        min_value=5, max_value=240, required=False
+    )
+    enabled_slots = serializers.ListField(
+        child=serializers.CharField(), required=False, default=list
+    )
+    day_start_minute = serializers.IntegerField(
+        min_value=0, max_value=1439, required=False
+    )
+    day_end_minute = serializers.IntegerField(
+        min_value=1, max_value=1440, required=False
+    )
+    chunk_size = serializers.IntegerField(
+        min_value=1, max_value=20, required=False
+    )
+    chunk_break_minutes = serializers.IntegerField(
+        min_value=0, max_value=240, required=False
+    )
+    is_distributed = serializers.BooleanField(required=False)
+    show_candidate_names = serializers.BooleanField(required=False)
 
 
 class CandidateSerializer(serializers.Serializer):

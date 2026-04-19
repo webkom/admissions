@@ -3,7 +3,7 @@ from rest_framework import status
 from rest_framework.test import APITestCase
 
 from admissions.admissions.constants import LEADER, MEMBER, RECRUITING
-from admissions.admissions.models import Group, LegoUser, Membership
+from admissions.admissions.models import Group, LegoUser, Membership, SavedSchedule
 from admissions.admissions.tests.utils import create_admission, fake_timedelta
 
 
@@ -307,3 +307,82 @@ class SolveScheduleViewTestCase(APITestCase):
         self.assertTrue(
             any(member["is_overtime"] for member in res.data["schedule"][0]["panel"])
         )
+
+
+class SavedScheduleViewTestCase(APITestCase):
+    def setUp(self):
+        self.admin_group = Group.objects.create(name="Webkom", lego_id=300)
+        self.admin_user = LegoUser.objects.create(
+            username="schedule-admin", lego_id=301
+        )
+        Membership.objects.create(
+            user=self.admin_user, role=MEMBER, group=self.admin_group
+        )
+        self.admission = create_admission(
+            created_by=self.admin_user, slug="schedule-opptak"
+        )
+        self.admission.admin_groups.add(self.admin_group)
+        self.url = reverse(
+            "saved-schedule", kwargs={"admission_slug": self.admission.slug}
+        )
+        self.client.force_authenticate(user=self.admin_user)
+
+    def test_can_save_schedule_config_without_overwriting_plan(self):
+        SavedSchedule.objects.create(
+            admission=self.admission,
+            schedule=[{"candidate": "Ada", "time": 8, "panel": []}],
+            start_date="2026-04-20",
+            end_date="2026-04-24",
+            session_duration=60,
+            enabled_slots=["2026-04-20:480"],
+            day_start_minute=480,
+            day_end_minute=1080,
+            is_distributed=False,
+        )
+
+        payload = {
+            "start_date": "2026-04-21",
+            "end_date": "2026-04-25",
+            "session_duration": 45,
+            "enabled_slots": ["2026-04-21:540", "2026-04-21:585"],
+            "day_start_minute": 540,
+            "day_end_minute": 900,
+            "is_distributed": False,
+        }
+
+        res = self.client.post(self.url, payload, format="json")
+
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.assertEqual(
+            res.data["schedule"], [{"candidate": "Ada", "time": 8, "panel": []}]
+        )
+        self.assertEqual(res.data["start_date"], "2026-04-21")
+        self.assertEqual(res.data["end_date"], "2026-04-25")
+        self.assertEqual(
+            res.data["enabled_slots"], ["2026-04-21:540", "2026-04-21:585"]
+        )
+        self.assertEqual(res.data["day_start_minute"], 540)
+        self.assertEqual(res.data["day_end_minute"], 900)
+
+    def test_can_create_schedule_from_config_only_payload(self):
+        payload = {
+            "start_date": "2026-04-21",
+            "end_date": "2026-04-25",
+            "session_duration": 45,
+            "enabled_slots": ["2026-04-21:540", "2026-04-21:585"],
+            "day_start_minute": 540,
+            "day_end_minute": 900,
+            "is_distributed": False,
+        }
+
+        res = self.client.post(self.url, payload, format="json")
+
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.assertEqual(res.data["schedule"], [])
+        self.assertEqual(res.data["start_date"], "2026-04-21")
+        self.assertEqual(res.data["end_date"], "2026-04-25")
+        self.assertEqual(res.data["session_duration"], 45)
+        self.assertEqual(
+            res.data["enabled_slots"], ["2026-04-21:540", "2026-04-21:585"]
+        )
+        self.assertEqual(SavedSchedule.objects.get(admission=self.admission).schedule, [])

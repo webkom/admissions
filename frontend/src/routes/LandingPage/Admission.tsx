@@ -132,7 +132,7 @@ const Admission: React.FC<AdmissionProps> = ({ admission }) => {
             )}
 
             <div className="flex w-full flex-col items-stretch gap-3">
-              {admission.userdata.is_privileged && (
+              {admission.userdata.is_recruiter && (
                 <LinkButton
                   className={secondaryActionButtonClass}
                   fullWidth

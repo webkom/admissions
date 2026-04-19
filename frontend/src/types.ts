@@ -38,6 +38,8 @@ interface AdmissionUserData {
   has_application: boolean;
   is_privileged: boolean;
   is_admin: boolean;
+  is_recruiter: boolean;
+  committee_role: "leader" | "recruiting" | "member" | null;
   committee_groups: Group[];
 }
 
@@ -94,7 +96,14 @@ export interface SavedSchedule {
   id: number;
   schedule: ScheduleItem[];
   start_date: string;
+  end_date: string | null;
   session_duration: number;
+  enabled_slots: string[];
+  day_start_minute: number;
+  day_end_minute: number;
+  chunk_size: number;
+  chunk_break_minutes: number;
   is_distributed: boolean;
+  show_candidate_names: boolean;
   updated_at: string;
 }

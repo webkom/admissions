@@ -303,10 +303,10 @@ const FilterButton = ({ active, onClick, label, count }: FilterButtonProps) => (
   <button
     type="button"
     className={cn(
-      "inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-ui font-semibold transition-all duration-100",
+      "inline-flex items-center gap-1.5 rounded-full border px-3.5 py-1.5 text-ui font-semibold transition-all duration-100",
       active
-        ? "border-brand-strongBorder bg-brand-tint text-brand"
-        : "border-transparent bg-transparent text-text-muted hover:border-border-soft hover:bg-surface-subtle hover:text-text-primary",
+        ? "border-brand-border bg-brand-muted text-brand"
+        : "border-transparent bg-transparent text-text-muted hover:border-border hover:bg-surface-neutral hover:text-text-primary",
     )}
     onClick={onClick}
   >

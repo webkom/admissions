@@ -132,12 +132,26 @@ def solve_schedule(
         loads.append(load_var)
 
     model.AddMaxEquality(max_load, loads)
+
+    # Earliness tiebreaker: prefer scheduling into earlier slots so the plan
+    # fills continuously from the start (e.g. Monday 9-15 before Tuesday).
+    # Small weight so overtime and load-balance objectives still dominate.
+    slot_rank = {t: r for r, t in enumerate(sorted_slots)}
+    earliness_weight = 1
+    earliness_sum = sum(
+        slot_rank[t] * schedule[(c.id, t)]
+        for c in candidates
+        for t in sorted_slots
+        if slot_rank[t] > 0
+    )
+
     model.Minimize(
         options.overtime_weight * sum(overtime_vars)
         + options.load_balance_weight * max_load
+        + earliness_weight * earliness_sum
     )
 
-    # ── SOLVE ─────────────────────────────────────────────────────────
+    # SOLVE
     solver = cp_model.CpSolver()
     solver.parameters.max_time_in_seconds = options.max_solver_seconds
     solver.parameters.num_search_workers = 8
@@ -155,7 +169,7 @@ def solve_schedule(
                         if solver.BooleanValue(assign[(iid, c.id, t)])
                     ]
                     results.append({"candidate": c.name, "time": t, "panel": panel})
-                    break          # ← slot found; skip remaining times
+                    break
         return {"status": "SUCCESS", "schedule": results}
 
     return {"status": "INFEASIBLE", "schedule": []}

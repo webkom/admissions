@@ -67,7 +67,7 @@ export const useSaveSchedule = (slug: string) => {
   >({
     mutationFn: (payload) =>
       apiClient
-        .post(`/api/admin/admission/${slug}/schedule/`, payload)
+        .post(`/admin/admission/${slug}/schedule/`, payload)
         .then((r) => r.data),
     onSuccess: (data) => {
       queryClient.setQueryData([`/admin/admission/${slug}/schedule/`], data);

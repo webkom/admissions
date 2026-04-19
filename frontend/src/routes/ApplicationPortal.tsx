@@ -152,7 +152,7 @@ const ApplicationPortal = () => {
             <Route
               path="/admin/*"
               element={
-                <RequireAuth auth={!!admission?.userdata.is_privileged}>
+                <RequireAuth auth={!!admission?.userdata.is_recruiter}>
                   <AdmissionAdmin />
                 </RequireAuth>
               }

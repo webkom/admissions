@@ -1,5 +1,6 @@
-import React, { useMemo, useState } from "react";
-import { ChevronDown } from "lucide-react";
+import React, { useEffect, useMemo, useState } from "react";
+import { Eye, EyeOff, Sparkles } from "lucide-react";
+import { Stepper, StatTile, ToggleCard, SegmentedControl, sectionLabelClass } from "../ui";
 import type {
   Candidate,
   Interviewer,
@@ -10,7 +11,7 @@ import { apiClient } from "../../../utils/callApi";
 import SolverCalendarView from "./SolverCalendarView";
 import Icon from "../../Icon";
 import { formatDateHeader, generateIcs } from "../scheduleUtils";
-import { useSavedSchedule } from "../../../query/hooks";
+import { useSaveSchedule, useSavedSchedule } from "../../../query/hooks";
 import cn from "src/utils/cn";
 
 interface Props {
@@ -20,6 +21,14 @@ interface Props {
   sessionDuration: number;
   admissionTitle: string;
   admissionSlug: string;
+  startDate: string;
+  endDate: string;
+  enabledSlots: Set<string>;
+  dayStartMinute: number;
+  dayEndMinute: number;
+  chunkSize: number;
+  chunkBreakMinutes: number;
+  onNotify?: (message: string, tone?: "success" | "error") => void;
 }
 
 interface SolveResponse {
@@ -39,25 +48,28 @@ const PRIORITY_PRESETS = [
   {
     key: "protect-availability",
     label: "Minimer overtid",
-    description: "Spar intervjuere utenfor registrert tilgjengelighet.",
+    description: "Respekter tilgjengeligheten selv om noen får flere intervjuer.",
     overtimeWeight: 100,
     loadBalanceWeight: 1,
   },
   {
     key: "balanced",
     label: "Balansert",
-    description: "Unngå overtid, men jobb samtidig for en jevnere fordeling.",
+    description: "Vei overtid og fordeling omtrent likt.",
     overtimeWeight: 40,
     loadBalanceWeight: 4,
   },
   {
     key: "protect-load",
     label: "Jevn fordeling",
-    description: "Fordel belastningen jevnere, selv om det kan gi noe overtid.",
+    description: "Alle får like mange intervjuer, men på bekostning av overtid når man egentlig ikke er tilgjengelig",
     overtimeWeight: 12,
     loadBalanceWeight: 8,
   },
 ] as const;
+
+const PANEL_SIZE_MIN = 1;
+const PANEL_SIZE_MAX = 5;
 
 export default function SolverView({
   candidates,
@@ -66,6 +78,14 @@ export default function SolverView({
   sessionDuration,
   admissionTitle,
   admissionSlug,
+  startDate,
+  endDate,
+  enabledSlots,
+  dayStartMinute,
+  dayEndMinute,
+  chunkSize,
+  chunkBreakMinutes,
+  onNotify,
 }: Props) {
   const [panelSize, setPanelSize] = useState(3);
   const [solverOptions, setSolverOptions] = useState<SolverOptions>(
@@ -80,9 +100,30 @@ export default function SolverView({
   const [selectedInterviewer, setSelectedInterviewer] = useState("");
   const [isSaving, setIsSaving] = useState(false);
   const [saveError, setSaveError] = useState("");
+  const [planRevealed, setPlanRevealed] = useState(false);
+  const [namesRevealed, setNamesRevealed] = useState(false);
+  const [showNamesForAll, setShowNamesForAll] = useState(false);
+  const [elapsedMs, setElapsedMs] = useState(0);
+
+  useEffect(() => {
+    if (!loading) {
+      setElapsedMs(0);
+      return;
+    }
+    const start = performance.now();
+    const tick = window.setInterval(() => {
+      setElapsedMs(performance.now() - start);
+    }, 100);
+    return () => window.clearInterval(tick);
+  }, [loading]);
 
   const { data: savedSchedule, refetch: refetchSaved } =
     useSavedSchedule(admissionSlug);
+  const saveSchedule = useSaveSchedule(admissionSlug);
+
+  useEffect(() => {
+    setShowNamesForAll(savedSchedule?.show_candidate_names ?? false);
+  }, [savedSchedule?.show_candidate_names]);
 
   const sortedSchedule = useMemo(
     () => [...(result?.schedule ?? [])].sort((a, b) => a.time - b.time),
@@ -139,6 +180,55 @@ export default function SolverView({
     [interviewerDistribution],
   );
 
+  const candidateAlias = useMemo(() => {
+    const map = new Map<string, string>();
+    sortedSchedule.forEach((item) => {
+      if (!map.has(item.candidate)) {
+        map.set(item.candidate, `Kandidat ${map.size + 1}`);
+      }
+    });
+    return map;
+  }, [sortedSchedule]);
+
+  const displayCandidate = (name: string) =>
+    namesRevealed ? name : candidateAlias.get(name) ?? name;
+
+  const displaySchedule = useMemo(
+    () =>
+      sortedSchedule.map((item) => ({
+        ...item,
+        candidate: displayCandidate(item.candidate),
+      })),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [sortedSchedule, namesRevealed, candidateAlias],
+  );
+
+  const overviewStats = useMemo(() => {
+    if (!result || result.status !== "SUCCESS") return null;
+
+    const overtimeAssignments = sortedSchedule.reduce(
+      (sum, item) =>
+        sum + item.panel.filter((member) => member.is_overtime).length,
+      0,
+    );
+
+    const assignedInterviewers = interviewerDistribution.filter(
+      (entry) => entry.count > 0,
+    );
+    const loads = assignedInterviewers.map((entry) => entry.count);
+    const maxLoad = loads.length > 0 ? Math.max(...loads) : 0;
+    const minLoad = loads.length > 0 ? Math.min(...loads) : 0;
+
+    return {
+      totalInterviews: result.schedule.length,
+      overtimeAssignments,
+      maxLoad,
+      minLoad,
+      usedInterviewers: assignedInterviewers.length,
+      totalInterviewers: interviewers.length,
+    };
+  }, [result, sortedSchedule, interviewerDistribution, interviewers.length]);
+
   const selectedPriorityPreset = useMemo(
     () =>
       PRIORITY_PRESETS.find(
@@ -147,13 +237,6 @@ export default function SolverView({
           preset.loadBalanceWeight === solverOptions.load_balance_weight,
       )?.key ?? "custom",
     [solverOptions.load_balance_weight, solverOptions.overtime_weight],
-  );
-
-  const selectedPriorityMeta = useMemo(
-    () =>
-      PRIORITY_PRESETS.find((preset) => preset.key === selectedPriorityPreset) ??
-      null,
-    [selectedPriorityPreset],
   );
 
   const formatSlotTime = (timeValue: number) => {
@@ -175,6 +258,8 @@ export default function SolverView({
     setError("");
     setResult(null);
     setSelectedInterviewer("");
+    setPlanRevealed(false);
+    setNamesRevealed(false);
 
     try {
       const payload = {
@@ -213,15 +298,24 @@ export default function SolverView({
     setIsSaving(true);
     setSaveError("");
     try {
-      await apiClient.post(`/admin/admission/${admissionSlug}/schedule/`, {
+      await saveSchedule.mutateAsync({
         schedule,
-        start_date: dates[0] ?? "",
+        start_date: startDate,
+        end_date: endDate,
         session_duration: sessionDuration,
+        enabled_slots: Array.from(enabledSlots),
+        day_start_minute: dayStartMinute,
+        day_end_minute: dayEndMinute,
+        chunk_size: chunkSize,
+        chunk_break_minutes: chunkBreakMinutes,
         is_distributed: distribute,
+        show_candidate_names: showNamesForAll,
       });
       await refetchSaved();
+      onNotify?.(distribute ? "Intervjuplan distribuert." : "Intervjuplan lagret.");
     } catch {
       setSaveError("Kunne ikke lagre planen. Prøv igjen.");
+      onNotify?.("Kunne ikke lagre intervjuplanen.", "error");
     } finally {
       setIsSaving(false);
     }
@@ -232,15 +326,24 @@ export default function SolverView({
     setIsSaving(true);
     setSaveError("");
     try {
-      await apiClient.post(`/admin/admission/${admissionSlug}/schedule/`, {
+      await saveSchedule.mutateAsync({
         schedule: savedSchedule.schedule,
         start_date: savedSchedule.start_date,
+        end_date: savedSchedule.end_date,
         session_duration: savedSchedule.session_duration,
+        enabled_slots: savedSchedule.enabled_slots,
+        day_start_minute: savedSchedule.day_start_minute,
+        day_end_minute: savedSchedule.day_end_minute,
+        chunk_size: savedSchedule.chunk_size,
+        chunk_break_minutes: savedSchedule.chunk_break_minutes,
         is_distributed: false,
+        show_candidate_names: savedSchedule.show_candidate_names,
       });
       await refetchSaved();
+      onNotify?.("Intervjuplan låst opp.");
     } catch {
       setSaveError("Kunne ikke låse opp planen.");
+      onNotify?.("Kunne ikke låse opp intervjuplanen.", "error");
     } finally {
       setIsSaving(false);
     }
@@ -262,16 +365,6 @@ export default function SolverView({
     updateSolverOption(key, !solverOptions[key]);
   };
 
-  const handleToggleCardKeyDown = (
-    event: React.KeyboardEvent<HTMLDivElement>,
-    key: "enforce_same_gender" | "allow_overtime",
-  ) => {
-    if (event.key === "Enter" || event.key === " ") {
-      event.preventDefault();
-      toggleSolverOption(key);
-    }
-  };
-
   const applyPriorityPreset = (
     overtimeWeight: number,
     loadBalanceWeight: number,
@@ -285,329 +378,156 @@ export default function SolverView({
 
   return (
     <div className="flex flex-col gap-3">
-      <div className="rounded-panel border border-border bg-surface-base p-5">
-        <div className="mb-4 flex flex-wrap items-start justify-between gap-4">
-          <div className="min-w-[200px] flex-1">
-            <h2 className="m-0 mb-1 text-sm font-bold text-text-primary">
-              Generer en plan
-            </h2>
-          </div>
+      <div className="rounded-panel border border-border bg-surface-base p-6 handheld:p-5">
+        <header className="mb-6">
+          <h2 className="m-0 text-[15px] font-bold text-text-primary">
+            Intervjuforslag
+          </h2>
+          <p className="m-0 mt-1 max-w-[40rem] text-ui leading-relaxed text-text-muted">
+            Her kan man spesifisere krav man har
+          </p>
+        </header>
 
-          <div className="flex flex-wrap items-end gap-3">
-            <div className="flex flex-col gap-1">
-              <label
-                className="text-label font-bold uppercase tracking-label text-text-subtle"
-                htmlFor="panel-size"
-              >
-                Panelstørrelse
-              </label>
-              <input
-                id="panel-size"
-                type="number"
-                min="1"
-                max="5"
-                className="w-16 rounded-md border border-border-muted bg-surface-base px-2.5 py-2 text-center text-sm font-bold text-text-primary transition-[border-color,box-shadow] duration-150 focus:border-brand-input focus:outline-none focus:ring-3 focus:ring-brand-ringSoft"
-                value={panelSize}
-                onChange={(e) => {
-                  const nextValue = parseInt(e.target.value, 10);
-                  if (!isNaN(nextValue)) {
-                    setPanelSize(nextValue);
-                  }
-                }}
-              />
-            </div>
-            <button
-              type="button"
-              className="cursor-pointer whitespace-nowrap rounded-lg border border-brand bg-brand px-4 py-2 text-ui font-bold text-white transition-[background,border-color,box-shadow] duration-150 hover:border-brand-hover hover:bg-brand-hover focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-brand-ring active:bg-brand-pressed disabled:cursor-not-allowed disabled:opacity-40"
-              onClick={handleSolve}
-              disabled={loading}
-            >
-              {loading ? "Optimaliserer..." : "Generer plan"}
-            </button>
+        <section className="mb-6">
+          <span className={sectionLabelClass}>Regler</span>
+          <div className="grid grid-cols-[repeat(auto-fit,minmax(220px,1fr))] gap-2">
+            <ToggleCard
+              title="Samme kjønn i panel"
+              description="Minst én matchende intervjuer i hvert panel."
+              checked={solverOptions.enforce_same_gender}
+              onToggle={() => toggleSolverOption("enforce_same_gender")}
+            />
+            <ToggleCard
+              title="Tillat overtid"
+              description="Bruk slotter utenfor tilgjengeligheten ved behov."
+              checked={solverOptions.allow_overtime}
+              onToggle={() => toggleSolverOption("allow_overtime")}
+            />
           </div>
-        </div>
+        </section>
 
-        <div className="mb-4 flex flex-wrap gap-4 border-b border-border-soft pb-4">
-          <div className="inline-flex items-baseline gap-[0.4rem]">
-            <span className="text-label font-bold uppercase tracking-label text-text-subtle">
-              Kandidater
+        <section className="mb-6">
+          <div className="mb-2 flex items-end justify-between gap-3">
+            <span className="block text-label font-bold uppercase tracking-label text-text-subtle">
+              Prioritering
             </span>
-            <span className="text-sm font-bold text-text-primary">
-              {candidates.length}
-            </span>
-          </div>
-          <div className="inline-flex items-baseline gap-[0.4rem]">
-            <span className="text-label font-bold uppercase tracking-label text-text-subtle">
-              Intervjuere
-            </span>
-            <span className="text-sm font-bold text-text-primary">
-              {interviewers.length}
-            </span>
-          </div>
-          <div className="inline-flex items-baseline gap-[0.4rem]">
-            <span className="text-label font-bold uppercase tracking-label text-text-subtle">
-              Antall intervjuere
-            </span>
-            <span className="text-sm font-bold text-text-primary">
-              {panelSize}
-            </span>
-          </div>
-        </div>
-
-        <div className="mb-4 flex flex-col gap-[0.9rem] rounded-lg border border-border bg-surface-muted p-4">
-          <div className="flex flex-col gap-1">
-            <span className="mb-1 block text-label font-bold uppercase tracking-label text-text-subtle">
-              Før du genererer
-            </span>
-            <h3 className="m-0 text-sm font-bold text-text-primary">
-              Velg krav og prioriteringer
-            </h3>
-            <p className="m-0 max-w-[42rem] text-ui leading-relaxed text-text-muted">
-              Klikk på et kort for å slå en regel av eller på. Åpne detaljene
-              bare når du vil lese forklaringen.
-            </p>
-          </div>
-
-          <div className="grid grid-cols-[repeat(auto-fit,minmax(220px,1fr))] gap-[0.65rem]">
-            <div
-              role="button"
-              tabIndex={0}
-              aria-pressed={solverOptions.enforce_same_gender}
-              className={cn(
-                "flex cursor-pointer flex-col gap-[0.65rem] rounded-[10px] border px-[0.95rem] py-[0.85rem] transition-[border-color,box-shadow,transform] duration-150 hover:-translate-y-px hover:border-brand-strongBorder focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-focus",
-                solverOptions.enforce_same_gender
-                  ? "border-brand-activeBorder bg-surface-base bg-brand-panel shadow-toggle"
-                  : "border-border-soft bg-surface-base",
-              )}
-              onClick={() => toggleSolverOption("enforce_same_gender")}
-              onKeyDown={(event) =>
-                handleToggleCardKeyDown(event, "enforce_same_gender")
-              }
-            >
-              <div className="flex items-center justify-between gap-[0.3rem]">
-                <span className="text-label font-bold uppercase tracking-label text-text-subtle">
-                  Panelregel
-                </span>
-                <span
-                  className={cn(
-                    "flex min-w-12 items-center justify-center rounded-full px-2.5 py-1 text-xs font-bold uppercase tracking-badge",
-                    solverOptions.enforce_same_gender
-                      ? "bg-brand-fill text-brand"
-                      : "bg-surface-subtle text-text-muted",
-                  )}
-                >
-                  {solverOptions.enforce_same_gender ? "På" : "Av"}
-                </span>
-              </div>
-              <h4 className="m-0 text-sm font-bold text-text-primary">
-                Samme kjønn i panelet
-              </h4>
-              <p className="m-0 text-detail leading-[1.45] text-text-muted">
-                Krev minst én intervjuer av samme kjønn som kandidaten.
-              </p>
-              <details
-                className="grid gap-[0.55rem] pt-[0.1rem] [&[open]_.summary-icon]:rotate-180"
-                onClick={(event) => event.stopPropagation()}
-                onKeyDown={(event) => event.stopPropagation()}
-              >
-                <summary className="inline-flex w-fit cursor-pointer list-none items-center gap-[0.35rem] text-text-muted [&::-webkit-details-marker]:hidden">
-                  <span className="text-label font-bold uppercase tracking-label text-text-subtle">
-                    Les detaljene
-                  </span>
-                  <ChevronDown className="summary-icon h-[0.9rem] w-[0.9rem] transition-transform duration-150" />
-                </summary>
-                <p className="m-0 text-ui leading-relaxed text-text-soft">
-                  Når denne regelen er på, må hvert intervju ha minst én person
-                  i panelet som matcher kandidatens kjønn. Hvis det ikke finnes,
-                  blir akkurat det oppsettet vurdert som ugyldig.
-                </p>
-              </details>
-            </div>
-
-            <div
-              role="button"
-              tabIndex={0}
-              aria-pressed={solverOptions.allow_overtime}
-              className={cn(
-                "flex cursor-pointer flex-col gap-[0.65rem] rounded-[10px] border px-[0.95rem] py-[0.85rem] transition-[border-color,box-shadow,transform] duration-150 hover:-translate-y-px hover:border-brand-strongBorder focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-focus",
-                solverOptions.allow_overtime
-                  ? "border-brand-activeBorder bg-surface-base bg-brand-panel shadow-toggle"
-                  : "border-border-soft bg-surface-base",
-              )}
-              onClick={() => toggleSolverOption("allow_overtime")}
-              onKeyDown={(event) =>
-                handleToggleCardKeyDown(event, "allow_overtime")
-              }
-            >
-              <div className="flex items-center justify-between gap-[0.3rem]">
-                <span className="text-label font-bold uppercase tracking-label text-text-subtle">
-                  Tilgjengelighet
-                </span>
-                <span
-                  className={cn(
-                    "flex min-w-12 items-center justify-center rounded-full px-2.5 py-1 text-xs font-bold uppercase tracking-badge",
-                    solverOptions.allow_overtime
-                      ? "bg-brand-fill text-brand"
-                      : "bg-surface-subtle text-text-muted",
-                  )}
-                >
-                  {solverOptions.allow_overtime ? "På" : "Av"}
-                </span>
-              </div>
-              <h4 className="m-0 text-sm font-bold text-text-primary">
-                Tillat overtid
-              </h4>
-              <p className="m-0 text-detail leading-[1.45] text-text-muted">
-                La solveren bruke intervjuere utenfor registrert tilgjengelighet
-                når det trengs.
-              </p>
-              <details
-                className="grid gap-[0.55rem] pt-[0.1rem] [&[open]_.summary-icon]:rotate-180"
-                onClick={(event) => event.stopPropagation()}
-                onKeyDown={(event) => event.stopPropagation()}
-              >
-                <summary className="inline-flex w-fit cursor-pointer list-none items-center gap-[0.35rem] text-text-muted [&::-webkit-details-marker]:hidden">
-                  <span className="text-label font-bold uppercase tracking-label text-text-subtle">
-                    Les detaljene
-                  </span>
-                  <ChevronDown className="summary-icon h-[0.9rem] w-[0.9rem] transition-transform duration-150" />
-                </summary>
-                <p className="m-0 text-ui leading-relaxed text-text-soft">
-                  Når denne er av, får solveren bare bruke slotter folk faktisk
-                  har merket som tilgjengelige. Når den er på, kan den bruke
-                  andre slotter også, men markere dem som overtid i resultatet.
-                </p>
-              </details>
-            </div>
-          </div>
-
-          <div className="flex flex-col gap-[0.65rem] pt-[0.15rem]">
-            <div className="flex items-center justify-between gap-[0.3rem]">
+            {selectedPriorityPreset === "custom" && (
               <span className="text-label font-bold uppercase tracking-label text-text-subtle">
-                Prioritering
+                Tilpasset
               </span>
-              <span className="flex min-w-12 items-center justify-center rounded-full bg-black/5 px-2.5 py-1 text-xs font-bold uppercase tracking-badge text-text-soft">
-                {selectedPriorityPreset === "custom"
-                  ? "Tilpasset"
-                  : "Forhåndsvalg"}
-              </span>
-            </div>
-            <h4 className="m-0 text-sm font-bold text-text-primary">
-              Hva skal solveren ofre først?
-            </h4>
-            <p className="m-0 text-detail leading-[1.45] text-text-muted">
-              Velg hva som er viktigst når tilgjengelighet, kapasitet og jevn
-              fordeling trekker i ulike retninger.
-            </p>
-            <div className="flex flex-wrap gap-[0.45rem]">
-              {PRIORITY_PRESETS.map((preset) => (
+            )}
+          </div>
+          <div
+            role="radiogroup"
+            aria-label="Prioritering"
+            className="grid grid-cols-[repeat(auto-fit,minmax(180px,1fr))] gap-2"
+          >
+            {PRIORITY_PRESETS.map((preset, index) => {
+              const active = selectedPriorityPreset === preset.key;
+              return (
                 <button
                   key={preset.key}
                   type="button"
-                  className={cn(
-                    "inline-flex cursor-pointer items-center justify-center rounded-full border px-3 py-[0.45rem] text-[0.78rem] font-bold transition-[border-color,background] duration-150 hover:border-brand-strongBorder",
-                    selectedPriorityPreset === preset.key
-                      ? "border-brand-activeBorder bg-brand-badge text-brand"
-                      : "border-border-soft bg-surface-base text-text-body",
-                  )}
+                  role="radio"
+                  aria-checked={active}
                   onClick={() =>
                     applyPriorityPreset(
                       preset.overtimeWeight,
                       preset.loadBalanceWeight,
                     )
                   }
+                  className={cn(
+                    "group relative flex cursor-pointer flex-col gap-2 rounded-[10px] border px-4 py-3 text-left transition-[border-color,box-shadow,transform] duration-150 hover:-translate-y-px hover:border-brand-strongBorder focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-focus",
+                    active
+                      ? "border-brand-activeBorder bg-brand-panel shadow-toggle"
+                      : "border-border-soft bg-surface-base",
+                  )}
                 >
-                  {preset.label}
+                  <div className="flex items-center justify-between gap-2">
+                    <span
+                      className={cn(
+                        "inline-flex h-6 min-w-[1.75rem] items-center justify-center rounded-full px-1.5 text-[0.68rem] font-bold tracking-badge tabular-nums",
+                        active
+                          ? "bg-brand-fill text-brand"
+                          : "bg-surface-subtle text-text-muted",
+                      )}
+                    >
+                      {String(index + 1).padStart(2, "0")}
+                    </span>
+                    <span
+                      aria-hidden="true"
+                      className={cn(
+                        "h-2.5 w-2.5 rounded-full border transition-colors",
+                        active
+                          ? "border-brand bg-brand"
+                          : "border-border-muted bg-surface-base",
+                      )}
+                    />
+                  </div>
+                  <h4 className="m-0 text-sm font-bold text-text-primary">
+                    {preset.label}
+                  </h4>
+                  <p className="m-0 text-detail leading-snug text-text-muted">
+                    {preset.description}
+                  </p>
                 </button>
-              ))}
-            </div>
-            <p className="m-0 text-helper leading-[1.5] text-text-soft">
-              {selectedPriorityMeta ? (
-                <>
-                  <span className="mr-[0.35rem] font-bold text-text-primary">
-                    {selectedPriorityMeta.label}
-                  </span>
-                  {selectedPriorityMeta.description}
-                </>
-              ) : (
-                <>
-                  <span className="mr-[0.35rem] font-bold text-text-primary">
-                    Tilpasset
-                  </span>
-                  Du har manuelt valgt egne vekter for overtid og fordeling.
-                </>
-              )}
-            </p>
-            <details className="grid gap-[0.55rem] pt-[0.1rem] [&[open]_.summary-icon]:rotate-180">
-              <summary className="inline-flex w-fit cursor-pointer list-none items-center gap-[0.35rem] text-text-muted [&::-webkit-details-marker]:hidden">
-                <span className="text-label font-bold uppercase tracking-label text-text-subtle">
-                  Forklaring og finjustering
-                </span>
-                <ChevronDown className="summary-icon h-[0.9rem] w-[0.9rem] transition-transform duration-150" />
-              </summary>
-              <p className="m-0 text-ui leading-relaxed text-text-soft">
-                Overtidsvekten sier hvor dyrt det er å bruke folk utenfor
-                tilgjengeligheten sin. Fordelingsvekten sier hvor hardt
-                solveren skal prøve å unngå at noen får klart flere intervjuer
-                enn resten.
-              </p>
-              <div className="grid grid-cols-[repeat(auto-fit,minmax(140px,1fr))] gap-3">
-                <div className="flex flex-col gap-1">
-                  <label
-                    className="text-label font-bold uppercase tracking-label text-text-subtle"
-                    htmlFor="overtime-weight"
-                  >
-                    Overtidsvekt
-                  </label>
-                  <input
-                    id="overtime-weight"
-                    type="number"
-                    min="0"
-                    className="w-full rounded-md border border-border-muted bg-surface-base px-2.5 py-2 text-left text-sm font-semibold text-text-primary transition-[border-color,box-shadow] duration-150 focus:border-brand-input focus:outline-none focus:ring-3 focus:ring-brand-ringSoft"
-                    value={solverOptions.overtime_weight}
-                    onChange={(event) =>
-                      updateSolverOption(
-                        "overtime_weight",
-                        Math.max(0, Number(event.target.value) || 0),
-                      )
-                    }
-                    disabled={!solverOptions.allow_overtime}
-                  />
-                </div>
-                <div className="flex flex-col gap-1">
-                  <label
-                    className="text-label font-bold uppercase tracking-label text-text-subtle"
-                    htmlFor="load-balance-weight"
-                  >
-                    Fordelingsvekt
-                  </label>
-                  <input
-                    id="load-balance-weight"
-                    type="number"
-                    min="0"
-                    className="w-full rounded-md border border-border-muted bg-surface-base px-2.5 py-2 text-left text-sm font-semibold text-text-primary transition-[border-color,box-shadow] duration-150 focus:border-brand-input focus:outline-none focus:ring-3 focus:ring-brand-ringSoft"
-                    value={solverOptions.load_balance_weight}
-                    onChange={(event) =>
-                      updateSolverOption(
-                        "load_balance_weight",
-                        Math.max(0, Number(event.target.value) || 0),
-                      )
-                    }
-                  />
-                </div>
-              </div>
-            </details>
+              );
+            })}
           </div>
+        </section>
+
+        <section className="mb-5 flex flex-wrap items-center justify-between gap-4 rounded-[10px] border border-border-soft bg-surface-muted px-4 py-3">
+          <div className="min-w-0">
+            <span className={sectionLabelClass}>Panelstørrelse</span>
+            <p className="m-0 mt-1 text-detail leading-snug text-text-muted">
+              Antall intervjuere per kandidat.
+            </p>
+          </div>
+          <Stepper
+            value={panelSize}
+            min={PANEL_SIZE_MIN}
+            max={PANEL_SIZE_MAX}
+            onStep={setPanelSize}
+            aria-label="Panelstørrelse"
+          />
+        </section>
+        <div className="flex flex-wrap items-center justify-between gap-4 border-t border-border-soft pt-4">
+          <div className="flex flex-wrap items-center gap-5 text-ui text-text-muted">
+            <span className="inline-flex items-baseline gap-1.5">
+              <span className="text-label font-bold uppercase tracking-label text-text-subtle">
+                Kandidater
+              </span>
+              <span className="text-sm font-bold tabular-nums text-text-primary">
+                {candidates.length}
+              </span>
+            </span>
+            <span className="inline-flex items-baseline gap-1.5">
+              <span className="text-label font-bold uppercase tracking-label text-text-subtle">
+                Intervjuere
+              </span>
+              <span className="text-sm font-bold tabular-nums text-text-primary">
+                {interviewers.length}
+              </span>
+            </span>
+          </div>
+          <button
+            type="button"
+            className="cursor-pointer whitespace-nowrap rounded-lg border border-brand bg-brand px-5 py-2.5 text-ui font-bold text-white transition-[background,border-color,box-shadow] duration-150 hover:border-brand-hover hover:bg-brand-hover focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-brand-ring active:bg-brand-pressed disabled:cursor-not-allowed disabled:opacity-40"
+            onClick={handleSolve}
+            disabled={loading}
+          >
+            {loading ? "Optimaliserer..." : "Generer plan"}
+          </button>
         </div>
 
         {error && (
-          <div className="mb-3 rounded-lg border border-brand-border bg-brand-muted px-4 py-3 text-ui font-semibold text-brand">
+          <div className="mt-4 rounded-lg border border-brand-border bg-brand-muted px-4 py-3 text-ui font-semibold text-brand">
             {error}
           </div>
         )}
 
         {result?.status === "INFEASIBLE" && (
-          <div className="mb-3 rounded-lg border border-brand-border bg-surface-muted px-5 py-8 text-center">
+          <div className="mt-4 rounded-lg border border-brand-border bg-surface-muted px-5 py-8 text-center">
             <h4 className="m-0 mb-2 text-base font-bold text-text-primary">
               Ingen løsning funnet
             </h4>
@@ -617,327 +537,442 @@ export default function SolverView({
             </p>
           </div>
         )}
+      </div>
 
-        {result?.status === "SUCCESS" && (
-          <div className="animate-[fade-in_0.25s_ease-out]">
-            <div className="mb-[0.875rem] flex flex-wrap items-center justify-between gap-3">
-              <div className="flex flex-wrap items-center gap-[0.65rem]">
-                <div>
-                  <span className="mb-1 block text-label font-bold uppercase tracking-label text-text-subtle">
-                    Resultat
+      {loading &&
+        (() => {
+          const maxMs = solverOptions.max_solver_seconds * 1000;
+          const progressPercent = Math.min(
+            95,
+            (elapsedMs / Math.max(maxMs, 1)) * 100,
+          );
+          return (
+            <div className="animate-[fade-in_0.25s_ease-out] rounded-panel border border-border bg-surface-base p-6 handheld:p-5">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div className="flex items-center gap-2.5">
+                  <span
+                    className="flex h-8 w-8 items-center justify-center rounded-full bg-brand-muted text-brand"
+                    aria-hidden="true"
+                  >
+                    <Sparkles size={15} className="animate-pulse" />
                   </span>
-                  <h3 className="m-0 text-sm font-bold text-text-primary">
-                    Generert intervjuplan
-                  </h3>
-                </div>
-                <span className="inline-flex items-center gap-1.5 rounded-full border border-brand-border bg-brand-subtle px-2.5 py-1 text-xs font-semibold text-brand">
-                  {result.schedule.length} intervjuer
-                </span>
-              </div>
-
-              <div className="flex gap-[3px] rounded-lg border border-border-soft bg-surface-muted p-[3px]">
-                <button
-                  type="button"
-                  className={cn(
-                    "flex h-8 w-8 cursor-pointer items-center justify-center rounded-md border transition-all duration-100 hover:text-text-primary",
-                    viewType === "list"
-                      ? "border-border-soft bg-surface-base text-text-primary"
-                      : "border-transparent bg-transparent text-text-faded",
-                  )}
-                  onClick={() => setViewType("list")}
-                  title="Liste-visning"
-                >
-                  <Icon name="list" size="1.2rem" prefix="ios" />
-                </button>
-                <button
-                  type="button"
-                  className={cn(
-                    "flex h-8 w-8 cursor-pointer items-center justify-center rounded-md border transition-all duration-100 hover:text-text-primary",
-                    viewType === "calendar"
-                      ? "border-border-soft bg-surface-base text-text-primary"
-                      : "border-transparent bg-transparent text-text-faded",
-                  )}
-                  onClick={() => setViewType("calendar")}
-                  title="Kalender-visning"
-                >
-                  <Icon name="calendar" size="1.2rem" prefix="ios" />
-                </button>
-                <button
-                  type="button"
-                  className={cn(
-                    "flex h-8 cursor-pointer items-center justify-center rounded-md border px-3 text-xs font-bold transition-all duration-100 hover:text-text-primary",
-                    viewType === "person"
-                      ? "border-border-soft bg-surface-base text-text-primary"
-                      : "border-transparent bg-transparent text-text-faded",
-                  )}
-                  onClick={() => setViewType("person")}
-                  title="Personvisning"
-                >
-                  Person
-                </button>
-              </div>
-            </div>
-
-            {viewType === "person" ? (
-              <div className="flex flex-col gap-4">
-                <div className="flex justify-end">
-                  <div className="flex flex-col gap-1">
-                    <label
-                      className="text-label font-bold uppercase tracking-label text-text-subtle"
-                      htmlFor="interviewer-filter"
-                    >
-                      Velg intervjuer
-                    </label>
-                    <select
-                      id="interviewer-filter"
-                      className="min-w-56 rounded-md border border-border-muted bg-surface-base px-2.5 py-2 text-sm font-semibold text-text-primary transition-[border-color,box-shadow] duration-150 focus:border-brand-input focus:outline-none focus:ring-3 focus:ring-brand-ringSoft"
-                      value={selectedInterviewer}
-                      onChange={(event) =>
-                        setSelectedInterviewer(event.target.value)
-                      }
-                    >
-                      <option value="">Velg en person</option>
-                      {interviewerDistribution.map((interviewer) => (
-                        <option key={interviewer.name} value={interviewer.name}>
-                          {interviewer.name}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                </div>
-
-                <div className="mb-4">
-                  <div className="mb-[0.6rem] flex flex-wrap items-baseline justify-between gap-3">
-                    <span className="mb-1 block text-label font-bold uppercase tracking-label text-text-subtle">
-                      Fordeling
-                    </span>
-                    <p className="m-0 text-ui text-text-subtle">
-                      Klikk på en person for å åpne intervjuene deres.
+                  <div>
+                    <h3 className="m-0 text-sm font-bold text-text-primary">
+                      Optimaliserer intervjuplan
+                    </h3>
+                    <p className="m-0 mt-0.5 text-detail text-text-muted">
+                      Solveren vurderer kombinasjoner av paneler og tidspunkt.
                     </p>
                   </div>
-
-                  <div className="grid grid-cols-[repeat(auto-fit,minmax(160px,1fr))] gap-[0.6rem]">
-                    <button
-                      type="button"
-                      className="rounded-lg border border-border-soft bg-surface-muted px-4 py-3 text-left transition-[border-color,background] duration-100 hover:border-brand-panelBorder"
-                    >
-                      <span className="text-ui font-bold text-text-primary">
-                        Alle intervjuere
-                      </span>
-                      <span className="block text-xl font-extrabold text-text-primary">
-                        {totalAssignments}
-                      </span>
-                      <span className="text-label font-bold uppercase tracking-label text-text-subtle">
-                        Totale tildelinger
-                      </span>
-                    </button>
-
-                    {interviewerDistribution.map((interviewer) => (
-                      <button
-                        key={interviewer.name}
-                        type="button"
-                        className={cn(
-                          "rounded-lg border px-4 py-3 text-left transition-[border-color,background] duration-100 hover:border-brand-panelBorder",
-                          selectedInterviewer === interviewer.name
-                            ? "border-brand-panelBorder bg-brand-subtle"
-                            : "border-border-soft bg-surface-muted",
-                        )}
-                        onClick={() => setSelectedInterviewer(interviewer.name)}
-                      >
-                        <span className="text-ui font-bold text-text-primary">
-                          {interviewer.name}
-                        </span>
-                        <span className="block text-xl font-extrabold text-text-primary">
-                          {interviewer.count}
-                        </span>
-                        <span className="text-label font-bold uppercase tracking-label text-text-subtle">
-                          {interviewer.overtimeCount > 0
-                            ? `${interviewer.overtimeCount} overtid`
-                            : "Ingen overtid"}
-                        </span>
-                      </button>
-                    ))}
-                  </div>
                 </div>
-
-                {!selectedInterviewer ? (
-                  <div className="rounded-lg border border-border bg-surface-muted p-4 text-center text-sm font-semibold text-text-muted">
-                    Velg en intervjuer for å se intervjuene.
-                  </div>
-                ) : selectedInterviewerSchedule.length === 0 ? (
-                  <div className="rounded-lg border border-border bg-surface-muted p-4 text-center text-sm font-semibold text-text-muted">
-                    {selectedInterviewer} har ingen tildelte intervjuer.
-                  </div>
-                ) : (
-                  <div className="overflow-hidden rounded-lg border border-border-soft">
-                    <table className="w-full border-collapse">
-                      <thead>
-                        <tr>
-                          <th className="border-b border-border-soft bg-surface-subtle px-4 py-3 text-left text-label font-bold uppercase tracking-label text-text-subtle">
-                            Tidspunkt
-                          </th>
-                          <th className="border-b border-border-soft bg-surface-subtle px-4 py-3 text-left text-label font-bold uppercase tracking-label text-text-subtle">
-                            Kandidat
-                          </th>
-                          <th className="border-b border-border-soft bg-surface-subtle px-4 py-3 text-left text-label font-bold uppercase tracking-label text-text-subtle">
-                            Intervjupanel
-                          </th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {selectedInterviewerSchedule.map((item, idx) => (
-                          <tr
-                            key={idx}
-                            className="group [&:not(:last-child)>td]:border-b [&:not(:last-child)>td]:border-b-border-faint hover:[&>td]:bg-surface-soft"
-                          >
-                            <td className="w-[100px] whitespace-nowrap px-4 py-3 text-sm font-semibold text-text-muted">
-                              {formatSlotTime(item.time)}
-                            </td>
-                            <td className="px-4 py-3 text-sm font-semibold text-text-primary">
-                              {item.candidate}
-                            </td>
-                            <td className="px-4 py-3 text-sm">
-                              <div className="flex flex-wrap gap-[0.35rem]">
-                                {item.panel.map((p, i) => (
-                                  <span
-                                    key={i}
-                                    className={cn(
-                                      "inline-flex items-center rounded-full border px-2 py-1 text-xs font-semibold",
-                                      p.is_overtime
-                                        ? "border-brand-panelBorder bg-brand-badge text-brand"
-                                        : "border-border-soft bg-surface-subtle text-text-body",
-                                    )}
-                                    title={
-                                      p.is_overtime
-                                        ? "Utenfor registrert tilgjengelighet"
-                                        : undefined
-                                    }
-                                  >
-                                    {p.name}
-                                  </span>
-                                ))}
-                              </div>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
+                <span className="text-ui font-bold tabular-nums text-text-primary">
+                  {(elapsedMs / 1000).toFixed(1)}s
+                </span>
               </div>
-            ) : viewType === "list" ? (
-              <div className="overflow-hidden rounded-lg border border-border-soft">
-                <table className="w-full border-collapse">
-                  <thead>
-                    <tr>
-                      <th className="border-b border-border-soft bg-surface-subtle px-4 py-3 text-left text-label font-bold uppercase tracking-label text-text-subtle">
-                        Tidspunkt
-                      </th>
-                      <th className="border-b border-border-soft bg-surface-subtle px-4 py-3 text-left text-label font-bold uppercase tracking-label text-text-subtle">
-                        Kandidat
-                      </th>
-                      <th className="border-b border-border-soft bg-surface-subtle px-4 py-3 text-left text-label font-bold uppercase tracking-label text-text-subtle">
-                        Intervjupanel
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {sortedSchedule.map((item, idx) => (
-                      <tr
-                        key={idx}
-                        className="group [&:not(:last-child)>td]:border-b [&:not(:last-child)>td]:border-b-border-faint hover:[&>td]:bg-surface-soft"
-                      >
-                        <td className="w-[100px] whitespace-nowrap px-4 py-3 text-sm font-semibold text-text-muted">
-                          {formatSlotTime(item.time)}
-                        </td>
-                        <td className="px-4 py-3 text-sm font-semibold text-text-primary">
-                          {item.candidate}
-                        </td>
-                        <td className="px-4 py-3 text-sm">
-                          <div className="flex flex-wrap gap-[0.35rem]">
-                            {item.panel.map((p, i) => (
-                              <span
-                                key={i}
-                                className={cn(
-                                  "inline-flex items-center rounded-full border px-2 py-1 text-xs font-semibold",
-                                  p.is_overtime
-                                    ? "border-brand-panelBorder bg-brand-badge text-brand"
-                                    : "border-border-soft bg-surface-subtle text-text-body",
-                                )}
-                                title={
-                                  p.is_overtime
-                                    ? "Utenfor registrert tilgjengelighet"
-                                    : undefined
-                                }
-                              >
-                                {p.name}
-                              </span>
-                            ))}
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+              <div
+                className="mt-4 h-1.5 w-full overflow-hidden rounded-full bg-surface-muted"
+                role="progressbar"
+                aria-valuenow={Math.round(progressPercent)}
+                aria-valuemin={0}
+                aria-valuemax={100}
+              >
+                <div
+                  className="h-full rounded-full bg-brand transition-[width] duration-200 ease-linear"
+                  style={{ width: `${progressPercent}%` }}
+                />
               </div>
-            ) : (
-              <SolverCalendarView schedule={sortedSchedule} dates={dates} />
-            )}
+              {progressPercent >= 95 && (
+                <p className="m-0 mt-3 text-detail text-text-muted">
+                  Ferdigstiller løsningen …
+                </p>
+              )}
+            </div>
+          );
+        })()}
 
-            <div className="mt-[0.875rem] flex flex-wrap items-center gap-3 border-t border-border-soft pt-[0.875rem]">
+      {result?.status === "SUCCESS" && overviewStats && (
+        <div className="animate-[fade-in_0.25s_ease-out] rounded-panel border border-border bg-surface-base p-6 handheld:p-5">
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <span className="mb-1 block text-label font-bold uppercase tracking-label text-text-subtle">
+                Resultat
+              </span>
+              <h3 className="m-0 text-sm font-bold text-text-primary">
+                Oversikt over plan
+              </h3>
+            </div>
+            <span className="inline-flex items-center gap-1.5 rounded-full border border-success-border bg-success-bg px-2.5 py-1 text-xs font-bold uppercase tracking-badge text-success">
+              Ferdig
+            </span>
+          </div>
+
+          <div className="grid grid-cols-[repeat(auto-fit,minmax(140px,1fr))] gap-2">
+            <StatTile
+              label="Intervjuer"
+              value={overviewStats.totalInterviews}
+              hint={`${overviewStats.usedInterviewers} av ${overviewStats.totalInterviewers} brukt`}
+            />
+            <StatTile
+              label="Overtidstildelinger"
+              value={overviewStats.overtimeAssignments}
+              hint={
+                overviewStats.overtimeAssignments === 0
+                  ? "Ingen utenfor tilgjengelighet"
+                  : "Utenfor tilgjengelighet"
+              }
+              tone={overviewStats.overtimeAssignments > 0 ? "warn" : "neutral"}
+            />
+            <StatTile
+              label="Mest belastet"
+              value={overviewStats.maxLoad}
+              hint="intervjuer hos én person"
+            />
+            <StatTile
+              label="Minst belastet"
+              value={overviewStats.minLoad}
+              hint="intervjuer hos én person"
+            />
+          </div>
+
+          <div className="mt-5 flex flex-wrap items-center gap-2 border-t border-border-soft pt-4">
+            <button
+              type="button"
+              onClick={() => setPlanRevealed((current) => !current)}
+              className={cn(
+                "inline-flex cursor-pointer items-center gap-1.5 rounded-lg border px-4 py-2 text-ui font-semibold transition-[border-color,background,box-shadow] duration-150",
+                planRevealed
+                  ? "border-border-muted bg-surface-base text-text-soft hover:border-border-quiet hover:bg-surface-subtle"
+                  : "border-brand bg-brand text-white hover:border-brand-hover hover:bg-brand-hover",
+              )}
+            >
+              {planRevealed ? <EyeOff size={14} /> : <Eye size={14} />}
+              {planRevealed ? "Skjul intervjuplan" : "Vis intervjuplan"}
+            </button>
+            {planRevealed && (
               <button
                 type="button"
-                className="inline-flex cursor-pointer items-center gap-1.5 rounded-lg border border-border-muted bg-surface-base px-4 py-2 text-ui font-semibold text-text-soft transition-[border-color,background] duration-100 hover:border-border-quiet hover:bg-surface-subtle"
-                onClick={handleExportIcs}
-              >
-                <Icon name="download" size="0.9rem" prefix="ios" />
-                Eksporter til kalender (.ics)
-              </button>
-              <div className="ml-auto flex flex-wrap items-center gap-2">
-                {savedSchedule?.is_distributed ? (
-                  <>
-                    <span className="inline-flex items-center rounded-full border border-success-border bg-success-bg px-3 py-1 text-xs font-bold uppercase tracking-badge text-success">
-                      Distribuert
-                    </span>
-                    <button
-                      type="button"
-                      className="cursor-pointer rounded-lg border border-border-muted bg-surface-base px-4 py-2 text-ui font-semibold text-text-soft transition-[border-color,background] duration-100 hover:border-border-quiet hover:bg-surface-subtle disabled:cursor-not-allowed disabled:opacity-50"
-                      onClick={handleUnlock}
-                      disabled={isSaving}
-                    >
-                      Lås opp for redigering
-                    </button>
-                  </>
-                ) : (
-                  <>
-                    <button
-                      type="button"
-                      className="cursor-pointer rounded-lg border border-border-muted bg-surface-base px-4 py-2 text-ui font-semibold text-text-soft transition-[border-color,background] duration-100 hover:border-border-quiet hover:bg-surface-subtle disabled:cursor-not-allowed disabled:opacity-50"
-                      onClick={() => handleSave(false)}
-                      disabled={isSaving}
-                    >
-                      {isSaving ? "Lagrer..." : "Lagre plan"}
-                    </button>
-                    <button
-                      type="button"
-                      className="cursor-pointer rounded-lg border border-brand bg-brand px-4 py-2 text-ui font-bold text-white transition-[background,border-color,box-shadow] duration-150 hover:border-brand-hover hover:bg-brand-hover focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-brand-ring active:bg-brand-pressed disabled:cursor-not-allowed disabled:opacity-40"
-                      onClick={() => handleSave(true)}
-                      disabled={isSaving}
-                    >
-                      Lås og distribuer
-                    </button>
-                  </>
+                onClick={() => setNamesRevealed((current) => !current)}
+                className={cn(
+                  "inline-flex cursor-pointer items-center gap-1.5 rounded-lg border px-4 py-2 text-ui font-semibold transition-[border-color,background] duration-150",
+                  namesRevealed
+                    ? "border-brand-activeBorder bg-brand-panel text-brand"
+                    : "border-border-muted bg-surface-base text-text-soft hover:border-border-quiet hover:bg-surface-subtle",
                 )}
+              >
+                {namesRevealed ? <EyeOff size={14} /> : <Eye size={14} />}
+                {namesRevealed ? "Skjul kandidatnavn" : "Vis kandidatnavn"}
+              </button>
+            )}
+            <ToggleCard
+              title="Del kandidatnavn"
+              description="Vis kandidatnavn for alle deltakere i den distribuerte planen."
+              checked={showNamesForAll}
+              onToggle={() => setShowNamesForAll((v) => !v)}
+              className="flex-1 basis-[220px]"
+            />
+            {!planRevealed && (
+              <span className="text-detail text-text-muted">
+                Planen og kandidatnavn er skjult til du åpner dem.
+              </span>
+            )}
+          </div>
+        </div>
+      )}
+
+      {result?.status === "SUCCESS" && planRevealed && (
+        <div className="animate-[fade-in_0.25s_ease-out] rounded-panel border border-border bg-surface-base p-6 handheld:p-5">
+          <div className="mb-[0.875rem] flex flex-wrap items-center justify-between gap-3">
+            <div className="flex flex-wrap items-center gap-[0.65rem]">
+              <div>
+                <span className="mb-1 block text-label font-bold uppercase tracking-label text-text-subtle">
+                  Intervjuplan
+                </span>
+                <h3 className="m-0 text-sm font-bold text-text-primary">
+                  Generert intervjuplan
+                </h3>
               </div>
-              {saveError && (
-                <span className="text-xs font-semibold text-brand">
-                  {saveError}
+              <span className="inline-flex items-center gap-1.5 rounded-full border border-brand-border bg-brand-subtle px-2.5 py-1 text-xs font-semibold text-brand">
+                {result.schedule.length} intervjuer
+              </span>
+              {!namesRevealed && (
+                <span className="inline-flex items-center gap-1.5 rounded-full border border-border-muted bg-surface-muted px-2.5 py-1 text-xs font-semibold text-text-muted">
+                  <EyeOff size={12} />
+                  Navn skjult
                 </span>
               )}
             </div>
+
+            <SegmentedControl
+              value={viewType}
+              onChange={setViewType}
+              items={[
+                { key: "list", icon: <Icon name="list" size="1.2rem" prefix="ios" />, title: "Liste-visning" },
+                { key: "calendar", icon: <Icon name="calendar" size="1.2rem" prefix="ios" />, title: "Kalender-visning" },
+                { key: "person", label: "Person", title: "Personvisning" },
+              ]}
+            />
           </div>
-        )}
-      </div>
+
+          {viewType === "person" ? (
+            <div className="flex flex-col gap-4">
+              <div className="flex justify-end">
+                <div className="flex flex-col gap-1">
+                  <label
+                    className="text-label font-bold uppercase tracking-label text-text-subtle"
+                    htmlFor="interviewer-filter"
+                  >
+                    Velg intervjuer
+                  </label>
+                  <select
+                    id="interviewer-filter"
+                    className="min-w-56 rounded-md border border-border-muted bg-surface-base px-2.5 py-2 text-sm font-semibold text-text-primary transition-[border-color,box-shadow] duration-150 focus:border-brand-input focus:outline-none focus:ring-3 focus:ring-brand-ringSoft"
+                    value={selectedInterviewer}
+                    onChange={(event) =>
+                      setSelectedInterviewer(event.target.value)
+                    }
+                  >
+                    <option value="">Velg en person</option>
+                    {interviewerDistribution.map((interviewer) => (
+                      <option key={interviewer.name} value={interviewer.name}>
+                        {interviewer.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              <div className="mb-4">
+                <div className="mb-[0.6rem] flex flex-wrap items-baseline justify-between gap-3">
+                  <span className="mb-1 block text-label font-bold uppercase tracking-label text-text-subtle">
+                    Fordeling
+                  </span>
+                  <p className="m-0 text-ui text-text-subtle">
+                    Klikk på en person for å åpne intervjuene deres.
+                  </p>
+                </div>
+
+                <div className="grid grid-cols-[repeat(auto-fit,minmax(160px,1fr))] gap-[0.6rem]">
+                  <button
+                    type="button"
+                    className="rounded-lg border border-border-soft bg-surface-muted px-4 py-3 text-left transition-[border-color,background] duration-100 hover:border-brand-panelBorder"
+                  >
+                    <span className="text-ui font-bold text-text-primary">
+                      Alle intervjuere
+                    </span>
+                    <span className="block text-xl font-extrabold text-text-primary">
+                      {totalAssignments}
+                    </span>
+                    <span className="text-label font-bold uppercase tracking-label text-text-subtle">
+                      Totale tildelinger
+                    </span>
+                  </button>
+
+                  {interviewerDistribution.map((interviewer) => (
+                    <button
+                      key={interviewer.name}
+                      type="button"
+                      className={cn(
+                        "rounded-lg border px-4 py-3 text-left transition-[border-color,background] duration-100 hover:border-brand-panelBorder",
+                        selectedInterviewer === interviewer.name
+                          ? "border-brand-panelBorder bg-brand-subtle"
+                          : "border-border-soft bg-surface-muted",
+                      )}
+                      onClick={() => setSelectedInterviewer(interviewer.name)}
+                    >
+                      <span className="text-ui font-bold text-text-primary">
+                        {interviewer.name}
+                      </span>
+                      <span className="block text-xl font-extrabold text-text-primary">
+                        {interviewer.count}
+                      </span>
+                      <span className="text-label font-bold uppercase tracking-label text-text-subtle">
+                        {interviewer.overtimeCount > 0
+                          ? `${interviewer.overtimeCount} overtid`
+                          : "Ingen overtid"}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {!selectedInterviewer ? (
+                <div className="rounded-lg border border-border bg-surface-muted p-4 text-center text-sm font-semibold text-text-muted">
+                  Velg en intervjuer for å se intervjuene.
+                </div>
+              ) : selectedInterviewerSchedule.length === 0 ? (
+                <div className="rounded-lg border border-border bg-surface-muted p-4 text-center text-sm font-semibold text-text-muted">
+                  {selectedInterviewer} har ingen tildelte intervjuer.
+                </div>
+              ) : (
+                <div className="overflow-hidden rounded-lg border border-border-soft">
+                  <table className="w-full border-collapse">
+                    <thead>
+                      <tr>
+                        <th className="border-b border-border-soft bg-surface-subtle px-4 py-3 text-left text-label font-bold uppercase tracking-label text-text-subtle">
+                          Tidspunkt
+                        </th>
+                        <th className="border-b border-border-soft bg-surface-subtle px-4 py-3 text-left text-label font-bold uppercase tracking-label text-text-subtle">
+                          Kandidat
+                        </th>
+                        <th className="border-b border-border-soft bg-surface-subtle px-4 py-3 text-left text-label font-bold uppercase tracking-label text-text-subtle">
+                          Intervjupanel
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {selectedInterviewerSchedule.map((item, idx) => (
+                        <tr
+                          key={idx}
+                          className="group [&:not(:last-child)>td]:border-b [&:not(:last-child)>td]:border-b-border-faint hover:[&>td]:bg-surface-soft"
+                        >
+                          <td className="w-[100px] whitespace-nowrap px-4 py-3 text-sm font-semibold text-text-muted">
+                            {formatSlotTime(item.time)}
+                          </td>
+                          <td className="px-4 py-3 text-sm font-semibold text-text-primary">
+                            {displayCandidate(item.candidate)}
+                          </td>
+                          <td className="px-4 py-3 text-sm">
+                            <div className="flex flex-wrap gap-[0.35rem]">
+                              {item.panel.map((p, i) => (
+                                <span
+                                  key={i}
+                                  className={cn(
+                                    "inline-flex items-center rounded-full border px-2 py-1 text-xs font-semibold",
+                                    p.is_overtime
+                                      ? "border-brand-panelBorder bg-brand-badge text-brand"
+                                      : "border-border-soft bg-surface-subtle text-text-body",
+                                  )}
+                                  title={
+                                    p.is_overtime
+                                      ? "Utenfor registrert tilgjengelighet"
+                                      : undefined
+                                  }
+                                >
+                                  {p.name}
+                                </span>
+                              ))}
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          ) : viewType === "list" ? (
+            <div className="overflow-hidden rounded-lg border border-border-soft">
+              <table className="w-full border-collapse">
+                <thead>
+                  <tr>
+                    <th className="border-b border-border-soft bg-surface-subtle px-4 py-3 text-left text-label font-bold uppercase tracking-label text-text-subtle">
+                      Tidspunkt
+                    </th>
+                    <th className="border-b border-border-soft bg-surface-subtle px-4 py-3 text-left text-label font-bold uppercase tracking-label text-text-subtle">
+                      Kandidat
+                    </th>
+                    <th className="border-b border-border-soft bg-surface-subtle px-4 py-3 text-left text-label font-bold uppercase tracking-label text-text-subtle">
+                      Intervjupanel
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {sortedSchedule.map((item, idx) => (
+                    <tr
+                      key={idx}
+                      className="group [&:not(:last-child)>td]:border-b [&:not(:last-child)>td]:border-b-border-faint hover:[&>td]:bg-surface-soft"
+                    >
+                      <td className="w-[100px] whitespace-nowrap px-4 py-3 text-sm font-semibold text-text-muted">
+                        {formatSlotTime(item.time)}
+                      </td>
+                      <td className="px-4 py-3 text-sm font-semibold text-text-primary">
+                        {displayCandidate(item.candidate)}
+                      </td>
+                      <td className="px-4 py-3 text-sm">
+                        <div className="flex flex-wrap gap-[0.35rem]">
+                          {item.panel.map((p, i) => (
+                            <span
+                              key={i}
+                              className={cn(
+                                "inline-flex items-center rounded-full border px-2 py-1 text-xs font-semibold",
+                                p.is_overtime
+                                  ? "border-brand-panelBorder bg-brand-badge text-brand"
+                                  : "border-border-soft bg-surface-subtle text-text-body",
+                              )}
+                              title={
+                                p.is_overtime
+                                  ? "Utenfor registrert tilgjengelighet"
+                                  : undefined
+                              }
+                            >
+                              {p.name}
+                            </span>
+                          ))}
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <SolverCalendarView schedule={displaySchedule} dates={dates} />
+          )}
+
+          <div className="mt-[0.875rem] flex flex-wrap items-center gap-3 border-t border-border-soft pt-[0.875rem]">
+            <button
+              type="button"
+              className="inline-flex cursor-pointer items-center gap-1.5 rounded-lg border border-border-muted bg-surface-base px-4 py-2 text-ui font-semibold text-text-soft transition-[border-color,background] duration-100 hover:border-border-quiet hover:bg-surface-subtle"
+              onClick={handleExportIcs}
+            >
+              <Icon name="download" size="0.9rem" prefix="ios" />
+              Eksporter til kalender (.ics)
+            </button>
+            <div className="ml-auto flex flex-wrap items-center gap-2">
+              {savedSchedule?.is_distributed ? (
+                <>
+                  <span className="inline-flex items-center rounded-full border border-success-border bg-success-bg px-3 py-1 text-xs font-bold uppercase tracking-badge text-success">
+                    Distribuert
+                  </span>
+                  <button
+                    type="button"
+                    className="cursor-pointer rounded-lg border border-border-muted bg-surface-base px-4 py-2 text-ui font-semibold text-text-soft transition-[border-color,background] duration-100 hover:border-border-quiet hover:bg-surface-subtle disabled:cursor-not-allowed disabled:opacity-50"
+                    onClick={handleUnlock}
+                    disabled={isSaving}
+                  >
+                    Lås opp for redigering
+                  </button>
+                </>
+              ) : (
+                <>
+                  <button
+                    type="button"
+                    className="cursor-pointer rounded-lg border border-border-muted bg-surface-base px-4 py-2 text-ui font-semibold text-text-soft transition-[border-color,background] duration-100 hover:border-border-quiet hover:bg-surface-subtle disabled:cursor-not-allowed disabled:opacity-50"
+                    onClick={() => handleSave(false)}
+                    disabled={isSaving}
+                  >
+                    {isSaving ? "Lagrer..." : "Lagre plan"}
+                  </button>
+                  <button
+                    type="button"
+                    className="cursor-pointer rounded-lg border border-brand bg-brand px-4 py-2 text-ui font-bold text-white transition-[background,border-color,box-shadow] duration-150 hover:border-brand-hover hover:bg-brand-hover focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-brand-ring active:bg-brand-pressed disabled:cursor-not-allowed disabled:opacity-40"
+                    onClick={() => handleSave(true)}
+                    disabled={isSaving}
+                  >
+                    Lås og distribuer
+                  </button>
+                </>
+              )}
+            </div>
+            {saveError && (
+              <span className="text-xs font-semibold text-brand">
+                {saveError}
+              </span>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
+

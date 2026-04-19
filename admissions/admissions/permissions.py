@@ -17,6 +17,13 @@ def user_is_privileged(admission_slug, user):
     for group in admission.admin_groups.all():
         if Membership.objects.filter(user=user.pk, group=group.pk).exists():
             return True
+    return user_is_recruiter(admission_slug, user)
+
+
+def user_is_recruiter(admission_slug, user):
+    # Return true only if the user is leader or recruiting in one of the
+    # admission's committee groups. Members of admin_groups do not qualify.
+    admission = Admission.objects.get(slug=admission_slug)
     for group in admission.groups.all():
         if (
             Membership.objects.filter(user=user.pk, group=group.pk)
@@ -99,10 +106,10 @@ class AdmissionPermissions(permissions.BasePermission):
 
 class ApplicationPermissions(permissions.BasePermission):
     def has_object_permission(self, request, view, obj):
-        return user_is_privileged(view.kwargs.get("admission_slug"), request.user)
+        return user_is_recruiter(view.kwargs.get("admission_slug"), request.user)
 
     def has_permission(self, request, view):
-        return user_is_privileged(view.kwargs.get("admission_slug"), request.user)
+        return user_is_recruiter(view.kwargs.get("admission_slug"), request.user)
 
 
 class GroupApplicationPermissions(permissions.BasePermission):
@@ -114,7 +121,7 @@ class GroupApplicationPermissions(permissions.BasePermission):
             return GroupApplication.objects.filter(application=obj).count() == 0
 
     def has_permission(self, request, view):
-        return user_is_privileged(view.kwargs.get("admission_slug"), request.user)
+        return user_is_recruiter(view.kwargs.get("admission_slug"), request.user)
 
 class IsAdmissionCommitteeMember(permissions.BasePermission):
     """

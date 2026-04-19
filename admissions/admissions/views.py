@@ -418,13 +418,70 @@ class SavedScheduleView(APIView):
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
         data = serializer.validated_data
+        existing = SavedSchedule.objects.filter(admission=admission).first()
+
+        if "start_date" not in data and existing is None:
+            return Response(
+                {"start_date": ["This field is required."]},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if "session_duration" not in data and existing is None:
+            return Response(
+                {"session_duration": ["This field is required."]},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        start_date = data.get(
+            "start_date",
+            existing.start_date if existing is not None else timezone.now().date(),
+        )
+        end_date = data.get(
+            "end_date",
+            existing.end_date if existing is not None else start_date,
+        )
+
         saved, _ = SavedSchedule.objects.update_or_create(
             admission=admission,
             defaults={
-                "schedule": data["schedule"],
-                "start_date": data["start_date"],
-                "session_duration": data["session_duration"],
-                "is_distributed": data["is_distributed"],
+                "schedule": data.get(
+                    "schedule",
+                    existing.schedule if existing is not None else [],
+                ),
+                "start_date": start_date,
+                "end_date": end_date,
+                "session_duration": data.get(
+                    "session_duration",
+                    existing.session_duration if existing is not None else 60,
+                ),
+                "enabled_slots": data.get(
+                    "enabled_slots",
+                    existing.enabled_slots if existing is not None else [],
+                ),
+                "day_start_minute": data.get(
+                    "day_start_minute",
+                    existing.day_start_minute if existing is not None else 8 * 60,
+                ),
+                "day_end_minute": data.get(
+                    "day_end_minute",
+                    existing.day_end_minute if existing is not None else 18 * 60,
+                ),
+                "chunk_size": data.get(
+                    "chunk_size",
+                    existing.chunk_size if existing is not None else 4,
+                ),
+                "chunk_break_minutes": data.get(
+                    "chunk_break_minutes",
+                    existing.chunk_break_minutes if existing is not None else 0,
+                ),
+                "is_distributed": data.get(
+                    "is_distributed",
+                    existing.is_distributed if existing is not None else False,
+                ),
+                "show_candidate_names": data.get(
+                    "show_candidate_names",
+                    existing.show_candidate_names if existing is not None else False,
+                ),
             },
         )
         return Response(SavedScheduleSerializer(saved).data, status=status.HTTP_200_OK)

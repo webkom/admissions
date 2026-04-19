@@ -6,9 +6,12 @@ interface TimeSchedulerProps {
   enabledSlots?: Set<string>;
   selectedSlots?: Set<string>;
   onSlotsChange?: (slots: Set<string>) => void;
-  startHour?: number;
-  endHour?: number;
+  dayStartMinute: number;
+  dayEndMinute: number;
+  chunkSize: number;
+  chunkBreakMinutes: number;
   onSave?: (slots: Set<string>) => Promise<void>;
+  onSaveSuccess?: () => void;
   sessionDuration: number;
   dates: string[];
 }
@@ -17,9 +20,12 @@ const TimeScheduler: React.FC<TimeSchedulerProps> = ({
   enabledSlots,
   selectedSlots: externalSelectedSlots,
   onSlotsChange,
-  startHour = 8,
-  endHour = 18,
+  dayStartMinute,
+  dayEndMinute,
+  chunkSize,
+  chunkBreakMinutes,
   onSave,
+  onSaveSuccess,
   sessionDuration,
   dates,
 }) => {
@@ -32,18 +38,35 @@ const TimeScheduler: React.FC<TimeSchedulerProps> = ({
   const [isDragging, setIsDragging] = React.useState(false);
   const [addMode, setAddMode] = React.useState(false);
   const [isSaving, setIsSaving] = React.useState(false);
-
-  const startMinute = startHour * 60;
-  const endMinute = endHour * 60;
+  const [dirtySinceSave, setDirtySinceSave] = React.useState(false);
 
   const timeSlots = React.useMemo(() => {
     const slots = [];
     const step = sessionDuration > 0 ? sessionDuration : 60;
-    for (let m = startMinute; m < endMinute; m += step) {
-      slots.push(m);
+    let currentMinute = dayStartMinute;
+    while (currentMinute < dayEndMinute) {
+      for (let i = 0; i < chunkSize && currentMinute < dayEndMinute; i++) {
+        slots.push(currentMinute);
+        currentMinute += step;
+      }
+      currentMinute += chunkBreakMinutes;
     }
     return slots;
-  }, [startMinute, endMinute, sessionDuration]);
+  }, [
+    dayStartMinute,
+    dayEndMinute,
+    sessionDuration,
+    chunkSize,
+    chunkBreakMinutes,
+  ]);
+
+  const chunks = React.useMemo(() => {
+    const res = [];
+    for (let i = 0; i < timeSlots.length; i += chunkSize) {
+      res.push(timeSlots.slice(i, i + chunkSize));
+    }
+    return res;
+  }, [timeSlots, chunkSize]);
 
   const formatTime = (totalMinutes: number) => {
     const hours = Math.floor(totalMinutes / 60);
@@ -56,31 +79,44 @@ const TimeScheduler: React.FC<TimeSchedulerProps> = ({
     return enabledSlots.has(makeSlotKey(date, minute));
   };
 
-  const toggleSlot = React.useCallback(
-    (date: string, minute: number, mode: boolean, currentSlots: Set<string>) => {
-      if (!enabledSlots || !enabledSlots.has(makeSlotKey(date, minute))) return;
-
-      const slotId = makeSlotKey(date, minute);
+  const toggleChunk = React.useCallback(
+    (
+      date: string,
+      chunk: number[],
+      mode: boolean,
+      currentSlots: Set<string>,
+    ) => {
       const next = new Set(currentSlots);
-      if (mode) next.add(slotId);
-      else next.delete(slotId);
+      chunk.forEach((minute) => {
+        if (!enabledSlots || !enabledSlots.has(makeSlotKey(date, minute)))
+          return;
+        const slotId = makeSlotKey(date, minute);
+        if (mode) next.add(slotId);
+        else next.delete(slotId);
+      });
       setSelectedSlots(next);
+      setDirtySinceSave(true);
     },
     [enabledSlots, setSelectedSlots],
   );
 
-  const handleMouseDown = (date: string, minute: number) => {
-    if (!isSlotEnabled(date, minute)) return;
-    const slotId = makeSlotKey(date, minute);
-    const newAddMode = !selectedSlots.has(slotId);
+  const handleMouseDown = (date: string, chunk: number[]) => {
+    if (!chunk.some((m) => isSlotEnabled(date, m))) return;
+
+    const enabledInChunk = chunk.filter((m) => isSlotEnabled(date, m));
+    const selectedInChunk = enabledInChunk.filter((m) =>
+      selectedSlots.has(makeSlotKey(date, m)),
+    );
+    const newAddMode = selectedInChunk.length < enabledInChunk.length;
+
     setAddMode(newAddMode);
     setIsDragging(true);
-    toggleSlot(date, minute, newAddMode, selectedSlots);
+    toggleChunk(date, chunk, newAddMode, selectedSlots);
   };
 
-  const handleMouseEnter = (date: string, minute: number) => {
-    if (isDragging && isSlotEnabled(date, minute)) {
-      toggleSlot(date, minute, addMode, selectedSlots);
+  const handleMouseEnter = (date: string, chunk: number[]) => {
+    if (isDragging && chunk.some((m) => isSlotEnabled(date, m))) {
+      toggleChunk(date, chunk, addMode, selectedSlots);
     }
   };
 
@@ -98,6 +134,8 @@ const TimeScheduler: React.FC<TimeSchedulerProps> = ({
     setIsSaving(true);
     try {
       await onSave(selectedSlots);
+      setDirtySinceSave(false);
+      onSaveSuccess?.();
     } finally {
       setIsSaving(false);
     }
@@ -114,7 +152,7 @@ const TimeScheduler: React.FC<TimeSchedulerProps> = ({
     >
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h3 className="m-0 text-sm font-bold text-text-primary">
-          Marker tilgjengelige slots
+          Marker ledighet
         </h3>
         <div className="flex flex-wrap gap-1.5">
           <LegendItem label="Valgt" variant="selected" />
@@ -151,30 +189,85 @@ const TimeScheduler: React.FC<TimeSchedulerProps> = ({
             );
           })}
 
-          {timeSlots.map((minute) => (
-            <React.Fragment key={minute}>
-              <div className="flex items-center justify-end pr-2 text-label font-bold uppercase tracking-label text-border-quiet">
-                {formatTime(minute)}
+          {chunks.map((chunk, chunkIdx) => (
+            <React.Fragment key={chunkIdx}>
+              <div className="flex flex-col items-end justify-center pr-2">
+                <div className="text-label font-bold uppercase tracking-label text-border-quiet">
+                  {formatTime(chunk[0])}
+                </div>
+                {chunk.length > 1 && (
+                  <div className="text-[10px] font-medium leading-none text-text-disabled">
+                    til {formatTime(chunk[chunk.length - 1] + sessionDuration)}
+                  </div>
+                )}
               </div>
 
               {dates.map((date) => {
-                const enabled = isSlotEnabled(date, minute);
-                const isSelected = selectedSlots.has(makeSlotKey(date, minute));
+                const enabledInChunk = chunk.filter((m) =>
+                  isSlotEnabled(date, m),
+                );
+                const selectedInChunk = enabledInChunk.filter((m) =>
+                  selectedSlots.has(makeSlotKey(date, m)),
+                );
+
+                const isAllSelected =
+                  enabledInChunk.length > 0 &&
+                  selectedInChunk.length === enabledInChunk.length;
+                const isSomeSelected = selectedInChunk.length > 0;
+                const isAnyEnabled = enabledInChunk.length > 0;
 
                 return (
                   <div
-                    key={makeSlotKey(date, minute)}
-                    onMouseDown={() => handleMouseDown(date, minute)}
-                    onMouseEnter={() => handleMouseEnter(date, minute)}
+                    key={`${date}-${chunkIdx}`}
+                    onMouseDown={() => handleMouseDown(date, chunk)}
+                    onMouseEnter={() => handleMouseEnter(date, chunk)}
                     className={cn(
-                      "h-10 w-full rounded-md border transition-[background-color,border-color] duration-100",
-                      !enabled && "cursor-not-allowed border-border bg-surface-neutral",
-                      enabled && isSelected && "cursor-pointer border-brand bg-brand hover:bg-brand-hover",
-                      enabled &&
-                        !isSelected &&
+                      "group relative flex min-h-[44px] w-full flex-col gap-[2px] rounded-md border p-1 transition-all duration-100",
+                      !isAnyEnabled &&
+                        "cursor-not-allowed border-border bg-surface-neutral",
+                      isAnyEnabled &&
+                        isAllSelected &&
+                        "cursor-pointer border-brand bg-brand hover:bg-brand-hover",
+                      isAnyEnabled &&
+                        !isAllSelected &&
+                        isSomeSelected &&
+                        "cursor-pointer border-brand-strongBorder bg-brand-soft hover:bg-brand-muted",
+                      isAnyEnabled &&
+                        !isSomeSelected &&
                         "cursor-pointer border-border bg-surface-base hover:border-brand-strongBorder hover:bg-brand-soft",
                     )}
-                  />
+                  >
+                    <div className="flex flex-1 flex-wrap gap-[2px]">
+                      {chunk.map((m) => {
+                        const enabled = isSlotEnabled(date, m);
+                        const selected = selectedSlots.has(makeSlotKey(date, m));
+                        return (
+                          <div
+                            key={m}
+                            className={cn(
+                              "h-1.5 flex-1 rounded-[1px]",
+                              !enabled && "bg-border-muted/30",
+                              enabled &&
+                                selected &&
+                                (isAllSelected ? "bg-white/40" : "bg-brand"),
+                              enabled && !selected && "bg-border-faint",
+                            )}
+                          />
+                        );
+                      })}
+                    </div>
+                    <div className="text-center text-[10px] font-bold uppercase tracking-tight">
+                      {isAllSelected ? (
+                        <span className="text-white/90">Valgt</span>
+                      ) : isSomeSelected ? (
+                        <span className="text-brand">Delvis</span>
+                      ) : isAnyEnabled ? (
+                        <span className="text-text-disabled group-hover:text-brand-strongBorder">
+                          Ledig
+                        </span>
+                      ) : null}
+                    </div>
+                  </div>
                 );
               })}
             </React.Fragment>
@@ -185,14 +278,21 @@ const TimeScheduler: React.FC<TimeSchedulerProps> = ({
       <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border pt-3">
         <FooterInfo label="Valgte slots" value={String(selectedSlots.size)} />
         <FooterInfo label="Intervjulengde" value={`${sessionDuration} min`} />
-        <button
-          className="cursor-pointer rounded-lg border border-brand bg-brand px-4 py-2 text-ui font-bold text-white transition-[background,border-color,box-shadow] duration-150 hover:border-brand-hover hover:bg-brand-hover focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-brand-ring active:bg-brand-pressed disabled:cursor-not-allowed disabled:opacity-40"
-          onClick={handleSave}
-          disabled={isSaving || !onSave}
-          type="button"
-        >
-          {isSaving ? "Lagrer..." : "Lagre tilgjengelighet"}
-        </button>
+        <div className="flex items-center gap-3">
+          {dirtySinceSave && (
+            <span className="text-xs font-semibold italic text-text-faded">
+              Ulagrede endringer
+            </span>
+          )}
+          <button
+            className="cursor-pointer rounded-lg border border-brand bg-brand px-4 py-2 text-ui font-bold text-white transition-[background,border-color,box-shadow] duration-150 hover:border-brand-hover hover:bg-brand-hover focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-brand-ring active:bg-brand-pressed disabled:cursor-not-allowed disabled:opacity-40"
+            onClick={handleSave}
+            disabled={isSaving || !onSave}
+            type="button"
+          >
+            {isSaving ? "Lagrer..." : "Lagre tilgjengelighet"}
+          </button>
+        </div>
       </div>
     </div>
   );
