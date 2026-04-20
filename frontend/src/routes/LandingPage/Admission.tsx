@@ -17,7 +17,7 @@ const Admission: React.FC<AdmissionProps> = ({ admission }) => {
   const isBackup = admission.slug === "backup";
   const isSingleGroupAdmission = admission?.groups.length === 1;
   const external_link =
-    "https://docs.google.com/forms/d/e/1FAIpQLSd4oaU8BADfuVrKCoMmpSQcVVrFCdlPPmP56dKznU0clQt7cg/viewform?usp=header";
+    "https://docs.google.com/forms/d/e/1FAIpQLSd4oaU8BADfuVrKCoMmpSQcVVrFCdlPPmP56dKznU0clQt7cg/viewform";
 
   return (
     <AdmissionWrapper>
