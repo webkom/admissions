@@ -11,14 +11,12 @@ import { TabNav, type TabNavItem } from "src/components/Scheduling/ui";
 import {
   useAdminApplications,
   useAdmission,
+  useInterviewAvailability,
+  useSaveInterviewAvailability,
   useSavedSchedule,
   useSaveSchedule,
 } from "src/query/hooks";
-import {
-  Candidate,
-  Interviewer,
-  SavedSchedule,
-} from "../../types";
+import { Candidate, Interviewer, SavedSchedule } from "../../types";
 import StatusToast, { StatusToastState } from "src/components/StatusToast";
 import TimeScheduler from "src/components/Scheduling/Calendar/Calendar";
 import PersonListView from "src/components/Scheduling/PersonList/PersonListView";
@@ -32,17 +30,18 @@ import {
   DEFAULT_MOCK_INTERVIEWER_COUNT,
   createMockCandidates,
   createMockInterviewers,
-  mergeAvailability,
-  type ScheduleConfig,
 } from "./mockData";
-import djangoData, { isLoggedIn } from "src/utils/djangoData";
+import djangoData from "src/utils/djangoData";
 import {
   addDays,
+  decodeScheduleTime,
+  encodeScheduleTime,
   dateRangeDates,
   formatDateHeader,
   generateIcs,
   makeSlotKey,
   nextMonday,
+  parseSlotKey,
 } from "src/components/Scheduling/scheduleUtils";
 import cn from "src/utils/cn";
 
@@ -50,15 +49,18 @@ const DEFAULT_DAY_START_MINUTE = 8 * 60;
 const DEFAULT_DAY_END_MINUTE = 18 * 60;
 const DEFAULT_SESSION_DURATION = 60;
 
-const slotsToSolverAvailability = (slots: Set<string>, dates: string[]): number[] => {
+const slotsToSolverAvailability = (
+  slots: Set<string>,
+  dates: string[],
+  sessionDuration: number,
+): number[] => {
   const availability = new Set<number>();
   slots.forEach((key) => {
-    const colonIdx = key.indexOf(":");
-    const date = key.slice(0, colonIdx);
-    const minute = Number(key.slice(colonIdx + 1));
+    const { date, minute } = parseSlotKey(key);
+    if (!Number.isFinite(minute)) return;
     const dayIndex = dates.indexOf(date);
     if (dayIndex === -1) return;
-    availability.add(dayIndex * 24 + Math.floor(minute / 60));
+    availability.add(encodeScheduleTime(dayIndex, minute, sessionDuration));
   });
   return Array.from(availability).sort((a, b) => a - b);
 };
@@ -87,7 +89,11 @@ const inferEndDateFromSchedule = (savedSchedule: SavedSchedule) => {
   if (savedSchedule.schedule.length === 0) return null;
 
   const lastDayOffset = savedSchedule.schedule.reduce(
-    (max, item) => Math.max(max, Math.floor(item.time / 24)),
+    (max, item) =>
+      Math.max(
+        max,
+        decodeScheduleTime(item.time, savedSchedule.session_duration).dayIndex,
+      ),
     0,
   );
 
@@ -102,14 +108,13 @@ const SchedulePage: React.FC = () => {
     return <div>Loading...</div>;
   }
 
-  const { is_recruiter, is_admin, committee_role } = admission.userdata;
+  const { is_recruiter, committee_role } = admission.userdata;
 
   return (
     <CommonScheduleView
       admissionTitle={admission.title}
       admissionSlug={admissionSlug ?? ""}
       isAdmin={is_recruiter}
-      isAdmissionAdmin={is_admin}
       committeeRole={committee_role}
     />
   );
@@ -119,7 +124,6 @@ interface CommonScheduleViewProps {
   admissionTitle: string;
   admissionSlug: string;
   isAdmin: boolean;
-  isAdmissionAdmin: boolean;
   committeeRole: "leader" | "recruiting" | "member" | null;
 }
 
@@ -131,19 +135,20 @@ const CommonScheduleView: React.FC<CommonScheduleViewProps> = ({
   admissionTitle,
   admissionSlug,
   isAdmin,
-  isAdmissionAdmin,
   committeeRole,
 }) => {
   const roleLabel = (() => {
     if (committeeRole === "leader") return "Leder";
     if (committeeRole === "recruiting") return "Opptaksansvarlig";
-    if (isAdmissionAdmin) return "Admin";
     if (committeeRole === "member") return "Medlem";
     return "Intervjuer";
   })();
   const { data: savedSchedule } = useSavedSchedule(admissionSlug);
   const { data: adminApplications } = useAdminApplications(admissionSlug);
+  const { data: availabilityParticipants } =
+    useInterviewAvailability(admissionSlug);
   const saveSchedule = useSaveSchedule(admissionSlug);
+  const saveInterviewAvailability = useSaveInterviewAvailability(admissionSlug);
   const [activeSection, setActiveSection] =
     useState<TabType>("my-availability");
 
@@ -155,7 +160,9 @@ const CommonScheduleView: React.FC<CommonScheduleViewProps> = ({
 
   const [startDate, setStartDate] = useState(defaultStart);
   const [endDate, setEndDate] = useState(defaultEnd);
-  const [dayStartMinute, setDayStartMinute] = useState(DEFAULT_DAY_START_MINUTE);
+  const [dayStartMinute, setDayStartMinute] = useState(
+    DEFAULT_DAY_START_MINUTE,
+  );
   const [dayEndMinute, setDayEndMinute] = useState(DEFAULT_DAY_END_MINUTE);
   const [chunkSize, setChunkSize] = useState(4);
   const [chunkBreakMinutes, setChunkBreakMinutes] = useState(0);
@@ -195,7 +202,9 @@ const CommonScheduleView: React.FC<CommonScheduleViewProps> = ({
     parsedInterviewerInput <= 200;
 
   const effectiveCandidateCount =
-    useMockData && isCandidateInputValid ? parsedCandidateInput : candidateCount;
+    useMockData && isCandidateInputValid
+      ? parsedCandidateInput
+      : candidateCount;
   const effectiveInterviewerCount =
     useMockData && isInterviewerInputValid
       ? parsedInterviewerInput
@@ -206,7 +215,12 @@ const CommonScheduleView: React.FC<CommonScheduleViewProps> = ({
     if (candidateCount !== parsedCandidateInput) {
       setCandidateCount(parsedCandidateInput);
     }
-  }, [useMockData, isCandidateInputValid, parsedCandidateInput, candidateCount]);
+  }, [
+    useMockData,
+    isCandidateInputValid,
+    parsedCandidateInput,
+    candidateCount,
+  ]);
 
   useEffect(() => {
     if (!useMockData || !isInterviewerInputValid) return;
@@ -280,58 +294,61 @@ const CommonScheduleView: React.FC<CommonScheduleViewProps> = ({
     }
   }, [availabilityStorageKey]);
 
+  useEffect(() => {
+    const mine = availabilityParticipants?.find(
+      (participant) => participant.is_me,
+    );
+    if (!mine) return;
+    setMySelectedSlots(new Set(mine.slots));
+  }, [availabilityParticipants]);
+
   const interviewers = useMemo<Interviewer[]>(() => {
-    const scheduleConfig: ScheduleConfig = {
+    const scheduleConfigBase = {
       numDays: dates.length,
       dayStartHour: Math.floor(dayStartMinute / 60),
       dayEndHour: Math.floor(dayEndMinute / 60),
       chunkSize,
+      sessionDurationMinutes: sessionDuration,
     };
+    const scheduleConfig = scheduleConfigBase as Parameters<
+      typeof createMockInterviewers
+    >[1];
 
-    const myAvailability = slotsToSolverAvailability(mySelectedSlots, dates);
-    const realInterviewers: Interviewer[] = isLoggedIn()
-      ? [
-          {
-            id: "current-user",
-            name: currentUserName,
-            gender: "M",
-            availability: myAvailability,
-          },
-        ]
-      : [];
+    const realInterviewers: Interviewer[] = (
+      availabilityParticipants ?? []
+    ).map((participant) => ({
+      id: participant.username,
+      name: participant.full_name,
+      gender: "M",
+      availability: slotsToSolverAvailability(
+        new Set(participant.slots),
+        dates,
+        sessionDuration,
+      ),
+    }));
 
-    const mocks = createMockInterviewers(effectiveInterviewerCount, scheduleConfig);
+    const mocks = createMockInterviewers(
+      effectiveInterviewerCount,
+      scheduleConfig,
+    );
 
     if (!useMockData) {
       return realInterviewers;
     }
 
-    if (!appendMockToReal || realInterviewers.length === 0) {
+    if (!appendMockToReal) {
       return mocks;
     }
 
-    const seededAvailability = mocks[0]?.availability ?? [];
-    const mergedCurrentUser: Interviewer = {
-      ...realInterviewers[0],
-      availability:
-        realInterviewers[0].availability.length > 0
-          ? mergeAvailability(realInterviewers[0].availability, seededAvailability)
-          : seededAvailability,
-    };
-
-    if (mocks.length === 0) {
-      return [mergedCurrentUser];
-    }
-
-    return [mergedCurrentUser, ...mocks.slice(1)];
+    return [...realInterviewers, ...mocks];
   }, [
     effectiveInterviewerCount,
     dates,
     dayStartMinute,
     dayEndMinute,
     chunkSize,
-    mySelectedSlots,
-    currentUserName,
+    availabilityParticipants,
+    sessionDuration,
     useMockData,
     appendMockToReal,
   ]);
@@ -383,6 +400,9 @@ const CommonScheduleView: React.FC<CommonScheduleViewProps> = ({
         availabilityStorageKey,
         JSON.stringify(Array.from(slots)),
       );
+      await saveInterviewAvailability.mutateAsync({
+        slots: Array.from(slots),
+      });
     } catch {
       showToast("Kunne ikke lagre tilgjengeligheten.", "error");
       throw new Error("Failed to persist availability");
@@ -419,6 +439,105 @@ const CommonScheduleView: React.FC<CommonScheduleViewProps> = ({
       return;
     }
   };
+
+  const canToggleCandidateNames =
+    committeeRole === "leader" || committeeRole === "recruiting";
+
+  const handleToggleCandidateNames = async (showCandidateNames: boolean) => {
+    if (!savedSchedule || !canToggleCandidateNames) return false;
+
+    try {
+      await saveSchedule.mutateAsync({
+        schedule: savedSchedule.schedule,
+        start_date: savedSchedule.start_date,
+        end_date: savedSchedule.end_date,
+        session_duration: savedSchedule.session_duration,
+        enabled_slots: savedSchedule.enabled_slots,
+        day_start_minute: savedSchedule.day_start_minute,
+        day_end_minute: savedSchedule.day_end_minute,
+        chunk_size: savedSchedule.chunk_size,
+        chunk_break_minutes: savedSchedule.chunk_break_minutes,
+        is_distributed: savedSchedule.is_distributed,
+        show_candidate_names: showCandidateNames,
+      });
+      showToast(
+        showCandidateNames
+          ? "Kandidatnavn er nå synlige i intervjuplanen."
+          : "Kandidatnavn er nå skjult i intervjuplanen.",
+      );
+      return true;
+    } catch {
+      showToast("Kunne ikke oppdatere visning av kandidatnavn.", "error");
+      return false;
+    }
+  };
+
+  const handleReplacePanelMember = async (
+    scheduleIndex: number,
+    panelMemberIndex: number,
+    replacementName: string,
+  ) => {
+    if (!savedSchedule || !isAdmin) return false;
+
+    const targetEntry = savedSchedule.schedule[scheduleIndex];
+    if (!targetEntry) return false;
+
+    const duplicateInPanel = targetEntry.panel.some(
+      (member, memberIndex) =>
+        memberIndex !== panelMemberIndex && member.name === replacementName,
+    );
+    if (duplicateInPanel) {
+      showToast(
+        "Denne personen er allerede i panelet for intervjuet.",
+        "error",
+      );
+      return false;
+    }
+
+    const updatedSchedule = savedSchedule.schedule.map((entry, index) => {
+      if (index !== scheduleIndex) return entry;
+
+      return {
+        ...entry,
+        panel: entry.panel.map((member, memberIndex) =>
+          memberIndex === panelMemberIndex
+            ? {
+                ...member,
+                name: replacementName,
+              }
+            : member,
+        ),
+      };
+    });
+
+    try {
+      await saveSchedule.mutateAsync({
+        schedule: updatedSchedule,
+        start_date: savedSchedule.start_date,
+        end_date: savedSchedule.end_date,
+        session_duration: savedSchedule.session_duration,
+        enabled_slots: savedSchedule.enabled_slots,
+        day_start_minute: savedSchedule.day_start_minute,
+        day_end_minute: savedSchedule.day_end_minute,
+        chunk_size: savedSchedule.chunk_size,
+        chunk_break_minutes: savedSchedule.chunk_break_minutes,
+        is_distributed: savedSchedule.is_distributed,
+        show_candidate_names: savedSchedule.show_candidate_names,
+      });
+      showToast("Intervjupanel oppdatert.");
+      return true;
+    } catch {
+      showToast("Kunne ikke oppdatere intervjupanelet.", "error");
+      return false;
+    }
+  };
+
+  const interviewerNameOptions = useMemo(() => {
+    const names = new Set(
+      (availabilityParticipants ?? []).map((p) => p.full_name),
+    );
+    return Array.from(names).sort((a, b) => a.localeCompare(b, "nb"));
+  }, [availabilityParticipants]);
 
   const hasPendingScaleChanges =
     candidateInput !== String(candidateCount) ||
@@ -499,7 +618,9 @@ const CommonScheduleView: React.FC<CommonScheduleViewProps> = ({
             )}
           >
             <div className="flex min-w-[220px] flex-col gap-1">
-              <h2 className="m-0 text-sm font-bold text-text-primary">Testdata</h2>
+              <h2 className="m-0 text-sm font-bold text-text-primary">
+                Testdata
+              </h2>
               <p className="m-0 text-ui leading-6 text-text-muted">
                 Skru på mockdata for å simulere større opptak, og velg om den
                 skal legges oppa reelle data.
@@ -526,7 +647,9 @@ const CommonScheduleView: React.FC<CommonScheduleViewProps> = ({
                   type="checkbox"
                   checked={appendMockToReal}
                   disabled={!useMockData}
-                  onChange={(event) => setAppendMockToReal(event.target.checked)}
+                  onChange={(event) =>
+                    setAppendMockToReal(event.target.checked)
+                  }
                 />
                 Legg mockdata til reelle data
               </label>
@@ -659,6 +782,10 @@ const CommonScheduleView: React.FC<CommonScheduleViewProps> = ({
               dates={dates}
               isAdmin={isAdmin}
               currentUserName={currentUserName}
+              canToggleCandidateNames={canToggleCandidateNames}
+              onToggleCandidateNames={handleToggleCandidateNames}
+              onReplacePanelMember={handleReplacePanelMember}
+              interviewerNameOptions={interviewerNameOptions}
             />
           )}
 
@@ -691,6 +818,14 @@ interface DistributedPlanViewProps {
   dates: string[];
   isAdmin: boolean;
   currentUserName: string;
+  canToggleCandidateNames: boolean;
+  onToggleCandidateNames: (showCandidateNames: boolean) => Promise<boolean>;
+  onReplacePanelMember: (
+    scheduleIndex: number,
+    panelMemberIndex: number,
+    replacementName: string,
+  ) => Promise<boolean>;
+  interviewerNameOptions: string[];
 }
 
 const DistributedPlanView: React.FC<DistributedPlanViewProps> = ({
@@ -698,8 +833,23 @@ const DistributedPlanView: React.FC<DistributedPlanViewProps> = ({
   dates,
   isAdmin,
   currentUserName,
+  canToggleCandidateNames,
+  onToggleCandidateNames,
+  onReplacePanelMember,
+  interviewerNameOptions,
 }) => {
   const [myInterviewsOnly, setMyInterviewsOnly] = useState(false);
+  const [isUpdatingNames, setIsUpdatingNames] = useState(false);
+  const [isExportChooserOpen, setIsExportChooserOpen] = useState(false);
+  const [pendingNameVisibility, setPendingNameVisibility] = useState<
+    boolean | null
+  >(null);
+  const [editingPanelTarget, setEditingPanelTarget] = useState<{
+    scheduleIndex: number;
+    panelMemberIndex: number;
+  } | null>(null);
+  const [replacementName, setReplacementName] = useState("");
+  const [isReplacingPanelMember, setIsReplacingPanelMember] = useState(false);
 
   if (!savedSchedule) {
     return (
@@ -717,41 +867,103 @@ const DistributedPlanView: React.FC<DistributedPlanViewProps> = ({
   }
 
   const namesVisible = isAdmin || savedSchedule.show_candidate_names;
-  const sorted = [...savedSchedule.schedule].sort((a, b) => a.time - b.time);
-  const myInterviews = sorted.filter((item) =>
+  const sortedEntries = savedSchedule.schedule
+    .map((item, index) => ({ item, scheduleIndex: index }))
+    .sort((a, b) => a.item.time - b.item.time);
+  const myInterviews = sortedEntries.filter(({ item }) =>
     item.panel.some((p) => p.name === currentUserName),
   );
-  const displaySorted = myInterviewsOnly ? myInterviews : sorted;
+  const displaySorted = myInterviewsOnly ? myInterviews : sortedEntries;
+  const replacementOptions = Array.from(
+    new Set([
+      ...interviewerNameOptions,
+      ...savedSchedule.schedule.flatMap((item) =>
+        item.panel.map((member) => member.name),
+      ),
+    ]),
+  ).sort((a, b) => a.localeCompare(b, "nb"));
+
+  const editingPanelEntry =
+    editingPanelTarget !== null
+      ? savedSchedule.schedule[editingPanelTarget.scheduleIndex]
+      : null;
+  const selectedPanelMemberName =
+    editingPanelEntry && editingPanelTarget !== null
+      ? editingPanelEntry.panel[editingPanelTarget.panelMemberIndex]?.name
+      : null;
+  const replacementWouldDuplicate =
+    editingPanelEntry && editingPanelTarget !== null
+      ? editingPanelEntry.panel.some(
+          (member, memberIndex) =>
+            memberIndex !== editingPanelTarget.panelMemberIndex &&
+            member.name === replacementName,
+        )
+      : false;
+
+  const actionButtonBase =
+    "inline-flex cursor-pointer items-center justify-center gap-1.5 rounded-lg border px-4 py-2 text-ui font-semibold transition-[border-color,background,box-shadow] duration-150 focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-brand-ring disabled:cursor-not-allowed disabled:opacity-50";
+  const actionButtonNeutral =
+    "border-border-muted bg-surface-base text-text-soft hover:border-border-quiet hover:bg-surface-subtle";
+  const actionButtonAccent =
+    "border-brand bg-brand text-white hover:border-brand-hover hover:bg-brand-hover active:bg-brand-pressed";
+  const actionButtonActive =
+    "border-brand-activeBorder bg-brand-panel text-brand hover:border-brand-activeBorder hover:bg-brand-panel";
 
   const formatTimeLabel = (timeValue: number) => {
-    const dayIndex = Math.floor(timeValue / 24);
-    const hour = timeValue % 24;
+    const { dayIndex, minute } = decodeScheduleTime(
+      timeValue,
+      savedSchedule.session_duration,
+    );
     const date = dates[dayIndex];
+    const hour = Math.floor(minute / 60);
+    const minutePart = minute % 60;
+    const timeLabel = `${hour.toString().padStart(2, "0")}:${minutePart
+      .toString()
+      .padStart(2, "0")}`;
     return date
-      ? `${formatDateHeader(date).weekday} ${formatDateHeader(date).dayMonth} ${hour}:00`
-      : `Dag ${dayIndex + 1} ${hour}:00`;
+      ? `${formatDateHeader(date).weekday} ${formatDateHeader(date).dayMonth} ${timeLabel}`
+      : `Dag ${dayIndex + 1} ${timeLabel}`;
   };
 
-  const handleExportIcs = () => {
-    const schedule = myInterviewsOnly ? myInterviews : savedSchedule.schedule;
+  const handleExportIcs = (target: "apple" | "google") => {
+    const schedule = myInterviewsOnly
+      ? myInterviews.map(({ item }) => item)
+      : savedSchedule.schedule;
     const icsContent = generateIcs(
       schedule,
       dates,
       savedSchedule.session_duration,
       "Intervjuplan",
     );
-    const blob = new Blob([icsContent], { type: "text/calendar;charset=utf-8" });
+    const blob = new Blob([icsContent], {
+      type: "text/calendar;charset=utf-8",
+    });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = myInterviewsOnly ? "mine-intervjuer.ics" : "intervjuplan.ics";
+    a.download =
+      target === "google"
+        ? myInterviewsOnly
+          ? "mine-intervjuer-google.ics"
+          : "intervjuplan-google.ics"
+        : myInterviewsOnly
+          ? "mine-intervjuer-apple.ics"
+          : "intervjuplan-apple.ics";
     a.click();
     URL.revokeObjectURL(url);
+
+    if (target === "google") {
+      window.open(
+        "https://calendar.google.com/calendar/u/0/r/settings/importexport",
+        "_blank",
+        "noopener,noreferrer",
+      );
+    }
   };
 
   const handleExportCsv = () => {
     const rows: string[][] = [["Tidspunkt", "Kandidat", "Panel"]];
-    displaySorted.forEach((item) => {
+    displaySorted.forEach(({ item }) => {
       rows.push([
         formatTimeLabel(item.time),
         namesVisible ? item.candidate : "—",
@@ -759,7 +971,9 @@ const DistributedPlanView: React.FC<DistributedPlanViewProps> = ({
       ]);
     });
     const csv = rows
-      .map((row) => row.map((cell) => `"${cell.replace(/"/g, '""')}"`).join(","))
+      .map((row) =>
+        row.map((cell) => `"${cell.replace(/"/g, '""')}"`).join(","),
+      )
       .join("\n");
     const blob = new Blob(["\ufeff" + csv], { type: "text/csv;charset=utf-8" });
     const url = URL.createObjectURL(blob);
@@ -770,6 +984,52 @@ const DistributedPlanView: React.FC<DistributedPlanViewProps> = ({
     URL.revokeObjectURL(url);
   };
 
+  const handleToggleNamesForPlan = async () => {
+    if (!canToggleCandidateNames || isUpdatingNames) return;
+
+    setPendingNameVisibility(!savedSchedule.show_candidate_names);
+  };
+
+  const confirmToggleNamesForPlan = async () => {
+    if (pendingNameVisibility === null) return;
+
+    setIsUpdatingNames(true);
+    try {
+      await onToggleCandidateNames(pendingNameVisibility);
+      setPendingNameVisibility(null);
+    } finally {
+      setIsUpdatingNames(false);
+    }
+  };
+
+  const beginReplacePanelMember = (
+    scheduleIndex: number,
+    panelMemberIndex: number,
+    currentName: string,
+  ) => {
+    setEditingPanelTarget({ scheduleIndex, panelMemberIndex });
+    setReplacementName(currentName);
+  };
+
+  const confirmPanelReplacement = async () => {
+    if (!editingPanelTarget || !replacementName) return;
+
+    setIsReplacingPanelMember(true);
+    try {
+      const didUpdate = await onReplacePanelMember(
+        editingPanelTarget.scheduleIndex,
+        editingPanelTarget.panelMemberIndex,
+        replacementName,
+      );
+      if (didUpdate) {
+        setEditingPanelTarget(null);
+        setReplacementName("");
+      }
+    } finally {
+      setIsReplacingPanelMember(false);
+    }
+  };
+
   const thClass =
     "bg-surface-subtle px-4 py-3 text-left text-label font-bold uppercase tracking-label text-text-subtle border-b border-border";
 
@@ -777,7 +1037,9 @@ const DistributedPlanView: React.FC<DistributedPlanViewProps> = ({
     <div className="rounded-panel border border-border bg-surface-base p-5">
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <div className="flex flex-wrap items-center gap-2.5">
-          <h3 className="m-0 text-sm font-bold text-text-primary">Intervjuplan</h3>
+          <h3 className="m-0 text-sm font-bold text-text-primary">
+            Intervjuplan
+          </h3>
           {savedSchedule.is_distributed ? (
             <span className="inline-flex items-center rounded-full border border-success-border bg-success-bg px-2.5 py-1 text-label font-bold uppercase tracking-caps text-success">
               Distribuert
@@ -799,21 +1061,37 @@ const DistributedPlanView: React.FC<DistributedPlanViewProps> = ({
             type="button"
             onClick={() => setMyInterviewsOnly((v) => !v)}
             className={cn(
-              "inline-flex cursor-pointer items-center gap-1.5 rounded-full border px-3.5 py-1.5 text-ui font-semibold transition-all duration-100",
-              myInterviewsOnly
-                ? "border-brand-border bg-brand-muted text-brand"
-                : "border-transparent bg-transparent text-text-muted hover:border-border hover:bg-surface-neutral hover:text-text-primary",
+              actionButtonBase,
+              myInterviewsOnly ? actionButtonActive : actionButtonNeutral,
             )}
           >
             Mine intervjuer
           </button>
+
+          {canToggleCandidateNames && (
+            <button
+              type="button"
+              onClick={handleToggleNamesForPlan}
+              disabled={isUpdatingNames}
+              className={cn(
+                actionButtonBase,
+                savedSchedule.show_candidate_names
+                  ? actionButtonActive
+                  : actionButtonNeutral,
+              )}
+            >
+              {savedSchedule.show_candidate_names
+                ? "Skjul kandidatnavn"
+                : "Vis kandidatnavn"}
+            </button>
+          )}
 
           {isAdmin && (
             <button
               type="button"
               onClick={handleExportCsv}
               title="Kan importeres til Google Regneark via Fil → Importer"
-              className="inline-flex cursor-pointer items-center gap-1.5 rounded-lg border border-border-muted bg-surface-base px-4 py-2 text-ui font-semibold text-text-soft transition-[border-color,background] duration-100 hover:border-border-quiet hover:bg-surface-subtle"
+              className={cn(actionButtonBase, actionButtonNeutral)}
             >
               Eksporter CSV
             </button>
@@ -821,17 +1099,66 @@ const DistributedPlanView: React.FC<DistributedPlanViewProps> = ({
 
           <button
             type="button"
-            onClick={handleExportIcs}
-            className="cursor-pointer rounded-lg border border-brand bg-brand px-4 py-2 text-ui font-bold text-white transition-[background,border-color,box-shadow] duration-150 hover:border-brand-hover hover:bg-brand-hover focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-brand-ring active:bg-brand-pressed"
+            onClick={() => setIsExportChooserOpen(true)}
+            className={cn(actionButtonBase, actionButtonAccent, "font-bold")}
           >
-            {myInterviewsOnly ? "Eksporter mine (.ics)" : "Eksporter (.ics)"}
+            {myInterviewsOnly ? "Eksporter mine" : "Eksporter"}
           </button>
         </div>
       </div>
 
+      {isExportChooserOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
+          <div className="w-full max-w-md rounded-panel border border-border bg-surface-base p-5 shadow-lg">
+            <h4 className="m-0 text-base font-bold text-text-primary">
+              Velg kalender
+            </h4>
+            <p className="mb-0 mt-2 text-ui text-text-muted">
+              Eksporten blir en .ics-fil. Apple Calendar kan åpne den direkte,
+              mens Google Calendar importerer den via innstillinger.
+            </p>
+            <div className="mt-4 grid gap-2">
+              <button
+                type="button"
+                className={cn(
+                  actionButtonBase,
+                  actionButtonAccent,
+                  "font-bold",
+                )}
+                onClick={() => {
+                  handleExportIcs("apple");
+                  setIsExportChooserOpen(false);
+                }}
+              >
+                Apple Calendar (.ics)
+              </button>
+              <button
+                type="button"
+                className={cn(actionButtonBase, actionButtonNeutral)}
+                onClick={() => {
+                  handleExportIcs("google");
+                  setIsExportChooserOpen(false);
+                }}
+              >
+                Google Calendar (.ics + importside)
+              </button>
+              <button
+                type="button"
+                className={cn(actionButtonBase, actionButtonNeutral)}
+                onClick={() => setIsExportChooserOpen(false)}
+              >
+                Avbryt
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {myInterviewsOnly && myInterviews.length === 0 && (
         <div className="mb-4 rounded-lg border border-border-soft bg-surface-muted px-4 py-3 text-ui text-text-muted">
-          Ingen intervjuer funnet for <strong>{currentUserName}</strong>. Filteret matcher på navn — du må ha vært med i solveren for at intervjuene skal dukke opp.
+          Ingen intervjuer funnet for <strong>{currentUserName}</strong>.
+          Filteret matcher på navn — du må ha vært med i solveren for at
+          intervjuene skal dukke opp.
         </div>
       )}
 
@@ -845,9 +1172,9 @@ const DistributedPlanView: React.FC<DistributedPlanViewProps> = ({
             </tr>
           </thead>
           <tbody>
-            {displaySorted.map((item, idx) => (
+            {displaySorted.map(({ item, scheduleIndex }) => (
               <tr
-                key={idx}
+                key={`${item.candidate}-${item.time}-${scheduleIndex}`}
                 className={cn(
                   "group",
                   item.panel.some((p) => p.name === currentUserName) &&
@@ -864,19 +1191,82 @@ const DistributedPlanView: React.FC<DistributedPlanViewProps> = ({
                 <td className="px-4 py-3 text-sm text-text-primary group-hover:bg-surface-hover">
                   <div className="flex flex-wrap gap-1.5">
                     {item.panel.map((p, i) => (
-                      <span
-                        key={i}
-                        className={cn(
-                          "inline-flex items-center rounded-full border px-2 py-1 text-xs font-semibold",
-                          p.name === currentUserName
-                            ? "border-brand-strongBorder bg-brand-tint font-bold text-brand"
-                            : p.is_overtime
-                              ? "border-brand-panelBorder bg-brand-badge text-brand"
-                              : "border-border bg-surface-neutral text-text-soft",
+                      <React.Fragment key={`${p.name}-${i}`}>
+                        {isAdmin &&
+                        editingPanelTarget?.scheduleIndex === scheduleIndex &&
+                        editingPanelTarget.panelMemberIndex === i ? (
+                          <div className="inline-flex items-center gap-1 rounded-full border border-border bg-surface-base px-1.5 py-1">
+                            <select
+                              className="max-w-[13rem] rounded-md border border-border-muted bg-surface-base px-2 py-1 text-xs font-semibold text-text-primary"
+                              value={replacementName}
+                              onChange={(event) =>
+                                setReplacementName(event.target.value)
+                              }
+                            >
+                              {replacementOptions.map((name) => (
+                                <option
+                                  key={name}
+                                  value={name}
+                                  disabled={
+                                    !!editingPanelEntry &&
+                                    name !== selectedPanelMemberName &&
+                                    editingPanelEntry.panel.some(
+                                      (member) => member.name === name,
+                                    )
+                                  }
+                                >
+                                  {name}
+                                </option>
+                              ))}
+                            </select>
+                            <button
+                              type="button"
+                              onClick={confirmPanelReplacement}
+                              disabled={
+                                isReplacingPanelMember ||
+                                !replacementName ||
+                                replacementWouldDuplicate
+                              }
+                              className="rounded-md border border-brand bg-brand px-2 py-1 text-[11px] font-bold text-white disabled:opacity-50"
+                            >
+                              Bytt
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setEditingPanelTarget(null)}
+                              disabled={isReplacingPanelMember}
+                              className="rounded-md border border-border-muted bg-surface-base px-2 py-1 text-[11px] font-semibold text-text-soft disabled:opacity-50"
+                            >
+                              Avbryt
+                            </button>
+                          </div>
+                        ) : (
+                          <button
+                            type="button"
+                            disabled={!isAdmin}
+                            onClick={() =>
+                              isAdmin &&
+                              beginReplacePanelMember(scheduleIndex, i, p.name)
+                            }
+                            className={cn(
+                              "inline-flex items-center rounded-full border px-2 py-1 text-xs font-semibold",
+                              isAdmin && "cursor-pointer transition-colors",
+                              p.name === currentUserName
+                                ? "border-brand-strongBorder bg-brand-tint font-bold text-brand"
+                                : p.is_overtime
+                                  ? "border-brand-panelBorder bg-brand-badge text-brand"
+                                  : "border-border bg-surface-neutral text-text-soft",
+                            )}
+                            title={
+                              isAdmin
+                                ? "Klikk for å bytte intervjuer"
+                                : undefined
+                            }
+                          >
+                            {p.name}
+                          </button>
                         )}
-                      >
-                        {p.name}
-                      </span>
+                      </React.Fragment>
                     ))}
                   </div>
                 </td>
@@ -885,6 +1275,45 @@ const DistributedPlanView: React.FC<DistributedPlanViewProps> = ({
           </tbody>
         </table>
       </div>
+
+      {pendingNameVisibility !== null && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
+          <div className="w-full max-w-md rounded-panel border border-border bg-surface-base p-5 shadow-lg">
+            <h4 className="m-0 text-base font-bold text-text-primary">
+              {pendingNameVisibility
+                ? "Vis kandidatnavn?"
+                : "Skjul kandidatnavn?"}
+            </h4>
+            <p className="mb-0 mt-2 text-ui text-text-muted">
+              {pendingNameVisibility
+                ? "Dette gjør kandidatnavn synlige for alle som har tilgang til intervjuplanen."
+                : "Dette skjuler kandidatnavn for alle som ikke er admin."}
+            </p>
+            <div className="mt-4 flex justify-end gap-2">
+              <button
+                type="button"
+                className={cn(actionButtonBase, actionButtonNeutral)}
+                onClick={() => setPendingNameVisibility(null)}
+                disabled={isUpdatingNames}
+              >
+                Avbryt
+              </button>
+              <button
+                type="button"
+                className={cn(
+                  actionButtonBase,
+                  actionButtonAccent,
+                  "font-bold",
+                )}
+                onClick={confirmToggleNamesForPlan}
+                disabled={isUpdatingNames}
+              >
+                {isUpdatingNames ? "Lagrer..." : "Bekreft"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

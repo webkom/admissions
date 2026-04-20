@@ -14,13 +14,13 @@ export const columns = [
     id: "expander",
     header: ({ table }) => (
       <span onClick={table.getToggleAllRowsExpandedHandler()}>
-        {table.getIsAllRowsExpanded() ? <ChevronDown/> : <ChevronRight/>}
+        {table.getIsAllRowsExpanded() ? <ChevronDown /> : <ChevronRight />}
       </span>
     ),
     size: 1,
     cell: ({ row }) => (
       <span onClick={() => row.toggleExpanded()}>
-        {row.getIsExpanded() ? <ChevronDown/> : <ChevronRight/>}
+        {row.getIsExpanded() ? <ChevronDown /> : <ChevronRight />}
       </span>
     ),
   }),

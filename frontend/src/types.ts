@@ -107,3 +107,12 @@ export interface SavedSchedule {
   show_candidate_names: boolean;
   updated_at: string;
 }
+
+export interface InterviewAvailabilityParticipant {
+  user_id: string;
+  username: string;
+  full_name: string;
+  slots: string[];
+  has_submitted: boolean;
+  is_me: boolean;
+}

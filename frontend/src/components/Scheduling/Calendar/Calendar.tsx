@@ -240,7 +240,9 @@ const TimeScheduler: React.FC<TimeSchedulerProps> = ({
                     <div className="flex flex-1 flex-wrap gap-[2px]">
                       {chunk.map((m) => {
                         const enabled = isSlotEnabled(date, m);
-                        const selected = selectedSlots.has(makeSlotKey(date, m));
+                        const selected = selectedSlots.has(
+                          makeSlotKey(date, m),
+                        );
                         return (
                           <div
                             key={m}
@@ -255,17 +257,6 @@ const TimeScheduler: React.FC<TimeSchedulerProps> = ({
                           />
                         );
                       })}
-                    </div>
-                    <div className="text-center text-[10px] font-bold uppercase tracking-tight">
-                      {isAllSelected ? (
-                        <span className="text-white/90">Valgt</span>
-                      ) : isSomeSelected ? (
-                        <span className="text-brand">Delvis</span>
-                      ) : isAnyEnabled ? (
-                        <span className="text-text-disabled group-hover:text-brand-strongBorder">
-                          Ledig
-                        </span>
-                      ) : null}
                     </div>
                   </div>
                 );

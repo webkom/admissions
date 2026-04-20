@@ -1,6 +1,12 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { Eye, EyeOff, Sparkles } from "lucide-react";
-import { Stepper, StatTile, ToggleCard, SegmentedControl, sectionLabelClass } from "../ui";
+import {
+  Stepper,
+  StatTile,
+  ToggleCard,
+  SegmentedControl,
+  sectionLabelClass,
+} from "../ui";
 import type {
   Candidate,
   Interviewer,
@@ -10,7 +16,11 @@ import type {
 import { apiClient } from "../../../utils/callApi";
 import SolverCalendarView from "./SolverCalendarView";
 import Icon from "../../Icon";
-import { formatDateHeader, generateIcs } from "../scheduleUtils";
+import {
+  decodeScheduleTime,
+  formatDateHeader,
+  generateIcs,
+} from "../scheduleUtils";
 import { useSaveSchedule, useSavedSchedule } from "../../../query/hooks";
 import cn from "src/utils/cn";
 
@@ -48,7 +58,8 @@ const PRIORITY_PRESETS = [
   {
     key: "protect-availability",
     label: "Minimer overtid",
-    description: "Respekter tilgjengeligheten selv om noen får flere intervjuer.",
+    description:
+      "Respekter tilgjengeligheten selv om noen får flere intervjuer.",
     overtimeWeight: 100,
     loadBalanceWeight: 1,
   },
@@ -62,7 +73,8 @@ const PRIORITY_PRESETS = [
   {
     key: "protect-load",
     label: "Jevn fordeling",
-    description: "Alle får like mange intervjuer, men på bekostning av overtid når man egentlig ikke er tilgjengelig",
+    description:
+      "Alle får like mange intervjuer, men på bekostning av overtid når man egentlig ikke er tilgjengelig",
     overtimeWeight: 12,
     loadBalanceWeight: 8,
   },
@@ -102,7 +114,6 @@ export default function SolverView({
   const [saveError, setSaveError] = useState("");
   const [planRevealed, setPlanRevealed] = useState(false);
   const [namesRevealed, setNamesRevealed] = useState(false);
-  const [showNamesForAll, setShowNamesForAll] = useState(false);
   const [elapsedMs, setElapsedMs] = useState(0);
 
   useEffect(() => {
@@ -120,10 +131,6 @@ export default function SolverView({
   const { data: savedSchedule, refetch: refetchSaved } =
     useSavedSchedule(admissionSlug);
   const saveSchedule = useSaveSchedule(admissionSlug);
-
-  useEffect(() => {
-    setShowNamesForAll(savedSchedule?.show_candidate_names ?? false);
-  }, [savedSchedule?.show_candidate_names]);
 
   const sortedSchedule = useMemo(
     () => [...(result?.schedule ?? [])].sort((a, b) => a.time - b.time),
@@ -191,7 +198,7 @@ export default function SolverView({
   }, [sortedSchedule]);
 
   const displayCandidate = (name: string) =>
-    namesRevealed ? name : candidateAlias.get(name) ?? name;
+    namesRevealed ? name : (candidateAlias.get(name) ?? name);
 
   const displaySchedule = useMemo(
     () =>
@@ -240,12 +247,16 @@ export default function SolverView({
   );
 
   const formatSlotTime = (timeValue: number) => {
-    const dayIndex = Math.floor(timeValue / 24);
-    const hour = timeValue % 24;
+    const { dayIndex, minute } = decodeScheduleTime(timeValue, sessionDuration);
     const date = dates[dayIndex];
-    if (!date) return `Dag ${dayIndex + 1} ${hour}:00`;
+    const hour = Math.floor(minute / 60);
+    const minutePart = minute % 60;
+    const timeLabel = `${hour.toString().padStart(2, "0")}:${minutePart
+      .toString()
+      .padStart(2, "0")}`;
+    if (!date) return `Dag ${dayIndex + 1} ${timeLabel}`;
     const { weekday, dayMonth } = formatDateHeader(date);
-    return `${weekday} ${dayMonth} ${hour}:00`;
+    return `${weekday} ${dayMonth} ${timeLabel}`;
   };
 
   const handleSolve = async () => {
@@ -282,8 +293,15 @@ export default function SolverView({
     const schedule = result?.schedule ?? savedSchedule?.schedule ?? [];
     if (schedule.length === 0) return;
 
-    const icsContent = generateIcs(schedule, dates, sessionDuration, admissionTitle);
-    const blob = new Blob([icsContent], { type: "text/calendar;charset=utf-8" });
+    const icsContent = generateIcs(
+      schedule,
+      dates,
+      sessionDuration,
+      admissionTitle,
+    );
+    const blob = new Blob([icsContent], {
+      type: "text/calendar;charset=utf-8",
+    });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
@@ -309,10 +327,13 @@ export default function SolverView({
         chunk_size: chunkSize,
         chunk_break_minutes: chunkBreakMinutes,
         is_distributed: distribute,
-        show_candidate_names: showNamesForAll,
+        // Candidate name sharing is managed from Intervjuplan.
+        show_candidate_names: savedSchedule?.show_candidate_names ?? false,
       });
       await refetchSaved();
-      onNotify?.(distribute ? "Intervjuplan distribuert." : "Intervjuplan lagret.");
+      onNotify?.(
+        distribute ? "Intervjuplan distribuert." : "Intervjuplan lagret.",
+      );
     } catch {
       setSaveError("Kunne ikke lagre planen. Prøv igjen.");
       onNotify?.("Kunne ikke lagre intervjuplanen.", "error");
@@ -663,13 +684,6 @@ export default function SolverView({
                 {namesRevealed ? "Skjul kandidatnavn" : "Vis kandidatnavn"}
               </button>
             )}
-            <ToggleCard
-              title="Del kandidatnavn"
-              description="Vis kandidatnavn for alle deltakere i den distribuerte planen."
-              checked={showNamesForAll}
-              onToggle={() => setShowNamesForAll((v) => !v)}
-              className="flex-1 basis-[220px]"
-            />
             {!planRevealed && (
               <span className="text-detail text-text-muted">
                 Planen og kandidatnavn er skjult til du åpner dem.
@@ -706,8 +720,16 @@ export default function SolverView({
               value={viewType}
               onChange={setViewType}
               items={[
-                { key: "list", icon: <Icon name="list" size="1.2rem" prefix="ios" />, title: "Liste-visning" },
-                { key: "calendar", icon: <Icon name="calendar" size="1.2rem" prefix="ios" />, title: "Kalender-visning" },
+                {
+                  key: "list",
+                  icon: <Icon name="list" size="1.2rem" prefix="ios" />,
+                  title: "Liste-visning",
+                },
+                {
+                  key: "calendar",
+                  icon: <Icon name="calendar" size="1.2rem" prefix="ios" />,
+                  title: "Kalender-visning",
+                },
                 { key: "person", label: "Person", title: "Personvisning" },
               ]}
             />
@@ -916,7 +938,11 @@ export default function SolverView({
               </table>
             </div>
           ) : (
-            <SolverCalendarView schedule={displaySchedule} dates={dates} />
+            <SolverCalendarView
+              schedule={displaySchedule}
+              dates={dates}
+              sessionDuration={sessionDuration}
+            />
           )}
 
           <div className="mt-[0.875rem] flex flex-wrap items-center gap-3 border-t border-border-soft pt-[0.875rem]">
@@ -975,4 +1001,3 @@ export default function SolverView({
     </div>
   );
 }
-

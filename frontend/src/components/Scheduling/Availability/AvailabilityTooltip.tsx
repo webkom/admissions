@@ -15,9 +15,7 @@ const AvailabilityTooltip = ({
         <div className="mb-1 border-b border-text-gray7 pb-1 text-[10px] font-bold uppercase text-text-gray3">
           {dayLabel}
         </div>
-        <div className="font-mono text-[10px] text-text-white">
-          {hoursText}
-        </div>
+        <div className="font-mono text-[10px] text-text-white">{hoursText}</div>
       </div>
       <div className="absolute bottom-[-4px] left-1/2 h-2 w-2 -translate-x-1/2 rotate-45 bg-text-strong" />
     </div>

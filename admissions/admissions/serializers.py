@@ -15,6 +15,7 @@ from admissions.admissions.models import (
     Admission,
     Group,
     GroupApplication,
+    InterviewAvailability,
     LegoUser,
     Membership,
     SavedSchedule,
@@ -407,6 +408,7 @@ class ApplicationCreateUpdateSerializer(serializers.HyperlinkedModelSerializer):
 
         return user_application
 
+
 class SavedScheduleSerializer(serializers.ModelSerializer):
     class Meta:
         model = SavedSchedule
@@ -461,9 +463,11 @@ class CandidateSerializer(serializers.Serializer):
     name = serializers.CharField()
     gender = serializers.CharField(required=False, allow_null=True)
 
+
 class InterviewerSerializer(CandidateSerializer):
     availability = serializers.ListField(child=serializers.IntegerField(), default=list)
     biased = serializers.ListField(child=serializers.CharField(), default=list)
+
 
 class SolveOptionsSerializer(serializers.Serializer):
     enforce_same_gender = serializers.BooleanField(default=True)
@@ -472,8 +476,23 @@ class SolveOptionsSerializer(serializers.Serializer):
     load_balance_weight = serializers.IntegerField(min_value=0, default=1)
     max_solver_seconds = serializers.FloatField(min_value=1.0, max_value=60.0, default=10.0)
 
+
 class ScheduleRequestsSerializer(serializers.Serializer):
     candidates = CandidateSerializer(many=True)
     interviewers = InterviewerSerializer(many=True)
     panel_size = serializers.IntegerField(default=4)
     options = SolveOptionsSerializer(required=False)
+
+
+class SaveInterviewAvailabilitySerializer(serializers.Serializer):
+    slots = serializers.ListField(child=serializers.CharField(), default=list)
+
+
+class InterviewAvailabilityParticipantSerializer(serializers.Serializer):
+    user_id = serializers.UUIDField()
+    username = serializers.CharField()
+    full_name = serializers.CharField()
+    slots = serializers.ListField(child=serializers.CharField(), default=list)
+    has_submitted = serializers.BooleanField()
+    is_me = serializers.BooleanField()
+

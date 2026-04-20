@@ -184,6 +184,29 @@ class SavedSchedule(models.Model):
         return f"Schedule for {self.admission} (distributed={self.is_distributed})"
 
 
+class InterviewAvailability(models.Model):
+    admission = models.ForeignKey(
+        Admission, on_delete=models.CASCADE, related_name="interview_availabilities"
+    )
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="interview_availabilities",
+    )
+    slots = models.JSONField(default=list, blank=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["admission", "user"], name="unique_admission_user_availability"
+            )
+        ]
+
+    def __str__(self):
+        return f"Availability for {self.user} in {self.admission}"
+
+
 class Membership(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)

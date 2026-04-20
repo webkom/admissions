@@ -1,6 +1,12 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AxiosError } from "axios";
-import { Admission, Application, Group, SavedSchedule } from "src/types";
+import {
+  Admission,
+  Application,
+  Group,
+  InterviewAvailabilityParticipant,
+  SavedSchedule,
+} from "src/types";
 import { apiClient } from "src/utils/callApi";
 
 // Public hooks
@@ -71,6 +77,35 @@ export const useSaveSchedule = (slug: string) => {
         .then((r) => r.data),
     onSuccess: (data) => {
       queryClient.setQueryData([`/admin/admission/${slug}/schedule/`], data);
+    },
+  });
+};
+
+export const useInterviewAvailability = (slug: string) => {
+  return useQuery<InterviewAvailabilityParticipant[], AxiosError>({
+    queryKey: [`/admin/admission/${slug}/availability/`],
+    retry: false,
+    // Keep heatmap/interviewer data fresh across clients without requiring a full page refresh.
+    refetchInterval: 10000,
+    refetchIntervalInBackground: true,
+  });
+};
+
+export const useSaveInterviewAvailability = (slug: string) => {
+  const queryClient = useQueryClient();
+  return useMutation<
+    InterviewAvailabilityParticipant,
+    AxiosError,
+    { slots: string[] }
+  >({
+    mutationFn: (payload) =>
+      apiClient
+        .post(`/admin/admission/${slug}/availability/`, payload)
+        .then((r) => r.data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({
+        queryKey: [`/admin/admission/${slug}/availability/`],
+      });
     },
   });
 };

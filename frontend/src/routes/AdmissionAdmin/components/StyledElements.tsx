@@ -61,7 +61,9 @@ export const GroupFilterButton = styled.button<{ $selected: boolean }>`
     props.$selected ? "rgba(178, 18, 7, 0.04)" : "#ffffff"};
   color: #111111;
   cursor: pointer;
-  transition: border-color 0.12s ease, background 0.12s ease;
+  transition:
+    border-color 0.12s ease,
+    background 0.12s ease;
 
   &:hover {
     border-color: ${(props) =>

@@ -19,6 +19,7 @@ from admissions.admissions.models import (
     Admission,
     Group,
     GroupApplication,
+    InterviewAvailability,
     LegoUser,
     Membership,
     SavedSchedule,
@@ -33,6 +34,8 @@ from admissions.admissions.serializers import (
     GroupSerializer,
     SavedScheduleSerializer,
     SaveScheduleInputSerializer,
+    SaveInterviewAvailabilitySerializer,
+    InterviewAvailabilityParticipantSerializer,
     UserApplicationSerializer,
     ScheduleRequestsSerializer,
 )
@@ -67,6 +70,10 @@ def get_representing_group(admission, user):
         ):
             return group
     return None
+
+
+def user_is_committee_member(admission, user):
+    return Membership.objects.filter(user=user.pk, group__in=admission.groups.all()).exists()
 
 
 class AppView(TemplateView):
@@ -344,6 +351,7 @@ class ManageGroupViewSet(mixins.ListModelMixin, viewsets.GenericViewSet):
     authentication_classes = [SessionAuthentication]
     permission_classes = [permissions.IsAuthenticated, GroupPermissions]
 
+
 class SolveScheduleView(APIView):
     authentication_classes = [SessionAuthentication]
     permission_classes = [permissions.IsAuthenticated]
@@ -379,12 +387,12 @@ class SavedScheduleView(APIView):
         user.__class__ = LegoUser
 
         is_admin = user_is_admission_admin(admission, user)
-        is_member = get_representing_group(admission, user) is not None
+        is_recruiter = get_representing_group(admission, user) is not None
 
-        if require_admin and not is_admin:
+        if require_admin and not (is_admin or is_recruiter):
             return None, Response(status=status.HTTP_403_FORBIDDEN)
 
-        if not is_admin and not is_member:
+        if not is_admin and not is_recruiter:
             # Allow viewing distributed schedule for any authenticated user in the admission
             try:
                 saved = admission.saved_schedule
@@ -485,3 +493,96 @@ class SavedScheduleView(APIView):
             },
         )
         return Response(SavedScheduleSerializer(saved).data, status=status.HTTP_200_OK)
+
+
+class InterviewAvailabilityView(APIView):
+    authentication_classes = [SessionAuthentication]
+    permission_classes = [IsAuthenticated]
+
+    def _get_admission(self, admission_slug):
+        try:
+            return Admission.objects.get(slug=admission_slug)
+        except Admission.DoesNotExist:
+            return None
+
+    def get(self, request, admission_slug):
+        admission = self._get_admission(admission_slug)
+        if admission is None:
+            return Response(status=status.HTTP_404_NOT_FOUND)
+
+        user = request.user
+        user.__class__ = LegoUser
+
+        is_admin = user_is_admission_admin(admission, user)
+        is_recruiter = get_representing_group(admission, user) is not None
+        is_committee_member = user_is_committee_member(admission, user)
+
+        if not is_committee_member and not is_admin:
+            return Response(status=status.HTTP_403_FORBIDDEN)
+
+        if is_admin or is_recruiter:
+            member_ids = (
+                Membership.objects.filter(group__in=admission.groups.all())
+                .values_list("user_id", flat=True)
+                .distinct()
+            )
+            users = LegoUser.objects.filter(id__in=member_ids).order_by(
+                "first_name", "last_name", "username"
+            )
+        else:
+            users = LegoUser.objects.filter(id=user.id)
+
+        availability_map = {
+            item.user_id: item.slots
+            for item in InterviewAvailability.objects.filter(
+                admission=admission, user_id__in=users.values_list("id", flat=True)
+            )
+        }
+
+        payload = [
+            {
+                "user_id": person.id,
+                "username": person.username,
+                "full_name": person.get_full_name() or person.username,
+                "slots": availability_map.get(person.id, []),
+                "has_submitted": person.id in availability_map,
+                "is_me": person.id == user.id,
+            }
+            for person in users
+        ]
+        serializer = InterviewAvailabilityParticipantSerializer(payload, many=True)
+        return Response(serializer.data)
+
+    def post(self, request, admission_slug):
+        admission = self._get_admission(admission_slug)
+        if admission is None:
+            return Response(status=status.HTTP_404_NOT_FOUND)
+
+        user = request.user
+        user.__class__ = LegoUser
+        if not user_is_committee_member(admission, user) and not user_is_admission_admin(
+            admission, user
+        ):
+            return Response(status=status.HTTP_403_FORBIDDEN)
+
+        serializer = SaveInterviewAvailabilitySerializer(data=request.data)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+        saved, _ = InterviewAvailability.objects.update_or_create(
+            admission=admission,
+            user=user,
+            defaults={"slots": serializer.validated_data.get("slots", [])},
+        )
+
+        return Response(
+            {
+                "user_id": user.id,
+                "username": user.username,
+                "full_name": user.get_full_name() or user.username,
+                "slots": saved.slots,
+                "has_submitted": True,
+                "is_me": True,
+            },
+            status=status.HTTP_200_OK,
+        )

@@ -386,3 +386,33 @@ class SavedScheduleViewTestCase(APITestCase):
             res.data["enabled_slots"], ["2026-04-21:540", "2026-04-21:585"]
         )
         self.assertEqual(SavedSchedule.objects.get(admission=self.admission).schedule, [])
+
+    def test_recruiter_can_save_schedule(self):
+        recruiter_group = Group.objects.create(name="Bedkom", lego_id=302)
+        recruiter_user = LegoUser.objects.create(
+            username="schedule-recruiter", lego_id=303
+        )
+        Membership.objects.create(
+            user=recruiter_user,
+            role=RECRUITING,
+            group=recruiter_group,
+        )
+        self.admission.groups.add(recruiter_group)
+        self.client.force_authenticate(user=recruiter_user)
+
+        payload = {
+            "start_date": "2026-04-21",
+            "end_date": "2026-04-25",
+            "session_duration": 45,
+            "enabled_slots": ["2026-04-21:540", "2026-04-21:585"],
+            "day_start_minute": 540,
+            "day_end_minute": 900,
+            "is_distributed": False,
+            "show_candidate_names": True,
+        }
+
+        res = self.client.post(self.url, payload, format="json")
+
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.assertTrue(res.data["show_candidate_names"])
+

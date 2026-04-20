@@ -1,40 +1,50 @@
 import React, { useMemo } from "react";
 import type { ScheduleItem } from "../../../types";
-import { formatDateHeader } from "../scheduleUtils";
+import { decodeScheduleTime, formatDateHeader } from "../scheduleUtils";
 import cn from "src/utils/cn";
 
 interface Props {
   schedule: ScheduleItem[];
   dates: string[];
+  sessionDuration: number;
 }
 
-const SolverCalendarView: React.FC<Props> = ({ schedule, dates }) => {
-  const startHour = 8;
-  const endHour = 18;
-
-  const hours = useMemo(
-    () =>
-      Array.from(
-        { length: endHour - startHour },
-        (_, i) => `${i + startHour}:00`,
-      ),
-    [],
-  );
+const SolverCalendarView: React.FC<Props> = ({
+  schedule,
+  dates,
+  sessionDuration,
+}) => {
+  const minutes = useMemo(() => {
+    if (schedule.length === 0) return [] as number[];
+    const unique = new Set<number>();
+    schedule.forEach((item) => {
+      unique.add(decodeScheduleTime(item.time, sessionDuration).minute);
+    });
+    return Array.from(unique).sort((a, b) => a - b);
+  }, [schedule, sessionDuration]);
 
   const scheduleMap = useMemo(() => {
     const map = new Map<string, ScheduleItem[]>();
     schedule.forEach((item) => {
-      const dayIndex = Math.floor(item.time / 24);
-      const hour = item.time % 24;
-      const key = `${dayIndex}-${hour}`;
+      const { dayIndex, minute } = decodeScheduleTime(
+        item.time,
+        sessionDuration,
+      );
+      const key = `${dayIndex}-${minute}`;
       const existing = map.get(key) ?? [];
       existing.push(item);
       map.set(key, existing);
     });
     return map;
-  }, [schedule]);
+  }, [schedule, sessionDuration]);
 
   const columns = dates.length + 1;
+
+  const formatMinuteLabel = (minute: number) => {
+    const hour = Math.floor(minute / 60);
+    const minutePart = minute % 60;
+    return `${hour}:${minutePart.toString().padStart(2, "0")}`;
+  };
 
   return (
     <div className="min-w-0 w-full overflow-x-auto rounded-lg border border-border bg-surface-muted p-3">
@@ -61,18 +71,17 @@ const SolverCalendarView: React.FC<Props> = ({ schedule, dates }) => {
           );
         })}
 
-        {hours.map((hourLabel) => {
-          const hour = parseInt(hourLabel, 10);
+        {minutes.map((minute) => {
           return (
-            <React.Fragment key={hourLabel}>
+            <React.Fragment key={minute}>
               <div className="flex items-center justify-end pr-2 text-label font-bold uppercase tracking-label text-border-quiet">
-                {hourLabel}
+                {formatMinuteLabel(minute)}
               </div>
               {dates.map((_, dayIndex) => {
-                const items = scheduleMap.get(`${dayIndex}-${hour}`) ?? [];
+                const items = scheduleMap.get(`${dayIndex}-${minute}`) ?? [];
                 return (
                   <div
-                    key={`${dayIndex}-${hour}`}
+                    key={`${dayIndex}-${minute}`}
                     className={cn(
                       "flex min-h-[4.5rem] flex-col gap-1 rounded-md border p-1",
                       items.length > 0

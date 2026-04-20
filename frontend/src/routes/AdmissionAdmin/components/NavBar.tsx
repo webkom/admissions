@@ -122,7 +122,9 @@ const NavLink = styled(RouterNavLink)`
   font-size: 0.875rem;
   font-weight: 600;
   text-decoration: none;
-  transition: background 0.12s ease, color 0.12s ease;
+  transition:
+    background 0.12s ease,
+    color 0.12s ease;
 
   &:hover {
     background: #f0f0f0;

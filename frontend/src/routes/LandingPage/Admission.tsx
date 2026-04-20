@@ -165,8 +165,8 @@ const Admission: React.FC<AdmissionProps> = ({ admission }) => {
       </div>
 
       <p className="m-0 border-t border-border-soft pt-8 text-sm text-text-faded [&_a]:font-semibold [&_a]:text-text-secondary [&_a]:underline [&_a]:underline-offset-2 [&_a:hover]:text-text-strong">
-        Du kan til enhver tid trekke søknaden din hvis du skulle ombestemme
-        deg. Hvis det ikke fungerer å slette søknaden, send en mail til{" "}
+        Du kan til enhver tid trekke søknaden din hvis du skulle ombestemme deg.
+        Hvis det ikke fungerer å slette søknaden, send en mail til{" "}
         {isRevy || isRevyBoard ? (
           <a href="mailto:revysjef@abakus.no">revysjef@abakus.no</a>
         ) : isBackup ? (
@@ -203,10 +203,7 @@ interface ActionButtonContentProps {
   label: string;
 }
 
-const ActionButtonContent = ({
-  icon,
-  label,
-}: ActionButtonContentProps) => (
+const ActionButtonContent = ({ icon, label }: ActionButtonContentProps) => (
   <span className="grid w-full grid-cols-[1.25rem_minmax(0,1fr)_1.25rem] items-center">
     <span className="inline-flex h-5 w-5 items-center justify-center">
       {icon}

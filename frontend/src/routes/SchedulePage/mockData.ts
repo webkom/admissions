@@ -4,25 +4,50 @@ export const DEFAULT_MOCK_CANDIDATE_COUNT = 24;
 export const DEFAULT_MOCK_INTERVIEWER_COUNT = 12;
 
 const FEMALE_FIRST_NAMES = [
-  "Anna", "Ingrid", "Sofie", "Emma", "Maja",
-  "Nora", "Kari", "Maria", "Tuva", "Thea",
+  "Anna",
+  "Ingrid",
+  "Sofie",
+  "Emma",
+  "Maja",
+  "Nora",
+  "Kari",
+  "Maria",
+  "Tuva",
+  "Thea",
 ];
 
 const MALE_FIRST_NAMES = [
-  "Ola", "Erik", "Morten", "Lars", "Henrik",
-  "Jonas", "Andreas", "Per", "Sander", "Even",
+  "Ola",
+  "Erik",
+  "Morten",
+  "Lars",
+  "Henrik",
+  "Jonas",
+  "Andreas",
+  "Per",
+  "Sander",
+  "Even",
 ];
 
 const LAST_NAMES = [
-  "Hansen", "Johansen", "Olsen", "Larsen", "Andersen",
-  "Nilsen", "Berg", "Dahl", "Kristiansen", "Moe",
+  "Hansen",
+  "Johansen",
+  "Olsen",
+  "Larsen",
+  "Andersen",
+  "Nilsen",
+  "Berg",
+  "Dahl",
+  "Kristiansen",
+  "Moe",
 ];
 
 const buildName = (index: number, gender: Candidate["gender"]) => {
   const firstNames = gender === "F" ? FEMALE_FIRST_NAMES : MALE_FIRST_NAMES;
   const cycle = Math.floor(index / (firstNames.length * LAST_NAMES.length));
   const firstName = firstNames[index % firstNames.length];
-  const lastName = LAST_NAMES[Math.floor(index / firstNames.length) % LAST_NAMES.length];
+  const lastName =
+    LAST_NAMES[Math.floor(index / firstNames.length) % LAST_NAMES.length];
   const suffix = cycle > 0 ? ` ${cycle + 1}` : "";
   return `${firstName} ${lastName}${suffix}`;
 };
@@ -40,6 +65,7 @@ export interface ScheduleConfig {
   dayStartHour: number;
   dayEndHour: number;
   chunkSize: number;
+  sessionDurationMinutes: number;
 }
 
 interface AvailabilityGroup {
@@ -53,6 +79,21 @@ const DEFAULT_SCHEDULE_CONFIG: ScheduleConfig = {
   dayStartHour: 8,
   dayEndHour: 17,
   chunkSize: 4,
+  sessionDurationMinutes: 60,
+};
+
+const getSlotsPerDay = (sessionDurationMinutes: number): number => {
+  const duration = Math.max(1, sessionDurationMinutes);
+  return Math.max(1, Math.floor((24 * 60) / duration));
+};
+
+const encodeScheduleTime = (
+  day: number,
+  minute: number,
+  sessionDurationMinutes: number,
+): number => {
+  const duration = Math.max(1, sessionDurationMinutes);
+  return day * getSlotsPerDay(duration) + Math.floor(minute / duration);
 };
 
 const buildAvailabilityGroups = (
@@ -118,12 +159,20 @@ const buildAvailabilityGroups = (
   );
 };
 
-const groupsToAvailability = (groups: AvailabilityGroup[]): number[] => {
+const groupsToAvailability = (
+  groups: AvailabilityGroup[],
+  config: ScheduleConfig,
+): number[] => {
   const availability = new Set<number>();
+  const step = Math.max(1, config.sessionDurationMinutes);
 
   groups.forEach((group) => {
-    for (let hour = group.startHour; hour < group.endHour; hour++) {
-      availability.add(group.day * 24 + hour);
+    for (
+      let minute = group.startHour * 60;
+      minute < group.endHour * 60;
+      minute += step
+    ) {
+      availability.add(encodeScheduleTime(group.day, minute, step));
     }
   });
 
@@ -131,7 +180,7 @@ const groupsToAvailability = (groups: AvailabilityGroup[]): number[] => {
 };
 
 const buildAvailability = (index: number, config: ScheduleConfig): number[] => {
-  return groupsToAvailability(buildAvailabilityGroups(index, config));
+  return groupsToAvailability(buildAvailabilityGroups(index, config), config);
 };
 
 export const mergeAvailability = (
@@ -143,7 +192,11 @@ export const mergeAvailability = (
 export const createMockCandidates = (count: number): Candidate[] =>
   Array.from({ length: count }, (_, index) => {
     const gender = index % 2 === 0 ? "M" : "F";
-    return { id: `candidate-${index + 1}`, name: buildName(index, gender), gender };
+    return {
+      id: `candidate-${index + 1}`,
+      name: buildName(index, gender),
+      gender,
+    };
   });
 
 export const createMockInterviewers = (

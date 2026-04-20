@@ -1,6 +1,11 @@
 import React, { useState, useMemo } from "react";
 import type { Interviewer } from "../types";
-import { formatDateHeader, makeSlotKey, parseSlotKey } from "../scheduleUtils";
+import {
+  decodeScheduleTime,
+  formatDateHeader,
+  makeSlotKey,
+  parseSlotKey,
+} from "../scheduleUtils";
 import cn from "src/utils/cn";
 
 interface AvailabilityHeatmapProps {
@@ -65,17 +70,16 @@ const AvailabilityHeatmap: React.FC<AvailabilityHeatmapProps> = ({
 
     filteredInterviewers.forEach((interviewer) => {
       interviewer.availability.forEach((slot) => {
-        const dayIndex = Math.floor(slot / 24);
-        const hour = slot % 24;
+        const { dayIndex, minute } = decodeScheduleTime(slot, sessionDuration);
         const date = dates[dayIndex];
         if (!date) return;
-        const key = makeSlotKey(date, hour * 60);
+        const key = makeSlotKey(date, minute);
         counts.set(key, (counts.get(key) || 0) + 1);
       });
     });
 
     return counts;
-  }, [filteredInterviewers, dates]);
+  }, [filteredInterviewers, dates, sessionDuration]);
 
   const maxCount = useMemo(
     () => Math.max(1, ...Array.from(slotAvailability.values())),
@@ -259,7 +263,9 @@ const AvailabilityHeatmap: React.FC<AvailabilityHeatmapProps> = ({
                         background: getHeatBackground(enabled, intensity),
                         borderColor: getHeatBorder(enabled, intensity),
                       }}
-                      title={enabled ? `${count} tilgjengelig` : "Ikke tilgjengelig"}
+                      title={
+                        enabled ? `${count} tilgjengelig` : "Ikke tilgjengelig"
+                      }
                     >
                       {enabled && count > 0 && (
                         <span
@@ -284,8 +290,14 @@ const AvailabilityHeatmap: React.FC<AvailabilityHeatmapProps> = ({
       </div>
 
       <div className="flex flex-wrap gap-4 border-t border-border-soft pt-3.5">
-        <SummaryCard label="Aktive intervjuere" value={String(filteredInterviewers.length)} />
-        <SummaryCard label="Dekning" value={`${slotAvailability.size} slotter`} />
+        <SummaryCard
+          label="Aktive intervjuere"
+          value={String(filteredInterviewers.length)}
+        />
+        <SummaryCard
+          label="Dekning"
+          value={`${slotAvailability.size} slotter`}
+        />
         <SummaryCard label="Beste åpne luke" value={bestSlotLabel} />
       </div>
     </div>

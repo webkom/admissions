@@ -1,12 +1,10 @@
 import React, { useState, useEffect, useCallback } from "react";
+import { CalendarDays, Check, Clock, Timer, Layers } from "lucide-react";
 import {
-  CalendarDays,
-  Check,
-  Clock,
-  Timer,
-  Layers,
-} from "lucide-react";
-import { dateRangeDates, formatDateHeader, makeSlotKey } from "../scheduleUtils";
+  dateRangeDates,
+  formatDateHeader,
+  makeSlotKey,
+} from "../scheduleUtils";
 import cn from "src/utils/cn";
 import {
   Stepper,
@@ -45,7 +43,6 @@ export interface ScheduleConfigInput {
   sessionDuration: number;
 }
 
-
 const AdminScheduleConfig: React.FC<AdminScheduleConfigProps> = ({
   startDate,
   endDate,
@@ -75,7 +72,9 @@ const AdminScheduleConfig: React.FC<AdminScheduleConfigProps> = ({
   const [pendingDuration, setPendingDuration] = useState(sessionDuration);
   const [customDurationInput, setCustomDurationInput] = useState("");
   const [isCustomDuration, setIsCustomDuration] = useState(
-    !DURATION_PRESETS.includes(sessionDuration as (typeof DURATION_PRESETS)[number]),
+    !DURATION_PRESETS.includes(
+      sessionDuration as (typeof DURATION_PRESETS)[number],
+    ),
   );
 
   const [pendingChunkSize, setPendingChunkSize] = useState(chunkSize);
@@ -332,10 +331,7 @@ const AdminScheduleConfig: React.FC<AdminScheduleConfigProps> = ({
                 <span className="select-none text-sm text-text-disabled">
                   →
                 </span>
-                <TimeSegmentInput
-                  value={pendingEnd}
-                  onChange={setPendingEnd}
-                />
+                <TimeSegmentInput value={pendingEnd} onChange={setPendingEnd} />
                 {isInvalidRange && (
                   <span className="text-xs font-semibold text-brand">
                     Ugyldig tidsrom
@@ -501,7 +497,6 @@ const AdminScheduleConfig: React.FC<AdminScheduleConfigProps> = ({
           </div>
         </div>
       </div>
-
 
       {/* Slot grid */}
       <div className="min-w-0 select-none overflow-x-auto rounded-lg border border-border bg-surface-muted p-3">
