@@ -16,6 +16,8 @@ const Admission: React.FC<AdmissionProps> = ({ admission }) => {
   const isRevyBoard = admission.slug === "revystyret";
   const isBackup = admission.slug === "backup";
   const isSingleGroupAdmission = admission?.groups.length === 1;
+  const external_link =
+    "https://docs.google.com/forms/d/e/1FAIpQLSd4oaU8BADfuVrKCoMmpSQcVVrFCdlPPmP56dKznU0clQt7cg/viewform?usp=header";
 
   return (
     <AdmissionWrapper>
@@ -125,16 +127,13 @@ const Admission: React.FC<AdmissionProps> = ({ admission }) => {
       {isRevy && admission.is_open && !isLoggedIn() && (
         <p>
           Er du ikke medlem av Abakus? Søk via{" "}
-          <a href="https://forms.gle/SKPRvGNwuKhcZQP26">dette skjemaet</a>.
+          <a href={external_link}>dette skjemaet</a>.
         </p>
       )}
       {isRevyBoard && admission.is_open && !isLoggedIn() && (
         <p>
           Er du ikke medlem av Abakus? Søk via{" "}
-          <a href="https://docs.google.com/forms/d/e/1FAIpQLSdLzkn2RC_CIW3EHPKSn0f60xTP17LdnrvVb1ubVeRVHTsz1A/viewform?usp=sharing">
-            dette skjemaet
-          </a>
-          .
+          <a href={external_link}>dette skjemaet</a>.
         </p>
       )}
     </AdmissionWrapper>
