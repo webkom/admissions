@@ -210,5 +210,6 @@ export const createMockInterviewers = (
       name: buildName(index, gender),
       gender,
       availability: buildAvailability(index, config),
+      biased: [],
     };
   });

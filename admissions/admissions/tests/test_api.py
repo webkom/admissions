@@ -3,7 +3,14 @@ from rest_framework import status
 from rest_framework.test import APITestCase
 
 from admissions.admissions.constants import LEADER, MEMBER, RECRUITING
-from admissions.admissions.models import Group, LegoUser, Membership, SavedSchedule
+from admissions.admissions.models import (
+    Group,
+    InterviewAvailability,
+    LegoUser,
+    Membership,
+    SavedSchedule,
+    UserApplication,
+)
 from admissions.admissions.tests.utils import create_admission, fake_timedelta
 
 
@@ -223,9 +230,24 @@ class SolveScheduleViewTestCase(APITestCase):
                 {"id": "candidate-1", "name": "Anna", "gender": "F"},
             ],
             "interviewers": [
-                {"id": "interviewer-1", "name": "Ola", "gender": "M", "availability": [8]},
-                {"id": "interviewer-2", "name": "Per", "gender": "M", "availability": [8]},
-                {"id": "interviewer-3", "name": "Ida", "gender": "F", "availability": []},
+                {
+                    "id": "interviewer-1",
+                    "name": "Ola",
+                    "gender": "M",
+                    "availability": [8],
+                },
+                {
+                    "id": "interviewer-2",
+                    "name": "Per",
+                    "gender": "M",
+                    "availability": [8],
+                },
+                {
+                    "id": "interviewer-3",
+                    "name": "Ida",
+                    "gender": "F",
+                    "availability": [],
+                },
             ],
             "panel_size": 2,
             "options": {
@@ -245,9 +267,24 @@ class SolveScheduleViewTestCase(APITestCase):
                 {"id": "candidate-1", "name": "Anna", "gender": "F"},
             ],
             "interviewers": [
-                {"id": "interviewer-1", "name": "Ola", "gender": "M", "availability": [8]},
-                {"id": "interviewer-2", "name": "Per", "gender": "M", "availability": [8]},
-                {"id": "interviewer-3", "name": "Ida", "gender": "F", "availability": []},
+                {
+                    "id": "interviewer-1",
+                    "name": "Ola",
+                    "gender": "M",
+                    "availability": [8],
+                },
+                {
+                    "id": "interviewer-2",
+                    "name": "Per",
+                    "gender": "M",
+                    "availability": [8],
+                },
+                {
+                    "id": "interviewer-3",
+                    "name": "Ida",
+                    "gender": "F",
+                    "availability": [],
+                },
             ],
             "panel_size": 2,
             "options": {
@@ -268,8 +305,18 @@ class SolveScheduleViewTestCase(APITestCase):
                 {"id": "candidate-1", "name": "Erik", "gender": "M"},
             ],
             "interviewers": [
-                {"id": "interviewer-1", "name": "Ola", "gender": "M", "availability": [8]},
-                {"id": "interviewer-2", "name": "Per", "gender": "M", "availability": []},
+                {
+                    "id": "interviewer-1",
+                    "name": "Ola",
+                    "gender": "M",
+                    "availability": [8],
+                },
+                {
+                    "id": "interviewer-2",
+                    "name": "Per",
+                    "gender": "M",
+                    "availability": [],
+                },
             ],
             "panel_size": 2,
             "options": {
@@ -289,8 +336,18 @@ class SolveScheduleViewTestCase(APITestCase):
                 {"id": "candidate-1", "name": "Erik", "gender": "M"},
             ],
             "interviewers": [
-                {"id": "interviewer-1", "name": "Ola", "gender": "M", "availability": [8]},
-                {"id": "interviewer-2", "name": "Per", "gender": "M", "availability": []},
+                {
+                    "id": "interviewer-1",
+                    "name": "Ola",
+                    "gender": "M",
+                    "availability": [8],
+                },
+                {
+                    "id": "interviewer-2",
+                    "name": "Per",
+                    "gender": "M",
+                    "availability": [],
+                },
             ],
             "panel_size": 2,
             "options": {
@@ -385,7 +442,9 @@ class SavedScheduleViewTestCase(APITestCase):
         self.assertEqual(
             res.data["enabled_slots"], ["2026-04-21:540", "2026-04-21:585"]
         )
-        self.assertEqual(SavedSchedule.objects.get(admission=self.admission).schedule, [])
+        self.assertEqual(
+            SavedSchedule.objects.get(admission=self.admission).schedule, []
+        )
 
     def test_recruiter_can_save_schedule(self):
         recruiter_group = Group.objects.create(name="Bedkom", lego_id=302)
@@ -416,3 +475,86 @@ class SavedScheduleViewTestCase(APITestCase):
         self.assertEqual(res.status_code, status.HTTP_200_OK)
         self.assertTrue(res.data["show_candidate_names"])
 
+
+class InterviewAvailabilityViewTestCase(APITestCase):
+    def setUp(self):
+        self.group = Group.objects.create(name="Komite", lego_id=401)
+        self.user = LegoUser.objects.create(username="committee-member", lego_id=402)
+        Membership.objects.create(user=self.user, role=MEMBER, group=self.group)
+        self.admission = create_admission(
+            created_by=self.user, slug="availability-test"
+        )
+        self.admission.groups.add(self.group)
+        self.url = reverse(
+            "interview-availability",
+            kwargs={"admission_slug": self.admission.slug},
+        )
+        self.client.force_authenticate(user=self.user)
+
+    def test_can_save_conflicts_without_overwriting_slots(self):
+        InterviewAvailability.objects.create(
+            admission=self.admission,
+            user=self.user,
+            slots=["2026-04-21:540"],
+            conflicts=["real-candidate-ada"],
+        )
+
+        res = self.client.post(
+            self.url,
+            {"conflicts": ["real-candidate-eirik"]},
+            format="json",
+        )
+
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.assertEqual(res.data["slots"], ["2026-04-21:540"])
+        self.assertEqual(res.data["conflicts"], ["real-candidate-eirik"])
+
+    def test_get_returns_saved_conflicts_for_participant(self):
+        InterviewAvailability.objects.create(
+            admission=self.admission,
+            user=self.user,
+            slots=["2026-04-21:540"],
+            conflicts=["real-candidate-ada"],
+        )
+
+        res = self.client.get(self.url)
+
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(res.data), 1)
+        self.assertEqual(res.data[0]["conflicts"], ["real-candidate-ada"])
+
+
+class InterviewCandidatesViewTestCase(APITestCase):
+    def setUp(self):
+        self.group = Group.objects.create(name="Intervjukomite", lego_id=501)
+        self.user = LegoUser.objects.create(username="committee-viewer", lego_id=502)
+        Membership.objects.create(user=self.user, role=MEMBER, group=self.group)
+        self.admission = create_admission(created_by=self.user, slug="candidate-list")
+        self.admission.groups.add(self.group)
+        self.applicant = LegoUser.objects.create(
+            username="ada",
+            first_name="Ada",
+            last_name="Lovelace",
+            lego_id=503,
+        )
+        UserApplication.objects.create(user=self.applicant, admission=self.admission)
+        self.url = reverse(
+            "interview-candidates",
+            kwargs={"admission_slug": self.admission.slug},
+        )
+        self.client.force_authenticate(user=self.user)
+
+    def test_committee_member_can_get_minimal_candidate_list(self):
+        res = self.client.get(self.url)
+
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.assertEqual(
+            res.data,
+            [
+                {
+                    "id": "real-candidate-ada",
+                    "name": "Ada Lovelace",
+                    "gender": "",
+                }
+            ],
+        )

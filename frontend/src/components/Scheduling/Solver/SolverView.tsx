@@ -6,6 +6,15 @@ import {
   ToggleCard,
   SegmentedControl,
   sectionLabelClass,
+  SchedulePanel,
+  SchedulePanelHeader,
+  SchedulePanelBody,
+  SchedulePanelFooter,
+  Chip,
+  actionButtonBase,
+  actionButtonPrimary,
+  actionButtonNeutral,
+  actionButtonActive,
 } from "../ui";
 import type {
   Candidate,
@@ -399,166 +408,168 @@ export default function SolverView({
 
   return (
     <div className="flex flex-col gap-3">
-      <div className="rounded-panel border border-border bg-surface-base p-6 handheld:p-5">
-        <header className="mb-6">
-          <h2 className="m-0 text-[15px] font-bold text-text-primary">
-            Intervjuforslag
-          </h2>
-          <p className="m-0 mt-1 max-w-[40rem] text-ui leading-relaxed text-text-muted">
-            Her kan man spesifisere krav man har
-          </p>
-        </header>
+      <SchedulePanel>
+        <SchedulePanelHeader
+          icon={Sparkles}
+          eyebrow="Admin · Solver"
+          title="Generer intervjuforslag"
+          description="Still inn regler, prioriteringer og panelstørrelse. Solveren foreslår en plan som du kan distribuere."
+        />
+        <SchedulePanelBody className="divide-y divide-border-soft p-0">
+          <section className="px-6 py-5">
+            <span className={sectionLabelClass}>Regler</span>
+            <div className="grid grid-cols-[repeat(auto-fit,minmax(220px,1fr))] gap-2">
+              <ToggleCard
+                title="Samme kjønn i panel"
+                description="Minst én matchende intervjuer i hvert panel."
+                checked={solverOptions.enforce_same_gender}
+                onToggle={() => toggleSolverOption("enforce_same_gender")}
+              />
+              <ToggleCard
+                title="Tillat overtid"
+                description="Bruk slotter utenfor tilgjengeligheten ved behov."
+                checked={solverOptions.allow_overtime}
+                onToggle={() => toggleSolverOption("allow_overtime")}
+              />
+            </div>
+          </section>
 
-        <section className="mb-6">
-          <span className={sectionLabelClass}>Regler</span>
-          <div className="grid grid-cols-[repeat(auto-fit,minmax(220px,1fr))] gap-2">
-            <ToggleCard
-              title="Samme kjønn i panel"
-              description="Minst én matchende intervjuer i hvert panel."
-              checked={solverOptions.enforce_same_gender}
-              onToggle={() => toggleSolverOption("enforce_same_gender")}
-            />
-            <ToggleCard
-              title="Tillat overtid"
-              description="Bruk slotter utenfor tilgjengeligheten ved behov."
-              checked={solverOptions.allow_overtime}
-              onToggle={() => toggleSolverOption("allow_overtime")}
-            />
-          </div>
-        </section>
-
-        <section className="mb-6">
-          <div className="mb-2 flex items-end justify-between gap-3">
-            <span className="block text-label font-bold uppercase tracking-label text-text-subtle">
-              Prioritering
-            </span>
-            {selectedPriorityPreset === "custom" && (
-              <span className="text-label font-bold uppercase tracking-label text-text-subtle">
-                Tilpasset
+          <section className="px-6 py-5">
+            <div className="mb-2 flex items-end justify-between gap-3">
+              <span className="block text-label font-bold uppercase tracking-label text-text-subtle">
+                Prioritering
               </span>
-            )}
-          </div>
-          <div
-            role="radiogroup"
-            aria-label="Prioritering"
-            className="grid grid-cols-[repeat(auto-fit,minmax(180px,1fr))] gap-2"
-          >
-            {PRIORITY_PRESETS.map((preset, index) => {
-              const active = selectedPriorityPreset === preset.key;
-              return (
-                <button
-                  key={preset.key}
-                  type="button"
-                  role="radio"
-                  aria-checked={active}
-                  onClick={() =>
-                    applyPriorityPreset(
-                      preset.overtimeWeight,
-                      preset.loadBalanceWeight,
-                    )
-                  }
-                  className={cn(
-                    "group relative flex cursor-pointer flex-col gap-2 rounded-[10px] border px-4 py-3 text-left transition-[border-color,box-shadow,transform] duration-150 hover:-translate-y-px hover:border-brand-strongBorder focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-focus",
-                    active
-                      ? "border-brand-activeBorder bg-brand-panel shadow-toggle"
-                      : "border-border-soft bg-surface-base",
-                  )}
-                >
-                  <div className="flex items-center justify-between gap-2">
-                    <span
-                      className={cn(
-                        "inline-flex h-6 min-w-[1.75rem] items-center justify-center rounded-full px-1.5 text-[0.68rem] font-bold tracking-badge tabular-nums",
-                        active
-                          ? "bg-brand-fill text-brand"
-                          : "bg-surface-subtle text-text-muted",
-                      )}
-                    >
-                      {String(index + 1).padStart(2, "0")}
-                    </span>
-                    <span
-                      aria-hidden="true"
-                      className={cn(
-                        "h-2.5 w-2.5 rounded-full border transition-colors",
-                        active
-                          ? "border-brand bg-brand"
-                          : "border-border-muted bg-surface-base",
-                      )}
-                    />
-                  </div>
-                  <h4 className="m-0 text-sm font-bold text-text-primary">
-                    {preset.label}
+              {selectedPriorityPreset === "custom" && (
+                <span className="text-label font-bold uppercase tracking-label text-text-subtle">
+                  Tilpasset
+                </span>
+              )}
+            </div>
+            <div
+              role="radiogroup"
+              aria-label="Prioritering"
+              className="grid grid-cols-[repeat(auto-fit,minmax(180px,1fr))] gap-2"
+            >
+              {PRIORITY_PRESETS.map((preset, index) => {
+                const active = selectedPriorityPreset === preset.key;
+                return (
+                  <button
+                    key={preset.key}
+                    type="button"
+                    role="radio"
+                    aria-checked={active}
+                    onClick={() =>
+                      applyPriorityPreset(
+                        preset.overtimeWeight,
+                        preset.loadBalanceWeight,
+                      )
+                    }
+                    className={cn(
+                      "group relative flex cursor-pointer flex-col gap-2 rounded-[10px] border px-4 py-3 text-left transition-[border-color,box-shadow,transform] duration-150 hover:-translate-y-px hover:border-brand-strongBorder focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-focus",
+                      active
+                        ? "border-brand-activeBorder bg-brand-panel shadow-toggle"
+                        : "border-border-soft bg-surface-base",
+                    )}
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <span
+                        className={cn(
+                          "inline-flex h-6 min-w-[1.75rem] items-center justify-center rounded-full px-1.5 text-[0.68rem] font-bold tracking-badge tabular-nums",
+                          active
+                            ? "bg-brand-fill text-brand"
+                            : "bg-surface-subtle text-text-muted",
+                        )}
+                      >
+                        {String(index + 1).padStart(2, "0")}
+                      </span>
+                      <span
+                        aria-hidden="true"
+                        className={cn(
+                          "h-2.5 w-2.5 rounded-full border transition-colors",
+                          active
+                            ? "border-brand bg-brand"
+                            : "border-border-muted bg-surface-base",
+                        )}
+                      />
+                    </div>
+                    <h4 className="m-0 text-sm font-bold text-text-primary">
+                      {preset.label}
+                    </h4>
+                    <p className="m-0 text-detail leading-snug text-text-muted">
+                      {preset.description}
+                    </p>
+                  </button>
+                );
+              })}
+            </div>
+          </section>
+
+          <section className="px-6 py-5">
+            <div className="flex flex-wrap items-center justify-between gap-4">
+              <div className="min-w-0">
+                <span className={sectionLabelClass}>Panelstørrelse</span>
+                <p className="m-0 mt-1 text-detail leading-snug text-text-muted">
+                  Antall intervjuere per kandidat.
+                </p>
+              </div>
+              <Stepper
+                value={panelSize}
+                min={PANEL_SIZE_MIN}
+                max={PANEL_SIZE_MAX}
+                onStep={setPanelSize}
+                aria-label="Panelstørrelse"
+              />
+            </div>
+          </section>
+
+          {(error || result?.status === "INFEASIBLE") && (
+            <section className="px-6 py-5">
+              {error && (
+                <div className="rounded-lg border border-brand-border bg-brand-muted px-4 py-3 text-ui font-semibold text-brand">
+                  {error}
+                </div>
+              )}
+              {result?.status === "INFEASIBLE" && (
+                <div className="rounded-lg border border-border-soft bg-surface-muted px-5 py-6 text-center">
+                  <h4 className="m-0 mb-2 text-sm font-bold text-text-primary">
+                    Ingen løsning funnet
                   </h4>
-                  <p className="m-0 text-detail leading-snug text-text-muted">
-                    {preset.description}
+                  <p className="m-0 mx-auto max-w-[32rem] text-ui leading-relaxed text-text-subtle">
+                    Begrensningene er for stramme. Prøv lavere panelstørrelse
+                    eller åpne flere slots.
                   </p>
-                </button>
-              );
-            })}
-          </div>
-        </section>
+                </div>
+              )}
+            </section>
+          )}
+        </SchedulePanelBody>
 
-        <section className="mb-5 flex flex-wrap items-center justify-between gap-4 rounded-[10px] border border-border-soft bg-surface-muted px-4 py-3">
-          <div className="min-w-0">
-            <span className={sectionLabelClass}>Panelstørrelse</span>
-            <p className="m-0 mt-1 text-detail leading-snug text-text-muted">
-              Antall intervjuere per kandidat.
-            </p>
-          </div>
-          <Stepper
-            value={panelSize}
-            min={PANEL_SIZE_MIN}
-            max={PANEL_SIZE_MAX}
-            onStep={setPanelSize}
-            aria-label="Panelstørrelse"
-          />
-        </section>
-        <div className="flex flex-wrap items-center justify-between gap-4 border-t border-border-soft pt-4">
-          <div className="flex flex-wrap items-center gap-5 text-ui text-text-muted">
-            <span className="inline-flex items-baseline gap-1.5">
-              <span className="text-label font-bold uppercase tracking-label text-text-subtle">
-                Kandidater
-              </span>
-              <span className="text-sm font-bold tabular-nums text-text-primary">
+        <SchedulePanelFooter>
+          <div className="flex flex-wrap items-center gap-4 text-detail text-text-muted">
+            <span>
+              <span className="font-bold text-text-primary">
                 {candidates.length}
-              </span>
+              </span>{" "}
+              kandidater
             </span>
-            <span className="inline-flex items-baseline gap-1.5">
-              <span className="text-label font-bold uppercase tracking-label text-text-subtle">
-                Intervjuere
-              </span>
-              <span className="text-sm font-bold tabular-nums text-text-primary">
+            <span>
+              <span className="font-bold text-text-primary">
                 {interviewers.length}
-              </span>
+              </span>{" "}
+              intervjuere
             </span>
           </div>
           <button
             type="button"
-            className="cursor-pointer whitespace-nowrap rounded-lg border border-brand bg-brand px-5 py-2.5 text-ui font-bold text-white transition-[background,border-color,box-shadow] duration-150 hover:border-brand-hover hover:bg-brand-hover focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-brand-ring active:bg-brand-pressed disabled:cursor-not-allowed disabled:opacity-40"
+            className={cn(actionButtonBase, actionButtonPrimary)}
             onClick={handleSolve}
             disabled={loading}
           >
+            <Sparkles size={14} />
             {loading ? "Optimaliserer..." : "Generer plan"}
           </button>
-        </div>
-
-        {error && (
-          <div className="mt-4 rounded-lg border border-brand-border bg-brand-muted px-4 py-3 text-ui font-semibold text-brand">
-            {error}
-          </div>
-        )}
-
-        {result?.status === "INFEASIBLE" && (
-          <div className="mt-4 rounded-lg border border-brand-border bg-surface-muted px-5 py-8 text-center">
-            <h4 className="m-0 mb-2 text-base font-bold text-text-primary">
-              Ingen løsning funnet
-            </h4>
-            <p className="m-0 mx-auto max-w-[32rem] text-ui leading-relaxed text-text-subtle">
-              Nåværende begrensninger er for stramme. Start med lavere
-              panelstørrelse eller åpne flere slots før dere prøver igjen.
-            </p>
-          </div>
-        )}
-      </div>
+        </SchedulePanelFooter>
+      </SchedulePanel>
 
       {loading &&
         (() => {
@@ -568,401 +579,394 @@ export default function SolverView({
             (elapsedMs / Math.max(maxMs, 1)) * 100,
           );
           return (
-            <div className="animate-[fade-in_0.25s_ease-out] rounded-panel border border-border bg-surface-base p-6 handheld:p-5">
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <div className="flex items-center gap-2.5">
-                  <span
-                    className="flex h-8 w-8 items-center justify-center rounded-full bg-brand-muted text-brand"
-                    aria-hidden="true"
-                  >
-                    <Sparkles size={15} className="animate-pulse" />
-                  </span>
-                  <div>
-                    <h3 className="m-0 text-sm font-bold text-text-primary">
-                      Optimaliserer intervjuplan
-                    </h3>
-                    <p className="m-0 mt-0.5 text-detail text-text-muted">
-                      Solveren vurderer kombinasjoner av paneler og tidspunkt.
-                    </p>
+            <SchedulePanel className="animate-[fade-in_0.25s_ease-out]">
+              <SchedulePanelBody>
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div className="flex items-center gap-3">
+                    <span
+                      className="flex h-9 w-9 items-center justify-center rounded-lg bg-brand-muted text-brand ring-1 ring-brand-border/60"
+                      aria-hidden="true"
+                    >
+                      <Sparkles size={16} className="animate-pulse" />
+                    </span>
+                    <div>
+                      <h3 className="m-0 text-sm font-bold text-text-primary">
+                        Optimaliserer intervjuplan
+                      </h3>
+                      <p className="m-0 mt-0.5 text-detail text-text-muted">
+                        Solveren vurderer kombinasjoner av paneler og tidspunkt.
+                      </p>
+                    </div>
                   </div>
+                  <span className="text-ui font-bold tabular-nums text-text-primary">
+                    {(elapsedMs / 1000).toFixed(1)}s
+                  </span>
                 </div>
-                <span className="text-ui font-bold tabular-nums text-text-primary">
-                  {(elapsedMs / 1000).toFixed(1)}s
-                </span>
-              </div>
-              <div
-                className="mt-4 h-1.5 w-full overflow-hidden rounded-full bg-surface-muted"
-                role="progressbar"
-                aria-valuenow={Math.round(progressPercent)}
-                aria-valuemin={0}
-                aria-valuemax={100}
-              >
                 <div
-                  className="h-full rounded-full bg-brand transition-[width] duration-200 ease-linear"
-                  style={{ width: `${progressPercent}%` }}
-                />
-              </div>
-              {progressPercent >= 95 && (
-                <p className="m-0 mt-3 text-detail text-text-muted">
-                  Ferdigstiller løsningen …
-                </p>
-              )}
-            </div>
+                  className="mt-4 h-1.5 w-full overflow-hidden rounded-full bg-surface-muted"
+                  role="progressbar"
+                  aria-valuenow={Math.round(progressPercent)}
+                  aria-valuemin={0}
+                  aria-valuemax={100}
+                >
+                  <div
+                    className="h-full rounded-full bg-brand transition-[width] duration-200 ease-linear"
+                    style={{ width: `${progressPercent}%` }}
+                  />
+                </div>
+                {progressPercent >= 95 && (
+                  <p className="m-0 mt-3 text-detail text-text-muted">
+                    Ferdigstiller løsningen …
+                  </p>
+                )}
+              </SchedulePanelBody>
+            </SchedulePanel>
           );
         })()}
 
       {result?.status === "SUCCESS" && overviewStats && (
-        <div className="animate-[fade-in_0.25s_ease-out] rounded-panel border border-border bg-surface-base p-6 handheld:p-5">
-          <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-            <div>
-              <span className="mb-1 block text-label font-bold uppercase tracking-label text-text-subtle">
-                Resultat
-              </span>
-              <h3 className="m-0 text-sm font-bold text-text-primary">
-                Oversikt over plan
-              </h3>
+        <SchedulePanel className="animate-[fade-in_0.25s_ease-out]">
+          <SchedulePanelHeader
+            eyebrow="Resultat · Oversikt"
+            title="Oversikt over plan"
+            description="Forhåndsvis effekten før du lagrer eller distribuerer."
+            chips={<Chip tone="success">Ferdig</Chip>}
+          />
+          <SchedulePanelBody>
+            <div className="grid grid-cols-[repeat(auto-fit,minmax(140px,1fr))] gap-2">
+              <StatTile
+                label="Intervjuer"
+                value={overviewStats.totalInterviews}
+                hint={`${overviewStats.usedInterviewers} av ${overviewStats.totalInterviewers} brukt`}
+              />
+              <StatTile
+                label="Overtidstildelinger"
+                value={overviewStats.overtimeAssignments}
+                hint={
+                  overviewStats.overtimeAssignments === 0
+                    ? "Ingen utenfor tilgjengelighet"
+                    : "Utenfor tilgjengelighet"
+                }
+                tone={
+                  overviewStats.overtimeAssignments > 0 ? "warn" : "neutral"
+                }
+              />
+              <StatTile
+                label="Mest belastet"
+                value={overviewStats.maxLoad}
+                hint="intervjuer hos én person"
+              />
+              <StatTile
+                label="Minst belastet"
+                value={overviewStats.minLoad}
+                hint="intervjuer hos én person"
+              />
             </div>
-            <span className="inline-flex items-center gap-1.5 rounded-full border border-success-border bg-success-bg px-2.5 py-1 text-xs font-bold uppercase tracking-badge text-success">
-              Ferdig
-            </span>
-          </div>
-
-          <div className="grid grid-cols-[repeat(auto-fit,minmax(140px,1fr))] gap-2">
-            <StatTile
-              label="Intervjuer"
-              value={overviewStats.totalInterviews}
-              hint={`${overviewStats.usedInterviewers} av ${overviewStats.totalInterviewers} brukt`}
-            />
-            <StatTile
-              label="Overtidstildelinger"
-              value={overviewStats.overtimeAssignments}
-              hint={
-                overviewStats.overtimeAssignments === 0
-                  ? "Ingen utenfor tilgjengelighet"
-                  : "Utenfor tilgjengelighet"
-              }
-              tone={overviewStats.overtimeAssignments > 0 ? "warn" : "neutral"}
-            />
-            <StatTile
-              label="Mest belastet"
-              value={overviewStats.maxLoad}
-              hint="intervjuer hos én person"
-            />
-            <StatTile
-              label="Minst belastet"
-              value={overviewStats.minLoad}
-              hint="intervjuer hos én person"
-            />
-          </div>
-
-          <div className="mt-5 flex flex-wrap items-center gap-2 border-t border-border-soft pt-4">
-            <button
-              type="button"
-              onClick={() => setPlanRevealed((current) => !current)}
-              className={cn(
-                "inline-flex cursor-pointer items-center gap-1.5 rounded-lg border px-4 py-2 text-ui font-semibold transition-[border-color,background,box-shadow] duration-150",
-                planRevealed
-                  ? "border-border-muted bg-surface-base text-text-soft hover:border-border-quiet hover:bg-surface-subtle"
-                  : "border-brand bg-brand text-white hover:border-brand-hover hover:bg-brand-hover",
-              )}
-            >
-              {planRevealed ? <EyeOff size={14} /> : <Eye size={14} />}
-              {planRevealed ? "Skjul intervjuplan" : "Vis intervjuplan"}
-            </button>
-            {planRevealed && (
+          </SchedulePanelBody>
+          <SchedulePanelFooter>
+            <div className="flex flex-wrap items-center gap-2">
               <button
                 type="button"
-                onClick={() => setNamesRevealed((current) => !current)}
+                onClick={() => setPlanRevealed((current) => !current)}
                 className={cn(
-                  "inline-flex cursor-pointer items-center gap-1.5 rounded-lg border px-4 py-2 text-ui font-semibold transition-[border-color,background] duration-150",
-                  namesRevealed
-                    ? "border-brand-activeBorder bg-brand-panel text-brand"
-                    : "border-border-muted bg-surface-base text-text-soft hover:border-border-quiet hover:bg-surface-subtle",
+                  actionButtonBase,
+                  planRevealed ? actionButtonNeutral : actionButtonPrimary,
                 )}
               >
-                {namesRevealed ? <EyeOff size={14} /> : <Eye size={14} />}
-                {namesRevealed ? "Skjul kandidatnavn" : "Vis kandidatnavn"}
+                {planRevealed ? <EyeOff size={14} /> : <Eye size={14} />}
+                {planRevealed ? "Skjul intervjuplan" : "Vis intervjuplan"}
               </button>
-            )}
+              {planRevealed && (
+                <button
+                  type="button"
+                  onClick={() => setNamesRevealed((current) => !current)}
+                  className={cn(
+                    actionButtonBase,
+                    namesRevealed ? actionButtonActive : actionButtonNeutral,
+                  )}
+                >
+                  {namesRevealed ? <EyeOff size={14} /> : <Eye size={14} />}
+                  {namesRevealed ? "Skjul kandidatnavn" : "Vis kandidatnavn"}
+                </button>
+              )}
+            </div>
             {!planRevealed && (
               <span className="text-detail text-text-muted">
                 Planen og kandidatnavn er skjult til du åpner dem.
               </span>
             )}
-          </div>
-        </div>
+          </SchedulePanelFooter>
+        </SchedulePanel>
       )}
 
       {result?.status === "SUCCESS" && planRevealed && (
-        <div className="animate-[fade-in_0.25s_ease-out] rounded-panel border border-border bg-surface-base p-6 handheld:p-5">
-          <div className="mb-[0.875rem] flex flex-wrap items-center justify-between gap-3">
-            <div className="flex flex-wrap items-center gap-[0.65rem]">
-              <div>
-                <span className="mb-1 block text-label font-bold uppercase tracking-label text-text-subtle">
-                  Intervjuplan
-                </span>
-                <h3 className="m-0 text-sm font-bold text-text-primary">
-                  Generert intervjuplan
-                </h3>
-              </div>
-              <span className="inline-flex items-center gap-1.5 rounded-full border border-brand-border bg-brand-subtle px-2.5 py-1 text-xs font-semibold text-brand">
-                {result.schedule.length} intervjuer
-              </span>
-              {!namesRevealed && (
-                <span className="inline-flex items-center gap-1.5 rounded-full border border-border-muted bg-surface-muted px-2.5 py-1 text-xs font-semibold text-text-muted">
-                  <EyeOff size={12} />
-                  Navn skjult
-                </span>
-              )}
-            </div>
-
-            <SegmentedControl
-              value={viewType}
-              onChange={setViewType}
-              items={[
-                {
-                  key: "list",
-                  icon: <Icon name="list" size="1.2rem" prefix="ios" />,
-                  title: "Liste-visning",
-                },
-                {
-                  key: "calendar",
-                  icon: <Icon name="calendar" size="1.2rem" prefix="ios" />,
-                  title: "Kalender-visning",
-                },
-                { key: "person", label: "Person", title: "Personvisning" },
-              ]}
-            />
-          </div>
-
-          {viewType === "person" ? (
-            <div className="flex flex-col gap-4">
-              <div className="flex justify-end">
-                <div className="flex flex-col gap-1">
-                  <label
-                    className="text-label font-bold uppercase tracking-label text-text-subtle"
-                    htmlFor="interviewer-filter"
-                  >
-                    Velg intervjuer
-                  </label>
-                  <select
-                    id="interviewer-filter"
-                    className="min-w-56 rounded-md border border-border-muted bg-surface-base px-2.5 py-2 text-sm font-semibold text-text-primary transition-[border-color,box-shadow] duration-150 focus:border-brand-input focus:outline-none focus:ring-3 focus:ring-brand-ringSoft"
-                    value={selectedInterviewer}
-                    onChange={(event) =>
-                      setSelectedInterviewer(event.target.value)
-                    }
-                  >
-                    <option value="">Velg en person</option>
-                    {interviewerDistribution.map((interviewer) => (
-                      <option key={interviewer.name} value={interviewer.name}>
-                        {interviewer.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-
-              <div className="mb-4">
-                <div className="mb-[0.6rem] flex flex-wrap items-baseline justify-between gap-3">
-                  <span className="mb-1 block text-label font-bold uppercase tracking-label text-text-subtle">
-                    Fordeling
-                  </span>
-                  <p className="m-0 text-ui text-text-subtle">
-                    Klikk på en person for å åpne intervjuene deres.
-                  </p>
+        <SchedulePanel className="animate-[fade-in_0.25s_ease-out]">
+          <SchedulePanelHeader
+            eyebrow="Resultat · Plan"
+            title="Generert intervjuplan"
+            description="Gjennomgå før du lagrer eller distribuerer til intervjuerne."
+            chips={
+              <>
+                <Chip tone="brand">{result.schedule.length} intervjuer</Chip>
+                {!namesRevealed && (
+                  <Chip tone="muted" icon={<EyeOff size={11} />}>
+                    Navn skjult
+                  </Chip>
+                )}
+              </>
+            }
+            actions={
+              <SegmentedControl
+                value={viewType}
+                onChange={setViewType}
+                items={[
+                  {
+                    key: "list",
+                    icon: <Icon name="list" size="1.2rem" prefix="ios" />,
+                    title: "Liste-visning",
+                  },
+                  {
+                    key: "calendar",
+                    icon: <Icon name="calendar" size="1.2rem" prefix="ios" />,
+                    title: "Kalender-visning",
+                  },
+                  { key: "person", label: "Person", title: "Personvisning" },
+                ]}
+              />
+            }
+          />
+          <SchedulePanelBody>
+            {viewType === "person" ? (
+              <div className="flex flex-col gap-4">
+                <div className="flex justify-end">
+                  <div className="flex flex-col gap-1">
+                    <label
+                      className="text-label font-bold uppercase tracking-label text-text-subtle"
+                      htmlFor="interviewer-filter"
+                    >
+                      Velg intervjuer
+                    </label>
+                    <select
+                      id="interviewer-filter"
+                      className="min-w-56 rounded-md border border-border-muted bg-surface-base px-2.5 py-2 text-sm font-semibold text-text-primary transition-[border-color,box-shadow] duration-150 focus:border-brand-input focus:outline-none focus:ring-3 focus:ring-brand-ringSoft"
+                      value={selectedInterviewer}
+                      onChange={(event) =>
+                        setSelectedInterviewer(event.target.value)
+                      }
+                    >
+                      <option value="">Velg en person</option>
+                      {interviewerDistribution.map((interviewer) => (
+                        <option key={interviewer.name} value={interviewer.name}>
+                          {interviewer.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
                 </div>
 
-                <div className="grid grid-cols-[repeat(auto-fit,minmax(160px,1fr))] gap-[0.6rem]">
-                  <button
-                    type="button"
-                    className="rounded-lg border border-border-soft bg-surface-muted px-4 py-3 text-left transition-[border-color,background] duration-100 hover:border-brand-panelBorder"
-                  >
-                    <span className="text-ui font-bold text-text-primary">
-                      Alle intervjuere
+                <div className="mb-4">
+                  <div className="mb-[0.6rem] flex flex-wrap items-baseline justify-between gap-3">
+                    <span className="mb-1 block text-label font-bold uppercase tracking-label text-text-subtle">
+                      Fordeling
                     </span>
-                    <span className="block text-xl font-extrabold text-text-primary">
-                      {totalAssignments}
-                    </span>
-                    <span className="text-label font-bold uppercase tracking-label text-text-subtle">
-                      Totale tildelinger
-                    </span>
-                  </button>
+                    <p className="m-0 text-ui text-text-subtle">
+                      Klikk på en person for å åpne intervjuene deres.
+                    </p>
+                  </div>
 
-                  {interviewerDistribution.map((interviewer) => (
+                  <div className="grid grid-cols-[repeat(auto-fit,minmax(160px,1fr))] gap-[0.6rem]">
                     <button
-                      key={interviewer.name}
                       type="button"
-                      className={cn(
-                        "rounded-lg border px-4 py-3 text-left transition-[border-color,background] duration-100 hover:border-brand-panelBorder",
-                        selectedInterviewer === interviewer.name
-                          ? "border-brand-panelBorder bg-brand-subtle"
-                          : "border-border-soft bg-surface-muted",
-                      )}
-                      onClick={() => setSelectedInterviewer(interviewer.name)}
+                      className="rounded-lg border border-border bg-surface-base px-4 py-3 text-left transition-[border-color,background] duration-100 hover:border-brand-panelBorder hover:bg-brand-soft"
                     >
                       <span className="text-ui font-bold text-text-primary">
-                        {interviewer.name}
+                        Alle intervjuere
                       </span>
                       <span className="block text-xl font-extrabold text-text-primary">
-                        {interviewer.count}
+                        {totalAssignments}
                       </span>
                       <span className="text-label font-bold uppercase tracking-label text-text-subtle">
-                        {interviewer.overtimeCount > 0
-                          ? `${interviewer.overtimeCount} overtid`
-                          : "Ingen overtid"}
+                        Totale tildelinger
                       </span>
                     </button>
-                  ))}
-                </div>
-              </div>
 
-              {!selectedInterviewer ? (
-                <div className="rounded-lg border border-border bg-surface-muted p-4 text-center text-sm font-semibold text-text-muted">
-                  Velg en intervjuer for å se intervjuene.
+                    {interviewerDistribution.map((interviewer) => (
+                      <button
+                        key={interviewer.name}
+                        type="button"
+                        className={cn(
+                          "rounded-lg border px-4 py-3 text-left transition-[border-color,background] duration-100 hover:border-brand-panelBorder",
+                          selectedInterviewer === interviewer.name
+                            ? "border-brand-activeBorder bg-toggle-active shadow-toggle"
+                            : "border-border bg-surface-base hover:bg-brand-soft",
+                        )}
+                        onClick={() => setSelectedInterviewer(interviewer.name)}
+                      >
+                        <span className="text-ui font-bold text-text-primary">
+                          {interviewer.name}
+                        </span>
+                        <span className="block text-xl font-extrabold text-text-primary">
+                          {interviewer.count}
+                        </span>
+                        <span className="text-label font-bold uppercase tracking-label text-text-subtle">
+                          {interviewer.overtimeCount > 0
+                            ? `${interviewer.overtimeCount} overtid`
+                            : "Ingen overtid"}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
                 </div>
-              ) : selectedInterviewerSchedule.length === 0 ? (
-                <div className="rounded-lg border border-border bg-surface-muted p-4 text-center text-sm font-semibold text-text-muted">
-                  {selectedInterviewer} har ingen tildelte intervjuer.
-                </div>
-              ) : (
-                <div className="overflow-hidden rounded-lg border border-border-soft">
-                  <table className="w-full border-collapse">
-                    <thead>
-                      <tr>
-                        <th className="border-b border-border-soft bg-surface-subtle px-4 py-3 text-left text-label font-bold uppercase tracking-label text-text-subtle">
-                          Tidspunkt
-                        </th>
-                        <th className="border-b border-border-soft bg-surface-subtle px-4 py-3 text-left text-label font-bold uppercase tracking-label text-text-subtle">
-                          Kandidat
-                        </th>
-                        <th className="border-b border-border-soft bg-surface-subtle px-4 py-3 text-left text-label font-bold uppercase tracking-label text-text-subtle">
-                          Intervjupanel
-                        </th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {selectedInterviewerSchedule.map((item, idx) => (
-                        <tr
-                          key={idx}
-                          className="group [&:not(:last-child)>td]:border-b [&:not(:last-child)>td]:border-b-border-faint hover:[&>td]:bg-surface-soft"
-                        >
-                          <td className="w-[100px] whitespace-nowrap px-4 py-3 text-sm font-semibold text-text-muted">
-                            {formatSlotTime(item.time)}
-                          </td>
-                          <td className="px-4 py-3 text-sm font-semibold text-text-primary">
-                            {displayCandidate(item.candidate)}
-                          </td>
-                          <td className="px-4 py-3 text-sm">
-                            <div className="flex flex-wrap gap-[0.35rem]">
-                              {item.panel.map((p, i) => (
-                                <span
-                                  key={i}
-                                  className={cn(
-                                    "inline-flex items-center rounded-full border px-2 py-1 text-xs font-semibold",
-                                    p.is_overtime
-                                      ? "border-brand-panelBorder bg-brand-badge text-brand"
-                                      : "border-border-soft bg-surface-subtle text-text-body",
-                                  )}
-                                  title={
-                                    p.is_overtime
-                                      ? "Utenfor registrert tilgjengelighet"
-                                      : undefined
-                                  }
-                                >
-                                  {p.name}
-                                </span>
-                              ))}
-                            </div>
-                          </td>
+
+                {!selectedInterviewer ? (
+                  <div className="rounded-lg border border-border bg-surface-base p-4 text-center text-sm font-semibold text-text-muted">
+                    Velg en intervjuer for å se intervjuene.
+                  </div>
+                ) : selectedInterviewerSchedule.length === 0 ? (
+                  <div className="rounded-lg border border-border bg-surface-base p-4 text-center text-sm font-semibold text-text-muted">
+                    {selectedInterviewer} har ingen tildelte intervjuer.
+                  </div>
+                ) : (
+                  <div className="overflow-hidden rounded-lg border border-border-soft">
+                    <table className="w-full border-collapse">
+                      <thead>
+                        <tr>
+                          <th className="border-b border-border-soft bg-surface-subtle px-4 py-3 text-left text-label font-bold uppercase tracking-label text-text-subtle">
+                            Tidspunkt
+                          </th>
+                          <th className="border-b border-border-soft bg-surface-subtle px-4 py-3 text-left text-label font-bold uppercase tracking-label text-text-subtle">
+                            Kandidat
+                          </th>
+                          <th className="border-b border-border-soft bg-surface-subtle px-4 py-3 text-left text-label font-bold uppercase tracking-label text-text-subtle">
+                            Intervjupanel
+                          </th>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </div>
-          ) : viewType === "list" ? (
-            <div className="overflow-hidden rounded-lg border border-border-soft">
-              <table className="w-full border-collapse">
-                <thead>
-                  <tr>
-                    <th className="border-b border-border-soft bg-surface-subtle px-4 py-3 text-left text-label font-bold uppercase tracking-label text-text-subtle">
-                      Tidspunkt
-                    </th>
-                    <th className="border-b border-border-soft bg-surface-subtle px-4 py-3 text-left text-label font-bold uppercase tracking-label text-text-subtle">
-                      Kandidat
-                    </th>
-                    <th className="border-b border-border-soft bg-surface-subtle px-4 py-3 text-left text-label font-bold uppercase tracking-label text-text-subtle">
-                      Intervjupanel
-                    </th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {sortedSchedule.map((item, idx) => (
-                    <tr
-                      key={idx}
-                      className="group [&:not(:last-child)>td]:border-b [&:not(:last-child)>td]:border-b-border-faint hover:[&>td]:bg-surface-soft"
-                    >
-                      <td className="w-[100px] whitespace-nowrap px-4 py-3 text-sm font-semibold text-text-muted">
-                        {formatSlotTime(item.time)}
-                      </td>
-                      <td className="px-4 py-3 text-sm font-semibold text-text-primary">
-                        {displayCandidate(item.candidate)}
-                      </td>
-                      <td className="px-4 py-3 text-sm">
-                        <div className="flex flex-wrap gap-[0.35rem]">
-                          {item.panel.map((p, i) => (
-                            <span
-                              key={i}
-                              className={cn(
-                                "inline-flex items-center rounded-full border px-2 py-1 text-xs font-semibold",
-                                p.is_overtime
-                                  ? "border-brand-panelBorder bg-brand-badge text-brand"
-                                  : "border-border-soft bg-surface-subtle text-text-body",
-                              )}
-                              title={
-                                p.is_overtime
-                                  ? "Utenfor registrert tilgjengelighet"
-                                  : undefined
-                              }
-                            >
-                              {p.name}
-                            </span>
-                          ))}
-                        </div>
-                      </td>
+                      </thead>
+                      <tbody>
+                        {selectedInterviewerSchedule.map((item, idx) => (
+                          <tr
+                            key={idx}
+                            className="group [&:not(:last-child)>td]:border-b [&:not(:last-child)>td]:border-b-border-faint hover:[&>td]:bg-surface-soft"
+                          >
+                            <td className="w-[100px] whitespace-nowrap px-4 py-3 text-sm font-semibold text-text-muted">
+                              {formatSlotTime(item.time)}
+                            </td>
+                            <td className="px-4 py-3 text-sm font-semibold text-text-primary">
+                              {displayCandidate(item.candidate)}
+                            </td>
+                            <td className="px-4 py-3 text-sm">
+                              <div className="flex flex-wrap gap-[0.35rem]">
+                                {item.panel.map((p, i) => (
+                                  <span
+                                    key={i}
+                                    className={cn(
+                                      "inline-flex items-center rounded-full border px-2 py-1 text-xs font-semibold",
+                                      p.is_overtime
+                                        ? "border-brand-panelBorder bg-brand-badge text-brand"
+                                        : "border-border-soft bg-surface-subtle text-text-body",
+                                    )}
+                                    title={
+                                      p.is_overtime
+                                        ? "Utenfor registrert tilgjengelighet"
+                                        : undefined
+                                    }
+                                  >
+                                    {p.name}
+                                  </span>
+                                ))}
+                              </div>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            ) : viewType === "list" ? (
+              <div className="overflow-hidden rounded-lg border border-border-soft">
+                <table className="w-full border-collapse">
+                  <thead>
+                    <tr>
+                      <th className="border-b border-border-soft bg-surface-subtle px-4 py-3 text-left text-label font-bold uppercase tracking-label text-text-subtle">
+                        Tidspunkt
+                      </th>
+                      <th className="border-b border-border-soft bg-surface-subtle px-4 py-3 text-left text-label font-bold uppercase tracking-label text-text-subtle">
+                        Kandidat
+                      </th>
+                      <th className="border-b border-border-soft bg-surface-subtle px-4 py-3 text-left text-label font-bold uppercase tracking-label text-text-subtle">
+                        Intervjupanel
+                      </th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          ) : (
-            <SolverCalendarView
-              schedule={displaySchedule}
-              dates={dates}
-              sessionDuration={sessionDuration}
-            />
-          )}
-
-          <div className="mt-[0.875rem] flex flex-wrap items-center gap-3 border-t border-border-soft pt-[0.875rem]">
+                  </thead>
+                  <tbody>
+                    {sortedSchedule.map((item, idx) => (
+                      <tr
+                        key={idx}
+                        className="group [&:not(:last-child)>td]:border-b [&:not(:last-child)>td]:border-b-border-faint hover:[&>td]:bg-surface-soft"
+                      >
+                        <td className="w-[100px] whitespace-nowrap px-4 py-3 text-sm font-semibold text-text-muted">
+                          {formatSlotTime(item.time)}
+                        </td>
+                        <td className="px-4 py-3 text-sm font-semibold text-text-primary">
+                          {displayCandidate(item.candidate)}
+                        </td>
+                        <td className="px-4 py-3 text-sm">
+                          <div className="flex flex-wrap gap-[0.35rem]">
+                            {item.panel.map((p, i) => (
+                              <span
+                                key={i}
+                                className={cn(
+                                  "inline-flex items-center rounded-full border px-2 py-1 text-xs font-semibold",
+                                  p.is_overtime
+                                    ? "border-brand-panelBorder bg-brand-badge text-brand"
+                                    : "border-border-soft bg-surface-subtle text-text-body",
+                                )}
+                                title={
+                                  p.is_overtime
+                                    ? "Utenfor registrert tilgjengelighet"
+                                    : undefined
+                                }
+                              >
+                                {p.name}
+                              </span>
+                            ))}
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <SolverCalendarView
+                schedule={displaySchedule}
+                dates={dates}
+                sessionDuration={sessionDuration}
+              />
+            )}
+          </SchedulePanelBody>
+          <SchedulePanelFooter>
             <button
               type="button"
-              className="inline-flex cursor-pointer items-center gap-1.5 rounded-lg border border-border-muted bg-surface-base px-4 py-2 text-ui font-semibold text-text-soft transition-[border-color,background] duration-100 hover:border-border-quiet hover:bg-surface-subtle"
+              className={cn(actionButtonBase, actionButtonNeutral)}
               onClick={handleExportIcs}
             >
               <Icon name="download" size="0.9rem" prefix="ios" />
-              Eksporter til kalender (.ics)
+              Eksporter (.ics)
             </button>
-            <div className="ml-auto flex flex-wrap items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
+              {saveError && (
+                <span className="text-detail font-semibold text-brand">
+                  {saveError}
+                </span>
+              )}
               {savedSchedule?.is_distributed ? (
                 <>
-                  <span className="inline-flex items-center rounded-full border border-success-border bg-success-bg px-3 py-1 text-xs font-bold uppercase tracking-badge text-success">
-                    Distribuert
-                  </span>
+                  <Chip tone="success">Distribuert</Chip>
                   <button
                     type="button"
-                    className="cursor-pointer rounded-lg border border-border-muted bg-surface-base px-4 py-2 text-ui font-semibold text-text-soft transition-[border-color,background] duration-100 hover:border-border-quiet hover:bg-surface-subtle disabled:cursor-not-allowed disabled:opacity-50"
+                    className={cn(actionButtonBase, actionButtonNeutral)}
                     onClick={handleUnlock}
                     disabled={isSaving}
                   >
@@ -973,7 +977,7 @@ export default function SolverView({
                 <>
                   <button
                     type="button"
-                    className="cursor-pointer rounded-lg border border-border-muted bg-surface-base px-4 py-2 text-ui font-semibold text-text-soft transition-[border-color,background] duration-100 hover:border-border-quiet hover:bg-surface-subtle disabled:cursor-not-allowed disabled:opacity-50"
+                    className={cn(actionButtonBase, actionButtonNeutral)}
                     onClick={() => handleSave(false)}
                     disabled={isSaving}
                   >
@@ -981,7 +985,7 @@ export default function SolverView({
                   </button>
                   <button
                     type="button"
-                    className="cursor-pointer rounded-lg border border-brand bg-brand px-4 py-2 text-ui font-bold text-white transition-[background,border-color,box-shadow] duration-150 hover:border-brand-hover hover:bg-brand-hover focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-brand-ring active:bg-brand-pressed disabled:cursor-not-allowed disabled:opacity-40"
+                    className={cn(actionButtonBase, actionButtonPrimary)}
                     onClick={() => handleSave(true)}
                     disabled={isSaving}
                   >
@@ -990,13 +994,8 @@ export default function SolverView({
                 </>
               )}
             </div>
-            {saveError && (
-              <span className="text-xs font-semibold text-brand">
-                {saveError}
-              </span>
-            )}
-          </div>
-        </div>
+          </SchedulePanelFooter>
+        </SchedulePanel>
       )}
     </div>
   );

@@ -3,14 +3,27 @@ import { useParams } from "react-router-dom";
 import {
   BarChart3,
   CalendarRange,
+  ChevronDown,
   LayoutPanelTop,
   Sparkles,
   CalendarCheck,
 } from "lucide-react";
-import { TabNav, type TabNavItem } from "src/components/Scheduling/ui";
 import {
-  useAdminApplications,
+  TabNav,
+  type TabNavItem,
+  SchedulePanel,
+  SchedulePanelHeader,
+  SchedulePanelBody,
+  SchedulePanelFooter,
+  Chip,
+  actionButtonBase,
+  actionButtonPrimary,
+  actionButtonNeutral,
+  actionButtonActive,
+} from "src/components/Scheduling/ui";
+import {
   useAdmission,
+  useInterviewCandidates,
   useInterviewAvailability,
   useSaveInterviewAvailability,
   useSavedSchedule,
@@ -44,6 +57,8 @@ import {
   parseSlotKey,
 } from "src/components/Scheduling/scheduleUtils";
 import cn from "src/utils/cn";
+import WizardTour, { useWizardTour } from "src/components/Scheduling/WizardTour";
+import { HelpCircle } from "lucide-react";
 
 const DEFAULT_DAY_START_MINUTE = 8 * 60;
 const DEFAULT_DAY_END_MINUTE = 18 * 60;
@@ -143,8 +158,16 @@ const CommonScheduleView: React.FC<CommonScheduleViewProps> = ({
     if (committeeRole === "member") return "Medlem";
     return "Intervjuer";
   })();
+
+  const wizard = useWizardTour(isAdmin);
+
+  useEffect(() => {
+    wizard.openIfNotDismissed();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const { data: savedSchedule } = useSavedSchedule(admissionSlug);
-  const { data: adminApplications } = useAdminApplications(admissionSlug);
+  const { data: interviewCandidates } = useInterviewCandidates(admissionSlug);
   const { data: availabilityParticipants } =
     useInterviewAvailability(admissionSlug);
   const saveSchedule = useSaveSchedule(admissionSlug);
@@ -240,14 +263,8 @@ const CommonScheduleView: React.FC<CommonScheduleViewProps> = ({
   );
 
   const realCandidates = useMemo<Candidate[]>(
-    () =>
-      (adminApplications ?? []).map((application) => ({
-        id: `real-candidate-${application.user.username}`,
-        name: application.user.full_name,
-        // Unknown genders should not trigger the same-gender hard constraint.
-        gender: "",
-      })),
-    [adminApplications],
+    () => interviewCandidates ?? [],
+    [interviewCandidates],
   );
 
   const candidates = useMemo<Candidate[]>(() => {
@@ -266,6 +283,10 @@ const CommonScheduleView: React.FC<CommonScheduleViewProps> = ({
     () => `admissions.availability.${admissionSlug}`,
     [admissionSlug],
   );
+  const conflictStorageKey = useMemo(
+    () => `admissions.conflicts.${admissionSlug}`,
+    [admissionSlug],
+  );
 
   const [mySelectedSlots, setMySelectedSlots] = useState<Set<string>>(() => {
     if (typeof window === "undefined") return new Set();
@@ -278,6 +299,19 @@ const CommonScheduleView: React.FC<CommonScheduleViewProps> = ({
       return Array.isArray(arr) ? new Set(arr) : new Set();
     } catch {
       return new Set();
+    }
+  });
+  const [myConflicts, setMyConflicts] = useState<string[]>(() => {
+    if (typeof window === "undefined") return [];
+    try {
+      const raw = window.localStorage.getItem(
+        `admissions.conflicts.${admissionSlug}`,
+      );
+      if (!raw) return [];
+      const parsed = JSON.parse(raw);
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
     }
   });
 
@@ -295,11 +329,22 @@ const CommonScheduleView: React.FC<CommonScheduleViewProps> = ({
   }, [availabilityStorageKey]);
 
   useEffect(() => {
+    try {
+      const raw = window.localStorage.getItem(conflictStorageKey);
+      const parsed = raw ? JSON.parse(raw) : [];
+      setMyConflicts(Array.isArray(parsed) ? parsed : []);
+    } catch {
+      setMyConflicts([]);
+    }
+  }, [conflictStorageKey]);
+
+  useEffect(() => {
     const mine = availabilityParticipants?.find(
       (participant) => participant.is_me,
     );
     if (!mine) return;
     setMySelectedSlots(new Set(mine.slots));
+    setMyConflicts(mine.conflicts ?? []);
   }, [availabilityParticipants]);
 
   const interviewers = useMemo<Interviewer[]>(() => {
@@ -325,6 +370,7 @@ const CommonScheduleView: React.FC<CommonScheduleViewProps> = ({
         dates,
         sessionDuration,
       ),
+      biased: participant.conflicts ?? [],
     }));
 
     const mocks = createMockInterviewers(
@@ -400,12 +446,39 @@ const CommonScheduleView: React.FC<CommonScheduleViewProps> = ({
         availabilityStorageKey,
         JSON.stringify(Array.from(slots)),
       );
+      window.localStorage.setItem(
+        conflictStorageKey,
+        JSON.stringify(myConflicts),
+      );
       await saveInterviewAvailability.mutateAsync({
         slots: Array.from(slots),
+        conflicts: myConflicts,
       });
     } catch {
       showToast("Kunne ikke lagre tilgjengeligheten.", "error");
       throw new Error("Failed to persist availability");
+    }
+  };
+
+  const handleSaveConflicts = async (conflicts: string[]) => {
+    try {
+      window.localStorage.setItem(
+        availabilityStorageKey,
+        JSON.stringify(Array.from(mySelectedSlots)),
+      );
+      window.localStorage.setItem(
+        conflictStorageKey,
+        JSON.stringify(conflicts),
+      );
+      await saveInterviewAvailability.mutateAsync({
+        slots: Array.from(mySelectedSlots),
+        conflicts,
+      });
+      setMyConflicts(conflicts);
+      showToast("Interessekonflikter lagret.");
+    } catch {
+      showToast("Kunne ikke lagre interessekonflikter.", "error");
+      throw new Error("Failed to persist conflicts");
     }
   };
 
@@ -533,53 +606,37 @@ const CommonScheduleView: React.FC<CommonScheduleViewProps> = ({
   };
 
   const interviewerNameOptions = useMemo(() => {
-    const names = new Set(
-      (availabilityParticipants ?? []).map((p) => p.full_name),
-    );
+    const names = new Set(interviewers.map((interviewer) => interviewer.name));
     return Array.from(names).sort((a, b) => a.localeCompare(b, "nb"));
-  }, [availabilityParticipants]);
-
-  const hasPendingScaleChanges =
-    candidateInput !== String(candidateCount) ||
-    interviewerInput !== String(interviewerCount);
-  const hasValidScaleInput = isCandidateInputValid && isInterviewerInputValid;
-
-  const handleSaveScale = () => {
-    // No-op: scale is now applied live.
-  };
+  }, [interviewers]);
 
   const tabDefinitions = useMemo<TabDefinition[]>(() => {
     const tabs: TabDefinition[] = [
       {
         key: "plan",
         title: "Intervjuplan",
-        description: "Se den distribuerte intervjuplanen.",
         icon: CalendarCheck,
       },
       {
         key: "config",
         title: "Rammer",
-        description: "Sett hvilke slotter og hvilken varighet som gjelder.",
         icon: LayoutPanelTop,
         adminOnly: true,
       },
       {
         key: "my-availability",
         title: "Min tilgjengelighet",
-        description: "Marker når du faktisk kan sitte i intervju.",
         icon: CalendarRange,
       },
       {
         key: "heatmap",
         title: "Fordeling",
-        description: "Se dekning og kandidatlisten i samme arbeidsflate.",
         icon: BarChart3,
         adminOnly: true,
       },
       {
         key: "solver",
         title: "Intervjuforslag",
-        description: "Generer et forslag når datagrunnlaget er klart.",
         icon: Sparkles,
         adminOnly: true,
       },
@@ -591,6 +648,12 @@ const CommonScheduleView: React.FC<CommonScheduleViewProps> = ({
   return (
     <div className="min-h-[calc(100vh-80px)] bg-surface-page">
       <StatusToast toast={toast} />
+      <WizardTour
+        isOpen={wizard.isOpen}
+        onClose={wizard.close}
+        isAdmin={isAdmin}
+      />
+
       <div className="mx-auto w-full max-w-6xl px-5 pb-12 pt-8 handheld:px-4 handheld:pb-8 handheld:pt-5">
         <header className="mb-6">
           <div className="mt-1 flex flex-wrap items-center gap-3">
@@ -602,33 +665,41 @@ const CommonScheduleView: React.FC<CommonScheduleViewProps> = ({
                 "inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-bold tracking-badge",
                 isAdmin
                   ? "border-brand-strongBorder bg-brand-tint text-brand"
-                  : "border-border bg-surface-neutral text-text-muted",
+                  : "border-border bg-surface-base text-text-muted",
               )}
             >
               {roleLabel}
             </span>
+            <button
+              type="button"
+              onClick={wizard.open}
+              title="Vis veiledning"
+              className="ml-auto inline-flex items-center gap-1.5 rounded-full border border-border-soft bg-surface-base px-3 py-1.5 text-xs font-semibold text-text-muted transition-colors hover:border-brand-strongBorder hover:bg-brand-soft hover:text-brand"
+            >
+              <HelpCircle size={13} />
+              Veiledning
+            </button>
           </div>
         </header>
 
         {isAdmin && (
-          <section
-            className={cn(
-              "rounded-panel border border-border bg-surface-base",
-              "mb-3 flex flex-wrap items-start justify-between gap-4 px-5 py-4",
-            )}
-          >
-            <div className="flex min-w-[220px] flex-col gap-1">
-              <h2 className="m-0 text-sm font-bold text-text-primary">
-                Testdata
-              </h2>
-              <p className="m-0 text-ui leading-6 text-text-muted">
-                Skru på mockdata for å simulere større opptak, og velg om den
-                skal legges oppa reelle data.
-              </p>
-            </div>
-
-            <div className="flex flex-wrap gap-3">
-              <label className="flex cursor-pointer items-center gap-2 self-end rounded-md border border-border-soft bg-surface-muted px-3 py-2 text-ui font-semibold text-text-primary">
+          <details className="group mb-3 overflow-hidden rounded-panel border border-border bg-surface-base">
+            <summary className="flex cursor-pointer list-none select-none items-center justify-between gap-4 px-5 py-3 hover:bg-surface-soft">
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-bold text-text-primary">
+                  Testdata
+                </span>
+                <span className="text-detail text-text-muted">
+                  — simuler kandidater og intervjuere
+                </span>
+              </div>
+              <ChevronDown
+                size={14}
+                className="flex-none text-text-muted transition-transform duration-200 group-open:rotate-180"
+              />
+            </summary>
+            <div className="flex flex-wrap items-end gap-2.5 border-t border-border-soft px-5 py-4">
+              <label className="flex cursor-pointer items-center gap-2 rounded-md border border-border-soft bg-surface-base px-3 py-2 text-ui font-semibold text-text-primary transition-colors hover:border-brand-strongBorder">
                 <input
                   type="checkbox"
                   checked={useMockData}
@@ -639,8 +710,9 @@ const CommonScheduleView: React.FC<CommonScheduleViewProps> = ({
 
               <label
                 className={cn(
-                  "flex cursor-pointer items-center gap-2 self-end rounded-md border border-border-soft bg-surface-muted px-3 py-2 text-ui font-semibold text-text-primary",
-                  !useMockData && "cursor-not-allowed opacity-50",
+                  "flex cursor-pointer items-center gap-2 rounded-md border border-border-soft bg-surface-base px-3 py-2 text-ui font-semibold text-text-primary transition-colors hover:border-brand-strongBorder",
+                  !useMockData &&
+                    "cursor-not-allowed opacity-50 hover:border-border-soft",
                 )}
               >
                 <input
@@ -651,7 +723,7 @@ const CommonScheduleView: React.FC<CommonScheduleViewProps> = ({
                     setAppendMockToReal(event.target.checked)
                   }
                 />
-                Legg mockdata til reelle data
+                Legg til reelle data
               </label>
 
               <div className="flex flex-col gap-1">
@@ -668,7 +740,7 @@ const CommonScheduleView: React.FC<CommonScheduleViewProps> = ({
                   max="200"
                   value={candidateInput}
                   disabled={!useMockData}
-                  className="w-28 rounded-md border border-border-muted bg-surface-base px-2.5 py-2 text-sm font-bold text-text-primary transition-[border-color,box-shadow] duration-150 focus:border-brand-input focus:outline-none focus:ring-3 focus:ring-brand-ringSoft"
+                  className="w-24 rounded-md border border-border-muted bg-surface-base px-2.5 py-2 text-sm font-bold text-text-primary transition-[border-color,box-shadow] duration-150 focus:border-brand-input focus:outline-none focus:ring-3 focus:ring-brand-ringSoft"
                   onChange={(event) => setCandidateInput(event.target.value)}
                 />
               </div>
@@ -687,30 +759,13 @@ const CommonScheduleView: React.FC<CommonScheduleViewProps> = ({
                   max="200"
                   value={interviewerInput}
                   disabled={!useMockData}
-                  className="w-28 rounded-md border border-border-muted bg-surface-base px-2.5 py-2 text-sm font-bold text-text-primary transition-[border-color,box-shadow] duration-150 focus:border-brand-input focus:outline-none focus:ring-3 focus:ring-brand-ringSoft"
+                  className="w-24 rounded-md border border-border-muted bg-surface-base px-2.5 py-2 text-sm font-bold text-text-primary transition-[border-color,box-shadow] duration-150 focus:border-brand-input focus:outline-none focus:ring-3 focus:ring-brand-ringSoft"
                   onChange={(event) => setInterviewerInput(event.target.value)}
                 />
               </div>
 
-              <button
-                type="button"
-                onClick={handleSaveScale}
-                disabled={!useMockData || !hasValidScaleInput}
-                className={cn(
-                  "rounded-lg border border-brand bg-brand text-white transition-[background,border-color,box-shadow] duration-150 hover:border-brand-hover hover:bg-brand-hover focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-brand-ring active:bg-brand-pressed disabled:cursor-not-allowed disabled:opacity-40",
-                  "self-end cursor-pointer px-4 py-2 text-ui font-bold",
-                  !hasPendingScaleChanges &&
-                    "border-brand bg-brand hover:border-brand hover:bg-brand",
-                )}
-              >
-                {!useMockData
-                  ? "Mock av"
-                  : hasPendingScaleChanges
-                    ? "Lagre testdata"
-                    : "Lagret"}
-              </button>
             </div>
-          </section>
+          </details>
         )}
 
         <TabNav
@@ -746,17 +801,17 @@ const CommonScheduleView: React.FC<CommonScheduleViewProps> = ({
                 sessionDuration={sessionDuration}
               />
 
-              <section className="rounded-panel border border-border bg-surface-base p-5">
-                <div className="mb-4 flex items-center justify-between">
-                  <h3 className="m-0 text-sm font-bold text-text-primary">
-                    Kandidater
-                  </h3>
-                  <span className="text-label font-bold uppercase tracking-label text-text-subtle">
-                    {candidates.length}
-                  </span>
-                </div>
-                <PersonListView data={candidates} />
-              </section>
+              <SchedulePanel>
+                <SchedulePanelHeader
+                  eyebrow="Oversikt · Kandidater"
+                  title="Registrerte kandidater"
+                  description="Listen oppdateres automatisk fra søknadene og mockdataene."
+                  chips={<Chip tone="muted">{candidates.length}</Chip>}
+                />
+                <SchedulePanelBody>
+                  <PersonListView data={candidates} />
+                </SchedulePanelBody>
+              </SchedulePanel>
             </>
           )}
 
@@ -771,8 +826,6 @@ const CommonScheduleView: React.FC<CommonScheduleViewProps> = ({
               enabledSlots={enabledSlots}
               onSave={handleSaveConfig}
               sessionDuration={sessionDuration}
-              candidateCount={candidateCount}
-              interviewerCount={interviewerCount}
             />
           )}
 
@@ -786,6 +839,10 @@ const CommonScheduleView: React.FC<CommonScheduleViewProps> = ({
               onToggleCandidateNames={handleToggleCandidateNames}
               onReplacePanelMember={handleReplacePanelMember}
               interviewerNameOptions={interviewerNameOptions}
+              myConflicts={myConflicts}
+              realCandidates={candidates}
+              onSaveConflicts={handleSaveConflicts}
+              interviewers={interviewers}
             />
           )}
 
@@ -826,6 +883,10 @@ interface DistributedPlanViewProps {
     replacementName: string,
   ) => Promise<boolean>;
   interviewerNameOptions: string[];
+  myConflicts: string[];
+  realCandidates: Candidate[];
+  onSaveConflicts: (ids: string[]) => Promise<void>;
+  interviewers: Interviewer[];
 }
 
 const DistributedPlanView: React.FC<DistributedPlanViewProps> = ({
@@ -837,13 +898,16 @@ const DistributedPlanView: React.FC<DistributedPlanViewProps> = ({
   onToggleCandidateNames,
   onReplacePanelMember,
   interviewerNameOptions,
+  myConflicts,
+  realCandidates,
+  onSaveConflicts,
+  interviewers,
 }) => {
   const [myInterviewsOnly, setMyInterviewsOnly] = useState(false);
   const [isUpdatingNames, setIsUpdatingNames] = useState(false);
   const [isExportChooserOpen, setIsExportChooserOpen] = useState(false);
-  const [pendingNameVisibility, setPendingNameVisibility] = useState<
-    boolean | null
-  >(null);
+  const [tableExpanded, setTableExpanded] = useState(false);
+  const [isSavingConflict, setIsSavingConflict] = useState(false);
   const [editingPanelTarget, setEditingPanelTarget] = useState<{
     scheduleIndex: number;
     panelMemberIndex: number;
@@ -851,22 +915,53 @@ const DistributedPlanView: React.FC<DistributedPlanViewProps> = ({
   const [replacementName, setReplacementName] = useState("");
   const [isReplacingPanelMember, setIsReplacingPanelMember] = useState(false);
 
+  const conflictSet = useMemo(() => new Set(myConflicts), [myConflicts]);
+  const candidateIdByName = useMemo(
+    () => new Map(realCandidates.map((c) => [c.name, c.id])),
+    [realCandidates],
+  );
+  const biasedByInterviewer = useMemo(
+    () => new Map(interviewers.map((iv) => [iv.name, new Set(iv.biased)])),
+    [interviewers],
+  );
+
+  const toggleCandidateConflict = async (candidateName: string) => {
+    const candidateId = candidateIdByName.get(candidateName);
+    if (!candidateId || isSavingConflict) return;
+    setIsSavingConflict(true);
+    const newConflicts = conflictSet.has(candidateId)
+      ? myConflicts.filter((id) => id !== candidateId)
+      : [...myConflicts, candidateId];
+    try {
+      await onSaveConflicts(newConflicts);
+    } catch {
+      // Toast is shown by onSaveConflicts
+    } finally {
+      setIsSavingConflict(false);
+    }
+  };
+
   if (!savedSchedule) {
     return (
-      <div className="rounded-panel border border-border bg-surface-base px-6 py-12 text-center">
-        <h3 className="mb-2 mt-0 text-sm font-bold text-text-primary">
-          Ingen plan distribuert ennå
-        </h3>
-        <p className="m-0 text-ui leading-relaxed text-text-muted">
-          {isAdmin
-            ? 'Gå til "Intervjuforslag" for å generere og distribuere en intervjuplan.'
-            : "Admins har ikke distribuert en intervjuplan ennå. Kom tilbake senere."}
-        </p>
-      </div>
+      <SchedulePanel>
+        <div className="px-6 py-14 text-center">
+          <span className="mb-2 inline-flex h-10 w-10 items-center justify-center rounded-full bg-brand-soft text-brand ring-1 ring-brand-border/60">
+            <CalendarCheck size={18} />
+          </span>
+          <h3 className="mb-1 mt-2 text-sm font-bold text-text-primary">
+            Ingen plan distribuert ennå
+          </h3>
+          <p className="m-0 mx-auto max-w-[28rem] text-ui leading-relaxed text-text-muted">
+            {isAdmin
+              ? 'Gå til "Intervjuforslag" for å generere og distribuere en intervjuplan.'
+              : "Admins har ikke distribuert en intervjuplan ennå. Kom tilbake senere."}
+          </p>
+        </div>
+      </SchedulePanel>
     );
   }
 
-  const namesVisible = isAdmin || savedSchedule.show_candidate_names;
+  const namesVisible = savedSchedule.show_candidate_names;
   const sortedEntries = savedSchedule.schedule
     .map((item, index) => ({ item, scheduleIndex: index }))
     .sort((a, b) => a.item.time - b.item.time);
@@ -899,15 +994,6 @@ const DistributedPlanView: React.FC<DistributedPlanViewProps> = ({
             member.name === replacementName,
         )
       : false;
-
-  const actionButtonBase =
-    "inline-flex cursor-pointer items-center justify-center gap-1.5 rounded-lg border px-4 py-2 text-ui font-semibold transition-[border-color,background,box-shadow] duration-150 focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-brand-ring disabled:cursor-not-allowed disabled:opacity-50";
-  const actionButtonNeutral =
-    "border-border-muted bg-surface-base text-text-soft hover:border-border-quiet hover:bg-surface-subtle";
-  const actionButtonAccent =
-    "border-brand bg-brand text-white hover:border-brand-hover hover:bg-brand-hover active:bg-brand-pressed";
-  const actionButtonActive =
-    "border-brand-activeBorder bg-brand-panel text-brand hover:border-brand-activeBorder hover:bg-brand-panel";
 
   const formatTimeLabel = (timeValue: number) => {
     const { dayIndex, minute } = decodeScheduleTime(
@@ -987,16 +1073,9 @@ const DistributedPlanView: React.FC<DistributedPlanViewProps> = ({
   const handleToggleNamesForPlan = async () => {
     if (!canToggleCandidateNames || isUpdatingNames) return;
 
-    setPendingNameVisibility(!savedSchedule.show_candidate_names);
-  };
-
-  const confirmToggleNamesForPlan = async () => {
-    if (pendingNameVisibility === null) return;
-
     setIsUpdatingNames(true);
     try {
-      await onToggleCandidateNames(pendingNameVisibility);
-      setPendingNameVisibility(null);
+      await onToggleCandidateNames(!savedSchedule.show_candidate_names);
     } finally {
       setIsUpdatingNames(false);
     }
@@ -1031,290 +1110,629 @@ const DistributedPlanView: React.FC<DistributedPlanViewProps> = ({
   };
 
   const thClass =
-    "bg-surface-subtle px-4 py-3 text-left text-label font-bold uppercase tracking-label text-text-subtle border-b border-border";
+    "bg-surface-subtle px-4 py-3 text-left text-label font-bold uppercase tracking-label text-text-subtle border-b border-border-soft";
 
   return (
-    <div className="rounded-panel border border-border bg-surface-base p-5">
-      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-        <div className="flex flex-wrap items-center gap-2.5">
-          <h3 className="m-0 text-sm font-bold text-text-primary">
-            Intervjuplan
-          </h3>
-          {savedSchedule.is_distributed ? (
-            <span className="inline-flex items-center rounded-full border border-success-border bg-success-bg px-2.5 py-1 text-label font-bold uppercase tracking-caps text-success">
-              Distribuert
-            </span>
+    <SchedulePanel>
+      {/* Header */}
+      <SchedulePanelHeader
+        icon={CalendarCheck}
+        eyebrow="Resultat · Plan"
+        title="Intervjuplan"
+        chips={
+          savedSchedule.is_distributed ? (
+            <Chip tone="success">Distribuert</Chip>
           ) : (
-            <span className="inline-flex items-center rounded-full border border-border bg-surface-muted px-2.5 py-1 text-label font-bold uppercase tracking-caps text-text-muted">
-              Utkast
-            </span>
-          )}
-          {myInterviewsOnly && myInterviews.length > 0 && (
-            <span className="inline-flex items-center rounded-full border border-brand-border bg-brand-muted px-2.5 py-1 text-label font-bold uppercase tracking-caps text-brand">
-              {myInterviews.length} intervjuer
-            </span>
-          )}
-        </div>
-
-        <div className="flex flex-wrap items-center gap-2">
-          <button
-            type="button"
-            onClick={() => setMyInterviewsOnly((v) => !v)}
-            className={cn(
-              actionButtonBase,
-              myInterviewsOnly ? actionButtonActive : actionButtonNeutral,
-            )}
-          >
-            Mine intervjuer
-          </button>
-
-          {canToggleCandidateNames && (
-            <button
-              type="button"
-              onClick={handleToggleNamesForPlan}
-              disabled={isUpdatingNames}
-              className={cn(
-                actionButtonBase,
-                savedSchedule.show_candidate_names
-                  ? actionButtonActive
-                  : actionButtonNeutral,
-              )}
-            >
-              {savedSchedule.show_candidate_names
-                ? "Skjul kandidatnavn"
-                : "Vis kandidatnavn"}
-            </button>
-          )}
-
-          {isAdmin && (
-            <button
-              type="button"
-              onClick={handleExportCsv}
-              title="Kan importeres til Google Regneark via Fil → Importer"
-              className={cn(actionButtonBase, actionButtonNeutral)}
-            >
-              Eksporter CSV
-            </button>
-          )}
-
+            <Chip tone="muted">Utkast</Chip>
+          )
+        }
+        actions={
           <button
             type="button"
             onClick={() => setIsExportChooserOpen(true)}
-            className={cn(actionButtonBase, actionButtonAccent, "font-bold")}
+            className={cn(actionButtonBase, actionButtonPrimary)}
           >
-            {myInterviewsOnly ? "Eksporter mine" : "Eksporter"}
+            Eksporter
           </button>
-        </div>
+        }
+      />
+
+      {/* Filter bar */}
+      <div className="flex flex-wrap items-center gap-2 border-b border-border-soft px-6 py-3">
+        <button
+          type="button"
+          onClick={() => setMyInterviewsOnly((v) => !v)}
+          className={cn(
+            actionButtonBase,
+            myInterviewsOnly ? actionButtonActive : actionButtonNeutral,
+            "px-3 py-1.5",
+          )}
+        >
+          Mine intervjuer
+          {myInterviews.length > 0 && (
+            <span className="ml-1 rounded-full bg-current/10 px-1.5 py-0.5 text-[10px] font-bold tabular-nums">
+              {myInterviews.length}
+            </span>
+          )}
+        </button>
+
+        {canToggleCandidateNames && (
+          <button
+            type="button"
+            onClick={handleToggleNamesForPlan}
+            disabled={isUpdatingNames}
+            className={cn(
+              actionButtonBase,
+              namesVisible ? actionButtonActive : actionButtonNeutral,
+              "px-3 py-1.5",
+            )}
+          >
+            {isUpdatingNames
+              ? "Oppdaterer..."
+              : namesVisible
+                ? "Skjul navn"
+                : "Vis navn"}
+          </button>
+        )}
+
+        {isAdmin && (
+          <button
+            type="button"
+            onClick={handleExportCsv}
+            title="CSV til Google Regneark"
+            className={cn(
+              actionButtonBase,
+              actionButtonNeutral,
+              "px-3 py-1.5",
+            )}
+          >
+            CSV
+          </button>
+        )}
+
+        <span className="ml-auto text-detail text-text-muted">
+          {displaySorted.length} intervjuer
+          {myConflicts.length > 0 && (
+            <span className="ml-2 rounded-full border border-brand-border bg-brand-muted px-2 py-0.5 text-label font-bold text-brand">
+              {myConflicts.length} KI
+            </span>
+          )}
+        </span>
       </div>
 
-      {isExportChooserOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
-          <div className="w-full max-w-md rounded-panel border border-border bg-surface-base p-5 shadow-lg">
-            <h4 className="m-0 text-base font-bold text-text-primary">
-              Velg kalender
-            </h4>
-            <p className="mb-0 mt-2 text-ui text-text-muted">
-              Eksporten blir en .ics-fil. Apple Calendar kan åpne den direkte,
-              mens Google Calendar importerer den via innstillinger.
-            </p>
-            <div className="mt-4 grid gap-2">
-              <button
-                type="button"
-                className={cn(
-                  actionButtonBase,
-                  actionButtonAccent,
-                  "font-bold",
-                )}
-                onClick={() => {
-                  handleExportIcs("apple");
-                  setIsExportChooserOpen(false);
-                }}
-              >
-                Apple Calendar (.ics)
-              </button>
-              <button
-                type="button"
-                className={cn(actionButtonBase, actionButtonNeutral)}
-                onClick={() => {
-                  handleExportIcs("google");
-                  setIsExportChooserOpen(false);
-                }}
-              >
-                Google Calendar (.ics + importside)
-              </button>
-              <button
-                type="button"
-                className={cn(actionButtonBase, actionButtonNeutral)}
-                onClick={() => setIsExportChooserOpen(false)}
-              >
-                Avbryt
-              </button>
+      {/* Plan content */}
+      <SchedulePanelBody className={tableExpanded ? "p-0" : undefined}>
+        {isExportChooserOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
+            <div className="w-full max-w-md rounded-panel border border-border bg-surface-base p-5 shadow-lg">
+              <h4 className="m-0 text-base font-bold text-text-primary">
+                Velg kalender
+              </h4>
+              <p className="mb-0 mt-2 text-ui text-text-muted">
+                Eksporten blir en .ics-fil. Apple Calendar kan åpne den
+                direkte, mens Google Calendar importerer via innstillinger.
+              </p>
+              <div className="mt-4 grid gap-2">
+                <button
+                  type="button"
+                  className={cn(actionButtonBase, actionButtonPrimary)}
+                  onClick={() => {
+                    handleExportIcs("apple");
+                    setIsExportChooserOpen(false);
+                  }}
+                >
+                  Apple Calendar (.ics)
+                </button>
+                <button
+                  type="button"
+                  className={cn(actionButtonBase, actionButtonNeutral)}
+                  onClick={() => {
+                    handleExportIcs("google");
+                    setIsExportChooserOpen(false);
+                  }}
+                >
+                  Google Calendar (.ics + importside)
+                </button>
+                <button
+                  type="button"
+                  className={cn(actionButtonBase, actionButtonNeutral)}
+                  onClick={() => setIsExportChooserOpen(false)}
+                >
+                  Avbryt
+                </button>
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        )}
 
-      {myInterviewsOnly && myInterviews.length === 0 && (
-        <div className="mb-4 rounded-lg border border-border-soft bg-surface-muted px-4 py-3 text-ui text-text-muted">
-          Ingen intervjuer funnet for <strong>{currentUserName}</strong>.
-          Filteret matcher på navn — du må ha vært med i solveren for at
-          intervjuene skal dukke opp.
-        </div>
-      )}
+        {!tableExpanded ? (
+          <div className="py-10 text-center">
+            <p className="mb-1 text-title font-bold text-text-primary">
+              {displaySorted.length} intervjuer planlagt
+            </p>
+            <p className="mb-5 text-ui text-text-muted">
+              {myInterviews.length > 0
+                ? `${myInterviews.length} av dem er med deg`
+                : "Ingen av dem er med deg ennå"}
+            </p>
+            <button
+              type="button"
+              className={cn(actionButtonBase, actionButtonPrimary)}
+              onClick={() => setTableExpanded(true)}
+            >
+              Vis intervjuplan
+            </button>
+          </div>
+        ) : (
+          <>
+            {myInterviewsOnly && myInterviews.length === 0 && (
+              <div className="border-b border-border-soft px-6 py-4 text-ui text-text-muted">
+                Ingen intervjuer funnet for{" "}
+                <strong>{currentUserName}</strong>. Filteret matcher på navn.
+              </div>
+            )}
 
-      <div className="overflow-hidden rounded-lg border border-border">
-        <table className="w-full border-collapse">
-          <thead>
-            <tr>
-              <th className={thClass}>Tidspunkt</th>
-              <th className={thClass}>Kandidat</th>
-              <th className={thClass}>Panel</th>
-            </tr>
-          </thead>
-          <tbody>
-            {displaySorted.map(({ item, scheduleIndex }) => (
-              <tr
-                key={`${item.candidate}-${item.time}-${scheduleIndex}`}
-                className={cn(
-                  "group",
-                  item.panel.some((p) => p.name === currentUserName) &&
-                    !myInterviewsOnly &&
-                    "bg-brand-subtle/30",
-                )}
-              >
-                <td className="whitespace-nowrap px-4 py-3 text-sm text-text-muted group-hover:bg-surface-hover">
-                  {formatTimeLabel(item.time)}
-                </td>
-                <td className="px-4 py-3 text-sm font-semibold text-text-primary group-hover:bg-surface-hover">
-                  {namesVisible ? item.candidate : "—"}
-                </td>
-                <td className="px-4 py-3 text-sm text-text-primary group-hover:bg-surface-hover">
-                  <div className="flex flex-wrap gap-1.5">
-                    {item.panel.map((p, i) => (
-                      <React.Fragment key={`${p.name}-${i}`}>
-                        {isAdmin &&
-                        editingPanelTarget?.scheduleIndex === scheduleIndex &&
-                        editingPanelTarget.panelMemberIndex === i ? (
-                          <div className="inline-flex items-center gap-1 rounded-full border border-border bg-surface-base px-1.5 py-1">
-                            <select
-                              className="max-w-[13rem] rounded-md border border-border-muted bg-surface-base px-2 py-1 text-xs font-semibold text-text-primary"
-                              value={replacementName}
-                              onChange={(event) =>
-                                setReplacementName(event.target.value)
+            {namesVisible && (
+              <div className="border-b border-border-soft bg-brand-soft px-6 py-2.5 text-detail text-text-muted">
+                Klikk på et kandidatnavn for å markere interessekonflikt (KI).
+              </div>
+            )}
+
+            <div className="overflow-x-auto">
+              <table className="w-full border-collapse">
+                <thead>
+                  <tr>
+                    <th className={thClass}>Tidspunkt</th>
+                    <th className={thClass}>Kandidat</th>
+                    <th className={thClass}>Panel</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {displaySorted.map(({ item, scheduleIndex }) => {
+                    const candidateId = candidateIdByName.get(item.candidate);
+                    const isConflict =
+                      candidateId !== undefined &&
+                      conflictSet.has(candidateId);
+                    const isMyRow = item.panel.some(
+                      (p) => p.name === currentUserName,
+                    );
+                    const panelCoiNames = isAdmin && candidateId
+                      ? item.panel
+                          .filter((p) => biasedByInterviewer.get(p.name)?.has(candidateId))
+                          .map((p) => p.name)
+                      : [];
+                    return (
+                      <tr
+                        key={`${item.candidate}-${item.time}-${scheduleIndex}`}
+                        className={cn(
+                          "group border-b border-border-faint last:border-0",
+                          isMyRow && !myInterviewsOnly && "bg-brand-soft",
+                        )}
+                      >
+                        <td className="whitespace-nowrap px-4 py-3 text-sm text-text-muted group-hover:bg-surface-soft">
+                          {formatTimeLabel(item.time)}
+                        </td>
+                        <td className="px-4 py-3 group-hover:bg-surface-soft">
+                          {namesVisible ? (
+                            <button
+                              type="button"
+                              onClick={() =>
+                                toggleCandidateConflict(item.candidate)
                               }
+                              disabled={!candidateId || isSavingConflict}
+                              title={
+                                isConflict
+                                  ? "Fjern interessekonflikt"
+                                  : "Merk som interessekonflikt"
+                              }
+                              className={cn(
+                                "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-semibold transition-[border-color,background,transform] duration-150 hover:-translate-y-px",
+                                isConflict
+                                  ? "border-brand-activeBorder bg-brand-tint text-brand"
+                                  : "border-border bg-surface-base text-text-primary hover:border-brand-strongBorder hover:bg-brand-soft",
+                                !candidateId &&
+                                  "cursor-default opacity-70 hover:translate-y-0",
+                              )}
                             >
-                              {replacementOptions.map((name) => (
-                                <option
-                                  key={name}
-                                  value={name}
-                                  disabled={
-                                    !!editingPanelEntry &&
-                                    name !== selectedPanelMemberName &&
-                                    editingPanelEntry.panel.some(
-                                      (member) => member.name === name,
+                              {isConflict && (
+                                <span className="h-1.5 w-1.5 rounded-full bg-brand" />
+                              )}
+                              {item.candidate}
+                            </button>
+                          ) : (
+                            <span className="text-sm text-text-muted">—</span>
+                          )}
+                        </td>
+                        <td className="px-4 py-3 group-hover:bg-surface-soft">
+                          <div className="flex flex-wrap gap-1.5">
+                            {item.panel.map((p, i) => {
+                              const hasCoi = isAdmin && candidateId
+                                ? biasedByInterviewer.get(p.name)?.has(candidateId) ?? false
+                                : false;
+                              return (
+                                <button
+                                  key={`${p.name}-${i}`}
+                                  type="button"
+                                  disabled={!isAdmin}
+                                  onClick={() =>
+                                    isAdmin &&
+                                    beginReplacePanelMember(
+                                      scheduleIndex,
+                                      i,
+                                      p.name,
                                     )
                                   }
+                                  className={cn(
+                                    "inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-semibold",
+                                    isAdmin &&
+                                      "cursor-pointer transition-[border-color,background,transform] hover:-translate-y-px",
+                                    hasCoi
+                                      ? "border-dashed border-orange-400 bg-orange-50 text-orange-700"
+                                      : p.name === currentUserName
+                                        ? "border-brand-strongBorder bg-brand-tint font-bold text-brand"
+                                        : p.is_overtime
+                                          ? "border-amber-300 bg-amber-50 font-semibold text-amber-700"
+                                          : "border-border-soft bg-surface-subtle text-text-soft",
+                                  )}
+                                  title={
+                                    hasCoi
+                                      ? `${p.name} har meldt interessekonflikt${isAdmin ? " · Klikk for å bytte" : ""}`
+                                      : isAdmin
+                                        ? "Klikk for å bytte intervjuer"
+                                        : undefined
+                                  }
                                 >
-                                  {name}
-                                </option>
-                              ))}
-                            </select>
-                            <button
-                              type="button"
-                              onClick={confirmPanelReplacement}
-                              disabled={
-                                isReplacingPanelMember ||
-                                !replacementName ||
-                                replacementWouldDuplicate
-                              }
-                              className="rounded-md border border-brand bg-brand px-2 py-1 text-[11px] font-bold text-white disabled:opacity-50"
-                            >
-                              Bytt
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => setEditingPanelTarget(null)}
-                              disabled={isReplacingPanelMember}
-                              className="rounded-md border border-border-muted bg-surface-base px-2 py-1 text-[11px] font-semibold text-text-soft disabled:opacity-50"
-                            >
-                              Avbryt
-                            </button>
+                                  {hasCoi && <span className="text-[9px]">⚠</span>}
+                                  {p.name}
+                                </button>
+                              );
+                            })}
                           </div>
-                        ) : (
-                          <button
-                            type="button"
-                            disabled={!isAdmin}
-                            onClick={() =>
-                              isAdmin &&
-                              beginReplacePanelMember(scheduleIndex, i, p.name)
-                            }
-                            className={cn(
-                              "inline-flex items-center rounded-full border px-2 py-1 text-xs font-semibold",
-                              isAdmin && "cursor-pointer transition-colors",
-                              p.name === currentUserName
-                                ? "border-brand-strongBorder bg-brand-tint font-bold text-brand"
-                                : p.is_overtime
-                                  ? "border-brand-panelBorder bg-brand-badge text-brand"
-                                  : "border-border bg-surface-neutral text-text-soft",
-                            )}
-                            title={
-                              isAdmin
-                                ? "Klikk for å bytte intervjuer"
-                                : undefined
-                            }
-                          >
-                            {p.name}
-                          </button>
-                        )}
-                      </React.Fragment>
-                    ))}
-                  </div>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </>
+        )}
+      </SchedulePanelBody>
 
-      {pendingNameVisibility !== null && (
+      {tableExpanded && (
+        <SchedulePanelFooter>
+          <span className="text-detail text-text-muted">
+            {namesVisible
+              ? "Klikk et kandidatnavn for å markere/fjerne interessekonflikt."
+              : "Kandidatnavn er skjult."}
+          </span>
+          <button
+            type="button"
+            onClick={() => setTableExpanded(false)}
+            className={cn(actionButtonBase, actionButtonNeutral, "px-3 py-1.5")}
+          >
+            Skjul tabell
+          </button>
+        </SchedulePanelFooter>
+      )}
+
+      {editingPanelTarget !== null && editingPanelEntry && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
           <div className="w-full max-w-md rounded-panel border border-border bg-surface-base p-5 shadow-lg">
             <h4 className="m-0 text-base font-bold text-text-primary">
-              {pendingNameVisibility
-                ? "Vis kandidatnavn?"
-                : "Skjul kandidatnavn?"}
+              Bytt intervjuer
             </h4>
             <p className="mb-0 mt-2 text-ui text-text-muted">
-              {pendingNameVisibility
-                ? "Dette gjør kandidatnavn synlige for alle som har tilgang til intervjuplanen."
-                : "Dette skjuler kandidatnavn for alle som ikke er admin."}
+              Velg hvem som skal erstatte{" "}
+              <strong>{selectedPanelMemberName ?? "personen"}</strong> i dette
+              intervjuet.
             </p>
+            <div className="mt-4 space-y-3">
+              <select
+                className="w-full rounded-xl border border-border-muted bg-surface-base px-3 py-2.5 text-sm font-semibold text-text-primary transition-[border-color,box-shadow] duration-150 focus:border-brand-input focus:outline-none focus:ring-3 focus:ring-brand-ringSoft"
+                value={replacementName}
+                onChange={(event) => setReplacementName(event.target.value)}
+              >
+                {replacementOptions.map((name) => (
+                  <option
+                    key={name}
+                    value={name}
+                    disabled={
+                      name !== selectedPanelMemberName &&
+                      editingPanelEntry.panel.some(
+                        (member) => member.name === name,
+                      )
+                    }
+                  >
+                    {name}
+                  </option>
+                ))}
+              </select>
+              {replacementWouldDuplicate && (
+                <div className="rounded-xl border border-brand-border bg-brand-muted px-3 py-2 text-ui font-semibold text-brand">
+                  Denne personen er allerede i panelet.
+                </div>
+              )}
+            </div>
             <div className="mt-4 flex justify-end gap-2">
               <button
                 type="button"
                 className={cn(actionButtonBase, actionButtonNeutral)}
-                onClick={() => setPendingNameVisibility(null)}
-                disabled={isUpdatingNames}
+                onClick={() => setEditingPanelTarget(null)}
+                disabled={isReplacingPanelMember}
               >
                 Avbryt
               </button>
               <button
                 type="button"
-                className={cn(
-                  actionButtonBase,
-                  actionButtonAccent,
-                  "font-bold",
-                )}
-                onClick={confirmToggleNamesForPlan}
-                disabled={isUpdatingNames}
+                className={cn(actionButtonBase, actionButtonPrimary)}
+                onClick={confirmPanelReplacement}
+                disabled={
+                  isReplacingPanelMember ||
+                  !replacementName ||
+                  replacementWouldDuplicate
+                }
               >
-                {isUpdatingNames ? "Lagrer..." : "Bekreft"}
+                {isReplacingPanelMember ? "Bytter..." : "Bytt intervjuer"}
               </button>
             </div>
           </div>
         </div>
       )}
-    </div>
+    </SchedulePanel>
+  );
+};
+
+interface ConflictPickerProps {
+  candidates: Candidate[];
+  selectedCandidateIds: string[];
+  onSelectionChange: (candidateIds: string[]) => void;
+  onSave: (candidateIds: string[]) => Promise<void>;
+}
+
+const ConflictPicker: React.FC<ConflictPickerProps> = ({
+  candidates,
+  selectedCandidateIds,
+  onSelectionChange,
+  onSave,
+}) => {
+  const [query, setQuery] = useState("");
+  const [isSaving, setIsSaving] = useState(false);
+  const [showAllCandidates, setShowAllCandidates] = useState(false);
+
+  const selectedSet = useMemo(
+    () => new Set(selectedCandidateIds),
+    [selectedCandidateIds],
+  );
+
+  const filteredCandidates = useMemo(() => {
+    const normalized = query.trim().toLocaleLowerCase("nb");
+    if (!normalized) return candidates;
+    return candidates.filter((candidate) =>
+      candidate.name.toLocaleLowerCase("nb").includes(normalized),
+    );
+  }, [candidates, query]);
+  const selectedCandidates = useMemo(
+    () => candidates.filter((candidate) => selectedSet.has(candidate.id)),
+    [candidates, selectedSet],
+  );
+  const suggestionCandidates = useMemo(
+    () => filteredCandidates.slice(0, 6),
+    [filteredCandidates],
+  );
+  const visibleCandidates = useMemo(() => {
+    if (query.trim()) return filteredCandidates;
+    if (showAllCandidates) return candidates;
+    return selectedCandidates;
+  }, [
+    candidates,
+    filteredCandidates,
+    query,
+    selectedCandidates,
+    showAllCandidates,
+  ]);
+
+  const toggleCandidate = (candidateId: string) => {
+    if (selectedSet.has(candidateId)) {
+      onSelectionChange(
+        selectedCandidateIds.filter((selectedId) => selectedId !== candidateId),
+      );
+      return;
+    }
+    onSelectionChange([...selectedCandidateIds, candidateId]);
+  };
+
+  const handleSave = async () => {
+    setIsSaving(true);
+    try {
+      await onSave(selectedCandidateIds);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleSuggestionPick = (candidateId: string) => {
+    toggleCandidate(candidateId);
+    setQuery("");
+  };
+
+  return (
+    <SchedulePanel className="h-full">
+      <SchedulePanelHeader
+        title="Interessekonflikter"
+        chips={<Chip tone="brand">{selectedCandidateIds.length} markert</Chip>}
+      />
+      <SchedulePanelBody className="space-y-4">
+        <div className="rounded-xl border border-border-soft bg-surface-muted p-3">
+          <label
+            htmlFor="conflict-search"
+            className="mb-1 block text-label font-bold uppercase tracking-label text-text-subtle"
+          >
+            Finn kandidat
+          </label>
+          <input
+            id="conflict-search"
+            type="search"
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            placeholder="Søk på navn"
+            className="w-full rounded-xl border border-border-muted bg-surface-base px-3 py-2.5 text-sm font-semibold text-text-primary transition-[border-color,box-shadow] duration-150 focus:border-brand-input focus:outline-none focus:ring-3 focus:ring-brand-ringSoft"
+          />
+          {query.trim() && suggestionCandidates.length > 0 && (
+            <div className="mt-2 grid gap-1.5">
+              {suggestionCandidates.map((candidate) => {
+                const active = selectedSet.has(candidate.id);
+                return (
+                  <button
+                    key={candidate.id}
+                    type="button"
+                    onClick={() => handleSuggestionPick(candidate.id)}
+                    className={cn(
+                      "flex items-center justify-between rounded-lg border px-3 py-2 text-left text-sm font-semibold transition-[border-color,background] duration-150",
+                      active
+                        ? "border-brand-activeBorder bg-brand-panel text-brand"
+                        : "border-border-soft bg-surface-base text-text-primary hover:border-brand-strongBorder hover:bg-brand-soft",
+                    )}
+                  >
+                    <span className="truncate">{candidate.name}</span>
+                    <span className="text-label font-bold uppercase tracking-caps text-text-subtle">
+                      {active ? "Markert" : "Velg"}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
+        {selectedCandidates.length > 0 && (
+          <div className="space-y-2">
+            <div className="text-label font-bold uppercase tracking-label text-text-subtle">
+              Markerte kandidater
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {selectedCandidates.map((candidate) => (
+                <button
+                  key={candidate.id}
+                  type="button"
+                  onClick={() => toggleCandidate(candidate.id)}
+                  className="inline-flex items-center rounded-full border border-brand-strongBorder bg-brand-tint px-3 py-1.5 text-sm font-semibold text-brand transition-[background,border-color] hover:border-brand-activeBorder hover:bg-brand-panel"
+                >
+                  {candidate.name}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {candidates.length === 0 ? (
+          <div className="rounded-xl border border-border-soft bg-surface-muted px-4 py-8 text-center">
+            <h4 className="m-0 text-sm font-bold text-text-primary">
+              Ingen kandidater registrert ennå
+            </h4>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            <div className="flex items-center justify-between gap-3">
+              <div className="text-ui text-text-muted">
+                {query.trim()
+                  ? `${filteredCandidates.length} treff`
+                  : showAllCandidates
+                    ? `${candidates.length} kandidater`
+                    : "Søk eller vis alle kandidater"}
+              </div>
+              {!query.trim() && (
+                <button
+                  type="button"
+                  onClick={() => setShowAllCandidates((current) => !current)}
+                  className={cn(
+                    actionButtonBase,
+                    actionButtonNeutral,
+                    "px-3 py-1.5",
+                  )}
+                >
+                  {showAllCandidates ? "Skjul liste" : "Vis alle"}
+                </button>
+              )}
+            </div>
+
+            {(query.trim() ||
+              showAllCandidates ||
+              selectedCandidates.length > 0) && (
+              <div className="max-h-[28rem] overflow-y-auto rounded-xl border border-border-soft bg-surface-muted p-2">
+                <div className="grid gap-2">
+                  {visibleCandidates.map((candidate) => {
+                    const active = selectedSet.has(candidate.id);
+                    return (
+                      <button
+                        key={candidate.id}
+                        type="button"
+                        onClick={() => toggleCandidate(candidate.id)}
+                        className={cn(
+                          "flex items-center justify-between gap-3 rounded-xl border px-3 py-3 text-left transition-[border-color,background,transform] duration-150 hover:-translate-y-px",
+                          active
+                            ? "border-brand-activeBorder bg-brand-panel shadow-toggle"
+                            : "border-border-soft bg-surface-base hover:border-brand-strongBorder hover:bg-brand-soft",
+                        )}
+                      >
+                        <div className="min-w-0">
+                          <div className="truncate text-sm font-bold text-text-primary">
+                            {candidate.name}
+                          </div>
+                        </div>
+                        <span
+                          className={cn(
+                            "inline-flex rounded-full border px-2 py-1 text-label font-bold uppercase tracking-caps",
+                            active
+                              ? "border-brand-strongBorder bg-brand-tint text-brand"
+                              : "border-border bg-surface-muted text-text-subtle",
+                          )}
+                        >
+                          {active ? "Inhabil" : "OK"}
+                        </span>
+                      </button>
+                    );
+                  })}
+
+                  {visibleCandidates.length === 0 && (
+                    <div className="px-3 py-8 text-center text-ui text-text-muted">
+                      Ingen kandidater matcher søket.
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {!query.trim() &&
+              !showAllCandidates &&
+              selectedCandidates.length === 0 && (
+                <div className="rounded-xl border border-dashed border-border-soft bg-surface-muted px-4 py-6 text-sm text-text-muted">
+                  Start med å søke etter et navn. Du kan også åpne hele listen
+                  hvis du vil bla.
+                </div>
+              )}
+          </div>
+        )}
+      </SchedulePanelBody>
+      <SchedulePanelFooter>
+        <button
+          type="button"
+          onClick={() => onSelectionChange([])}
+          className={cn(actionButtonBase, actionButtonNeutral)}
+          disabled={selectedCandidateIds.length === 0 || isSaving}
+        >
+          Fjern alle
+        </button>
+        <button
+          type="button"
+          onClick={handleSave}
+          className={cn(actionButtonBase, actionButtonPrimary)}
+          disabled={isSaving}
+        >
+          {isSaving ? "Lagrer..." : "Lagre konflikter"}
+        </button>
+      </SchedulePanelFooter>
+    </SchedulePanel>
   );
 };
 

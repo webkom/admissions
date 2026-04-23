@@ -1,4 +1,5 @@
 import React, { useState, useMemo } from "react";
+import { BarChart3 } from "lucide-react";
 import type { Interviewer } from "../types";
 import {
   decodeScheduleTime,
@@ -7,6 +8,12 @@ import {
   parseSlotKey,
 } from "../scheduleUtils";
 import cn from "src/utils/cn";
+import {
+  SchedulePanel,
+  SchedulePanelHeader,
+  SchedulePanelBody,
+  SchedulePanelFooter,
+} from "../ui";
 
 interface AvailabilityHeatmapProps {
   interviewers: Interviewer[];
@@ -136,66 +143,67 @@ const AvailabilityHeatmap: React.FC<AvailabilityHeatmapProps> = ({
   const columns = dates.length + 1;
 
   return (
-    <div className="flex min-w-0 flex-col gap-3">
-      <div
-        className={cn(
-          "rounded-panel border border-border bg-surface-base",
-          "flex flex-wrap items-center justify-between gap-3 px-4 py-3.5",
-        )}
-      >
-        <div className="flex flex-wrap gap-1.5">
-          <FilterButton
-            active={filterMode === "all"}
-            onClick={() => setMode("all")}
-            label="Alle"
-            count={interviewers.length}
-          />
-          <FilterButton
-            active={filterMode === "male"}
-            onClick={() => setMode("male")}
-            label="Menn"
-            count={interviewers.filter((i) => i.gender === "M").length}
-          />
-          <FilterButton
-            active={filterMode === "female"}
-            onClick={() => setMode("female")}
-            label="Kvinner"
-            count={interviewers.filter((i) => i.gender === "F").length}
-          />
-        </div>
+    <SchedulePanel className="min-w-0">
+      <SchedulePanelHeader
+        icon={BarChart3}
+        eyebrow="Oversikt · Dekning"
+        title="Fordeling av tilgjengelighet"
+        description="Heatmappet viser hvor mange intervjuere som er tilgjengelige i hvert tidsrom. Mørkere farge = bedre dekning."
+        actions={
+          <div className="flex items-center gap-2">
+            <label
+              className="text-label font-bold uppercase tracking-label text-text-subtle"
+              htmlFor="person-filter"
+            >
+              Person
+            </label>
+            <select
+              id="person-filter"
+              value={selectedIndividual || ""}
+              className={cn(
+                "rounded-md border border-border-muted bg-surface-base px-2.5 py-2 text-sm font-medium text-text-primary transition-[border-color,box-shadow] duration-150 focus:border-brand-input focus:outline-none focus:ring-3 focus:ring-brand-ringSoft",
+                "min-w-[180px] cursor-pointer",
+              )}
+              onChange={(e) => {
+                const value = e.target.value || null;
+                setSelectedIndividual(value);
+                setFilterMode(value ? "people" : "all");
+              }}
+            >
+              <option value="">Velg person...</option>
+              {interviewers.map((interviewer) => (
+                <option key={interviewer.id} value={interviewer.id}>
+                  {interviewer.name}
+                </option>
+              ))}
+            </select>
+          </div>
+        }
+      />
 
-        <div className="flex items-center gap-2">
-          <label
-            className="text-label font-bold uppercase tracking-label text-text-subtle"
-            htmlFor="person-filter"
-          >
-            Person
-          </label>
-          <select
-            id="person-filter"
-            value={selectedIndividual || ""}
-            className={cn(
-              "rounded-md border border-border-muted bg-surface-base px-2.5 py-2 text-sm font-medium text-text-primary transition-[border-color,box-shadow] duration-150 focus:border-brand-input focus:outline-none focus:ring-3 focus:ring-brand-ringSoft",
-              "min-w-[170px] cursor-pointer",
-            )}
-            onChange={(e) => {
-              const value = e.target.value || null;
-              setSelectedIndividual(value);
-              setFilterMode(value ? "people" : "all");
-            }}
-          >
-            <option value="">Velg person...</option>
-            {interviewers.map((interviewer) => (
-              <option key={interviewer.id} value={interviewer.id}>
-                {interviewer.name}
-              </option>
-            ))}
-          </select>
-        </div>
-      </div>
+      <SchedulePanelBody className="flex flex-col gap-4">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex flex-wrap gap-1.5">
+            <FilterButton
+              active={filterMode === "all"}
+              onClick={() => setMode("all")}
+              label="Alle"
+              count={interviewers.length}
+            />
+            <FilterButton
+              active={filterMode === "male"}
+              onClick={() => setMode("male")}
+              label="Menn"
+              count={interviewers.filter((i) => i.gender === "M").length}
+            />
+            <FilterButton
+              active={filterMode === "female"}
+              onClick={() => setMode("female")}
+              label="Kvinner"
+              count={interviewers.filter((i) => i.gender === "F").length}
+            />
+          </div>
 
-      <div className="min-w-0 rounded-panel border border-border bg-surface-base p-5">
-        <div className="mb-4 flex flex-wrap items-center justify-between gap-4">
           <div>
             <span className="mb-[0.35rem] block text-label font-bold uppercase tracking-label text-text-subtle">
               Tilgjengelighet
@@ -287,9 +295,9 @@ const AvailabilityHeatmap: React.FC<AvailabilityHeatmapProps> = ({
             ))}
           </div>
         </div>
-      </div>
+      </SchedulePanelBody>
 
-      <div className="flex flex-wrap gap-4 border-t border-border-soft pt-3.5">
+      <SchedulePanelFooter className="gap-5">
         <SummaryCard
           label="Aktive intervjuere"
           value={String(filteredInterviewers.length)}
@@ -299,8 +307,8 @@ const AvailabilityHeatmap: React.FC<AvailabilityHeatmapProps> = ({
           value={`${slotAvailability.size} slotter`}
         />
         <SummaryCard label="Beste åpne luke" value={bestSlotLabel} />
-      </div>
-    </div>
+      </SchedulePanelFooter>
+    </SchedulePanel>
   );
 };
 

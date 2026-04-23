@@ -32,7 +32,7 @@ class LegoUser(AbstractUser):
 
     @property
     def member_of_group(self):
-        membership = (Membership.objects.filter(user=self).first())
+        membership = Membership.objects.filter(user=self).first()
         if not membership:
             return None
         return membership.group
@@ -194,6 +194,7 @@ class InterviewAvailability(models.Model):
         related_name="interview_availabilities",
     )
     slots = models.JSONField(default=list, blank=True)
+    conflicts = models.JSONField(default=list, blank=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:

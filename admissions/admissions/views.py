@@ -73,7 +73,9 @@ def get_representing_group(admission, user):
 
 
 def user_is_committee_member(admission, user):
-    return Membership.objects.filter(user=user.pk, group__in=admission.groups.all()).exists()
+    return Membership.objects.filter(
+        user=user.pk, group__in=admission.groups.all()
+    ).exists()
 
 
 class AppView(TemplateView):
@@ -364,10 +366,10 @@ class SolveScheduleView(APIView):
         data = serializer.validated_data
 
         result = solve_schedule(
-            candidates_data=data['candidates'],
-            interviewers_data=data['interviewers'],
-            panel_size=data['panel_size'],
-            options_data=data.get('options', {}),
+            candidates_data=data["candidates"],
+            interviewers_data=data["interviewers"],
+            panel_size=data["panel_size"],
+            options_data=data.get("options", {}),
         )
 
         return Response(result, status=status.HTTP_200_OK)
@@ -532,12 +534,12 @@ class InterviewAvailabilityView(APIView):
         else:
             users = LegoUser.objects.filter(id=user.id)
 
-        availability_map = {
-            item.user_id: item.slots
-            for item in InterviewAvailability.objects.filter(
-                admission=admission, user_id__in=users.values_list("id", flat=True)
-            )
-        }
+        saved_items = InterviewAvailability.objects.filter(
+            admission=admission,
+            user_id__in=users.values_list("id", flat=True),
+        )
+        availability_map = {item.user_id: item.slots for item in saved_items}
+        conflicts_map = {item.user_id: item.conflicts for item in saved_items}
 
         payload = [
             {
@@ -545,6 +547,7 @@ class InterviewAvailabilityView(APIView):
                 "username": person.username,
                 "full_name": person.get_full_name() or person.username,
                 "slots": availability_map.get(person.id, []),
+                "conflicts": conflicts_map.get(person.id, []),
                 "has_submitted": person.id in availability_map,
                 "is_me": person.id == user.id,
             }
@@ -560,19 +563,32 @@ class InterviewAvailabilityView(APIView):
 
         user = request.user
         user.__class__ = LegoUser
-        if not user_is_committee_member(admission, user) and not user_is_admission_admin(
+        if not user_is_committee_member(
             admission, user
-        ):
+        ) and not user_is_admission_admin(admission, user):
             return Response(status=status.HTTP_403_FORBIDDEN)
 
         serializer = SaveInterviewAvailabilitySerializer(data=request.data)
         if not serializer.is_valid():
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
+        existing = InterviewAvailability.objects.filter(
+            admission=admission,
+            user=user,
+        ).first()
         saved, _ = InterviewAvailability.objects.update_or_create(
             admission=admission,
             user=user,
-            defaults={"slots": serializer.validated_data.get("slots", [])},
+            defaults={
+                "slots": serializer.validated_data.get(
+                    "slots",
+                    existing.slots if existing is not None else [],
+                ),
+                "conflicts": serializer.validated_data.get(
+                    "conflicts",
+                    existing.conflicts if existing is not None else [],
+                ),
+            },
         )
 
         return Response(
@@ -581,8 +597,46 @@ class InterviewAvailabilityView(APIView):
                 "username": user.username,
                 "full_name": user.get_full_name() or user.username,
                 "slots": saved.slots,
+                "conflicts": saved.conflicts,
                 "has_submitted": True,
                 "is_me": True,
             },
             status=status.HTTP_200_OK,
         )
+
+
+class InterviewCandidatesView(APIView):
+    authentication_classes = [SessionAuthentication]
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, admission_slug):
+        try:
+            admission = Admission.objects.get(slug=admission_slug)
+        except Admission.DoesNotExist:
+            return Response(status=status.HTTP_404_NOT_FOUND)
+
+        user = request.user
+        user.__class__ = LegoUser
+
+        is_admin = user_is_admission_admin(admission, user)
+        is_recruiter = get_representing_group(admission, user) is not None
+        is_committee_member = user_is_committee_member(admission, user)
+
+        if not is_committee_member and not is_admin and not is_recruiter:
+            return Response(status=status.HTTP_403_FORBIDDEN)
+
+        applications = (
+            UserApplication.objects.filter(admission=admission)
+            .select_related("user")
+            .order_by("user__first_name", "user__last_name", "user__username")
+        )
+        payload = [
+            {
+                "id": f"real-candidate-{application.user.username}",
+                "name": application.user.get_full_name() or application.user.username,
+                "gender": "",
+            }
+            for application in applications
+        ]
+
+        return Response(payload, status=status.HTTP_200_OK)

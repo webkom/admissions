@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AxiosError } from "axios";
 import {
   Admission,
+  Candidate,
   Application,
   Group,
   InterviewAvailabilityParticipant,
@@ -46,6 +47,13 @@ export const useAdminAdmission = (slug: string) => {
 export const useAdminApplications = (admissionSlug: string) => {
   return useQuery<Application[], AxiosError>({
     queryKey: [`/admin/admission/${admissionSlug}/application/`],
+  });
+};
+
+export const useInterviewCandidates = (slug: string) => {
+  return useQuery<Candidate[], AxiosError>({
+    queryKey: [`/admin/admission/${slug}/candidates/`],
+    retry: false,
   });
 };
 
@@ -96,7 +104,7 @@ export const useSaveInterviewAvailability = (slug: string) => {
   return useMutation<
     InterviewAvailabilityParticipant,
     AxiosError,
-    { slots: string[] }
+    { slots?: string[]; conflicts?: string[] }
   >({
     mutationFn: (payload) =>
       apiClient

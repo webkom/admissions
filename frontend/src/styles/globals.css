@@ -82,6 +82,12 @@
   --shadow-toggle: 0 8px 18px rgb(178 28 23 / 6%);
   --color-brand-pulse-start: rgb(178 28 23 / 45%);
   --color-brand-pulse-end: rgb(178 28 23 / 0%);
+  --gradient-toggle-active: linear-gradient(
+    135deg,
+    rgb(178 28 23 / 14%) 0%,
+    rgb(178 28 23 / 8%) 45%,
+    rgb(178 28 23 / 3%) 100%
+  );
 }
 
 html {
@@ -113,15 +119,15 @@ body {
 
 @keyframes timeline-pulse {
   0% {
-    box-shadow: 0 0 0 0 var(--color-brand-pulse-start);
+    box-shadow: 0 0 0 0 rgb(178 28 23 / 55%);
   }
 
   70% {
-    box-shadow: 0 0 0 10px var(--color-brand-pulse-end);
+    box-shadow: 0 0 0 14px rgb(178 28 23 / 0%);
   }
 
   100% {
-    box-shadow: 0 0 0 0 var(--color-brand-pulse-end);
+    box-shadow: 0 0 0 0 rgb(178 28 23 / 0%);
   }
 }
 

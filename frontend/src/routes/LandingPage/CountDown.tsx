@@ -29,8 +29,8 @@ const CountDown: React.FC<CountDownProps> = ({
   const isCompleted = remainingTotalSeconds <= 0;
 
   return (
-    <div className="flex min-w-0 flex-1 basis-56 flex-col items-center rounded-2xl border border-surface-disabled bg-surface-base px-2 py-4 handheld:w-full">
-      <h3 className="mb-4 text-center text-base font-bold text-text-accent">
+    <div className="flex w-full min-w-0 flex-col items-center px-2 py-2">
+      <h3 className="mb-2 text-center text-label font-bold uppercase tracking-label text-text-subtle">
         {title}
       </h3>
       {isCompleted ? (

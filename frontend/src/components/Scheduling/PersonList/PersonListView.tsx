@@ -28,7 +28,7 @@ const PersonListView = ({ data }: PersonListViewProps) => {
                   "flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-border text-sm font-bold",
                   isFemale
                     ? "bg-brand-tint text-brand"
-                    : "bg-surface-neutral text-text-muted",
+                    : "bg-brand-soft text-text-muted",
                 )}
               >
                 {personName.charAt(0)}
@@ -44,7 +44,7 @@ const PersonListView = ({ data }: PersonListViewProps) => {
                       "rounded-full border px-1.5 py-0.5 text-label font-bold",
                       isFemale
                         ? "border-brand-strongBorder bg-brand-tint text-brand"
-                        : "border-border bg-surface-neutral text-text-muted",
+                        : "border-border bg-brand-soft text-text-muted",
                     )}
                   >
                     {person.gender}
@@ -86,7 +86,7 @@ const PersonListView = ({ data }: PersonListViewProps) => {
       })}
 
       {data.length === 0 && (
-        <div className="rounded-lg border border-border bg-surface-muted px-4 py-8 text-center">
+        <div className="rounded-lg border border-border bg-surface-base px-4 py-8 text-center">
           <h4 className="mb-1 mt-0 text-sm font-bold text-text-primary">
             Ingen registrerte personer
           </h4>

@@ -71,6 +71,7 @@ export interface Interviewer {
   name: string;
   gender: string;
   availability: number[];
+  biased: string[];
 }
 
 export interface SolverOptions {
@@ -113,6 +114,7 @@ export interface InterviewAvailabilityParticipant {
   username: string;
   full_name: string;
   slots: string[];
+  conflicts: string[];
   has_submitted: boolean;
   is_me: boolean;
 }

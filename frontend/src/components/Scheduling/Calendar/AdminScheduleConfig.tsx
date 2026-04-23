@@ -1,5 +1,12 @@
 import React, { useState, useEffect, useCallback } from "react";
-import { CalendarDays, Check, Clock, Timer, Layers } from "lucide-react";
+import {
+  CalendarDays,
+  Check,
+  Clock,
+  Timer,
+  Layers,
+  LayoutPanelTop,
+} from "lucide-react";
 import {
   dateRangeDates,
   formatDateHeader,
@@ -10,12 +17,31 @@ import {
   Stepper,
   TimeSegmentInput,
   type TimeValue,
-  sectionLabelClass,
+  SchedulePanel,
+  SchedulePanelHeader,
+  SchedulePanelBody,
+  SchedulePanelFooter,
+  actionButtonBase,
+  actionButtonPrimary,
+  actionButtonGhost,
 } from "../ui";
 
 const MAX_RANGE_DAYS = 21;
-
 const DURATION_PRESETS = [15, 20, 30] as const;
+
+const SectionLabel: React.FC<{
+  icon: React.ElementType;
+  label: string;
+}> = ({ icon: Icon, label }) => (
+  <div className="flex items-center gap-1.5 pb-2">
+    <Icon size={12} className="text-text-subtle" />
+    <span className="text-xs font-bold uppercase tracking-wide text-text-subtle">
+      {label}
+    </span>
+  </div>
+);
+
+const Divider = () => <hr className="border-t border-border-faint" />;
 
 interface AdminScheduleConfigProps {
   startDate: string;
@@ -28,8 +54,6 @@ interface AdminScheduleConfigProps {
   onSave?: (config: ScheduleConfigInput) => Promise<void>;
   onSaveSuccess?: () => void;
   sessionDuration: number;
-  candidateCount: number;
-  interviewerCount: number;
 }
 
 export interface ScheduleConfigInput {
@@ -54,8 +78,6 @@ const AdminScheduleConfig: React.FC<AdminScheduleConfigProps> = ({
   onSave,
   onSaveSuccess,
   sessionDuration,
-  candidateCount,
-  interviewerCount,
 }) => {
   const [isDragging, setIsDragging] = useState(false);
   const [dragMode, setDragMode] = useState<"add" | "remove">("add");
@@ -266,89 +288,64 @@ const AdminScheduleConfig: React.FC<AdminScheduleConfigProps> = ({
     "cursor-pointer rounded-lg border border-border-soft bg-surface-base px-3 py-2 text-sm font-bold text-text-primary transition-[border-color,box-shadow] duration-150 hover:border-brand-strongBorder focus:border-brand focus:outline-none focus:shadow-[0_0_0_3px_var(--color-brand-ring)]";
 
   return (
-    <div className="flex min-w-0 flex-col gap-2.5">
-      <div className="rounded-panel border border-border bg-surface-base">
-        {/* Header */}
-        <div className="rounded-t-panel px-6 pb-5 pt-6">
-          <header className="mb-6">
-            <h2 className="m-0 text-[15px] font-bold text-text-primary">
-              Rammer for intervjuperioden
-            </h2>
-            <p className="m-0 mt-1 max-w-[40rem] text-ui leading-relaxed text-text-muted">
-              Definer datoperiode, daglig tidsrom og intervjustruktur. Aktiver
-              deretter individuelle tidslommer i kartet nedenfor.
-            </p>
-          </header>
+    <div className="grid min-w-0 items-start gap-3 xl:grid-cols-[300px_1fr]">
+      {/* ───── Settings column ───── */}
+      <SchedulePanel>
+        <SchedulePanelHeader
+          icon={LayoutPanelTop}
+          eyebrow="Admin · Oppsett"
+          title="Rammer"
+        />
 
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            {/* Date range */}
-            <section>
-              <span className={sectionLabelClass}>
-                <CalendarDays
-                  size={11}
-                  className="mr-1 inline-block align-[-1px]"
-                />
-                Intervjuperiode
-              </span>
-              <div className="flex flex-wrap items-center gap-2">
-                <input
-                  id="period-start"
-                  type="date"
-                  value={localStartDate}
-                  className={dateInputClass}
-                  onChange={(e) => setLocalStartDate(e.target.value)}
-                />
-                <span className="select-none text-sm text-text-disabled">
-                  →
+        <SchedulePanelBody className="space-y-4">
+          {/* Date range + Time range */}
+          <div className="space-y-3">
+            <SectionLabel icon={CalendarDays} label="Intervjuperiode" />
+            <div className="flex flex-wrap items-center gap-2">
+              <input
+                id="period-start"
+                type="date"
+                value={localStartDate}
+                className={dateInputClass}
+                onChange={(e) => setLocalStartDate(e.target.value)}
+              />
+              <span className="select-none text-sm text-text-disabled">→</span>
+              <input
+                type="date"
+                value={localEndDate}
+                min={localStartDate}
+                className={dateInputClass}
+                onChange={(e) => setLocalEndDate(e.target.value)}
+              />
+              {!dateRangeValid && (
+                <span className="text-xs font-semibold text-brand">
+                  Ugyldig periode
                 </span>
-                <input
-                  type="date"
-                  value={localEndDate}
-                  min={localStartDate}
-                  className={dateInputClass}
-                  onChange={(e) => setLocalEndDate(e.target.value)}
-                />
-                {!dateRangeValid && (
-                  <span className="text-xs font-semibold text-brand">
-                    Ugyldig datoperiode
-                  </span>
-                )}
-              </div>
-            </section>
+              )}
+            </div>
 
-            {/* Time range */}
-            <section>
-              <span className={sectionLabelClass}>
-                <Clock size={11} className="mr-1 inline-block align-[-1px]" />
-                Tidsrom per dag
-              </span>
-              <div className="flex items-center gap-2">
-                <TimeSegmentInput
-                  id="start-time"
-                  value={pendingStart}
-                  onChange={setPendingStart}
-                />
-                <span className="select-none text-sm text-text-disabled">
-                  →
+            <SectionLabel icon={Clock} label="Tidsrom per dag" />
+            <div className="flex flex-wrap items-center gap-2">
+              <TimeSegmentInput
+                id="start-time"
+                value={pendingStart}
+                onChange={setPendingStart}
+              />
+              <span className="select-none text-sm text-text-disabled">→</span>
+              <TimeSegmentInput value={pendingEnd} onChange={setPendingEnd} />
+              {isInvalidRange && (
+                <span className="text-xs font-semibold text-brand">
+                  Ugyldig tidsrom
                 </span>
-                <TimeSegmentInput value={pendingEnd} onChange={setPendingEnd} />
-                {isInvalidRange && (
-                  <span className="text-xs font-semibold text-brand">
-                    Ugyldig tidsrom
-                  </span>
-                )}
-              </div>
-            </section>
+              )}
+            </div>
           </div>
-        </div>
 
-        <div className="px-6 pb-6 pt-5">
-          {/* Duration presets */}
-          <section className="mb-5">
-            <span className={sectionLabelClass}>
-              <Timer size={11} className="mr-1 inline-block align-[-1px]" />
-              Intervjulengde
-            </span>
+          <Divider />
+
+          {/* Duration */}
+          <div className="space-y-2">
+            <SectionLabel icon={Timer} label="Intervjulengde" />
             <div className="flex flex-wrap items-center gap-2">
               {DURATION_PRESETS.map((preset) => {
                 const active = !isCustomDuration && pendingDuration === preset;
@@ -403,218 +400,233 @@ const AdminScheduleConfig: React.FC<AdminScheduleConfigProps> = ({
                 </span>
               </div>
             </div>
-          </section>
+          </div>
 
-          {/* Chunk structure */}
-          <section className="mb-5">
-            <span className={sectionLabelClass}>
-              <Layers size={11} className="mr-1 inline-block align-[-1px]" />
-              Intervjublokk (Inkludert tid man trenger etter intervju)
-            </span>
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-              <div className="flex items-center justify-between gap-3 rounded-[10px] border border-border-soft bg-surface-muted px-4 py-3">
-                <div className="min-w-0">
-                  <span className="block text-sm font-bold text-text-primary">
-                    Intervjuer per blokk
-                  </span>
-                  <p className="m-0 mt-0.5 text-detail leading-snug text-text-muted">
-                    Antall slotter på rad før pause.
-                  </p>
-                </div>
-                <Stepper
-                  value={pendingChunkSize}
-                  min={1}
-                  max={20}
-                  step={1}
-                  onStep={setPendingChunkSize}
-                  aria-label="Intervjuer per blokk"
-                />
-              </div>
+          <Divider />
 
-              <div className="flex items-center justify-between gap-3 rounded-[10px] border border-border-soft bg-surface-muted px-4 py-3">
-                <div className="min-w-0">
-                  <span className="block text-sm font-bold text-text-primary">
-                    Pause mellom blokker
-                  </span>
-                  <p className="m-0 mt-0.5 text-detail leading-snug text-text-muted">
-                    Minutter fri etter hver blokk.
-                  </p>
-                </div>
-                <Stepper
-                  value={pendingChunkBreak}
-                  min={0}
-                  max={240}
-                  step={5}
-                  onStep={setPendingChunkBreak}
-                  unit="min"
-                  aria-label="Pause mellom blokker"
-                />
+          {/* Chunk config */}
+          <div className="space-y-2">
+            <SectionLabel icon={Layers} label="Intervjublokk" />
+
+            <div className="flex items-center justify-between gap-2">
+              <div className="min-w-0">
+                <span className="text-sm font-bold text-text-primary">
+                  Per blokk
+                </span>
+                <span className="ml-1.5 text-xs text-text-muted">
+                  slotter på rad
+                </span>
               </div>
+              <Stepper
+                value={pendingChunkSize}
+                min={1}
+                max={20}
+                step={1}
+                onStep={setPendingChunkSize}
+                aria-label="Intervjuer per blokk"
+              />
             </div>
-          </section>
 
-          {/* Footer */}
-          <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border-soft pt-4">
-            <div className="flex flex-wrap items-center gap-1.5">
+            <div className="flex items-center justify-between gap-2">
+              <div className="min-w-0">
+                <span className="text-sm font-bold text-text-primary">
+                  Pause
+                </span>
+                <span className="ml-1.5 text-xs text-text-muted">
+                  mellom blokker
+                </span>
+              </div>
+              <Stepper
+                value={pendingChunkBreak}
+                min={0}
+                max={240}
+                step={5}
+                onStep={setPendingChunkBreak}
+                unit="min"
+                aria-label="Pause mellom blokker"
+              />
+            </div>
+          </div>
+        </SchedulePanelBody>
+
+        <SchedulePanelFooter>
+          <div className="flex items-center gap-3">
+            {hasPendingChanges && !isSaving && (
+              <span className="rounded-full border border-brand-border bg-brand-muted px-2.5 py-1 text-label font-bold uppercase tracking-caps text-brand">
+                Ulagrede endringer
+              </span>
+            )}
+            {onSave && (
               <button
                 type="button"
-                className="cursor-pointer rounded-md border border-border bg-surface-base px-3 py-1.5 text-ui font-semibold text-brand transition-[border-color,background,color] duration-150 hover:border-brand-strongBorder hover:bg-brand-soft hover:text-brand-dark"
+                className={cn(actionButtonBase, actionButtonPrimary)}
+                onClick={handleSave}
+                disabled={
+                  isSaving ||
+                  pendingDuration === 0 ||
+                  isInvalidRange ||
+                  !dateRangeValid
+                }
+              >
+                {isSaving ? "Lagrer..." : "Lagre"}
+              </button>
+            )}
+          </div>
+        </SchedulePanelFooter>
+      </SchedulePanel>
+
+      {/* ───── Slot grid column ───── */}
+      <SchedulePanel>
+        <SchedulePanelHeader
+          icon={CalendarDays}
+          eyebrow="Admin · Slotter"
+          title="Aktive tidslommer"
+          description="Klikk og dra for å åpne eller stenge intervjublokker."
+          actions={
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                className={cn(
+                  actionButtonBase,
+                  actionButtonGhost,
+                  "px-3 py-1.5",
+                )}
                 onClick={selectAll}
               >
                 Velg alle
               </button>
               <button
                 type="button"
-                className="cursor-pointer rounded-md border border-border bg-surface-base px-3 py-1.5 text-ui font-semibold text-brand transition-[border-color,background,color] duration-150 hover:border-brand-strongBorder hover:bg-brand-soft hover:text-brand-dark"
+                className={cn(
+                  actionButtonBase,
+                  actionButtonGhost,
+                  "px-3 py-1.5",
+                )}
                 onClick={clearAll}
               >
                 Tøm alle
               </button>
             </div>
+          }
+        />
+        <div className="min-w-0 select-none overflow-x-auto bg-surface-muted p-5 handheld:p-4">
+          <div
+            className="grid gap-[5px]"
+            style={{
+              gridTemplateColumns: `56px repeat(${columns - 1}, minmax(70px, 1fr))`,
+              minWidth: `max(680px, ${(columns - 1) * 70 + 56}px)`,
+            }}
+          >
+            <div />
+            {dates.map((date) => {
+              const { weekday, dayMonth } = formatDateHeader(date);
+              const isAllSelected =
+                timeSlots.length > 0 &&
+                timeSlots.every((m) => draftSlots.has(makeSlotKey(date, m)));
+              const isSomeSelected = timeSlots.some((m) =>
+                draftSlots.has(makeSlotKey(date, m)),
+              );
 
-            <div className="flex items-center gap-3">
-              {hasPendingChanges && !isSaving && (
-                <span className="text-xs font-semibold italic text-text-faded">
-                  Ulagrede endringer
-                </span>
-              )}
-              {onSave && (
-                <button
-                  type="button"
-                  className="cursor-pointer whitespace-nowrap rounded-lg border border-brand bg-brand px-4 py-2 text-ui font-bold text-white transition-[background,border-color,box-shadow] duration-150 hover:border-brand-hover hover:bg-brand-hover focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-brand-ring active:bg-brand-pressed disabled:cursor-not-allowed disabled:opacity-40"
-                  onClick={handleSave}
-                  disabled={
-                    isSaving ||
-                    pendingDuration === 0 ||
-                    isInvalidRange ||
-                    !dateRangeValid
-                  }
+              return (
+                <div
+                  key={date}
+                  className="flex flex-col items-center gap-1 rounded-md border border-border-soft bg-surface-base px-1 py-2"
                 >
-                  {isSaving ? "Lagrer..." : "Lagre oppsett"}
-                </button>
-              )}
-            </div>
+                  <div className="text-center text-label font-bold uppercase tracking-label text-text-muted">
+                    {weekday}
+                  </div>
+                  <div className="text-center text-ui font-bold text-text-primary">
+                    {dayMonth}
+                  </div>
+                  <label className="flex cursor-pointer items-center gap-1 text-label font-semibold text-text-subtle">
+                    <input
+                      type="checkbox"
+                      disabled={timeSlots.length === 0}
+                      checked={isAllSelected}
+                      ref={(input) => {
+                        if (input) {
+                          input.indeterminate =
+                            isSomeSelected && !isAllSelected;
+                        }
+                      }}
+                      onChange={() => {
+                        if (isAllSelected) clearAllForDay(date);
+                        else selectAllForDay(date);
+                      }}
+                    />
+                    Alle
+                  </label>
+                </div>
+              );
+            })}
+
+            {chunks.length === 0 ? (
+              <div
+                className={cn(
+                  "text-label font-bold uppercase tracking-label text-text-subtle",
+                  "col-[1/-1] px-4 py-10 text-center text-text-disabled",
+                )}
+              >
+                {dates.length === 0
+                  ? "Velg en datoperiode for å se tidsplanen."
+                  : "Ingen slotter — endre tidsrom og lagre."}
+              </div>
+            ) : (
+              chunks.map((chunk, chunkIdx) => (
+                <React.Fragment key={chunkIdx}>
+                  <div className="flex items-center justify-end pr-2 text-label font-bold uppercase tracking-label text-border-quiet">
+                    {formatTime(chunk[0])}
+                  </div>
+                  {dates.map((date) => {
+                    const enabledInChunk = chunk.filter((m) =>
+                      draftSlots.has(makeSlotKey(date, m)),
+                    );
+                    const isAllEnabled = enabledInChunk.length === chunk.length;
+                    const isSomeEnabled = enabledInChunk.length > 0;
+
+                    return (
+                      <div
+                        key={`${date}-${chunkIdx}`}
+                        onMouseDown={() => handleMouseDown(date, chunk)}
+                        onMouseEnter={() => handleMouseEnter(date, chunk)}
+                        className={cn(
+                          "flex min-h-[40px] cursor-pointer flex-col gap-[2px] rounded-[5px] border p-1 transition-[background-color,border-color] duration-100",
+                          isAllEnabled
+                            ? "border-brand bg-brand text-text-white hover:bg-brand-hover"
+                            : isSomeEnabled
+                              ? "border-brand-activeBorder bg-brand-soft hover:bg-brand-muted"
+                              : "border-border-soft bg-surface-base hover:border-brand-panelBorder hover:bg-brand-soft",
+                        )}
+                      >
+                        <div className="flex flex-1 flex-wrap gap-[2px]">
+                          {chunk.map((m) => (
+                            <div
+                              key={m}
+                              className={cn(
+                                "h-1 flex-1 rounded-[1px]",
+                                draftSlots.has(makeSlotKey(date, m))
+                                  ? isAllEnabled
+                                    ? "bg-white/40"
+                                    : "bg-brand"
+                                  : "bg-border-faint",
+                              )}
+                            />
+                          ))}
+                        </div>
+                        {isAllEnabled && (
+                          <div className="flex flex-1 items-center justify-center">
+                            <Check size={12} strokeWidth={2.5} />
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </React.Fragment>
+              ))
+            )}
           </div>
         </div>
-      </div>
-
-      {/* Slot grid */}
-      <div className="min-w-0 select-none overflow-x-auto rounded-lg border border-border bg-surface-muted p-3">
-        <div
-          className="grid gap-[5px]"
-          style={{
-            gridTemplateColumns: `56px repeat(${columns - 1}, minmax(70px, 1fr))`,
-            minWidth: `max(680px, ${(columns - 1) * 70 + 56}px)`,
-          }}
-        >
-          <div />
-          {dates.map((date) => {
-            const { weekday, dayMonth } = formatDateHeader(date);
-            const isAllSelected =
-              timeSlots.length > 0 &&
-              timeSlots.every((m) => draftSlots.has(makeSlotKey(date, m)));
-            const isSomeSelected = timeSlots.some((m) =>
-              draftSlots.has(makeSlotKey(date, m)),
-            );
-
-            return (
-              <div
-                key={date}
-                className="flex flex-col items-center gap-1 rounded-md border border-border-soft bg-surface-base px-1 py-2"
-              >
-                <div className="text-center text-label font-bold uppercase tracking-label text-text-muted">
-                  {weekday}
-                </div>
-                <div className="text-center text-ui font-bold text-text-primary">
-                  {dayMonth}
-                </div>
-                <label className="flex cursor-pointer items-center gap-1 text-label font-semibold text-text-subtle">
-                  <input
-                    type="checkbox"
-                    disabled={timeSlots.length === 0}
-                    checked={isAllSelected}
-                    ref={(input) => {
-                      if (input) {
-                        input.indeterminate = isSomeSelected && !isAllSelected;
-                      }
-                    }}
-                    onChange={() => {
-                      if (isAllSelected) clearAllForDay(date);
-                      else selectAllForDay(date);
-                    }}
-                  />
-                  Alle
-                </label>
-              </div>
-            );
-          })}
-
-          {chunks.length === 0 ? (
-            <div
-              className={cn(
-                "text-label font-bold uppercase tracking-label text-text-subtle",
-                "col-[1/-1] px-4 py-10 text-center text-text-disabled",
-              )}
-            >
-              {dates.length === 0
-                ? "Velg en datoperiode for å se tidsplanen."
-                : "Ingen slotter — endre tidsrom og lagre."}
-            </div>
-          ) : (
-            chunks.map((chunk, chunkIdx) => (
-              <React.Fragment key={chunkIdx}>
-                <div className="flex items-center justify-end pr-2 text-label font-bold uppercase tracking-label text-border-quiet">
-                  {formatTime(chunk[0])}
-                </div>
-                {dates.map((date) => {
-                  const enabledInChunk = chunk.filter((m) =>
-                    draftSlots.has(makeSlotKey(date, m)),
-                  );
-                  const isAllEnabled = enabledInChunk.length === chunk.length;
-                  const isSomeEnabled = enabledInChunk.length > 0;
-
-                  return (
-                    <div
-                      key={`${date}-${chunkIdx}`}
-                      onMouseDown={() => handleMouseDown(date, chunk)}
-                      onMouseEnter={() => handleMouseEnter(date, chunk)}
-                      className={cn(
-                        "flex min-h-[40px] cursor-pointer flex-col gap-[2px] rounded-[5px] border p-1 transition-[background-color,border-color] duration-100",
-                        isAllEnabled
-                          ? "border-brand bg-brand text-text-white hover:bg-brand-hover"
-                          : isSomeEnabled
-                            ? "border-brand-activeBorder bg-brand-soft hover:bg-brand-muted"
-                            : "border-border-soft bg-surface-base hover:border-brand-panelBorder hover:bg-brand-soft",
-                      )}
-                    >
-                      <div className="flex flex-1 flex-wrap gap-[2px]">
-                        {chunk.map((m) => (
-                          <div
-                            key={m}
-                            className={cn(
-                              "h-1 flex-1 rounded-[1px]",
-                              draftSlots.has(makeSlotKey(date, m))
-                                ? isAllEnabled
-                                  ? "bg-white/40"
-                                  : "bg-brand"
-                                : "bg-border-faint",
-                            )}
-                          />
-                        ))}
-                      </div>
-                      {isAllEnabled && (
-                        <div className="flex flex-1 items-center justify-center">
-                          <Check size={12} strokeWidth={2.5} />
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
-              </React.Fragment>
-            ))
-          )}
-        </div>
-      </div>
+      </SchedulePanel>
     </div>
   );
 };

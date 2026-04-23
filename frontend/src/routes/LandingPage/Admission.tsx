@@ -75,14 +75,14 @@ const Admission: React.FC<AdmissionProps> = ({ admission }) => {
   })();
 
   return (
-    <div className="mt-12 w-full max-w-6xl rounded-[var(--border-radius-lg)] border border-border-soft bg-surface-base p-14 shadow-panel transition-shadow duration-200 hover:shadow-panel-hover portrait:p-10 handheld:mt-8 handheld:p-6">
-      <div className="mb-14 grid grid-cols-[1.4fr_1fr] gap-20 portrait:grid-cols-1 portrait:gap-14">
+    <div className="mt-10 w-full max-w-6xl rounded-panel border border-border bg-surface-base p-10 shadow-panel transition-shadow duration-200 hover:shadow-panel-hover portrait:p-8 handheld:mt-6 handheld:p-5">
+      <div className="mb-8 grid grid-cols-[1.4fr_1fr] gap-10 portrait:grid-cols-1 portrait:gap-8">
         <div>
-          <h2 className="mb-4 text-display-lg font-extrabold tracking-tight text-text-strong handheld:text-display-md">
+          <h2 className="mb-3 text-display-lg font-extrabold tracking-tight text-text-strong handheld:text-display-md">
             {admission.title}
           </h2>
           {admission.description && (
-            <p className="mb-12 text-body-lg leading-relaxed text-text-body handheld:mb-8 handheld:text-base">
+            <p className="mb-8 text-body-lg leading-relaxed text-text-body handheld:mb-6 handheld:text-base">
               {admission.description
                 .split("\n")
                 .map((descriptionLine, index) => (
@@ -98,16 +98,14 @@ const Admission: React.FC<AdmissionProps> = ({ admission }) => {
 
         <div className="flex flex-col justify-start">
           {nextCountDown && (
-            <div className="flex flex-wrap gap-4 rounded-[var(--border-radius-lg)] border border-border-soft bg-surface-soft p-8">
-              <CountDown
-                title={nextCountDown.title}
-                dateString={nextCountDown.dateString}
-                completedLabel={nextCountDown.completedLabel}
-              />
-            </div>
+            <CountDown
+              title={nextCountDown.title}
+              dateString={nextCountDown.dateString}
+              completedLabel={nextCountDown.completedLabel}
+            />
           )}
 
-          <div className="mt-8 flex w-full flex-col gap-4">
+          <div className="mt-6 flex w-full flex-col gap-3">
             {(admission.is_open || admission.userdata.has_application) && (
               <LinkButton
                 className={primaryActionButtonClass}
@@ -164,7 +162,7 @@ const Admission: React.FC<AdmissionProps> = ({ admission }) => {
         </div>
       </div>
 
-      <p className="m-0 border-t border-border-soft pt-8 text-sm text-text-faded [&_a]:font-semibold [&_a]:text-text-secondary [&_a]:underline [&_a]:underline-offset-2 [&_a:hover]:text-text-strong">
+      <p className="m-0 border-t border-border pt-6 text-sm text-text-faded [&_a]:font-semibold [&_a]:text-text-secondary [&_a]:underline [&_a]:underline-offset-2 [&_a:hover]:text-text-strong">
         Du kan til enhver tid trekke søknaden din hvis du skulle ombestemme deg.
         Hvis det ikke fungerer å slette søknaden, send en mail til{" "}
         {isRevy || isRevyBoard ? (

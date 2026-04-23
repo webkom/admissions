@@ -448,9 +448,7 @@ class SaveScheduleInputSerializer(serializers.Serializer):
     day_end_minute = serializers.IntegerField(
         min_value=1, max_value=1440, required=False
     )
-    chunk_size = serializers.IntegerField(
-        min_value=1, max_value=20, required=False
-    )
+    chunk_size = serializers.IntegerField(min_value=1, max_value=20, required=False)
     chunk_break_minutes = serializers.IntegerField(
         min_value=0, max_value=240, required=False
     )
@@ -474,7 +472,9 @@ class SolveOptionsSerializer(serializers.Serializer):
     allow_overtime = serializers.BooleanField(default=True)
     overtime_weight = serializers.IntegerField(min_value=0, default=100)
     load_balance_weight = serializers.IntegerField(min_value=0, default=1)
-    max_solver_seconds = serializers.FloatField(min_value=1.0, max_value=60.0, default=10.0)
+    max_solver_seconds = serializers.FloatField(
+        min_value=1.0, max_value=60.0, default=10.0
+    )
 
 
 class ScheduleRequestsSerializer(serializers.Serializer):
@@ -485,7 +485,8 @@ class ScheduleRequestsSerializer(serializers.Serializer):
 
 
 class SaveInterviewAvailabilitySerializer(serializers.Serializer):
-    slots = serializers.ListField(child=serializers.CharField(), default=list)
+    slots = serializers.ListField(child=serializers.CharField(), required=False)
+    conflicts = serializers.ListField(child=serializers.CharField(), required=False)
 
 
 class InterviewAvailabilityParticipantSerializer(serializers.Serializer):
@@ -493,6 +494,6 @@ class InterviewAvailabilityParticipantSerializer(serializers.Serializer):
     username = serializers.CharField()
     full_name = serializers.CharField()
     slots = serializers.ListField(child=serializers.CharField(), default=list)
+    conflicts = serializers.ListField(child=serializers.CharField(), default=list)
     has_submitted = serializers.BooleanField()
     is_me = serializers.BooleanField()
-
