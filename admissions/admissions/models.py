@@ -170,6 +170,7 @@ class SavedSchedule(models.Model):
     start_date = models.DateField()
     end_date = models.DateField(null=True, blank=True)
     session_duration = models.PositiveIntegerField(default=60)
+    enabled_windows = models.JSONField(default=list, blank=True)
     enabled_slots = models.JSONField(default=list, blank=True)
     day_start_minute = models.PositiveIntegerField(default=8 * 60)
     day_end_minute = models.PositiveIntegerField(default=18 * 60)

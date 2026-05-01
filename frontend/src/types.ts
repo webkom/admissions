@@ -77,20 +77,31 @@ export interface Interviewer {
 export interface SolverOptions {
   enforce_same_gender: boolean;
   allow_overtime: boolean;
+  prioritize_continuity: boolean;
   overtime_weight: number;
   load_balance_weight: number;
+  continuity_weight: number;
   max_solver_seconds: number;
 }
 
 export interface SchedulePanelMember {
+  id?: string;
   name: string;
   is_overtime: boolean;
 }
 
 export interface ScheduleItem {
+  candidate_id?: string;
   candidate: string;
   time: number;
   panel: SchedulePanelMember[];
+  locked?: boolean;
+}
+
+export interface EnabledWindow {
+  date: string;
+  start_minute: number;
+  end_minute: number;
 }
 
 export interface SavedSchedule {
@@ -99,6 +110,7 @@ export interface SavedSchedule {
   start_date: string;
   end_date: string | null;
   session_duration: number;
+  enabled_windows: EnabledWindow[];
   enabled_slots: string[];
   day_start_minute: number;
   day_end_minute: number;

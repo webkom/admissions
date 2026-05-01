@@ -1,38 +1,31 @@
 import React, { useEffect, useState } from "react";
 import styled from "styled-components";
-import FormatTime from "src/components/Time/FormatTime";
 
 import LoadingBall from "src/components/LoadingBall";
-import GroupStatistics from "./components/GroupStatistics";
 import { replaceQuotationMarks } from "src/utils/methods";
 import { useAdmission, useAdminApplications } from "src/query/hooks";
 import { useParams } from "react-router-dom";
+import { Eye, EyeOff } from "lucide-react";
 
-import AdmissionsContainer from "src/containers/AdmissionsContainer";
 import { Application } from "src/types";
-import {
-  GroupFilterGrid,
-  SectionCard,
-  SectionDescription,
-  SectionEyebrow,
-  SectionTitle,
-} from "./components/StyledElements";
-import djangoData from "src/utils/djangoData";
 import { InputFieldModel } from "src/utils/jsonFields";
 import CSVExportHandler, {
   CompleteCsvData,
 } from "./components/CSVExportHandler";
+import {
+  actionButtonActive,
+  actionButtonBase,
+  actionButtonNeutral,
+} from "src/components/Scheduling/ui";
+import cn from "src/utils/cn";
 
 const ViewApplications = () => {
   const { admissionSlug } = useParams();
   const [sortedApplications, setSortedApplications] = useState<Application[]>(
     [],
   );
-  const [selectedGroups, setSelectedGroups] = useState<string[]>([]);
-  const [filteredApplications, setFilteredApplications] = useState<
-    Application[]
-  >([]);
   const [csvData, setCsvData] = useState<CompleteCsvData[]>([]);
+  const [showCandidates, setShowCandidates] = useState(false);
 
   const {
     data: applications,
@@ -44,8 +37,6 @@ const ViewApplications = () => {
     error: admissionError,
     isFetching: admissionIsFetching,
   } = useAdmission(admissionSlug ?? "");
-  const { groups } = admission ?? {};
-
   const csvHeaders = [
     { label: "Fullt Navn", key: "name" },
     { label: "Prioriteringer", key: "priorityText" },
@@ -77,21 +68,8 @@ const ViewApplications = () => {
   }, [applications]);
 
   useEffect(() => {
-    setFilteredApplications(
-      sortedApplications.filter(
-        (application) =>
-          selectedGroups.length === 0 ||
-          application.group_applications.find((groupApplication) =>
-            selectedGroups.includes(groupApplication.group.name),
-          ),
-      ),
-    );
-  }, [sortedApplications, selectedGroups]);
-
-  useEffect(() => {
-    // Push all the individual applications into csvData with the right format
     const updatedCsvData: CompleteCsvData[] = [];
-    filteredApplications.forEach((application) => {
+    sortedApplications.forEach((application) => {
       application.group_applications.forEach((groupApplication) => {
         updatedCsvData.push({
           name: application.user.full_name,
@@ -112,20 +90,18 @@ const ViewApplications = () => {
       });
     });
     setCsvData(updatedCsvData);
-  }, [filteredApplications]);
+  }, [sortedApplications]);
 
   const numApplicants = sortedApplications.length;
-  const selectedGroupCount = selectedGroups.length;
-  const visibleGroupCount = (groups ?? []).filter(
-    (group) =>
-      admission?.userdata.is_admin ||
-      group.name === djangoData.user.representative_of_group,
-  ).length;
 
   let numApplications = 0;
   sortedApplications.forEach((application) => {
     numApplications += application.group_applications.length;
   });
+
+  const visibleCsvData = showCandidates
+    ? csvData
+    : csvData.map(maskCandidateFields);
 
   if (applicationsError || admissionError) {
     return (
@@ -141,94 +117,41 @@ const ViewApplications = () => {
   } else {
     return (
       <PageWrapper>
-        <SectionCard>
-          <HeaderRow>
-            <div>
-              <SectionEyebrow>Opptaksadmin</SectionEyebrow>
-              <AdmissionTitle>{admission.title}</AdmissionTitle>
-              <SectionDescription>
-                Hold oversikt over frister, filtrer på grupper og gå rett videre
-                til behandling av søknadene.
-              </SectionDescription>
-              <SummaryLine>
-                {numApplicants} {numApplicants === 1 ? "søker" : "søkere"} og{" "}
-                {numApplications}{" "}
-                {numApplications === 1 ? "søknad" : "søknader"}
-              </SummaryLine>
-            </div>
-          </HeaderRow>
+        <Header>
+          <div>
+            <Eyebrow>CSV</Eyebrow>
+            <Title>{admission.title}</Title>
+          </div>
+          <HeaderControls>
+            <button
+              type="button"
+              aria-pressed={showCandidates}
+              onClick={() => setShowCandidates((current) => !current)}
+              className={cn(
+                actionButtonBase,
+                showCandidates ? actionButtonActive : actionButtonNeutral,
+                "px-3 py-2",
+              )}
+            >
+              {showCandidates ? <EyeOff size={14} /> : <Eye size={14} />}
+              {showCandidates ? "Skjul innhold" : "Vis innhold"}
+            </button>
+            <Meta>
+              {numApplicants} {numApplicants === 1 ? "søker" : "søkere"} ·{" "}
+              {numApplications} {numApplications === 1 ? "søknad" : "søknader"}
+            </Meta>
+          </HeaderControls>
+        </Header>
 
-          <TimelineGrid>
-            <TimelineItem>
-              <TimelineLabel>Søknader åpner</TimelineLabel>
-              <TimelineValue>
-                <FormatTime format="HH:mm:ss EEEE d. MMMM">
-                  {admission.open_from}
-                </FormatTime>
-              </TimelineValue>
-            </TimelineItem>
-            <TimelineItem>
-              <TimelineLabel>Søknadsfrist</TimelineLabel>
-              <TimelineValue>
-                <FormatTime format="HH:mm:ss EEEE d. MMMM">
-                  {admission.public_deadline}
-                </FormatTime>
-              </TimelineValue>
-            </TimelineItem>
-            <TimelineItem>
-              <TimelineLabel>Redigeringsfrist</TimelineLabel>
-              <TimelineValue>
-                <FormatTime format="HH:mm:ss EEEE d. MMMM">
-                  {admission.closed_from}
-                </FormatTime>
-              </TimelineValue>
-            </TimelineItem>
-          </TimelineGrid>
-        </SectionCard>
-
-        <SectionCard>
-          <FilterHeader>
-            <div>
-              <SectionEyebrow>Filtrering</SectionEyebrow>
-              <SectionTitle>Gruppeoversikt</SectionTitle>
-              <SectionDescription>
-                Trykk på en eller flere grupper for å snevre inn tabellen. Når
-                ingen grupper er valgt, vises alle søknadene.
-              </SectionDescription>
-            </div>
-            <FilterStatus>
-              {selectedGroupCount === 0
-                ? `Alle ${visibleGroupCount} grupper vises`
-                : `${selectedGroupCount} ${
-                    selectedGroupCount === 1 ? "gruppe" : "grupper"
-                  } valgt`}
-            </FilterStatus>
-          </FilterHeader>
-
-          <GroupFilterGrid>
-            {(groups !== undefined ? [...groups] : [])
-              .filter(
-                (group) =>
-                  admission.userdata.is_admin ||
-                  group.name === djangoData.user.representative_of_group,
-              )
-              .sort((a, b) => a.name.localeCompare(b.name))
-              .map((group) => (
-                <GroupStatistics
-                  key={group.pk}
-                  applications={sortedApplications}
-                  groupName={group.name}
-                  groupLogo={group.logo}
-                  selectedGroups={selectedGroups}
-                  setSelectedGroups={setSelectedGroups}
-                />
-              ))}
-          </GroupFilterGrid>
-        </SectionCard>
-        <CSVExportHandler csvData={csvData} csvHeaders={csvHeaders} />
-        <AdmissionsContainer
-          admission={admission}
-          applications={filteredApplications}
+        <CSVExportHandler
+          csvData={visibleCsvData}
+          csvHeaders={csvHeaders}
+          rowCount={csvData.length}
+        />
+        <CsvPreviewTable
+          rows={visibleCsvData}
+          headers={csvHeaders}
+          showCandidates={showCandidates}
         />
       </PageWrapper>
     );
@@ -237,75 +160,179 @@ const ViewApplications = () => {
 
 export default ViewApplications;
 
+type CsvHeader = { label: string; key: string };
+const SENSITIVE_FIELD_KEYS = new Set([
+  "name",
+  "priorityText",
+  "groupApplicationText",
+  "email",
+  "phoneNumber",
+  "username",
+]);
+
+const maskCandidateFields = (row: CompleteCsvData): CompleteCsvData => ({
+  ...row,
+  name: "Skjult",
+  priorityText: "Skjult",
+  groupApplicationText: "Skjult",
+  email: "Skjult",
+  phoneNumber: "Skjult",
+  username: "Skjult",
+});
+
+const CsvPreviewTable = ({
+  rows,
+  headers,
+  showCandidates,
+}: {
+  rows: CompleteCsvData[];
+  headers: CsvHeader[];
+  showCandidates: boolean;
+}) => (
+  <TableShell>
+    <StyledTable>
+      <thead>
+        <tr>
+          {headers.map((header) => (
+            <th key={header.key}>{header.label}</th>
+          ))}
+        </tr>
+      </thead>
+      <tbody>
+        {rows.map((row, rowIndex) => (
+          <tr key={`${row.username}-${row.group}-${rowIndex}`}>
+            {headers.map((header) => (
+              <td
+                key={header.key}
+                data-column={header.key}
+                data-masked={
+                  !showCandidates && SENSITIVE_FIELD_KEYS.has(header.key)
+                    ? "true"
+                    : undefined
+                }
+              >
+                {renderCsvCell(row[header.key])}
+              </td>
+            ))}
+          </tr>
+        ))}
+      </tbody>
+    </StyledTable>
+  </TableShell>
+);
+
+const renderCsvCell = (value: CompleteCsvData[string]): React.ReactNode => {
+  if (typeof value === "boolean") return value ? "Ja" : "Nei";
+  if (value === null || value === undefined || value === "") return "—";
+
+  return String(value);
+};
+
 /** Styles **/
 
 const PageWrapper = styled.div`
   display: flex;
   flex-direction: column;
-  gap: 1rem;
+  gap: 0.75rem;
   width: 100%;
 `;
 
-const HeaderRow = styled.div`
+const Header = styled.header`
   display: flex;
-  flex-direction: column;
-  gap: 0.75rem;
-`;
-
-const AdmissionTitle = styled.h1`
-  margin: 0;
-  font-size: 2rem;
-  font-weight: 800;
-  letter-spacing: -0.04em;
-  color: #1f2937;
-`;
-
-const SummaryLine = styled.p`
-  margin: 0.65rem 0 0;
-  color: #374151;
-  font-size: 0.95rem;
-  font-weight: 600;
-`;
-
-const TimelineGrid = styled.div`
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-  gap: 0.9rem;
-  margin-top: 1rem;
-  padding-top: 1rem;
-  border-top: 1px solid #e5e7eb;
-`;
-
-const TimelineItem = styled.div`
-  padding-right: 0.5rem;
-`;
-
-const TimelineLabel = styled.span`
-  display: block;
-  margin-bottom: 0.4rem;
-  font-size: 0.78rem;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: #6b7280;
-`;
-
-const TimelineValue = styled.span`
-  color: #1f2937;
-  font-weight: 600;
-  line-height: 1.5;
-`;
-
-const FilterHeader = styled.div`
-  display: flex;
-  align-items: flex-end;
+  align-items: center;
   justify-content: space-between;
   gap: 1rem;
-  flex-wrap: wrap;
+  padding-bottom: 0.5rem;
+
+  @media screen and (max-width: 700px) {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 0.35rem;
+  }
 `;
 
-const FilterStatus = styled.span`
-  color: #6b7280;
-  font-size: 0.9rem;
+const Eyebrow = styled.span`
+  display: block;
+  margin-bottom: 0.25rem;
+  color: var(--color-text-subtle);
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+`;
+
+const Title = styled.h1`
+  margin: 0;
+  color: var(--color-text-primary);
+  font-size: 1.35rem;
+  font-weight: 750;
+  line-height: 1.2;
+  text-align: left;
+`;
+
+const Meta = styled.span`
+  color: var(--color-text-muted);
+  font-size: 0.875rem;
   font-weight: 600;
+  white-space: nowrap;
+`;
+
+const HeaderControls = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+
+  @media screen and (max-width: 700px) {
+    justify-content: flex-start;
+  }
+`;
+
+const TableShell = styled.div`
+  max-width: 100%;
+  width: 100%;
+  overflow: auto;
+  border: 1px solid var(--color-border-soft);
+  border-radius: 8px;
+  background: var(--color-surface-base);
+`;
+
+const StyledTable = styled.table`
+  min-width: 1180px;
+  table-layout: auto;
+
+  th {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    background: var(--color-surface-base);
+    color: var(--color-text-subtle);
+    font-size: 0.68rem;
+    white-space: nowrap;
+  }
+
+  td {
+    vertical-align: top;
+    color: var(--color-text-primary);
+    line-height: 1.45;
+  }
+
+  td[data-masked="true"] {
+    color: var(--color-text-subtle);
+    font-style: italic;
+  }
+
+  td[data-column="priorityText"],
+  td[data-column="groupApplicationText"] {
+    min-width: 24rem;
+    white-space: pre-wrap;
+  }
+
+  td[data-column="phoneNumber"],
+  td[data-column="createdAt"],
+  td[data-column="updatedAt"] {
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
 `;

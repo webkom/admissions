@@ -3,10 +3,9 @@ import { Form } from "formik";
 import FormatTime from "src/components/Time/FormatTime";
 import Icon from "src/components/Icon";
 import ConfirmModal from "src/components/ConfirmModal";
-import { useMyApplication } from "src/query/hooks";
+import { useAdmission, useMyApplication } from "src/query/hooks";
 import { useDeleteMyApplicationMutation } from "src/query/mutations";
 import {
-  ApplicationDateInfo,
   EditActions,
   EditInfo,
   FormHeader,
@@ -22,28 +21,24 @@ import {
   SectionHeader,
   SeparatorLine,
   Sidebar,
-  StyledSpan,
   TimeStamp,
   Title,
 } from "src/routes/ApplicationForm/FormStructureStyle";
 import { clearAllDrafts } from "src/utils/draftHelper";
-import JsonFieldEditor from "src/components/JsonFieldEditor";
 import LinkButton, { StyledButton } from "src/components/LinkButton";
-import PriorityTextField from "../ApplicationForm/PriorityTextField";
+import { useParams } from "react-router-dom";
+import styled from "styled-components";
 
 interface FormStructureProps {
   toggleIsEditing: () => void;
 }
 
-const FormStructure: React.FC<FormStructureProps> = ({
-  admission,
-  groups,
-  selectedGroups,
-  toggleIsEditing,
-  SelectedGroupItems,
-  admissionSlug,
-}) => {
-  const { data: myApplication } = useMyApplication(admissionSlug);
+const FormStructure: React.FC<FormStructureProps> = ({ toggleIsEditing }) => {
+  const { admissionSlug = "" } = useParams();
+  const { data: admission, isFetching: admissionIsFetching } =
+    useAdmission(admissionSlug);
+  const { data: myApplication, isFetching: applicationIsFetching } =
+    useMyApplication(admissionSlug);
   const deleteApplicationMutation =
     useDeleteMyApplicationMutation(admissionSlug);
   const isRevy = admissionSlug === "revy";
@@ -53,6 +48,17 @@ const FormStructure: React.FC<FormStructureProps> = ({
   const { group_applications, updated_at } = myApplication || {};
 
   const hasSelected = group_applications && group_applications.length > 0;
+  const headerFields = (admission?.header_fields ?? []).filter(
+    (field) => "id" in field,
+  );
+
+  if (admissionIsFetching || applicationIsFetching) {
+    return <p>Loading</p>;
+  }
+
+  if (!admission || !myApplication) {
+    return <p>Feil: klarte ikke hente søknaden din.</p>;
+  }
 
   return (
     <PageWrapper>
@@ -61,7 +67,12 @@ const FormStructure: React.FC<FormStructureProps> = ({
           Søknad {isRevy ? "mottatt" : isRevyBoard ? "mottatt" : "sendt"}!
         </Title>
         <TimeStamp>
-          Sist oppdatert <FormatTime time={updated_at} />
+          Sist oppdatert{" "}
+          {updated_at && (
+            <FormatTime format="EEEE d. MMMM, kl. HH:mm">
+              {updated_at}
+            </FormatTime>
+          )}
         </TimeStamp>
       </FormHeader>
       <Form>
@@ -144,12 +155,30 @@ const FormStructure: React.FC<FormStructureProps> = ({
           </>
         )}
         <GeneralInfoSection $columnCount={isBackup ? 1 : 2}>
-          <SectionHeader>Søknadstekst</SectionHeader>
-          <JsonFieldEditor
-            value={myApplication?.text_fields || {}}
-            schema={admission?.public_text_fields || []}
-            readOnly
-          />
+          <SectionHeader>Generelt</SectionHeader>
+          <ReceiptFields>
+            <ReceiptField>
+              <ReceiptLabel>Mobilnummer</ReceiptLabel>
+              <ReceiptValue>
+                {myApplication.phone_number || "Ikke oppgitt"}
+              </ReceiptValue>
+            </ReceiptField>
+            {headerFields.map((field) => (
+              <ReceiptField key={field.id}>
+                <ReceiptLabel>{field.title}</ReceiptLabel>
+                <ReceiptValue>
+                  {myApplication.header_fields_response[field.id] ||
+                    "Ikke oppgitt"}
+                </ReceiptValue>
+              </ReceiptField>
+            ))}
+            {myApplication.text && (
+              <ReceiptField>
+                <ReceiptLabel>Prioriteringer og kommentarer</ReceiptLabel>
+                <ReceiptText>{myApplication.text}</ReceiptText>
+              </ReceiptField>
+            )}
+          </ReceiptFields>
 
           {!isBackup && (
             <Sidebar>
@@ -181,7 +210,28 @@ const FormStructure: React.FC<FormStructureProps> = ({
           </SectionHeader>
           {hasSelected ? (
             <>
-              {SelectedGroupItems}
+              <ReceiptApplications>
+                {group_applications.map((groupApplication) => (
+                  <ReceiptApplication key={groupApplication.group.pk}>
+                    <ReceiptApplicationHeader>
+                      <ReceiptLogo
+                        src={groupApplication.group.logo}
+                        alt=""
+                        aria-hidden="true"
+                      />
+                      <ReceiptGroupName>
+                        {groupApplication.group.name}
+                      </ReceiptGroupName>
+                    </ReceiptApplicationHeader>
+                    {groupApplication.group.response_label && (
+                      <ReceiptPrompt>
+                        {groupApplication.group.response_label}
+                      </ReceiptPrompt>
+                    )}
+                    <ReceiptText>{groupApplication.text}</ReceiptText>
+                  </ReceiptApplication>
+                ))}
+              </ReceiptApplications>
               <Sidebar>
                 <HelpText>
                   <Icon name="information-circle-outline" />
@@ -208,7 +258,6 @@ const FormStructure: React.FC<FormStructureProps> = ({
                     {isRevy ? "gruppe" : isRevyBoard ? "stilling" : "komité"}.
                   </span>
                 </HelpText>
-                <PriorityTextField />
               </Sidebar>
             </>
           ) : (
@@ -234,3 +283,81 @@ const FormStructure: React.FC<FormStructureProps> = ({
 };
 
 export default FormStructure;
+
+const ReceiptFields = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+`;
+
+const ReceiptField = styled.div`
+  padding: 1rem;
+  border: 1px solid #f3f4f6;
+  border-radius: var(--border-radius-md);
+  background: #f9fafb;
+`;
+
+const ReceiptLabel = styled.span`
+  display: block;
+  margin-bottom: 0.35rem;
+  color: #6b7280;
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+`;
+
+const ReceiptValue = styled.span`
+  color: #111827;
+  font-size: 0.95rem;
+  font-weight: 600;
+`;
+
+const ReceiptApplications = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+`;
+
+const ReceiptApplication = styled.article`
+  padding: 1.25rem;
+  border: 1px solid #f3f4f6;
+  border-radius: var(--border-radius-md);
+  background: #ffffff;
+`;
+
+const ReceiptApplicationHeader = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 0.85rem;
+`;
+
+const ReceiptLogo = styled.img`
+  width: 2rem;
+  height: 2rem;
+  object-fit: scale-down;
+  flex: none;
+`;
+
+const ReceiptGroupName = styled.h3`
+  margin: 0;
+  color: #111827;
+  font-size: 1.1rem;
+  font-weight: 700;
+`;
+
+const ReceiptPrompt = styled.p`
+  margin: 0 0 0.85rem;
+  color: #6b7280;
+  font-size: 0.875rem;
+  line-height: 1.6;
+`;
+
+const ReceiptText = styled.p`
+  margin: 0;
+  color: #374151;
+  font-size: 0.95rem;
+  line-height: 1.65;
+  white-space: pre-wrap;
+`;

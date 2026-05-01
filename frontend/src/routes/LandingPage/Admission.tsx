@@ -18,12 +18,12 @@ const baseActionButtonClass =
 
 const primaryActionButtonClass = cn(
   baseActionButtonClass,
-  "!min-h-[3.75rem] !border-2 !border-brand !bg-brand !text-action !text-white hover:!-translate-y-0.5 hover:!border-brand-dark hover:!bg-brand-dark hover:!shadow-action active:!translate-y-0 disabled:!cursor-not-allowed disabled:!opacity-50",
+  "slide-underline slide-underline--on-dark !min-h-[3.75rem] !border-2 !border-brand !bg-brand !text-action !text-white active:!translate-y-0 disabled:!cursor-not-allowed disabled:!opacity-50",
 );
 
 const secondaryActionButtonClass = cn(
   baseActionButtonClass,
-  "!border-2 !border-brand !bg-surface-base !text-sm !text-brand hover:!-translate-y-px hover:!bg-rose-50",
+  "slide-underline slide-underline--tight !border-2 !border-border-muted !bg-surface-base !text-sm !text-brand",
 );
 
 const Admission: React.FC<AdmissionProps> = ({ admission }) => {
@@ -96,7 +96,7 @@ const Admission: React.FC<AdmissionProps> = ({ admission }) => {
           <AdmissionTimeline items={timelineItems} />
         </div>
 
-        <div className="flex flex-col justify-start">
+        <aside className="flex flex-col justify-start">
           {nextCountDown && (
             <CountDown
               title={nextCountDown.title}
@@ -105,7 +105,8 @@ const Admission: React.FC<AdmissionProps> = ({ admission }) => {
             />
           )}
 
-          <div className="mt-6 flex w-full flex-col gap-3">
+          <div className="mt-4 flex w-full flex-col gap-3">
+            <div className="flex items-center justify-between gap-3 px-1"></div>
             {(admission.is_open || admission.userdata.has_application) && (
               <LinkButton
                 className={primaryActionButtonClass}
@@ -129,7 +130,7 @@ const Admission: React.FC<AdmissionProps> = ({ admission }) => {
               </LinkButton>
             )}
 
-            <div className="flex w-full flex-col items-stretch gap-3">
+            <div className="flex w-full flex-col items-stretch gap-2">
               {admission.userdata.is_recruiter && (
                 <LinkButton
                   className={secondaryActionButtonClass}
@@ -144,7 +145,7 @@ const Admission: React.FC<AdmissionProps> = ({ admission }) => {
               )}
             </div>
 
-            <div className="flex w-full flex-col items-stretch gap-3">
+            <div className="flex w-full flex-col items-stretch gap-2">
               {isAdmissionMember && (
                 <LinkButton
                   className={secondaryActionButtonClass}
@@ -159,7 +160,7 @@ const Admission: React.FC<AdmissionProps> = ({ admission }) => {
               )}
             </div>
           </div>
-        </div>
+        </aside>
       </div>
 
       <p className="m-0 border-t border-border pt-6 text-sm text-text-faded [&_a]:font-semibold [&_a]:text-text-secondary [&_a]:underline [&_a]:underline-offset-2 [&_a:hover]:text-text-strong">

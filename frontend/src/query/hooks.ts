@@ -10,6 +10,8 @@ import {
 } from "src/types";
 import { apiClient } from "src/utils/callApi";
 
+type SaveSchedulePayload = Partial<Omit<SavedSchedule, "id" | "updated_at">>;
+
 // Public hooks
 
 export const useAdmissions = () => {
@@ -74,17 +76,16 @@ export const useSavedSchedule = (slug: string) => {
 
 export const useSaveSchedule = (slug: string) => {
   const queryClient = useQueryClient();
-  return useMutation<
-    SavedSchedule,
-    AxiosError,
-    Omit<SavedSchedule, "id" | "updated_at">
-  >({
+  return useMutation<SavedSchedule, AxiosError, SaveSchedulePayload>({
     mutationFn: (payload) =>
       apiClient
         .post(`/admin/admission/${slug}/schedule/`, payload)
         .then((r) => r.data),
     onSuccess: (data) => {
       queryClient.setQueryData([`/admin/admission/${slug}/schedule/`], data);
+      queryClient.invalidateQueries({
+        queryKey: [`/admin/admission/${slug}/availability/`],
+      });
     },
   });
 };

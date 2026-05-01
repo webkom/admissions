@@ -1,6 +1,10 @@
 import * as React from "react";
 import { CalendarRange } from "lucide-react";
-import { formatDateHeader, makeSlotKey } from "../scheduleUtils";
+import {
+  buildBlockTimeChunks,
+  formatDateHeader,
+  makeSlotKey,
+} from "../scheduleUtils";
 import cn from "src/utils/cn";
 import {
   SchedulePanel,
@@ -50,18 +54,14 @@ const TimeScheduler: React.FC<TimeSchedulerProps> = ({
   const [isSaving, setIsSaving] = React.useState(false);
   const [dirtySinceSave, setDirtySinceSave] = React.useState(false);
 
-  const timeSlots = React.useMemo(() => {
-    const slots = [];
-    const step = sessionDuration > 0 ? sessionDuration : 60;
-    let currentMinute = dayStartMinute;
-    while (currentMinute < dayEndMinute) {
-      for (let i = 0; i < chunkSize && currentMinute < dayEndMinute; i++) {
-        slots.push(currentMinute);
-        currentMinute += step;
-      }
-      currentMinute += chunkBreakMinutes;
-    }
-    return slots;
+  const chunks = React.useMemo(() => {
+    return buildBlockTimeChunks({
+      dayStartMinute,
+      dayEndMinute,
+      sessionDuration,
+      chunkSize,
+      chunkBreakMinutes,
+    });
   }, [
     dayStartMinute,
     dayEndMinute,
@@ -69,14 +69,6 @@ const TimeScheduler: React.FC<TimeSchedulerProps> = ({
     chunkSize,
     chunkBreakMinutes,
   ]);
-
-  const chunks = React.useMemo(() => {
-    const res = [];
-    for (let i = 0; i < timeSlots.length; i += chunkSize) {
-      res.push(timeSlots.slice(i, i + chunkSize));
-    }
-    return res;
-  }, [timeSlots, chunkSize]);
 
   const formatTime = (totalMinutes: number) => {
     const hours = Math.floor(totalMinutes / 60);
@@ -280,6 +272,10 @@ const TimeScheduler: React.FC<TimeSchedulerProps> = ({
         <div className="flex flex-wrap items-center gap-5">
           <MetaValue label="Valgte slots" value={selectedSlots.size} />
           <MetaValue label="Intervjulengde" value={`${sessionDuration} min`} />
+          <MetaValue
+            label="Gruppering"
+            value={`${chunkSize} og ${chunkBreakMinutes} min pause`}
+          />
         </div>
         <div className="flex items-center gap-3">
           {dirtySinceSave && (

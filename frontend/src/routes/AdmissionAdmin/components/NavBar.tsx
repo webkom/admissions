@@ -65,12 +65,14 @@ export default NavBar;
 const Wrapper = styled.div`
   display: flex;
   flex-direction: column;
-  gap: 1.25rem;
+  gap: 0.75rem;
 `;
 
 const PanelSection = styled.section`
-  padding-bottom: 1.25rem;
-  border-bottom: 1px solid #e4e4e4;
+  padding: 1rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--border-radius-lg);
+  background: var(--color-surface-base);
 `;
 
 const SectionEyebrow = styled.span`
@@ -100,14 +102,19 @@ const BackLink = styled(Link)`
   align-items: center;
   gap: 0.4rem;
   width: fit-content;
-  color: #a0a0a0;
+  padding: 0.55rem 0.75rem;
+  border: 1px solid var(--color-border-soft);
+  border-radius: 999px;
+  background: var(--color-surface-base);
+  color: var(--color-text-muted);
   font-size: 0.813rem;
   font-weight: 600;
   text-decoration: none;
   transition: color 0.12s ease;
 
   &:hover {
-    color: #111111;
+    border-color: var(--color-brand-strong-border);
+    color: var(--color-brand);
   }
 `;
 
@@ -127,8 +134,8 @@ const NavLink = styled(RouterNavLink)`
     color 0.12s ease;
 
   &:hover {
-    background: #f0f0f0;
-    color: #111111;
+    background: var(--color-surface-subtle);
+    color: var(--color-text-primary);
   }
 
   &.active {

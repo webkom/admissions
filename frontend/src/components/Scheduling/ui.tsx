@@ -72,7 +72,7 @@ export const SchedulePanelHeader: React.FC<SchedulePanelHeaderProps> = ({
   >
     <div className="flex min-w-0 flex-1 items-start gap-3">
       {Icon && (
-        <span className="mt-0.5 inline-flex h-9 w-9 flex-none items-center justify-center rounded-lg bg-brand-soft text-brand ring-1 ring-brand-border/60">
+        <span className="mt-0.5 inline-flex h-9 w-9 flex-none items-center justify-center rounded-lg bg-brand-soft text-brand">
           <Icon size={17} />
         </span>
       )}

@@ -41,6 +41,12 @@ from admissions.admissions.serializers import (
 )
 from admissions.utils.email import send_message
 from .solve_schedule import solve_schedule
+from .schedule_windows import (
+    enabled_windows_to_slots,
+    normalize_enabled_windows,
+    remap_slots_between_durations,
+    slots_to_enabled_windows,
+)
 
 from .authentication import SessionAuthentication
 from .permissions import (
@@ -370,6 +376,7 @@ class SolveScheduleView(APIView):
             interviewers_data=data["interviewers"],
             panel_size=data["panel_size"],
             options_data=data.get("options", {}),
+            locked_assignments_data=data.get("locked_assignments", []),
         )
 
         return Response(result, status=status.HTTP_200_OK)
@@ -378,6 +385,29 @@ class SolveScheduleView(APIView):
 class SavedScheduleView(APIView):
     authentication_classes = [SessionAuthentication]
     permission_classes = [IsAuthenticated]
+
+    def _ensure_window_fields(self, saved):
+        changed_fields = []
+        if not saved.enabled_windows and saved.enabled_slots:
+            saved.enabled_windows = slots_to_enabled_windows(
+                saved.enabled_slots,
+                saved.session_duration,
+            )
+            changed_fields.append("enabled_windows")
+
+        if saved.enabled_windows:
+            derived_slots = enabled_windows_to_slots(
+                saved.enabled_windows,
+                saved.session_duration,
+            )
+            if saved.enabled_slots != derived_slots:
+                saved.enabled_slots = derived_slots
+                changed_fields.append("enabled_slots")
+
+        if changed_fields:
+            saved.save(update_fields=changed_fields)
+
+        return saved
 
     def _get_admission_and_check(self, request, admission_slug, require_admin=False):
         try:
@@ -412,6 +442,7 @@ class SavedScheduleView(APIView):
 
         try:
             saved = admission.saved_schedule
+            self._ensure_window_fields(saved)
             return Response(SavedScheduleSerializer(saved).data)
         except SavedSchedule.DoesNotExist:
             return Response(status=status.HTTP_404_NOT_FOUND)
@@ -429,6 +460,8 @@ class SavedScheduleView(APIView):
 
         data = serializer.validated_data
         existing = SavedSchedule.objects.filter(admission=admission).first()
+        if existing is not None:
+            self._ensure_window_fields(existing)
 
         if "start_date" not in data and existing is None:
             return Response(
@@ -450,24 +483,84 @@ class SavedScheduleView(APIView):
             "end_date",
             existing.end_date if existing is not None else start_date,
         )
+        session_duration = data.get(
+            "session_duration",
+            existing.session_duration if existing is not None else 60,
+        )
+
+        if "enabled_windows" in data:
+            enabled_windows = normalize_enabled_windows(data["enabled_windows"])
+        elif "enabled_slots" in data:
+            enabled_windows = slots_to_enabled_windows(
+                data["enabled_slots"],
+                session_duration,
+            )
+        elif existing is not None:
+            enabled_windows = normalize_enabled_windows(existing.enabled_windows)
+        else:
+            enabled_windows = []
+
+        enabled_slots = enabled_windows_to_slots(enabled_windows, session_duration)
+
+        grid_changed = False
+        should_clear_plan = False
+        if existing is not None:
+            old_windows = normalize_enabled_windows(existing.enabled_windows)
+            next_chunk_size = data.get("chunk_size", existing.chunk_size)
+            next_chunk_break_minutes = data.get(
+                "chunk_break_minutes", existing.chunk_break_minutes
+            )
+            block_shape_changed = (
+                existing.chunk_break_minutes != next_chunk_break_minutes
+                or (
+                    (existing.chunk_break_minutes > 0 or next_chunk_break_minutes > 0)
+                    and existing.chunk_size != next_chunk_size
+                )
+            )
+            grid_changed = (
+                existing.start_date != start_date
+                or existing.end_date != end_date
+                or existing.session_duration != session_duration
+                or old_windows != enabled_windows
+                or block_shape_changed
+                or existing.day_start_minute
+                != data.get("day_start_minute", existing.day_start_minute)
+                or existing.day_end_minute
+                != data.get("day_end_minute", existing.day_end_minute)
+            )
+            incoming_schedule = data.get("schedule")
+            should_clear_plan = (
+                grid_changed
+                and bool(existing.schedule)
+                and ("schedule" not in data or incoming_schedule == existing.schedule)
+            )
+
+        if should_clear_plan:
+            schedule = []
+        else:
+            schedule = data.get(
+                "schedule",
+                existing.schedule if existing is not None else [],
+            )
+
+        is_distributed = (
+            False
+            if should_clear_plan
+            else data.get(
+                "is_distributed",
+                existing.is_distributed if existing is not None else False,
+            )
+        )
 
         saved, _ = SavedSchedule.objects.update_or_create(
             admission=admission,
             defaults={
-                "schedule": data.get(
-                    "schedule",
-                    existing.schedule if existing is not None else [],
-                ),
+                "schedule": schedule,
                 "start_date": start_date,
                 "end_date": end_date,
-                "session_duration": data.get(
-                    "session_duration",
-                    existing.session_duration if existing is not None else 60,
-                ),
-                "enabled_slots": data.get(
-                    "enabled_slots",
-                    existing.enabled_slots if existing is not None else [],
-                ),
+                "session_duration": session_duration,
+                "enabled_windows": enabled_windows,
+                "enabled_slots": enabled_slots,
                 "day_start_minute": data.get(
                     "day_start_minute",
                     existing.day_start_minute if existing is not None else 8 * 60,
@@ -484,16 +577,26 @@ class SavedScheduleView(APIView):
                     "chunk_break_minutes",
                     existing.chunk_break_minutes if existing is not None else 0,
                 ),
-                "is_distributed": data.get(
-                    "is_distributed",
-                    existing.is_distributed if existing is not None else False,
-                ),
+                "is_distributed": is_distributed,
                 "show_candidate_names": data.get(
                     "show_candidate_names",
                     existing.show_candidate_names if existing is not None else False,
                 ),
             },
         )
+
+        if grid_changed and existing is not None:
+            for availability in admission.interview_availabilities.all():
+                remapped_slots = remap_slots_between_durations(
+                    availability.slots,
+                    existing.session_duration,
+                    enabled_windows,
+                    session_duration,
+                )
+                if availability.slots != remapped_slots:
+                    availability.slots = remapped_slots
+                    availability.save(update_fields=["slots", "updated_at"])
+
         return Response(SavedScheduleSerializer(saved).data, status=status.HTTP_200_OK)
 
 
@@ -571,6 +674,22 @@ class InterviewAvailabilityView(APIView):
         serializer = SaveInterviewAvailabilitySerializer(data=request.data)
         if not serializer.is_valid():
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+        if "conflicts" in serializer.validated_data:
+            try:
+                names_are_visible = admission.saved_schedule.show_candidate_names
+            except SavedSchedule.DoesNotExist:
+                names_are_visible = False
+
+            if not names_are_visible:
+                return Response(
+                    {
+                        "conflicts": [
+                            "Conflicts can only be saved after candidate names are visible."
+                        ]
+                    },
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
 
         existing = InterviewAvailability.objects.filter(
             admission=admission,

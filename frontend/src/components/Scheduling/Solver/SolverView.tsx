@@ -18,6 +18,7 @@ import {
 } from "../ui";
 import type {
   Candidate,
+  EnabledWindow,
   Interviewer,
   ScheduleItem,
   SolverOptions,
@@ -27,8 +28,10 @@ import SolverCalendarView from "./SolverCalendarView";
 import Icon from "../../Icon";
 import {
   decodeScheduleTime,
+  encodeScheduleTime,
   formatDateHeader,
   generateIcs,
+  parseSlotKey,
 } from "../scheduleUtils";
 import { useSaveSchedule, useSavedSchedule } from "../../../query/hooks";
 import cn from "src/utils/cn";
@@ -42,6 +45,7 @@ interface Props {
   admissionSlug: string;
   startDate: string;
   endDate: string;
+  enabledWindows: EnabledWindow[];
   enabledSlots: Set<string>;
   dayStartMinute: number;
   dayEndMinute: number;
@@ -51,15 +55,18 @@ interface Props {
 }
 
 interface SolveResponse {
-  status: "SUCCESS" | "INFEASIBLE";
+  status: "SUCCESS" | "INFEASIBLE" | "LOCKED_CONFLICT";
   schedule: ScheduleItem[];
+  locked_conflicts?: Array<{ message: string; assignment?: unknown }>;
 }
 
 const DEFAULT_SOLVER_OPTIONS: SolverOptions = {
   enforce_same_gender: true,
   allow_overtime: true,
+  prioritize_continuity: true,
   overtime_weight: 100,
   load_balance_weight: 1,
+  continuity_weight: 12,
   max_solver_seconds: 10,
 };
 
@@ -92,6 +99,41 @@ const PRIORITY_PRESETS = [
 const PANEL_SIZE_MIN = 1;
 const PANEL_SIZE_MAX = 5;
 
+const formatSavedTime = () =>
+  new Intl.DateTimeFormat("nb-NO", {
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(new Date());
+
+interface ReadinessItemProps {
+  label: string;
+  value: string;
+  ok: boolean;
+}
+
+const ReadinessItem = ({ label, value, ok }: ReadinessItemProps) => (
+  <div
+    className={cn(
+      "rounded-lg border px-3 py-2.5",
+      ok
+        ? "border-border-soft bg-surface-base"
+        : "border-brand-border bg-brand-muted",
+    )}
+  >
+    <span className="block text-label font-bold uppercase tracking-label text-text-subtle">
+      {label}
+    </span>
+    <span
+      className={cn(
+        "mt-1 block text-sm font-extrabold tabular-nums",
+        ok ? "text-text-primary" : "text-brand",
+      )}
+    >
+      {value}
+    </span>
+  </div>
+);
+
 export default function SolverView({
   candidates,
   interviewers,
@@ -101,6 +143,7 @@ export default function SolverView({
   admissionSlug,
   startDate,
   endDate,
+  enabledWindows,
   enabledSlots,
   dayStartMinute,
   dayEndMinute,
@@ -124,6 +167,15 @@ export default function SolverView({
   const [planRevealed, setPlanRevealed] = useState(false);
   const [namesRevealed, setNamesRevealed] = useState(false);
   const [elapsedMs, setElapsedMs] = useState(0);
+  const [lastSavedAt, setLastSavedAt] = useState("");
+  const [isDraftDirty, setIsDraftDirty] = useState(false);
+  const [editingTimeIndex, setEditingTimeIndex] = useState<number | null>(null);
+  const [editingTimeValue, setEditingTimeValue] = useState("");
+  const [editingPanelTarget, setEditingPanelTarget] = useState<{
+    scheduleIndex: number;
+    panelMemberIndex: number;
+  } | null>(null);
+  const [replacementName, setReplacementName] = useState("");
 
   useEffect(() => {
     if (!loading) {
@@ -141,8 +193,53 @@ export default function SolverView({
     useSavedSchedule(admissionSlug);
   const saveSchedule = useSaveSchedule(admissionSlug);
 
+  const sortedEntries = useMemo(
+    () =>
+      (result?.schedule ?? [])
+        .map((item, scheduleIndex) => ({ item, scheduleIndex }))
+        .sort((a, b) => a.item.time - b.item.time),
+    [result],
+  );
   const sortedSchedule = useMemo(
-    () => [...(result?.schedule ?? [])].sort((a, b) => a.time - b.time),
+    () => sortedEntries.map(({ item }) => item),
+    [sortedEntries],
+  );
+
+  const candidateIdByName = useMemo(
+    () =>
+      new Map(candidates.map((candidate) => [candidate.name, candidate.id])),
+    [candidates],
+  );
+  const interviewerByName = useMemo(
+    () =>
+      new Map(
+        interviewers.map((interviewer) => [interviewer.name, interviewer]),
+      ),
+    [interviewers],
+  );
+  const interviewerOptions = useMemo(
+    () => [...interviewers].sort((a, b) => a.name.localeCompare(b.name, "nb")),
+    [interviewers],
+  );
+  const editingPanelEntry =
+    editingPanelTarget !== null
+      ? result?.schedule[editingPanelTarget.scheduleIndex]
+      : null;
+  const selectedPanelMemberName =
+    editingPanelEntry && editingPanelTarget !== null
+      ? editingPanelEntry.panel[editingPanelTarget.panelMemberIndex]?.name
+      : null;
+  const replacementWouldDuplicate =
+    editingPanelEntry && editingPanelTarget !== null
+      ? editingPanelEntry.panel.some(
+          (member, memberIndex) =>
+            memberIndex !== editingPanelTarget.panelMemberIndex &&
+            member.name === replacementName,
+        )
+      : false;
+  const canEditDraft = !savedSchedule?.is_distributed;
+  const lockedCount = useMemo(
+    () => (result?.schedule ?? []).filter((item) => item.locked).length,
     [result],
   );
 
@@ -215,7 +312,6 @@ export default function SolverView({
         ...item,
         candidate: displayCandidate(item.candidate),
       })),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
     [sortedSchedule, namesRevealed, candidateAlias],
   );
 
@@ -268,6 +364,119 @@ export default function SolverView({
     return `${weekday} ${dayMonth} ${timeLabel}`;
   };
 
+  const enabledTimeOptions = useMemo(() => {
+    const times = new Set<number>();
+    enabledSlots.forEach((key) => {
+      const { date, minute } = parseSlotKey(key);
+      if (!Number.isFinite(minute)) return;
+      const dayIndex = dates.indexOf(date);
+      if (dayIndex === -1) return;
+      times.add(encodeScheduleTime(dayIndex, minute, sessionDuration));
+    });
+    return Array.from(times).sort((a, b) => a - b);
+  }, [dates, enabledSlots, sessionDuration]);
+
+  const occupiedTimes = useMemo(
+    () => new Set((result?.schedule ?? []).map((item) => item.time)),
+    [result],
+  );
+
+  const timeOptionsForEdit = useMemo(() => {
+    const currentTime =
+      editingTimeIndex !== null
+        ? result?.schedule[editingTimeIndex]?.time
+        : null;
+    return enabledTimeOptions.filter(
+      (time) => time === currentTime || !occupiedTimes.has(time),
+    );
+  }, [editingTimeIndex, enabledTimeOptions, occupiedTimes, result]);
+
+  const updateScheduleItem = (
+    scheduleIndex: number,
+    updater: (item: ScheduleItem) => ScheduleItem,
+  ) => {
+    setResult((current) => {
+      if (!current || current.status !== "SUCCESS") return current;
+      return {
+        ...current,
+        schedule: current.schedule.map((item, index) =>
+          index === scheduleIndex ? updater(item) : item,
+        ),
+      };
+    });
+    setIsDraftDirty(true);
+    setLastSavedAt("");
+  };
+
+  const lockedAssignments = useMemo(
+    () =>
+      (result?.schedule ?? [])
+        .filter((item) => item.locked)
+        .map((item) => ({
+          candidate_id:
+            item.candidate_id ?? candidateIdByName.get(item.candidate),
+          candidate: item.candidate,
+          time: item.time,
+          panel: item.panel.map((member) => ({
+            id: member.id ?? interviewerByName.get(member.name)?.id,
+            name: member.name,
+          })),
+        })),
+    [candidateIdByName, interviewerByName, result],
+  );
+
+  const beginTimeEdit = (scheduleIndex: number) => {
+    const item = result?.schedule[scheduleIndex];
+    if (!item) return;
+    setEditingTimeIndex(scheduleIndex);
+    setEditingTimeValue(String(item.time));
+  };
+
+  const confirmTimeEdit = () => {
+    if (editingTimeIndex === null || !editingTimeValue) return;
+    const nextTime = Number(editingTimeValue);
+    updateScheduleItem(editingTimeIndex, (item) => ({
+      ...item,
+      time: nextTime,
+      locked: true,
+    }));
+    setEditingTimeIndex(null);
+    setEditingTimeValue("");
+  };
+
+  const beginPanelEdit = (
+    scheduleIndex: number,
+    panelMemberIndex: number,
+    currentName: string,
+  ) => {
+    setEditingPanelTarget({ scheduleIndex, panelMemberIndex });
+    setReplacementName(currentName);
+  };
+
+  const confirmPanelEdit = () => {
+    if (!editingPanelTarget || !replacementName || replacementWouldDuplicate)
+      return;
+    const replacement = interviewerByName.get(replacementName);
+    updateScheduleItem(editingPanelTarget.scheduleIndex, (item) => ({
+      ...item,
+      locked: true,
+      panel: item.panel.map((member, index) =>
+        index === editingPanelTarget.panelMemberIndex
+          ? {
+              ...member,
+              id: replacement?.id ?? member.id,
+              name: replacementName,
+              is_overtime: replacement
+                ? !replacement.availability.includes(item.time)
+                : member.is_overtime,
+            }
+          : member,
+      ),
+    }));
+    setEditingPanelTarget(null);
+    setReplacementName("");
+  };
+
   const handleSolve = async () => {
     if (candidates.length === 0 || interviewers.length === 0) {
       setError("Legg til minst én kandidat og én intervjuer.");
@@ -278,8 +487,10 @@ export default function SolverView({
     setError("");
     setResult(null);
     setSelectedInterviewer("");
-    setPlanRevealed(false);
+    setPlanRevealed(Boolean(lockedAssignments.length));
     setNamesRevealed(false);
+    setLastSavedAt("");
+    setIsDraftDirty(false);
 
     try {
       const payload = {
@@ -287,9 +498,16 @@ export default function SolverView({
         interviewers,
         panel_size: panelSize,
         options: solverOptions,
+        ...(lockedAssignments.length > 0
+          ? { locked_assignments: lockedAssignments }
+          : {}),
       };
       const response = await apiClient.post("/solve/", payload);
       setResult(response.data);
+      if (response.data.status === "SUCCESS") {
+        setPlanRevealed(true);
+        setNamesRevealed(false);
+      }
     } catch (err) {
       console.error(err);
       setError("Kunne ikke koble til serveren. Er backend oppe?");
@@ -330,16 +548,18 @@ export default function SolverView({
         start_date: startDate,
         end_date: endDate,
         session_duration: sessionDuration,
+        enabled_windows: enabledWindows,
         enabled_slots: Array.from(enabledSlots),
         day_start_minute: dayStartMinute,
         day_end_minute: dayEndMinute,
         chunk_size: chunkSize,
         chunk_break_minutes: chunkBreakMinutes,
         is_distributed: distribute,
-        // Candidate name sharing is managed from Intervjuplan.
-        show_candidate_names: savedSchedule?.show_candidate_names ?? false,
+        show_candidate_names: false,
       });
       await refetchSaved();
+      setLastSavedAt(formatSavedTime());
+      setIsDraftDirty(false);
       onNotify?.(
         distribute ? "Intervjuplan distribuert." : "Intervjuplan lagret.",
       );
@@ -361,6 +581,7 @@ export default function SolverView({
         start_date: savedSchedule.start_date,
         end_date: savedSchedule.end_date,
         session_duration: savedSchedule.session_duration,
+        enabled_windows: savedSchedule.enabled_windows ?? [],
         enabled_slots: savedSchedule.enabled_slots,
         day_start_minute: savedSchedule.day_start_minute,
         day_end_minute: savedSchedule.day_end_minute,
@@ -390,7 +611,7 @@ export default function SolverView({
   };
 
   const toggleSolverOption = (
-    key: "enforce_same_gender" | "allow_overtime",
+    key: "enforce_same_gender" | "allow_overtime" | "prioritize_continuity",
   ) => {
     updateSolverOption(key, !solverOptions[key]);
   };
@@ -405,6 +626,33 @@ export default function SolverView({
       load_balance_weight: loadBalanceWeight,
     }));
   };
+
+  const readiness = useMemo(() => {
+    const submittedInterviewers = interviewers.filter(
+      (interviewer) => interviewer.availability.length > 0,
+    ).length;
+    const enabledSlotCount = enabledSlots.size;
+    const totalCapacity = enabledSlotCount * panelSize;
+    const neededCapacity = candidates.length * panelSize;
+    const conflictCount = interviewers.reduce(
+      (sum, interviewer) => sum + interviewer.biased.length,
+      0,
+    );
+    const ready =
+      candidates.length > 0 &&
+      submittedInterviewers > 0 &&
+      enabledSlotCount >= candidates.length &&
+      totalCapacity >= neededCapacity;
+
+    return {
+      ready,
+      submittedInterviewers,
+      enabledSlotCount,
+      totalCapacity,
+      neededCapacity,
+      conflictCount,
+    };
+  }, [candidates.length, enabledSlots.size, interviewers, panelSize]);
 
   return (
     <div className="flex flex-col gap-3">
@@ -430,6 +678,48 @@ export default function SolverView({
                 description="Bruk slotter utenfor tilgjengeligheten ved behov."
                 checked={solverOptions.allow_overtime}
                 onToggle={() => toggleSolverOption("allow_overtime")}
+              />
+              <ToggleCard
+                title="Fyll sammenhengende"
+                description="Prioriter mandag før tirsdag og unngå hull mellom intervjuer."
+                checked={solverOptions.prioritize_continuity}
+                onToggle={() => toggleSolverOption("prioritize_continuity")}
+              />
+            </div>
+          </section>
+
+          <section className="px-6 py-5">
+            <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+              <span className={sectionLabelClass}>Klar til generering</span>
+              <Chip tone={readiness.ready ? "success" : "muted"}>
+                {readiness.ready ? "Klar" : "Sjekk grunnlaget"}
+              </Chip>
+            </div>
+            <div className="grid grid-cols-[repeat(auto-fit,minmax(150px,1fr))] gap-2">
+              <ReadinessItem
+                label="Kandidater"
+                value={String(candidates.length)}
+                ok={candidates.length > 0}
+              />
+              <ReadinessItem
+                label="Intervjuere med tider"
+                value={`${readiness.submittedInterviewers}/${interviewers.length}`}
+                ok={readiness.submittedInterviewers > 0}
+              />
+              <ReadinessItem
+                label="Åpne tidsluker"
+                value={`${readiness.enabledSlotCount}`}
+                ok={readiness.enabledSlotCount >= candidates.length}
+              />
+              <ReadinessItem
+                label="Kapasitet"
+                value={`${readiness.totalCapacity}/${readiness.neededCapacity}`}
+                ok={readiness.totalCapacity >= readiness.neededCapacity}
+              />
+              <ReadinessItem
+                label="KI registrert"
+                value={String(readiness.conflictCount)}
+                ok
               />
             </div>
           </section>
@@ -522,7 +812,9 @@ export default function SolverView({
             </div>
           </section>
 
-          {(error || result?.status === "INFEASIBLE") && (
+          {(error ||
+            result?.status === "INFEASIBLE" ||
+            result?.status === "LOCKED_CONFLICT") && (
             <section className="px-6 py-5">
               {error && (
                 <div className="rounded-lg border border-brand-border bg-brand-muted px-4 py-3 text-ui font-semibold text-brand">
@@ -537,6 +829,19 @@ export default function SolverView({
                   <p className="m-0 mx-auto max-w-[32rem] text-ui leading-relaxed text-text-subtle">
                     Begrensningene er for stramme. Prøv lavere panelstørrelse
                     eller åpne flere slots.
+                  </p>
+                </div>
+              )}
+              {result?.status === "LOCKED_CONFLICT" && (
+                <div className="rounded-lg border border-brand-border bg-brand-muted px-5 py-4">
+                  <h4 className="m-0 mb-2 text-sm font-bold text-brand">
+                    Låst endring krasjer med KI
+                  </h4>
+                  <p className="m-0 text-ui leading-relaxed text-text-muted">
+                    En manuell endring er låst, men bryter med nye
+                    interessekonflikter eller harde begrensninger. Endre raden
+                    manuelt, eller fjern låsen ved å generere planen på nytt
+                    uten å bevare den.
                   </p>
                 </div>
               )}
@@ -566,7 +871,11 @@ export default function SolverView({
             disabled={loading}
           >
             <Sparkles size={14} />
-            {loading ? "Optimaliserer..." : "Generer plan"}
+            {loading
+              ? "Optimaliserer..."
+              : lockedCount > 0
+                ? "Kjør på nytt med låste endringer"
+                : "Generer plan"}
           </button>
         </SchedulePanelFooter>
       </SchedulePanel>
@@ -584,7 +893,7 @@ export default function SolverView({
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <div className="flex items-center gap-3">
                     <span
-                      className="flex h-9 w-9 items-center justify-center rounded-lg bg-brand-muted text-brand ring-1 ring-brand-border/60"
+                      className="flex h-9 w-9 items-center justify-center rounded-lg bg-brand-muted text-brand"
                       aria-hidden="true"
                     >
                       <Sparkles size={16} className="animate-pulse" />
@@ -696,6 +1005,103 @@ export default function SolverView({
               </span>
             )}
           </SchedulePanelFooter>
+
+          {editingTimeIndex !== null && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
+              <div className="w-full max-w-md rounded-panel border border-border bg-surface-base p-5 shadow-lg">
+                <h4 className="m-0 text-base font-bold text-text-primary">
+                  Endre tid
+                </h4>
+                <p className="mb-0 mt-2 text-ui text-text-muted">
+                  Velg en ledig tidsluke. Raden låses slik at senere kjøringer
+                  bevarer endringen.
+                </p>
+                <select
+                  className="mt-4 w-full rounded-xl border border-border-muted bg-surface-base px-3 py-2.5 text-sm font-semibold text-text-primary transition-[border-color,box-shadow] duration-150 focus:border-brand-input focus:outline-none focus:ring-3 focus:ring-brand-ringSoft"
+                  value={editingTimeValue}
+                  onChange={(event) => setEditingTimeValue(event.target.value)}
+                >
+                  {timeOptionsForEdit.map((time) => (
+                    <option key={time} value={time}>
+                      {formatSlotTime(time)}
+                    </option>
+                  ))}
+                </select>
+                <div className="mt-4 flex justify-end gap-2">
+                  <button
+                    type="button"
+                    className={cn(actionButtonBase, actionButtonNeutral)}
+                    onClick={() => setEditingTimeIndex(null)}
+                  >
+                    Avbryt
+                  </button>
+                  <button
+                    type="button"
+                    className={cn(actionButtonBase, actionButtonPrimary)}
+                    onClick={confirmTimeEdit}
+                    disabled={!editingTimeValue}
+                  >
+                    Lagre tid
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {editingPanelTarget !== null && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
+              <div className="w-full max-w-md rounded-panel border border-border bg-surface-base p-5 shadow-lg">
+                <h4 className="m-0 text-base font-bold text-text-primary">
+                  Bytt intervjuer
+                </h4>
+                <p className="mb-0 mt-2 text-ui text-text-muted">
+                  Velg erstatter for dette panelet. Raden låses etter endringen.
+                </p>
+                <select
+                  className="mt-4 w-full rounded-xl border border-border-muted bg-surface-base px-3 py-2.5 text-sm font-semibold text-text-primary transition-[border-color,box-shadow] duration-150 focus:border-brand-input focus:outline-none focus:ring-3 focus:ring-brand-ringSoft"
+                  value={replacementName}
+                  onChange={(event) => setReplacementName(event.target.value)}
+                >
+                  {interviewerOptions.map((interviewer) => (
+                    <option
+                      key={interviewer.id}
+                      value={interviewer.name}
+                      disabled={
+                        interviewer.name !== selectedPanelMemberName &&
+                        editingPanelEntry?.panel.some(
+                          (member) => member.name === interviewer.name,
+                        )
+                      }
+                    >
+                      {interviewer.name}
+                    </option>
+                  ))}
+                </select>
+                {replacementWouldDuplicate && (
+                  <div className="mt-3 rounded-xl border border-brand-border bg-brand-muted px-3 py-2 text-ui font-semibold text-brand">
+                    Denne personen er allerede i panelet.
+                  </div>
+                )}
+                <div className="mt-4 flex justify-end gap-2">
+                  <button
+                    type="button"
+                    className={cn(actionButtonBase, actionButtonNeutral)}
+                    onClick={() => setEditingPanelTarget(null)}
+                  >
+                    Avbryt
+                  </button>
+                  <button
+                    type="button"
+                    className={cn(actionButtonBase, actionButtonPrimary)}
+                    onClick={confirmPanelEdit}
+                    disabled={!replacementName || replacementWouldDuplicate}
+                  >
+                    Bytt intervjuer
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
         </SchedulePanel>
       )}
 
@@ -708,6 +1114,13 @@ export default function SolverView({
             chips={
               <>
                 <Chip tone="brand">{result.schedule.length} intervjuer</Chip>
+                {lockedCount > 0 && (
+                  <Chip tone="muted">{lockedCount} låst</Chip>
+                )}
+                {isDraftDirty && <Chip tone="brand">Ulagret</Chip>}
+                {lastSavedAt && (
+                  <Chip tone="success">Lagret kl. {lastSavedAt}</Chip>
+                )}
                 {!namesRevealed && (
                   <Chip tone="muted" icon={<EyeOff size={11} />}>
                     Navn skjult
@@ -900,24 +1313,47 @@ export default function SolverView({
                     </tr>
                   </thead>
                   <tbody>
-                    {sortedSchedule.map((item, idx) => (
+                    {sortedEntries.map(({ item, scheduleIndex }) => (
                       <tr
-                        key={idx}
+                        key={`${item.candidate}-${item.time}-${scheduleIndex}`}
                         className="group [&:not(:last-child)>td]:border-b [&:not(:last-child)>td]:border-b-border-faint hover:[&>td]:bg-surface-soft"
                       >
                         <td className="w-[100px] whitespace-nowrap px-4 py-3 text-sm font-semibold text-text-muted">
-                          {formatSlotTime(item.time)}
+                          <div className="flex flex-col gap-1">
+                            <span>{formatSlotTime(item.time)}</span>
+                            {canEditDraft && (
+                              <button
+                                type="button"
+                                className="self-start text-label font-bold uppercase tracking-label text-brand hover:text-brand-hover"
+                                onClick={() => beginTimeEdit(scheduleIndex)}
+                              >
+                                Endre tid
+                              </button>
+                            )}
+                          </div>
                         </td>
                         <td className="px-4 py-3 text-sm font-semibold text-text-primary">
-                          {displayCandidate(item.candidate)}
+                          <span>{displayCandidate(item.candidate)}</span>
+                          {item.locked && (
+                            <span className="ml-2 rounded-full border border-border-soft bg-surface-subtle px-2 py-0.5 text-label font-bold uppercase tracking-label text-text-subtle">
+                              Låst
+                            </span>
+                          )}
                         </td>
                         <td className="px-4 py-3 text-sm">
                           <div className="flex flex-wrap gap-[0.35rem]">
                             {item.panel.map((p, i) => (
-                              <span
+                              <button
                                 key={i}
+                                type="button"
+                                disabled={!canEditDraft}
+                                onClick={() =>
+                                  beginPanelEdit(scheduleIndex, i, p.name)
+                                }
                                 className={cn(
                                   "inline-flex items-center rounded-full border px-2 py-1 text-xs font-semibold",
+                                  canEditDraft &&
+                                    "cursor-pointer transition-[border-color,background,transform] hover:-translate-y-px hover:border-brand-strongBorder hover:bg-brand-soft",
                                   p.is_overtime
                                     ? "border-brand-panelBorder bg-brand-badge text-brand"
                                     : "border-border-soft bg-surface-subtle text-text-body",
@@ -929,7 +1365,7 @@ export default function SolverView({
                                 }
                               >
                                 {p.name}
-                              </span>
+                              </button>
                             ))}
                           </div>
                         </td>
@@ -960,6 +1396,14 @@ export default function SolverView({
                 <span className="text-detail font-semibold text-brand">
                   {saveError}
                 </span>
+              )}
+              {isDraftDirty && (
+                <span className="text-detail font-semibold italic text-text-faded">
+                  Ulagrede endringer
+                </span>
+              )}
+              {lastSavedAt && !isDraftDirty && (
+                <Chip tone="success">Lagret kl. {lastSavedAt}</Chip>
               )}
               {savedSchedule?.is_distributed ? (
                 <>

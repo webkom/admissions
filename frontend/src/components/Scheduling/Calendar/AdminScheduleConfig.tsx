@@ -8,9 +8,15 @@ import {
   LayoutPanelTop,
 } from "lucide-react";
 import {
+  buildBlockTimeChunks,
+  buildBlockTimeSlots,
   dateRangeDates,
+  enabledWindowsToSlots,
   formatDateHeader,
   makeSlotKey,
+  normalizeEnabledWindows,
+  parseSlotKey,
+  slotsToEnabledWindows,
 } from "../scheduleUtils";
 import cn from "src/utils/cn";
 import {
@@ -25,9 +31,11 @@ import {
   actionButtonPrimary,
   actionButtonGhost,
 } from "../ui";
+import type { EnabledWindow } from "../types";
 
 const MAX_RANGE_DAYS = 21;
 const DURATION_PRESETS = [15, 20, 30] as const;
+const PAUSE_PRESETS = [30, 60] as const;
 
 const SectionLabel: React.FC<{
   icon: React.ElementType;
@@ -43,6 +51,8 @@ const SectionLabel: React.FC<{
 
 const Divider = () => <hr className="border-t border-border-faint" />;
 
+const parseSlotDate = (key: string) => parseSlotKey(key).date;
+
 interface AdminScheduleConfigProps {
   startDate: string;
   endDate: string;
@@ -50,7 +60,10 @@ interface AdminScheduleConfigProps {
   dayEndMinute: number;
   chunkSize: number;
   chunkBreakMinutes: number;
+  enabledWindows: EnabledWindow[];
   enabledSlots: Set<string>;
+  hasScheduleDraft?: boolean;
+  lastSavedAt?: string;
   onSave?: (config: ScheduleConfigInput) => Promise<void>;
   onSaveSuccess?: () => void;
   sessionDuration: number;
@@ -64,6 +77,7 @@ export interface ScheduleConfigInput {
   chunkSize: number;
   chunkBreakMinutes: number;
   enabledSlots: string[];
+  enabledWindows: EnabledWindow[];
   sessionDuration: number;
 }
 
@@ -74,7 +88,10 @@ const AdminScheduleConfig: React.FC<AdminScheduleConfigProps> = ({
   dayEndMinute,
   chunkSize,
   chunkBreakMinutes,
+  enabledWindows,
   enabledSlots,
+  hasScheduleDraft = false,
+  lastSavedAt,
   onSave,
   onSaveSuccess,
   sessionDuration,
@@ -101,18 +118,30 @@ const AdminScheduleConfig: React.FC<AdminScheduleConfigProps> = ({
 
   const [pendingChunkSize, setPendingChunkSize] = useState(chunkSize);
   const [pendingChunkBreak, setPendingChunkBreak] = useState(chunkBreakMinutes);
+  const [customPauseInput, setCustomPauseInput] = useState("");
+  const [isCustomPause, setIsCustomPause] = useState(false);
 
   const [localStartDate, setLocalStartDate] = useState(startDate);
   const [localEndDate, setLocalEndDate] = useState(endDate);
-  const [draftSlots, setDraftSlots] = useState<Set<string>>(
-    () => new Set(enabledSlots),
+  const [draftWindows, setDraftWindows] = useState<EnabledWindow[]>(() =>
+    normalizeEnabledWindows(
+      enabledWindows.length > 0
+        ? enabledWindows
+        : slotsToEnabledWindows(enabledSlots, sessionDuration),
+    ),
   );
 
   useEffect(() => {
     setLocalStartDate(startDate);
     setLocalEndDate(endDate);
-    setDraftSlots(new Set(enabledSlots));
-  }, [startDate, endDate, enabledSlots]);
+    setDraftWindows(
+      normalizeEnabledWindows(
+        enabledWindows.length > 0
+          ? enabledWindows
+          : slotsToEnabledWindows(enabledSlots, sessionDuration),
+      ),
+    );
+  }, [startDate, endDate, enabledSlots, enabledWindows, sessionDuration]);
 
   useEffect(() => {
     setPendingStart({
@@ -140,21 +169,33 @@ const AdminScheduleConfig: React.FC<AdminScheduleConfigProps> = ({
 
   useEffect(() => {
     setPendingChunkBreak(chunkBreakMinutes);
+    const isPreset = PAUSE_PRESETS.includes(
+      chunkBreakMinutes as (typeof PAUSE_PRESETS)[number],
+    );
+    setIsCustomPause(!isPreset);
+    if (!isPreset) setCustomPauseInput(String(chunkBreakMinutes));
   }, [chunkBreakMinutes]);
 
   const startMinute = pendingStart.h * 60 + pendingStart.m;
   const endMinute = pendingEnd.h * 60 + pendingEnd.m;
   const isInvalidRange = startMinute >= endMinute;
-  const hasPendingChanges =
-    localStartDate !== startDate ||
-    localEndDate !== endDate ||
-    pendingDuration !== sessionDuration ||
-    pendingChunkSize !== chunkSize ||
+  const draftSlots = React.useMemo(
+    () => new Set(enabledWindowsToSlots(draftWindows, pendingDuration)),
+    [draftWindows, pendingDuration],
+  );
+  const normalizedEnabledWindows = React.useMemo(
+    () =>
+      normalizeEnabledWindows(
+        enabledWindows.length > 0
+          ? enabledWindows
+          : slotsToEnabledWindows(enabledSlots, sessionDuration),
+      ),
+    [enabledSlots, enabledWindows, sessionDuration],
+  );
+  const blockShapeChange =
     pendingChunkBreak !== chunkBreakMinutes ||
-    startMinute !== dayStartMinute ||
-    endMinute !== dayEndMinute ||
-    draftSlots.size !== enabledSlots.size ||
-    [...draftSlots].some((k) => !enabledSlots.has(k));
+    ((pendingChunkBreak > 0 || chunkBreakMinutes > 0) &&
+      pendingChunkSize !== chunkSize);
 
   const dates = React.useMemo(
     () => dateRangeDates(localStartDate, localEndDate).slice(0, MAX_RANGE_DAYS),
@@ -163,34 +204,77 @@ const AdminScheduleConfig: React.FC<AdminScheduleConfigProps> = ({
 
   const timeSlots = React.useMemo(() => {
     if (isInvalidRange) return [];
-    const slots = [];
-    const step = pendingDuration > 0 ? pendingDuration : 60;
-
-    let currentMinute = startMinute;
-    while (currentMinute < endMinute) {
-      for (let i = 0; i < pendingChunkSize && currentMinute < endMinute; i++) {
-        slots.push(currentMinute);
-        currentMinute += step;
-      }
-      currentMinute += pendingChunkBreak;
-    }
-    return slots;
+    return buildBlockTimeSlots({
+      dayStartMinute: startMinute,
+      dayEndMinute: endMinute,
+      sessionDuration: pendingDuration,
+      chunkSize: pendingChunkSize,
+      chunkBreakMinutes: pendingChunkBreak,
+    });
   }, [
     startMinute,
     endMinute,
     pendingDuration,
-    isInvalidRange,
     pendingChunkSize,
     pendingChunkBreak,
+    isInvalidRange,
   ]);
 
+  const shapedDraftSlots = React.useMemo(() => {
+    const next = new Set<string>();
+    dates.forEach((date) => {
+      timeSlots.forEach((minute) => {
+        const key = makeSlotKey(date, minute);
+        if (draftSlots.has(key)) next.add(key);
+      });
+    });
+    return next;
+  }, [dates, draftSlots, timeSlots]);
+
+  const normalizedDraftWindows = React.useMemo(
+    () => slotsToEnabledWindows(shapedDraftSlots, pendingDuration),
+    [pendingDuration, shapedDraftSlots],
+  );
+
+  const hasPendingChanges =
+    localStartDate !== startDate ||
+    localEndDate !== endDate ||
+    pendingDuration !== sessionDuration ||
+    pendingChunkSize !== chunkSize ||
+    pendingChunkBreak !== chunkBreakMinutes ||
+    startMinute !== dayStartMinute ||
+    endMinute !== dayEndMinute ||
+    JSON.stringify(normalizedDraftWindows) !==
+      JSON.stringify(normalizedEnabledWindows);
+  const gridDefiningChange =
+    localStartDate !== startDate ||
+    localEndDate !== endDate ||
+    pendingDuration !== sessionDuration ||
+    blockShapeChange ||
+    startMinute !== dayStartMinute ||
+    endMinute !== dayEndMinute ||
+    JSON.stringify(normalizedDraftWindows) !==
+      JSON.stringify(normalizedEnabledWindows);
+  const visualGroupingChange =
+    pendingChunkSize !== chunkSize && !blockShapeChange;
+
   const chunks = React.useMemo(() => {
-    const res = [];
-    for (let i = 0; i < timeSlots.length; i += pendingChunkSize) {
-      res.push(timeSlots.slice(i, i + pendingChunkSize));
-    }
-    return res;
-  }, [timeSlots, pendingChunkSize]);
+    if (isInvalidRange) return [];
+    return buildBlockTimeChunks({
+      dayStartMinute: startMinute,
+      dayEndMinute: endMinute,
+      sessionDuration: pendingDuration,
+      chunkSize: pendingChunkSize,
+      chunkBreakMinutes: pendingChunkBreak,
+    });
+  }, [
+    startMinute,
+    endMinute,
+    pendingDuration,
+    pendingChunkSize,
+    pendingChunkBreak,
+    isInvalidRange,
+  ]);
 
   const formatTime = (totalMinutes: number) => {
     const hours = Math.floor(totalMinutes / 60);
@@ -211,9 +295,9 @@ const AdminScheduleConfig: React.FC<AdminScheduleConfigProps> = ({
         if (mode === "add") newSlots.add(key);
         else newSlots.delete(key);
       });
-      setDraftSlots(newSlots);
+      setDraftWindows(slotsToEnabledWindows(newSlots, pendingDuration));
     },
-    [],
+    [pendingDuration],
   );
 
   const handleMouseDown = (date: string, chunk: number[]) => {
@@ -248,7 +332,11 @@ const AdminScheduleConfig: React.FC<AdminScheduleConfigProps> = ({
         dayEndMinute: endMinute,
         chunkSize: pendingChunkSize,
         chunkBreakMinutes: pendingChunkBreak,
-        enabledSlots: Array.from(draftSlots),
+        enabledSlots: enabledWindowsToSlots(
+          normalizedDraftWindows,
+          pendingDuration,
+        ),
+        enabledWindows: normalizedDraftWindows,
         sessionDuration: pendingDuration,
       };
       await onSave(nextConfig);
@@ -260,14 +348,19 @@ const AdminScheduleConfig: React.FC<AdminScheduleConfigProps> = ({
 
   const selectAllForDay = (date: string) => {
     const newSlots = new Set(draftSlots);
+    Array.from(newSlots).forEach((key) => {
+      if (parseSlotDate(key) === date) newSlots.delete(key);
+    });
     timeSlots.forEach((m) => newSlots.add(makeSlotKey(date, m)));
-    setDraftSlots(newSlots);
+    setDraftWindows(slotsToEnabledWindows(newSlots, pendingDuration));
   };
 
   const clearAllForDay = (date: string) => {
     const newSlots = new Set(draftSlots);
-    timeSlots.forEach((m) => newSlots.delete(makeSlotKey(date, m)));
-    setDraftSlots(newSlots);
+    Array.from(newSlots).forEach((key) => {
+      if (parseSlotDate(key) === date) newSlots.delete(key);
+    });
+    setDraftWindows(slotsToEnabledWindows(newSlots, pendingDuration));
   };
 
   const selectAll = () => {
@@ -275,10 +368,10 @@ const AdminScheduleConfig: React.FC<AdminScheduleConfigProps> = ({
     dates.forEach((date) => {
       timeSlots.forEach((m) => newSlots.add(makeSlotKey(date, m)));
     });
-    setDraftSlots(newSlots);
+    setDraftWindows(slotsToEnabledWindows(newSlots, pendingDuration));
   };
 
-  const clearAll = () => setDraftSlots(new Set());
+  const clearAll = () => setDraftWindows([]);
 
   const dateRangeValid =
     localStartDate && localEndDate && localStartDate <= localEndDate;
@@ -411,10 +504,10 @@ const AdminScheduleConfig: React.FC<AdminScheduleConfigProps> = ({
             <div className="flex items-center justify-between gap-2">
               <div className="min-w-0">
                 <span className="text-sm font-bold text-text-primary">
-                  Per blokk
+                  Størrelse på blokk
                 </span>
                 <span className="ml-1.5 text-xs text-text-muted">
-                  slotter på rad
+                  antall intervju "på rad" før pause
                 </span>
               </div>
               <Stepper
@@ -427,33 +520,99 @@ const AdminScheduleConfig: React.FC<AdminScheduleConfigProps> = ({
               />
             </div>
 
-            <div className="flex items-center justify-between gap-2">
-              <div className="min-w-0">
-                <span className="text-sm font-bold text-text-primary">
-                  Pause
-                </span>
-                <span className="ml-1.5 text-xs text-text-muted">
-                  mellom blokker
-                </span>
+            <div className="space-y-2">
+              <div className="flex items-center justify-between gap-2">
+                <div className="min-w-0">
+                  <span className="text-sm font-bold text-text-primary">
+                    Pause
+                  </span>
+                  <span className="ml-1.5 text-xs text-text-muted">
+                    mellom blokker
+                  </span>
+                </div>
               </div>
-              <Stepper
-                value={pendingChunkBreak}
-                min={0}
-                max={240}
-                step={5}
-                onStep={setPendingChunkBreak}
-                unit="min"
-                aria-label="Pause mellom blokker"
-              />
+              <div className="flex flex-wrap items-center gap-2">
+                {PAUSE_PRESETS.map((preset) => {
+                  const active = !isCustomPause && pendingChunkBreak === preset;
+                  return (
+                    <button
+                      key={preset}
+                      type="button"
+                      onClick={() => {
+                        setPendingChunkBreak(preset);
+                        setIsCustomPause(false);
+                        setCustomPauseInput("");
+                      }}
+                      className={cn(
+                        "rounded-[10px] border px-4 py-2.5 text-sm font-bold transition-[border-color,background,box-shadow,transform] duration-150 hover:-translate-y-px hover:border-brand-strongBorder focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-focus",
+                        active
+                          ? "border-brand-activeBorder bg-brand-panel shadow-toggle text-text-primary"
+                          : "border-border-soft bg-surface-base text-text-muted hover:text-text-primary",
+                      )}
+                    >
+                      {preset}
+                      <span className="ml-1 text-xs font-semibold opacity-70">
+                        min
+                      </span>
+                    </button>
+                  );
+                })}
+                <div
+                  className={cn(
+                    "inline-flex cursor-text items-center gap-1.5 rounded-[10px] border px-3 py-2 transition-[border-color,background,box-shadow] duration-150",
+                    isCustomPause
+                      ? "border-brand-activeBorder bg-brand-panel shadow-toggle"
+                      : "border-border-soft bg-surface-base hover:border-brand-strongBorder",
+                  )}
+                >
+                  <input
+                    type="number"
+                    min="0"
+                    max="240"
+                    step="1"
+                    placeholder="Egendefinert"
+                    value={isCustomPause ? customPauseInput : ""}
+                    className="w-24 border-none bg-transparent p-0 text-sm font-bold text-text-primary [-moz-appearance:textfield] placeholder:font-normal placeholder:text-text-disabled focus:text-brand focus:outline-none [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                    onChange={(e) => {
+                      setCustomPauseInput(e.target.value);
+                      setIsCustomPause(true);
+                      const val = parseInt(e.target.value, 10);
+                      if (!isNaN(val) && val >= 0) setPendingChunkBreak(val);
+                    }}
+                    onFocus={() => setIsCustomPause(true)}
+                  />
+                  <span className="select-none text-xs font-semibold text-text-subtle">
+                    min
+                  </span>
+                </div>
+              </div>
             </div>
           </div>
         </SchedulePanelBody>
 
         <SchedulePanelFooter>
+          <div className="flex flex-col gap-2">
+            {hasPendingChanges && (
+              <div className="max-w-[18rem] text-detail leading-snug text-text-muted">
+                {gridDefiningChange && hasScheduleDraft
+                  ? "Endringen påvirker tidsgrunnlaget og nullstiller eksisterende intervjuforslag."
+                  : gridDefiningChange
+                    ? "Endringen remapper tilgjengelighet til de nye tidslukene."
+                    : visualGroupingChange
+                      ? "Endringen påvirker bare hvordan tidslukene grupperes visuelt."
+                      : "Konfigurasjonen har ulagrede endringer."}
+              </div>
+            )}
+          </div>
           <div className="flex items-center gap-3">
             {hasPendingChanges && !isSaving && (
               <span className="rounded-full border border-brand-border bg-brand-muted px-2.5 py-1 text-label font-bold uppercase tracking-caps text-brand">
                 Ulagrede endringer
+              </span>
+            )}
+            {!hasPendingChanges && lastSavedAt && !isSaving && (
+              <span className="rounded-full border border-success-border bg-success-bg px-2.5 py-1 text-label font-bold uppercase tracking-caps text-success">
+                Lagret kl. {lastSavedAt}
               </span>
             )}
             {onSave && (

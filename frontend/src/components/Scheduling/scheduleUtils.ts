@@ -1,4 +1,4 @@
-import type { ScheduleItem } from "../../types";
+import type { EnabledWindow, ScheduleItem } from "../../types";
 
 const MINUTES_PER_DAY = 24 * 60;
 
@@ -66,6 +66,50 @@ const slotsPerDay = (sessionDuration: number): number => {
   return Math.max(1, Math.floor(MINUTES_PER_DAY / duration));
 };
 
+export const buildBlockTimeChunks = ({
+  dayStartMinute,
+  dayEndMinute,
+  sessionDuration,
+  chunkSize,
+  chunkBreakMinutes,
+}: {
+  dayStartMinute: number;
+  dayEndMinute: number;
+  sessionDuration: number;
+  chunkSize: number;
+  chunkBreakMinutes: number;
+}): number[][] => {
+  const duration = sessionDuration > 0 ? sessionDuration : 60;
+  const size = Math.max(1, Math.floor(chunkSize || 1));
+  const breakSlots = Math.max(
+    0,
+    Math.ceil(Math.max(0, chunkBreakMinutes || 0) / duration),
+  );
+  const chunks: number[][] = [];
+  let currentMinute = dayStartMinute;
+
+  while (currentMinute + duration <= dayEndMinute) {
+    const chunk: number[] = [];
+    for (
+      let slotInChunk = 0;
+      slotInChunk < size && currentMinute + duration <= dayEndMinute;
+      slotInChunk += 1
+    ) {
+      chunk.push(currentMinute);
+      currentMinute += duration;
+    }
+
+    if (chunk.length > 0) chunks.push(chunk);
+    currentMinute += breakSlots * duration;
+  }
+
+  return chunks;
+};
+
+export const buildBlockTimeSlots = (
+  input: Parameters<typeof buildBlockTimeChunks>[0],
+): number[] => buildBlockTimeChunks(input).flat();
+
 export const encodeScheduleTime = (
   dayIndex: number,
   minute: number,
@@ -91,12 +135,143 @@ export const makeSlotKey = (date: string, minute: number): string =>
   `${date}|${minute}`;
 
 export const parseSlotKey = (key: string): { date: string; minute: number } => {
-  const separator = key.indexOf("|");
+  const separator = key.includes("|")
+    ? key.lastIndexOf("|")
+    : key.lastIndexOf(":");
   if (separator === -1) return { date: key, minute: NaN };
   return {
     date: key.slice(0, separator),
     minute: Number(key.slice(separator + 1)),
   };
+};
+
+export const normalizeEnabledWindows = (
+  windows: EnabledWindow[] = [],
+): EnabledWindow[] => {
+  const byDate = new Map<string, Array<[number, number]>>();
+
+  windows.forEach((window) => {
+    const date = window.date;
+    const start = Number(window.start_minute);
+    const end = Number(window.end_minute);
+    if (!date || !Number.isFinite(start) || !Number.isFinite(end)) return;
+    if (start < 0 || end > MINUTES_PER_DAY || start >= end) return;
+
+    const current = byDate.get(date) ?? [];
+    current.push([start, end]);
+    byDate.set(date, current);
+  });
+
+  return Array.from(byDate.entries())
+    .sort(([a], [b]) => a.localeCompare(b))
+    .flatMap(([date, intervals]) => {
+      const merged: Array<[number, number]> = [];
+      [...intervals]
+        .sort(([a], [b]) => a - b)
+        .forEach(([start, end]) => {
+          const previous = merged[merged.length - 1];
+          if (!previous || start > previous[1]) {
+            merged.push([start, end]);
+          } else {
+            previous[1] = Math.max(previous[1], end);
+          }
+        });
+
+      return merged.map(([start_minute, end_minute]) => ({
+        date,
+        start_minute,
+        end_minute,
+      }));
+    });
+};
+
+export const slotsToEnabledWindows = (
+  slots: Iterable<string>,
+  sessionDuration: number,
+): EnabledWindow[] => {
+  const duration = sessionDuration > 0 ? sessionDuration : 60;
+  const windows: EnabledWindow[] = [];
+
+  Array.from(slots).forEach((key) => {
+    const { date, minute } = parseSlotKey(key);
+    if (!date || !Number.isFinite(minute)) return;
+    windows.push({
+      date,
+      start_minute: minute,
+      end_minute: minute + duration,
+    });
+  });
+
+  return normalizeEnabledWindows(windows);
+};
+
+export const enabledWindowsToSlots = (
+  windows: EnabledWindow[],
+  sessionDuration: number,
+): string[] => {
+  const duration = sessionDuration > 0 ? sessionDuration : 60;
+  const slots: string[] = [];
+
+  normalizeEnabledWindows(windows).forEach((window) => {
+    for (
+      let minute = window.start_minute;
+      minute + duration <= window.end_minute;
+      minute += duration
+    ) {
+      slots.push(makeSlotKey(window.date, minute));
+    }
+  });
+
+  return slots;
+};
+
+const intervalsCover = (
+  intervals: Array<[number, number]>,
+  start: number,
+  end: number,
+) => {
+  let cursor = start;
+  for (const [intervalStart, intervalEnd] of [...intervals].sort(
+    ([a], [b]) => a - b,
+  )) {
+    if (intervalEnd <= cursor) continue;
+    if (intervalStart > cursor) return false;
+    cursor = Math.max(cursor, intervalEnd);
+    if (cursor >= end) return true;
+  }
+  return false;
+};
+
+export const remapSlotsBetweenDurations = (
+  oldSlots: Iterable<string>,
+  oldDuration: number,
+  newWindows: EnabledWindow[],
+  newDuration: number,
+): Set<string> => {
+  const oldWindows = slotsToEnabledWindows(oldSlots, oldDuration);
+  const oldByDate = new Map<string, Array<[number, number]>>();
+  oldWindows.forEach((window) => {
+    const current = oldByDate.get(window.date) ?? [];
+    current.push([window.start_minute, window.end_minute]);
+    oldByDate.set(window.date, current);
+  });
+
+  const next = new Set<string>();
+  enabledWindowsToSlots(newWindows, newDuration).forEach((key) => {
+    const { date, minute } = parseSlotKey(key);
+    if (!Number.isFinite(minute)) return;
+    if (
+      intervalsCover(
+        oldByDate.get(date) ?? [],
+        minute,
+        minute + (newDuration > 0 ? newDuration : 60),
+      )
+    ) {
+      next.add(key);
+    }
+  });
+
+  return next;
 };
 
 const pad = (value: number): string => String(value).padStart(2, "0");

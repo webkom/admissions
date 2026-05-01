@@ -96,6 +96,11 @@ const SolverCalendarView: React.FC<Props> = ({
                       >
                         <div className="truncate whitespace-nowrap text-xs font-bold text-text-primary">
                           {item.candidate}
+                          {item.locked && (
+                            <span className="ml-1 rounded-full border border-border-soft bg-surface-subtle px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-label text-text-subtle">
+                              Låst
+                            </span>
+                          )}
                         </div>
                         <div className="flex flex-wrap gap-1">
                           {item.panel.map((p, i) => (

@@ -1,5 +1,5 @@
 import React from "react";
-import { Route, Routes, useParams } from "react-router-dom";
+import { Route, Routes, useLocation, useParams } from "react-router-dom";
 import styled from "styled-components";
 import ViewApplications from "./ViewApplications";
 import NavBar from "./components/NavBar";
@@ -8,14 +8,18 @@ import EditGroup from "./EditGroup";
 
 const AdminPage: React.FC = () => {
   const { admissionSlug } = useParams();
+  const location = useLocation();
   const { data: admission } = useAdmission(admissionSlug ?? "");
+  const showSideNav = location.pathname.includes("/admin/groups/");
 
   return (
     <PageWrapper>
-      <Wrapper>
-        <LeftSide>
-          <NavBar admission={admission} />
-        </LeftSide>
+      <Wrapper $withSideNav={showSideNav}>
+        {showSideNav && (
+          <LeftSide>
+            <NavBar admission={admission} />
+          </LeftSide>
+        )}
         <RightSide>
           <Routes>
             <Route path="" element={<ViewApplications />} />
@@ -31,15 +35,17 @@ export default AdminPage;
 
 const PageWrapper = styled.div`
   min-height: calc(100vh - 70px);
+  background: var(--color-surface-page);
 `;
 
-const Wrapper = styled.div`
+const Wrapper = styled.div<{ $withSideNav: boolean }>`
   max-width: 1440px;
   width: 100%;
   margin: 0 auto;
   padding: 1.5rem;
   display: grid;
-  grid-template-columns: 280px minmax(0, 1fr);
+  grid-template-columns: ${(props) =>
+    props.$withSideNav ? "280px minmax(0, 1fr)" : "minmax(0, 1fr)"};
   gap: 1.25rem;
 
   @media screen and (max-width: 900px) {

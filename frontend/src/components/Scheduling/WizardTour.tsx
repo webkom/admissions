@@ -9,7 +9,6 @@ import {
   Lightbulb,
   Shield,
   Sparkles,
-  User,
   X,
 } from "lucide-react";
 import cn from "src/utils/cn";
@@ -56,7 +55,7 @@ const ADMIN_STEPS: WizardStep[] = [
     label: "Tilgjengelighet",
     title: "Alle registrerer når de kan",
     description:
-      "Hver person i komiteen går inn under «Min tilgjengelighet» og markerer timene de faktisk kan sitte i intervju. De kan også merke kandidater de kjenner personlig (interessekonflikt). Du ser dekning i Fordeling-fanen.",
+      "Hver person i komiteen går inn under «Min tilgjengelighet» og markerer timene de faktisk kan sitte i intervju. Du ser dekning i Fordeling-fanen.",
     tips: [
       "Purr komiteen tidlig — solveren trenger alle data for å lage en god plan.",
       "Du kan se hvem som har registrert seg under Fordeling-fanen.",
@@ -101,51 +100,18 @@ const ADMIN_STEPS: WizardStep[] = [
 
 const MEMBER_STEPS: WizardStep[] = [
   {
-    icon: User,
-    label: "Din rolle",
-    title: "Du trenger bare gjøre to ting",
-    description:
-      "Som intervjuer er jobben din enkel: fortell systemet når du kan og meld fra om du kjenner noen av kandidatene. Admin tar seg av resten — du trenger ikke tenke på oppsett eller generering.",
-    tips: [
-      "Steg 1: Marker tilgjengelighet under «Min tilgjengelighet».",
-      "Steg 2: Sjekk «Intervjuplan» når admin har distribuert planen.",
-    ],
-  },
-  {
     icon: CalendarRange,
     label: "Tilgjengelighet",
     title: "Marker når du kan sitte i intervju",
     description:
-      "Under «Min tilgjengelighet» ser du en kalender med de tidslommene admin har åpnet. Klikk og dra for å markere timene du faktisk er ledig. Jo mer nøyaktig du er, jo bedre plan kan solveren lage.",
-    tips: [
-      "Klikk og dra for å velge flere timeslotter raskt.",
-      "Du kan avmarkere ved å klikke på allerede valgte slots.",
-      "Husk å trykke «Lagre» til slutt — ellers forsvinner endringene.",
-    ],
-  },
-  {
-    icon: CalendarRange,
-    label: "Interessekonflikt",
-    title: "Kjenner du noen av kandidatene?",
-    description:
-      "Til høyre for kalenderen finner du feltet for interessekonflikter. Hvis du kjenner en kandidat godt nok til at det ville være upassende å intervjue dem — søk dem opp og merk dem. Admin ser dette når planen lages.",
-    tips: [
-      "Interessekonflikt gjelder nære venner, familie eller tette bekjentskaper.",
-      "Det er bedre å merke for mange enn for få — det er anonymt for kandidatene.",
-      "Lagre-knappen i tilgjengelighetsfeltet lagrer også interessekonfliktene dine.",
-    ],
+      "Marker tidene du faktisk kan sitte i intervju. Dette er det viktigste du gjør før opptaksansvarlig lager planen.",
   },
   {
     icon: CalendarCheck,
     label: "Intervjuplanen",
     title: "Se intervjuene dine når planen er klar",
     description:
-      "Når admin har distribuert planen, dukker den opp under «Intervjuplan». Filtrer på «Mine intervjuer» for å se akkurat hva du skal gjøre. Du kan eksportere direkte til Apple Calendar eller Google Calendar.",
-    tips: [
-      "Bruk «Eksporter» og velg kalenderen din — intervjuene havner rett inn.",
-      "Kandidatnavn kan være skjult — det er admins valg å skru dem på.",
-      "Har du feil i panelet ditt? Ta kontakt med admin.",
-    ],
+      "Når planen er distribuert, ser du intervjuene dine under «Intervjuplan». Der kan du eksportere til kalender og markere eventuell interessekonflikt når kandidatnavn er synlige.",
   },
 ];
 
@@ -198,6 +164,18 @@ export default function WizardTour({
     onClose();
   }, [dontShow, isAdmin, onClose]);
 
+  const handleComplete = useCallback(() => {
+    try {
+      localStorage.setItem(
+        isAdmin ? ADMIN_STORAGE_KEY : MEMBER_STORAGE_KEY,
+        "1",
+      );
+    } catch {
+      // ignore
+    }
+    onClose();
+  }, [isAdmin, onClose]);
+
   const handleKeyDown = useCallback(
     (e: KeyboardEvent) => {
       if (!isOpen) return;
@@ -230,31 +208,36 @@ export default function WizardTour({
       />
 
       <div className="relative z-10 flex w-full max-w-[500px] flex-col overflow-hidden rounded-panel border border-border bg-surface-base shadow-[0_32px_64px_-12px_rgba(0,0,0,0.25)]">
-        {/* Header bar */}
         <div className="flex items-center justify-between border-b border-border-soft px-5 py-3">
-          <div className="flex items-center gap-1.5">
-            {steps.map((_, i) => (
-              <button
-                key={i}
-                type="button"
-                onClick={() => go(i)}
-                aria-label={`Steg ${i + 1}`}
-                className={cn(
-                  "rounded-full transition-[width,background] duration-200",
-                  i === step
-                    ? "h-2 w-5 bg-brand"
-                    : i < step
-                      ? "h-2 w-2 bg-brand opacity-40 hover:opacity-60"
-                      : "h-2 w-2 bg-border-muted hover:bg-border-quiet",
-                )}
-              />
-            ))}
+          <div className="flex min-w-0 items-center gap-2">
+            <span className="text-label font-bold uppercase tracking-badge-wide text-text-subtle">
+              Opptaksflyt
+            </span>
+            <span className="h-1 w-1 rounded-full bg-text-faded" />
+            <span className="text-detail font-bold text-text-muted">
+              Steg {step + 1} av {steps.length}
+            </span>
           </div>
 
-          <div className="flex items-center gap-3">
-            <span className="text-detail text-text-muted">
-              {step + 1} / {steps.length}
-            </span>
+          <div className="flex items-center gap-2.5">
+            <div className="flex items-center gap-1.5">
+              {steps.map((_, i) => (
+                <button
+                  key={i}
+                  type="button"
+                  onClick={() => go(i)}
+                  aria-label={`Steg ${i + 1}`}
+                  className={cn(
+                    "rounded-full transition-[width,background] duration-200",
+                    i === step
+                      ? "h-2 w-5 bg-brand"
+                      : i < step
+                        ? "h-2 w-2 bg-green-500 hover:bg-green-600"
+                        : "h-2 w-2 bg-border-muted hover:bg-border-quiet",
+                  )}
+                />
+              ))}
+            </div>
             <button
               type="button"
               onClick={handleClose}
@@ -267,14 +250,17 @@ export default function WizardTour({
         </div>
 
         {/* Step content */}
-        <div key={step} className="flex flex-col gap-5 px-6 py-7 animate-[fade-in_0.18s_ease-out]">
+        <div
+          key={step}
+          className="flex flex-col gap-5 px-6 py-7 animate-[fade-in_0.18s_ease-out]"
+        >
           <div className="flex items-start gap-3.5">
-            <span className="mt-0.5 inline-flex h-11 w-11 flex-none items-center justify-center rounded-xl bg-brand-fill text-brand ring-1 ring-brand-border/60">
+            <span className="mt-0.5 inline-flex h-11 w-11 flex-none items-center justify-center rounded-xl bg-brand-fill text-brand">
               <Icon size={20} />
             </span>
             <div>
               <span className="mb-0.5 block text-label font-bold uppercase tracking-label text-text-subtle">
-                {isAdmin ? "Admin" : "Intervjuer"} · {current.label}
+                {isAdmin ? "Admin" : "Medlem"} · {current.label}
               </span>
               <h2 className="m-0 text-[1.05rem] font-bold leading-snug text-text-primary">
                 {current.title}
@@ -294,7 +280,10 @@ export default function WizardTour({
               </div>
               <ul className="m-0 flex flex-col gap-2 pl-0">
                 {current.tips.map((tip, i) => (
-                  <li key={i} className="flex items-start gap-2 text-ui text-text-secondary">
+                  <li
+                    key={i}
+                    className="flex items-start gap-2 text-ui text-text-secondary"
+                  >
                     <span className="mt-[7px] h-1 w-1 flex-none rounded-full bg-brand/50" />
                     {tip}
                   </li>
@@ -381,7 +370,7 @@ export default function WizardTour({
             {isLast ? (
               <button
                 type="button"
-                onClick={handleClose}
+                onClick={handleComplete}
                 className={cn(actionButtonBase, actionButtonPrimary)}
               >
                 {isAdmin ? "Sett i gang" : "Forstått!"}

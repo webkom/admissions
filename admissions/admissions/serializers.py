@@ -418,6 +418,7 @@ class SavedScheduleSerializer(serializers.ModelSerializer):
             "start_date",
             "end_date",
             "session_duration",
+            "enabled_windows",
             "enabled_slots",
             "day_start_minute",
             "day_end_minute",
@@ -431,16 +432,15 @@ class SavedScheduleSerializer(serializers.ModelSerializer):
 
 
 class SaveScheduleInputSerializer(serializers.Serializer):
-    schedule = serializers.ListField(
-        child=serializers.DictField(), required=False, default=list
-    )
+    schedule = serializers.ListField(child=serializers.DictField(), required=False)
     start_date = serializers.DateField(required=False)
     end_date = serializers.DateField(required=False, allow_null=True)
     session_duration = serializers.IntegerField(
         min_value=5, max_value=240, required=False
     )
-    enabled_slots = serializers.ListField(
-        child=serializers.CharField(), required=False, default=list
+    enabled_slots = serializers.ListField(child=serializers.CharField(), required=False)
+    enabled_windows = serializers.ListField(
+        child=serializers.DictField(), required=False
     )
     day_start_minute = serializers.IntegerField(
         min_value=0, max_value=1439, required=False
@@ -470,11 +470,25 @@ class InterviewerSerializer(CandidateSerializer):
 class SolveOptionsSerializer(serializers.Serializer):
     enforce_same_gender = serializers.BooleanField(default=True)
     allow_overtime = serializers.BooleanField(default=True)
+    prioritize_continuity = serializers.BooleanField(default=True)
     overtime_weight = serializers.IntegerField(min_value=0, default=100)
     load_balance_weight = serializers.IntegerField(min_value=0, default=1)
+    continuity_weight = serializers.IntegerField(min_value=0, default=12)
     max_solver_seconds = serializers.FloatField(
         min_value=1.0, max_value=60.0, default=10.0
     )
+
+
+class LockedPanelMemberSerializer(serializers.Serializer):
+    id = serializers.CharField(required=False)
+    name = serializers.CharField(required=False)
+
+
+class LockedAssignmentSerializer(serializers.Serializer):
+    candidate_id = serializers.CharField(required=False)
+    candidate = serializers.CharField(required=False)
+    time = serializers.IntegerField()
+    panel = LockedPanelMemberSerializer(many=True)
 
 
 class ScheduleRequestsSerializer(serializers.Serializer):
@@ -482,6 +496,7 @@ class ScheduleRequestsSerializer(serializers.Serializer):
     interviewers = InterviewerSerializer(many=True)
     panel_size = serializers.IntegerField(default=4)
     options = SolveOptionsSerializer(required=False)
+    locked_assignments = LockedAssignmentSerializer(many=True, required=False)
 
 
 class SaveInterviewAvailabilitySerializer(serializers.Serializer):

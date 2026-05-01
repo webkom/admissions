@@ -13,7 +13,8 @@ export type CompleteCsvData = {
   priorityText: string;
   group: string;
   groupApplicationText: string;
-} & Omit<CsvData, "applicationText">;
+} & Omit<CsvData, "applicationText"> &
+  Record<string, string | boolean | null | undefined>;
 
 const csvFormats = [
   { name: "Google Sheets", separator: ",", enclosingCharacter: '"' },
@@ -23,19 +24,26 @@ const csvFormats = [
 type Props = {
   csvData: CompleteCsvData[];
   csvHeaders: { label: string; key: string }[];
+  rowCount?: number;
 };
 
-const CSVExportHandler: React.FC<Props> = ({ csvData, csvHeaders }) => {
+const CSVExportHandler: React.FC<Props> = ({
+  csvData,
+  csvHeaders,
+  rowCount,
+}) => {
   const [csvFormat, setCsvFormat] = useState(csvFormats[0]);
 
   return (
     <Wrapper>
       <div>
         <SectionEyebrow>Eksport</SectionEyebrow>
-        <SectionTitle>Last ned søknadene som CSV</SectionTitle>
-        <SectionDescription>
-          Velg formatet som passer regnearket du skal åpne filen i.
-        </SectionDescription>
+        <SectionTitle>applications.csv</SectionTitle>
+        {typeof rowCount === "number" && (
+          <SectionDescription>
+            {rowCount} rader i forhåndsvisningen
+          </SectionDescription>
+        )}
       </div>
 
       <ControlRow>
@@ -81,6 +89,8 @@ const Wrapper = styled(SectionCard)`
   justify-content: space-between;
   gap: 1rem;
   flex-wrap: wrap;
+  padding: 0.85rem 1rem;
+  border-radius: 8px;
 `;
 
 const FormatSelector = styled.div`
@@ -98,9 +108,9 @@ const FormatSelector = styled.div`
 
   select {
     min-width: 220px;
-    min-height: 3rem;
+    min-height: 2.25rem;
     padding: 0 0.95rem;
-    border-radius: 0.75rem;
+    border-radius: 8px;
     border: 1px solid #d1d5db;
     background: #fff;
     color: #1f2937;
