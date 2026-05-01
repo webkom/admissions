@@ -34,7 +34,12 @@ const LandingPageNoAdmission = () => {
           for kunngjøringer!
         </p>
       </div>
-      <LinkButton className="slide-underline" to="https://abakus.no" external secondary>
+      <LinkButton
+        className="slide-underline"
+        to="https://abakus.no"
+        external
+        secondary
+      >
         Gå til abakus.no
       </LinkButton>
     </LandingPageSkeleton>
