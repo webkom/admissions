@@ -5,6 +5,7 @@ import FormatTime from "src/components/Time/FormatTime";
 import { ApplicationTableRow } from ".";
 import { InnerTableValues } from "./InnerTable";
 import DeleteApplication from "src/components/DeleteApplication";
+import { ChevronDown, ChevronRight } from "lucide-react";
 
 const columnHelper = createColumnHelper<ApplicationTableRow>();
 
@@ -13,13 +14,13 @@ export const columns = [
     id: "expander",
     header: ({ table }) => (
       <span onClick={table.getToggleAllRowsExpandedHandler()}>
-        {table.getIsAllRowsExpanded() ? "▼" : "►"}
+        {table.getIsAllRowsExpanded() ? <ChevronDown /> : <ChevronRight />}
       </span>
     ),
     size: 1,
     cell: ({ row }) => (
       <span onClick={() => row.toggleExpanded()}>
-        {row.getIsExpanded() ? "▼" : "►"}
+        {row.getIsExpanded() ? <ChevronDown /> : <ChevronRight />}
       </span>
     ),
   }),

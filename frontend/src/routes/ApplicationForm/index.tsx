@@ -56,7 +56,9 @@ const generateInitialValues: (
     formattedGroupApplications[group] = "";
   });
 
-  const blankHeaderFields = (admission?.header_fields as InputFieldModel[])
+  const blankHeaderFields = (
+    (admission?.header_fields as InputFieldModel[]) ?? []
+  )
     .filter((field) => "id" in field)
     .reduce(
       (obj, field) => ({
@@ -111,7 +113,9 @@ const validationSchema = (
           )),
       );
 
-    const headerFieldsSchema = (admission?.header_fields as InputFieldModel[])
+    const headerFieldsSchema = (
+      (admission?.header_fields as InputFieldModel[]) ?? []
+    )
       .filter((field) => "id" in field && field.required)
       .reduce(
         (obj, field) => ({

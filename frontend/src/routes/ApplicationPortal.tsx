@@ -21,6 +21,7 @@ import LoadingBall from "src/components/LoadingBall";
 import NavBar from "src/components/NavBar";
 import NotFoundPage from "./NotFoundPage";
 import RequireAuth from "src/components/RequireAuth";
+import SchedulePage from "./SchedulePage";
 
 interface SelectedGroups {
   [key: string]: boolean;
@@ -28,6 +29,7 @@ interface SelectedGroups {
 
 const ApplicationPortal = () => {
   const { admissionSlug } = useParams();
+
   const [selectedGroups, setSelectedGroups] = useState<SelectedGroups>(
     getSelectedGroupsDraft(),
   );
@@ -42,6 +44,7 @@ const ApplicationPortal = () => {
     error,
   } = useAdmission(admissionSlug ?? "");
   const { groups } = admission ?? {};
+  const isMember = (admission?.userdata.committee_groups?.length ?? 0) > 0;
 
   const toggleGroup = (name: string) => {
     setSelectedGroups({
@@ -149,8 +152,16 @@ const ApplicationPortal = () => {
             <Route
               path="/admin/*"
               element={
-                <RequireAuth auth={!!admission?.userdata.is_privileged}>
+                <RequireAuth auth={!!admission?.userdata.is_recruiter}>
                   <AdmissionAdmin />
+                </RequireAuth>
+              }
+            />
+            <Route
+              path="/schedule"
+              element={
+                <RequireAuth auth={isMember}>
+                  <SchedulePage />
                 </RequireAuth>
               }
             />

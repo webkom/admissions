@@ -1,10 +1,138 @@
 @import url("https://unpkg.com/ionicons@4.5.10-0/dist/css/ionicons.min.css");
 @import url("./fonts.css");
-@import url("~/@webkom/lego-bricks/dist/style.css");
+@import url("@webkom/lego-bricks/dist/style.css");
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --lego-red-color: var(--color-red-7);
+  --font-family: "Geist", -apple-system, blinkmacsystemfont, "Segoe UI", roboto,
+    helvetica, arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji",
+    "Segoe UI Symbol";
+  --font-display: "Geist", -apple-system, blinkmacsystemfont, "Segoe UI", roboto,
+    helvetica, arial, sans-serif;
+  --font-mono: "Geist Mono", ui-monospace, sfmono-regular, "SF Mono", menlo,
+    monaco, consolas, "Liberation Mono", "Courier New", monospace;
+  --border-radius-sm: 8px;
+  --border-radius-md: 12px;
+  --border-radius-lg: 16px;
+
+  /* Shadows tinted with a warm graphite (slight red bias) so they harmonise
+     with the brand-red surfaces instead of reading as flat neutral. */
+  --shadow-sm: 0 1px 2px 0 rgb(40 18 18 / 5%);
+  --shadow-md: 0 4px 8px -2px rgb(40 18 18 / 8%),
+    0 2px 4px -2px rgb(40 18 18 / 5%);
+  --shadow-lg: 0 12px 24px -8px rgb(40 18 18 / 10%),
+    0 4px 8px -4px rgb(40 18 18 / 5%);
+  --transition-base: all 0.22s cubic-bezier(0.2, 0, 0, 1);
+  --spacing-sm: 0.5rem;
+  --spacing-md: 1rem;
+  --spacing-lg: 1.5rem;
+  --color-brand: var(--lego-red-color);
+
+  /* Brand red as raw channels for rgb()/rgba() composition (e.g. inline
+     tinted shadows). Comma form so legacy rgba(var(--color-brand-rgb), a)
+     stays valid. */
+  --color-brand-rgb: 178, 28, 23;
+  --color-brand-hover: var(--color-red-8);
+  --color-brand-dark: var(--color-red-8);
+  --color-brand-pressed: var(--color-red-9);
+  --color-brand-input: rgb(178 28 23 / 40%);
+  --color-brand-ring: rgb(178 28 23 / 15%);
+  --color-brand-ring-soft: rgb(178 28 23 / 6%);
+  --color-brand-soft: rgb(178 28 23 / 3%);
+  --color-brand-subtle: rgb(178 28 23 / 5%);
+  --color-brand-muted: rgb(178 28 23 / 6%);
+  --color-brand-tint: rgb(178 28 23 / 7%);
+  --color-brand-badge: rgb(178 28 23 / 8%);
+  --color-brand-fill: rgb(178 28 23 / 12%);
+  --color-brand-border: rgb(178 28 23 / 14%);
+  --color-brand-strong-border: rgb(178 28 23 / 18%);
+  --color-brand-panel-border: rgb(178 28 23 / 20%);
+  --color-brand-active-border: rgb(178 28 23 / 22%);
+  --color-brand-focus: rgb(178 28 23 / 25%);
+  --color-success: var(--color-green-7);
+  --color-success-bg: var(--color-green-2);
+  --color-success-border: var(--color-green-7);
+  --color-danger: var(--color-red-6);
+  --color-danger-bg: var(--color-red-1);
+  --color-danger-border: var(--color-red-6);
+
+  /* Modal/drawer scrim — warm graphite at 40% so overlays harmonise with the
+     tinted shadow language instead of reading as a cold neutral black veil. */
+  --color-overlay: rgb(40 18 18 / 40%);
+  --color-surface-base: var(--lego-card-color);
+  --color-surface-page: var(--lego-background-color);
+  --color-surface-soft: var(--lego-background-color);
+  --color-surface-subtle: var(--color-gray-1);
+  --color-surface-muted: var(--color-gray-1);
+  --color-surface-hover: var(--lego-background-color);
+  --color-surface-neutral: var(--color-gray-2);
+  --color-surface-disabled: var(--color-gray-2);
+  --color-border-default: var(--border-gray);
+  --color-border-soft: var(--color-gray-2);
+  --color-border-muted: var(--color-gray-3);
+  --color-border-quiet: var(--color-gray-4);
+  --color-border-faint: var(--color-gray-2);
+  --color-text-primary: var(--lego-font-color);
+  --color-text-strong: var(--lego-font-color);
+  --color-text-accent: var(--color-gray-8);
+  --color-text-body: var(--color-gray-7);
+  --color-text-soft: var(--secondary-font-color);
+  --color-text-secondary: var(--color-gray-6);
+  --color-text-muted: var(--color-gray-7);
+  --color-text-subtle: var(--color-gray-5);
+  --color-text-faded: var(--color-gray-4);
+  --color-text-disabled: var(--color-gray-4);
+  --gradient-timeline-divider: linear-gradient(
+    to bottom,
+    var(--color-border-soft) 50%,
+    transparent 50%
+  );
+  --gradient-brand-panel: linear-gradient(
+    180deg,
+    var(--color-brand-subtle) 0%,
+    var(--color-surface-base) 100%
+  );
+
+  /* One source of truth for the diagonal "unavailable / closed slot" hatch,
+     so every calendar surface speaks the same visual language. */
+  --pattern-unavailable: repeating-linear-gradient(
+    135deg,
+    var(--color-border-faint) 0 1px,
+    transparent 1px 6px
+  );
+  --shadow-panel: 0 10px 28px -12px rgb(40 18 18 / 7%),
+    0 4px 10px -4px rgb(40 18 18 / 4%), inset 0 1px 0 rgb(255 255 255 / 60%);
+  --shadow-panel-hover: 0 22px 40px -16px rgb(40 18 18 / 11%),
+    0 8px 16px -8px rgb(40 18 18 / 5%), inset 0 1px 0 rgb(255 255 255 / 70%);
+
+  /* Slide-over drawer shadow: cast leftward from a right-anchored panel. */
+  --shadow-drawer-left: -12px 0 32px -16px rgb(40 18 18 / 18%);
+
+  /* High-elevation modal lift — shared by centred dialogs and the wizard. */
+  --shadow-modal: 0 32px 64px -16px rgb(40 18 18 / 22%),
+    0 12px 24px -12px rgb(40 18 18 / 12%);
+
+  /* Tiny tinted lift used on hoverable chips/inputs. */
+  --shadow-tint-sm: 0 2px 6px rgb(40 18 18 / 5%);
+  --shadow-action: 0 10px 15px -3px rgb(178 28 23 / 20%);
+  --shadow-toggle: 0 8px 18px rgb(178 28 23 / 6%);
+  --color-brand-pulse-start: rgb(178 28 23 / 45%);
+  --color-brand-pulse-end: rgb(178 28 23 / 0%);
+  --gradient-toggle-active: linear-gradient(
+    135deg,
+    rgb(178 28 23 / 14%) 0%,
+    rgb(178 28 23 / 8%) 45%,
+    rgb(178 28 23 / 3%) 100%
+  );
+}
 
 html {
   box-sizing: border-box;
-  font-size: 1rem;
+  font-size: 16px;
   height: 100%;
 }
 
@@ -13,50 +141,145 @@ html {
 *::after {
   box-sizing: inherit;
   -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 body {
   margin: 0;
-  line-height: 1.8;
-  background: var(--lego-background-color);
-  color: var(--lego-font-color);
+  line-height: 1.6;
+  background: var(--lego-background-color, #f9fafb);
+  color: var(--lego-font-color, #111827);
+  font-family: var(--font-family), sans-serif;
   position: relative;
+}
+
+/* Pointer-events-none grain overlay breaks the digital flatness of the page
+   without affecting interaction. SVG turbulence noise at low opacity. */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  opacity: 0.035;
+  mix-blend-mode: multiply;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 200'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0.6 0'/></filter><rect width='100%25' height='100%25' filter='url(%23n)'/></svg>");
+}
+
+#root {
+  min-height: 100dvh;
+  position: relative;
+  z-index: 1;
+}
+
+@keyframes timeline-pulse {
+  0% {
+    box-shadow: 0 0 0 0 rgb(178 28 23 / 55%);
+  }
+
+  70% {
+    box-shadow: 0 0 0 14px rgb(178 28 23 / 0%);
+  }
+
+  100% {
+    box-shadow: 0 0 0 0 rgb(178 28 23 / 0%);
+  }
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes slide-in-right {
+  from {
+    transform: translateX(100%);
+  }
+
+  to {
+    transform: translateX(0);
+  }
+}
+
+@keyframes overlay-fade-in {
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes barber-pole {
+  from {
+    background-position: 0 0;
+  }
+
+  to {
+    background-position: 18px 0;
+  }
 }
 
 h1,
 h2,
 h3,
 h4 {
-  font-weight: 400;
+  font-family: var(--font-display);
+  font-weight: 600;
+  color: var(--lego-font-color, #111827);
+  letter-spacing: -0.025em;
+  text-wrap: balance;
 }
 
 h1 {
-  font-size: 3rem;
+  font-size: 2.5rem;
   text-align: center;
-  margin: 0.2em 0 0;
-  line-height: 1.2em;
+  margin: 0.5em 0;
+  line-height: 1.05;
+  letter-spacing: -0.045em;
+  font-weight: 650;
 }
 
 h2 {
-  font-size: var(--font-size-xl);
+  font-size: 1.875rem;
+  margin-bottom: 0.75rem;
+  letter-spacing: -0.035em;
+  line-height: 1.15;
 }
 
 h3 {
-  font-size: var(--font-size-lg);
+  font-size: 1.5rem;
+  margin-bottom: 0.5rem;
+  letter-spacing: -0.03em;
+}
+
+p {
+  text-wrap: pretty;
+  margin-bottom: 1rem;
 }
 
 a {
-  color: var(--lego-link-color);
+  color: var(--lego-link-color, #2563eb);
   cursor: pointer;
   text-decoration: none;
+  transition: var(--transition-base);
+}
+
+a:hover {
+  opacity: 0.8;
 }
 
 a[disabled] {
   pointer-events: none;
-}
-
-p {
-  margin-bottom: 10px;
+  opacity: 0.5;
 }
 
 ul {
@@ -67,32 +290,75 @@ ul {
 
 table {
   border-collapse: collapse;
+  width: 100%;
 }
 
 th {
-  padding: 5px 0;
-  border-top: 1px solid #aaa;
-  border-bottom: 1px solid #aaa !important;
-  font-weight: 400;
+  padding: 0.75rem;
+  border-bottom: 1px solid var(--color-border-soft);
+  font-weight: 600;
+  text-transform: uppercase;
+  font-size: 0.75rem;
+  letter-spacing: 0.05em;
+  color: var(--color-text-secondary);
 }
 
 th,
 td {
-  font-size: var(--font-size-sm);
-  padding-left: 7px;
-  width: 140px;
-  border-bottom: 1px dashed #aaa;
+  font-size: 0.875rem;
+  padding: 1rem 0.75rem;
+  border-bottom: 1px solid var(--color-border-faint);
   text-align: left;
-  display: table-cell;
-  word-break: break-all;
-  hyphens: auto;
-}
-
-th:first-child,
-th:last-child {
-  border-radius: 0;
 }
 
 tr:last-of-type > td {
   border-bottom: 0;
+}
+
+/* Sliding underline used on main CTAs and link-buttons. Mirrors the NavBar
+   "Min søknad" hover: line slides out from the left starting brand red, and
+   settles to a soft gray. */
+.slide-underline {
+  position: relative;
+  overflow: hidden;
+}
+.slide-underline::after {
+  content: "";
+  position: absolute;
+  left: 12px;
+  right: 12px;
+  bottom: 8px;
+  height: 2px;
+  background-color: var(--color-brand);
+  transform: scaleX(0);
+  transform-origin: left;
+  transition:
+    transform 220ms cubic-bezier(0.2, 0, 0, 1),
+    background-color 220ms cubic-bezier(0.2, 0, 0, 1);
+}
+.slide-underline:hover::after,
+.slide-underline:focus::after {
+  transform: scaleX(1);
+  background-color: rgba(0, 0, 0, 0.06);
+}
+
+/* For small buttons where left/right padding is small */
+.slide-underline--tight::after {
+  left: 8px;
+  right: 8px;
+}
+
+/* Ensure keyboard focus shows underline too */
+.slide-underline:focus-visible::after {
+  transform: scaleX(1);
+  box-shadow: 0 0 0 4px var(--color-brand-ring-soft);
+}
+
+/* On dark/brand buttons keep the underline high-contrast white throughout. */
+.slide-underline--on-dark::after {
+  background-color: rgba(255, 255, 255, 0.55);
+}
+.slide-underline--on-dark:hover::after,
+.slide-underline--on-dark:focus::after {
+  background-color: rgba(255, 255, 255, 0.92);
 }

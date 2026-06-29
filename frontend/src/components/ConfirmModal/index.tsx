@@ -1,4 +1,4 @@
-import React, { JSXElementConstructor, useState } from "react";
+import React, { useState } from "react";
 import {
   Overlay,
   ConfirmBox,
@@ -6,38 +6,33 @@ import {
   Message,
   ActionButtonsWrapper,
 } from "./styles";
-import { Button } from "@webkom/lego-bricks";
+import { StyledButton } from "src/components/LinkButton";
 
 interface TriggerComponentProps {
   onClick: () => void;
 }
 
 interface ConfirmModalProps {
-  onConfirm: () => void;
   title: string;
   message: string;
-  trigger: JSXElementConstructor<TriggerComponentProps>;
-  cancelText?: string;
   confirmText?: string;
+  cancelText?: string;
+  onConfirm: () => void;
+  trigger: React.FC<TriggerComponentProps>;
 }
 
 const ConfirmModal: React.FC<ConfirmModalProps> = ({
-  onConfirm,
   title,
   message,
-  trigger: TriggerComponent,
+  confirmText = "Bekreft",
   cancelText = "Avbryt",
-  confirmText = "Ja",
+  onConfirm,
+  trigger: TriggerComponent,
 }) => {
   const [isOpen, setIsOpen] = useState(false);
 
-  const hideModal = () => {
-    setIsOpen(false);
-  };
-
-  const showModal = () => {
-    setIsOpen(true);
-  };
+  const showModal = () => setIsOpen(true);
+  const hideModal = () => setIsOpen(false);
 
   const confirmAction = () => {
     onConfirm();
@@ -50,10 +45,10 @@ const ConfirmModal: React.FC<ConfirmModalProps> = ({
         <Title>{title}</Title>
         <Message>{message}</Message>
         <ActionButtonsWrapper>
-          <Button onClick={hideModal}>{cancelText}</Button>
-          <Button dark onClick={confirmAction}>
+          <StyledButton onClick={hideModal}>{cancelText}</StyledButton>
+          <StyledButton dark onClick={confirmAction}>
             {confirmText}
-          </Button>
+          </StyledButton>
         </ActionButtonsWrapper>
       </ConfirmBox>
     </Overlay>

@@ -1,6 +1,4 @@
 import React, { useEffect, useState } from "react";
-import styled from "styled-components";
-import { media } from "src/styles/mediaQueries";
 
 interface CountDownProps {
   title: string;
@@ -8,129 +6,111 @@ interface CountDownProps {
 }
 
 const CountDown: React.FC<CountDownProps> = ({ title, dateString }) => {
-  const [remainingTotalSeconds, setRemainingTotalSeconds] = useState(
+  const [remainingTotalSeconds, setRemainingTotalSeconds] = useState(() =>
     getRemainingSeconds(dateString),
-  );
-  const [remaining, setRemaining] = useState(
-    calculateRemainingUnits(remainingTotalSeconds),
   );
 
   useEffect(() => {
+    setRemainingTotalSeconds(getRemainingSeconds(dateString));
+
     const interval = setInterval(() => {
-      setRemainingTotalSeconds(
-        (prevRemainingTotalSeconds) => prevRemainingTotalSeconds - 1,
-      );
+      setRemainingTotalSeconds(getRemainingSeconds(dateString));
     }, 1000);
 
     return () => clearInterval(interval);
-  }, []);
+  }, [dateString]);
 
-  useEffect(() => {
-    setRemaining(calculateRemainingUnits(remainingTotalSeconds));
-  }, [remainingTotalSeconds]);
+  const remaining = calculateRemainingUnits(remainingTotalSeconds);
+  const isCompleted = remainingTotalSeconds <= 0;
 
   return (
-    <Wrapper>
-      <Title>{title}</Title>
-      <ContentWrapper>
-        <ContentRow>
-          <Item>
-            <span>{remaining.days}</span>
-            <p>DAGER</p>
-          </Item>
-          <Item>
-            <span>{remaining.hours}</span>
-            <p>TIMER</p>
-          </Item>
-        </ContentRow>
-        <ContentRow>
-          <Item>
-            <span>{remaining.minutes}</span>
-            <p>MINUTTER</p>
-          </Item>
-          <Item>
-            <span>{remaining.seconds}</span>
-            <p>SEKUNDER</p>
-          </Item>
-        </ContentRow>
-      </ContentWrapper>
-    </Wrapper>
+    <div className="flex w-full min-w-0 flex-col px-0 py-2">
+      <div className="flex w-full items-start justify-between gap-3">
+        <div className="min-w-0 flex flex-1 flex-col">
+          <h3 className="m-0 mt-1 truncate text-title font-extrabold tracking-[-0.025em] text-text-primary">
+            {title}
+          </h3>
+          <p className="m-0 mt-1 text-sm font-semibold tabular-nums text-text-muted">
+            {formatMilestoneDate(dateString)}
+          </p>
+        </div>
+        <span
+          className={`inline-flex flex-none rounded-full px-2.5 py-1 text-label font-bold uppercase tracking-caps ${
+            isCompleted
+              ? "bg-surface-subtle text-text-muted"
+              : "bg-brand-muted text-brand"
+          }`}
+        ></span>
+      </div>
+      <div className="mt-4 grid w-full grid-cols-4 border-t border-border-soft pt-4 handheld:grid-cols-4">
+        <CountdownItem
+          value={remaining.days}
+          label="Dager"
+          dimmed={isCompleted}
+        />
+        <CountdownItem
+          value={remaining.hours}
+          label="Timer"
+          dimmed={isCompleted}
+        />
+        <CountdownItem
+          value={remaining.minutes}
+          label="Min"
+          dimmed={isCompleted}
+        />
+        <CountdownItem
+          value={remaining.seconds}
+          label="Sek"
+          dimmed={isCompleted}
+        />
+      </div>
+    </div>
   );
 };
 
 export default CountDown;
 
+interface CountdownItemProps {
+  value: number;
+  label: string;
+  dimmed?: boolean;
+}
+
+const CountdownItem = ({ value, label, dimmed }: CountdownItemProps) => (
+  <div className="min-w-0 px-1 text-center leading-tight">
+    <span
+      className={`block text-[clamp(1.6rem,3vw,2.35rem)] font-extrabold tabular-nums ${
+        dimmed ? "text-text-faded" : "text-text-strong"
+      }`}
+    >
+      {value}
+    </span>
+    <p className="m-0 text-tiny font-bold uppercase tracking-badge-wide text-text-faded">
+      {label}
+    </p>
+  </div>
+);
+
 const getRemainingSeconds = (dateString: string) =>
   Math.round((new Date(dateString).valueOf() - new Date().valueOf()) / 1000);
 
 const calculateRemainingUnits = (remainingSeconds: number) => {
-  let remaining = remainingSeconds;
-  const seconds = Math.round(remaining % 60);
+  let remaining = Math.max(remainingSeconds, 0);
+  const seconds = remaining % 60;
   remaining = (remaining - seconds) / 60;
-  const minutes = Math.round(remaining % 60);
+  const minutes = remaining % 60;
   remaining = (remaining - minutes) / 60;
-  const hours = Math.round(remaining % 24);
+  const hours = remaining % 24;
   remaining = (remaining - hours) / 24;
-  const days = Math.round(remaining);
+  const days = remaining;
   return { days, hours, minutes, seconds };
 };
 
-/** Styles **/
-
-const Wrapper = styled.div`
-  display: flex;
-  background-color: #fff;
-  padding: 0.5em;
-  justify-content: center;
-  align-items: center;
-  flex-wrap: wrap;
-  ${media.handheld`
-    margin-top: 0.4em;
-    margin-bottom: 1em;
-  `}
-`;
-
-const Title = styled.h3`
-  font-size: 23px;
-  text-align: center;
-  margin: 0;
-  margin-bottom: 10px;
-  flex-basis: 100%;
-
-  ${media.handheld`
-    font-size: 1.3rem;
-  `}
-`;
-
-const ContentWrapper = styled.div`
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
-  margin-bottom: 0.5em;
-`;
-
-const ContentRow = styled.div`
-  display: flex;
-`;
-
-const Item = styled.div`
-  margin: 0 20px;
-  margin-bottom: 1em;
-  text-align: center;
-  width: 80px;
-  line-height: 1.4;
-
-  span {
-    font-size: 1.8rem;
-    font-weight: 700;
-  }
-
-  p {
-    margin: 0;
-    font-size: 0.85rem;
-  }
-
-  ${media.handheld`
-    margin: 0 0.2em;
-  `}
-`;
+const formatMilestoneDate = (dateString: string) =>
+  new Intl.DateTimeFormat("nb-NO", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(new Date(dateString));

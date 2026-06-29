@@ -13,7 +13,13 @@ const getParsedJson = (
   key: KeyType,
   defaultValue: string | boolean | null | [] = "",
 ) => {
-  return JSON.parse(getItem(key, JSON.stringify(defaultValue)));
+  // Corrupted storage must not white-screen the applicant portal: these run
+  // inside useState initializers, so fall back to the default on bad JSON.
+  try {
+    return JSON.parse(getItem(key, JSON.stringify(defaultValue)));
+  } catch {
+    return defaultValue;
+  }
 };
 const saveObject = (
   key: KeyType,

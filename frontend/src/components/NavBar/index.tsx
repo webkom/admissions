@@ -14,7 +14,7 @@ interface NavBarProps {
 const NavBar: React.FC<NavBarProps> = ({ isEditing }) => {
   const { admissionSlug, ...params } = useParams();
   const { data: admission } = useAdmission(admissionSlug ?? "");
-  const isRevy = admissionSlug === "revy";
+  const isRevy = admissionSlug?.includes("revy");
   const isRevyBoard = admissionSlug === "revystyret";
   const isSingleGroupAdmission = admission?.groups.length === 1;
 
@@ -56,39 +56,54 @@ const Container = styled.nav`
   display: flex;
   align-items: center;
   justify-content: space-between;
-  background: var(--color-gray-1);
+  background: var(--color-surface-base, white);
   width: 100%;
-  height: 70px;
-  border-bottom: 3px solid rgba(192, 57, 43, 0.08);
+  height: 80px;
+  border-bottom: 1px solid var(--color-border-soft);
+  box-shadow: var(--shadow-sm);
+  padding: 0 4rem;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  backdrop-filter: saturate(140%) blur(6px);
 
   ${media.handheld`        
     flex-direction: column;
     height: auto;
+    padding: 1rem;
+    position: relative;
   `}
 `;
 
 const BrandContainer = styled.div`
-  width: 125px;
-  margin: 0 2rem;
+  width: 140px;
   flex-shrink: 0;
+  transition: var(--transition-base);
+
+  &:hover {
+    transform: scale(1.05);
+  }
+
   ${media.handheld`        
-    margin: 1rem 0 5px 0;
+    margin-bottom: 1rem;
     order: 1;
   `};
 `;
 
 const NavItemsContainer = styled.ul`
   display: flex;
-  margin-left: 7rem;
+  gap: 3rem;
 
   ${media.portrait`  
-    margin-left: 0;
+    gap: 1.5rem;
   `}
 
-  ${media.handheld`        
+  ${media.handheld`
     order: 3;
-    margin-bottom: 1rem;
-    padding-top: 0.5rem;
-    border-top: 1px solid var(--color-gray-3);
+    width: 100%;
+    justify-content: center;
+    margin-top: 1rem;
+    padding-top: 1rem;
+    border-top: 1px solid var(--color-border-soft);
   `}
 `;

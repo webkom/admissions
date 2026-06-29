@@ -31,8 +31,10 @@ const GroupCard: React.FC<GroupCardProps> = ({
       $isRevy={isRevy}
       $isRevyBoard={isRevyBoard}
     >
-      {!(isRevy || isRevyBoard) && <Logo src={logo} />}
-      <Name>{readmeIfy(name)}</Name>
+      <Header>
+        {!(isRevy || isRevyBoard) && <Logo src={logo} />}
+        <Name>{readmeIfy(name)}</Name>
+      </Header>
       <Description>{readmeIfy(description, true)}</Description>
       {!(isRevy || isRevyBoard) && (
         <LearnMoreLink href={`${readMoreLink}`} target="_blank">
@@ -68,134 +70,109 @@ type GroupCardStyledProps = GroupCardElementsStyledProps & {
 };
 
 const Card = styled.div<GroupCardStyledProps>`
-  display: grid;
-  grid-template-columns: 1fr 3fr;
-  grid-template-rows: 2rem 1fr ${({ $isRevy }) => !$isRevy && "1.5rem"};
-  grid-template-areas:
-    "${({ $isRevy }) => ($isRevy ? "name" : ".")} name"
-    "${({ $isRevy }) => ($isRevy ? "text" : "logo")} text"
-    ". readmore";
-  grid-gap: 10px 20px;
-  background: var(--color-white);
+  display: flex;
+  flex-direction: column;
+  background: var(--color-surface-base, white);
   box-shadow: ${(props) =>
-    props.$isChosen
-      ? "1px 3px 5px rgba(129, 129, 129, 0.5)"
-      : "1px 3px 5px rgba(129, 129, 129, 0.3)"};
+    props.$isChosen ? "var(--shadow-md)" : "var(--shadow-sm)"};
+  border: 1px solid
+    ${(props) =>
+      props.$isChosen ? "var(--color-brand)" : "var(--color-border-soft)"};
   box-sizing: border-box;
-  padding: 1.5rem 1.5rem calc(1.5rem + 35px) 1rem;
-  border-radius: 10px;
+  padding: 2rem;
+  border-radius: var(--border-radius-md);
   overflow: hidden;
   position: relative;
-  max-width: 460px;
+  transition: var(--transition-base);
+  height: 100%;
 
   &:hover {
     cursor: pointer;
-    box-shadow: 0 2px 5px rgba(129, 129, 129, 0.9);
+    box-shadow: var(--shadow-md);
+    transform: translateY(-2px);
+    border-color: ${(props) =>
+      props.$isChosen
+        ? "var(--color-brand)"
+        : "var(--color-brand-strong-border)"};
   }
 
   ${media.handheld`
-    grid-template-columns: 1.5fr 5fr;
-    grid-template-rows: 2rem 3fr;
-    grid-template-areas:
-      "logo name"
-      "text text"
-      "readmore readmore";
-    grid-gap: 10px 5px;
-    padding: 1.7rem 1.5rem calc(1rem + 35px) 1.5rem;
+    padding: 1.5rem;
   `};
+`;
+
+const Header = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin-bottom: 1rem;
 `;
 
 const Name = styled.h2`
-  grid-area: name;
   margin: 0;
-  font-size: 1.5rem;
-  line-height: 2rem;
-  letter-spacing: 0.7px;
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: var(--color-text-strong);
+  letter-spacing: -0.03em;
 
   ${media.handheld`
-    font-size: 1.3rem;
-    padding: 0
-    text-align: left;
-    align-self: center;
-    `};
-`;
-
-const Description = styled.p`
-  grid-area: text;
-  margin: 0;
-  font-size: 0.85rem;
-  line-height: 1.3rem;
-
-  ${media.handheld`
-    padding: 0;
-    text-align: left;
-    margin-top: 10px;
-    `};
-`;
-
-const Logo = styled.img`
-  object-fit: scale-down;
-  grid-area: logo;
-  width: 100%;
-  ${media.handheld`
-  width: 80%;
-  align-self: center;
+    font-size: 1.125rem;
   `};
 `;
 
+const Description = styled.p`
+  margin: 0;
+  font-size: 0.875rem;
+  line-height: 1.55;
+  color: var(--color-text-body);
+  flex-grow: 1;
+  margin-bottom: 1.5rem;
+`;
+
+const Logo = styled.img`
+  object-fit: contain;
+  width: 40px;
+  height: 40px;
+  border-radius: var(--border-radius-sm);
+`;
+
 const LearnMoreLink = styled.a`
-  grid-area: readmore;
   font-weight: 600;
-  text-align: right;
-  align-self: center;
-  font-size: 0.9rem;
+  font-size: 0.8125rem;
+  color: var(--color-brand);
+  margin-bottom: 2.5rem;
 
   &:hover {
     text-decoration: underline;
   }
-
-  ${media.handheld`
-    margin: 0;
-    `};
 `;
 
 const SelectedMark = styled.div<GroupCardElementsStyledProps>`
   width: 100%;
-  height: 35px;
-  padding: 8px 0;
+  padding: 0.75rem 0;
   position: absolute;
-  right: 0;
+  left: 0;
   bottom: 0;
   display: flex;
   justify-content: center;
   align-items: center;
   background: ${(props) =>
-    props.$isChosen
-      ? "linear-gradient(180deg, #C0392B 0%, #BD1C1C 100%)"
-      : "linear-gradient(180deg, #394B59 0%, #283642 100%)"};
-  border-radius: 0px 0px 10px 10px;
+    props.$isChosen ? "var(--color-brand)" : "var(--color-surface-subtle)"};
+  transition: var(--transition-base);
 `;
 
 const SelectedMarkText = styled.span<GroupCardElementsStyledProps>`
-  color: ${(props) =>
-    props.$isChosen ? "var(--color-white);" : "var(--color-gray-2);"};
-  font-size: 1rem;
-  font-weight: bold;
-  line-height: 1.2rrem;
+  color: ${(props) => (props.$isChosen ? "white" : "var(--color-text-body)")};
+  font-size: 0.875rem;
+  font-weight: 600;
   user-select: none;
   display: flex;
   align-items: center;
+  gap: 0.5rem;
 
   span {
-    color: rgba(255, 255, 255, 0.6);
-    font-size: 0.8rem;
-    margin-left: 4px;
+    opacity: 0.8;
+    font-size: 0.75rem;
+    font-weight: 400;
   }
-
-  ${media.handheld`
-     font-size: 0.9rem;
-     span {
-      font-size: 0.7rem;
-     }
-  `};
 `;

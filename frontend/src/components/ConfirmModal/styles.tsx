@@ -1,4 +1,4 @@
-import "~/@webkom/lego-bricks/dist/style.css";
+import "@webkom/lego-bricks/dist/style.css";
 import styled from "styled-components";
 
 export const Overlay = styled.div`
