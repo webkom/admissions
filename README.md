@@ -7,6 +7,7 @@ Recruitment for [Abakus](https://abakus.no/).
 - [Environments](#environments)
 - [Local development](#local-development)
 - [Creating admissions](#creating-admissions)
+- [Interview scheduling worker](#interview-scheduling-worker)
 - [Permissions](#permissions)
 - [Run tests](#run-tests)
 - [Code style](#code-style)
@@ -154,6 +155,27 @@ $ poetry run python manage.py shell_plus
 > admission = Admission.objects.get(slug="opptak")
 > admission.groups.add(new_group)
 ```
+
+&nbsp;
+
+## Interview scheduling worker
+
+Interview schedules are produced by a constraint solver that can take a while on
+large admissions, so solving runs in a **separate worker process** instead of
+the web request. The frontend enqueues a `SolveJob`, the worker picks up pending
+jobs and runs them, and the frontend polls for the result.
+
+You must run the worker for the interview-distribution ("Fordel intervjuer")
+feature to produce results — without it, solve jobs stay `PENDING` forever.
+
+```sh
+# Run alongside the Django server (a 5th terminal in development)
+$ poetry run python manage.py run_solver_worker
+```
+
+In production, run this as a long-lived process/container next to the web server.
+A single instance is enough; jobs are claimed with row locks, so you can run more
+than one safely.
 
 &nbsp;
 

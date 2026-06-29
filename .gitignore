@@ -65,6 +65,7 @@ target/
 
 .env
 admissions/files
+members
 main.js
 bundles/
 webpack-stats.json

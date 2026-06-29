@@ -5,7 +5,7 @@ import path from "path";
 const projectRootDir = path.resolve(__dirname);
 
 // https://vitejs.dev/config/
-export default defineConfig({
+export default defineConfig(({ mode }) => ({
   plugins: [react()],
   base: "/static/",
   root: projectRootDir,
@@ -21,7 +21,10 @@ export default defineConfig({
     rollupOptions: {
       input: "frontend/src/index.tsx",
     },
-    sourcemap: "inline",
+    // Inline maps in dev for debugging; never ship source maps to production,
+    // where they expose the full TypeScript source via devtools and bloat the
+    // bundle.
+    sourcemap: mode === "production" ? false : "inline",
   },
   resolve: {
     alias: {
@@ -30,4 +33,4 @@ export default defineConfig({
       "~": path.resolve(projectRootDir, "node_modules"),
     },
   },
-});
+}));
