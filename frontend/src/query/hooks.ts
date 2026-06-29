@@ -1,6 +1,18 @@
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AxiosError } from "axios";
-import { Admission, Application, Group } from "src/types";
+import {
+  Admission,
+  Candidate,
+  Application,
+  Group,
+  InterviewAvailabilityParticipant,
+  SavedSchedule,
+} from "src/types";
+import { apiClient } from "src/utils/callApi";
+
+type SaveSchedulePayload = Partial<Omit<SavedSchedule, "id" | "updated_at">> & {
+  expected_updated_at?: string;
+};
 
 // Public hooks
 
@@ -13,12 +25,14 @@ export const useAdmissions = () => {
 export const useAdmission = (slug: string) => {
   return useQuery<Admission, AxiosError>({
     queryKey: [`/admission/${slug}/`],
+    enabled: Boolean(slug),
   });
 };
 
 export const useMyApplication = (slug: string) => {
   return useQuery<Application, AxiosError>({
     queryKey: [`/admission/${slug}/application/mine/`],
+    enabled: Boolean(slug),
   });
 };
 
@@ -33,18 +47,84 @@ export const useAdminAdmissions = () => {
 export const useAdminAdmission = (slug: string) => {
   return useQuery<Admission, AxiosError>({
     queryKey: [`/admin/admission/${slug}/`],
+    enabled: Boolean(slug),
   });
 };
 
 export const useAdminApplications = (admissionSlug: string) => {
   return useQuery<Application[], AxiosError>({
     queryKey: [`/admin/admission/${admissionSlug}/application/`],
+    enabled: Boolean(admissionSlug),
+  });
+};
+
+export const useInterviewCandidates = (slug: string) => {
+  return useQuery<Candidate[], AxiosError>({
+    queryKey: [`/admin/admission/${slug}/candidates/`],
+    retry: false,
+    enabled: Boolean(slug),
   });
 };
 
 export const useAdminGroups = () => {
   return useQuery<Group[], AxiosError>({
     queryKey: ["/admin/group/"],
+  });
+};
+
+// Schedule hooks
+
+export const useSavedSchedule = (slug: string) => {
+  return useQuery<SavedSchedule, AxiosError>({
+    queryKey: [`/admin/admission/${slug}/schedule/`],
+    retry: false,
+    enabled: Boolean(slug),
+  });
+};
+
+export const useSaveSchedule = (slug: string) => {
+  const queryClient = useQueryClient();
+  return useMutation<SavedSchedule, AxiosError, SaveSchedulePayload>({
+    mutationFn: (payload) =>
+      apiClient
+        .post(`/admin/admission/${slug}/schedule/`, payload)
+        .then((r) => r.data),
+    onSuccess: (data) => {
+      queryClient.setQueryData([`/admin/admission/${slug}/schedule/`], data);
+      queryClient.invalidateQueries({
+        queryKey: [`/admin/admission/${slug}/availability/`],
+      });
+    },
+  });
+};
+
+export const useInterviewAvailability = (slug: string) => {
+  return useQuery<InterviewAvailabilityParticipant[], AxiosError>({
+    queryKey: [`/admin/admission/${slug}/availability/`],
+    retry: false,
+    enabled: Boolean(slug),
+    // Keep heatmap/interviewer data fresh across clients.
+    refetchInterval: 10000,
+    refetchIntervalInBackground: false,
+  });
+};
+
+export const useSaveInterviewAvailability = (slug: string) => {
+  const queryClient = useQueryClient();
+  return useMutation<
+    InterviewAvailabilityParticipant,
+    AxiosError,
+    { slots?: string[]; conflicts?: string[] }
+  >({
+    mutationFn: (payload) =>
+      apiClient
+        .post(`/admin/admission/${slug}/availability/`, payload)
+        .then((r) => r.data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({
+        queryKey: [`/admin/admission/${slug}/availability/`],
+      });
+    },
   });
 };
 
@@ -59,7 +139,7 @@ export const useManageAdmissions = () => {
 export const useManageAdmission = (slug: string, enabled = true) => {
   return useQuery<Admission, AxiosError>({
     queryKey: [`/manage/admission/${slug}/`],
-    enabled,
+    enabled: enabled && Boolean(slug),
   });
 };
 
