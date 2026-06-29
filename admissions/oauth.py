@@ -177,4 +177,8 @@ def update_custom_user_details(strategy, details, user=None, *args, **kwargs):
         user.save()
 
     user.profile_picture = kwargs["response"]["profilePicture"]
+    # LEGO reports gender as "male"/"female"/"other"; mirror it so the interview
+    # solver can match panel gender. "gender" is a single word so it is not
+    # camel-cased by LEGO's API.
+    user.gender = kwargs["response"].get("gender") or ""
     user.save()

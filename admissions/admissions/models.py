@@ -15,6 +15,9 @@ class LegoUser(AbstractUser):
     lego_id = models.IntegerField(unique=True, null=False, editable=False)
 
     profile_picture = models.URLField(null=True, blank=True)
+    # Mirrored from LEGO on login ("male"/"female"/"other"/""). Used only to
+    # let the interview solver match panel gender; never shown to applicants.
+    gender = models.CharField(max_length=50, blank=True, default="")
 
     @property
     def representative_of_group(self):
@@ -31,16 +34,24 @@ class LegoUser(AbstractUser):
         return membership.group
 
     @property
+    def member_of_group(self):
+        membership = Membership.objects.filter(user=self).first()
+        if not membership:
+            return None
+        return membership.group
+
+    @property
     def is_member_of_webkom(self):
         """
         Return whether the user is a member of the webkom-group or not
         """
-        try:
-            webkom = Group.objects.get(name=constants.WEBKOM_GROUPNAME)
-        except Group.DoesNotExist:
-            # Allow the project to run without a group named "webkom" initialized
-            return False
-        return Membership.objects.filter(user=self, group=webkom).exists()
+        return self.is_member_of(constants.WEBKOM_GROUPNAME)
+
+    def is_member_of(self, group_name):
+        """
+        Return whether the user is a member of the given group or not
+        """
+        return Membership.objects.filter(user=self, group__name=group_name).exists()
 
 
 class Group(models.Model):
@@ -63,7 +74,7 @@ class Group(models.Model):
 class Admission(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     created_by = models.ForeignKey(
-        LegoUser, null=True, related_name="admissions", on_delete=models.CASCADE
+        LegoUser, null=True, related_name="admissions", on_delete=models.SET_NULL
     )
     title = models.CharField(max_length=255, unique=True)
     slug = models.SlugField(max_length=200, unique=True, null=False)
@@ -152,6 +163,126 @@ class GroupApplication(TimeStampModel):
         Group, related_name="applications", on_delete=models.CASCADE
     )
     text = models.TextField(blank=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["application", "group"],
+                name="unique_application_group_combination",
+            )
+        ]
+
+
+class SavedSchedule(models.Model):
+    admission = models.OneToOneField(
+        Admission, on_delete=models.CASCADE, related_name="saved_schedule"
+    )
+    schedule = models.JSONField()
+    start_date = models.DateField()
+    end_date = models.DateField(null=True, blank=True)
+    session_duration = models.PositiveIntegerField(default=60)
+    enabled_windows = models.JSONField(default=list, blank=True)
+    enabled_slots = models.JSONField(default=list, blank=True)
+    day_start_minute = models.PositiveIntegerField(default=8 * 60)
+    day_end_minute = models.PositiveIntegerField(default=18 * 60)
+    chunk_size = models.PositiveIntegerField(default=4)
+    chunk_break_minutes = models.PositiveIntegerField(default=0)
+    panel_size = models.PositiveSmallIntegerField(null=True, blank=True)
+    solver_options = models.JSONField(null=True, blank=True)
+    is_distributed = models.BooleanField(default=False)
+
+    NAME_VISIBILITY_HIDDEN = "hidden"
+    NAME_VISIBILITY_ADMIN_ONLY = "admin_only"
+    NAME_VISIBILITY_COMMITTEE = "committee"
+    NAME_VISIBILITY_CHOICES = [
+        (NAME_VISIBILITY_HIDDEN, "Hidden"),
+        (NAME_VISIBILITY_ADMIN_ONLY, "Admin only"),
+        (NAME_VISIBILITY_COMMITTEE, "Committee"),
+    ]
+    name_visibility = models.CharField(
+        max_length=16,
+        choices=NAME_VISIBILITY_CHOICES,
+        default=NAME_VISIBILITY_HIDDEN,
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"Schedule for {self.admission} (distributed={self.is_distributed})"
+
+
+class InterviewAvailability(models.Model):
+    admission = models.ForeignKey(
+        Admission, on_delete=models.CASCADE, related_name="interview_availabilities"
+    )
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="interview_availabilities",
+    )
+    slots = models.JSONField(default=list, blank=True)
+    conflicts = models.JSONField(default=list, blank=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["admission", "user"], name="unique_admission_user_availability"
+            )
+        ]
+
+    def __str__(self):
+        return f"Availability for {self.user} in {self.admission}"
+
+
+class SolveJob(models.Model):
+    """A queued interview-schedule solve. Solving runs in a separate worker
+    process (manage.py run_solver_worker) instead of the request thread, so a
+    heavy solve can take as long as it needs without hitting the request
+    timeout — the client enqueues a job and polls for the result."""
+
+    STATUS_PENDING = "PENDING"
+    STATUS_RUNNING = "RUNNING"
+    STATUS_DONE = "DONE"
+    STATUS_ERROR = "ERROR"
+    STATUS_CANCELLED = "CANCELLED"
+    STATUS_CHOICES = [
+        (STATUS_PENDING, "Pending"),
+        (STATUS_RUNNING, "Running"),
+        (STATUS_DONE, "Done"),
+        (STATUS_ERROR, "Error"),
+        (STATUS_CANCELLED, "Cancelled"),
+    ]
+    ACTIVE_STATUSES = (STATUS_PENDING, STATUS_RUNNING)
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    admission = models.ForeignKey(
+        Admission, on_delete=models.CASCADE, related_name="solve_jobs"
+    )
+    requested_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, on_delete=models.SET_NULL
+    )
+    status = models.CharField(
+        max_length=16,
+        choices=STATUS_CHOICES,
+        default=STATUS_PENDING,
+        db_index=True,
+    )
+    # The full solver input (candidates, interviewers, panel_size, options, …)
+    # and, once finished, the solver result envelope.
+    request_data = models.JSONField()
+    result = models.JSONField(null=True, blank=True)
+    error = models.TextField(blank=True, default="")
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    started_at = models.DateTimeField(null=True, blank=True)
+    finished_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["created_at"]
+
+    def __str__(self):
+        return f"SolveJob {self.id} for {self.admission} ({self.status})"
 
 
 class Membership(models.Model):

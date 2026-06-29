@@ -51,7 +51,7 @@ sentry_sdk.init(
 
 
 CORS_FRONTEND_URL = urlparse(FRONTEND_URL).netloc
-CORS_ORIGIN_WHITELIST = list(
+CORS_ALLOWED_ORIGINS = list(
     {
         f"https://{CORS_FRONTEND_URL}",
         f"https://www.{CORS_FRONTEND_URL}",
@@ -61,3 +61,16 @@ CORS_ORIGIN_WHITELIST = list(
         "http://127.0.0.1:3000",
     }
 )
+
+# Security: HTTPS, cookies, HSTS. TLS terminates at the proxy (X-Forwarded-Proto).
+SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+SECURE_SSL_REDIRECT = env.bool("SECURE_SSL_REDIRECT", default=True)
+SESSION_COOKIE_SECURE = True
+CSRF_COOKIE_SECURE = True
+SESSION_COOKIE_HTTPONLY = True
+SESSION_COOKIE_SAMESITE = "Lax"
+CSRF_COOKIE_SAMESITE = "Lax"
+SECURE_CONTENT_TYPE_NOSNIFF = True
+SECURE_HSTS_SECONDS = env.int("SECURE_HSTS_SECONDS", default=60 * 60 * 24 * 365)
+SECURE_HSTS_INCLUDE_SUBDOMAINS = True
+SECURE_HSTS_PRELOAD = True

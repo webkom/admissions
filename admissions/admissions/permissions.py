@@ -1,9 +1,10 @@
 from django.db.models import Q
+from django.shortcuts import get_object_or_404
 from rest_framework import permissions
 
 from admissions.admissions import constants
 
-from .models import Admission, GroupApplication, LegoUser, Membership, UserApplication
+from .models import Admission, LegoUser, Membership
 
 
 def cast_as_lego_user(user_obj) -> LegoUser:
@@ -13,10 +14,17 @@ def cast_as_lego_user(user_obj) -> LegoUser:
 
 def user_is_privileged(admission_slug, user):
     # Return true if the user has some sort of privileges in the admission
-    admission = Admission.objects.get(slug=admission_slug)
+    admission = get_object_or_404(Admission, slug=admission_slug)
     for group in admission.admin_groups.all():
         if Membership.objects.filter(user=user.pk, group=group.pk).exists():
             return True
+    return user_is_recruiter(admission_slug, user)
+
+
+def user_is_recruiter(admission_slug, user):
+    # Return true only if the user is leader or recruiting in one of the
+    # admission's committee groups. Members of admin_groups do not qualify.
+    admission = get_object_or_404(Admission, slug=admission_slug)
     for group in admission.groups.all():
         if (
             Membership.objects.filter(user=user.pk, group=group.pk)
@@ -100,18 +108,6 @@ class AdmissionPermissions(permissions.BasePermission):
 class ApplicationPermissions(permissions.BasePermission):
     def has_object_permission(self, request, view, obj):
         return user_is_privileged(view.kwargs.get("admission_slug"), request.user)
-
-    def has_permission(self, request, view):
-        return user_is_privileged(view.kwargs.get("admission_slug"), request.user)
-
-
-class GroupApplicationPermissions(permissions.BasePermission):
-    def has_object_permission(self, request, view, obj):
-        if isinstance(obj, GroupApplication):
-            request.user.__class__ = LegoUser
-            return obj.group == request.user.representative_of_group
-        if isinstance(obj, UserApplication):
-            return GroupApplication.objects.filter(application=obj).count() == 0
 
     def has_permission(self, request, view):
         return user_is_privileged(view.kwargs.get("admission_slug"), request.user)
