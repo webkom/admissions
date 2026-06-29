@@ -16,10 +16,19 @@ export const toggleFromArray: <T>(
     : [...array, item];
 
 /**
- * Replace double quotation marks with single quotation marks
+ * Make an applicant-supplied value safe to put in a CSV cell.
  *
- * @param text The string to be replaced
- * @returns A string where " is replaced by '
+ * Defuses spreadsheet formula injection: Excel/Sheets execute a cell whose
+ * value starts with =, +, -, @, tab or carriage return, so an answer like
+ * `=HYPERLINK(...)` would run when a recruiter opens applications.csv. Such
+ * values are prefixed with a single quote so they render as plain text.
+ * Embedded double quotes are also normalised to single quotes.
+ *
+ * @param value The applicant-derived value
+ * @returns A string safe to write to a CSV cell
  */
-export const replaceQuotationMarks = (text: string) =>
-  text.replaceAll('"', "'");
+export const escapeCsvCell = (value: unknown): string => {
+  if (value === null || value === undefined) return "";
+  const text = String(value).replaceAll('"', "'");
+  return /^[=+\-@\t\r]/.test(text) ? `'${text}` : text;
+};

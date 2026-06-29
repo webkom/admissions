@@ -1,9 +1,11 @@
 import { AxiosError } from "axios";
 import { useFormik } from "formik";
+import * as Yup from "yup";
 import { DateTime } from "luxon";
 import React, { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import ConfirmModal from "src/components/ConfirmModal";
+import HeaderFieldsEditor from "./components/HeaderFieldsEditor";
 import { useManageAdmission } from "src/query/hooks";
 import {
   AdmissionMutationResponse,
@@ -15,7 +17,7 @@ import {
 import { toggleFromArray } from "src/utils/methods";
 import styled from "styled-components";
 import GroupSelector from "./components/GroupSelector";
-import { Button } from "@webkom/lego-bricks";
+import { StyledButton } from "src/components/LinkButton";
 import LoadingBall from "src/components/LoadingBall";
 
 interface ReturnedData {
@@ -32,6 +34,32 @@ const localTimeStringToTimezoned = (dateString: string): string | null =>
   DateTime.fromISO(dateString, {
     zone: "local",
   }).toISO({ includeOffset: true });
+
+// The datetime fields are local "yyyy-MM-ddTHH:mm:ss" strings, so lexical
+// comparison preserves chronological order.
+const validationSchema = Yup.object({
+  title: Yup.string().trim().required("Tittel er påkrevd"),
+  slug: Yup.string()
+    .min(4, "Slug må være minst 4 tegn")
+    .required("Slug er påkrevd"),
+  open_from: Yup.string().required("Åpningstidspunkt er påkrevd"),
+  public_deadline: Yup.string()
+    .required("Søknadsfrist er påkrevd")
+    .test(
+      "deadline-after-open",
+      "Søknadsfristen må være etter åpning",
+      (value, ctx) =>
+        !value || !ctx.parent.open_from || value >= ctx.parent.open_from,
+    ),
+  closed_from: Yup.string()
+    .required("Stengetidspunkt er påkrevd")
+    .test(
+      "close-after-open",
+      "Stenging må være etter åpning",
+      (value, ctx) =>
+        !value || !ctx.parent.open_from || value > ctx.parent.open_from,
+    ),
+});
 
 const CreateAdmission: React.FC = () => {
   const navigate = useNavigate();
@@ -66,6 +94,8 @@ const CreateAdmission: React.FC = () => {
       admin_groups: [],
       groups: [],
     },
+    validationSchema,
+    validateOnMount: true,
     onSubmit: (values) => {
       setReturnedData(undefined);
       const processedValues = { ...values };
@@ -254,6 +284,18 @@ const CreateAdmission: React.FC = () => {
           />
         </InputWrapper>
       </FormGroup>
+      <FormGroup>
+        <WideInputWrapper>
+          <InputTitle>Tilleggsspørsmål</InputTitle>
+          <InputDescription>
+            Ekstra spørsmål søkeren svarer på i tillegg til søknadsteksten.
+          </InputDescription>
+          <HeaderFieldsEditor
+            value={formik.values.header_fields}
+            onChange={(fields) => formik.setFieldValue("header_fields", fields)}
+          />
+        </WideInputWrapper>
+      </FormGroup>
       {returnedData && (
         <FormGroup>
           <ResultText type={returnedData.type}>
@@ -263,16 +305,16 @@ const CreateAdmission: React.FC = () => {
       )}
       <FormGroup>
         <InputWrapper>
-          <Button type="submit" disabled={!formik.isValid} success>
+          <StyledButton type="submit" disabled={!formik.isValid} success>
             {isNew ? "Opprett opptak" : "Lagre endringer"}
-          </Button>
+          </StyledButton>
         </InputWrapper>
         {!isNew && (
           <InputWrapper>
             <ConfirmModal
               title="Slett opptak"
               trigger={({ onClick }) => (
-                <Button
+                <StyledButton
                   disabled={
                     DateTime.fromISO(admission?.closed_from ?? "")
                       .diffNow()
@@ -282,7 +324,7 @@ const CreateAdmission: React.FC = () => {
                   danger
                 >
                   Slett opptak
-                </Button>
+                </StyledButton>
               )}
               message="Er du sikker på at du vil slette opptaket?"
               cancelText="Nei"
@@ -314,6 +356,10 @@ const FormGroup = styled.div`
 
 const InputWrapper = styled.div`
   flex-basis: 550px;
+`;
+
+const WideInputWrapper = styled.div`
+  flex-basis: 100%;
 `;
 
 const InputTitle = styled.p`

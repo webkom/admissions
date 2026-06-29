@@ -1,36 +1,31 @@
 import React, { useEffect, useState } from "react";
 import styled from "styled-components";
-import FormatTime from "src/components/Time/FormatTime";
 
 import LoadingBall from "src/components/LoadingBall";
-import GroupStatistics from "./components/GroupStatistics";
-import { replaceQuotationMarks } from "src/utils/methods";
+import { escapeCsvCell } from "src/utils/methods";
 import { useAdmission, useAdminApplications } from "src/query/hooks";
 import { useParams } from "react-router-dom";
+import { Eye, EyeOff } from "lucide-react";
 
-import AdmissionsContainer from "src/containers/AdmissionsContainer";
 import { Application } from "src/types";
-import {
-  Statistics,
-  StatisticsName,
-  StatisticsWrapper,
-} from "./components/StyledElements";
-import djangoData from "src/utils/djangoData";
 import { InputFieldModel } from "src/utils/jsonFields";
 import CSVExportHandler, {
   CompleteCsvData,
 } from "./components/CSVExportHandler";
+import {
+  actionButtonActive,
+  actionButtonBase,
+  actionButtonNeutral,
+} from "src/components/Scheduling/ui";
+import cn from "src/utils/cn";
 
 const ViewApplications = () => {
   const { admissionSlug } = useParams();
   const [sortedApplications, setSortedApplications] = useState<Application[]>(
     [],
   );
-  const [selectedGroups, setSelectedGroups] = useState<string[]>([]);
-  const [filteredApplications, setFilteredApplications] = useState<
-    Application[]
-  >([]);
   const [csvData, setCsvData] = useState<CompleteCsvData[]>([]);
+  const [showCandidates, setShowCandidates] = useState(false);
 
   const {
     data: applications,
@@ -42,13 +37,11 @@ const ViewApplications = () => {
     error: admissionError,
     isFetching: admissionIsFetching,
   } = useAdmission(admissionSlug ?? "");
-  const { groups } = admission ?? {};
-
   const csvHeaders = [
     { label: "Fullt Navn", key: "name" },
     { label: "Prioriteringer", key: "priorityText" },
     ...(admission?.userdata.is_admin
-      ? (admission?.header_fields as InputFieldModel[])
+      ? ((admission?.header_fields as InputFieldModel[]) ?? [])
           .filter((headerField) => "id" in headerField)
           .map((headerField) => ({
             label: headerField.title,
@@ -75,33 +68,25 @@ const ViewApplications = () => {
   }, [applications]);
 
   useEffect(() => {
-    setFilteredApplications(
-      sortedApplications.filter(
-        (application) =>
-          selectedGroups.length === 0 ||
-          application.group_applications.find((groupApplication) =>
-            selectedGroups.includes(groupApplication.group.name),
-          ),
-      ),
-    );
-  }, [sortedApplications, selectedGroups]);
-
-  useEffect(() => {
-    // Push all the individual applications into csvData with the right format
     const updatedCsvData: CompleteCsvData[] = [];
-    filteredApplications.forEach((application) => {
+    sortedApplications.forEach((application) => {
+      const headerResponses = Object.fromEntries(
+        Object.entries(application.header_fields_response ?? {}).map(
+          ([key, value]) => [key, escapeCsvCell(value)],
+        ),
+      );
       application.group_applications.forEach((groupApplication) => {
         updatedCsvData.push({
           name: application.user.full_name,
           priorityText:
             application.text !== ""
-              ? replaceQuotationMarks(application.text ?? "")
+              ? escapeCsvCell(application.text ?? "")
               : "Ingen prioriteringer",
-          ...application.header_fields_response,
+          ...headerResponses,
           group: groupApplication.group.name,
-          groupApplicationText: replaceQuotationMarks(groupApplication.text),
+          groupApplicationText: escapeCsvCell(groupApplication.text),
           email: application.user.email,
-          phoneNumber: application.phone_number,
+          phoneNumber: escapeCsvCell(application.phone_number),
           username: application.user.username,
           appliedWithinDeadline: application.applied_within_deadline,
           createdAt: application.created_at,
@@ -110,7 +95,7 @@ const ViewApplications = () => {
       });
     });
     setCsvData(updatedCsvData);
-  }, [filteredApplications]);
+  }, [sortedApplications]);
 
   const numApplicants = sortedApplications.length;
 
@@ -118,6 +103,10 @@ const ViewApplications = () => {
   sortedApplications.forEach((application) => {
     numApplications += application.group_applications.length;
   });
+
+  const visibleCsvData = showCandidates
+    ? csvData
+    : csvData.map(maskCandidateFields);
 
   if (applicationsError || admissionError) {
     return (
@@ -133,60 +122,41 @@ const ViewApplications = () => {
   } else {
     return (
       <PageWrapper>
-        <Statistics>
-          <StatisticsWrapper>
-            <StatisticsName>Søknader åpner</StatisticsName>
-            <FormatTime format="HH:mm:ss EEEE d. MMMM">
-              {admission.open_from}
-            </FormatTime>
-          </StatisticsWrapper>
-          <StatisticsWrapper>
-            <StatisticsName>Søknadsfrist</StatisticsName>
-            <FormatTime format="HH:mm:ss EEEE d. MMMM">
-              {admission.public_deadline}
-            </FormatTime>
-          </StatisticsWrapper>
-          <StatisticsWrapper>
-            <StatisticsName>Redigeringsfrist</StatisticsName>
-            <FormatTime format="HH:mm:ss EEEE d. MMMM">
-              {admission.closed_from}
-            </FormatTime>
-          </StatisticsWrapper>
-        </Statistics>
-        <Statistics>
-          <StatisticsWrapper $smallerMargin>
-            <StatisticsName>Antall søkere</StatisticsName>
-            {numApplicants} {numApplicants == 1 ? "søker" : "søkere"}
-          </StatisticsWrapper>
-          <StatisticsWrapper $smallerMargin>
-            <StatisticsName>Totalt antall søknader</StatisticsName>
-            {numApplications} {numApplications == 1 ? "søknad" : "søknader"}
-          </StatisticsWrapper>
+        <Header>
+          <div>
+            <Eyebrow>CSV</Eyebrow>
+            <Title>{admission.title}</Title>
+          </div>
+          <HeaderControls>
+            <button
+              type="button"
+              aria-pressed={showCandidates}
+              onClick={() => setShowCandidates((current) => !current)}
+              className={cn(
+                actionButtonBase,
+                showCandidates ? actionButtonActive : actionButtonNeutral,
+                "px-3 py-2",
+              )}
+            >
+              {showCandidates ? <EyeOff size={14} /> : <Eye size={14} />}
+              {showCandidates ? "Skjul innhold" : "Vis innhold"}
+            </button>
+            <Meta>
+              {numApplicants} {numApplicants === 1 ? "søker" : "søkere"} ·{" "}
+              {numApplications} {numApplications === 1 ? "søknad" : "søknader"}
+            </Meta>
+          </HeaderControls>
+        </Header>
 
-          <Statistics>
-            {(groups !== undefined ? [...groups] : [])
-              .filter(
-                (group) =>
-                  admission.userdata.is_admin ||
-                  group.name === djangoData.user.representative_of_group,
-              )
-              .sort((a, b) => a.name.localeCompare(b.name))
-              .map((group) => (
-                <GroupStatistics
-                  key={group.pk}
-                  applications={sortedApplications}
-                  groupName={group.name}
-                  groupLogo={group.logo}
-                  selectedGroups={selectedGroups}
-                  setSelectedGroups={setSelectedGroups}
-                />
-              ))}
-          </Statistics>
-        </Statistics>
-        <CSVExportHandler csvData={csvData} csvHeaders={csvHeaders} />
-        <AdmissionsContainer
-          admission={admission}
-          applications={filteredApplications}
+        <CSVExportHandler
+          csvData={visibleCsvData}
+          csvHeaders={csvHeaders}
+          rowCount={csvData.length}
+        />
+        <CsvPreviewTable
+          rows={visibleCsvData}
+          headers={csvHeaders}
+          showCandidates={showCandidates}
         />
       </PageWrapper>
     );
@@ -195,13 +165,180 @@ const ViewApplications = () => {
 
 export default ViewApplications;
 
+type CsvHeader = { label: string; key: string };
+// Columns that never contain applicant-identifying content. Everything else —
+// including the dynamic header-field answer columns — is masked when content is
+// hidden, so applicant free text can't leak through a custom question.
+const NON_SENSITIVE_FIELD_KEYS = new Set([
+  "group",
+  "appliedWithinDeadline",
+  "createdAt",
+  "updatedAt",
+]);
+
+const isSensitiveKey = (key: string) => !NON_SENSITIVE_FIELD_KEYS.has(key);
+
+const maskCandidateFields = (row: CompleteCsvData): CompleteCsvData => {
+  const masked: CompleteCsvData = { ...row };
+  Object.keys(masked).forEach((key) => {
+    if (isSensitiveKey(key)) masked[key] = "Skjult";
+  });
+  return masked;
+};
+
+const CsvPreviewTable = ({
+  rows,
+  headers,
+  showCandidates,
+}: {
+  rows: CompleteCsvData[];
+  headers: CsvHeader[];
+  showCandidates: boolean;
+}) => (
+  <TableShell>
+    <StyledTable>
+      <thead>
+        <tr>
+          {headers.map((header) => (
+            <th key={header.key}>{header.label}</th>
+          ))}
+        </tr>
+      </thead>
+      <tbody>
+        {rows.map((row, rowIndex) => (
+          <tr key={`${row.username}-${row.group}-${rowIndex}`}>
+            {headers.map((header) => (
+              <td
+                key={header.key}
+                data-column={header.key}
+                data-masked={
+                  !showCandidates && isSensitiveKey(header.key)
+                    ? "true"
+                    : undefined
+                }
+              >
+                {renderCsvCell(row[header.key])}
+              </td>
+            ))}
+          </tr>
+        ))}
+      </tbody>
+    </StyledTable>
+  </TableShell>
+);
+
+const renderCsvCell = (value: CompleteCsvData[string]): React.ReactNode => {
+  if (typeof value === "boolean") return value ? "Ja" : "Nei";
+  if (value === null || value === undefined || value === "") return "—";
+
+  return String(value);
+};
+
 /** Styles **/
 
 const PageWrapper = styled.div`
   display: flex;
   flex-direction: column;
+  gap: 0.75rem;
+  width: 100%;
+`;
+
+const Header = styled.header`
+  display: flex;
   align-items: center;
-  margin: 1em;
-  border: 1px solid rgba(0, 0, 0, 0.09);
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.04);
+  justify-content: space-between;
+  gap: 1rem;
+  padding-bottom: 0.5rem;
+
+  @media screen and (max-width: 700px) {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 0.35rem;
+  }
+`;
+
+const Eyebrow = styled.span`
+  display: block;
+  margin-bottom: 0.25rem;
+  color: var(--color-text-subtle);
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+`;
+
+const Title = styled.h1`
+  margin: 0;
+  color: var(--color-text-primary);
+  font-size: 1.35rem;
+  font-weight: 750;
+  line-height: 1.2;
+  text-align: left;
+`;
+
+const Meta = styled.span`
+  color: var(--color-text-muted);
+  font-size: 0.875rem;
+  font-weight: 600;
+  white-space: nowrap;
+`;
+
+const HeaderControls = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+
+  @media screen and (max-width: 700px) {
+    justify-content: flex-start;
+  }
+`;
+
+const TableShell = styled.div`
+  max-width: 100%;
+  width: 100%;
+  overflow: auto;
+  border: 1px solid var(--color-border-soft);
+  border-radius: 8px;
+  background: var(--color-surface-base);
+`;
+
+const StyledTable = styled.table`
+  min-width: 1180px;
+  table-layout: auto;
+
+  th {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    background: var(--color-surface-base);
+    color: var(--color-text-subtle);
+    font-size: 0.68rem;
+    white-space: nowrap;
+  }
+
+  td {
+    vertical-align: top;
+    color: var(--color-text-primary);
+    line-height: 1.45;
+  }
+
+  td[data-masked="true"] {
+    color: var(--color-text-subtle);
+    font-style: italic;
+  }
+
+  td[data-column="priorityText"],
+  td[data-column="groupApplicationText"] {
+    min-width: 24rem;
+    white-space: pre-wrap;
+  }
+
+  td[data-column="phoneNumber"],
+  td[data-column="createdAt"],
+  td[data-column="updatedAt"] {
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
 `;

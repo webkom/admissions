@@ -35,15 +35,23 @@ const EditGroup = () => {
     return <div>Feil: klarte ikke laste inn grupper.</div>;
   } else {
     const group = (groups ?? []).find((group) => group.pk === groupId);
-    console.log(group);
     if (!group) return <div>Feil: Ugyldig gruppe</div>;
 
     return (
       <PageWrapper>
-        <GroupLogoWrapper>
-          <GroupLogo src={group.logo} />
-          <h2>{group.name}</h2>
-        </GroupLogoWrapper>
+        <HeaderCard>
+          <GroupLogoWrapper>
+            <GroupLogo src={group.logo} />
+            <div>
+              <SectionEyebrow>Gruppeinnstillinger</SectionEyebrow>
+              <GroupTitle>{group.name}</GroupTitle>
+              <GroupDescription>
+                Juster beskrivelsen og autosvaret som vises for søkerne i denne
+                gruppen.
+              </GroupDescription>
+            </div>
+          </GroupLogoWrapper>
+        </HeaderCard>
 
         <Wrapper>
           <EditGroupForm
@@ -62,6 +70,36 @@ export default EditGroup;
 const PageWrapper = styled.div`
   display: flex;
   flex-direction: column;
-  align-items: center;
-  min-height: 100vh;
+  gap: 1rem;
+  width: 100%;
+`;
+
+const HeaderCard = styled.div`
+  width: 100%;
+  padding-bottom: 1rem;
+  border-bottom: 1px solid #e5e7eb;
+`;
+
+const SectionEyebrow = styled.span`
+  display: inline-block;
+  margin-bottom: 0.35rem;
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: #6b7280;
+`;
+
+const GroupTitle = styled.h1`
+  margin: 0;
+  font-size: 1.65rem;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  color: #1f2937;
+`;
+
+const GroupDescription = styled.p`
+  margin: 0.45rem 0 0;
+  color: #6b7280;
+  line-height: 1.6;
 `;
