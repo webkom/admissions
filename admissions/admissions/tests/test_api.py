@@ -1,9 +1,20 @@
+from types import SimpleNamespace
+
+from django.core.management import call_command
 from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APITestCase
 
 from admissions.admissions.constants import LEADER, MEMBER, RECRUITING
-from admissions.admissions.models import Group, LegoUser, Membership
+from admissions.admissions.models import (
+    Group,
+    InterviewAvailability,
+    LegoUser,
+    Membership,
+    SavedSchedule,
+    SolveJob,
+    UserApplication,
+)
 from admissions.admissions.tests.utils import create_admission, fake_timedelta
 
 
@@ -209,3 +220,782 @@ class EditAdmissionTestCase(APITestCase):
         )
 
         self.assertEqual(res.status_code, status.HTTP_404_NOT_FOUND)
+
+
+class SolveScheduleViewTestCase(APITestCase):
+    def setUp(self):
+        self.group = Group.objects.create(name="Solverkom", lego_id=998)
+        self.user = LegoUser.objects.create(username="solver-user", lego_id=999)
+        Membership.objects.create(user=self.user, role=MEMBER, group=self.group)
+        self.admission = create_admission(created_by=self.user, slug="solve-opptak")
+        self.admission.admin_groups.add(self.group)
+        self.client.force_authenticate(user=self.user)
+        self.url = reverse("solve-schedule")
+
+    def _solve(self, payload):
+        """Enqueue, run the worker once, and return a response-like object whose
+        .data is the solve result. Non-202 responses (validation/permission) are
+        returned verbatim."""
+        res = self.client.post(
+            self.url,
+            {**payload, "admission_slug": self.admission.slug},
+            format="json",
+        )
+        if res.status_code != status.HTTP_202_ACCEPTED:
+            return res
+        call_command("run_solver_worker", once=True)
+        job = SolveJob.objects.get(id=res.data["job_id"])
+        return SimpleNamespace(status_code=status.HTTP_200_OK, data=job.result)
+
+    def test_requires_admission_slug(self):
+        res = self.client.post(
+            self.url,
+            {"candidates": [], "interviewers": [], "panel_size": 1},
+            format="json",
+        )
+
+        self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_unprivileged_user_cannot_solve(self):
+        outsider = LegoUser.objects.create(username="solver-outsider", lego_id=997)
+        self.client.force_authenticate(user=outsider)
+
+        res = self._solve({"candidates": [], "interviewers": [], "panel_size": 1})
+
+        self.assertEqual(res.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_invalid_panel_size_is_rejected(self):
+        res = self._solve({"candidates": [], "interviewers": [], "panel_size": 0})
+
+        self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_blank_candidate_gender_is_allowed(self):
+        payload = {
+            "candidates": [
+                {"id": "candidate-1", "name": "Anna", "gender": ""},
+            ],
+            "interviewers": [
+                {
+                    "id": "interviewer-1",
+                    "name": "Ola",
+                    "gender": "M",
+                    "availability": [8],
+                },
+            ],
+            "panel_size": 1,
+            "options": {
+                "enforce_same_gender": True,
+                "allow_overtime": False,
+            },
+        }
+
+        res = self._solve(payload)
+
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.assertEqual(res.data["status"], "SUCCESS")
+
+    def test_unplaceable_candidate_is_reported(self):
+        payload = {
+            "candidates": [
+                {"id": "candidate-1", "name": "Anna", "gender": "F"},
+            ],
+            "interviewers": [
+                {
+                    "id": "interviewer-1",
+                    "name": "Ola",
+                    "gender": "M",
+                    "availability": [8],
+                },
+                {
+                    "id": "interviewer-2",
+                    "name": "Per",
+                    "gender": "M",
+                    "availability": [8],
+                },
+                {
+                    "id": "interviewer-3",
+                    "name": "Ida",
+                    "gender": "F",
+                    "availability": [],
+                },
+            ],
+            "panel_size": 2,
+            "options": {
+                "enforce_same_gender": True,
+                "allow_overtime": False,
+            },
+        }
+
+        res = self._solve(payload)
+
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.assertEqual(res.data["status"], "PARTIAL")
+        self.assertEqual(res.data["schedule"], [])
+        self.assertEqual(
+            [c["candidate_id"] for c in res.data["unplaceable"]],
+            ["candidate-1"],
+        )
+
+    def test_same_gender_constraint_can_be_disabled(self):
+        payload = {
+            "candidates": [
+                {"id": "candidate-1", "name": "Anna", "gender": "F"},
+            ],
+            "interviewers": [
+                {
+                    "id": "interviewer-1",
+                    "name": "Ola",
+                    "gender": "M",
+                    "availability": [8],
+                },
+                {
+                    "id": "interviewer-2",
+                    "name": "Per",
+                    "gender": "M",
+                    "availability": [8],
+                },
+                {
+                    "id": "interviewer-3",
+                    "name": "Ida",
+                    "gender": "F",
+                    "availability": [],
+                },
+            ],
+            "panel_size": 2,
+            "options": {
+                "enforce_same_gender": False,
+                "allow_overtime": False,
+            },
+        }
+
+        res = self._solve(payload)
+
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.assertEqual(res.data["status"], "SUCCESS")
+        self.assertEqual(len(res.data["schedule"]), 1)
+        self.assertEqual(res.data["schedule"][0]["candidate_id"], "candidate-1")
+        self.assertTrue(
+            all("id" in member for member in res.data["schedule"][0]["panel"])
+        )
+
+    def test_overtime_can_be_disabled(self):
+        payload = {
+            "candidates": [
+                {"id": "candidate-1", "name": "Erik", "gender": "M"},
+            ],
+            "interviewers": [
+                {
+                    "id": "interviewer-1",
+                    "name": "Ola",
+                    "gender": "M",
+                    "availability": [8],
+                },
+                {
+                    "id": "interviewer-2",
+                    "name": "Per",
+                    "gender": "M",
+                    "availability": [],
+                },
+            ],
+            "panel_size": 2,
+            "options": {
+                "enforce_same_gender": False,
+                "allow_overtime": False,
+            },
+        }
+
+        res = self._solve(payload)
+
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.assertEqual(res.data["status"], "PARTIAL")
+        self.assertEqual(
+            [c["candidate_id"] for c in res.data["unplaceable"]],
+            ["candidate-1"],
+        )
+
+    def test_overtime_can_be_enabled(self):
+        payload = {
+            "candidates": [
+                {"id": "candidate-1", "name": "Erik", "gender": "M"},
+            ],
+            "interviewers": [
+                {
+                    "id": "interviewer-1",
+                    "name": "Ola",
+                    "gender": "M",
+                    "availability": [8],
+                },
+                {
+                    "id": "interviewer-2",
+                    "name": "Per",
+                    "gender": "M",
+                    "availability": [],
+                },
+            ],
+            "panel_size": 2,
+            "options": {
+                "enforce_same_gender": False,
+                "allow_overtime": True,
+            },
+        }
+
+        res = self._solve(payload)
+
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.assertEqual(res.data["status"], "SUCCESS")
+        self.assertEqual(len(res.data["schedule"]), 1)
+        self.assertTrue(
+            any(member["is_overtime"] for member in res.data["schedule"][0]["panel"])
+        )
+
+    def test_sequential_scheduling_works_across_empty_slots_with_overtime(self):
+        # 2 candidates, but only 1 interviewer available at t=0.
+        # Admin has enabled slots 0 and 1.
+        # Should be feasible sequentially if overtime is allowed for t=1.
+        payload = {
+            "candidates": [
+                {"id": "c1", "name": "C1", "gender": ""},
+                {"id": "c2", "name": "C2", "gender": ""},
+            ],
+            "interviewers": [
+                {
+                    "id": "i1",
+                    "name": "I1",
+                    "gender": "M",
+                    "availability": [0],
+                },
+            ],
+            "panel_size": 1,
+            "all_slots": [0, 1],
+            "options": {
+                "allow_overtime": True,
+            },
+        }
+
+        res = self._solve(payload)
+
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.assertEqual(res.data["status"], "SUCCESS")
+        self.assertEqual(len(res.data["schedule"]), 2)
+        times = sorted([item["time"] for item in res.data["schedule"]])
+        self.assertEqual(times, [0, 1])
+
+    def test_continuity_prefers_earliest_consecutive_slots(self):
+        payload = {
+            "candidates": [
+                {"id": "candidate-1", "name": "Ada", "gender": "F"},
+                {"id": "candidate-2", "name": "Eirik", "gender": "M"},
+            ],
+            "interviewers": [
+                {
+                    "id": "interviewer-1",
+                    "name": "Ola",
+                    "gender": "M",
+                    "availability": [0, 2],
+                },
+                {
+                    "id": "interviewer-2",
+                    "name": "Ida",
+                    "gender": "F",
+                    "availability": [1, 2],
+                },
+            ],
+            "panel_size": 1,
+            "options": {
+                "enforce_same_gender": False,
+                "allow_overtime": False,
+                "prioritize_continuity": True,
+                "continuity_weight": 20,
+            },
+        }
+
+        res = self._solve(payload)
+
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.assertEqual(res.data["status"], "SUCCESS")
+        self.assertEqual(
+            sorted(item["time"] for item in res.data["schedule"]),
+            [0, 1],
+        )
+
+    def test_locked_assignments_are_preserved(self):
+        payload = {
+            "candidates": [
+                {"id": "candidate-1", "name": "Ada", "gender": "F"},
+                {"id": "candidate-2", "name": "Eirik", "gender": "M"},
+            ],
+            "interviewers": [
+                {
+                    "id": "interviewer-1",
+                    "name": "Ola",
+                    "gender": "M",
+                    "availability": [0, 1],
+                },
+                {
+                    "id": "interviewer-2",
+                    "name": "Ida",
+                    "gender": "F",
+                    "availability": [0, 1],
+                },
+            ],
+            "panel_size": 1,
+            "options": {
+                "enforce_same_gender": False,
+                "allow_overtime": False,
+            },
+            "locked_assignments": [
+                {
+                    "candidate_id": "candidate-1",
+                    "candidate": "Ada",
+                    "time": 1,
+                    "panel": [{"id": "interviewer-2", "name": "Ida"}],
+                }
+            ],
+        }
+
+        res = self._solve(payload)
+
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.assertEqual(res.data["status"], "SUCCESS")
+        locked = next(
+            item
+            for item in res.data["schedule"]
+            if item["candidate_id"] == "candidate-1"
+        )
+        self.assertEqual(locked["time"], 1)
+        self.assertEqual(locked["panel"][0]["id"], "interviewer-2")
+        self.assertTrue(locked["locked"])
+
+    def test_locked_assignment_with_conflict_is_reported(self):
+        payload = {
+            "candidates": [
+                {"id": "candidate-1", "name": "Ada", "gender": "F"},
+            ],
+            "interviewers": [
+                {
+                    "id": "interviewer-1",
+                    "name": "Ola",
+                    "gender": "M",
+                    "availability": [0],
+                    "biased": ["candidate-1"],
+                },
+            ],
+            "panel_size": 1,
+            "options": {
+                "enforce_same_gender": False,
+                "allow_overtime": False,
+            },
+            "locked_assignments": [
+                {
+                    "candidate_id": "candidate-1",
+                    "candidate": "Ada",
+                    "time": 0,
+                    "panel": [{"id": "interviewer-1", "name": "Ola"}],
+                }
+            ],
+        }
+
+        res = self._solve(payload)
+
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.assertEqual(res.data["status"], "LOCKED_CONFLICT")
+        self.assertEqual(res.data["schedule"], [])
+        self.assertIn("locked_conflicts", res.data)
+
+
+class SavedScheduleViewTestCase(APITestCase):
+    def setUp(self):
+        self.admin_group = Group.objects.create(name="Webkom", lego_id=300)
+        self.admin_user = LegoUser.objects.create(
+            username="schedule-admin", lego_id=301
+        )
+        Membership.objects.create(
+            user=self.admin_user, role=MEMBER, group=self.admin_group
+        )
+        self.admission = create_admission(
+            created_by=self.admin_user, slug="schedule-opptak"
+        )
+        self.admission.admin_groups.add(self.admin_group)
+        self.url = reverse(
+            "saved-schedule", kwargs={"admission_slug": self.admission.slug}
+        )
+        self.client.force_authenticate(user=self.admin_user)
+
+    def test_grid_change_clears_existing_plan(self):
+        SavedSchedule.objects.create(
+            admission=self.admission,
+            schedule=[{"candidate": "Ada", "time": 8, "panel": []}],
+            start_date="2026-04-20",
+            end_date="2026-04-24",
+            session_duration=60,
+            enabled_slots=["2026-04-20:480"],
+            day_start_minute=480,
+            day_end_minute=1080,
+            is_distributed=False,
+        )
+
+        payload = {
+            "start_date": "2026-04-21",
+            "end_date": "2026-04-25",
+            "session_duration": 45,
+            "enabled_slots": ["2026-04-21:540", "2026-04-21:585"],
+            "day_start_minute": 540,
+            "day_end_minute": 900,
+            "is_distributed": False,
+        }
+
+        res = self.client.post(self.url, payload, format="json")
+
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.assertEqual(res.data["schedule"], [])
+        self.assertFalse(res.data["is_distributed"])
+        self.assertEqual(res.data["start_date"], "2026-04-21")
+        self.assertEqual(res.data["end_date"], "2026-04-25")
+        self.assertEqual(
+            res.data["enabled_slots"], ["2026-04-21|540", "2026-04-21|585"]
+        )
+        self.assertEqual(
+            res.data["enabled_windows"],
+            [{"date": "2026-04-21", "start_minute": 540, "end_minute": 630}],
+        )
+        self.assertEqual(res.data["day_start_minute"], 540)
+        self.assertEqual(res.data["day_end_minute"], 900)
+
+    def test_can_create_schedule_from_config_only_payload(self):
+        payload = {
+            "start_date": "2026-04-21",
+            "end_date": "2026-04-25",
+            "session_duration": 45,
+            "enabled_slots": ["2026-04-21:540", "2026-04-21:585"],
+            "day_start_minute": 540,
+            "day_end_minute": 900,
+            "is_distributed": False,
+        }
+
+        res = self.client.post(self.url, payload, format="json")
+
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.assertEqual(res.data["schedule"], [])
+        self.assertEqual(res.data["start_date"], "2026-04-21")
+        self.assertEqual(res.data["end_date"], "2026-04-25")
+        self.assertEqual(res.data["session_duration"], 45)
+        self.assertEqual(
+            res.data["enabled_slots"], ["2026-04-21|540", "2026-04-21|585"]
+        )
+        self.assertEqual(
+            res.data["enabled_windows"],
+            [{"date": "2026-04-21", "start_minute": 540, "end_minute": 630}],
+        )
+        self.assertEqual(
+            SavedSchedule.objects.get(admission=self.admission).schedule, []
+        )
+
+    def test_can_save_enabled_windows_and_derive_slots(self):
+        payload = {
+            "start_date": "2026-04-21",
+            "end_date": "2026-04-21",
+            "session_duration": 30,
+            "enabled_windows": [
+                {"date": "2026-04-21", "start_minute": 540, "end_minute": 630}
+            ],
+            "day_start_minute": 540,
+            "day_end_minute": 900,
+        }
+
+        res = self.client.post(self.url, payload, format="json")
+
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.assertEqual(
+            res.data["enabled_slots"],
+            ["2026-04-21|540", "2026-04-21|570", "2026-04-21|600"],
+        )
+        self.assertEqual(res.data["enabled_windows"], payload["enabled_windows"])
+
+    def test_duration_change_clears_submitted_availability(self):
+        interviewer = LegoUser.objects.create(username="available-user", lego_id=304)
+        InterviewAvailability.objects.create(
+            admission=self.admission,
+            user=interviewer,
+            slots=["2026-04-21|540"],
+        )
+        SavedSchedule.objects.create(
+            admission=self.admission,
+            schedule=[],
+            start_date="2026-04-21",
+            end_date="2026-04-21",
+            session_duration=60,
+            enabled_windows=[
+                {"date": "2026-04-21", "start_minute": 540, "end_minute": 660}
+            ],
+            enabled_slots=["2026-04-21|540", "2026-04-21|600"],
+            day_start_minute=540,
+            day_end_minute=900,
+        )
+
+        payload = {
+            "start_date": "2026-04-21",
+            "end_date": "2026-04-21",
+            "session_duration": 30,
+            "enabled_windows": [
+                {"date": "2026-04-21", "start_minute": 540, "end_minute": 660}
+            ],
+            "day_start_minute": 540,
+            "day_end_minute": 900,
+        }
+
+        res = self.client.post(self.url, payload, format="json")
+
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        # A structural change to the grid wipes everyone's availability.
+        self.assertFalse(
+            InterviewAvailability.objects.filter(
+                admission=self.admission,
+                user=interviewer,
+            ).exists()
+        )
+
+    def test_block_break_change_clears_existing_plan(self):
+        SavedSchedule.objects.create(
+            admission=self.admission,
+            schedule=[{"candidate": "Ada", "time": 8, "panel": []}],
+            start_date="2026-04-21",
+            end_date="2026-04-21",
+            session_duration=30,
+            enabled_windows=[
+                {"date": "2026-04-21", "start_minute": 540, "end_minute": 660}
+            ],
+            enabled_slots=[
+                "2026-04-21|540",
+                "2026-04-21|570",
+                "2026-04-21|600",
+                "2026-04-21|630",
+            ],
+            day_start_minute=540,
+            day_end_minute=900,
+            chunk_size=4,
+            chunk_break_minutes=0,
+            is_distributed=True,
+        )
+
+        payload = {
+            "start_date": "2026-04-21",
+            "end_date": "2026-04-21",
+            "session_duration": 30,
+            "enabled_windows": [
+                {"date": "2026-04-21", "start_minute": 540, "end_minute": 600},
+                {"date": "2026-04-21", "start_minute": 630, "end_minute": 690},
+            ],
+            "day_start_minute": 540,
+            "day_end_minute": 900,
+            "chunk_size": 2,
+            "chunk_break_minutes": 30,
+        }
+
+        res = self.client.post(self.url, payload, format="json")
+
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.assertEqual(res.data["schedule"], [])
+        self.assertFalse(res.data["is_distributed"])
+
+    def test_recruiter_can_save_schedule(self):
+        recruiter_group = Group.objects.create(name="Bedkom", lego_id=302)
+        recruiter_user = LegoUser.objects.create(
+            username="schedule-recruiter", lego_id=303
+        )
+        Membership.objects.create(
+            user=recruiter_user,
+            role=RECRUITING,
+            group=recruiter_group,
+        )
+        self.admission.groups.add(recruiter_group)
+        self.client.force_authenticate(user=recruiter_user)
+
+        payload = {
+            "start_date": "2026-04-21",
+            "end_date": "2026-04-25",
+            "session_duration": 45,
+            "enabled_slots": ["2026-04-21:540", "2026-04-21:585"],
+            "day_start_minute": 540,
+            "day_end_minute": 900,
+            "is_distributed": False,
+            "name_visibility": "committee",
+        }
+
+        res = self.client.post(self.url, payload, format="json")
+
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.assertEqual(res.data["name_visibility"], "committee")
+
+
+class InterviewAvailabilityViewTestCase(APITestCase):
+    def setUp(self):
+        self.group = Group.objects.create(name="Komite", lego_id=401)
+        self.user = LegoUser.objects.create(username="committee-member", lego_id=402)
+        Membership.objects.create(user=self.user, role=MEMBER, group=self.group)
+        self.admission = create_admission(
+            created_by=self.user, slug="availability-test"
+        )
+        self.admission.groups.add(self.group)
+        self.url = reverse(
+            "interview-availability",
+            kwargs={"admission_slug": self.admission.slug},
+        )
+        self.client.force_authenticate(user=self.user)
+
+    def test_can_save_conflicts_without_overwriting_slots(self):
+        SavedSchedule.objects.create(
+            admission=self.admission,
+            schedule=[],
+            start_date="2026-04-21",
+            session_duration=60,
+            name_visibility="committee",
+        )
+        applicant = LegoUser.objects.create(username="eirik-applicant", lego_id=403)
+        application = UserApplication.objects.create(
+            user=applicant, admission=self.admission
+        )
+        InterviewAvailability.objects.create(
+            admission=self.admission,
+            user=self.user,
+            slots=["2026-04-21:540"],
+            conflicts=["real-candidate-ada"],
+        )
+
+        res = self.client.post(
+            self.url,
+            {"conflicts": [str(application.pk)]},
+            format="json",
+        )
+
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.assertEqual(res.data["slots"], ["2026-04-21:540"])
+        self.assertEqual(res.data["conflicts"], [str(application.pk)])
+
+    def test_cannot_save_conflicts_before_names_are_visible(self):
+        res = self.client.post(
+            self.url,
+            {"conflicts": ["real-candidate-eirik"]},
+            format="json",
+        )
+
+        self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertFalse(
+            InterviewAvailability.objects.filter(
+                admission=self.admission,
+                user=self.user,
+            ).exists()
+        )
+
+    def test_get_returns_saved_conflicts_for_participant(self):
+        InterviewAvailability.objects.create(
+            admission=self.admission,
+            user=self.user,
+            slots=["2026-04-21:540"],
+            conflicts=["real-candidate-ada"],
+        )
+
+        res = self.client.get(self.url)
+
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(res.data), 1)
+        self.assertEqual(res.data[0]["conflicts"], ["real-candidate-ada"])
+
+
+class InterviewCandidatesViewTestCase(APITestCase):
+    def setUp(self):
+        self.group = Group.objects.create(name="Intervjukomite", lego_id=501)
+        self.user = LegoUser.objects.create(username="committee-viewer", lego_id=502)
+        Membership.objects.create(user=self.user, role=MEMBER, group=self.group)
+        self.admission = create_admission(created_by=self.user, slug="candidate-list")
+        self.admission.groups.add(self.group)
+        self.applicant = LegoUser.objects.create(
+            username="ada",
+            first_name="Ada",
+            last_name="Lovelace",
+            lego_id=503,
+        )
+        self.application = UserApplication.objects.create(
+            user=self.applicant, admission=self.admission
+        )
+        self.url = reverse(
+            "interview-candidates",
+            kwargs={"admission_slug": self.admission.slug},
+        )
+        self.client.force_authenticate(user=self.user)
+
+    def test_candidate_names_hidden_from_committee_by_default(self):
+        res = self.client.get(self.url)
+
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.assertEqual(
+            res.data,
+            [
+                {
+                    "id": "candidate-0",
+                    "name": "",
+                    "gender": "",
+                }
+            ],
+        )
+
+    def test_candidate_names_hidden_when_not_released_to_committee(self):
+        SavedSchedule.objects.create(
+            admission=self.admission,
+            schedule=[],
+            start_date="2026-04-21",
+            session_duration=60,
+            name_visibility="admin_only",
+        )
+
+        res = self.client.get(self.url)
+
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.assertEqual(res.data, [{"id": "candidate-0", "name": "", "gender": ""}])
+
+    def test_committee_member_sees_names_when_released(self):
+        SavedSchedule.objects.create(
+            admission=self.admission,
+            schedule=[],
+            start_date="2026-04-21",
+            session_duration=60,
+            name_visibility="committee",
+        )
+
+        res = self.client.get(self.url)
+
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.assertEqual(
+            res.data,
+            [
+                {
+                    "id": str(self.application.pk),
+                    "name": "Ada Lovelace",
+                    "gender": "",
+                }
+            ],
+        )
+
+    def test_recruiter_always_sees_names(self):
+        recruiter_group = Group.objects.create(name="Bedkom", lego_id=504)
+        recruiter_user = LegoUser.objects.create(
+            username="candidate-recruiter", lego_id=505
+        )
+        Membership.objects.create(
+            user=recruiter_user, role=RECRUITING, group=recruiter_group
+        )
+        self.admission.groups.add(recruiter_group)
+        self.client.force_authenticate(user=recruiter_user)
+
+        res = self.client.get(self.url)
+
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.assertEqual(
+            res.data,
+            [
+                {
+                    "id": str(self.application.pk),
+                    "name": "Ada Lovelace",
+                    "gender": "",
+                }
+            ],
+        )

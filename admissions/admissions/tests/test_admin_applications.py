@@ -92,6 +92,19 @@ class ListApplicationsTestCase(APITestCase):
 
         self.assertEqual(res.status_code, status.HTTP_403_FORBIDDEN)
 
+    def test_unknown_admission_slug_returns_404(self):
+        """An unknown slug should 404 (via the permission lookup), not 500."""
+        self.client.force_authenticate(user=self.pleb)
+
+        res = self.client.get(
+            reverse(
+                "admin-userapplication-list",
+                kwargs={"admission_slug": "does-not-exist"},
+            )
+        )
+
+        self.assertEqual(res.status_code, status.HTTP_404_NOT_FOUND)
+
     # Should test for both application-mine and application-list unless editing current view
     def test_can_see_own_application(self):
         UserApplication.objects.create(user=self.pleb, admission=self.admission)
