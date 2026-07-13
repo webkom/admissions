@@ -120,6 +120,9 @@ const config: Config = {
       ringWidth: {
         3: "var(--focus-ring-width)",
       },
+      zIndex: {
+        modal: "var(--modal-layer)",
+      },
       fontSize: {
         nano: [
           "var(--font-size-nano)",

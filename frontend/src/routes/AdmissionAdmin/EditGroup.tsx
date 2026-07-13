@@ -98,5 +98,5 @@ const GroupTitle = styled.h1`
 const GroupDescription = styled.p`
   margin: var(--spacing-md) 0 0;
   color: var(--color-text-muted);
-  line-height: 1.3;
+  line-height: var(--line-height-base);
 `;

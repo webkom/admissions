@@ -13,3 +13,14 @@ export const calendarGrid = {
   scheduleDayColumnMinWidth: 160,
   minimumWidth: 680,
 } as const;
+
+export const iconSizes = {
+  compact: 12,
+  control: 15,
+  standard: 18,
+  feature: 20,
+} as const;
+
+export const iconStrokeWidths = {
+  emphasis: 3,
+} as const;

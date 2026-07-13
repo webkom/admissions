@@ -27,7 +27,7 @@ export const SectionDescription = styled.p`
   max-width: var(--content-width-readable);
   color: var(--color-text-muted);
   font-size: var(--font-size-sm);
-  line-height: 1.3;
+  line-height: var(--line-height-base);
 `;
 
 export const GroupFilterButton = styled.button<{ $selected: boolean }>`
@@ -76,7 +76,7 @@ export const GroupFilterLogo = styled.img`
 export const GroupFilterName = styled.span`
   font-size: var(--font-size-sm);
   font-weight: 600;
-  line-height: 1.25;
+  line-height: var(--line-height-tight);
   text-align: left;
   white-space: nowrap;
   overflow: hidden;

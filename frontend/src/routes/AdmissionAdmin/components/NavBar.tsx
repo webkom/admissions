@@ -145,5 +145,5 @@ const NavEmptyState = styled.p`
   margin: var(--spacing-md) 0 0;
   color: var(--color-text-muted);
   font-size: var(--font-size-detail);
-  line-height: 1.3;
+  line-height: var(--line-height-base);
 `;

@@ -4,7 +4,7 @@ import { media } from "src/styles/mediaQueries";
 export const Wrapper = styled.div`
   width: 100%;
   max-width: var(--lego-max-width);
-  min-height: 10em;
+  min-height: var(--group-editor-min-height);
   padding: 0;
   border-radius: var(--border-radius-lg);
   background: var(--color-surface-base);
@@ -23,7 +23,7 @@ export const FormWrapper = styled.div`
   align-items: stretch;
   flex-wrap: wrap;
   ${media.handheld`
-     padding: 1em;
+     padding: var(--spacing-lg);
   `};
 `;
 
@@ -42,11 +42,11 @@ export const GroupLogoWrapper = styled.div`
 export const EditGroupFormWrapper = styled.div`
   display: flex;
   width: 100%;
-  margin-bottom: 0.5em;
+  margin-bottom: var(--spacing-md);
 
   div {
     flex: 1 1 100%;
-    margin: 0 0.5em;
+    margin: 0 var(--spacing-md);
   }
 
   ${media.handheld`
