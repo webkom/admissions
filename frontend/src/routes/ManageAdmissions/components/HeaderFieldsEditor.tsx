@@ -2,6 +2,7 @@ import React from "react";
 import styled from "styled-components";
 import { ArrowDown, ArrowUp, Trash2 } from "lucide-react";
 import { FieldModel, InputFieldModel } from "src/utils/jsonFields";
+import { iconSizes } from "src/styles/designTokens";
 
 const INPUT_TYPE_OPTIONS: { value: InputFieldModel["type"]; label: string }[] =
   [
@@ -23,14 +24,21 @@ const makeInputField = (): InputFieldModel => ({
 type Props = {
   value: FieldModel[];
   onChange: (fields: FieldModel[]) => void;
+  error?: string;
+  showErrors?: boolean;
 };
 
-const HeaderFieldsEditor: React.FC<Props> = ({ value, onChange }) => {
+const HeaderFieldsEditor: React.FC<Props> = ({
+  value,
+  onChange,
+  error,
+  showErrors = false,
+}) => {
   const replaceAt = (index: number, next: FieldModel) =>
-    onChange(value.map((field, i) => (i === index ? next : field)));
+    onChange(value.map((field, current) => (current === index ? next : field)));
 
   const removeAt = (index: number) =>
-    onChange(value.filter((_, i) => i !== index));
+    onChange(value.filter((_, current) => current !== index));
 
   const moveBy = (index: number, delta: number) => {
     const target = index + delta;
@@ -50,130 +58,185 @@ const HeaderFieldsEditor: React.FC<Props> = ({ value, onChange }) => {
     <Wrapper>
       {value.length === 0 && <Empty>Ingen ekstra spørsmål er lagt til.</Empty>}
 
-      {value.map((field, index) => (
-        <Row key={field.type === "text" ? `text-${index}` : field.id}>
-          <RowHeader>
-            <RowKind>
-              {field.type === "text" ? "Infotekst" : "Spørsmål"}
-            </RowKind>
-            <RowActions>
-              <IconButton
-                type="button"
-                aria-label="Flytt opp"
-                disabled={index === 0}
-                onClick={() => moveBy(index, -1)}
-              >
-                <ArrowUp size={15} />
-              </IconButton>
-              <IconButton
-                type="button"
-                aria-label="Flytt ned"
-                disabled={index === value.length - 1}
-                onClick={() => moveBy(index, 1)}
-              >
-                <ArrowDown size={15} />
-              </IconButton>
-              <IconButton
-                type="button"
-                aria-label="Fjern"
-                onClick={() => removeAt(index)}
-              >
-                <Trash2 size={15} />
-              </IconButton>
-            </RowActions>
-          </RowHeader>
+      {value.map((field, index) => {
+        const fieldKey = field.type === "text" ? `text-${index}` : field.id;
+        const contentId = `header-field-${fieldKey}`;
+        const titleError =
+          field.type !== "text" && showErrors && field.title.trim().length < 5;
 
-          {field.type === "text" ? (
-            <Field>
-              <FieldLabel>Tekst som vises til søkeren</FieldLabel>
-              <TextArea
-                value={field.text}
-                onChange={(e) =>
-                  replaceAt(index, { type: "text", text: e.target.value })
-                }
-                placeholder="Skriv en forklarende tekst…"
-              />
-            </Field>
-          ) : (
-            <>
-              <Grid>
-                <Field>
-                  <FieldLabel>Type</FieldLabel>
-                  <Select
-                    value={field.type}
-                    onChange={(e) =>
-                      patchInput(index, {
-                        type: e.target.value as InputFieldModel["type"],
-                      })
-                    }
-                  >
-                    {INPUT_TYPE_OPTIONS.map((option) => (
-                      <option key={option.value} value={option.value}>
-                        {option.label}
-                      </option>
-                    ))}
-                  </Select>
-                </Field>
-                <Field>
-                  <FieldLabel>Spørsmål (min. 5 tegn)</FieldLabel>
-                  <Input
-                    value={field.title}
-                    onChange={(e) =>
-                      patchInput(index, { title: e.target.value })
-                    }
-                    placeholder="f.eks. Hvilket trinn går du på?"
-                  />
-                </Field>
-                <Field>
-                  <FieldLabel>Hjelpetekst</FieldLabel>
-                  <Input
-                    value={field.label}
-                    onChange={(e) =>
-                      patchInput(index, { label: e.target.value })
-                    }
-                    placeholder="Valgfri utdypning"
-                  />
-                </Field>
-                <Field>
-                  <FieldLabel>Plassholder</FieldLabel>
-                  <Input
-                    value={field.placeholder}
-                    onChange={(e) =>
-                      patchInput(index, { placeholder: e.target.value })
-                    }
-                    placeholder="Vises i tomt felt"
-                  />
-                </Field>
-              </Grid>
-              <RequiredLabel>
-                <input
-                  type="checkbox"
-                  checked={field.required}
-                  onChange={(e) =>
-                    patchInput(index, { required: e.target.checked })
+        return (
+          <Row key={fieldKey}>
+            <RowHeader>
+              <RowKind>
+                {field.type === "text" ? "Infotekst" : `Spørsmål ${index + 1}`}
+              </RowKind>
+              <RowActions>
+                <IconButton
+                  type="button"
+                  aria-label="Flytt opp"
+                  disabled={index === 0}
+                  onClick={() => moveBy(index, -1)}
+                >
+                  <ArrowUp size={iconSizes.control} aria-hidden="true" />
+                </IconButton>
+                <IconButton
+                  type="button"
+                  aria-label="Flytt ned"
+                  disabled={index === value.length - 1}
+                  onClick={() => moveBy(index, 1)}
+                >
+                  <ArrowDown size={iconSizes.control} aria-hidden="true" />
+                </IconButton>
+                <IconButton
+                  type="button"
+                  aria-label="Fjern"
+                  onClick={() => removeAt(index)}
+                >
+                  <Trash2 size={iconSizes.control} aria-hidden="true" />
+                </IconButton>
+              </RowActions>
+            </RowHeader>
+
+            {field.type === "text" ? (
+              <Field>
+                <FieldLabel htmlFor={contentId}>
+                  Tekst som vises til søkeren
+                </FieldLabel>
+                <TextArea
+                  id={contentId}
+                  value={field.text}
+                  onChange={(event) =>
+                    replaceAt(index, { type: "text", text: event.target.value })
                   }
+                  placeholder="Skriv en forklarende tekst…"
                 />
-                Påkrevd
-              </RequiredLabel>
-            </>
-          )}
-        </Row>
-      ))}
+              </Field>
+            ) : (
+              <>
+                <Grid>
+                  <Field>
+                    <FieldLabel htmlFor={`${contentId}-type`}>Type</FieldLabel>
+                    <Select
+                      id={`${contentId}-type`}
+                      value={field.type}
+                      onChange={(event) =>
+                        patchInput(index, {
+                          type: event.target.value as InputFieldModel["type"],
+                        })
+                      }
+                    >
+                      {INPUT_TYPE_OPTIONS.map((option) => (
+                        <option key={option.value} value={option.value}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </Select>
+                  </Field>
+                  <Field>
+                    <FieldLabel htmlFor={`${contentId}-title`}>
+                      Spørsmål
+                    </FieldLabel>
+                    <Input
+                      id={`${contentId}-title`}
+                      value={field.title}
+                      aria-invalid={titleError}
+                      aria-describedby={
+                        titleError ? `${contentId}-title-error` : undefined
+                      }
+                      onChange={(event) =>
+                        patchInput(index, { title: event.target.value })
+                      }
+                      placeholder="Hvilket trinn går du på?"
+                    />
+                    {titleError && (
+                      <FieldError id={`${contentId}-title-error`}>
+                        Spørsmålet må inneholde minst 5 tegn.
+                      </FieldError>
+                    )}
+                  </Field>
+                  <Field>
+                    <FieldLabel htmlFor={`${contentId}-label`}>
+                      Hjelpetekst
+                    </FieldLabel>
+                    <Input
+                      id={`${contentId}-label`}
+                      value={field.label}
+                      onChange={(event) =>
+                        patchInput(index, { label: event.target.value })
+                      }
+                      placeholder="Valgfri utdypning"
+                    />
+                  </Field>
+                  <Field>
+                    <FieldLabel htmlFor={`${contentId}-placeholder`}>
+                      Plassholder
+                    </FieldLabel>
+                    <Input
+                      id={`${contentId}-placeholder`}
+                      value={field.placeholder}
+                      onChange={(event) =>
+                        patchInput(index, { placeholder: event.target.value })
+                      }
+                      placeholder="Vises i tomt felt"
+                    />
+                  </Field>
+                </Grid>
+                <RequiredLabel>
+                  <input
+                    type="checkbox"
+                    checked={field.required}
+                    onChange={(event) =>
+                      patchInput(index, { required: event.target.checked })
+                    }
+                  />
+                  Påkrevd
+                </RequiredLabel>
+              </>
+            )}
+          </Row>
+        );
+      })}
+
+      {error && <EditorError role="alert">{error}</EditorError>}
 
       <AddRow>
         <AddButton
           type="button"
           onClick={() => onChange([...value, makeInputField()])}
         >
-          + Spørsmål
+          Legg til spørsmål
         </AddButton>
         <AddButton
           type="button"
           onClick={() => onChange([...value, { type: "text", text: "" }])}
         >
-          + Infotekst
+          Legg til infotekst
         </AddButton>
       </AddRow>
+
+      {value.length > 0 && (
+        <Preview aria-labelledby="question-preview-title">
+          <PreviewTitle id="question-preview-title">
+            Forhåndsvisning for søkeren
+          </PreviewTitle>
+          {value.map((field, index) =>
+            field.type === "text" ? (
+              <PreviewText key={`preview-text-${index}`}>
+                {field.text || "Tom infotekst"}
+              </PreviewText>
+            ) : (
+              <PreviewField key={`preview-${field.id}`}>
+                <strong>
+                  {field.title || "Spørsmål uten tekst"}
+                  {field.required ? " *" : ""}
+                </strong>
+                {field.label && <span>{field.label}</span>}
+                <PreviewValue>{field.placeholder || "Svarfelt"}</PreviewValue>
+              </PreviewField>
+            ),
+          )}
+        </Preview>
+      )}
     </Wrapper>
   );
 };
@@ -183,20 +246,20 @@ export default HeaderFieldsEditor;
 const Wrapper = styled.div`
   display: flex;
   flex-direction: column;
-  gap: 0.75rem;
-  max-width: 640px;
+  gap: var(--spacing-lg);
+  width: min(100%, var(--content-width-form));
 `;
 
 const Empty = styled.p`
   margin: 0;
-  color: var(--color-gray-6);
+  color: var(--color-text-muted);
   font-style: italic;
 `;
 
 const Row = styled.div`
-  border: 1px solid var(--color-border-muted);
+  padding: var(--spacing-lg);
+  border: var(--border-width-default) solid var(--color-border-muted);
   border-radius: var(--border-radius-md);
-  padding: 0.85rem 1rem;
   background: var(--color-surface-base);
 `;
 
@@ -204,14 +267,15 @@ const RowHeader = styled.div`
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 0.6rem;
+  gap: var(--spacing-md);
+  margin-bottom: var(--spacing-md);
 `;
 
 const RowKind = styled.span`
+  color: var(--color-text-muted);
   font-size: var(--font-size-detail);
   font-weight: 700;
-  letter-spacing: 0.02em;
-  color: var(--color-gray-6);
+  letter-spacing: var(--letter-spacing-caps);
 `;
 
 const RowActions = styled.div`
@@ -223,11 +287,13 @@ const IconButton = styled.button`
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  padding: 0.3rem;
-  border: 1px solid var(--color-border-muted);
+  min-width: var(--control-height-sm);
+  min-height: var(--control-height-sm);
+  padding: var(--spacing-sm);
+  border: var(--border-width-default) solid var(--color-border-muted);
   border-radius: var(--border-radius-md);
   background: var(--color-surface-base);
-  color: var(--color-gray-7);
+  color: var(--color-text-primary);
   cursor: pointer;
 
   &:disabled {
@@ -238,28 +304,38 @@ const IconButton = styled.button`
 
 const Grid = styled.div`
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-  gap: 0.6rem;
+  grid-template-columns: repeat(
+    auto-fit,
+    minmax(min(var(--control-min-width), 100%), 1fr)
+  );
+  gap: var(--spacing-md);
 `;
 
 const Field = styled.div`
   display: flex;
   flex-direction: column;
-  gap: 0.2rem;
+  gap: var(--spacing-sm);
 `;
 
 const FieldLabel = styled.label`
+  color: var(--color-text-primary);
   font-size: var(--font-size-detail);
   font-weight: 600;
-  color: var(--color-gray-7);
 `;
 
 const fieldStyles = `
-  font-size: var(--font-size-ui);
-  padding: 0.45rem 0.6rem;
-  border-radius: var(--border-radius-md);
-  border: 1px solid var(--color-border-muted);
   width: 100%;
+  min-height: var(--control-height-sm);
+  padding: var(--spacing-sm) var(--spacing-md);
+  border: var(--border-width-default) solid var(--color-border-muted);
+  border-radius: var(--border-radius-md);
+  background: var(--color-surface-base);
+  color: var(--color-text-primary);
+  font-size: var(--font-size-ui);
+
+  &[aria-invalid="true"] {
+    border-color: var(--color-danger-border);
+  }
 `;
 
 const Input = styled.input`
@@ -268,41 +344,90 @@ const Input = styled.input`
 
 const Select = styled.select`
   ${fieldStyles}
-  background: var(--color-surface-base);
 `;
 
 const TextArea = styled.textarea`
   ${fieldStyles}
-  min-height: 4.5rem;
+  min-height: var(--form-textarea-min-height);
   resize: vertical;
 `;
 
 const RequiredLabel = styled.label`
   display: inline-flex;
   align-items: center;
-  gap: 0.4rem;
-  margin-top: 0.6rem;
+  gap: var(--spacing-sm);
+  margin-top: var(--spacing-md);
+  color: var(--color-text-primary);
   font-size: var(--font-size-ui);
-  color: var(--color-gray-7);
 `;
 
 const AddRow = styled.div`
   display: flex;
-  gap: var(--spacing-sm);
+  flex-wrap: wrap;
+  gap: var(--spacing-md);
 `;
 
 const AddButton = styled.button`
-  font-size: var(--font-size-ui);
-  font-weight: 600;
-  padding: 0.45rem 0.85rem;
-  border: 1px dashed var(--color-border-quiet);
+  min-height: var(--control-height-sm);
+  padding: 0 var(--spacing-lg);
+  border: var(--border-width-default) dashed var(--color-border-quiet);
   border-radius: var(--border-radius-md);
   background: transparent;
-  color: var(--color-gray-7);
+  color: var(--color-text-primary);
+  font-size: var(--font-size-ui);
+  font-weight: 600;
   cursor: pointer;
 
   &:hover {
-    border-color: var(--color-blue-6);
-    color: var(--color-blue-6);
+    border-color: var(--color-brand);
+    color: var(--color-brand);
   }
+`;
+
+const FieldError = styled.span`
+  color: var(--color-danger);
+  font-size: var(--font-size-detail);
+`;
+
+const EditorError = styled(FieldError)`
+  display: block;
+`;
+
+const Preview = styled.section`
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-md);
+  padding: var(--spacing-lg);
+  border-left: var(--border-width-emphasis) solid var(--color-brand);
+  background: var(--color-surface-subtle);
+`;
+
+const PreviewTitle = styled.h3`
+  margin: 0;
+  font-size: var(--font-size-md);
+`;
+
+const PreviewText = styled.p`
+  margin: 0;
+  color: var(--color-text-muted);
+`;
+
+const PreviewField = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-xs);
+
+  span {
+    color: var(--color-text-muted);
+    font-size: var(--font-size-detail);
+  }
+`;
+
+const PreviewValue = styled.span`
+  min-height: var(--control-height-sm);
+  padding: var(--spacing-sm) var(--spacing-md);
+  border: var(--border-width-default) solid var(--color-border-soft);
+  border-radius: var(--border-radius-md);
+  background: var(--color-surface-base);
+  color: var(--color-text-subtle);
 `;

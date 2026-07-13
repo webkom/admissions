@@ -1,5 +1,5 @@
 /**
- *  Removes an item if it matches the predicate, remove it if it doesn't.
+ *  Removes an item if it matches the predicate, and adds it otherwise.
  *
  * @param array     The original array
  * @param item      The item to either remove or add to the array
@@ -10,7 +10,7 @@ export const toggleFromArray: <T>(
   array: T[],
   item: T,
   predicate?: (value: T, index: number, array: T[]) => boolean,
-) => void = (array, item, predicate = (value) => value === item) =>
+) => T[] = (array, item, predicate = (value) => value === item) =>
   array.includes(item)
     ? array.filter((value, index, array) => !predicate(value, index, array))
     : [...array, item];
