@@ -911,6 +911,7 @@ const CommonScheduleView: React.FC<CommonScheduleViewProps> = ({
         isOpen={wizard.isOpen}
         onClose={wizard.close}
         isAdmin={isAdmin}
+        onNavigate={handleSectionChange}
       />
 
       <StatusToast toast={toast} onDismiss={() => setToast(null)} />

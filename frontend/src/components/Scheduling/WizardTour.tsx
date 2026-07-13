@@ -7,8 +7,8 @@ import {
   ChevronLeft,
   ChevronRight,
   LayoutPanelTop,
+  ListChecks,
   Shield,
-  Sparkles,
   X,
 } from "lucide-react";
 import cn from "src/utils/cn";
@@ -18,13 +18,22 @@ import {
   actionButtonPrimary,
   actionButtonNeutral,
 } from "./ui";
+import { iconSizes, iconStrokeWidths } from "src/styles/designTokens";
 
 interface WizardStep {
   icon: React.ComponentType<{ size?: number | string; className?: string }>;
   label: string;
   title: string;
   description: string;
+  target?: WizardTarget;
 }
+
+type WizardTarget =
+  | "config"
+  | "my-availability"
+  | "heatmap"
+  | "solver"
+  | "plan";
 
 const ADMIN_STEPS: WizardStep[] = [
   {
@@ -32,42 +41,47 @@ const ADMIN_STEPS: WizardStep[] = [
     label: "Din rolle",
     title: "Du styrer hele prosessen",
     description:
-      "Som admin har du ansvaret for å sette opp rammene, sørge for at alle registrerer tilgjengelighet, generere planen og distribuere den. De andre i komiteen trenger bare å gjøre én ting — du gjør resten.",
+      "Som admin setter du rammene, følger opp tilgjengelighet og publiserer den ferdige planen.",
   },
   {
     icon: LayoutPanelTop,
     label: "Rammer",
     title: "Start med å sette opp rammene",
     description:
-      "I «Rammer»-fanen bestemmer du hvilke dager og klokkeslett intervjuene kan holdes, hvor lenge hvert intervju varer, og hvordan blokkene er strukturert. Tidslukene du åpner her er det eneste intervjuerne vil se.",
+      "Velg dager, klokkeslett, intervjulengde og pauser. Intervjuerne kan bare velge tidene du åpner.",
+    target: "config",
   },
   {
     icon: CalendarRange,
     label: "Tilgjengelighet",
     title: "Alle registrerer når de kan",
     description:
-      "Hver person i komiteen går inn under «Tilgjengelighet» og markerer timene de faktisk kan sitte i intervju. Du ser dekning i Fordeling-fanen.",
+      "Hver person markerer tidene de kan delta. Du følger dekningen under «Fordeling».",
+    target: "my-availability",
   },
   {
     icon: BarChart3,
     label: "Fordeling",
     title: "Sjekk at dekningen er god nok",
     description:
-      "Varmekartet i «Fordeling» viser hvor mange intervjuere som er tilgjengelige i hver tidsluke. Jo mørkere farge, jo bedre dekning. Her ser du også hvem i komiteen som har sendt inn tilgjengeligheten sin, og hvem som mangler.",
+      "Se dekning per tidsluke og hvem som fortsatt mangler tilgjengelighet.",
+    target: "heatmap",
   },
   {
-    icon: Sparkles,
+    icon: ListChecks,
     label: "Intervjuforslag",
     title: "Generer og distribuer planen",
     description:
-      "Når tilgjengeligheten er på plass, kjører du solveren under «Intervjuforslag». Den lager en best mulig plan basert på tilgjengelighet, panelstørrelse og dine prioriteringer. Gå igjennom resultatet og trykk «Publiser» når du er fornøyd.",
+      "Lag et forslag fra registrert tilgjengelighet. Kontroller resultatet før du publiserer.",
+    target: "solver",
   },
   {
     icon: CalendarCheck,
     label: "Intervjuplan",
     title: "Følg opp og juster ved behov",
     description:
-      "Den distribuerte planen ligger under «Intervjuplan». Her kan du bytte enkeltintervjuere, skru navn av og på, og eksportere til kalender. Alle i komiteen ser planen og kan eksportere intervjuene sine.",
+      "Se den publiserte planen, juster paneler og styr når kandidatnavn blir synlige.",
+    target: "plan",
   },
 ];
 
@@ -78,6 +92,7 @@ const MEMBER_STEPS: WizardStep[] = [
     title: "Marker når du kan sitte i intervju",
     description:
       "Marker tidene du faktisk kan sitte i intervju. Dette er det viktigste du gjør før opptaksansvarlig lager planen.",
+    target: "my-availability",
   },
   {
     icon: CalendarCheck,
@@ -85,6 +100,7 @@ const MEMBER_STEPS: WizardStep[] = [
     title: "Se intervjuene dine når planen er klar",
     description:
       "Når planen er distribuert, ser du intervjuene dine under «Intervjuplan». Der kan du eksportere til kalender og markere eventuell interessekonflikt når kandidatnavn er synlige.",
+    target: "plan",
   },
 ];
 
@@ -92,6 +108,7 @@ interface WizardTourProps {
   isOpen: boolean;
   onClose: () => void;
   isAdmin: boolean;
+  onNavigate: (target: WizardTarget) => void;
 }
 
 const ADMIN_STORAGE_KEY = "admissions.wizard.admin.v1";
@@ -112,6 +129,7 @@ export default function WizardTour({
   isOpen,
   onClose,
   isAdmin,
+  onNavigate,
 }: WizardTourProps) {
   const steps = isAdmin ? ADMIN_STEPS : MEMBER_STEPS;
   const [step, setStep] = useState(0);
@@ -146,6 +164,12 @@ export default function WizardTour({
     onClose();
   }, [isAdmin, onClose]);
 
+  const handleNavigate = useCallback(() => {
+    if (!current.target) return;
+    onNavigate(current.target);
+    onClose();
+  }, [current.target, onClose, onNavigate]);
+
   const handleKeyDown = useCallback(
     (e: KeyboardEvent) => {
       if (e.key === "Escape") handleClose();
@@ -179,7 +203,7 @@ export default function WizardTour({
 
   return (
     <div
-      className="fixed inset-0 z-[200] flex items-center justify-center p-4"
+      className="fixed inset-0 z-modal flex items-center justify-center p-4"
       aria-modal="true"
       role="dialog"
       aria-label="Veiledning"
@@ -213,6 +237,7 @@ export default function WizardTour({
                   type="button"
                   onClick={() => go(i)}
                   aria-label={`Steg ${i + 1}`}
+                  aria-current={i === step ? "step" : undefined}
                   className={cn(
                     "rounded-full transition-[width,background] duration-200",
                     i === step
@@ -230,7 +255,7 @@ export default function WizardTour({
               className="inline-flex h-7 w-7 items-center justify-center rounded-md text-text-muted transition-colors hover:bg-surface-subtle hover:text-text-primary"
               aria-label="Lukk"
             >
-              <X size={15} />
+              <X size={iconSizes.control} />
             </button>
           </div>
         </div>
@@ -241,7 +266,7 @@ export default function WizardTour({
         >
           <div className="flex items-start gap-3.5">
             <span className="mt-0.5 inline-flex h-11 w-11 flex-none items-center justify-center rounded-xl bg-brand-fill text-brand">
-              <Icon size={20} />
+              <Icon size={iconSizes.feature} />
             </span>
             <div>
               <span className="mb-0.5 block text-detail font-medium text-text-muted">
@@ -256,6 +281,19 @@ export default function WizardTour({
           <p className="m-0 text-ui leading-relaxed text-text-secondary">
             {current.description}
           </p>
+          {current.target && (
+            <button
+              type="button"
+              onClick={handleNavigate}
+              className={cn(
+                actionButtonBase,
+                actionButtonNeutral,
+                "self-start",
+              )}
+            >
+              Åpne {current.label.toLocaleLowerCase("nb-NO")}
+            </button>
+          )}
         </div>
 
         <div className="overflow-x-auto border-t border-border-soft">
@@ -269,6 +307,7 @@ export default function WizardTour({
                   key={i}
                   type="button"
                   onClick={() => go(i)}
+                  aria-current={isActive ? "step" : undefined}
                   className={cn(
                     "flex min-w-20 flex-1 flex-col items-center gap-1.5 border-r border-border-faint px-3 py-3 text-center transition-colors last:border-r-0",
                     isActive ? "bg-brand-soft" : "hover:bg-surface-subtle",
@@ -285,9 +324,12 @@ export default function WizardTour({
                     )}
                   >
                     {isDone ? (
-                      <Check size={12} strokeWidth={3} />
+                      <Check
+                        size={iconSizes.compact}
+                        strokeWidth={iconStrokeWidths.emphasis}
+                      />
                     ) : (
-                      <StepIcon size={12} />
+                      <StepIcon size={iconSizes.compact} />
                     )}
                   </span>
                   <span
@@ -325,7 +367,7 @@ export default function WizardTour({
                 onClick={() => go(step - 1)}
                 className={cn(actionButtonBase, actionButtonNeutral, "px-3")}
               >
-                <ChevronLeft size={14} />
+                <ChevronLeft size={iconSizes.control} />
                 Forrige
               </button>
             )}
@@ -336,7 +378,7 @@ export default function WizardTour({
                 onClick={handleComplete}
                 className={cn(actionButtonBase, actionButtonPrimary)}
               >
-                {isAdmin ? "Sett i gang" : "Forstått!"}
+                {isAdmin ? "Kom i gang" : "Forstått"}
               </button>
             ) : (
               <button
@@ -345,7 +387,7 @@ export default function WizardTour({
                 className={cn(actionButtonBase, actionButtonPrimary)}
               >
                 Neste
-                <ChevronRight size={14} />
+                <ChevronRight size={iconSizes.control} />
               </button>
             )}
           </div>
