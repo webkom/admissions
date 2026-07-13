@@ -20,6 +20,7 @@ import {
   actionButtonNeutral,
 } from "src/components/Scheduling/ui";
 import cn from "src/utils/cn";
+import { breakpoints } from "src/styles/designTokens";
 
 const ViewApplications = () => {
   const { admissionSlug } = useParams();
@@ -279,13 +280,13 @@ const Header = styled.header`
   align-items: center;
   justify-content: space-between;
   gap: var(--spacing-md);
-  padding: 0.5rem 0 0.75rem;
-  border-bottom: 1px solid var(--color-border-soft);
+  padding: var(--spacing-md) 0 var(--spacing-lg);
+  border-bottom: var(--border-width-default) solid var(--color-border-soft);
 
-  @media screen and (max-width: 700px) {
+  @media screen and (max-width: ${breakpoints.compact}) {
     align-items: flex-start;
     flex-direction: column;
-    gap: 0.35rem;
+    gap: var(--spacing-md);
   }
 `;
 
@@ -299,7 +300,7 @@ const Title = styled.h1`
 `;
 
 const AdmissionName = styled.p`
-  margin: 0.15rem 0 0.4rem;
+  margin: var(--spacing-xs) 0 var(--spacing-md);
   color: var(--color-text-primary);
   font-size: var(--font-size-md);
   font-weight: 600;
@@ -314,43 +315,46 @@ const Meta = styled.p`
 const HeaderControls = styled.div`
   display: flex;
   align-items: center;
-  gap: 0.85rem;
+  gap: var(--spacing-xl);
   flex-wrap: wrap;
   justify-content: flex-end;
 
-  @media screen and (max-width: 700px) {
+  @media screen and (max-width: ${breakpoints.compact}) {
     justify-content: flex-start;
   }
 `;
 
 const FilterSection = styled.section`
   padding: var(--spacing-md);
-  border: 1.5px solid var(--color-border-soft);
+  border: var(--border-width-emphasis) solid var(--color-border-soft);
   border-radius: var(--border-radius-lg);
   background: var(--color-surface-base);
   box-shadow: var(--shadow-sm);
 `;
 
 const FilterTitle = styled.h2`
-  margin: 0 0 0.75rem;
+  margin: 0 0 var(--spacing-lg);
   font-size: var(--font-size-md);
   font-weight: 600;
 `;
 
 const GroupFilters = styled.div`
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(14rem, 100%), 1fr));
-  gap: 0.75rem;
+  grid-template-columns: repeat(
+    auto-fit,
+    minmax(min(var(--layout-card-min-lg), 100%), 1fr)
+  );
+  gap: var(--spacing-lg);
   width: 100%;
 `;
 
 const PrivacyPlaceholder = styled.div`
   display: flex;
   align-items: center;
-  gap: 0.75rem;
+  gap: var(--spacing-lg);
   margin: 0;
   padding: var(--spacing-md);
-  border: 1.5px solid var(--color-border-soft);
+  border: var(--border-width-emphasis) solid var(--color-border-soft);
   border-radius: var(--border-radius-lg);
   background: var(--color-surface-base);
   color: var(--color-text-muted);
@@ -368,7 +372,7 @@ const PrivacyPlaceholder = styled.div`
   }
 
   strong {
-    margin-bottom: 0.2rem;
+    margin-bottom: var(--spacing-sm);
     color: var(--color-text-primary);
     font-weight: 600;
   }
@@ -378,14 +382,14 @@ const TableShell = styled.div`
   max-width: 100%;
   width: 100%;
   overflow: auto;
-  border: 1.5px solid var(--color-border-soft);
+  border: var(--border-width-emphasis) solid var(--color-border-soft);
   border-radius: var(--border-radius-lg);
   background: var(--color-surface-base);
   box-shadow: var(--shadow-sm);
 `;
 
 const StyledTable = styled.table`
-  min-width: 1180px;
+  min-width: var(--application-table-min-width);
   table-layout: auto;
 
   th {
@@ -406,7 +410,7 @@ const StyledTable = styled.table`
 
   td[data-column="priorityText"],
   td[data-column="groupApplicationText"] {
-    min-width: 24rem;
+    min-width: var(--content-width-compact);
     white-space: pre-wrap;
   }
 

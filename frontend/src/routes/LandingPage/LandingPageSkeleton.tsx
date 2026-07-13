@@ -9,7 +9,7 @@ const LandingPageSkeleton: React.FC<PropsWithChildren> = ({ children }) => {
       <div className="mb-8 max-w-44 transition-transform duration-200 hover:scale-[1.02] handheld:max-w-36">
         <AbakusLogo />
       </div>
-      <h1 className="mb-4 text-center text-[clamp(2.75rem,6vw,4rem)] font-extrabold tracking-display-tight text-text-strong handheld:text-display-lg">
+      <h1 className="mb-4 text-center text-[length:var(--font-size-hero-fluid)] font-extrabold tracking-display-tight text-text-strong handheld:text-display-lg">
         Opptak
       </h1>
       {children}

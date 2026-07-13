@@ -78,19 +78,17 @@ const GroupsPage: React.FC<GroupsPageProps> = ({
 
 export default GroupsPage;
 
-/** Styles **/
-
 const PageWrapper = styled.div`
   width: 100%;
-  padding: 4rem 2rem;
+  padding: var(--spacing-7xl) var(--spacing-4xl);
   max-width: var(--lego-max-width);
   margin: 0 auto;
-  min-height: calc(100vh - 80px);
+  min-height: var(--page-min-height);
   display: flex;
   flex-direction: column;
 
   ${media.handheld`
-    padding: 2rem 1rem;
+    padding: var(--spacing-4xl) var(--spacing-xl);
   `};
 `;
 
@@ -98,9 +96,9 @@ const Title = styled.h1`
   color: var(--color-text-body);
   font-size: var(--font-size-heading-md);
   font-weight: 500;
-  margin-bottom: 3rem;
+  margin-bottom: var(--spacing-6xl);
   text-align: center;
-  line-height: 1.4;
+  line-height: var(--line-height-title);
 
   ${media.handheld`
     font-size: var(--font-size-heading-xs);
@@ -110,7 +108,10 @@ const Title = styled.h1`
 
 const GroupsWrapper = styled.div`
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+  grid-template-columns: repeat(
+    auto-fill,
+    minmax(var(--group-card-min-width), 1fr)
+  );
   grid-gap: var(--spacing-xl);
   width: 100%;
 
@@ -122,7 +123,7 @@ const GroupsWrapper = styled.div`
 
 const NextButtonWrapper = styled.div`
   width: 100%;
-  margin-top: 4rem;
+  margin-top: var(--spacing-7xl);
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -135,11 +136,11 @@ const ErrorMessage = styled.div`
   color: var(--color-text-muted);
   display: flex;
   align-items: center;
-  gap: 0.75rem;
-  padding: 1rem 1.5rem;
+  gap: var(--spacing-lg);
+  padding: var(--spacing-xl) var(--spacing-3xl);
   background-color: var(--color-danger-bg);
   border-radius: var(--border-radius-md);
-  border: 1px solid var(--color-danger-border);
+  border: var(--border-width-default) solid var(--color-danger-border);
 
   > i {
     font-size: var(--font-size-heading-xs);

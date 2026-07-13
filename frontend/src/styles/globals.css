@@ -19,13 +19,71 @@
   --font-size-heading-xs: 1.25rem;
   --font-size-heading-sm: 1.375rem;
   --font-size-heading-md: 1.5rem;
+  --font-size-countdown: 2rem;
+  --font-size-countdown-fluid: clamp(1.6rem, 3vw, 2.35rem);
+  --font-size-hero-fluid: clamp(2.75rem, 6vw, 4rem);
   --font-size-display-md: 2.25rem;
   --font-size-display-lg: 3rem;
+  --line-height-nano: 0.875rem;
+  --line-height-tiny: 1rem;
+  --line-height-detail: 1.15rem;
+  --line-height-ui: 1.25rem;
+  --line-height-title: 1.4rem;
+  --line-height-action: 1.5rem;
+  --line-height-body-lg: 1.7rem;
+  --line-height-countdown: 2.25rem;
+  --line-height-display-md: 2.5rem;
+  --line-height-display-lg: 3.25rem;
+  --line-height-base: 1.3;
+  --letter-spacing-badge: 0.06em;
+  --letter-spacing-badge-wide: 0.12em;
+  --letter-spacing-caps: 0.05em;
+  --letter-spacing-label: 0.08em;
+  --letter-spacing-display: -0.03em;
+  --letter-spacing-display-tight: -0.045em;
   --spacing-xs: calc(var(--lego-default-padding) / 8);
   --spacing-sm: calc(var(--lego-default-padding) / 4);
   --spacing-md: calc(var(--lego-default-padding) / 2);
   --spacing-lg: calc(var(--lego-default-padding) * 3 / 4);
   --spacing-xl: var(--lego-default-padding);
+  --spacing-2xl: calc(var(--lego-default-padding) * 5 / 4);
+  --spacing-3xl: calc(var(--lego-default-padding) * 3 / 2);
+  --spacing-4xl: calc(var(--lego-default-padding) * 2);
+  --spacing-5xl: calc(var(--lego-default-padding) * 5 / 2);
+  --spacing-6xl: calc(var(--lego-default-padding) * 3);
+  --spacing-7xl: calc(var(--lego-default-padding) * 4);
+  --border-width-default: 1px;
+  --border-width-emphasis: 1.5px;
+  --focus-ring-width: 3px;
+  --focus-ring-offset: 2px;
+  --border-radius-pill: 999px;
+  --navigation-height: 5rem;
+  --navigation-logo-width: 8.75rem;
+  --navigation-layer: 100;
+  --page-min-height: calc(100dvh - var(--navigation-height));
+  --content-width-readable: 44rem;
+  --content-width-compact: 24rem;
+  --content-width-form: 50rem;
+  --admin-sidebar-width: 17.5rem;
+  --application-table-min-width: 73.75rem;
+  --schedule-table-min-width: 36rem;
+  --control-min-width: 13.75rem;
+  --control-height-sm: 2.25rem;
+  --avatar-size-lg: 3.5rem;
+  --avatar-size-md: 3.125rem;
+  --avatar-size-sm: 2.5rem;
+  --group-card-min-width: 21.875rem;
+  --layout-card-min-sm: 8.75rem;
+  --layout-card-min-md: 11.25rem;
+  --layout-card-min-lg: 13.75rem;
+  --schedule-label-width: 6.25rem;
+  --schedule-name-width: 8.75rem;
+  --motion-distance-sm: 0.375rem;
+  --motion-pulse-radius: 0.875rem;
+  --underline-inset: 0.75rem;
+  --underline-inset-tight: 0.5rem;
+  --underline-offset: 0.5rem;
+  --underline-thickness: 0.125rem;
   --transition-base: var(--easing-fast);
   --color-brand: var(--lego-red-color);
 
@@ -128,7 +186,7 @@ html {
 
 body {
   margin: 0;
-  line-height: 1.3;
+  line-height: var(--line-height-base);
   background: var(--lego-background-color);
   color: var(--lego-font-color);
   font-family: var(--font-family), sans-serif;
@@ -145,7 +203,7 @@ body {
   }
 
   70% {
-    box-shadow: 0 0 0 14px var(--color-brand-pulse-end);
+    box-shadow: 0 0 0 var(--motion-pulse-radius) var(--color-brand-pulse-end);
   }
 
   100% {
@@ -156,7 +214,7 @@ body {
 @keyframes fade-in {
   from {
     opacity: 0;
-    transform: translateY(6px);
+    transform: translateY(var(--motion-distance-sm));
   }
 
   to {
@@ -192,29 +250,29 @@ h4 {
   font-family: var(--font-display);
   font-weight: 600;
   color: var(--lego-font-color);
-  line-height: 1.3;
+  line-height: var(--line-height-base);
   text-wrap: balance;
 }
 
 h1 {
-  margin: 1rem 0;
+  margin: var(--spacing-xl) 0;
   font-size: var(--font-size-xl);
 }
 
 h2 {
-  margin: 0.5rem 0;
+  margin: var(--spacing-md) 0;
   font-size: var(--font-size-heading-md);
 }
 
 h3 {
-  margin: 0.5rem 0;
+  margin: var(--spacing-md) 0;
   font-size: var(--font-size-heading-sm);
 }
 
 p {
   text-wrap: pretty;
   margin-bottom: var(--spacing-sm);
-  line-height: 1.3;
+  line-height: var(--line-height-base);
 }
 
 a {
@@ -278,10 +336,10 @@ tbody tr:nth-child(even) {
 .slide-underline::after {
   content: "";
   position: absolute;
-  left: 12px;
-  right: 12px;
-  bottom: 8px;
-  height: 2px;
+  left: var(--underline-inset);
+  right: var(--underline-inset);
+  bottom: var(--underline-offset);
+  height: var(--underline-thickness);
   background-color: var(--color-brand);
   transform: scaleX(0);
   transform-origin: left;
@@ -297,13 +355,13 @@ tbody tr:nth-child(even) {
 }
 
 .slide-underline-tight::after {
-  left: 8px;
-  right: 8px;
+  left: var(--underline-inset-tight);
+  right: var(--underline-inset-tight);
 }
 
 .slide-underline:focus-visible::after {
   transform: scaleX(1);
-  box-shadow: 0 0 0 4px var(--color-brand-ring-soft);
+  box-shadow: 0 0 0 var(--spacing-sm) var(--color-brand-ring-soft);
 }
 
 .slide-underline-on-dark::after {

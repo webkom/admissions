@@ -50,22 +50,20 @@ const NavBar: React.FC<NavBarProps> = ({ isEditing }) => {
 
 export default NavBar;
 
-/** Styles **/
-
 const Container = styled.nav`
   display: flex;
   align-items: center;
   justify-content: space-between;
   background: var(--color-surface-base);
   width: 100%;
-  height: 80px;
-  border-bottom: 1px solid var(--color-border-soft);
+  height: var(--navigation-height);
+  border-bottom: var(--border-width-default) solid var(--color-border-soft);
   box-shadow: var(--shadow-sm);
-  padding: 0 4rem;
+  padding: 0 var(--spacing-7xl);
   position: sticky;
   top: 0;
-  z-index: 100;
-  backdrop-filter: saturate(140%) blur(6px);
+  z-index: var(--navigation-layer);
+  backdrop-filter: saturate(140%) blur(var(--motion-distance-sm));
 
   ${media.handheld`        
     flex-direction: column;
@@ -76,7 +74,7 @@ const Container = styled.nav`
 `;
 
 const BrandContainer = styled.div`
-  width: 140px;
+  width: var(--navigation-logo-width);
   flex-shrink: 0;
   transition: var(--transition-base);
 
@@ -92,7 +90,7 @@ const BrandContainer = styled.div`
 
 const NavItemsContainer = styled.ul`
   display: flex;
-  gap: 3rem;
+  gap: var(--spacing-6xl);
 
   ${media.portrait`  
     gap: var(--spacing-lg);
@@ -103,7 +101,7 @@ const NavItemsContainer = styled.ul`
     width: 100%;
     justify-content: center;
     margin-top: var(--spacing-md);
-    padding-top: 1rem;
-    border-top: 1px solid var(--color-border-soft);
+    padding-top: var(--spacing-xl);
+    border-top: var(--border-width-default) solid var(--color-border-soft);
   `}
 `;

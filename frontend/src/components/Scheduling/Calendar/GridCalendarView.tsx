@@ -9,6 +9,7 @@ import {
   makeSlotKey,
 } from "../scheduleUtils";
 import cn from "src/utils/cn";
+import { calendarGrid } from "src/styles/designTokens";
 
 interface GridCalendarViewProps {
   schedule: ScheduleItem[];
@@ -113,8 +114,8 @@ const GridCalendarView: React.FC<GridCalendarViewProps> = ({
       <div
         className="grid gap-px bg-border-muted"
         style={{
-          gridTemplateColumns: `80px repeat(${dates.length}, minmax(160px, 1fr))`,
-          minWidth: `max(680px, ${dates.length * 160 + 80}px)`,
+          gridTemplateColumns: `${calendarGrid.scheduleTimeColumnWidth}px repeat(${dates.length}, minmax(${calendarGrid.scheduleDayColumnMinWidth}px, 1fr))`,
+          minWidth: `max(${calendarGrid.minimumWidth}px, ${dates.length * calendarGrid.scheduleDayColumnMinWidth + calendarGrid.scheduleTimeColumnWidth}px)`,
         }}
       >
         <div className="bg-surface-base" />

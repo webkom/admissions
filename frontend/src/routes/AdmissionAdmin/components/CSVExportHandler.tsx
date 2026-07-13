@@ -88,8 +88,8 @@ const Wrapper = styled(SectionCard)`
 const FormatSelector = styled.div`
   display: flex;
   flex-direction: column;
-  gap: 0.45rem;
-  min-width: 220px;
+  gap: var(--spacing-md);
+  min-width: var(--control-min-width);
 
   label {
     color: var(--color-text-muted);
@@ -101,6 +101,6 @@ const FormatSelector = styled.div`
 const ControlRow = styled.div`
   display: flex;
   align-items: flex-end;
-  gap: 0.85rem;
+  gap: var(--spacing-xl);
   flex-wrap: wrap;
 `;

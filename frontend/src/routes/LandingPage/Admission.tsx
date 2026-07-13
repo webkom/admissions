@@ -203,7 +203,7 @@ interface ActionButtonContentProps {
 }
 
 const ActionButtonContent = ({ icon, label }: ActionButtonContentProps) => (
-  <span className="grid w-full grid-cols-[1.25rem_minmax(0,1fr)_1.25rem] items-center">
+  <span className="grid w-full grid-cols-[var(--spacing-2xl)_minmax(0,1fr)_var(--spacing-2xl)] items-center">
     <span className="inline-flex h-5 w-5 items-center justify-center">
       {icon}
     </span>

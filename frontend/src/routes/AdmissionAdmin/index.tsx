@@ -1,6 +1,7 @@
 import React from "react";
 import { Route, Routes, useLocation, useParams } from "react-router-dom";
 import styled from "styled-components";
+import { breakpoints } from "src/styles/designTokens";
 import ViewApplications from "./ViewApplications";
 import NavBar from "./components/NavBar";
 import { useAdmission } from "src/query/hooks";
@@ -34,7 +35,7 @@ const AdminPage: React.FC = () => {
 export default AdminPage;
 
 const PageWrapper = styled.div`
-  min-height: calc(100vh - 70px);
+  min-height: var(--page-min-height);
   background: var(--color-surface-page);
 `;
 
@@ -45,10 +46,12 @@ const Wrapper = styled.div<{ $withSideNav: boolean }>`
   padding: var(--spacing-lg);
   display: grid;
   grid-template-columns: ${(props) =>
-    props.$withSideNav ? "280px minmax(0, 1fr)" : "minmax(0, 1fr)"};
-  gap: 1.25rem;
+    props.$withSideNav
+      ? "var(--admin-sidebar-width) minmax(0, 1fr)"
+      : "minmax(0, 1fr)"};
+  gap: var(--spacing-2xl);
 
-  @media screen and (max-width: 900px) {
+  @media screen and (max-width: ${breakpoints.portrait}) {
     grid-template-columns: 1fr;
     padding: var(--spacing-md);
   }

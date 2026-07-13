@@ -18,15 +18,13 @@ const UserInfo: React.FC = () => {
 
 export default UserInfo;
 
-/** Styles **/
-
 const Container = styled.div`
   border-radius: var(--border-radius-md);
   cursor: default;
   display: flex;
   align-items: center;
-  margin: 10px;
-  margin-right: 5rem;
+  margin: var(--spacing-md);
+  margin-right: var(--spacing-7xl);
 
   ${media.portrait`        
     margin-right: var(--spacing-md);
@@ -37,7 +35,7 @@ const Container = styled.div`
     order: 2;
     display: inline;
     margin: 0;
-    margin-bottom: 10px;
+    margin-bottom: var(--spacing-md);
   `}
 `;
 
@@ -57,8 +55,8 @@ const NameLogOutWrapper = styled.div`
 const Name = styled.span`
   ${media.portrait`        
     font-size: var(--font-size-detail);
-    margin-bottom: 5px;
-    line-height: 0.8rem;
+    margin-bottom: var(--spacing-sm);
+    line-height: var(--line-height-nano);
   `}
 
   ${media.handheld`        
@@ -73,8 +71,8 @@ const LogoutButton = styled.a`
   border-radius: var(--border-radius-sm);
   display: inline;
   font-size: var(--font-size-xs);
-  line-height: 1rem;
-  padding: 0.12rem 0.5rem;
+  line-height: var(--line-height-tiny);
+  padding: var(--spacing-xs) var(--spacing-md);
   color: var(--lego-font-color);
   &:hover {
     color: var(--lego-red-color);
@@ -84,13 +82,13 @@ const LogoutButton = styled.a`
 const ProfilePicture = styled.img`
   object-fit: scale-down;
   height: auto;
-  width: 50px;
-  height: 50px;
+  width: var(--avatar-size-md);
+  height: var(--avatar-size-md);
   border-radius: 50%;
   margin-left: var(--spacing-md);
 
   ${media.portrait`        
-    width: 40px;
+    width: var(--avatar-size-sm);
     margin-left: var(--spacing-sm);
   `}
 

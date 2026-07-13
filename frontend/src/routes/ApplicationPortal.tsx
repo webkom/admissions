@@ -186,5 +186,5 @@ const PageWrapper = styled.div`
   display: flex;
   flex-direction: column;
   align-items: center;
-  min-height: calc(100vh - 70px);
+  min-height: var(--page-min-height);
 `;

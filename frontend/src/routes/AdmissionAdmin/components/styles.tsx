@@ -8,7 +8,7 @@ export const Wrapper = styled.div`
   padding: 0;
   border-radius: var(--border-radius-lg);
   background: var(--color-surface-base);
-  border: 1px solid var(--color-border-soft);
+  border: var(--border-width-default) solid var(--color-border-soft);
 
   ${media.handheld`
      width: 100%;
@@ -29,8 +29,8 @@ export const FormWrapper = styled.div`
 
 export const GroupLogo = styled.img`
   object-fit: scale-down;
-  width: 3.5rem;
-  height: 3.5rem;
+  width: var(--avatar-size-lg);
+  height: var(--avatar-size-lg);
 `;
 
 export const GroupLogoWrapper = styled.div`

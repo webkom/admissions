@@ -71,7 +71,7 @@ const ExportChooserModal = ({
         aria-modal="true"
         aria-labelledby="export-chooser-title"
         tabIndex={-1}
-        className="max-h-[calc(100dvh-2rem)] w-full max-w-md overflow-y-auto rounded-panel border border-border bg-surface-base p-5 shadow-modal focus:outline-none animate-fade-in"
+        className="max-h-[calc(100dvh-var(--spacing-4xl))] w-full max-w-md overflow-y-auto rounded-panel border border-border bg-surface-base p-5 shadow-modal focus:outline-none animate-fade-in"
       >
         <h4
           id="export-chooser-title"

@@ -64,12 +64,12 @@ export default NavBar;
 const Wrapper = styled.div`
   display: flex;
   flex-direction: column;
-  gap: 0.75rem;
+  gap: var(--spacing-lg);
 `;
 
 const PanelSection = styled.section`
   padding: var(--spacing-md);
-  border: 1.5px solid var(--color-border);
+  border: var(--border-width-emphasis) solid var(--color-border);
   border-radius: var(--border-radius-lg);
   background: var(--color-surface-base);
   box-shadow: var(--shadow-sm);
@@ -77,7 +77,7 @@ const PanelSection = styled.section`
 
 const SectionEyebrow = styled.span`
   display: inline-block;
-  margin-bottom: 0.4rem;
+  margin-bottom: var(--spacing-md);
   font-size: var(--font-size-sm);
   font-weight: 500;
   color: var(--color-text-muted);
@@ -97,11 +97,11 @@ const NavDescription = styled.p`
 const BackLink = styled(Link)`
   display: inline-flex;
   align-items: center;
-  gap: 0.4rem;
+  gap: var(--spacing-md);
   width: fit-content;
-  padding: 0.55rem 0.75rem;
-  border: 1.5px solid var(--color-border-soft);
-  border-radius: 999px;
+  padding: var(--spacing-md) var(--spacing-lg);
+  border: var(--border-width-emphasis) solid var(--color-border-soft);
+  border-radius: var(--border-radius-pill);
   background: var(--color-surface-base);
   color: var(--color-text-muted);
   font-size: var(--font-size-detail);
@@ -118,10 +118,10 @@ const BackLink = styled(Link)`
 const NavLink = styled(RouterNavLink)`
   display: flex;
   align-items: center;
-  height: 2.25rem;
-  padding: 0 0.65rem;
+  height: var(--control-height-sm);
+  padding: 0 var(--spacing-lg);
   border-radius: var(--border-radius-md);
-  margin-top: 0.3rem;
+  margin-top: var(--spacing-sm);
   color: var(--color-text-muted);
   font-size: var(--font-size-sm);
   font-weight: 600;
@@ -142,7 +142,7 @@ const NavLink = styled(RouterNavLink)`
 `;
 
 const NavEmptyState = styled.p`
-  margin: 0.4rem 0 0;
+  margin: var(--spacing-md) 0 0;
   color: var(--color-text-muted);
   font-size: var(--font-size-detail);
   line-height: 1.3;

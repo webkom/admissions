@@ -60,7 +60,7 @@ const InterviewerLoadView = ({
           </p>
         </div>
 
-        <div className="grid grid-cols-[repeat(auto-fit,minmax(160px,1fr))] gap-2.5">
+        <div className="grid grid-cols-auto-card-md gap-2.5">
           <button
             type="button"
             onClick={() => onSelectInterviewer("")}
@@ -115,7 +115,7 @@ const InterviewerLoadView = ({
         </div>
       ) : (
         <div className="overflow-x-auto rounded-lg border border-border-soft">
-          <table className="w-full min-w-[36rem] border-collapse">
+          <table className="w-full min-w-schedule-table border-collapse">
             <thead>
               <tr>
                 <th className="bg-surface-subtle px-4 py-3 text-left text-ui font-semibold text-text-muted">
@@ -135,7 +135,7 @@ const InterviewerLoadView = ({
                   key={scheduleIndex}
                   className="group [&:not(:last-child)>td]:border-b [&:not(:last-child)>td]:border-b-border-faint hover:[&>td]:bg-surface-soft"
                 >
-                  <td className="w-[100px] whitespace-nowrap px-4 py-3 text-sm font-semibold text-text-muted">
+                  <td className="w-schedule-label whitespace-nowrap px-4 py-3 text-sm font-semibold text-text-muted">
                     {formatSlotTime(item.time)}
                   </td>
                   <td className="px-4 py-3 text-sm font-semibold text-text-primary">

@@ -5,9 +5,9 @@ import { media } from "src/styles/mediaQueries";
 export const SectionCard = styled.section`
   width: 100%;
   background: var(--color-surface-base);
-  border: 1.5px solid var(--color-border-soft);
+  border: var(--border-width-emphasis) solid var(--color-border-soft);
   border-radius: var(--border-radius-lg);
-  padding: 1.25rem 1.5rem;
+  padding: var(--spacing-2xl) var(--spacing-3xl);
   box-shadow: var(--shadow-sm);
 
   ${media.handheld`
@@ -23,8 +23,8 @@ export const SectionTitle = styled.h2`
 `;
 
 export const SectionDescription = styled.p`
-  margin: 0.35rem 0 0;
-  max-width: 44rem;
+  margin: var(--spacing-md) 0 0;
+  max-width: var(--content-width-readable);
   color: var(--color-text-muted);
   font-size: var(--font-size-sm);
   line-height: 1.3;
@@ -34,12 +34,12 @@ export const GroupFilterButton = styled.button<{ $selected: boolean }>`
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 0.75rem;
+  gap: var(--spacing-lg);
   min-width: 0;
   width: 100%;
-  padding: 0.65rem 0.875rem;
+  padding: var(--spacing-md) var(--spacing-lg);
   border-radius: var(--border-radius-md);
-  border: 1.5px solid
+  border: var(--border-width-emphasis) solid
     ${(props) =>
       props.$selected ? "var(--color-brand)" : "var(--color-border-soft)"};
   background: ${(props) =>
@@ -62,14 +62,14 @@ export const GroupFilterButton = styled.button<{ $selected: boolean }>`
 export const GroupFilterMeta = styled.span`
   display: inline-flex;
   align-items: center;
-  gap: 0.65rem;
+  gap: var(--spacing-lg);
   min-width: 0;
 `;
 
 export const GroupFilterLogo = styled.img`
   object-fit: scale-down;
-  width: 1.5rem;
-  height: 1.5rem;
+  width: var(--spacing-3xl);
+  height: var(--spacing-3xl);
   flex-shrink: 0;
 `;
 
@@ -95,7 +95,7 @@ export const TableWrapper = styled.div`
   width: 100%;
   overflow: auto;
   border-radius: var(--border-radius-lg);
-  border: 1.5px solid var(--color-border-soft);
+  border: var(--border-width-emphasis) solid var(--color-border-soft);
   background: var(--color-surface-base);
   box-shadow: var(--shadow-sm);
 `;
@@ -106,9 +106,9 @@ export const CSVExport = styled(CSVLink)`
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  height: 2.25rem;
-  padding: 0 1rem;
-  border-radius: 2rem;
+  height: var(--control-height-sm);
+  padding: 0 var(--spacing-xl);
+  border-radius: var(--border-radius-pill);
   background: var(--color-red-6);
   color: var(--color-absolute-white);
   font-size: var(--font-size-sm);
@@ -116,7 +116,7 @@ export const CSVExport = styled(CSVLink)`
   font-weight: 600;
   text-decoration: none;
   transition: background var(--easing-fast);
-  border: 1.5px solid var(--color-red-6);
+  border: var(--border-width-emphasis) solid var(--color-red-6);
 
   &:hover {
     background: var(--color-red-7);

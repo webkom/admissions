@@ -79,7 +79,7 @@ interface CountdownItemProps {
 const CountdownItem = ({ value, label, dimmed }: CountdownItemProps) => (
   <div className="min-w-0 px-1 text-center leading-tight">
     <span
-      className={`block text-[clamp(1.6rem,3vw,2.35rem)] font-extrabold tabular-nums ${
+      className={`block text-[length:var(--font-size-countdown-fluid)] font-extrabold tabular-nums ${
         dimmed ? "text-text-faded" : "text-text-strong"
       }`}
     >

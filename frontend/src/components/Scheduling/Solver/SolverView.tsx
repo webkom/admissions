@@ -932,7 +932,7 @@ export default function SolverView({
               <div className="mt-5 flex flex-col gap-5 animate-fade-in">
                 <div>
                   <span className={sectionLabelClass}>Regler</span>
-                  <div className="grid grid-cols-[repeat(auto-fit,minmax(220px,1fr))] gap-2">
+                  <div className="grid grid-cols-auto-card-lg gap-2">
                     <div className="flex flex-col gap-1.5">
                       <ToggleCard
                         title="Samme kjønn i panel"
@@ -985,7 +985,7 @@ export default function SolverView({
                   <div
                     role="radiogroup"
                     aria-label="Prioritering"
-                    className="grid grid-cols-[repeat(auto-fit,minmax(180px,1fr))] gap-2"
+                    className="grid grid-cols-auto-card-md gap-2"
                   >
                     {PRIORITY_PRESETS.map((preset, index) => {
                       const active = selectedPriorityPreset === preset.key;
@@ -1243,7 +1243,7 @@ export default function SolverView({
             }
           />
           <SchedulePanelBody>
-            <div className="grid grid-cols-[repeat(auto-fit,minmax(140px,1fr))] gap-2">
+            <div className="grid grid-cols-auto-card-sm gap-2">
               <StatTile
                 label="Intervjuer"
                 value={overviewStats.totalInterviews}
@@ -1351,7 +1351,7 @@ export default function SolverView({
               />
             ) : viewType === "list" ? (
               <div className="overflow-x-auto rounded-lg border border-border-soft">
-                <table className="w-full min-w-[36rem] border-collapse">
+                <table className="w-full min-w-schedule-table border-collapse">
                   <thead>
                     <tr>
                       <th className="bg-surface-subtle px-4 py-3 text-left text-ui font-semibold text-text-muted">
@@ -1385,7 +1385,7 @@ export default function SolverView({
                         >
                           <td
                             className={cn(
-                              "w-[140px] whitespace-nowrap px-4 py-3 text-sm font-semibold text-text-muted",
+                              "w-schedule-name whitespace-nowrap px-4 py-3 text-sm font-semibold text-text-muted",
                               item.locked && "border-l-2 border-l-brand",
                             )}
                           >

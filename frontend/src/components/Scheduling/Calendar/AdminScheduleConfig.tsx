@@ -21,6 +21,7 @@ import {
   slotsToEnabledWindows,
 } from "../scheduleUtils";
 import cn from "src/utils/cn";
+import { calendarGrid } from "src/styles/designTokens";
 import {
   Stepper,
   TimeSegmentInput,
@@ -789,8 +790,8 @@ const AdminScheduleConfig: React.FC<AdminScheduleConfigProps> = ({
           <div
             className="grid touch-auto gap-1"
             style={{
-              gridTemplateColumns: `56px repeat(${columns - 1}, minmax(70px, 1fr))`,
-              minWidth: `max(680px, ${(columns - 1) * 70 + 56}px)`,
+              gridTemplateColumns: `${calendarGrid.timeColumnWidth}px repeat(${columns - 1}, minmax(${calendarGrid.dayColumnMinWidth}px, 1fr))`,
+              minWidth: `max(${calendarGrid.minimumWidth}px, ${(columns - 1) * calendarGrid.dayColumnMinWidth + calendarGrid.timeColumnWidth}px)`,
             }}
           >
             <div />

@@ -76,13 +76,13 @@ const PageWrapper = styled.div`
 
 const HeaderCard = styled.div`
   width: 100%;
-  padding-bottom: 1rem;
-  border-bottom: 1px solid var(--color-border-soft);
+  padding-bottom: var(--spacing-xl);
+  border-bottom: var(--border-width-default) solid var(--color-border-soft);
 `;
 
 const SectionEyebrow = styled.span`
   display: inline-block;
-  margin-bottom: 0.35rem;
+  margin-bottom: var(--spacing-md);
   font-size: var(--font-size-sm);
   font-weight: 500;
   color: var(--color-text-muted);
@@ -96,7 +96,7 @@ const GroupTitle = styled.h1`
 `;
 
 const GroupDescription = styled.p`
-  margin: 0.45rem 0 0;
+  margin: var(--spacing-md) 0 0;
   color: var(--color-text-muted);
   line-height: 1.3;
 `;

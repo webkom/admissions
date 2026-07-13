@@ -113,7 +113,7 @@ const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
         aria-modal="true"
         aria-label={title}
         tabIndex={-1}
-        className="max-h-[calc(100dvh-2rem)] w-full max-w-md overflow-y-auto rounded-panel border border-border bg-surface-base p-5 shadow-modal focus:outline-none animate-fade-in"
+        className="max-h-[calc(100dvh-var(--spacing-4xl))] w-full max-w-md overflow-y-auto rounded-panel border border-border bg-surface-base p-5 shadow-modal focus:outline-none animate-fade-in"
       >
         <div className="flex items-start gap-3">
           {resolvedIcon && (

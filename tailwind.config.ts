@@ -1,4 +1,5 @@
 import type { Config } from "tailwindcss";
+import { breakpoints } from "./frontend/src/styles/designTokens";
 
 const brand = {
   DEFAULT: "var(--color-brand)",
@@ -85,6 +86,23 @@ const config: Config = {
       },
       maxWidth: {
         lego: "var(--lego-max-width)",
+        readable: "var(--content-width-readable)",
+      },
+      minWidth: {
+        "application-table": "var(--application-table-min-width)",
+        "schedule-table": "var(--schedule-table-min-width)",
+      },
+      width: {
+        "schedule-label": "var(--schedule-label-width)",
+        "schedule-name": "var(--schedule-name-width)",
+      },
+      gridTemplateColumns: {
+        "auto-card-sm":
+          "repeat(auto-fit, minmax(var(--layout-card-min-sm), 1fr))",
+        "auto-card-md":
+          "repeat(auto-fit, minmax(var(--layout-card-min-md), 1fr))",
+        "auto-card-lg":
+          "repeat(auto-fit, minmax(var(--layout-card-min-lg), 1fr))",
       },
       boxShadow: {
         sm: "var(--shadow-sm)",
@@ -100,40 +118,73 @@ const config: Config = {
         "tint-sm": "var(--shadow-tint-sm)",
       },
       ringWidth: {
-        3: "3px",
+        3: "var(--focus-ring-width)",
       },
       fontSize: {
-        nano: ["var(--font-size-nano)", { lineHeight: "0.875rem" }],
-        tiny: ["var(--font-size-tiny)", { lineHeight: "1rem" }],
-        label: ["var(--font-size-label)", { lineHeight: "1rem" }],
-        detail: ["var(--font-size-detail)", { lineHeight: "1.15rem" }],
-        ui: ["var(--font-size-ui)", { lineHeight: "1.25rem" }],
-        title: ["var(--font-size-title)", { lineHeight: "1.4rem" }],
-        action: ["var(--font-size-md)", { lineHeight: "1.5rem" }],
-        "body-lg": ["var(--font-size-lg)", { lineHeight: "1.7rem" }],
-        countdown: ["2rem", { lineHeight: "2.25rem" }],
-        "display-sm": ["var(--font-size-xl)", { lineHeight: "2.25rem" }],
-        "display-md": ["var(--font-size-display-md)", { lineHeight: "2.5rem" }],
+        nano: [
+          "var(--font-size-nano)",
+          { lineHeight: "var(--line-height-nano)" },
+        ],
+        tiny: [
+          "var(--font-size-tiny)",
+          { lineHeight: "var(--line-height-tiny)" },
+        ],
+        label: [
+          "var(--font-size-label)",
+          { lineHeight: "var(--line-height-tiny)" },
+        ],
+        detail: [
+          "var(--font-size-detail)",
+          { lineHeight: "var(--line-height-detail)" },
+        ],
+        ui: ["var(--font-size-ui)", { lineHeight: "var(--line-height-ui)" }],
+        title: [
+          "var(--font-size-title)",
+          { lineHeight: "var(--line-height-title)" },
+        ],
+        action: [
+          "var(--font-size-md)",
+          { lineHeight: "var(--line-height-action)" },
+        ],
+        "body-lg": [
+          "var(--font-size-lg)",
+          { lineHeight: "var(--line-height-body-lg)" },
+        ],
+        countdown: [
+          "var(--font-size-countdown)",
+          { lineHeight: "var(--line-height-countdown)" },
+        ],
+        "display-sm": [
+          "var(--font-size-xl)",
+          { lineHeight: "var(--line-height-countdown)" },
+        ],
+        "display-md": [
+          "var(--font-size-display-md)",
+          { lineHeight: "var(--line-height-display-md)" },
+        ],
         "display-lg": [
           "var(--font-size-display-lg)",
-          { lineHeight: "3.25rem" },
+          { lineHeight: "var(--line-height-display-lg)" },
         ],
       },
       letterSpacing: {
-        badge: "0.06em",
-        "badge-wide": "0.12em",
-        caps: "0.05em",
-        label: "0.08em",
-        display: "-0.03em",
-        "display-tight": "-0.045em",
+        badge: "var(--letter-spacing-badge)",
+        "badge-wide": "var(--letter-spacing-badge-wide)",
+        caps: "var(--letter-spacing-caps)",
+        label: "var(--letter-spacing-label)",
+        display: "var(--letter-spacing-display)",
+        "display-tight": "var(--letter-spacing-display-tight)",
       },
       screens: {
-        portrait: { raw: "(max-width: 900px)" },
-        handheld: { raw: "(max-width: 640px)" },
+        portrait: { raw: `(max-width: ${breakpoints.portrait})` },
+        handheld: { raw: `(max-width: ${breakpoints.handheld})` },
       },
       keyframes: {
         "fade-in": {
-          from: { opacity: "0", transform: "translateY(6px)" },
+          from: {
+            opacity: "0",
+            transform: "translateY(var(--motion-distance-sm))",
+          },
           to: { opacity: "1", transform: "translateY(0)" },
         },
         "timeline-pulse": {
@@ -141,7 +192,8 @@ const config: Config = {
             boxShadow: "0 0 0 0 var(--color-brand-pulse-start)",
           },
           "70%": {
-            boxShadow: "0 0 0 14px var(--color-brand-pulse-end)",
+            boxShadow:
+              "0 0 0 var(--motion-pulse-radius) var(--color-brand-pulse-end)",
           },
           "100%": {
             boxShadow: "0 0 0 0 var(--color-brand-pulse-end)",
