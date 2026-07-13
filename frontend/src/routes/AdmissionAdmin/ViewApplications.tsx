@@ -1,6 +1,8 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useMemo, useState } from "react";
 import styled from "styled-components";
+import { DateTime } from "luxon";
 
+import { StyledButton } from "src/components/LinkButton";
 import LoadingBall from "src/components/LoadingBall";
 import AdmissionsContainer from "src/containers/AdmissionsContainer";
 import { escapeCsvCell } from "src/utils/methods";
@@ -8,7 +10,6 @@ import { useAdmission, useAdminApplications } from "src/query/hooks";
 import { useParams } from "react-router-dom";
 import { Eye, EyeOff } from "lucide-react";
 
-import { Application } from "src/types";
 import { InputFieldModel } from "src/utils/jsonFields";
 import CSVExportHandler, {
   CompleteCsvData,
@@ -20,14 +21,28 @@ import {
   actionButtonNeutral,
 } from "src/components/Scheduling/ui";
 import cn from "src/utils/cn";
-import { breakpoints } from "src/styles/designTokens";
+import { breakpoints, iconSizes } from "src/styles/designTokens";
+import { getApiErrorMessage } from "src/utils/apiErrors";
+
+const CSV_TIME_ZONE = "Europe/Oslo";
+
+const formatCsvDate = (value: string): string => {
+  const date = DateTime.fromISO(value).setZone(CSV_TIME_ZONE);
+  return date.isValid ? date.setLocale("nb").toFormat("dd.MM.yyyy HH:mm") : "";
+};
+
+const filenamePart = (value: string): string =>
+  value
+    .toLocaleLowerCase("nb-NO")
+    .replaceAll("ø", "o")
+    .replaceAll("æ", "ae")
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9_-]+/g, "-")
+    .replace(/^-+|-+$/g, "");
 
 const ViewApplications = () => {
   const { admissionSlug } = useParams();
-  const [sortedApplications, setSortedApplications] = useState<Application[]>(
-    [],
-  );
-  const [csvData, setCsvData] = useState<CompleteCsvData[]>([]);
   const [showCandidates, setShowCandidates] = useState(false);
   const [selectedGroups, setSelectedGroups] = useState<string[]>([]);
 
@@ -35,86 +50,101 @@ const ViewApplications = () => {
     data: applications,
     error: applicationsError,
     isFetching: applicationsIsFetching,
+    refetch: refetchApplications,
   } = useAdminApplications(admissionSlug ?? "");
   const {
     data: admission,
     error: admissionError,
     isFetching: admissionIsFetching,
+    refetch: refetchAdmission,
   } = useAdmission(admissionSlug ?? "");
-  const filteredApplications = useMemo(
+  const sortedApplications = useMemo(
     () =>
-      sortedApplications.filter(
-        (application) =>
-          selectedGroups.length === 0 ||
-          application.group_applications.some((groupApplication) =>
-            selectedGroups.includes(groupApplication.group.name),
-          ),
+      [...(applications ?? [])].sort((a, b) =>
+        a.user.full_name.localeCompare(b.user.full_name, "nb"),
       ),
-    [selectedGroups, sortedApplications],
+    [applications],
   );
-  const csvHeaders = [
-    { label: "Fullt Navn", key: "name" },
-    { label: "Prioriteringer", key: "priorityText" },
-    ...(admission?.userdata.is_admin
-      ? (admission?.header_fields ?? [])
-          .filter(
-            (headerField): headerField is InputFieldModel =>
-              "id" in headerField,
-          )
-          .map((headerField) => ({
-            label: headerField.title,
-            key: headerField.id,
-          }))
-      : []),
-    { label: "Gruppe", key: "group" },
-    { label: "Søknadstekst", key: "groupApplicationText" },
-    { label: "E-post", key: "email" },
-    { label: "Mobilnummer", key: "phoneNumber" },
-    { label: "Brukernavn", key: "username" },
-    { label: "Søkt innen frist", key: "appliedWithinDeadline" },
-    { label: "Tid sendt", key: "createdAt" },
-    { label: "Tid oppdatert", key: "updatedAt" },
-  ];
+  const filteredApplications = useMemo(() => {
+    if (selectedGroups.length === 0) return sortedApplications;
 
-  useEffect(() => {
-    if (!applications) return;
-    setSortedApplications(
-      [...applications].sort((a, b) =>
-        a.user.full_name.localeCompare(b.user.full_name),
-      ),
-    );
-  }, [applications]);
-
-  useEffect(() => {
-    const updatedCsvData: CompleteCsvData[] = [];
-    filteredApplications.forEach((application) => {
-      const headerResponses = application.header_fields_response ?? {};
-      application.group_applications.forEach((groupApplication) => {
-        updatedCsvData.push({
+    return sortedApplications.flatMap((application) => {
+      const groupApplications = application.group_applications.filter(
+        (groupApplication) =>
+          selectedGroups.includes(groupApplication.group.name),
+      );
+      return groupApplications.length > 0
+        ? [{ ...application, group_applications: groupApplications }]
+        : [];
+    });
+  }, [selectedGroups, sortedApplications]);
+  const questionColumns = useMemo(
+    () =>
+      admission?.userdata.is_admin
+        ? (admission.header_fields ?? [])
+            .filter(
+              (headerField): headerField is InputFieldModel =>
+                "id" in headerField,
+            )
+            .map((headerField, index) => ({
+              id: headerField.id,
+              key: `question_${index}`,
+              label: headerField.title,
+            }))
+        : [],
+    [admission],
+  );
+  const csvHeaders = useMemo(
+    () => [
+      { label: "Fullt navn", key: "name" },
+      { label: "Prioriteringer", key: "priorityText" },
+      ...questionColumns,
+      { label: "Gruppe", key: "group" },
+      { label: "Søknadstekst", key: "groupApplicationText" },
+      { label: "E-post", key: "email" },
+      { label: "Mobilnummer", key: "phoneNumber" },
+      { label: "Brukernavn", key: "username" },
+      { label: "Søkt innen frist", key: "appliedWithinDeadline" },
+      { label: "Tid sendt", key: "createdAt" },
+      { label: "Tid oppdatert", key: "updatedAt" },
+    ],
+    [questionColumns],
+  );
+  const csvData = useMemo(
+    () =>
+      filteredApplications.flatMap((application) => {
+        const headerResponses = application.header_fields_response ?? {};
+        return application.group_applications.map((groupApplication) => ({
           name: application.user.full_name,
           priorityText:
             application.text !== ""
               ? (application.text ?? "")
               : "Ingen prioriteringer",
-          ...headerResponses,
+          ...Object.fromEntries(
+            questionColumns.map(({ id, key }) => [
+              key,
+              headerResponses[id] ?? "",
+            ]),
+          ),
           group: groupApplication.group.name,
           groupApplicationText: groupApplication.text,
           email: application.user.email,
           phoneNumber: application.phone_number,
           username: application.user.username,
-          appliedWithinDeadline: application.applied_within_deadline,
-          createdAt: application.created_at,
-          updatedAt: application.updated_at,
-        });
-      });
-    });
-    setCsvData(updatedCsvData);
-  }, [filteredApplications]);
+          appliedWithinDeadline: application.applied_within_deadline
+            ? "Ja"
+            : "Nei",
+          createdAt: formatCsvDate(application.created_at),
+          updatedAt: formatCsvDate(application.updated_at),
+        }));
+      }),
+    [filteredApplications, questionColumns],
+  );
 
-  const numApplicants = sortedApplications.length;
+  const numApplicants = filteredApplications.length;
 
   let numApplications = 0;
-  sortedApplications.forEach((application) => {
+  filteredApplications.forEach((application) => {
     numApplications += application.group_applications.length;
   });
 
@@ -127,17 +157,32 @@ const ViewApplications = () => {
       ]),
     ),
   ) as CompleteCsvData[];
-  const exportCsvHeaders = csvHeaders.map((header) => ({
-    ...header,
-    label: escapeCsvCell(header.label),
-  }));
+  const exportFilename = `${admission?.slug ?? "opptak"}-${
+    selectedGroups.length > 0
+      ? selectedGroups.map(filenamePart).join("-")
+      : "alle-grupper"
+  }-${DateTime.now().setZone(CSV_TIME_ZONE).toFormat("yyyy-LL-dd")}.csv`;
 
   if (applicationsError || admissionError) {
+    const requestError = applicationsError ?? admissionError;
     return (
-      <div>
-        Error: {applicationsError?.message}
-        {admissionError?.message}
-      </div>
+      <ErrorState role="alert">
+        <h2>Kunne ikke laste søknadene</h2>
+        <p>
+          {requestError
+            ? getApiErrorMessage(requestError, "Prøv å laste siden på nytt.")
+            : "Prøv å laste siden på nytt."}
+        </p>
+        <StyledButton
+          type="button"
+          onClick={() => {
+            void refetchApplications();
+            void refetchAdmission();
+          }}
+        >
+          Prøv igjen
+        </StyledButton>
+      </ErrorState>
     );
   } else if (applicationsIsFetching || admissionIsFetching) {
     return <LoadingBall />;
@@ -166,7 +211,11 @@ const ViewApplications = () => {
                 "px-3 py-2",
               )}
             >
-              {showCandidates ? <EyeOff size={14} /> : <Eye size={14} />}
+              {showCandidates ? (
+                <EyeOff size={iconSizes.control} />
+              ) : (
+                <Eye size={iconSizes.control} />
+              )}
               {showCandidates ? "Skjul kandidatdata" : "Vis kandidatdata"}
             </button>
           </HeaderControls>
@@ -199,14 +248,15 @@ const ViewApplications = () => {
           <>
             <CSVExportHandler
               csvData={exportCsvData}
-              csvHeaders={exportCsvHeaders}
+              csvHeaders={csvHeaders}
               rowCount={csvData.length}
+              filename={exportFilename}
             />
             <CsvPreviewTable rows={visibleCsvData} headers={csvHeaders} />
           </>
         ) : (
           <PrivacyPlaceholder>
-            <EyeOff size={20} aria-hidden="true" />
+            <EyeOff size={iconSizes.feature} aria-hidden="true" />
             <div>
               <strong>Kandidatdata er skjult</strong>
               <span>
@@ -275,6 +325,20 @@ const PageWrapper = styled.div`
   width: 100%;
 `;
 
+const ErrorState = styled.div`
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--spacing-md);
+  max-width: var(--content-width-form);
+  padding: var(--spacing-xl);
+
+  h2,
+  p {
+    margin: 0;
+  }
+`;
+
 const Header = styled.header`
   display: flex;
   align-items: center;
@@ -295,7 +359,7 @@ const Title = styled.h1`
   color: var(--color-text-primary);
   font-size: var(--font-size-xl);
   font-weight: 600;
-  line-height: 1.3;
+  line-height: var(--line-height-base);
   text-align: left;
 `;
 
@@ -395,7 +459,7 @@ const StyledTable = styled.table`
   th {
     position: sticky;
     top: 0;
-    z-index: 1;
+    z-index: var(--table-header-layer);
     background: var(--color-gray-2);
     color: var(--color-gray-7);
     font-size: var(--font-size-sm);
@@ -405,7 +469,7 @@ const StyledTable = styled.table`
   td {
     vertical-align: top;
     color: var(--color-text-primary);
-    line-height: 1.3;
+    line-height: var(--line-height-base);
   }
 
   td[data-column="priorityText"],
