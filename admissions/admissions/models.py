@@ -3,7 +3,7 @@ import uuid
 from django.conf import settings
 from django.contrib.auth.models import AbstractUser
 from django.db import models
-from django.db.models import Q
+from django.db.models import F, Q
 from django.utils import timezone
 
 from admissions.admissions import constants
@@ -94,6 +94,15 @@ class Admission(models.Model):
 
     groups = models.ManyToManyField(Group, through="AdmissionGroup")
     admin_groups = models.ManyToManyField(Group, related_name="admin_groups")
+
+    class Meta:
+        constraints = [
+            models.CheckConstraint(
+                condition=Q(public_deadline__gt=F("open_from"))
+                & Q(closed_from__gte=F("public_deadline")),
+                name="admission_dates_in_chronological_order",
+            )
+        ]
 
     def __str__(self):
         return self.title

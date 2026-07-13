@@ -1,9 +1,9 @@
 import re
 from enum import Enum
-from typing import Dict, List, Literal, Union
+from typing import Dict, List, Literal, Self, Union
 from uuid import uuid4
 
-from pydantic import BaseModel, ConfigDict, Field, RootModel
+from pydantic import BaseModel, ConfigDict, Field, RootModel, model_validator
 from typing_extensions import Annotated
 
 """
@@ -34,7 +34,7 @@ class TextModel(BaseModel):
 class BaseInputModel(BaseModel):
     model_config = ConfigDict(strict=True)
 
-    id: str = Field(default_factory=lambda: uuid4().hex, frozen=True)
+    id: str = Field(default_factory=lambda: uuid4().hex, min_length=1, frozen=True)
     title: str = Field(min_length=5)
     label: str
     placeholder: str
@@ -64,6 +64,15 @@ InputModelUnion = Union[
 
 class InputModelList(RootModel):
     root: List[Annotated[InputModelUnion, Field(discriminator="type")]]
+
+    @model_validator(mode="after")
+    def validate_unique_input_ids(self) -> Self:
+        input_ids = [
+            field.id for field in self.root if isinstance(field, BaseInputModel)
+        ]
+        if len(input_ids) != len(set(input_ids)):
+            raise ValueError("Input field IDs must be unique")
+        return self
 
 
 ####################################

@@ -7,6 +7,7 @@ from django.db.models import Q
 from django.utils import timezone
 from rest_framework import serializers
 
+from pydantic import ValidationError as PydanticValidationError
 from structlog import get_logger
 
 from admissions.admissions import constants
@@ -196,21 +197,59 @@ class AdminCreateUpdateAdmissionSerializer(serializers.HyperlinkedModelSerialize
             "created_by",
         )
 
-    def update_or_create(self, pk, validated_data):
-        schema = InputModelList
-        try:
-            header_fields = schema(validated_data["header_fields"])
-            validated_data["header_fields"] = header_fields.model_dump()
-        except Exception as errors:
+    def validate(self, attrs):
+        instance = self.instance
+        open_from = attrs.get("open_from", getattr(instance, "open_from", None))
+        public_deadline = attrs.get(
+            "public_deadline", getattr(instance, "public_deadline", None)
+        )
+        closed_from = attrs.get("closed_from", getattr(instance, "closed_from", None))
+
+        errors = {}
+        if open_from and public_deadline and public_deadline <= open_from:
+            errors["public_deadline"] = "Søknadsfristen må være etter åpningen."
+        if public_deadline and closed_from and closed_from < public_deadline:
+            errors["closed_from"] = "Stengingen kan ikke være før søknadsfristen."
+
+        has_admin_groups = (
+            bool(attrs["admin_groups"])
+            if "admin_groups" in attrs
+            else bool(instance and instance.admin_groups.exists())
+        )
+        has_groups = (
+            bool(attrs["groups"])
+            if "groups" in attrs
+            else bool(instance and instance.groups.exists())
+        )
+        if not has_admin_groups:
+            errors["admin_groups"] = "Velg minst én admin-gruppe."
+        if not has_groups:
+            errors["groups"] = "Velg minst én gruppe som har opptak."
+        if errors:
             raise serializers.ValidationError(errors)
 
-        input_admin_groups = validated_data.pop("admin_groups")
-        input_groups = validated_data.pop("groups")
-        admission, created = Admission.objects.update_or_create(
+        return attrs
+
+    @transaction.atomic
+    def update_or_create(self, pk, validated_data):
+        if "header_fields" in validated_data:
+            try:
+                header_fields = InputModelList(validated_data["header_fields"])
+                validated_data["header_fields"] = header_fields.model_dump()
+            except PydanticValidationError:
+                raise serializers.ValidationError(
+                    {"header_fields": "Spørsmålsoppsettet er ugyldig."}
+                )
+
+        input_admin_groups = validated_data.pop("admin_groups", None)
+        input_groups = validated_data.pop("groups", None)
+        admission, _ = Admission.objects.update_or_create(
             pk=pk, defaults=validated_data
         )
-        admission.admin_groups.set(input_admin_groups)
-        admission.groups.set(input_groups)
+        if input_admin_groups is not None:
+            admission.admin_groups.set(input_admin_groups)
+        if input_groups is not None:
+            admission.groups.set(input_groups)
         return admission
 
     def create(self, validated_data):

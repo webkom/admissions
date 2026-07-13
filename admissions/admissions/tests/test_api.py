@@ -136,12 +136,18 @@ class EditAdmissionTestCase(APITestCase):
             username="bigsupremeleader", lego_id=1, is_staff=True
         )
         self.admission = create_admission(created_by=self.staff_user)
+        self.admin_group = Group.objects.create(name="Admission admins", lego_id=15)
+        self.committee = Group.objects.create(name="Committee", lego_id=16)
+        self.admission.admin_groups.add(self.admin_group)
+        self.admission.groups.add(self.committee)
         self.edit_admission_data = {
             "title": "Plebkom opptak 2020",
             "open_from": fake_timedelta(days=10),
+            "public_deadline": fake_timedelta(days=11),
+            "closed_from": fake_timedelta(days=12),
             "header_fields": [],
-            "admin_groups": [],
-            "groups": [],
+            "admin_groups": [str(self.admin_group.pk)],
+            "groups": [str(self.committee.pk)],
         }
 
     def test_pleb_cannot_edit_admission(self):

@@ -14,6 +14,8 @@ MIGRATION_0015 = (
     "0015_solvejob_unique_active_solve_job_per_admission",
 )
 MIGRATION_0016 = ("admissions", "0016_use_absolute_schedule_minutes")
+MIGRATION_0018 = ("admissions", "0018_name_visibility_audit_event")
+MIGRATION_0019 = ("admissions", "0019_admission_date_order")
 
 
 def create_admission(apps, *, slug, lego_id):
@@ -137,6 +139,30 @@ class SolveJobDeduplicationMigrationTestCase(MigrationTestCase):
         completed = SolveJob.objects.get(pk=self.completed_id)
         self.assertEqual(completed.status, "DONE")
         self.assertEqual(completed.result, {"schedule": []})
+
+
+class AdmissionDateOrderMigrationTestCase(MigrationTestCase):
+    migrate_from = MIGRATION_0018
+    migrate_to = MIGRATION_0019
+
+    def set_up_before_migration(self, apps):
+        Admission = apps.get_model("admissions", "Admission")
+        now = timezone.now()
+        admission = Admission.objects.create(
+            title="Legacy invalid dates",
+            slug="legacy-invalid-dates",
+            open_from=now + timedelta(days=2),
+            public_deadline=now,
+            closed_from=now - timedelta(days=1),
+        )
+        self.admission_id = admission.pk
+
+    def test_normalizes_legacy_dates_before_adding_the_constraint(self):
+        Admission = self.apps.get_model("admissions", "Admission")
+
+        admission = Admission.objects.get(pk=self.admission_id)
+        self.assertLess(admission.open_from, admission.public_deadline)
+        self.assertLessEqual(admission.public_deadline, admission.closed_from)
 
 
 class AbsoluteScheduleMinutesMigrationTestCase(MigrationTestCase):
