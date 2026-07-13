@@ -147,6 +147,7 @@ const CreateAdmission: React.FC = () => {
   const updateAdmission = useManageUpdateAdmission();
   const deleteAdmission = useManageDeleteAdmission();
   const initializedAdmission = useRef<string>();
+  const submissionInFlight = useRef(false);
   const [returnedData, setReturnedData] = useState<ReturnedData>();
   const [slugManuallyEdited, setSlugManuallyEdited] = useState(!isNew);
 
@@ -155,6 +156,8 @@ const CreateAdmission: React.FC = () => {
     validationSchema,
     validateOnMount: true,
     onSubmit: (values) => {
+      if (submissionInFlight.current) return;
+      submissionInFlight.current = true;
       setReturnedData(undefined);
       const processedValues = {
         ...values,
@@ -166,12 +169,14 @@ const CreateAdmission: React.FC = () => {
       };
 
       const onSuccess = (data: AdmissionMutationResponse) => {
+        submissionInFlight.current = false;
         formik.resetForm({ values });
         setReturnedData({ type: "success", message: "Opptaket er lagret." });
         if (isNew && data.slug) navigate(`/manage/${data.slug}`);
       };
 
       const onError = (requestError: AxiosError) => {
+        submissionInFlight.current = false;
         const fieldErrors = getApiFieldErrors(
           requestError,
           ADMISSION_FIELD_NAMES,
