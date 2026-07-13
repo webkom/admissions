@@ -81,6 +81,8 @@ The `.env` file with secret keys is not included, but an [`example.env`](./admis
 
 Create a local OAuth2 application in LEGO and put its client ID and secret in your copied `.env` file. Never commit real OAuth credentials.
 
+Credential-shaped OAuth values have existed in this repository's history. Treat any matching LEGO application credentials as compromised: revoke them in LEGO, create a replacement client, and update the deployment secret store. Removing a value from the current tree or rewriting Git history does not replace credential rotation.
+
 If you want to configure another one, go to the OAuth2 tab in the user settings [menu](http://localhost:3000/users/me/settings/oauth2) in the running dev version of lego-webapp. Open or create an application, and enter the values you find into your .env file. If you are creating a new OAuth2 application, enter `http://127.0.0.1:5000/complete/lego/` as the redirect url.
 
 ```sh
@@ -187,9 +189,9 @@ The project gives permissions based on group memberships imported from LEGO.
 | :---------------------- | ------------- | ------------------------------------------------------------------------------------------------------------------------- |
 | Admission               | CREATE        | Either (1) any member of Webkom, (2) leader of Abakus OR (3) leader of RevyStyret. <br/> (1,2,3) `user.is_staff`          |
 | Admission               | EDIT          | Either (1) member of Webkom OR (2) creator of admission. <br/>(1) `user.is_member_of_webkom`, (2) `admission.created_by`. |
-| All applications        | VIEW & DELETE | Member of a group in `admission.admin_groups`                                                                             |
-| Applications to a group | VIEW & DELETE | Member of a group in `admission.groups` WITH role LEADER or RERUITING                                                     |
-| Group                   | EDIT          | Member of a group in `admission.groups` WITH role LEADER or RERUITING                                                     |
+| All applications        | VIEW & DELETE | Active member of a group in `admission.admin_groups`                                                                      |
+| Applications to a group | VIEW & DELETE | Active member of a group in `admission.groups` with role LEADER or RECRUITING                                             |
+| Group                   | EDIT          | Active member of a group in `admission.groups` with role LEADER or RECRUITING                                             |
 
 &nbsp;
 
@@ -208,6 +210,8 @@ $ DATABASE_PORT=5433 poetry run tox -e tests
 This codebase uses the PEP 8 code style. We enforce this with isort, black & flake8.
 In addition to the standards outlined in PEP 8, we have a few guidelines
 (see `setup.cfg` for more info):
+
+Frontend colors, spacing, typography, control dimensions, and responsive breakpoints must use the shared tokens in `frontend/src/styles/globals.css`, `frontend/src/styles/designTokens.ts`, and `tailwind.config.ts`. Raw values are reserved for data-dependent grid arithmetic, one-pixel hairlines, intrinsic asset dimensions, and constraints that cannot consume CSS variables, such as media-query declarations. Reusable values must be promoted to a named token instead of repeated locally.
 
 Format the code with black & isort
 
