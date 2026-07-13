@@ -350,8 +350,8 @@ const FormGroup = styled.div`
   display: flex;
   flex-direction: row;
   flex-wrap: wrap;
-  gap: 30px;
-  margin-bottom: 2rem;
+  gap: var(--lego-default-padding);
+  margin-bottom: var(--spacing-xl);
 `;
 
 const InputWrapper = styled.div`
@@ -363,7 +363,7 @@ const WideInputWrapper = styled.div`
 `;
 
 const InputTitle = styled.p`
-  font-size: 22px;
+  font-size: var(--font-size-heading-sm);
   line-height: 1.2;
   margin: 0;
 `;
@@ -376,17 +376,17 @@ const InputDescription = styled.span`
 `;
 
 const Input = styled.input`
-  font-size: 16px;
+  font-size: var(--font-size-md);
   max-width: 100%;
   width: 300px;
   padding: 5px;
-  border-radius: 3px;
-  border: 1px solid #d6d6d6;
+  border-radius: var(--border-radius-sm);
+  border: 1px solid var(--color-border-muted);
 `;
 
 const ResultText = styled.span<{ type: ReturnedData["type"] }>`
   padding: 0.3rem 1rem;
-  border-radius: 10px;
+  border-radius: var(--border-radius-md);
   background: ${({ type }) =>
     type === "success" ? "var(--color-green-7)" : "var(--lego-red-color)"};
 `;

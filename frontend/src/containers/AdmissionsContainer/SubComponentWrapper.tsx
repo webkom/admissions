@@ -1,7 +1,7 @@
 import styled from "styled-components";
 
 const SubComponentWrapper = styled.div`
-  background-color: #f5f5f5;
+  background-color: var(--color-surface-subtle);
   padding: 0.75rem 0.5rem;
 
   p {

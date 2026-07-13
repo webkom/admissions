@@ -19,8 +19,6 @@ const brand = {
   panelBorder: "var(--color-brand-panel-border)",
   activeBorder: "var(--color-brand-active-border)",
   focus: "var(--color-brand-focus)",
-  // The `panel` variant is used as a filled tile background for selected
-  // states. Approximated as the soft brand tint.
   panel: "var(--color-brand-subtle)",
 };
 
@@ -29,6 +27,8 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
+        white: "var(--color-absolute-white)",
+        black: "var(--color-black)",
         brand,
         success: {
           DEFAULT: "var(--color-success)",
@@ -69,18 +69,24 @@ const config: Config = {
           subtle: "var(--color-text-subtle)",
           faded: "var(--color-text-faded)",
           disabled: "var(--color-text-disabled)",
-          white: "#ffffff",
+          white: "var(--color-absolute-white)",
           gray3: "var(--color-gray-3)",
           gray7: "var(--color-gray-7)",
         },
       },
       borderRadius: {
+        sm: "var(--border-radius-sm)",
+        DEFAULT: "var(--border-radius-sm)",
+        md: "var(--border-radius-md)",
+        lg: "var(--border-radius-md)",
+        xl: "var(--border-radius-lg)",
+        "2xl": "var(--border-radius-lg)",
         panel: "var(--border-radius-lg)",
       },
+      maxWidth: {
+        lego: "var(--lego-max-width)",
+      },
       boxShadow: {
-        // Override Tailwind's stock cool-black shadows with the warm-graphite
-        // tinted tokens so `shadow-sm/shadow/shadow-md/shadow-lg` are on-brand
-        // everywhere without touching each call site.
         sm: "var(--shadow-sm)",
         DEFAULT: "var(--shadow-md)",
         md: "var(--shadow-md)",
@@ -97,32 +103,31 @@ const config: Config = {
         3: "3px",
       },
       fontSize: {
-        nano: ["0.5625rem", { lineHeight: "0.875rem" }],
-        tiny: ["0.65rem", { lineHeight: "1rem" }],
-        label: ["0.7rem", { lineHeight: "1rem" }],
-        detail: ["0.8rem", { lineHeight: "1.15rem" }],
-        ui: ["0.875rem", { lineHeight: "1.25rem" }],
-        title: ["1rem", { lineHeight: "1.4rem" }],
-        action: ["1rem", { lineHeight: "1.5rem" }],
-        "body-lg": ["1.125rem", { lineHeight: "1.7rem" }],
+        nano: ["var(--font-size-nano)", { lineHeight: "0.875rem" }],
+        tiny: ["var(--font-size-tiny)", { lineHeight: "1rem" }],
+        label: ["var(--font-size-label)", { lineHeight: "1rem" }],
+        detail: ["var(--font-size-detail)", { lineHeight: "1.15rem" }],
+        ui: ["var(--font-size-ui)", { lineHeight: "1.25rem" }],
+        title: ["var(--font-size-title)", { lineHeight: "1.4rem" }],
+        action: ["var(--font-size-md)", { lineHeight: "1.5rem" }],
+        "body-lg": ["var(--font-size-lg)", { lineHeight: "1.7rem" }],
         countdown: ["2rem", { lineHeight: "2.25rem" }],
-        "display-sm": ["1.875rem", { lineHeight: "2.25rem" }],
-        "display-md": ["2.25rem", { lineHeight: "2.5rem" }],
-        "display-lg": ["3rem", { lineHeight: "3.25rem" }],
+        "display-sm": ["var(--font-size-xl)", { lineHeight: "2.25rem" }],
+        "display-md": ["var(--font-size-display-md)", { lineHeight: "2.5rem" }],
+        "display-lg": [
+          "var(--font-size-display-lg)",
+          { lineHeight: "3.25rem" },
+        ],
       },
       letterSpacing: {
         badge: "0.06em",
         "badge-wide": "0.12em",
         caps: "0.05em",
         label: "0.08em",
-        // Tight tracking for large display headings rendered on non-h* nodes
-        // (e.g. text-display-* on a div), matching the h1/h2 element styles.
         display: "-0.03em",
         "display-tight": "-0.045em",
       },
       screens: {
-        // Orientation/size-based variants used across the scheduler UI.
-        // Both are applied as max-width media queries (smaller screens).
         portrait: { raw: "(max-width: 900px)" },
         handheld: { raw: "(max-width: 640px)" },
       },
@@ -133,18 +138,28 @@ const config: Config = {
         },
         "timeline-pulse": {
           "0%": {
-            boxShadow: "0 0 0 0 rgb(178 28 23 / 55%)",
+            boxShadow: "0 0 0 0 var(--color-brand-pulse-start)",
           },
           "70%": {
-            boxShadow: "0 0 0 14px rgb(178 28 23 / 0%)",
+            boxShadow: "0 0 0 14px var(--color-brand-pulse-end)",
           },
           "100%": {
-            boxShadow: "0 0 0 0 rgb(178 28 23 / 0%)",
+            boxShadow: "0 0 0 0 var(--color-brand-pulse-end)",
           },
+        },
+        "overlay-fade-in": {
+          from: { opacity: "0" },
+          to: { opacity: "1" },
+        },
+        "slide-in-right": {
+          from: { transform: "translateX(100%)" },
+          to: { transform: "translateX(0)" },
         },
       },
       animation: {
-        "fade-in": "fade-in 0.25s ease-out",
+        "fade-in": "fade-in var(--easing-medium)",
+        "overlay-fade-in": "overlay-fade-in var(--easing-fast)",
+        "slide-in-right": "slide-in-right var(--easing-medium)",
         "pulse-brand": "timeline-pulse 2s ease-in-out infinite",
       },
       backgroundImage: {

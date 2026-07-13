@@ -1,3 +1,6 @@
+import { isAxiosError } from "axios";
+
+import { apiClient } from "../../../utils/callApi";
 import type { ScheduleItem, SolverOptions } from "../types";
 
 export interface SolveResponse {
@@ -9,8 +12,6 @@ export interface SolveResponse {
     | "TIMEOUT"
     | "ERROR";
   schedule: ScheduleItem[];
-  // True when the solver proved optimality; false/absent means it returned the
-  // best solution found before the time limit.
   optimal?: boolean;
   unplaceable?: Array<{
     candidate_id: string;
@@ -18,13 +19,40 @@ export interface SolveResponse {
     reason?: string;
   }>;
   locked_conflicts?: Array<{ message: string; assignment?: unknown }>;
+  error?: string;
 }
 
-// SUCCESS and PARTIAL both yield a usable (possibly incomplete) schedule.
 export const hasSchedule = (status?: SolveResponse["status"]) =>
   status === "SUCCESS" || status === "PARTIAL";
 
-// Turn a solver "unplaceable" reason into a concrete next step for the admin.
+export const CONFLICT_MESSAGE =
+  "Planen ble endret av noen andre — last inn siden på nytt.";
+
+export const isConflictError = (err: unknown) =>
+  isAxiosError(err) && err.response?.status === 409;
+
+export const solveFailureMessage = (result: SolveResponse): string => {
+  switch (result.status) {
+    case "INFEASIBLE":
+      return (
+        "Ingen løsning finnes med disse begrensningene. Forrige plan er " +
+        "beholdt — prøv lavere panelstørrelse eller åpne flere slots."
+      );
+    case "TIMEOUT":
+      return (
+        "Solveren rakk ikke å bli ferdig innen tidsgrensen. Forrige plan er " +
+        "beholdt — prøv igjen."
+      );
+    case "LOCKED_CONFLICT":
+      return (
+        "Låste endringer er i konflikt med inhabiliteter eller harde " +
+        "begrensninger. Forrige plan er beholdt."
+      );
+    default:
+      return result.error || "Solveren feilet under kjøring.";
+  }
+};
+
 export const unplaceableSuggestion = (reason?: string): string | null => {
   switch (reason) {
     case "For mange i komiteen har meldt inhabilitet.":
@@ -41,8 +69,6 @@ export const unplaceableSuggestion = (reason?: string): string | null => {
   }
 };
 
-// A queued solve. The backend runs it in a worker; the client enqueues, then
-// polls until the job reaches DONE (with `result`) or ERROR (with `error`).
 export interface SolveJob {
   job_id: string;
   status: "PENDING" | "RUNNING" | "DONE" | "ERROR" | "CANCELLED";
@@ -50,11 +76,32 @@ export interface SolveJob {
   error: string;
 }
 
-// How often to poll the solve-job status endpoint while a solve runs.
 export const SOLVE_POLL_INTERVAL_MS = 1500;
 
-// Give up polling after this long so a stopped worker surfaces as an error.
 export const SOLVE_POLL_TIMEOUT_MS = 5 * 60 * 1000;
+
+export type SolveJobPollOutcome =
+  | { kind: "finished"; job: SolveJob }
+  | { kind: "timeout" }
+  | { kind: "stale" };
+
+export const pollSolveJob = async (
+  created: SolveJob,
+  isStale: () => boolean = () => false,
+): Promise<SolveJobPollOutcome> => {
+  let job = created;
+  const pollStart = Date.now();
+  while (job.status === "PENDING" || job.status === "RUNNING") {
+    await new Promise((resolve) => setTimeout(resolve, SOLVE_POLL_INTERVAL_MS));
+    if (isStale()) return { kind: "stale" };
+    if (Date.now() - pollStart > SOLVE_POLL_TIMEOUT_MS) {
+      return { kind: "timeout" };
+    }
+    const { data } = await apiClient.get<SolveJob>(`/solve/${created.job_id}/`);
+    job = data;
+  }
+  return { kind: "finished", job };
+};
 
 export const DEFAULT_SOLVER_OPTIONS: SolverOptions = {
   enforce_same_gender: false,
@@ -64,7 +111,6 @@ export const DEFAULT_SOLVER_OPTIONS: SolverOptions = {
   overtime_weight: 100,
   load_balance_weight: 1,
   continuity_weight: 12,
-  // In lockstep with the backend cap (constants.MAX_SOLVER_SECONDS).
   max_solver_seconds: 120,
 };
 

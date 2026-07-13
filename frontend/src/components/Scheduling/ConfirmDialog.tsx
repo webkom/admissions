@@ -11,7 +11,6 @@ import {
 const FOCUSABLE_SELECTOR =
   'a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
-/** Keeps Tab/Shift+Tab focus cycling inside `ref` while `active` is true. */
 export const useFocusTrap = (
   ref: React.RefObject<HTMLElement>,
   active: boolean,
@@ -63,8 +62,6 @@ interface ConfirmDialogProps {
   onClose: () => void;
   confirmDisabled?: boolean;
   busy?: boolean;
-  /** "danger" switches the confirm button to the destructive variant and, when
-   *  no icon is supplied, shows a warning glyph so the severity reads at a glance. */
   tone?: "default" | "danger";
   icon?: React.ReactNode;
 }
@@ -105,7 +102,7 @@ const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-overlay px-4 animate-[overlay-fade-in_0.15s_ease-out]"
+      className="fixed inset-0 z-[200] flex items-center justify-center overflow-y-auto bg-overlay px-4 py-4 animate-overlay-fade-in"
       onMouseDown={(event) => {
         if (event.target === event.currentTarget) onClose();
       }}
@@ -116,7 +113,7 @@ const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
         aria-modal="true"
         aria-label={title}
         tabIndex={-1}
-        className="w-full max-w-md rounded-panel border border-border bg-surface-base p-5 shadow-modal focus:outline-none animate-[fade-in_0.18s_ease-out]"
+        className="max-h-[calc(100dvh-2rem)] w-full max-w-md overflow-y-auto rounded-panel border border-border bg-surface-base p-5 shadow-modal focus:outline-none animate-fade-in"
       >
         <div className="flex items-start gap-3">
           {resolvedIcon && (

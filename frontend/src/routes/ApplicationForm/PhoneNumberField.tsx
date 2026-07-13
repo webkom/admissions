@@ -56,6 +56,6 @@ const Wrapper = styled.div`
   grid-area: phonenumber;
 
   ${media.portrait`
-    margin-top: 1.5rem;
+    margin-top: var(--spacing-lg);
   `};
 `;

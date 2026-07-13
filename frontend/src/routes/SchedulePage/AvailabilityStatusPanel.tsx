@@ -46,7 +46,7 @@ const AvailabilityStatusPanel: React.FC<AvailabilityStatusPanelProps> = ({
         ) : (
           <>
             <div>
-              <span className="mb-2 block text-label font-bold uppercase tracking-label text-success">
+              <span className="mb-2 block text-ui font-semibold text-success">
                 Sendt inn ({submitted.length})
               </span>
               {submitted.length === 0 ? (
@@ -66,7 +66,7 @@ const AvailabilityStatusPanel: React.FC<AvailabilityStatusPanelProps> = ({
               )}
             </div>
             <div>
-              <span className="mb-2 block text-label font-bold uppercase tracking-label text-text-subtle">
+              <span className="mb-2 block text-ui font-semibold text-text-muted">
                 Mangler ({missing.length})
               </span>
               {missing.length === 0 ? (

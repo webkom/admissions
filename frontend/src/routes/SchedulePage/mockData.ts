@@ -107,7 +107,6 @@ const buildAvailabilityGroups = (
     const dayRoll = random();
     if (dayRoll < 0.15) continue;
 
-    // Pick a contiguous chunk window so availability appears as grouped blocks.
     const windowSize = dayRoll < 0.6 ? 1 : Math.min(2, chunks.length);
     const maxStart = Math.max(0, chunks.length - windowSize);
     const startChunkIndex = Math.floor(random() * (maxStart + 1));

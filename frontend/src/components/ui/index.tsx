@@ -3,26 +3,23 @@ import { Check, ChevronDown, Minus, Plus } from "lucide-react";
 import cn from "src/utils/cn";
 
 export const sectionLabelClass =
-  "mb-2 block text-label font-bold uppercase tracking-label text-text-subtle";
+  "mb-2 block text-ui font-semibold text-text-muted";
 
 export const actionButtonBase =
-  "inline-flex cursor-pointer items-center justify-center gap-1.5 whitespace-nowrap rounded-xl border px-4 py-2.5 text-ui font-semibold shadow-[0_1px_0_rgb(40_18_18/0.04)] transition-[border-color,background,box-shadow,color,transform] duration-200 ease-[cubic-bezier(0.2,0,0,1)] hover:-translate-y-px active:translate-y-0 active:scale-[0.985] focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-brand-ring disabled:cursor-not-allowed disabled:translate-y-0 disabled:opacity-50";
+  "inline-flex h-9 cursor-pointer items-center justify-center gap-1.5 whitespace-nowrap rounded-full border px-4 text-ui font-semibold transition-[border-color,background,color,box-shadow] duration-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-ring disabled:cursor-not-allowed disabled:opacity-50";
 
 export const actionButtonPrimary =
-  "border-brand bg-brand text-white hover:border-brand-hover hover:bg-brand-hover hover:shadow-[0_12px_24px_-16px_var(--color-brand)] active:bg-brand-pressed font-bold";
+  "border-brand bg-brand font-semibold text-white hover:border-brand-hover hover:bg-brand-hover active:bg-brand-pressed";
 
 export const actionButtonNeutral =
-  "border-border-muted bg-surface-base text-text-soft hover:border-border-quiet hover:bg-surface-subtle";
+  "border-border bg-surface-subtle text-text-primary hover:bg-surface-neutral";
 
 export const actionButtonGhost =
   "border-transparent bg-transparent text-text-muted shadow-none hover:border-border hover:bg-surface-subtle hover:text-text-primary";
 
 export const actionButtonActive =
-  "border-brand-activeBorder bg-brand-panel text-brand hover:border-brand-activeBorder hover:bg-brand-panel hover:shadow-[0_10px_20px_-18px_var(--color-brand)]";
+  "border-brand bg-brand text-white hover:border-brand-hover hover:bg-brand-hover";
 
-// Destructive / consequential actions (unpublishing, unlocking, removing).
-// Quiet tinted state at rest, solid fill on hover so the weight escalates as
-// the pointer commits — distinct from the brand-red primary.
 export const actionButtonDanger =
   "border-danger-border bg-danger-bg text-danger hover:border-danger hover:bg-danger hover:text-white font-bold";
 
@@ -41,7 +38,7 @@ export const Chip: React.FC<ChipProps> = ({
 }) => (
   <span
     className={cn(
-      "inline-flex items-center gap-1 whitespace-nowrap rounded-full border px-2.5 py-1 text-label font-bold uppercase tracking-caps",
+      "inline-flex items-center gap-1 whitespace-nowrap rounded-full border px-2.5 py-1 text-detail font-semibold",
       tone === "brand" && "border-brand-border bg-brand-muted text-brand",
       tone === "success" && "border-success-border bg-success-bg text-success",
       tone === "muted" &&
@@ -63,9 +60,7 @@ interface SaveButtonProps
     "children" | "type"
   > {
   isSaving: boolean;
-  /** Bumping this number triggers the success flash (use when isSaving doesn't disambiguate which button saved). */
   saveTick?: number;
-  /** When false, suppresses the success flash entirely (e.g. on error) — both for isSaving true→false transitions and saveTick bumps. */
   succeeded?: boolean;
   variant?: SaveButtonVariant;
   savingLabel?: string;
@@ -186,8 +181,8 @@ export const SaveButton = React.forwardRef<HTMLButtonElement, SaveButtonProps>(
           className={cn(
             "inline-block",
             justSaved
-              ? "animate-[fade-in_0.28s_ease-out] font-bold tracking-tight scale-[1.015]"
-              : "animate-[fade-in_0.18s_ease-out]",
+              ? "animate-fade-in font-bold tracking-tight scale-[1.015]"
+              : "animate-fade-in",
           )}
         >
           {displayLabel}
@@ -210,9 +205,7 @@ export const MetaValue: React.FC<MetaValueProps> = ({
   className,
 }) => (
   <span className={cn("inline-flex items-baseline gap-1.5", className)}>
-    <span className="text-label font-bold uppercase tracking-label text-text-subtle">
-      {label}
-    </span>
+    <span className="text-detail font-medium text-text-muted">{label}</span>
     <span className="text-sm font-bold tabular-nums text-text-primary">
       {value}
     </span>
@@ -303,7 +296,7 @@ export const ToggleCard: React.FC<ToggleCardProps> = ({
     aria-checked={checked}
     onClick={onToggle}
     className={cn(
-      "group relative flex cursor-pointer flex-col gap-1 overflow-hidden rounded-[10px] border px-4 py-3 pr-12 text-left transition-[border-color,background,box-shadow,transform] duration-200 hover:-translate-y-px hover:border-brand-strongBorder focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-focus",
+      "group relative flex cursor-pointer flex-col gap-1 overflow-hidden rounded-lg border px-4 py-3 pr-12 text-left transition-[border-color,background] duration-100 hover:border-border-quiet hover:bg-surface-subtle focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-focus",
       checked
         ? "border-brand-activeBorder bg-toggle-active shadow-toggle"
         : "border-border-soft bg-surface-base hover:bg-brand-soft",
@@ -332,7 +325,7 @@ export const ToggleCard: React.FC<ToggleCardProps> = ({
       className={cn(
         "pointer-events-none absolute right-3 top-1/2 flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-full border-2 transition-all duration-200",
         checked
-          ? "border-brand bg-brand shadow-[0_0_0_4px_var(--color-brand-ring-soft)]"
+          ? "border-brand bg-brand ring-4 ring-brand-ringSoft"
           : "border-border-muted bg-surface-base group-hover:border-brand-strongBorder",
       )}
     >
@@ -348,11 +341,12 @@ export const ToggleCard: React.FC<ToggleCardProps> = ({
   </button>
 );
 
-export interface SegmentedControlItem<Key extends string> {
+interface SegmentedControlItem<Key extends string> {
   key: Key;
   label?: string;
   icon?: React.ReactNode;
   title?: string;
+  ariaLabel?: string;
   count?: number;
 }
 
@@ -360,12 +354,14 @@ interface SegmentedControlProps<Key extends string> {
   value: Key;
   onChange: (next: Key) => void;
   items: SegmentedControlItem<Key>[];
+  "aria-label": string;
 }
 
 export function SegmentedControl<Key extends string>({
   value,
   onChange,
   items,
+  "aria-label": ariaLabel,
 }: SegmentedControlProps<Key>): JSX.Element {
   const buttonRefs = React.useRef<(HTMLButtonElement | null)[]>([]);
   const activeIndex = items.findIndex((item) => item.key === value);
@@ -384,6 +380,7 @@ export function SegmentedControl<Key extends string>({
   return (
     <div
       role="radiogroup"
+      aria-label={ariaLabel}
       className="inline-flex items-center gap-1 rounded-md border border-border bg-surface-base p-1"
     >
       {items.map((item, index) => {
@@ -397,6 +394,10 @@ export function SegmentedControl<Key extends string>({
             type="button"
             role="radio"
             aria-checked={active}
+            aria-label={
+              item.ariaLabel ??
+              (item.label ? undefined : (item.title ?? item.key))
+            }
             tabIndex={active || (activeIndex < 0 && index === 0) ? 0 : -1}
             title={item.title}
             onClick={() => onChange(item.key)}
@@ -408,7 +409,7 @@ export function SegmentedControl<Key extends string>({
                 : "text-text-muted hover:bg-brand-soft hover:text-text-primary",
             )}
           >
-            {item.icon}
+            {item.icon && <span aria-hidden="true">{item.icon}</span>}
             {item.label}
             {typeof item.count === "number" && (
               <span
@@ -448,9 +449,7 @@ export const StatTile: React.FC<StatTileProps> = ({
         : "border-border-soft",
     )}
   >
-    <span className="text-label font-bold uppercase tracking-label text-text-subtle">
-      {label}
-    </span>
+    <span className="text-detail font-medium text-text-muted">{label}</span>
     <span className="text-xl font-extrabold tabular-nums text-text-primary">
       {value}
     </span>
@@ -460,7 +459,7 @@ export const StatTile: React.FC<StatTileProps> = ({
   </div>
 );
 
-export interface CustomSelectOption {
+interface CustomSelectOption {
   value: string;
   label: string;
   disabled?: boolean;
@@ -633,7 +632,7 @@ export const CustomSelect: React.FC<CustomSelectProps> = ({
         />
       </button>
       {open && (
-        <div className="absolute left-0 top-full z-[200] mt-1 w-full origin-top-left rounded-lg border border-border bg-surface-base shadow-panel animate-[fade-in_0.15s_ease-out]">
+        <div className="absolute left-0 top-full z-[200] mt-1 w-full origin-top-left rounded-lg border border-border bg-surface-base shadow-panel animate-fade-in">
           <ul
             id={listboxId}
             role="listbox"

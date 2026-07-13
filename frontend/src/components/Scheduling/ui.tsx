@@ -34,7 +34,7 @@ export const SchedulePanel: React.FC<SchedulePanelProps> = ({
   <section
     id={id}
     className={cn(
-      "overflow-hidden rounded-panel border border-border bg-surface-base",
+      "overflow-hidden rounded-panel border border-border bg-surface-base shadow-sm",
       className,
     )}
   >
@@ -63,26 +63,26 @@ export const SchedulePanelHeader: React.FC<SchedulePanelHeaderProps> = ({
 }) => (
   <header
     className={cn(
-      "flex flex-wrap items-start justify-between gap-4 px-6 py-5 handheld:px-4 handheld:py-4",
+      "flex flex-wrap items-start justify-between gap-4 px-5 py-4 handheld:px-4",
       bordered && "border-b border-border-soft",
       className,
     )}
   >
     <div className="flex min-w-0 flex-1 items-start gap-3">
       {Icon && (
-        <span className="mt-0.5 inline-flex h-9 w-9 flex-none items-center justify-center rounded-lg bg-brand-soft text-brand">
-          <Icon size={17} />
+        <span className="mt-0.5 inline-flex h-7 w-7 flex-none items-center justify-center text-brand">
+          <Icon size={18} />
         </span>
       )}
       <div className="min-w-0">
         <div className="flex flex-wrap items-center gap-2">
-          <h2 className="m-0 text-title font-bold leading-tight text-text-primary">
+          <h2 className="m-0 text-title font-semibold leading-tight text-text-primary">
             {title}
           </h2>
           {chips}
         </div>
         {description && (
-          <p className="m-0 mt-1 max-w-[44rem] text-ui leading-relaxed text-text-muted">
+          <p className="m-0 mt-1 max-w-prose text-ui text-text-muted">
             {description}
           </p>
         )}
@@ -99,7 +99,6 @@ export const SchedulePanelHeader: React.FC<SchedulePanelHeaderProps> = ({
 interface SchedulePanelBodyProps {
   children: React.ReactNode;
   className?: string;
-  /** Drops the default padding so content can sit flush against the panel. */
   noPadding?: boolean;
 }
 
@@ -108,12 +107,7 @@ export const SchedulePanelBody: React.FC<SchedulePanelBodyProps> = ({
   className,
   noPadding = false,
 }) => (
-  <div
-    className={cn(
-      !noPadding && "px-6 py-5 handheld:px-4 handheld:py-4",
-      className,
-    )}
-  >
+  <div className={cn(!noPadding && "px-5 py-4 handheld:px-4", className)}>
     {children}
   </div>
 );
@@ -129,7 +123,7 @@ export const SchedulePanelFooter: React.FC<SchedulePanelFooterProps> = ({
 }) => (
   <div
     className={cn(
-      "flex flex-wrap items-center justify-between gap-3 border-t border-border-soft px-6 py-4 handheld:px-4 handheld:py-3",
+      "flex flex-wrap items-center justify-between gap-3 border-t border-border-soft px-5 py-4 handheld:px-4 handheld:py-3",
       className,
     )}
   >
@@ -137,7 +131,7 @@ export const SchedulePanelFooter: React.FC<SchedulePanelFooterProps> = ({
   </div>
 );
 
-export interface PanelChipOption {
+interface PanelChipOption {
   id?: string;
   name: string;
   disabled?: boolean;
@@ -147,11 +141,8 @@ export interface PanelChipOption {
 interface EditablePanelChipProps {
   label: string;
   tone?: "neutral" | "overtime";
-  /** Marks the chip with a visible conflict-of-interest warning. */
   conflict?: boolean;
-  /** Highlights the chip as the signed-in user. */
   isCurrentUser?: boolean;
-  /** When omitted (or empty), the chip renders as a static, non-interactive pill. */
   options?: PanelChipOption[];
   onSelect?: (newName: string, id?: string) => void;
   title?: string;
@@ -206,9 +197,11 @@ export const EditablePanelChip: React.FC<EditablePanelChipProps> = ({
     };
   }, [open]);
 
-  const filtered = (options ?? []).filter((opt) =>
-    opt.name.toLowerCase().includes(query.trim().toLowerCase()),
-  );
+  const filtered = open
+    ? (options ?? []).filter((opt) =>
+        opt.name.toLowerCase().includes(query.trim().toLowerCase()),
+      )
+    : [];
   const enabledIndexes = filtered
     .map((opt, index) => (opt.disabled ? -1 : index))
     .filter((index) => index >= 0);
@@ -278,7 +271,7 @@ export const EditablePanelChip: React.FC<EditablePanelChipProps> = ({
         className={cn(
           "group/chip inline-flex items-center gap-1 rounded-full border px-2 py-1 text-xs font-semibold",
           editable &&
-            "cursor-pointer transition-[border-color,background,transform,box-shadow] duration-150 hover:-translate-y-px hover:border-brand-strongBorder hover:bg-brand-soft hover:shadow-tint-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-ring",
+            "cursor-pointer transition-[border-color,background] duration-100 hover:border-border-quiet hover:bg-surface-subtle focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-ring",
           open &&
             "border-brand-activeBorder bg-brand-soft shadow-tint-sm -translate-y-px",
           conflict
@@ -308,7 +301,7 @@ export const EditablePanelChip: React.FC<EditablePanelChipProps> = ({
         )}
       </button>
       {editable && open && (
-        <div className="absolute left-0 top-full z-30 mt-1 w-64 origin-top-left rounded-lg border border-border bg-surface-base shadow-panel animate-[fade-in_0.15s_ease-out]">
+        <div className="absolute left-0 top-full z-30 mt-1 w-64 origin-top-left rounded-lg border border-border bg-surface-base shadow-panel animate-fade-in">
           <div className="border-b border-border-soft px-2 py-1.5">
             <input
               ref={inputRef}
@@ -347,7 +340,7 @@ export const EditablePanelChip: React.FC<EditablePanelChipProps> = ({
                 const isCurrent = opt.name === label;
                 const isHighlighted = index === highlightedIndex;
                 return (
-                  <li key={opt.name} role="none">
+                  <li key={opt.id ?? opt.name} role="none">
                     <button
                       id={optionId(index)}
                       type="button"
@@ -375,7 +368,7 @@ export const EditablePanelChip: React.FC<EditablePanelChipProps> = ({
                       {isCurrent ? (
                         <Check size={12} aria-hidden="true" />
                       ) : opt.disabled ? (
-                        <span className="text-label font-bold uppercase tracking-label text-text-faded">
+                        <span className="text-detail font-medium text-text-muted">
                           I panelet
                         </span>
                       ) : null}
@@ -400,6 +393,7 @@ interface TimeSegmentInputProps {
   id?: string;
   value: TimeValue;
   onChange: (next: TimeValue) => void;
+  "aria-label": string;
 }
 
 const padSegment = (segment: number) => String(segment).padStart(2, "0");
@@ -474,23 +468,26 @@ export const TimeSegmentInput: React.FC<TimeSegmentInputProps> = ({
   id,
   value,
   onChange,
+  "aria-label": ariaLabel,
 }) => (
   <div
     id={id}
+    role="group"
+    aria-label={ariaLabel}
     className="inline-flex items-center gap-0.5 rounded-lg border border-border-soft bg-surface-base px-2 py-1.5"
   >
     <TimeSegmentField
       max={23}
       committed={value.h}
       onCommit={(h) => onChange({ h, m: value.m })}
-      aria-label="Time"
+      aria-label={`${ariaLabel}, time`}
     />
     <span className="select-none text-sm font-bold text-text-subtle">:</span>
     <TimeSegmentField
       max={59}
       committed={value.m}
       onCommit={(m) => onChange({ h: value.h, m })}
-      aria-label="Minutt"
+      aria-label={`${ariaLabel}, minutt`}
     />
   </div>
 );

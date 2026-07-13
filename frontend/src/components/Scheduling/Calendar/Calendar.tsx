@@ -97,8 +97,6 @@ const TimeScheduler: React.FC<TimeSchedulerProps> = ({
     [enabledSlots, setSelectedSlots],
   );
 
-  // If any slot in the block is already selected, toggling clears the whole
-  // block; otherwise it fills it. Keeps blocks all-or-nothing.
   const blockAddMode = (date: string, chunk: number[]) => {
     const enabledInChunk = chunk.filter((m) => isSlotEnabled(date, m));
     return !enabledInChunk.some((m) => selectedSlots.has(makeSlotKey(date, m)));
@@ -153,10 +151,18 @@ const TimeScheduler: React.FC<TimeSchedulerProps> = ({
     };
   }, [handlePointerUp]);
 
+  React.useEffect(() => {
+    if (!dirtySinceSave) return;
+    const warnBeforeUnload = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+      event.returnValue = "";
+    };
+    window.addEventListener("beforeunload", warnBeforeUnload);
+    return () => window.removeEventListener("beforeunload", warnBeforeUnload);
+  }, [dirtySinceSave]);
+
   const handleSave = async () => {
     if (!onSave) return;
-    // Snap to whole blocks before saving: any block with a selected slot is
-    // filled completely, so stored availability never contains half-blocks.
     const normalized = new Set<string>();
     dates.forEach((date) => {
       chunks.forEach((chunk) => {
@@ -200,7 +206,7 @@ const TimeScheduler: React.FC<TimeSchedulerProps> = ({
       <SchedulePanelBody>
         <div className="min-w-0 overflow-x-auto rounded-lg border border-border bg-surface-muted p-3">
           <div
-            className="grid touch-none gap-[5px]"
+            className="grid touch-auto gap-1"
             style={{
               gridTemplateColumns: `56px repeat(${columns - 1}, minmax(70px, 1fr))`,
               minWidth: `max(680px, ${(columns - 1) * 70 + 56}px)`,
@@ -214,8 +220,8 @@ const TimeScheduler: React.FC<TimeSchedulerProps> = ({
                 <div
                   key={date}
                   className={cn(
-                    "flex min-h-9 items-center justify-center rounded-md border border-border bg-surface-base text-label font-bold uppercase tracking-label text-text-muted",
-                    "flex-col gap-[0.1rem]",
+                    "flex min-h-9 items-center justify-center rounded-md border border-border bg-surface-base text-detail font-semibold text-text-muted",
+                    "flex-col gap-0.5",
                   )}
                 >
                   <span>{weekday}</span>
@@ -259,7 +265,7 @@ const TimeScheduler: React.FC<TimeSchedulerProps> = ({
                     <div
                       key={`${date}-${chunkIdx}`}
                       role="button"
-                      tabIndex={0}
+                      tabIndex={isAnyEnabled ? 0 : -1}
                       aria-pressed={isSelected}
                       aria-disabled={!isAnyEnabled}
                       aria-label={cellLabel}
@@ -267,7 +273,7 @@ const TimeScheduler: React.FC<TimeSchedulerProps> = ({
                       onPointerEnter={() => handlePointerEnter(date, chunk)}
                       onKeyDown={(e) => handleCellKeyDown(e, date, chunk)}
                       className={cn(
-                        "group relative flex min-h-[44px] w-full flex-col items-center justify-center gap-[2px] rounded-md border p-1.5 transition-all duration-100",
+                        "group relative flex min-h-11 w-full flex-col items-center justify-center gap-0.5 rounded-md border p-1.5 transition-all duration-100",
                         "focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-focus",
                         !isAnyEnabled &&
                           "cursor-not-allowed border-border-soft bg-surface-neutral [background-image:var(--pattern-unavailable)]",
@@ -279,7 +285,7 @@ const TimeScheduler: React.FC<TimeSchedulerProps> = ({
                           "cursor-pointer border-border bg-surface-base hover:border-brand-strong hover:bg-brand-soft",
                       )}
                     >
-                      <div className="flex h-1.5 w-full items-center gap-[3px]">
+                      <div className="flex h-1.5 w-full items-center gap-1">
                         {chunk.map((m) => {
                           const enabled = isSlotEnabled(date, m);
                           return (
@@ -339,7 +345,7 @@ const LegendItem = ({ label, variant }: LegendItemProps) => (
   <span className="inline-flex items-center gap-1.5 rounded-full border border-border bg-surface-muted px-2.5 py-1 text-xs font-semibold text-text-muted">
     <span
       className={cn(
-        "h-[10px] w-[10px] shrink-0 rounded-[2px] border",
+        "h-2.5 w-2.5 shrink-0 rounded-sm border",
         variant === "selected" && "border-brand bg-brand",
         variant === "open" && "border-border-quiet bg-surface-base",
         variant === "disabled" &&

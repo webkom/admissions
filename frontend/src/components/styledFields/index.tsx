@@ -12,28 +12,30 @@ export const StyledField = styled(Field)<StyledFieldProps>`
   width: 100%;
   max-width: 400px;
   padding: 0.75rem 1rem;
-  margin-top: 0.5rem;
-  font-size: 0.9375rem;
-  color: #111827;
+  margin-top: var(--spacing-sm);
+  font-size: var(--font-size-ui);
+  color: var(--color-text-primary);
   border: 1px solid
-    ${(props) => (props.error ? "var(--lego-red-color, #e11d48)" : "#d1d5db")};
+    ${(props) =>
+      props.error ? "var(--lego-red-color)" : "var(--color-border-muted)"};
   border-radius: var(--border-radius-md);
-  background-color: white;
+  background-color: var(--color-surface-base);
   transition: var(--transition-base);
 
   &::placeholder {
-    color: #9ca3af;
+    color: var(--color-text-subtle);
   }
 
   &:focus {
-    border-color: #2563eb;
-    box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.1);
+    border-color: var(--color-blue-6);
+    box-shadow: 0 0 0 4px
+      color-mix(in srgb, var(--color-blue-6) 10%, transparent);
     outline: none;
   }
 
   &:disabled {
-    background-color: #f3f4f6;
-    color: #9ca3af;
+    background-color: var(--color-surface-disabled);
+    color: var(--color-text-disabled);
     cursor: not-allowed;
   }
 `;
@@ -42,41 +44,43 @@ export const StyledTextAreaField = styled(Textarea)<StyledFieldProps>`
   display: block;
   width: 100%;
   min-height: 10rem;
-  padding: 1rem;
-  margin-top: 0.5rem;
-  font-size: 0.9375rem;
-  color: #111827;
+  padding: var(--spacing-md);
+  margin-top: var(--spacing-sm);
+  font-size: var(--font-size-ui);
+  color: var(--color-text-primary);
   line-height: 1.6;
   border: 1px solid
-    ${({ $error }) => ($error ? "var(--lego-red-color, #e11d48)" : "#d1d5db")};
+    ${({ $error }) =>
+      $error ? "var(--lego-red-color)" : "var(--color-border-muted)"};
   border-radius: var(--border-radius-md);
-  background-color: white;
+  background-color: var(--color-surface-base);
   transition: var(--transition-base);
   resize: vertical;
 
   &::placeholder {
-    color: #9ca3af;
+    color: var(--color-text-subtle);
   }
 
   &:focus {
-    border-color: #2563eb;
-    box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.1);
+    border-color: var(--color-blue-6);
+    box-shadow: 0 0 0 4px
+      color-mix(in srgb, var(--color-blue-6) 10%, transparent);
     outline: none;
   }
 
   &:disabled {
-    background-color: #f3f4f6;
-    color: #9ca3af;
+    background-color: var(--color-surface-disabled);
+    color: var(--color-text-disabled);
     cursor: not-allowed;
   }
 `;
 
 export const FieldLabel = styled.label`
   font-weight: 600;
-  font-size: 0.875rem;
-  color: #374151;
+  font-size: var(--font-size-sm);
+  color: var(--color-text-body);
   display: block;
-  margin-bottom: 0.25rem;
+  margin-bottom: var(--spacing-xs);
 `;
 
 interface InputValidationFeedbackProps {
@@ -90,5 +94,5 @@ export const InputValidationFeedback: React.FC<
 const ValidationError = styled.div`
   color: var(--lego-red-color);
   font-weight: 500;
-  font-size: 0.9rem;
+  font-size: var(--font-size-ui);
 `;

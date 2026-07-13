@@ -1,11 +1,11 @@
 import React from "react";
 import GroupCard from "src/components/GroupCard";
-import Icon from "src/components/Icon";
 import styled from "styled-components";
 import { media } from "src/styles/mediaQueries";
 import { useAdmission } from "src/query/hooks";
 import { useParams } from "react-router-dom";
 import LinkButton from "src/components/LinkButton";
+import { Info } from "lucide-react";
 
 interface GroupsPageProps {
   selectedGroups: { [key: string]: boolean };
@@ -65,7 +65,7 @@ const GroupsPage: React.FC<GroupsPageProps> = ({
         </LinkButton>
         {!hasSelectedAnything() && (
           <ErrorMessage>
-            <Icon name="information-circle-outline" />
+            <Info aria-hidden="true" />
             Du må velge en eller flere{" "}
             {isRevy ? "grupper" : isRevyBoard ? "stillinger" : "komiteer"} før
             du kan gå videre
@@ -83,7 +83,7 @@ export default GroupsPage;
 const PageWrapper = styled.div`
   width: 100%;
   padding: 4rem 2rem;
-  max-width: 1200px;
+  max-width: var(--lego-max-width);
   margin: 0 auto;
   min-height: calc(100vh - 80px);
   display: flex;
@@ -95,28 +95,28 @@ const PageWrapper = styled.div`
 `;
 
 const Title = styled.h1`
-  color: #4b5563;
-  font-size: 1.5rem;
+  color: var(--color-text-body);
+  font-size: var(--font-size-heading-md);
   font-weight: 500;
   margin-bottom: 3rem;
   text-align: center;
   line-height: 1.4;
 
   ${media.handheld`
-    font-size: 1.25rem;
-    margin-bottom: 2rem;
+    font-size: var(--font-size-heading-xs);
+    margin-bottom: var(--spacing-xl);
   `};
 `;
 
 const GroupsWrapper = styled.div`
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
-  grid-gap: 2rem;
+  grid-gap: var(--spacing-xl);
   width: 100%;
 
   ${media.handheld`
     grid-template-columns: 1fr;
-    grid-gap: 1.5rem;
+    grid-gap: var(--spacing-lg);
     `};
 `;
 
@@ -126,23 +126,23 @@ const NextButtonWrapper = styled.div`
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 1.5rem;
+  gap: var(--spacing-lg);
 `;
 
 const ErrorMessage = styled.div`
-  font-size: 0.875rem;
+  font-size: var(--font-size-sm);
   font-weight: 500;
-  color: #6b7280;
+  color: var(--color-text-muted);
   display: flex;
   align-items: center;
   gap: 0.75rem;
   padding: 1rem 1.5rem;
-  background-color: #fef2f2;
+  background-color: var(--color-danger-bg);
   border-radius: var(--border-radius-md);
-  border: 1px solid #fee2e2;
+  border: 1px solid var(--color-danger-border);
 
   > i {
-    font-size: 1.25rem;
-    color: var(--lego-red-color, #e11d48);
+    font-size: var(--font-size-heading-xs);
+    color: var(--lego-red-color);
   }
 `;

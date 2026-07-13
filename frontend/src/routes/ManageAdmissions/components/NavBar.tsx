@@ -50,5 +50,5 @@ const NavLink = styled(Link)`
 `;
 
 const CreateNewWrapper = styled.div`
-  margin-top: 1rem;
+  margin-top: var(--spacing-md);
 `;

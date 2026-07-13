@@ -41,11 +41,8 @@ const AvailabilityHeatmap: React.FC<AvailabilityHeatmapProps> = ({
   );
 
   const step = sessionDuration > 0 ? sessionDuration : 60;
-  // Slot times are quantized to multiples of the session duration (see
-  // encode/decodeScheduleTime), so the rows must sit on that same grid —
-  // otherwise saved availability lands between rows and disappears.
-  const startMinute = Math.floor(dayStartMinute / step) * step;
-  const endMinute = Math.ceil(dayEndMinute / step) * step;
+  const startMinute = dayStartMinute;
+  const endMinute = dayEndMinute;
 
   const timeSlots = useMemo(() => {
     const slots = [];
@@ -102,9 +99,6 @@ const AvailabilityHeatmap: React.FC<AvailabilityHeatmapProps> = ({
   const isSlotEnabled = (date: string, minute: number): boolean =>
     availableSlots.has(makeSlotKey(date, minute));
 
-  // Floor at 24% so even a single available interviewer reads clearly against
-  // the empty surface; mixing in OKLCH (not sRGB) keeps the count→colour steps
-  // perceptually even instead of bunching up in the low range.
   const getHeatPercent = (intensity: number) => Math.round(24 + intensity * 66);
 
   const getHeatBackground = (enabled: boolean, intensity: number) => {
@@ -133,7 +127,7 @@ const AvailabilityHeatmap: React.FC<AvailabilityHeatmapProps> = ({
         actions={
           <div className="flex items-center gap-2">
             <label
-              className="text-label font-bold uppercase tracking-label text-text-subtle"
+              className="text-detail font-medium text-text-muted"
               htmlFor="person-filter"
             >
               Person
@@ -141,7 +135,7 @@ const AvailabilityHeatmap: React.FC<AvailabilityHeatmapProps> = ({
             <CustomSelect
               id="person-filter"
               value={selectedIndividual || ""}
-              className="min-w-[180px]"
+              className="min-w-44"
               placeholder="Velg person…"
               onChange={(v) => {
                 const value = v || null;
@@ -163,6 +157,7 @@ const AvailabilityHeatmap: React.FC<AvailabilityHeatmapProps> = ({
       <SchedulePanelBody className="flex flex-col gap-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <SegmentedControl<"all" | "male" | "female">
+            aria-label="Filtrer tilgjengelighet etter kjønn"
             value={
               filterMode === "all" ||
               filterMode === "male" ||
@@ -192,14 +187,14 @@ const AvailabilityHeatmap: React.FC<AvailabilityHeatmapProps> = ({
 
           <div className="flex flex-wrap items-end gap-x-5 gap-y-2">
             <div>
-              <span className="mb-[0.35rem] block text-label font-bold uppercase tracking-label text-text-subtle">
+              <span className="mb-1.5 block text-detail font-medium text-text-muted">
                 Tilgjengelighet
               </span>
-              <div className="flex items-center gap-[3px]">
+              <div className="flex items-center gap-1">
                 {[0, 0.25, 0.5, 0.75, 1].map((intensity) => (
                   <div
                     key={intensity}
-                    className="h-3 w-[1.4rem] rounded-[3px] border"
+                    className="h-3 w-6 rounded-sm border"
                     style={{
                       background: getHeatBackground(true, intensity),
                       borderColor: getHeatBorder(true, intensity),
@@ -213,13 +208,13 @@ const AvailabilityHeatmap: React.FC<AvailabilityHeatmapProps> = ({
             </div>
 
             <div>
-              <span className="mb-[0.35rem] block text-label font-bold uppercase tracking-label text-text-subtle">
+              <span className="mb-1.5 block text-detail font-medium text-text-muted">
                 Forklaring
               </span>
               <div className="flex items-center gap-3">
                 <span className="flex items-center gap-1.5 text-xs font-semibold text-text-faded">
                   <span
-                    className="h-3 w-[1.4rem] rounded-[3px] border"
+                    className="h-3 w-6 rounded-sm border"
                     style={{
                       background: getHeatBackground(true, 0),
                       borderColor: getHeatBorder(true, 0),
@@ -229,7 +224,7 @@ const AvailabilityHeatmap: React.FC<AvailabilityHeatmapProps> = ({
                 </span>
                 <span className="flex items-center gap-1.5 text-xs font-semibold text-text-faded">
                   <span
-                    className="h-3 w-[1.4rem] rounded-[3px] border border-border-soft opacity-60"
+                    className="h-3 w-6 rounded-sm border border-border-soft opacity-60"
                     style={{
                       backgroundImage: "var(--pattern-unavailable)",
                       backgroundColor: "var(--color-surface-base)",
@@ -244,7 +239,7 @@ const AvailabilityHeatmap: React.FC<AvailabilityHeatmapProps> = ({
 
         <div className="min-w-0 overflow-x-auto rounded-lg border border-border bg-surface-muted p-3">
           <div
-            className="grid gap-[5px]"
+            className="grid gap-1"
             style={{
               gridTemplateColumns: `56px repeat(${columns - 1}, minmax(70px, 1fr))`,
               minWidth: `max(680px, ${(columns - 1) * 70 + 56}px)`,
@@ -257,8 +252,8 @@ const AvailabilityHeatmap: React.FC<AvailabilityHeatmapProps> = ({
                 <div
                   key={date}
                   className={cn(
-                    "flex min-h-9 items-center justify-center rounded-md border border-border bg-surface-base text-label font-bold uppercase tracking-label text-text-muted",
-                    "flex-col gap-[0.1rem]",
+                    "flex min-h-9 items-center justify-center rounded-md border border-border bg-surface-base text-detail font-semibold text-text-muted",
+                    "flex-col gap-0.5",
                   )}
                 >
                   <span>{weekday}</span>
@@ -279,16 +274,21 @@ const AvailabilityHeatmap: React.FC<AvailabilityHeatmapProps> = ({
                   const intensity = getHeatIntensity(date, minute);
                   const count = getAvailableCount(date, minute);
                   const cellTitle = enabled
-                    ? `${count} tilgjengelige`
-                    : "Ikke tilgjengelig";
+                    ? `${formatDateHeader(date).weekday} ${
+                        formatDateHeader(date).dayMonth
+                      } klokken ${formatMinutes(minute)}: ${count} tilgjengelige`
+                    : `${formatDateHeader(date).weekday} ${
+                        formatDateHeader(date).dayMonth
+                      } klokken ${formatMinutes(minute)}: stengt`;
 
                   return (
                     <div
                       key={makeSlotKey(date, minute)}
+                      role="img"
                       tabIndex={0}
                       aria-label={cellTitle}
                       className={cn(
-                        "flex h-[2.4rem] items-center justify-center rounded-md border transition-[background-color] duration-100 focus-visible:relative focus-visible:z-10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-focus",
+                        "flex h-10 items-center justify-center rounded-md border transition-[background-color] duration-100 focus-visible:relative focus-visible:z-10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-focus",
                         !enabled && "opacity-60",
                       )}
                       style={{

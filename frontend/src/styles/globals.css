@@ -1,4 +1,3 @@
-@import url("https://unpkg.com/ionicons@4.5.10-0/dist/css/ionicons.min.css");
 @import url("./fonts.css");
 @import url("@webkom/lego-bricks/dist/style.css");
 
@@ -7,52 +6,62 @@
 @tailwind utilities;
 
 :root {
-  --lego-red-color: var(--color-red-7);
-  --font-family: "Geist", -apple-system, blinkmacsystemfont, "Segoe UI", roboto,
-    helvetica, arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji",
-    "Segoe UI Symbol";
-  --font-display: "Geist", -apple-system, blinkmacsystemfont, "Segoe UI", roboto,
+  --font-family: inter, -apple-system, blinkmacsystemfont, "Segoe UI", roboto,
     helvetica, arial, sans-serif;
-  --font-mono: "Geist Mono", ui-monospace, sfmono-regular, "SF Mono", menlo,
-    monaco, consolas, "Liberation Mono", "Courier New", monospace;
-  --border-radius-sm: 8px;
-  --border-radius-md: 12px;
-  --border-radius-lg: 16px;
-
-  /* Shadows tinted with a warm graphite (slight red bias) so they harmonise
-     with the brand-red surfaces instead of reading as flat neutral. */
-  --shadow-sm: 0 1px 2px 0 rgb(40 18 18 / 5%);
-  --shadow-md: 0 4px 8px -2px rgb(40 18 18 / 8%),
-    0 2px 4px -2px rgb(40 18 18 / 5%);
-  --shadow-lg: 0 12px 24px -8px rgb(40 18 18 / 10%),
-    0 4px 8px -4px rgb(40 18 18 / 5%);
-  --transition-base: all 0.22s cubic-bezier(0.2, 0, 0, 1);
-  --spacing-sm: 0.5rem;
-  --spacing-md: 1rem;
-  --spacing-lg: 1.5rem;
+  --font-display: inter, -apple-system, blinkmacsystemfont, "Segoe UI", roboto,
+    helvetica, arial, sans-serif;
+  --font-size-nano: 0.5625rem;
+  --font-size-tiny: 0.65rem;
+  --font-size-label: var(--font-size-xs);
+  --font-size-detail: 0.8rem;
+  --font-size-ui: var(--font-size-sm);
+  --font-size-title: var(--font-size-md);
+  --font-size-heading-xs: 1.25rem;
+  --font-size-heading-sm: 1.375rem;
+  --font-size-heading-md: 1.5rem;
+  --font-size-display-md: 2.25rem;
+  --font-size-display-lg: 3rem;
+  --spacing-xs: calc(var(--lego-default-padding) / 8);
+  --spacing-sm: calc(var(--lego-default-padding) / 4);
+  --spacing-md: calc(var(--lego-default-padding) / 2);
+  --spacing-lg: calc(var(--lego-default-padding) * 3 / 4);
+  --spacing-xl: var(--lego-default-padding);
+  --transition-base: var(--easing-fast);
   --color-brand: var(--lego-red-color);
 
-  /* Brand red as raw channels for rgb()/rgba() composition (e.g. inline
-     tinted shadows). Comma form so legacy rgba(var(--color-brand-rgb), a)
-     stays valid. */
-  --color-brand-rgb: 178, 28, 23;
-  --color-brand-hover: var(--color-red-8);
-  --color-brand-dark: var(--color-red-8);
-  --color-brand-pressed: var(--color-red-9);
-  --color-brand-input: rgb(178 28 23 / 40%);
-  --color-brand-ring: rgb(178 28 23 / 15%);
-  --color-brand-ring-soft: rgb(178 28 23 / 6%);
-  --color-brand-soft: rgb(178 28 23 / 3%);
-  --color-brand-subtle: rgb(178 28 23 / 5%);
-  --color-brand-muted: rgb(178 28 23 / 6%);
-  --color-brand-tint: rgb(178 28 23 / 7%);
-  --color-brand-badge: rgb(178 28 23 / 8%);
-  --color-brand-fill: rgb(178 28 23 / 12%);
-  --color-brand-border: rgb(178 28 23 / 14%);
-  --color-brand-strong-border: rgb(178 28 23 / 18%);
-  --color-brand-panel-border: rgb(178 28 23 / 20%);
-  --color-brand-active-border: rgb(178 28 23 / 22%);
-  --color-brand-focus: rgb(178 28 23 / 25%);
+  --color-brand-hover: var(--lego-red-color-hover);
+  --color-brand-dark: var(--color-red-7);
+  --color-brand-pressed: var(--color-red-8);
+  --color-brand-input: color-mix(in srgb, var(--color-brand) 40%, transparent);
+  --color-brand-ring: color-mix(in srgb, var(--color-brand) 18%, transparent);
+  --color-brand-ring-soft: color-mix(
+    in srgb,
+    var(--color-brand) 8%,
+    transparent
+  );
+  --color-brand-soft: color-mix(in srgb, var(--color-brand) 4%, transparent);
+  --color-brand-subtle: color-mix(in srgb, var(--color-brand) 6%, transparent);
+  --color-brand-muted: color-mix(in srgb, var(--color-brand) 8%, transparent);
+  --color-brand-tint: color-mix(in srgb, var(--color-brand) 10%, transparent);
+  --color-brand-badge: var(--color-brand-tint);
+  --color-brand-fill: color-mix(in srgb, var(--color-brand) 14%, transparent);
+  --color-brand-border: var(--color-brand-ring);
+  --color-brand-strong-border: color-mix(
+    in srgb,
+    var(--color-brand) 28%,
+    transparent
+  );
+  --color-brand-panel-border: color-mix(
+    in srgb,
+    var(--color-brand) 32%,
+    transparent
+  );
+  --color-brand-active-border: color-mix(
+    in srgb,
+    var(--color-brand) 38%,
+    transparent
+  );
+  --color-brand-focus: color-mix(in srgb, var(--color-brand) 45%, transparent);
   --color-success: var(--color-green-7);
   --color-success-bg: var(--color-green-2);
   --color-success-border: var(--color-green-7);
@@ -60,9 +69,7 @@
   --color-danger-bg: var(--color-red-1);
   --color-danger-border: var(--color-red-6);
 
-  /* Modal/drawer scrim — warm graphite at 40% so overlays harmonise with the
-     tinted shadow language instead of reading as a cold neutral black veil. */
-  --color-overlay: rgb(40 18 18 / 40%);
+  --color-overlay: color-mix(in srgb, var(--lego-font-color) 45%, transparent);
   --color-surface-base: var(--lego-card-color);
   --color-surface-page: var(--lego-background-color);
   --color-surface-soft: var(--lego-background-color);
@@ -72,6 +79,7 @@
   --color-surface-neutral: var(--color-gray-2);
   --color-surface-disabled: var(--color-gray-2);
   --color-border-default: var(--border-gray);
+  --color-border: var(--border-gray);
   --color-border-soft: var(--color-gray-2);
   --color-border-muted: var(--color-gray-3);
   --color-border-quiet: var(--color-gray-4);
@@ -86,53 +94,27 @@
   --color-text-subtle: var(--color-gray-5);
   --color-text-faded: var(--color-gray-4);
   --color-text-disabled: var(--color-gray-4);
-  --gradient-timeline-divider: linear-gradient(
-    to bottom,
-    var(--color-border-soft) 50%,
-    transparent 50%
-  );
-  --gradient-brand-panel: linear-gradient(
-    180deg,
-    var(--color-brand-subtle) 0%,
-    var(--color-surface-base) 100%
-  );
-
-  /* One source of truth for the diagonal "unavailable / closed slot" hatch,
-     so every calendar surface speaks the same visual language. */
   --pattern-unavailable: repeating-linear-gradient(
     135deg,
     var(--color-border-faint) 0 1px,
     transparent 1px 6px
   );
-  --shadow-panel: 0 10px 28px -12px rgb(40 18 18 / 7%),
-    0 4px 10px -4px rgb(40 18 18 / 4%), inset 0 1px 0 rgb(255 255 255 / 60%);
-  --shadow-panel-hover: 0 22px 40px -16px rgb(40 18 18 / 11%),
-    0 8px 16px -8px rgb(40 18 18 / 5%), inset 0 1px 0 rgb(255 255 255 / 70%);
-
-  /* Slide-over drawer shadow: cast leftward from a right-anchored panel. */
-  --shadow-drawer-left: -12px 0 32px -16px rgb(40 18 18 / 18%);
-
-  /* High-elevation modal lift — shared by centred dialogs and the wizard. */
-  --shadow-modal: 0 32px 64px -16px rgb(40 18 18 / 22%),
-    0 12px 24px -12px rgb(40 18 18 / 12%);
-
-  /* Tiny tinted lift used on hoverable chips/inputs. */
-  --shadow-tint-sm: 0 2px 6px rgb(40 18 18 / 5%);
-  --shadow-action: 0 10px 15px -3px rgb(178 28 23 / 20%);
-  --shadow-toggle: 0 8px 18px rgb(178 28 23 / 6%);
-  --color-brand-pulse-start: rgb(178 28 23 / 45%);
-  --color-brand-pulse-end: rgb(178 28 23 / 0%);
-  --gradient-toggle-active: linear-gradient(
-    135deg,
-    rgb(178 28 23 / 14%) 0%,
-    rgb(178 28 23 / 8%) 45%,
-    rgb(178 28 23 / 3%) 100%
-  );
+  --shadow-panel: var(--shadow-sm);
+  --shadow-panel-hover: var(--shadow-sm);
+  --shadow-drawer-left: -8px 0 24px
+    color-mix(in srgb, var(--color-gray-6) 12%, transparent);
+  --shadow-modal: var(--shadow-lg);
+  --shadow-tint-sm: var(--shadow-sm);
+  --shadow-action: none;
+  --shadow-toggle: none;
+  --color-brand-pulse-start: var(--color-brand-focus);
+  --color-brand-pulse-end: transparent;
+  --gradient-toggle-active: none;
 }
 
 html {
   box-sizing: border-box;
-  font-size: 16px;
+  font-size: var(--font-size-md);
   height: 100%;
 }
 
@@ -146,43 +128,28 @@ html {
 
 body {
   margin: 0;
-  line-height: 1.6;
-  background: var(--lego-background-color, #f9fafb);
-  color: var(--lego-font-color, #111827);
+  line-height: 1.3;
+  background: var(--lego-background-color);
+  color: var(--lego-font-color);
   font-family: var(--font-family), sans-serif;
   position: relative;
 }
 
-/* Pointer-events-none grain overlay breaks the digital flatness of the page
-   without affecting interaction. SVG turbulence noise at low opacity. */
-body::before {
-  content: "";
-  position: fixed;
-  inset: 0;
-  z-index: 0;
-  pointer-events: none;
-  opacity: 0.035;
-  mix-blend-mode: multiply;
-  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 200'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0.6 0'/></filter><rect width='100%25' height='100%25' filter='url(%23n)'/></svg>");
-}
-
 #root {
   min-height: 100dvh;
-  position: relative;
-  z-index: 1;
 }
 
 @keyframes timeline-pulse {
   0% {
-    box-shadow: 0 0 0 0 rgb(178 28 23 / 55%);
+    box-shadow: 0 0 0 0 var(--color-brand-pulse-start);
   }
 
   70% {
-    box-shadow: 0 0 0 14px rgb(178 28 23 / 0%);
+    box-shadow: 0 0 0 14px var(--color-brand-pulse-end);
   }
 
   100% {
-    box-shadow: 0 0 0 0 rgb(178 28 23 / 0%);
+    box-shadow: 0 0 0 0 var(--color-brand-pulse-end);
   }
 }
 
@@ -218,63 +185,47 @@ body::before {
   }
 }
 
-@keyframes barber-pole {
-  from {
-    background-position: 0 0;
-  }
-
-  to {
-    background-position: 18px 0;
-  }
-}
-
 h1,
 h2,
 h3,
 h4 {
   font-family: var(--font-display);
   font-weight: 600;
-  color: var(--lego-font-color, #111827);
-  letter-spacing: -0.025em;
+  color: var(--lego-font-color);
+  line-height: 1.3;
   text-wrap: balance;
 }
 
 h1 {
-  font-size: 2.5rem;
-  text-align: center;
-  margin: 0.5em 0;
-  line-height: 1.05;
-  letter-spacing: -0.045em;
-  font-weight: 650;
+  margin: 1rem 0;
+  font-size: var(--font-size-xl);
 }
 
 h2 {
-  font-size: 1.875rem;
-  margin-bottom: 0.75rem;
-  letter-spacing: -0.035em;
-  line-height: 1.15;
+  margin: 0.5rem 0;
+  font-size: var(--font-size-heading-md);
 }
 
 h3 {
-  font-size: 1.5rem;
-  margin-bottom: 0.5rem;
-  letter-spacing: -0.03em;
+  margin: 0.5rem 0;
+  font-size: var(--font-size-heading-sm);
 }
 
 p {
   text-wrap: pretty;
-  margin-bottom: 1rem;
+  margin-bottom: var(--spacing-sm);
+  line-height: 1.3;
 }
 
 a {
-  color: var(--lego-link-color, #2563eb);
+  color: var(--lego-link-color, var(--color-brand));
   cursor: pointer;
   text-decoration: none;
-  transition: var(--transition-base);
+  transition: color var(--transition-base);
 }
 
 a:hover {
-  opacity: 0.8;
+  color: var(--color-brand-hover);
 }
 
 a[disabled] {
@@ -294,34 +245,36 @@ table {
 }
 
 th {
-  padding: 0.75rem;
-  border-bottom: 1px solid var(--color-border-soft);
+  padding: var(--spacing-sm);
   font-weight: 600;
-  text-transform: uppercase;
-  font-size: 0.75rem;
-  letter-spacing: 0.05em;
-  color: var(--color-text-secondary);
+  color: var(--color-gray-7);
+  background: var(--color-gray-2);
 }
 
 th,
 td {
-  font-size: 0.875rem;
-  padding: 1rem 0.75rem;
-  border-bottom: 1px solid var(--color-border-faint);
+  font-size: var(--font-size-sm);
+  padding: var(--spacing-sm);
   text-align: left;
 }
 
-tr:last-of-type > td {
-  border-bottom: 0;
+th:first-child {
+  border-radius: 2em 0 0 2em;
 }
 
-/* Sliding underline used on main CTAs and link-buttons. Mirrors the NavBar
-   "Min søknad" hover: line slides out from the left starting brand red, and
-   settles to a soft gray. */
+th:last-child {
+  border-radius: 0 2em 2em 0;
+}
+
+tbody tr:nth-child(even) {
+  background: var(--additive-background);
+}
+
 .slide-underline {
   position: relative;
   overflow: hidden;
 }
+
 .slide-underline::after {
   content: "";
   position: absolute;
@@ -336,29 +289,47 @@ tr:last-of-type > td {
     transform 220ms cubic-bezier(0.2, 0, 0, 1),
     background-color 220ms cubic-bezier(0.2, 0, 0, 1);
 }
+
 .slide-underline:hover::after,
 .slide-underline:focus::after {
   transform: scaleX(1);
-  background-color: rgba(0, 0, 0, 0.06);
+  background-color: var(--additive-background);
 }
 
-/* For small buttons where left/right padding is small */
-.slide-underline--tight::after {
+.slide-underline-tight::after {
   left: 8px;
   right: 8px;
 }
 
-/* Ensure keyboard focus shows underline too */
 .slide-underline:focus-visible::after {
   transform: scaleX(1);
   box-shadow: 0 0 0 4px var(--color-brand-ring-soft);
 }
 
-/* On dark/brand buttons keep the underline high-contrast white throughout. */
-.slide-underline--on-dark::after {
-  background-color: rgba(255, 255, 255, 0.55);
+.slide-underline-on-dark::after {
+  background-color: color-mix(
+    in srgb,
+    var(--color-absolute-white) 55%,
+    transparent
+  );
 }
-.slide-underline--on-dark:hover::after,
-.slide-underline--on-dark:focus::after {
-  background-color: rgba(255, 255, 255, 0.92);
+
+.slide-underline-on-dark:hover::after,
+.slide-underline-on-dark:focus::after {
+  background-color: color-mix(
+    in srgb,
+    var(--color-absolute-white) 92%,
+    transparent
+  );
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }

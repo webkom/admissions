@@ -40,7 +40,7 @@ interface AdmissionUserData {
   is_admin: boolean;
   is_recruiter: boolean;
   committee_role: "leader" | "recruiting" | "member" | null;
-  committee_groups: Group[];
+  committee_groups: string[];
 }
 
 export interface Admission {
@@ -63,19 +63,18 @@ export interface Admission {
 export interface Candidate {
   id: string;
   name: string;
-  gender: string;
+  gender?: string;
 }
 
 export interface Interviewer {
   id: string;
   name: string;
-  gender: string;
+  gender?: string;
   availability: number[];
   biased: string[];
 }
 
 export interface SolverOptions {
-  // Same-gender panel matching; opt-in, ignored for anyone with no gender data.
   enforce_same_gender: boolean;
   allow_overtime: boolean;
   prioritize_continuity: boolean;
@@ -140,9 +139,7 @@ export interface InterviewAvailabilityParticipant {
   user_id: string;
   username: string;
   full_name: string;
-  // Solver panel-matching code: "M" / "F" / "" (mirrored from LEGO, only
-  // populated for privileged viewers).
-  gender: string;
+  gender?: string;
   slots: string[];
   conflicts: string[];
   has_submitted: boolean;

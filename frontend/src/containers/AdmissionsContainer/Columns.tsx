@@ -1,11 +1,10 @@
 import React from "react";
 import { createColumnHelper } from "@tanstack/react-table";
-import Icon from "src/components/Icon";
 import FormatTime from "src/components/Time/FormatTime";
 import { ApplicationTableRow } from ".";
 import { InnerTableValues } from "./InnerTable";
 import DeleteApplication from "src/components/DeleteApplication";
-import { ChevronDown, ChevronRight } from "lucide-react";
+import { ChevronDown, ChevronRight, Timer } from "lucide-react";
 
 const columnHelper = createColumnHelper<ApplicationTableRow>();
 
@@ -13,15 +12,31 @@ export const columns = [
   columnHelper.display({
     id: "expander",
     header: ({ table }) => (
-      <span onClick={table.getToggleAllRowsExpandedHandler()}>
+      <button
+        type="button"
+        aria-label={
+          table.getIsAllRowsExpanded()
+            ? "Skjul alle søknadsdetaljer"
+            : "Vis alle søknadsdetaljer"
+        }
+        aria-expanded={table.getIsAllRowsExpanded()}
+        onClick={table.getToggleAllRowsExpandedHandler()}
+      >
         {table.getIsAllRowsExpanded() ? <ChevronDown /> : <ChevronRight />}
-      </span>
+      </button>
     ),
     size: 1,
     cell: ({ row }) => (
-      <span onClick={() => row.toggleExpanded()}>
+      <button
+        type="button"
+        aria-label={
+          row.getIsExpanded() ? "Skjul søknadsdetaljer" : "Vis søknadsdetaljer"
+        }
+        aria-expanded={row.getIsExpanded()}
+        onClick={() => row.toggleExpanded()}
+      >
         {row.getIsExpanded() ? <ChevronDown /> : <ChevronRight />}
-      </span>
+      </button>
     ),
   }),
   columnHelper.accessor("username", {
@@ -47,13 +62,10 @@ export const columns = [
           {info.row.original.createdAt}
         </FormatTime>
         {!info.row.original.appliedWithinDeadline && (
-          <Icon
-            name="stopwatch"
-            prefix="ios"
-            size="1.5rem"
-            title="Søkte etter fristen"
-            color="#c0392b"
-            padding="0 10px 0 0"
+          <Timer
+            size={20}
+            aria-label="Søkte etter fristen"
+            className="mr-2 inline text-danger"
           />
         )}
       </>

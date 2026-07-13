@@ -17,6 +17,8 @@ import {
   Interviewer,
   NameVisibility,
   SavedSchedule,
+  ScheduleItem,
+  SchedulePanelMember,
 } from "../../types";
 import GridCalendarView from "src/components/Scheduling/Calendar/GridCalendarView";
 import {
@@ -26,6 +28,7 @@ import {
   parseSlotKey,
 } from "src/components/Scheduling/scheduleUtils";
 import cn from "src/utils/cn";
+import { escapeCsvCell } from "src/utils/methods";
 import PlanFilterBar from "./PlanFilterBar";
 
 const LockToggle: React.FC<{
@@ -44,8 +47,8 @@ const LockToggle: React.FC<{
         : "Lås raden så den forblir om du kjører solveren på nytt"
     }
     className={cn(
-      "inline-flex items-center gap-1 rounded-full border font-bold uppercase tracking-label transition-colors",
-      size === "sm" ? "px-1.5 py-0.5 text-[9px]" : "px-2 py-0.5 text-[10px]",
+      "inline-flex items-center gap-1 rounded-full border font-semibold transition-colors",
+      size === "sm" ? "px-1.5 py-0.5 text-nano" : "px-2 py-0.5 text-tiny",
       locked
         ? "border-brand-activeBorder bg-brand-tint text-brand hover:bg-brand-soft"
         : "border-border-soft bg-surface-base text-text-subtle hover:border-brand-strongBorder hover:text-text-primary",
@@ -130,22 +133,56 @@ const DistributedPlanView: React.FC<DistributedPlanViewProps> = ({
   };
 
   const conflictSet = useMemo(() => new Set(myConflicts), [myConflicts]);
-  const candidateIdByName = useMemo(
-    () => new Map(realCandidates.map((c) => [c.name, c.id])),
-    [realCandidates],
-  );
-  const biasedByInterviewer = useMemo(
-    () => new Map(interviewers.map((iv) => [iv.name, new Set(iv.biased)])),
+  const uniqueCandidateIdByName = useMemo(() => {
+    const grouped = new Map<string, string[]>();
+    realCandidates.forEach((candidate) => {
+      grouped.set(candidate.name, [
+        ...(grouped.get(candidate.name) ?? []),
+        candidate.id,
+      ]);
+    });
+    return new Map(
+      Array.from(grouped.entries())
+        .filter(([, ids]) => ids.length === 1)
+        .map(([name, ids]) => [name, ids[0]]),
+    );
+  }, [realCandidates]);
+  const biasedByInterviewerId = useMemo(
+    () => new Map(interviewers.map((iv) => [iv.id, new Set(iv.biased)])),
     [interviewers],
   );
+  const uniqueInterviewerIdByName = useMemo(() => {
+    const grouped = new Map<string, string[]>();
+    interviewers.forEach((interviewer) => {
+      grouped.set(interviewer.name, [
+        ...(grouped.get(interviewer.name) ?? []),
+        interviewer.id,
+      ]);
+    });
+    return new Map(
+      Array.from(grouped.entries())
+        .filter(([, ids]) => ids.length === 1)
+        .map(([name, ids]) => [name, ids[0]]),
+    );
+  }, [interviewers]);
   const interviewerOptions = useMemo(
     () => [...interviewers].sort((a, b) => a.name.localeCompare(b.name, "nb")),
     [interviewers],
   );
-  const isMe = (member: { id?: string; name: string }) =>
-    (currentUserId !== undefined && member.id === currentUserId) ||
-    member.name === currentUserName;
-  const isEditableDraft = Boolean(isAdmin && savedSchedule);
+  const candidateIdFor = (item: ScheduleItem) =>
+    item.candidate_id ?? uniqueCandidateIdByName.get(item.candidate);
+  const biasedFor = (member: SchedulePanelMember) => {
+    const interviewerId =
+      member.id ?? uniqueInterviewerIdByName.get(member.name);
+    return interviewerId ? biasedByInterviewerId.get(interviewerId) : undefined;
+  };
+  const isMe = (member: { id?: string; name: string }) => {
+    if (member.id && currentUserId) return member.id === currentUserId;
+    return !member.id && member.name === currentUserName;
+  };
+  const isEditableDraft = Boolean(
+    isAdmin && savedSchedule && !savedSchedule.is_distributed,
+  );
   const enabledTimeOptions = useMemo(() => {
     if (!savedSchedule) return [];
     const times = new Set<number>();
@@ -164,9 +201,17 @@ const DistributedPlanView: React.FC<DistributedPlanViewProps> = ({
     () => new Set(savedSchedule?.schedule.map((item) => item.time) ?? []),
     [savedSchedule],
   );
+  const timeOptionsForEdit = useMemo(() => {
+    const currentTime =
+      editingTimeIndex !== null
+        ? savedSchedule?.schedule[editingTimeIndex]?.time
+        : null;
+    return enabledTimeOptions.filter(
+      (time) => time === currentTime || !occupiedTimes.has(time),
+    );
+  }, [editingTimeIndex, enabledTimeOptions, occupiedTimes, savedSchedule]);
 
-  const toggleCandidateConflict = async (candidateName: string) => {
-    const candidateId = candidateIdByName.get(candidateName);
+  const toggleCandidateConflict = async (candidateId?: string) => {
     if (!candidateId || isSavingConflict) return;
     setIsSavingConflict(true);
     const newConflicts = conflictSet.has(candidateId)
@@ -175,7 +220,7 @@ const DistributedPlanView: React.FC<DistributedPlanViewProps> = ({
     try {
       await onSaveConflicts(newConflicts);
     } catch {
-      // Parent's onSaveConflicts shows the error toast
+      return;
     } finally {
       setIsSavingConflict(false);
     }
@@ -191,7 +236,7 @@ const DistributedPlanView: React.FC<DistributedPlanViewProps> = ({
           <h3 className="mb-1 mt-2 text-sm font-bold text-text-primary">
             Ingen plan publisert ennå
           </h3>
-          <p className="m-0 mx-auto max-w-[28rem] text-ui leading-relaxed text-text-muted">
+          <p className="m-0 mx-auto max-w-md text-ui leading-relaxed text-text-muted">
             {isAdmin
               ? 'Gå til "Intervjuforslag" for å generere og publisere en intervjuplan.'
               : "Opptaksansvarlig har ikke publisert intervjuplanen ennå. Kom tilbake senere."}
@@ -214,16 +259,17 @@ const DistributedPlanView: React.FC<DistributedPlanViewProps> = ({
   const displaySorted = myInterviewsOnly ? myInterviews : sortedEntries;
   const conflictImpacts = sortedEntries
     .map(({ item, scheduleIndex }) => {
-      const candidateId = candidateIdByName.get(item.candidate);
+      const candidateId = candidateIdFor(item);
       if (!candidateId) return null;
       const affectedPanel = item.panel
         .map((member, panelMemberIndex) => ({
           name: member.name,
           panelMemberIndex,
         }))
-        .filter((member) =>
-          biasedByInterviewer.get(member.name)?.has(candidateId),
-        );
+        .filter((member) => {
+          const panelMember = item.panel[member.panelMemberIndex];
+          return biasedFor(panelMember)?.has(candidateId);
+        });
       const myConflictInOwnPanel =
         conflictSet.has(candidateId) &&
         item.panel.some((member) => isMe(member));
@@ -239,16 +285,6 @@ const DistributedPlanView: React.FC<DistributedPlanViewProps> = ({
 
   const formatTimeLabel = (timeValue: number) =>
     formatSlotLabel(timeValue, dates, savedSchedule.session_duration);
-
-  const timeOptionsForEdit = useMemo(() => {
-    const currentTime =
-      editingTimeIndex !== null
-        ? savedSchedule.schedule[editingTimeIndex]?.time
-        : null;
-    return enabledTimeOptions.filter(
-      (time) => time === currentTime || !occupiedTimes.has(time),
-    );
-  }, [editingTimeIndex, enabledTimeOptions, occupiedTimes, savedSchedule]);
 
   const beginTimeEdit = (scheduleIndex: number) => {
     const item = savedSchedule.schedule[scheduleIndex];
@@ -285,9 +321,14 @@ const DistributedPlanView: React.FC<DistributedPlanViewProps> = ({
   };
 
   const handleExportIcs = (target: "apple" | "google") => {
-    const schedule = myInterviewsOnly
+    const selectedSchedule = myInterviewsOnly
       ? myInterviews.map(({ item }) => item)
       : savedSchedule.schedule;
+    const schedule = selectedSchedule.map((item, index) => ({
+      ...item,
+      candidate: `Kandidat ${index + 1}`,
+      candidate_id: undefined,
+    }));
     const icsContent = generateIcs(
       schedule,
       dates,
@@ -331,9 +372,7 @@ const DistributedPlanView: React.FC<DistributedPlanViewProps> = ({
       ]);
     });
     const csv = rows
-      .map((row) =>
-        row.map((cell) => `"${cell.replace(/"/g, '""')}"`).join(","),
-      )
+      .map((row) => row.map((cell) => `"${escapeCsvCell(cell)}"`).join(","))
       .join("\n");
     const blob = new Blob(["\ufeff" + csv], { type: "text/csv;charset=utf-8" });
     const url = URL.createObjectURL(blob);
@@ -391,7 +430,6 @@ const DistributedPlanView: React.FC<DistributedPlanViewProps> = ({
         }
       />
 
-      {/* Filter bar */}
       <PlanFilterBar
         myInterviewsOnly={myInterviewsOnly}
         onToggleMyInterviews={() => setMyInterviewsOnly((v) => !v)}
@@ -399,12 +437,13 @@ const DistributedPlanView: React.FC<DistributedPlanViewProps> = ({
         planViewMode={planViewMode}
         onChangePlanViewMode={setPlanViewMode}
         canToggleCandidateNames={canToggleCandidateNames}
+        canHideCandidateNames={isAdmin}
         nameVisibility={savedSchedule.name_visibility}
         onSelectVisibility={(next) => {
           if (!isUpdatingNames) handleSelectVisibility(next);
         }}
         isUpdatingNames={isUpdatingNames}
-        showRerun={isEditableDraft && myConflicts.length > 0}
+        showRerun={isEditableDraft && conflictImpacts.length > 0}
         onRerun={handleRerun}
         isRerunning={isRerunning}
         conflictBadgeCount={
@@ -412,7 +451,6 @@ const DistributedPlanView: React.FC<DistributedPlanViewProps> = ({
         }
       />
 
-      {/* Plan content */}
       <SchedulePanelBody noPadding>
         {isExportChooserOpen && (
           <ExportChooserModal
@@ -441,7 +479,7 @@ const DistributedPlanView: React.FC<DistributedPlanViewProps> = ({
           {namesVisible && conflictImpacts.length > 0 && (
             <div className="border-b border-border-soft bg-surface-subtle px-6 py-3">
               <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-                <span className="text-label font-bold uppercase tracking-label text-text-subtle">
+                <span className="text-detail font-medium text-text-muted">
                   Inhabiliteter i publisert plan
                 </span>
                 <Chip tone="brand">{conflictImpacts.length}</Chip>
@@ -487,13 +525,13 @@ const DistributedPlanView: React.FC<DistributedPlanViewProps> = ({
                 availableSlots={enabledSlots}
                 renderItem={(item, index) => {
                   const scheduleIndex = displaySorted[index].scheduleIndex;
-                  const candidateId = candidateIdByName.get(item.candidate);
+                  const candidateId = candidateIdFor(item);
                   const isConflict =
                     candidateId !== undefined && conflictSet.has(candidateId);
                   return (
                     <div
                       key={`${item.candidate}-${item.time}-${scheduleIndex}`}
-                      className="flex flex-col gap-[0.3rem] rounded border border-border-soft border-l-2 border-l-border-quiet bg-surface-base px-[0.6rem] py-2"
+                      className="flex flex-col gap-1 rounded border border-border-soft border-l-2 border-l-border-quiet bg-surface-base px-2.5 py-2"
                     >
                       <div className="flex items-center justify-between gap-2">
                         <div className="truncate whitespace-nowrap text-xs font-bold text-text-primary">
@@ -501,9 +539,13 @@ const DistributedPlanView: React.FC<DistributedPlanViewProps> = ({
                             <button
                               type="button"
                               onClick={() =>
-                                toggleCandidateConflict(item.candidate)
+                                toggleCandidateConflict(candidateId)
                               }
                               disabled={!candidateId || isSavingConflict}
+                              aria-pressed={isConflict}
+                              aria-label={`${
+                                isConflict ? "Fjern" : "Merk"
+                              } interessekonflikt for ${item.candidate}`}
                               title={
                                 isConflict
                                   ? "Fjern interessekonflikt"
@@ -530,7 +572,7 @@ const DistributedPlanView: React.FC<DistributedPlanViewProps> = ({
                             </span>
                           ) : (
                             item.locked && (
-                              <span className="ml-1 rounded-full border border-border-soft bg-surface-subtle px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-label text-text-subtle">
+                              <span className="ml-1 rounded-full border border-border-soft bg-surface-subtle px-1.5 py-0.5 text-tiny font-semibold text-text-muted">
                                 Låst
                               </span>
                             )
@@ -539,7 +581,7 @@ const DistributedPlanView: React.FC<DistributedPlanViewProps> = ({
                         {isEditableDraft && (
                           <button
                             type="button"
-                            className="text-[9px] font-bold uppercase tracking-label text-brand hover:text-brand-hover"
+                            className="text-tiny font-semibold text-brand hover:text-brand-hover"
                             onClick={() => beginTimeEdit(scheduleIndex)}
                           >
                             Flytt
@@ -551,9 +593,7 @@ const DistributedPlanView: React.FC<DistributedPlanViewProps> = ({
                         {item.panel.map((p, i) => {
                           const hasCoi =
                             isAdmin && candidateId
-                              ? (biasedByInterviewer
-                                  .get(p.name)
-                                  ?.has(candidateId) ?? false)
+                              ? (biasedFor(p)?.has(candidateId) ?? false)
                               : false;
                           return (
                             <EditablePanelChip
@@ -568,9 +608,11 @@ const DistributedPlanView: React.FC<DistributedPlanViewProps> = ({
                                       id: iv.id,
                                       name: iv.name,
                                       disabled:
-                                        iv.name !== p.name &&
-                                        item.panel.some(
-                                          (member) => member.name === iv.name,
+                                        iv.id !== p.id &&
+                                        item.panel.some((member) =>
+                                          member.id
+                                            ? member.id === iv.id
+                                            : member.name === iv.name,
                                         ),
                                     }))
                                   : undefined
@@ -607,7 +649,7 @@ const DistributedPlanView: React.FC<DistributedPlanViewProps> = ({
                 </thead>
                 <tbody>
                   {displaySorted.map(({ item, scheduleIndex }) => {
-                    const candidateId = candidateIdByName.get(item.candidate);
+                    const candidateId = candidateIdFor(item);
                     const isConflict =
                       candidateId !== undefined && conflictSet.has(candidateId);
                     return (
@@ -621,7 +663,7 @@ const DistributedPlanView: React.FC<DistributedPlanViewProps> = ({
                             {isEditableDraft && (
                               <button
                                 type="button"
-                                className="self-start text-label font-bold uppercase tracking-label text-brand hover:text-brand-hover"
+                                className="self-start text-detail font-semibold text-brand hover:text-brand-hover"
                                 onClick={() => beginTimeEdit(scheduleIndex)}
                               >
                                 Endre tid
@@ -634,16 +676,20 @@ const DistributedPlanView: React.FC<DistributedPlanViewProps> = ({
                             <button
                               type="button"
                               onClick={() =>
-                                toggleCandidateConflict(item.candidate)
+                                toggleCandidateConflict(candidateId)
                               }
                               disabled={!candidateId || isSavingConflict}
+                              aria-pressed={isConflict}
+                              aria-label={`${
+                                isConflict ? "Fjern" : "Merk"
+                              } interessekonflikt for ${item.candidate}`}
                               title={
                                 isConflict
                                   ? "Fjern interessekonflikt"
                                   : "Merk som interessekonflikt"
                               }
                               className={cn(
-                                "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-semibold transition-[border-color,background,transform] duration-150 hover:-translate-y-px",
+                                "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-semibold transition-[border-color,background] duration-100",
                                 isConflict
                                   ? "border-brand-activeBorder bg-brand-tint text-brand"
                                   : "border-border bg-surface-base text-text-primary hover:border-brand-strongBorder hover:bg-brand-soft",
@@ -652,7 +698,10 @@ const DistributedPlanView: React.FC<DistributedPlanViewProps> = ({
                               )}
                             >
                               {isConflict && (
-                                <span className="h-1.5 w-1.5 rounded-full bg-brand" />
+                                <span
+                                  aria-hidden="true"
+                                  className="h-1.5 w-1.5 rounded-full bg-brand"
+                                />
                               )}
                               {item.candidate}
                             </button>
@@ -669,7 +718,7 @@ const DistributedPlanView: React.FC<DistributedPlanViewProps> = ({
                             </span>
                           ) : (
                             item.locked && (
-                              <span className="ml-2 rounded-full border border-border-soft bg-surface-base px-2 py-0.5 text-[10px] font-bold uppercase tracking-label text-text-subtle">
+                              <span className="ml-2 rounded-full border border-border-soft bg-surface-base px-2 py-0.5 text-tiny font-semibold text-text-muted">
                                 Låst
                               </span>
                             )
@@ -680,9 +729,7 @@ const DistributedPlanView: React.FC<DistributedPlanViewProps> = ({
                             {item.panel.map((p, i) => {
                               const hasCoi =
                                 isAdmin && candidateId
-                                  ? (biasedByInterviewer
-                                      .get(p.name)
-                                      ?.has(candidateId) ?? false)
+                                  ? (biasedFor(p)?.has(candidateId) ?? false)
                                   : false;
                               return (
                                 <EditablePanelChip
@@ -697,10 +744,11 @@ const DistributedPlanView: React.FC<DistributedPlanViewProps> = ({
                                           id: iv.id,
                                           name: iv.name,
                                           disabled:
-                                            iv.name !== p.name &&
-                                            item.panel.some(
-                                              (member) =>
-                                                member.name === iv.name,
+                                            iv.id !== p.id &&
+                                            item.panel.some((member) =>
+                                              member.id
+                                                ? member.id === iv.id
+                                                : member.name === iv.name,
                                             ),
                                         }))
                                       : undefined

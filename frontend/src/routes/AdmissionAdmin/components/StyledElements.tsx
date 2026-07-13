@@ -4,47 +4,30 @@ import { media } from "src/styles/mediaQueries";
 
 export const SectionCard = styled.section`
   width: 100%;
-  background: #ffffff;
-  border: 1px solid #e4e4e4;
-  border-radius: 10px;
+  background: var(--color-surface-base);
+  border: 1.5px solid var(--color-border-soft);
+  border-radius: var(--border-radius-lg);
   padding: 1.25rem 1.5rem;
+  box-shadow: var(--shadow-sm);
 
   ${media.handheld`
-    padding: 1rem;
+    padding: var(--spacing-md);
   `}
-`;
-
-export const SectionEyebrow = styled.span`
-  display: inline-block;
-  margin-bottom: 0.3rem;
-  font-size: 0.688rem;
-  font-weight: 700;
-  letter-spacing: 0.09em;
-  text-transform: uppercase;
-  color: #a0a0a0;
 `;
 
 export const SectionTitle = styled.h2`
   margin: 0;
-  font-size: 1.125rem;
-  font-weight: 700;
-  letter-spacing: -0.025em;
-  color: #111111;
+  font-size: var(--font-size-lg);
+  font-weight: 600;
+  color: var(--color-text-primary);
 `;
 
 export const SectionDescription = styled.p`
   margin: 0.35rem 0 0;
   max-width: 44rem;
-  color: #a0a0a0;
-  font-size: 0.813rem;
-  line-height: 1.6;
-`;
-
-export const GroupFilterGrid = styled.div`
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-  gap: 0.5rem;
-  margin-top: 0.875rem;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-sm);
+  line-height: 1.3;
 `;
 
 export const GroupFilterButton = styled.button<{ $selected: boolean }>`
@@ -52,22 +35,27 @@ export const GroupFilterButton = styled.button<{ $selected: boolean }>`
   align-items: center;
   justify-content: space-between;
   gap: 0.75rem;
+  min-width: 0;
   width: 100%;
   padding: 0.65rem 0.875rem;
-  border-radius: 8px;
-  border: 1px solid
-    ${(props) => (props.$selected ? "rgba(178, 18, 7, 0.25)" : "#e4e4e4")};
+  border-radius: var(--border-radius-md);
+  border: 1.5px solid
+    ${(props) =>
+      props.$selected ? "var(--color-brand)" : "var(--color-border-soft)"};
   background: ${(props) =>
-    props.$selected ? "rgba(178, 18, 7, 0.04)" : "#ffffff"};
-  color: #111111;
+    props.$selected ? "var(--color-brand-soft)" : "var(--color-surface-base)"};
+  color: var(--color-text-primary);
   cursor: pointer;
   transition:
-    border-color 0.12s ease,
-    background 0.12s ease;
+    border-color var(--easing-fast),
+    background var(--easing-fast);
 
   &:hover {
     border-color: ${(props) =>
-      props.$selected ? "rgba(178, 18, 7, 0.35)" : "#c8c8c8"};
+      props.$selected
+        ? "var(--color-brand-hover)"
+        : "var(--color-border-quiet)"};
+    background: var(--color-surface-subtle);
   }
 `;
 
@@ -86,7 +74,7 @@ export const GroupFilterLogo = styled.img`
 `;
 
 export const GroupFilterName = styled.span`
-  font-size: 0.875rem;
+  font-size: var(--font-size-sm);
   font-weight: 600;
   line-height: 1.25;
   text-align: left;
@@ -97,8 +85,8 @@ export const GroupFilterName = styled.span`
 
 export const GroupFilterCount = styled.span`
   flex-shrink: 0;
-  color: #a0a0a0;
-  font-size: 0.813rem;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-detail);
   font-weight: 600;
 `;
 
@@ -106,8 +94,10 @@ export const TableWrapper = styled.div`
   max-width: 100%;
   width: 100%;
   overflow: auto;
-  border-radius: 8px;
-  border: 1px solid #e4e4e4;
+  border-radius: var(--border-radius-lg);
+  border: 1.5px solid var(--color-border-soft);
+  background: var(--color-surface-base);
+  box-shadow: var(--shadow-sm);
 `;
 
 // eslint-disable-next-line
@@ -118,18 +108,19 @@ export const CSVExport = styled(CSVLink)`
   justify-content: center;
   height: 2.25rem;
   padding: 0 1rem;
-  border-radius: 8px;
-  background: var(--lego-red-color);
-  color: #fff;
-  font-size: 0.813rem;
+  border-radius: 2rem;
+  background: var(--color-red-6);
+  color: var(--color-absolute-white);
+  font-size: var(--font-size-sm);
   text-align: center;
-  font-weight: 700;
+  font-weight: 600;
   text-decoration: none;
-  transition: background 0.15s ease;
-  border: 1px solid var(--lego-red-color);
+  transition: background var(--easing-fast);
+  border: 1.5px solid var(--color-red-6);
 
   &:hover {
-    background: #9a1006;
-    border-color: #9a1006;
+    background: var(--color-red-7);
+    border-color: var(--color-red-7);
+    color: var(--color-absolute-white);
   }
 `;

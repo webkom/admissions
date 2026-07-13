@@ -21,7 +21,7 @@ export default UserInfo;
 /** Styles **/
 
 const Container = styled.div`
-  border-radius: 10px;
+  border-radius: var(--border-radius-md);
   cursor: default;
   display: flex;
   align-items: center;
@@ -29,8 +29,8 @@ const Container = styled.div`
   margin-right: 5rem;
 
   ${media.portrait`        
-    margin-right: 1rem;
-    margin-left: 2rem;
+    margin-right: var(--spacing-md);
+    margin-left: var(--spacing-xl);
   `}
 
   ${media.handheld`        
@@ -56,21 +56,21 @@ const NameLogOutWrapper = styled.div`
 
 const Name = styled.span`
   ${media.portrait`        
-    font-size: 0.8rem;
+    font-size: var(--font-size-detail);
     margin-bottom: 5px;
     line-height: 0.8rem;
   `}
 
   ${media.handheld`        
-    margin-right: 1rem;
+    margin-right: var(--spacing-md);
     margin-bottom: 0;
-    font-size: 0.8rem;
+    font-size: var(--font-size-detail);
   `}
 `;
 
 const LogoutButton = styled.a`
   background: var(--color-gray-3);
-  border-radius: 4px;
+  border-radius: var(--border-radius-sm);
   display: inline;
   font-size: var(--font-size-xs);
   line-height: 1rem;
@@ -87,11 +87,11 @@ const ProfilePicture = styled.img`
   width: 50px;
   height: 50px;
   border-radius: 50%;
-  margin-left: 1rem;
+  margin-left: var(--spacing-md);
 
   ${media.portrait`        
     width: 40px;
-    margin-left: 0.5rem;
+    margin-left: var(--spacing-sm);
   `}
 
   ${media.handheld`        

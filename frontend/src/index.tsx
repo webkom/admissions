@@ -1,14 +1,16 @@
 import "vite/modulepreload-polyfill";
-import React, { PropsWithChildren, useEffect } from "react";
-import { BrowserRouter as Router, useRoutes } from "react-router-dom";
+import React, { PropsWithChildren, Suspense } from "react";
+import {
+  BrowserRouter as Router,
+  useParams,
+  useRoutes,
+} from "react-router-dom";
 import { createRoot } from "react-dom/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { defaultQueryFn } from "./query/queries";
 
 import NotFoundPage from "src/routes/NotFoundPage";
-import LandingPage from "src/routes/LandingPage/";
 import ErrorBoundary from "src/containers/ErrorBoundary/";
-import ApplicationPortal from "src/routes/ApplicationPortal";
 import "@webkom/lego-bricks/dist/style.css";
 
 import ScrollToTop from "./scrollToTop";
@@ -16,17 +18,54 @@ import * as Sentry from "@sentry/browser";
 import "src/styles/globals.css";
 import "src/styles/linkSlide.css";
 import config from "src/utils/config";
-import djangoData, { isLoggedIn, isManager } from "src/utils/djangoData";
-import "@babel/polyfill";
-import ManageAdmissions from "src/routes/ManageAdmissions";
+import { isLoggedIn, isManager } from "src/utils/djangoData";
 import RequireAuth from "src/components/RequireAuth";
+
+const LandingPage = React.lazy(() => import("src/routes/LandingPage/"));
+const ApplicationPortal = React.lazy(
+  () => import("src/routes/ApplicationPortal"),
+);
+const ManageAdmissions = React.lazy(
+  () => import("src/routes/ManageAdmissions"),
+);
 
 Sentry.init({
   dsn: config.SENTRY_DSN,
   release: config.RELEASE,
   environment: config.ENVIRONMENT,
+  sendDefaultPii: false,
+  beforeBreadcrumb(breadcrumb) {
+    if (["console", "fetch", "xhr"].includes(breadcrumb.category ?? "")) {
+      return null;
+    }
+    return breadcrumb;
+  },
   beforeSend(event) {
-    return event;
+    const exceptionValues = event.exception?.values?.map((value) => ({
+      type: value.type,
+      value: value.type || "Client error",
+      stacktrace: value.stacktrace
+        ? {
+            frames: value.stacktrace.frames?.map((frame) => ({
+              filename: frame.filename,
+              function: frame.function,
+              module: frame.module,
+              lineno: frame.lineno,
+              colno: frame.colno,
+              in_app: frame.in_app,
+            })),
+          }
+        : undefined,
+    }));
+    return {
+      event_id: event.event_id,
+      timestamp: event.timestamp,
+      platform: event.platform,
+      level: event.level,
+      release: event.release,
+      environment: event.environment,
+      exception: exceptionValues ? { values: exceptionValues } : undefined,
+    };
   },
 });
 
@@ -48,12 +87,11 @@ if (!container) {
 }
 const root = createRoot(container);
 
-const App: React.FC<PropsWithChildren> = ({ children }) => {
-  useEffect(() => {
-    Sentry.setUser(djangoData.user);
-  }, [djangoData.user]);
+const App: React.FC<PropsWithChildren> = ({ children }) => <>{children}</>;
 
-  return <main>{children}</main>;
+const ScopedApplicationPortal = () => {
+  const { admissionSlug } = useParams();
+  return <ApplicationPortal key={admissionSlug} />;
 };
 
 const AppRoutes = () =>
@@ -71,7 +109,7 @@ const AppRoutes = () =>
       path: ":admissionSlug/*",
       element: (
         <RequireAuth auth={isLoggedIn()}>
-          <ApplicationPortal />
+          <ScopedApplicationPortal />
         </RequireAuth>
       ),
     },
@@ -79,13 +117,15 @@ const AppRoutes = () =>
   ]);
 
 root.render(
-  <ErrorBoundary openReportDialog>
+  <ErrorBoundary>
     <React.StrictMode>
       <QueryClientProvider client={queryClient}>
         <Router>
           <ScrollToTop>
             <App>
-              <AppRoutes />
+              <Suspense fallback={<p>Laster…</p>}>
+                <AppRoutes />
+              </Suspense>
             </App>
           </ScrollToTop>
         </Router>

@@ -9,7 +9,7 @@ import {
   StyledField,
   StyledTextAreaField,
 } from "src/components/styledFields";
-import Icon from "../Icon";
+import { Info } from "lucide-react";
 import {
   FieldModel,
   InputFieldModel,
@@ -17,7 +17,6 @@ import {
   TextModel,
 } from "src/utils/jsonFields";
 
-// Pull the (possibly nested, e.g. "headerFields.q1") error out of Formik state.
 const nestedError = (
   touched: FormikValues["touched"],
   errors: FormikValues["errors"],
@@ -30,7 +29,6 @@ const nestedError = (
   return touched?.[name] && errors?.[name];
 };
 
-// Shared renderer for the text / textarea / number header-field inputs.
 const JsonInputField: React.FC<FormikValues> = ({
   field,
   form: { touched, errors },
@@ -87,7 +85,7 @@ const JsonFieldEditor: React.FC<Props> = ({
 }) => {
   const TextField = ({ field }: { field: TextModel }) => (
     <HelpText>
-      <Icon name="information-circle-outline" />
+      <Info aria-hidden="true" />
       {field.text}
     </HelpText>
   );
@@ -159,14 +157,12 @@ const JsonFieldEditor: React.FC<Props> = ({
 
 export default JsonFieldEditor;
 
-/** Styles **/
-
 const Wrapper = styled.div`
-  margin-top: 1.5rem;
+  margin-top: var(--spacing-lg);
 `;
 
 const HelpLabel = styled.p`
   margin: 0 0 0.25rem;
   color: var(--color-text-muted);
-  font-size: 0.85rem;
+  font-size: var(--font-size-detail);
 `;

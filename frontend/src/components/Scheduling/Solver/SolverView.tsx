@@ -47,13 +47,16 @@ import {
 import ConfirmDialog from "../ConfirmDialog";
 import { useSaveSchedule, useSavedSchedule } from "../../../query/hooks";
 import cn from "src/utils/cn";
+import { escapeCsvCell } from "src/utils/methods";
 import {
+  CONFLICT_MESSAGE,
   DEFAULT_SOLVER_OPTIONS,
   PANEL_SIZE_MAX,
   PANEL_SIZE_MIN,
   PRIORITY_PRESETS,
   estimateSolverSeconds,
   hasSchedule,
+  isConflictError,
   progressMessageFor,
   unplaceableSuggestion,
 } from "./solverHelpers";
@@ -77,6 +80,7 @@ interface Props {
   dayEndMinute: number;
   chunkSize: number;
   chunkBreakMinutes: number;
+  syntheticInput?: boolean;
   onNotify?: (message: string, tone?: "success" | "error") => void;
 }
 
@@ -117,6 +121,7 @@ export default function SolverView({
   dayEndMinute,
   chunkSize,
   chunkBreakMinutes,
+  syntheticInput = false,
   onNotify,
 }: Props) {
   const [panelSize, setPanelSize] = useState(3);
@@ -135,6 +140,7 @@ export default function SolverView({
     elapsedMs,
     solve,
     cancel,
+    reset,
   } = useSolveJob(admissionSlug);
 
   const [viewType, setViewType] = useState<"list" | "calendar" | "person">(
@@ -156,11 +162,92 @@ export default function SolverView({
   const [publishVisibility, setPublishVisibility] =
     useState<NameVisibility>("hidden");
 
-  const { data: savedSchedule } = useSavedSchedule(admissionSlug);
+  const { data: savedSchedule, error: savedScheduleError } =
+    useSavedSchedule(admissionSlug);
   const saveSchedule = useSaveSchedule(admissionSlug);
+  const syncedRevisionRef = useRef<string | null>(null);
+  const candidateSignature = useMemo(
+    () =>
+      candidates
+        .map(({ id }) => id)
+        .sort()
+        .join("|"),
+    [candidates],
+  );
 
-  // Seed panel size and solver options from the saved schedule exactly once,
-  // so a returning admin picks up the published config without fighting edits.
+  useEffect(() => {
+    if ([401, 403].includes(savedScheduleError?.response?.status ?? 0)) {
+      reset();
+      return;
+    }
+    if (!savedSchedule) return;
+
+    const candidateIds = new Set(candidates.map(({ id }) => id));
+    const candidateNameCounts = candidates.reduce((counts, candidate) => {
+      counts.set(candidate.name, (counts.get(candidate.name) ?? 0) + 1);
+      return counts;
+    }, new Map<string, number>());
+    const uniqueCandidateNames = new Set(
+      candidates
+        .filter((candidate) => candidateNameCounts.get(candidate.name) === 1)
+        .map(({ name }) => name),
+    );
+    const isCurrentCandidate = (item: ScheduleItem) =>
+      item.candidate_id
+        ? candidateIds.has(item.candidate_id)
+        : uniqueCandidateNames.has(item.candidate);
+    const savedIsCurrent =
+      savedSchedule.schedule.length > 0 &&
+      savedSchedule.schedule.every(isCurrentCandidate);
+    const resultIsCurrent = (result?.schedule ?? []).every(isCurrentCandidate);
+    const firstSync = syncedRevisionRef.current === null;
+    const revisionChanged =
+      !firstSync && syncedRevisionRef.current !== savedSchedule.updated_at;
+
+    if (firstSync) {
+      syncedRevisionRef.current = savedSchedule.updated_at;
+      if (result && !resultIsCurrent) reset();
+      if (!result && savedIsCurrent) {
+        setResult({
+          status: "SUCCESS",
+          schedule: savedSchedule.schedule,
+          optimal: true,
+          unplaceable: [],
+          locked_conflicts: [],
+        });
+        setPlanRevealed(true);
+      }
+      return;
+    }
+
+    if (revisionChanged) {
+      syncedRevisionRef.current = savedSchedule.updated_at;
+      reset();
+      if (savedIsCurrent) {
+        setResult({
+          status: "SUCCESS",
+          schedule: savedSchedule.schedule,
+          optimal: true,
+          unplaceable: [],
+          locked_conflicts: [],
+        });
+        setPlanRevealed(true);
+      }
+      return;
+    }
+
+    if (result && !resultIsCurrent) reset();
+  }, [
+    candidateSignature,
+    candidates,
+    reset,
+    result,
+    savedSchedule,
+    savedScheduleError,
+    setPlanRevealed,
+    setResult,
+  ]);
+
   const seededFromSavedRef = useRef(false);
   useEffect(() => {
     if (!savedSchedule || seededFromSavedRef.current) return;
@@ -206,16 +293,26 @@ export default function SolverView({
   );
 
   const interviewerDistribution = useMemo(() => {
-    const counts = new Map(
+    const counts = new Map<
+      string,
+      { id: string; name: string; count: number; overtimeCount: number }
+    >(
       interviewers.map((interviewer) => [
-        interviewer.name,
-        { name: interviewer.name, count: 0, overtimeCount: 0 },
+        interviewer.id,
+        {
+          id: interviewer.id,
+          name: interviewer.name,
+          count: 0,
+          overtimeCount: 0,
+        },
       ]),
     );
 
     sortedSchedule.forEach((item) => {
       item.panel.forEach((member) => {
-        const existing = counts.get(member.name) ?? {
+        const key = member.id ?? `legacy:${member.name}`;
+        const existing = counts.get(key) ?? {
+          id: key,
           name: member.name,
           count: 0,
           overtimeCount: 0,
@@ -226,7 +323,7 @@ export default function SolverView({
           existing.overtimeCount += 1;
         }
 
-        counts.set(member.name, existing);
+        counts.set(key, existing);
       });
     });
 
@@ -248,25 +345,33 @@ export default function SolverView({
   const candidateAlias = useMemo(() => {
     const map = new Map<string, string>();
     sortedSchedule.forEach((item) => {
-      if (!map.has(item.candidate)) {
-        map.set(item.candidate, `Kandidat ${map.size + 1}`);
+      const key = item.candidate_id ?? `legacy:${item.candidate}`;
+      if (!map.has(key)) {
+        map.set(key, `Kandidat ${map.size + 1}`);
       }
     });
     (result?.unplaceable ?? []).forEach((entry) => {
-      if (!map.has(entry.candidate)) {
-        map.set(entry.candidate, `Kandidat ${map.size + 1}`);
+      const key = entry.candidate_id ?? `legacy:${entry.candidate}`;
+      if (!map.has(key)) {
+        map.set(key, `Kandidat ${map.size + 1}`);
       }
     });
     return map;
   }, [sortedSchedule, result]);
 
-  const displayCandidate = (name: string) => candidateAlias.get(name) ?? name;
+  const displayCandidate = (candidate: {
+    candidate_id?: string;
+    candidate: string;
+  }) =>
+    candidateAlias.get(
+      candidate.candidate_id ?? `legacy:${candidate.candidate}`,
+    ) ?? candidate.candidate;
 
   const displaySchedule = useMemo(
     () =>
       sortedSchedule.map((item) => ({
         ...item,
-        candidate: displayCandidate(item.candidate),
+        candidate: displayCandidate(item),
       })),
     [sortedSchedule, candidateAlias],
   );
@@ -274,8 +379,6 @@ export default function SolverView({
   const unplaceableCandidates =
     result?.status === "PARTIAL" ? (result.unplaceable ?? []) : [];
 
-  // Deduped, actionable next steps derived from why candidates couldn't be
-  // placed, so the admin sees what to change rather than just a generic note.
   const unplaceableSuggestions = useMemo(() => {
     const seen = new Set<string>();
     const suggestions: string[] = [];
@@ -334,7 +437,6 @@ export default function SolverView({
 
     const flags: string[] = [];
     if (solverOptions.enforce_same_gender) flags.push("Samme kjønn");
-    // Same-panel is the default, so only surface the non-default split case.
     if (!solverOptions.same_panel_per_block) flags.push("Delt panel");
     if (solverOptions.allow_overtime) flags.push("Tillat overtid");
     if (solverOptions.prioritize_continuity) flags.push("Sammenhengende");
@@ -424,10 +526,12 @@ export default function SolverView({
         ? interviewers.find((interviewer) => interviewer.id === newId)
         : undefined) ?? interviewerByName.get(newName);
     updateScheduleItem(scheduleIndex, (item) => {
-      const isDuplicate = item.panel.some(
-        (member, index) =>
-          index !== panelMemberIndex && member.name === newName,
-      );
+      const replacementId = replacement?.id ?? newId;
+      const isDuplicate = item.panel.some((member, index) => {
+        if (index === panelMemberIndex) return false;
+        if (replacementId && member.id) return member.id === replacementId;
+        return member.name === newName;
+      });
       if (isDuplicate) return item;
       return {
         ...item,
@@ -449,8 +553,10 @@ export default function SolverView({
   };
 
   const handleSolve = async () => {
-    if (candidates.length === 0 || interviewers.length === 0) {
-      setError("Legg til minst én kandidat og én intervjuer.");
+    if (!readiness.ready) {
+      setError(
+        "Tidsoppsettet må ha nok intervjuere og åpne luker for hele panelet.",
+      );
       return;
     }
 
@@ -458,8 +564,6 @@ export default function SolverView({
     setPlanRevealed(Boolean(lockedAssignments.length));
     setIsDraftDirty(false);
 
-    // Group slots into their interview blocks (encoded the same way as
-    // availability) so the solver can keep one panel per block.
     const blocks = buildSolveBlocks({
       dates,
       dayStartMinute,
@@ -469,26 +573,54 @@ export default function SolverView({
       chunkBreakMinutes,
     });
 
-    await solve({
-      admission_slug: admissionSlug,
-      candidates,
-      interviewers,
-      panel_size: panelSize,
-      all_slots: slotsToSolverAvailability(
-        enabledSlots,
-        dates,
-        sessionDuration,
-      ),
-      blocks,
-      options: solverOptions,
-      ...(lockedAssignments.length > 0
-        ? { locked_assignments: lockedAssignments }
-        : {}),
-    });
+    const lockedIds = lockedAssignments.map((assignment) => ({
+      candidate_id: assignment.candidate_id,
+      time: assignment.time,
+      panel: assignment.panel.map((member) => ({ id: member.id })),
+    }));
+    await solve(
+      syntheticInput
+        ? {
+            admission_slug: admissionSlug,
+            candidates,
+            interviewers,
+            panel_size: panelSize,
+            all_slots: slotsToSolverAvailability(
+              enabledSlots,
+              dates,
+              sessionDuration,
+            ),
+            blocks,
+            options: solverOptions,
+            synthetic: true,
+            ...(lockedAssignments.length > 0
+              ? { locked_assignments: lockedAssignments }
+              : {}),
+          }
+        : {
+            admission_slug: admissionSlug,
+            candidates: candidates.map(({ id }) => ({ id })),
+            interviewers: interviewers.map(({ id }) => ({ id })),
+            panel_size: panelSize,
+            options: solverOptions,
+            ...(lockedIds.length > 0 ? { locked_assignments: lockedIds } : {}),
+          },
+    );
+  };
+
+  const getScheduleForExport = () => {
+    const source = result?.schedule ?? savedSchedule?.schedule ?? [];
+    const includeNames =
+      !result && savedSchedule?.name_visibility === "committee";
+    return source.map((item, index) => ({
+      ...item,
+      candidate: includeNames ? item.candidate : `Kandidat ${index + 1}`,
+      candidate_id: undefined,
+    }));
   };
 
   const handleExportIcs = (target: "apple" | "google") => {
-    const schedule = result?.schedule ?? savedSchedule?.schedule ?? [];
+    const schedule = getScheduleForExport();
     if (schedule.length === 0) return;
 
     const icsContent = generateIcs(
@@ -518,7 +650,7 @@ export default function SolverView({
   };
 
   const handleExportCsv = () => {
-    const schedule = result?.schedule ?? savedSchedule?.schedule ?? [];
+    const schedule = getScheduleForExport();
     if (schedule.length === 0) return;
 
     const rows: string[][] = [["Tidspunkt", "Kandidat", "Panel"]];
@@ -530,9 +662,7 @@ export default function SolverView({
       ]);
     });
     const csv = rows
-      .map((row) =>
-        row.map((cell) => `"${cell.replace(/"/g, '""')}"`).join(","),
-      )
+      .map((row) => row.map((cell) => `"${escapeCsvCell(cell)}"`).join(","))
       .join("\n");
     const blob = new Blob(["\ufeff" + csv], { type: "text/csv;charset=utf-8" });
     const url = URL.createObjectURL(blob);
@@ -546,6 +676,13 @@ export default function SolverView({
   const handlePublish = async (nameVisibility: NameVisibility) => {
     const schedule = result?.schedule;
     if (!schedule || schedule.length === 0) return;
+    if (unplaceableCandidates.length > 0) {
+      const message =
+        "Planen kan ikke publiseres før alle kandidater har fått et intervju.";
+      setSaveError(message);
+      onNotify?.(message, "error");
+      return;
+    }
     setIsSaving(true);
     setSavingMode("distribute");
     setSaveError("");
@@ -565,14 +702,25 @@ export default function SolverView({
         solver_options: solverOptions,
         is_distributed: true,
         name_visibility: nameVisibility,
+        // Pin the revision we loaded so concurrent publishes surface as a
+        // 409 conflict instead of silently clobbering each other.
+        ...(savedSchedule
+          ? { expected_updated_at: savedSchedule.updated_at }
+          : {}),
       });
       setDistributeTick((tick) => tick + 1);
       setIsPublishDialogOpen(false);
       setIsDraftDirty(false);
       onNotify?.("Intervjuplanen er publisert for komiteen.");
-    } catch {
-      setSaveError("Kunne ikke lagre planen. Prøv igjen.");
-      onNotify?.("Kunne ikke lagre intervjuplanen.", "error");
+    } catch (err) {
+      if (isConflictError(err)) {
+        setSaveError(CONFLICT_MESSAGE);
+        onNotify?.(CONFLICT_MESSAGE, "error");
+        setIsPublishDialogOpen(false);
+      } else {
+        setSaveError("Kunne ikke lagre planen. Prøv igjen.");
+        onNotify?.("Kunne ikke lagre intervjuplanen.", "error");
+      }
     } finally {
       setIsSaving(false);
       setSavingMode(null);
@@ -587,11 +735,15 @@ export default function SolverView({
     try {
       await saveSchedule.mutateAsync({
         is_distributed: false,
+        expected_updated_at: savedSchedule.updated_at,
       });
       onNotify?.("Intervjuplan låst opp.");
-    } catch {
-      setSaveError("Kunne ikke låse opp planen.");
-      onNotify?.("Kunne ikke låse opp intervjuplanen.", "error");
+    } catch (err) {
+      const message = isConflictError(err)
+        ? CONFLICT_MESSAGE
+        : "Kunne ikke låse opp planen.";
+      setSaveError(message);
+      onNotify?.(message, "error");
     } finally {
       setIsSaving(false);
       setSavingMode(null);
@@ -631,21 +783,41 @@ export default function SolverView({
   };
 
   const readiness = useMemo(() => {
-    const submittedInterviewers = interviewers.filter(
-      (interviewer) => interviewer.availability.length > 0,
-    ).length;
+    let submittedInterviewers = 0;
+    let totalCapacity = 0;
+    let conflictCount = 0;
+    const coverageByTime = new Map<number, number>();
+    for (const interviewer of interviewers) {
+      if (interviewer.availability.length > 0) submittedInterviewers += 1;
+      totalCapacity += interviewer.availability.length;
+      conflictCount += interviewer.biased.length;
+      for (const time of new Set(interviewer.availability)) {
+        coverageByTime.set(time, (coverageByTime.get(time) ?? 0) + 1);
+      }
+    }
     const enabledSlotCount = enabledSlots.size;
-    const totalCapacity = enabledSlotCount * panelSize;
-    const neededCapacity = candidates.length * panelSize;
-    const conflictCount = interviewers.reduce(
-      (sum, interviewer) => sum + interviewer.biased.length,
-      0,
+    const enabledTimes = slotsToSolverAvailability(
+      enabledSlots,
+      dates,
+      sessionDuration,
     );
+    const slotsWithFullPanel = enabledTimes.filter(
+      (time) => (coverageByTime.get(time) ?? 0) >= panelSize,
+    ).length;
+    const usableSlotCount = solverOptions.allow_overtime
+      ? enabledTimes.length
+      : slotsWithFullPanel;
+    const neededCapacity = candidates.length * panelSize;
+    const availabilityReady = solverOptions.allow_overtime
+      ? true
+      : submittedInterviewers >= panelSize &&
+        slotsWithFullPanel >= candidates.length &&
+        totalCapacity >= neededCapacity;
     const ready =
       candidates.length > 0 &&
-      submittedInterviewers > 0 &&
-      enabledSlotCount >= candidates.length &&
-      totalCapacity >= neededCapacity;
+      interviewers.length >= panelSize &&
+      usableSlotCount >= candidates.length &&
+      availabilityReady;
 
     return {
       ready,
@@ -654,8 +826,18 @@ export default function SolverView({
       totalCapacity,
       neededCapacity,
       conflictCount,
+      slotsWithFullPanel,
+      usableSlotCount,
     };
-  }, [candidates.length, enabledSlots.size, interviewers, panelSize]);
+  }, [
+    candidates.length,
+    dates,
+    enabledSlots,
+    interviewers,
+    panelSize,
+    sessionDuration,
+    solverOptions.allow_overtime,
+  ]);
 
   const estimatedSeconds = useMemo(
     () =>
@@ -697,12 +879,16 @@ export default function SolverView({
               <ReadinessChip
                 label="intervjuere med tider"
                 value={`${readiness.submittedInterviewers}/${interviewers.length}`}
-                ok={readiness.submittedInterviewers > 0}
+                ok={
+                  solverOptions.allow_overtime
+                    ? interviewers.length >= panelSize
+                    : readiness.submittedInterviewers >= panelSize
+                }
               />
               <ReadinessChip
-                label="åpne tidsluker"
-                value={readiness.enabledSlotCount}
-                ok={readiness.enabledSlotCount >= candidates.length}
+                label="brukbare tidsluker"
+                value={readiness.usableSlotCount}
+                ok={readiness.usableSlotCount >= candidates.length}
               />
               <ReadinessChip
                 label="Inhabiliteter registrert"
@@ -730,7 +916,7 @@ export default function SolverView({
                   {settingsSummary}
                 </p>
               </div>
-              <span className="flex flex-none items-center gap-1.5 text-detail font-semibold uppercase tracking-label text-text-subtle transition-colors group-hover:text-text-primary">
+              <span className="flex flex-none items-center gap-1.5 text-detail font-semibold text-text-muted transition-colors group-hover:text-text-primary">
                 {setupExpanded ? "Skjul" : "Tilpass"}
                 <ChevronDown
                   size={16}
@@ -743,7 +929,7 @@ export default function SolverView({
             </button>
 
             {setupExpanded && (
-              <div className="mt-5 flex flex-col gap-5 animate-[fade-in_0.2s_ease-out]">
+              <div className="mt-5 flex flex-col gap-5 animate-fade-in">
                 <div>
                   <span className={sectionLabelClass}>Regler</span>
                   <div className="grid grid-cols-[repeat(auto-fit,minmax(220px,1fr))] gap-2">
@@ -787,11 +973,11 @@ export default function SolverView({
 
                 <div>
                   <div className="mb-2 flex items-end justify-between gap-3">
-                    <span className="block text-label font-bold uppercase tracking-label text-text-subtle">
+                    <span className="block text-detail font-medium text-text-muted">
                       Prioritering
                     </span>
                     {selectedPriorityPreset === "custom" && (
-                      <span className="text-label font-bold uppercase tracking-label text-text-subtle">
+                      <span className="text-detail font-medium text-text-muted">
                         Tilpasset
                       </span>
                     )}
@@ -816,7 +1002,7 @@ export default function SolverView({
                             )
                           }
                           className={cn(
-                            "group relative flex cursor-pointer flex-col gap-2 rounded-[10px] border px-4 py-3 text-left transition-[border-color,box-shadow,transform] duration-150 hover:-translate-y-px hover:border-brand-strongBorder focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-focus",
+                            "group relative flex cursor-pointer flex-col gap-2 rounded-lg border px-4 py-3 text-left transition-[border-color,background] duration-100 hover:border-border-quiet hover:bg-surface-subtle focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-focus",
                             active
                               ? "border-brand-activeBorder bg-brand-panel shadow-toggle"
                               : "border-border-soft bg-surface-base",
@@ -825,7 +1011,7 @@ export default function SolverView({
                           <div className="flex items-center justify-between gap-2">
                             <span
                               className={cn(
-                                "inline-flex h-6 min-w-[1.75rem] items-center justify-center rounded-full px-1.5 text-[0.68rem] font-bold tracking-badge tabular-nums",
+                                "inline-flex h-6 min-w-7 items-center justify-center rounded-full px-1.5 text-label font-bold tracking-badge tabular-nums",
                                 active
                                   ? "bg-brand-fill text-brand"
                                   : "bg-surface-subtle text-text-muted",
@@ -871,8 +1057,8 @@ export default function SolverView({
               )}
               {result?.status === "ERROR" && (
                 <div className="rounded-lg border border-brand-border bg-brand-muted px-4 py-3 text-ui font-semibold text-brand">
-                  Solveren feilet på grunn av ugyldige innstillinger — juster
-                  vektene og prøv igjen.
+                  {result.error ??
+                    "Solveren feilet på grunn av ugyldige innstillinger — juster vektene og prøv igjen."}
                 </div>
               )}
               {result?.status === "INFEASIBLE" && (
@@ -880,7 +1066,7 @@ export default function SolverView({
                   <h4 className="m-0 mb-2 text-sm font-bold text-text-primary">
                     Ingen løsning finnes
                   </h4>
-                  <p className="m-0 mx-auto max-w-[32rem] text-ui leading-relaxed text-text-subtle">
+                  <p className="m-0 mx-auto max-w-lg text-ui leading-relaxed text-text-subtle">
                     Begrensningene er for stramme. Prøv lavere panelstørrelse
                     eller åpne flere slots.
                   </p>
@@ -891,7 +1077,7 @@ export default function SolverView({
                   <h4 className="m-0 mb-2 text-sm font-bold text-text-primary">
                     Solveren rakk ikke å bli ferdig
                   </h4>
-                  <p className="m-0 mx-auto max-w-[36rem] text-ui leading-relaxed text-text-subtle">
+                  <p className="m-0 mx-auto max-w-xl text-ui leading-relaxed text-text-subtle">
                     Tidsgrensen ble nådd uten at en plan ble funnet — det betyr
                     ikke at problemet er umulig. Prøv å kjøre på nytt, eller
                     forenkle ved å redusere panelstørrelse eller åpne flere
@@ -929,7 +1115,7 @@ export default function SolverView({
               className="h-1.5 w-full overflow-hidden rounded-full bg-surface-muted"
             >
               <div
-                className="h-full rounded-full bg-brand bg-[linear-gradient(45deg,rgba(255,255,255,0.28)_25%,transparent_25%,transparent_50%,rgba(255,255,255,0.28)_50%,rgba(255,255,255,0.28)_75%,transparent_75%,transparent)] bg-[length:18px_18px] animate-[barber-pole_1.1s_linear_infinite] transition-[width] duration-500 ease-out"
+                className="h-full rounded-full bg-brand transition-[width] duration-500 ease-out"
                 style={{
                   width: `${Math.min(
                     95,
@@ -982,7 +1168,7 @@ export default function SolverView({
               type="button"
               className={cn(actionButtonBase, actionButtonPrimary)}
               onClick={handleSolve}
-              disabled={loading}
+              disabled={loading || !readiness.ready}
               title={
                 lockedCount > 0
                   ? "Genererer planen på nytt og beholder de manuelt låste radene."
@@ -1004,17 +1190,17 @@ export default function SolverView({
       </SchedulePanel>
 
       {unplaceableCandidates.length > 0 && (
-        <div className="rounded-panel border border-brand-border bg-brand-muted px-5 py-4 animate-[fade-in_0.25s_ease-out]">
+        <div className="rounded-panel border border-brand-border bg-brand-muted px-5 py-4 animate-fade-in">
           <h4 className="m-0 mb-1 text-sm font-bold text-brand">
             {unplaceableCandidates.length} kandidat
             {unplaceableCandidates.length === 1 ? "" : "er"} fikk ikke plass
           </h4>
-          <p className="m-0 mb-3 max-w-[44rem] text-ui leading-relaxed text-text-muted">
+          <p className="m-0 mb-3 max-w-prose text-ui leading-relaxed text-text-muted">
             Resten av planen er fylt, men disse fikk ingen gyldig tid med
             tilgjengelige intervjuere.
           </p>
           {unplaceableSuggestions.length > 0 && (
-            <ul className="m-0 mb-3 flex max-w-[44rem] list-disc flex-col gap-1 pl-5 text-ui leading-relaxed text-text-muted">
+            <ul className="m-0 mb-3 flex max-w-prose list-disc flex-col gap-1 pl-5 text-ui leading-relaxed text-text-muted">
               {unplaceableSuggestions.map((tip) => (
                 <li key={tip}>{tip}</li>
               ))}
@@ -1026,7 +1212,7 @@ export default function SolverView({
                 key={entry.candidate_id}
                 className="flex flex-wrap items-center gap-x-2 gap-y-1"
               >
-                <Chip tone="brand">{displayCandidate(entry.candidate)}</Chip>
+                <Chip tone="brand">{displayCandidate(entry)}</Chip>
                 {entry.reason && (
                   <span className="text-detail text-text-muted">
                     {entry.reason}
@@ -1039,7 +1225,7 @@ export default function SolverView({
       )}
 
       {hasSchedule(result?.status) && overviewStats && (
-        <SchedulePanel className="animate-[fade-in_0.25s_ease-out]">
+        <SchedulePanel className="animate-fade-in">
           <SchedulePanelHeader
             title="Oversikt over plan"
             description="Gjennomgå effekten før du publiserer planen."
@@ -1104,12 +1290,12 @@ export default function SolverView({
       )}
 
       {hasSchedule(result?.status) && planRevealed && (
-        <SchedulePanel className="animate-[fade-in_0.25s_ease-out]">
+        <SchedulePanel className="animate-fade-in">
           <SchedulePanelHeader
             title="Generert intervjuplan"
             description={
               savedSchedule && !savedSchedule.is_distributed
-                ? "Synlig kun for admins her, og forsvinner ikke når du lukker fanen. Publiser når du er klar."
+                ? "Synlig kun for admins her. Kladden lagres bare i denne fanen, så publiser når du er klar."
                 : "Gjennomgå planen før du publiserer den for komiteen."
             }
             chips={
@@ -1129,6 +1315,7 @@ export default function SolverView({
                   <Download size={15} aria-hidden="true" />
                 </button>
                 <SegmentedControl
+                  aria-label="Visning av generert intervjuplan"
                   value={viewType}
                   onChange={setViewType}
                   items={[
@@ -1163,17 +1350,17 @@ export default function SolverView({
                 formatSlotTime={formatSlotTime}
               />
             ) : viewType === "list" ? (
-              <div className="overflow-hidden rounded-lg border border-border-soft">
-                <table className="w-full border-collapse">
+              <div className="overflow-x-auto rounded-lg border border-border-soft">
+                <table className="w-full min-w-[36rem] border-collapse">
                   <thead>
                     <tr>
-                      <th className="border-b border-border-soft bg-surface-subtle px-4 py-3 text-left text-label font-bold uppercase tracking-label text-text-subtle">
+                      <th className="bg-surface-subtle px-4 py-3 text-left text-ui font-semibold text-text-muted">
                         Tidspunkt
                       </th>
-                      <th className="border-b border-border-soft bg-surface-subtle px-4 py-3 text-left text-label font-bold uppercase tracking-label text-text-subtle">
+                      <th className="bg-surface-subtle px-4 py-3 text-left text-ui font-semibold text-text-muted">
                         Kandidat
                       </th>
-                      <th className="border-b border-border-soft bg-surface-subtle px-4 py-3 text-left text-label font-bold uppercase tracking-label text-text-subtle">
+                      <th className="bg-surface-subtle px-4 py-3 text-left text-ui font-semibold text-text-muted">
                         Intervjupanel
                       </th>
                     </tr>
@@ -1199,8 +1386,7 @@ export default function SolverView({
                           <td
                             className={cn(
                               "w-[140px] whitespace-nowrap px-4 py-3 text-sm font-semibold text-text-muted",
-                              item.locked &&
-                                "shadow-[inset_2px_0_0_var(--color-brand)]",
+                              item.locked && "border-l-2 border-l-brand",
                             )}
                           >
                             {canEditDraft ? (
@@ -1222,10 +1408,10 @@ export default function SolverView({
                             )}
                           </td>
                           <td className="px-4 py-3 text-sm font-semibold text-text-primary">
-                            {displayCandidate(item.candidate)}
+                            {displayCandidate(item)}
                           </td>
                           <td className="px-4 py-3 text-sm">
-                            <div className="flex flex-wrap gap-[0.35rem]">
+                            <div className="flex flex-wrap gap-1.5">
                               {item.panel.map((p, i) => (
                                 <EditablePanelChip
                                   key={i}
@@ -1309,7 +1495,7 @@ export default function SolverView({
                       className={cn(actionButtonBase, actionButtonDanger)}
                       onClick={() => setIsUnlockDialogOpen(true)}
                       disabled={isSaving}
-                      title="Åpner planen for redigering. Komiteen ser fortsatt den gamle planen til du publiserer på nytt."
+                      title="Åpner planen for redigering og skjuler den for komiteen til den publiseres på nytt."
                     >
                       <Unlock size={14} />
                       Lås opp for å redigere
@@ -1368,11 +1554,12 @@ export default function SolverView({
           <div className="mt-3">
             <span className={sectionLabelClass}>Kandidatnavn</span>
             <SegmentedControl<NameVisibility>
+              aria-label="Synlighet for kandidatnavn"
               value={publishVisibility}
               onChange={setPublishVisibility}
               items={[
                 { key: "hidden", label: "Skjult" },
-                { key: "admin_only", label: "Admin" },
+                { key: "admin_only", label: "Opptaksansvarlige" },
                 { key: "committee", label: "Hele komiteen" },
               ]}
             />
@@ -1391,8 +1578,8 @@ export default function SolverView({
           busy={isSaving}
         >
           <p className="m-0">
-            Planen åpnes for redigering. Komiteen ser fortsatt den gjeldende
-            planen til du publiserer på nytt.
+            Planen åpnes for redigering og skjules for komiteen til du
+            publiserer på nytt.
           </p>
         </ConfirmDialog>
       )}

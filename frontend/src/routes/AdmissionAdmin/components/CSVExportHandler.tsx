@@ -5,7 +5,6 @@ import {
   CSVExport,
   SectionCard,
   SectionDescription,
-  SectionEyebrow,
   SectionTitle,
 } from "./StyledElements";
 import { CustomSelect } from "src/components/ui";
@@ -38,11 +37,10 @@ const CSVExportHandler: React.FC<Props> = ({
   return (
     <Wrapper>
       <div>
-        <SectionEyebrow>Eksport</SectionEyebrow>
-        <SectionTitle>applications.csv</SectionTitle>
+        <SectionTitle>Eksporter søknader</SectionTitle>
         {typeof rowCount === "number" && (
           <SectionDescription>
-            {rowCount} rader i forhåndsvisningen
+            {rowCount} rader er klare for nedlasting.
           </SectionDescription>
         )}
       </div>
@@ -69,7 +67,7 @@ const CSVExportHandler: React.FC<Props> = ({
           separator={csvFormat.separator}
           enclosingCharacter={csvFormat.enclosingCharacter}
         >
-          Eksporter som CSV
+          Last ned CSV
         </CSVExport>
       </ControlRow>
     </Wrapper>
@@ -82,10 +80,9 @@ const Wrapper = styled(SectionCard)`
   display: flex;
   align-items: flex-end;
   justify-content: space-between;
-  gap: 1rem;
+  gap: var(--spacing-md);
   flex-wrap: wrap;
-  padding: 0.85rem 1rem;
-  border-radius: 8px;
+  padding: var(--spacing-md);
 `;
 
 const FormatSelector = styled.div`
@@ -95,11 +92,9 @@ const FormatSelector = styled.div`
   min-width: 220px;
 
   label {
-    color: #6b7280;
-    font-size: 0.82rem;
-    font-weight: 700;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
+    color: var(--color-text-muted);
+    font-size: var(--font-size-sm);
+    font-weight: 600;
   }
 `;
 

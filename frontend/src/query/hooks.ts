@@ -1,4 +1,9 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  useMutation,
+  useQuery,
+  useQueryClient,
+  type UseQueryResult,
+} from "@tanstack/react-query";
 import { AxiosError } from "axios";
 import {
   Admission,
@@ -14,7 +19,22 @@ type SaveSchedulePayload = Partial<Omit<SavedSchedule, "id" | "updated_at">> & {
   expected_updated_at?: string;
 };
 
-// Public hooks
+const sensitiveQueryOptions = {
+  retry: false,
+  refetchInterval: 5000,
+  refetchIntervalInBackground: false,
+  refetchOnMount: "always",
+  refetchOnWindowFocus: "always",
+  staleTime: 0,
+  gcTime: 0,
+} as const;
+
+const hideDataAfterAccessDenied = <T>(
+  query: UseQueryResult<T, AxiosError>,
+): UseQueryResult<T, AxiosError> => {
+  if (![401, 403].includes(query.error?.response?.status ?? 0)) return query;
+  return { ...query, data: undefined } as UseQueryResult<T, AxiosError>;
+};
 
 export const useAdmissions = () => {
   return useQuery<Admission[], AxiosError>({
@@ -26,6 +46,9 @@ export const useAdmission = (slug: string) => {
   return useQuery<Admission, AxiosError>({
     queryKey: [`/admission/${slug}/`],
     enabled: Boolean(slug),
+    refetchInterval: 15000,
+    refetchOnWindowFocus: "always",
+    staleTime: 0,
   });
 };
 
@@ -35,8 +58,6 @@ export const useMyApplication = (slug: string) => {
     enabled: Boolean(slug),
   });
 };
-
-// Admin hooks
 
 export const useAdminAdmissions = () => {
   return useQuery<Admission[], AxiosError>({
@@ -52,18 +73,21 @@ export const useAdminAdmission = (slug: string) => {
 };
 
 export const useAdminApplications = (admissionSlug: string) => {
-  return useQuery<Application[], AxiosError>({
+  const query = useQuery<Application[], AxiosError>({
     queryKey: [`/admin/admission/${admissionSlug}/application/`],
     enabled: Boolean(admissionSlug),
+    ...sensitiveQueryOptions,
   });
+  return hideDataAfterAccessDenied(query);
 };
 
 export const useInterviewCandidates = (slug: string) => {
-  return useQuery<Candidate[], AxiosError>({
+  const query = useQuery<Candidate[], AxiosError>({
     queryKey: [`/admin/admission/${slug}/candidates/`],
-    retry: false,
     enabled: Boolean(slug),
+    ...sensitiveQueryOptions,
   });
+  return hideDataAfterAccessDenied(query);
 };
 
 export const useAdminGroups = () => {
@@ -72,14 +96,13 @@ export const useAdminGroups = () => {
   });
 };
 
-// Schedule hooks
-
 export const useSavedSchedule = (slug: string) => {
-  return useQuery<SavedSchedule, AxiosError>({
+  const query = useQuery<SavedSchedule, AxiosError>({
     queryKey: [`/admin/admission/${slug}/schedule/`],
-    retry: false,
     enabled: Boolean(slug),
+    ...sensitiveQueryOptions,
   });
+  return hideDataAfterAccessDenied(query);
 };
 
 export const useSaveSchedule = (slug: string) => {
@@ -94,19 +117,20 @@ export const useSaveSchedule = (slug: string) => {
       queryClient.invalidateQueries({
         queryKey: [`/admin/admission/${slug}/availability/`],
       });
+      queryClient.invalidateQueries({
+        queryKey: [`/admin/admission/${slug}/candidates/`],
+      });
     },
   });
 };
 
 export const useInterviewAvailability = (slug: string) => {
-  return useQuery<InterviewAvailabilityParticipant[], AxiosError>({
+  const query = useQuery<InterviewAvailabilityParticipant[], AxiosError>({
     queryKey: [`/admin/admission/${slug}/availability/`],
-    retry: false,
     enabled: Boolean(slug),
-    // Keep heatmap/interviewer data fresh across clients.
-    refetchInterval: 10000,
-    refetchIntervalInBackground: false,
+    ...sensitiveQueryOptions,
   });
+  return hideDataAfterAccessDenied(query);
 };
 
 export const useSaveInterviewAvailability = (slug: string) => {
@@ -127,8 +151,6 @@ export const useSaveInterviewAvailability = (slug: string) => {
     },
   });
 };
-
-// Manage hooks
 
 export const useManageAdmissions = () => {
   return useQuery<Admission[], AxiosError>({

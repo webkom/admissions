@@ -53,12 +53,12 @@ const GroupSelector: React.FC<GroupSelectorProps> = ({
 export default GroupSelector;
 
 const Select = styled.select`
-  font-size: 16px;
+  font-size: var(--font-size-md);
   max-width: 100%;
   width: 300px;
   padding: 5px;
-  border-radius: 3px;
-  border: 1px solid #d6d6d6;
+  border-radius: var(--border-radius-sm);
+  border: 1px solid var(--color-border-muted);
 `;
 
 const SelectedGroupWrapper = styled.div`
@@ -71,7 +71,7 @@ const SelectedGroup = styled.img`
   display: block;
   flex-basis: 50px;
   height: 50px;
-  border-radius: 25px;
+  border-radius: 2rem;
   cursor: pointer;
   margin-right: 5px;
 `;

@@ -1,35 +1,28 @@
-/* frontend/src/styles/linkSlide.css */
 .link-slide {
   position: relative;
   display: inline-block;
-  transition: color 0.18s ease;
-
-  /* ensure it inherits current font/weight/etc */
+  transition: color var(--easing-fast);
 }
 
-/* underline element, initially zero width */
 .link-slide::after {
   content: "";
   position: absolute;
   left: 0;
-  bottom: -3px; /* tweak vertical position if needed */
+  bottom: -3px;
   display: block;
   height: 2px;
   width: 0;
-  background: var(--color-brand, #b91c1c); /* default red fallback */
-  transition: width 0.18s ease;
-  border-radius: 2px;
+  background: var(--color-brand);
+  transition: width var(--easing-fast);
+  border-radius: var(--border-radius-sm);
 }
 
-/* expand underline on hover/focus */
 .link-slide:hover::after,
 .link-slide:focus::after {
   width: 100%;
 }
 
-/* change text color on hover/focus to the same brand red */
 .link-slide:hover,
 .link-slide:focus {
-  /* ensure hover color takes precedence over utility classes */
-  color: var(--color-brand, #b91c1c) !important;
+  color: var(--color-brand) !important;
 }

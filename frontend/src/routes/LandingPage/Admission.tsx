@@ -6,24 +6,24 @@ import AdmissionTimeline, {
 } from "src/components/AdmissionTimeline";
 import CountDown from "./CountDown";
 import LinkButton from "src/components/LinkButton";
-import Icon from "src/components/Icon";
 import cn from "src/utils/cn";
+import { Calendar, Send, Settings } from "lucide-react";
 
 interface AdmissionProps {
   admission: AdmissionInterface;
 }
 
 const baseActionButtonClass =
-  "!min-h-14 !box-border !rounded-[var(--border-radius-md)] !font-bold !transition-[background-color,border-color,color,transform,box-shadow] !duration-200";
+  "!min-h-14 !box-border !rounded-md !font-bold !transition-[background-color,border-color,color,transform,box-shadow] !duration-200";
 
 const primaryActionButtonClass = cn(
   baseActionButtonClass,
-  "slide-underline slide-underline--on-dark !min-h-[3.75rem] !border-2 !border-brand !bg-brand !text-action !text-white active:!translate-y-0 disabled:!cursor-not-allowed disabled:!opacity-50",
+  "slide-underline slide-underline-on-dark !min-h-16 !border-2 !border-brand !bg-brand !text-action !text-white active:!translate-y-0 disabled:!cursor-not-allowed disabled:!opacity-50",
 );
 
 const secondaryActionButtonClass = cn(
   baseActionButtonClass,
-  "slide-underline slide-underline--tight !border-2 !border-border-muted !bg-surface-base !text-sm !text-text-primary hover:!text-brand",
+  "slide-underline slide-underline-tight !border-2 !border-border-muted !bg-surface-base !text-sm !text-text-primary hover:!text-brand",
 );
 
 const Admission: React.FC<AdmissionProps> = ({ admission }) => {
@@ -33,6 +33,7 @@ const Admission: React.FC<AdmissionProps> = ({ admission }) => {
   const isSingleGroupAdmission = admission?.groups.length === 1;
   const isAdmissionMember =
     (admission.userdata.committee_groups?.length ?? 0) > 0;
+  const isPrivileged = admission.userdata.is_privileged;
   const timelineItems: AdmissionTimelineItem[] = [
     {
       title: "Opptaket åpner",
@@ -78,7 +79,7 @@ const Admission: React.FC<AdmissionProps> = ({ admission }) => {
     <div className="mt-10 w-full max-w-6xl rounded-panel border border-border bg-surface-base p-10 shadow-panel transition-shadow duration-200 hover:shadow-panel-hover portrait:p-8 handheld:mt-6 handheld:p-5">
       <div className="mb-8 grid grid-cols-[1.4fr_1fr] gap-10 portrait:grid-cols-1 portrait:gap-8">
         <div>
-          <h2 className="mb-3 text-display-lg font-extrabold tracking-[-0.04em] text-text-strong text-balance handheld:text-display-md">
+          <h2 className="mb-3 text-display-lg font-extrabold tracking-display-tight text-text-strong text-balance handheld:text-display-md">
             {admission.title}
           </h2>
           {admission.description && (
@@ -123,21 +124,21 @@ const Admission: React.FC<AdmissionProps> = ({ admission }) => {
                 disabled={!isLoggedIn() && !admission.is_open}
               >
                 <ActionButtonContent
-                  icon={<Icon name="paper-plane" size={20} />}
+                  icon={<Send size={20} aria-hidden="true" />}
                   label="Gå til søknad"
                 />
               </LinkButton>
             )}
 
             <div className="flex w-full flex-col items-stretch gap-2">
-              {admission.userdata.is_recruiter && (
+              {isPrivileged && (
                 <LinkButton
                   className={secondaryActionButtonClass}
                   fullWidth
                   to={`/${admission.slug}/admin/`}
                 >
                   <ActionButtonContent
-                    icon={<Icon name="settings" size={18} />}
+                    icon={<Settings size={18} aria-hidden="true" />}
                     label="Admin panel"
                   />
                 </LinkButton>
@@ -145,14 +146,14 @@ const Admission: React.FC<AdmissionProps> = ({ admission }) => {
             </div>
 
             <div className="flex w-full flex-col items-stretch gap-2">
-              {isAdmissionMember && (
+              {(isAdmissionMember || isPrivileged) && (
                 <LinkButton
                   className={secondaryActionButtonClass}
                   fullWidth
                   to={`/${admission.slug}/schedule/`}
                 >
                   <ActionButtonContent
-                    icon={<Icon name="calendar" size={18} />}
+                    icon={<Calendar size={18} aria-hidden="true" />}
                     label="Velg intervjutider"
                   />
                 </LinkButton>

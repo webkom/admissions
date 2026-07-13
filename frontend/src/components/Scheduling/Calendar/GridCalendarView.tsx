@@ -18,7 +18,6 @@ interface GridCalendarViewProps {
   dayEndMinute?: number;
   chunkSize?: number;
   chunkBreakMinutes?: number;
-  /** When provided, cells whose slot is not in the set are shown as unavailable. */
   availableSlots?: Set<string>;
   renderItem?: (item: ScheduleItem, scheduleIndex: number) => React.ReactNode;
 }
@@ -82,9 +81,9 @@ const GridCalendarView: React.FC<GridCalendarViewProps> = ({
     <div
       key={`${item.candidate}-${index}`}
       className={cn(
-        "flex flex-col gap-[0.3rem] rounded border bg-surface-base px-[0.6rem] py-2 shadow-sm",
+        "flex flex-col gap-1 rounded border bg-surface-base px-2.5 py-2 shadow-sm",
         item.locked
-          ? "border-brand border-l-[3px] border-l-brand ring-1 ring-inset ring-brand-border"
+          ? "border-brand border-l-2 border-l-brand ring-1 ring-inset ring-brand-border"
           : "border-brand-border border-l-2 border-l-brand",
       )}
     >
@@ -100,7 +99,7 @@ const GridCalendarView: React.FC<GridCalendarViewProps> = ({
         {item.panel.map((p, i) => (
           <span
             key={i}
-            className="whitespace-nowrap rounded-full bg-surface-subtle px-1.5 py-0.5 text-[10px] font-semibold text-text-muted"
+            className="whitespace-nowrap rounded-full bg-surface-subtle px-1.5 py-0.5 text-tiny font-semibold text-text-muted"
           >
             {p.name}
           </span>
@@ -118,7 +117,6 @@ const GridCalendarView: React.FC<GridCalendarViewProps> = ({
           minWidth: `max(680px, ${dates.length * 160 + 80}px)`,
         }}
       >
-        {/* Header row */}
         <div className="bg-surface-base" />
         {dates.map((date) => {
           const { weekday, dayMonth } = formatDateHeader(date);
@@ -127,7 +125,7 @@ const GridCalendarView: React.FC<GridCalendarViewProps> = ({
               key={date}
               className="flex flex-col items-center justify-center bg-surface-base py-3"
             >
-              <span className="text-label font-bold uppercase tracking-label text-text-subtle">
+              <span className="text-detail font-medium text-text-muted">
                 {weekday}
               </span>
               <span className="text-sm font-semibold text-text-primary">
@@ -137,7 +135,6 @@ const GridCalendarView: React.FC<GridCalendarViewProps> = ({
           );
         })}
 
-        {/* Time rows */}
         {minutes.map((minute) => (
           <React.Fragment key={minute}>
             <div className="flex items-center justify-end bg-surface-base pr-4 text-xs font-bold tabular-nums text-text-muted">
@@ -156,7 +153,7 @@ const GridCalendarView: React.FC<GridCalendarViewProps> = ({
                     isUnavailable ? "Ikke tilgjengelig for intervju" : undefined
                   }
                   className={cn(
-                    "flex min-h-[5rem] flex-col gap-1 p-1.5",
+                    "flex min-h-20 flex-col gap-1 p-1.5",
                     isUnavailable
                       ? "bg-surface-base [background-image:var(--pattern-unavailable)]"
                       : entries.length === 0

@@ -112,12 +112,12 @@ const LogoNameWrapper = styled.div`
 const Name = styled.h3`
   grid-area: name;
   margin: 0;
-  font-size: 1.5rem;
+  font-size: var(--font-size-heading-md);
   line-height: 2rem;
   letter-spacing: 0.7px;
 
   ${media.portrait`
-    font-size: 1.3rem;
+    font-size: var(--font-size-heading-xs);
     padding: 0
     text-align: left;
     align-self: center;
@@ -129,28 +129,28 @@ const Logo = styled.img`
   justify-self: start;
   object-fit: scale-down;
   max-width: 45px;
-  margin-right: 1rem;
+  margin-right: var(--spacing-md);
 `;
 
 const ResponseLabel = styled.div`
   grid-area: responselabel;
   background: linear-gradient(
     180deg,
-    rgba(234, 233, 232, 0.76) 0%,
-    rgba(218, 218, 218, 0.56) 100%
+    var(--color-surface-subtle) 0%,
+    var(--color-border-soft) 100%
   );
   background-repeat: repeat;
-  border: 1px solid rgba(53, 138, 204, 0.22);
-  border-radius: 13px;
-  padding: 1rem;
-  font-size: 0.8rem;
+  border: 1px solid var(--color-blue-2);
+  border-radius: var(--border-radius-lg);
+  padding: var(--spacing-md);
+  font-size: var(--font-size-detail);
   line-height: 1rem;
-  color: rgba(57, 75, 89, 0.8);
+  color: var(--color-text-muted);
 `;
 
 const InputWrapper = styled.div`
   grid-area: input;
-  font-size: 1rem;
+  font-size: var(--font-size-md);
 `;
 
 const InputArea = styled(StyledTextAreaField)`

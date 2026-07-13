@@ -1,9 +1,8 @@
 import React, { useMemo } from "react";
 import { Link, NavLink as RouterNavLink } from "react-router-dom";
-import Icon from "src/components/Icon";
 import { Admission } from "src/types";
-import djangoData from "src/utils/djangoData";
 import styled from "styled-components";
+import { ArrowLeft } from "lucide-react";
 
 interface Props {
   admission?: Admission;
@@ -15,7 +14,7 @@ const NavBar: React.FC<Props> = ({ admission }) => {
       admission?.groups.filter(
         (group) =>
           admission?.userdata.is_admin ||
-          group.name === djangoData.user.representative_of_group,
+          admission?.userdata.committee_groups.includes(group.name),
       ),
     [admission],
   );
@@ -23,7 +22,7 @@ const NavBar: React.FC<Props> = ({ admission }) => {
   return (
     <Wrapper>
       <BackLink to={"/"}>
-        <Icon name="arrow-back" size={20} /> Til forsiden
+        <ArrowLeft size={20} aria-hidden="true" /> Til forsiden
       </BackLink>
 
       <PanelSection>
@@ -69,28 +68,26 @@ const Wrapper = styled.div`
 `;
 
 const PanelSection = styled.section`
-  padding: 1rem;
-  border: 1px solid var(--color-border);
+  padding: var(--spacing-md);
+  border: 1.5px solid var(--color-border);
   border-radius: var(--border-radius-lg);
   background: var(--color-surface-base);
+  box-shadow: var(--shadow-sm);
 `;
 
 const SectionEyebrow = styled.span`
   display: inline-block;
   margin-bottom: 0.4rem;
-  font-size: 0.688rem;
-  font-weight: 700;
-  letter-spacing: 0.09em;
-  text-transform: uppercase;
-  color: #a0a0a0;
+  font-size: var(--font-size-sm);
+  font-weight: 500;
+  color: var(--color-text-muted);
 `;
 
 const NavHeader = styled.h3`
   margin: 0;
-  font-size: 0.9375rem;
-  font-weight: 700;
-  color: #111111;
-  letter-spacing: -0.02em;
+  font-size: var(--font-size-ui);
+  font-weight: 600;
+  color: var(--color-text-primary);
 `;
 
 const NavDescription = styled.p`
@@ -103,14 +100,14 @@ const BackLink = styled(Link)`
   gap: 0.4rem;
   width: fit-content;
   padding: 0.55rem 0.75rem;
-  border: 1px solid var(--color-border-soft);
+  border: 1.5px solid var(--color-border-soft);
   border-radius: 999px;
   background: var(--color-surface-base);
   color: var(--color-text-muted);
-  font-size: 0.813rem;
+  font-size: var(--font-size-detail);
   font-weight: 600;
   text-decoration: none;
-  transition: color 0.12s ease;
+  transition: color var(--easing-fast);
 
   &:hover {
     border-color: var(--color-brand-strong-border);
@@ -123,15 +120,15 @@ const NavLink = styled(RouterNavLink)`
   align-items: center;
   height: 2.25rem;
   padding: 0 0.65rem;
-  border-radius: 8px;
+  border-radius: var(--border-radius-md);
   margin-top: 0.3rem;
-  color: #4b4b4b;
-  font-size: 0.875rem;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-sm);
   font-weight: 600;
   text-decoration: none;
   transition:
-    background 0.12s ease,
-    color 0.12s ease;
+    background var(--easing-fast),
+    color var(--easing-fast);
 
   &:hover {
     background: var(--color-surface-subtle);
@@ -139,14 +136,14 @@ const NavLink = styled(RouterNavLink)`
   }
 
   &.active {
-    background: rgba(178, 18, 7, 0.07);
-    color: var(--lego-red-color);
+    background: var(--color-brand);
+    color: var(--color-absolute-white);
   }
 `;
 
 const NavEmptyState = styled.p`
   margin: 0.4rem 0 0;
-  color: #a0a0a0;
-  font-size: 0.813rem;
-  line-height: 1.6;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-detail);
+  line-height: 1.3;
 `;

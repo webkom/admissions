@@ -1,14 +1,11 @@
 import React from "react";
 import { useNavigate } from "react-router-dom";
-import Icon from "../Icon";
 import { Button } from "@webkom/lego-bricks";
 import cn from "src/utils/cn";
 
 type LinkButtonProps = {
   to: string;
   external?: boolean;
-  icon?: string;
-  iconPrefix?: string;
   fullWidth?: boolean;
   className?: string;
 };
@@ -41,8 +38,6 @@ const LinkButton: React.FC<
   to,
   external = false,
   children,
-  icon,
-  iconPrefix,
   fullWidth = false,
   className,
   ...props
@@ -64,7 +59,6 @@ const LinkButton: React.FC<
       {...props}
     >
       {children}
-      {icon && <Icon name={icon} prefix={iconPrefix} />}
     </StyledButton>
   );
 };

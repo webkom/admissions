@@ -70,36 +70,33 @@ export default EditGroup;
 const PageWrapper = styled.div`
   display: flex;
   flex-direction: column;
-  gap: 1rem;
+  gap: var(--spacing-md);
   width: 100%;
 `;
 
 const HeaderCard = styled.div`
   width: 100%;
   padding-bottom: 1rem;
-  border-bottom: 1px solid #e5e7eb;
+  border-bottom: 1px solid var(--color-border-soft);
 `;
 
 const SectionEyebrow = styled.span`
   display: inline-block;
   margin-bottom: 0.35rem;
-  font-size: 0.72rem;
-  font-weight: 800;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  color: #6b7280;
+  font-size: var(--font-size-sm);
+  font-weight: 500;
+  color: var(--color-text-muted);
 `;
 
 const GroupTitle = styled.h1`
   margin: 0;
-  font-size: 1.65rem;
-  font-weight: 800;
-  letter-spacing: -0.03em;
-  color: #1f2937;
+  font-size: var(--font-size-xl);
+  font-weight: 600;
+  color: var(--color-text-primary);
 `;
 
 const GroupDescription = styled.p`
   margin: 0.45rem 0 0;
-  color: #6b7280;
-  line-height: 1.6;
+  color: var(--color-text-muted);
+  line-height: 1.3;
 `;

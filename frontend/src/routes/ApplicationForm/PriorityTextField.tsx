@@ -48,7 +48,7 @@ export default PriorityTextField;
 const Wrapper = styled.div`
   grid-area: prioritytext;
   ${media.portrait`
-    margin-top: 0.5rem;
+    margin-top: var(--spacing-sm);
   `};
 `;
 
@@ -61,8 +61,8 @@ const LabelWrapper = styled.span`
 `;
 
 const Optional = styled.span`
-  font-size: 0.8rem;
-  color: rgba(57, 75, 89, 0.75);
+  font-size: var(--font-size-detail);
+  color: var(--color-text-muted);
   font-weight: 500;
   margin-left: 0.3rem;
   line-height: 1rem;

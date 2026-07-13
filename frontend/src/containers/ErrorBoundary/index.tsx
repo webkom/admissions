@@ -6,65 +6,43 @@ import { PropsWithChildren } from "react";
 
 interface ErrorBoundaryProps extends PropsWithChildren {
   resetOnChange?: boolean;
-  openReportDialog?: boolean;
+  resetKey?: React.Key;
   hidden?: boolean;
 }
 
 interface ErrorBoundaryState {
   error: Error | null;
-  lastEventId: string | null;
 }
 
 class ErrorBoundary extends React.Component<
   ErrorBoundaryProps,
   ErrorBoundaryState
 > {
-  state = {
+  state: ErrorBoundaryState = {
     error: null,
-    lastEventId: null,
   };
 
-  openDialog = () => {
-    this.state.lastEventId &&
-      Sentry.showReportDialog({
-        eventId: this.state.lastEventId,
-        lang: "no",
-        title: "Det skjedde en feil :(",
-        subtitle: "Webkom har fått beskjed.",
-        subtitle2:
-          "Gjerne beskriv hva som skjedde, så kan vi fikse problemet kjappere.",
-      });
-  };
+  static getDerivedStateFromError(error: Error): ErrorBoundaryState {
+    return { error };
+  }
 
-  UNSAFE_componentWillReceiveProps(nextProps: ErrorBoundaryProps) {
-    const { resetOnChange } = this.props;
-    const { error } = this.state;
-    if (error && nextProps.resetOnChange !== resetOnChange) {
+  componentDidUpdate(previousProps: ErrorBoundaryProps) {
+    const resetSignalChanged =
+      previousProps.resetOnChange !== this.props.resetOnChange;
+    const resetKeyChanged = previousProps.resetKey !== this.props.resetKey;
+    if (this.state.error && (resetSignalChanged || resetKeyChanged)) {
       this.setState({ error: null });
     }
   }
 
-  componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
-    this.setState({ error });
-    if (process.env.NODE_ENV === "development") {
-      /* eslint no-console: 0 */
-      console.error(error);
-
-      /* eslint no-console: 0 */
-      console.error(errorInfo);
-    }
-    Sentry.withScope((scope) => {
-      scope.setExtra("errorInfo", errorInfo);
-      const lastEventId = Sentry.captureException(error);
-      this.setState({ lastEventId }, () => {
-        this.props.openReportDialog && this.openDialog();
-      });
-    });
+  componentDidCatch(error: Error) {
+    Sentry.captureException(error);
   }
 
+  reset = () => this.setState({ error: null });
+
   render() {
-    const { openReportDialog, hidden = false } = this.props;
-    const { lastEventId } = this.state;
+    const { hidden = false } = this.props;
 
     if (!this.state.error) {
       return this.props.children;
@@ -74,19 +52,15 @@ class ErrorBoundary extends React.Component<
     }
 
     return (
-      <Container>
-        <Snap onClick={() => !openReportDialog && this.openDialog()}>
-          <img src={awSnap} alt="snap" />
+      <Container role="alert">
+        <Snap>
+          <img src={awSnap} alt="" />
           <Message>
             <h3>En feil har oppstått</h3>
-            <p>
-              Webkom har fått beskjed om feilen.{" "}
-              {!openReportDialog && lastEventId && (
-                <span>
-                  Klikk <b>her</b> for å sende en rapport.
-                </span>
-              )}
-            </p>
+            <p>Webkom har fått beskjed om feilen.</p>
+            <RetryButton type="button" onClick={this.reset}>
+              Prøv igjen
+            </RetryButton>
           </Message>
         </Snap>
       </Container>
@@ -95,8 +69,6 @@ class ErrorBoundary extends React.Component<
 }
 
 export default ErrorBoundary;
-
-/** Styles **/
 
 const Container = styled.div`
   display: flex;
@@ -111,7 +83,7 @@ const Snap = styled.div`
   justify-content: center;
   align-items: center;
   margin: 10px;
-  padding: 2rem;
+  padding: var(--spacing-xl);
 
   img {
     height: 100px;
@@ -121,4 +93,20 @@ const Snap = styled.div`
 
 const Message = styled.div`
   margin-left: 20px;
+`;
+
+const RetryButton = styled.button`
+  border: 1px solid currentcolor;
+  border-radius: var(--border-radius-md);
+  background: transparent;
+  padding: 0.5rem 0.75rem;
+  color: inherit;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+
+  &:focus-visible {
+    outline: 2px solid currentcolor;
+    outline-offset: 2px;
+  }
 `;

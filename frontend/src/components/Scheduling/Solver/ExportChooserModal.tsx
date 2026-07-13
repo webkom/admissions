@@ -20,7 +20,7 @@ const ExportOption = ({ icon, title, hint, onClick }: ExportOptionProps) => (
   <button
     type="button"
     onClick={onClick}
-    className="group flex w-full items-center gap-3 rounded-xl border border-border-soft bg-surface-base px-4 py-3 text-left transition-[border-color,background,transform] duration-150 hover:-translate-y-px hover:border-brand-strongBorder hover:bg-brand-soft focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-brand-ring"
+    className="group flex w-full items-center gap-3 rounded-lg border border-border-soft bg-surface-base px-4 py-3 text-left transition-[border-color,background] duration-100 hover:border-border-quiet hover:bg-surface-subtle focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-ring"
   >
     <span className="flex h-9 w-9 flex-none items-center justify-center rounded-lg bg-surface-muted text-text-muted transition-colors group-hover:bg-brand-muted group-hover:text-brand">
       {icon}
@@ -60,7 +60,7 @@ const ExportChooserModal = ({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-overlay px-4 animate-[overlay-fade-in_0.15s_ease-out]"
+      className="fixed inset-0 z-[200] flex items-center justify-center overflow-y-auto bg-overlay px-4 py-4 animate-overlay-fade-in"
       onMouseDown={(event) => {
         if (event.target === event.currentTarget) onClose();
       }}
@@ -71,7 +71,7 @@ const ExportChooserModal = ({
         aria-modal="true"
         aria-labelledby="export-chooser-title"
         tabIndex={-1}
-        className="w-full max-w-md rounded-panel border border-border bg-surface-base p-5 shadow-modal focus:outline-none animate-[fade-in_0.18s_ease-out]"
+        className="max-h-[calc(100dvh-2rem)] w-full max-w-md overflow-y-auto rounded-panel border border-border bg-surface-base p-5 shadow-modal focus:outline-none animate-fade-in"
       >
         <h4
           id="export-chooser-title"
@@ -80,7 +80,8 @@ const ExportChooserModal = ({
           Velg eksportmåte
         </h4>
         <p className="mb-0 mt-2 text-ui text-text-muted">
-          Last ned intervjuplanen til kalenderen din eller som regneark.
+          Kalenderfiler bruker anonyme kandidatnavn. CSV kan inneholde navn og
+          må behandles som konfidensiell informasjon.
         </p>
         <div className="mt-4 grid gap-2">
           <ExportOption

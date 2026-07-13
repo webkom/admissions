@@ -20,9 +20,6 @@ interface WorkflowStepParams {
   submittedAvailabilityCount: number;
 }
 
-/** Build the workflow-stepper definition for the schedule page. Pure function
- * of the current state — committee members see a 2-step flow, admins the full
- * 5-step one. */
 export const buildWorkflowSteps = ({
   isAdmin,
   activeSection,

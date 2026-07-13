@@ -1,7 +1,8 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import styled from "styled-components";
 
 import LoadingBall from "src/components/LoadingBall";
+import AdmissionsContainer from "src/containers/AdmissionsContainer";
 import { escapeCsvCell } from "src/utils/methods";
 import { useAdmission, useAdminApplications } from "src/query/hooks";
 import { useParams } from "react-router-dom";
@@ -12,6 +13,7 @@ import { InputFieldModel } from "src/utils/jsonFields";
 import CSVExportHandler, {
   CompleteCsvData,
 } from "./components/CSVExportHandler";
+import GroupStatistics from "./components/GroupStatistics";
 import {
   actionButtonActive,
   actionButtonBase,
@@ -26,6 +28,7 @@ const ViewApplications = () => {
   );
   const [csvData, setCsvData] = useState<CompleteCsvData[]>([]);
   const [showCandidates, setShowCandidates] = useState(false);
+  const [selectedGroups, setSelectedGroups] = useState<string[]>([]);
 
   const {
     data: applications,
@@ -37,12 +40,26 @@ const ViewApplications = () => {
     error: admissionError,
     isFetching: admissionIsFetching,
   } = useAdmission(admissionSlug ?? "");
+  const filteredApplications = useMemo(
+    () =>
+      sortedApplications.filter(
+        (application) =>
+          selectedGroups.length === 0 ||
+          application.group_applications.some((groupApplication) =>
+            selectedGroups.includes(groupApplication.group.name),
+          ),
+      ),
+    [selectedGroups, sortedApplications],
+  );
   const csvHeaders = [
     { label: "Fullt Navn", key: "name" },
     { label: "Prioriteringer", key: "priorityText" },
     ...(admission?.userdata.is_admin
-      ? ((admission?.header_fields as InputFieldModel[]) ?? [])
-          .filter((headerField) => "id" in headerField)
+      ? (admission?.header_fields ?? [])
+          .filter(
+            (headerField): headerField is InputFieldModel =>
+              "id" in headerField,
+          )
           .map((headerField) => ({
             label: headerField.title,
             key: headerField.id,
@@ -69,24 +86,20 @@ const ViewApplications = () => {
 
   useEffect(() => {
     const updatedCsvData: CompleteCsvData[] = [];
-    sortedApplications.forEach((application) => {
-      const headerResponses = Object.fromEntries(
-        Object.entries(application.header_fields_response ?? {}).map(
-          ([key, value]) => [key, escapeCsvCell(value)],
-        ),
-      );
+    filteredApplications.forEach((application) => {
+      const headerResponses = application.header_fields_response ?? {};
       application.group_applications.forEach((groupApplication) => {
         updatedCsvData.push({
           name: application.user.full_name,
           priorityText:
             application.text !== ""
-              ? escapeCsvCell(application.text ?? "")
+              ? (application.text ?? "")
               : "Ingen prioriteringer",
           ...headerResponses,
           group: groupApplication.group.name,
-          groupApplicationText: escapeCsvCell(groupApplication.text),
+          groupApplicationText: groupApplication.text,
           email: application.user.email,
-          phoneNumber: escapeCsvCell(application.phone_number),
+          phoneNumber: application.phone_number,
           username: application.user.username,
           appliedWithinDeadline: application.applied_within_deadline,
           createdAt: application.created_at,
@@ -95,7 +108,7 @@ const ViewApplications = () => {
       });
     });
     setCsvData(updatedCsvData);
-  }, [sortedApplications]);
+  }, [filteredApplications]);
 
   const numApplicants = sortedApplications.length;
 
@@ -104,9 +117,19 @@ const ViewApplications = () => {
     numApplications += application.group_applications.length;
   });
 
-  const visibleCsvData = showCandidates
-    ? csvData
-    : csvData.map(maskCandidateFields);
+  const visibleCsvData = showCandidates ? csvData : [];
+  const exportCsvData = visibleCsvData.map((row) =>
+    Object.fromEntries(
+      Object.entries(row).map(([key, value]) => [
+        key,
+        typeof value === "string" ? escapeCsvCell(value) : value,
+      ]),
+    ),
+  ) as CompleteCsvData[];
+  const exportCsvHeaders = csvHeaders.map((header) => ({
+    ...header,
+    label: escapeCsvCell(header.label),
+  }));
 
   if (applicationsError || admissionError) {
     return (
@@ -124,8 +147,12 @@ const ViewApplications = () => {
       <PageWrapper>
         <Header>
           <div>
-            <Eyebrow>CSV</Eyebrow>
-            <Title>{admission.title}</Title>
+            <Title>Søknader</Title>
+            <AdmissionName>{admission.title}</AdmissionName>
+            <Meta>
+              {numApplicants} {numApplicants === 1 ? "søker" : "søkere"} ·{" "}
+              {numApplications} {numApplications === 1 ? "søknad" : "søknader"}
+            </Meta>
           </div>
           <HeaderControls>
             <button
@@ -139,25 +166,60 @@ const ViewApplications = () => {
               )}
             >
               {showCandidates ? <EyeOff size={14} /> : <Eye size={14} />}
-              {showCandidates ? "Skjul innhold" : "Vis innhold"}
+              {showCandidates ? "Skjul kandidatdata" : "Vis kandidatdata"}
             </button>
-            <Meta>
-              {numApplicants} {numApplicants === 1 ? "søker" : "søkere"} ·{" "}
-              {numApplications} {numApplications === 1 ? "søknad" : "søknader"}
-            </Meta>
           </HeaderControls>
         </Header>
 
-        <CSVExportHandler
-          csvData={visibleCsvData}
-          csvHeaders={csvHeaders}
-          rowCount={csvData.length}
-        />
-        <CsvPreviewTable
-          rows={visibleCsvData}
-          headers={csvHeaders}
-          showCandidates={showCandidates}
-        />
+        <FilterSection aria-labelledby="group-filter-title">
+          <FilterTitle id="group-filter-title">Filtrer på gruppe</FilterTitle>
+          <GroupFilters>
+            {(admission.groups ?? [])
+              .filter(
+                (group) =>
+                  admission.userdata.is_admin ||
+                  admission.userdata.committee_groups.includes(group.name),
+              )
+              .sort((a, b) => a.name.localeCompare(b.name, "nb"))
+              .map((group) => (
+                <GroupStatistics
+                  key={group.pk}
+                  applications={sortedApplications}
+                  groupName={group.name}
+                  groupLogo={group.logo}
+                  selectedGroups={selectedGroups}
+                  setSelectedGroups={setSelectedGroups}
+                />
+              ))}
+          </GroupFilters>
+        </FilterSection>
+
+        {showCandidates ? (
+          <>
+            <CSVExportHandler
+              csvData={exportCsvData}
+              csvHeaders={exportCsvHeaders}
+              rowCount={csvData.length}
+            />
+            <CsvPreviewTable rows={visibleCsvData} headers={csvHeaders} />
+          </>
+        ) : (
+          <PrivacyPlaceholder>
+            <EyeOff size={20} aria-hidden="true" />
+            <div>
+              <strong>Kandidatdata er skjult</strong>
+              <span>
+                Vis innholdet når du er klar til å behandle søknadene.
+              </span>
+            </div>
+          </PrivacyPlaceholder>
+        )}
+        {showCandidates && (
+          <AdmissionsContainer
+            admission={admission}
+            applications={filteredApplications}
+          />
+        )}
       </PageWrapper>
     );
   }
@@ -166,34 +228,13 @@ const ViewApplications = () => {
 export default ViewApplications;
 
 type CsvHeader = { label: string; key: string };
-// Columns that never contain applicant-identifying content. Everything else —
-// including the dynamic header-field answer columns — is masked when content is
-// hidden, so applicant free text can't leak through a custom question.
-const NON_SENSITIVE_FIELD_KEYS = new Set([
-  "group",
-  "appliedWithinDeadline",
-  "createdAt",
-  "updatedAt",
-]);
-
-const isSensitiveKey = (key: string) => !NON_SENSITIVE_FIELD_KEYS.has(key);
-
-const maskCandidateFields = (row: CompleteCsvData): CompleteCsvData => {
-  const masked: CompleteCsvData = { ...row };
-  Object.keys(masked).forEach((key) => {
-    if (isSensitiveKey(key)) masked[key] = "Skjult";
-  });
-  return masked;
-};
 
 const CsvPreviewTable = ({
   rows,
   headers,
-  showCandidates,
 }: {
   rows: CompleteCsvData[];
   headers: CsvHeader[];
-  showCandidates: boolean;
 }) => (
   <TableShell>
     <StyledTable>
@@ -208,15 +249,7 @@ const CsvPreviewTable = ({
         {rows.map((row, rowIndex) => (
           <tr key={`${row.username}-${row.group}-${rowIndex}`}>
             {headers.map((header) => (
-              <td
-                key={header.key}
-                data-column={header.key}
-                data-masked={
-                  !showCandidates && isSensitiveKey(header.key)
-                    ? "true"
-                    : undefined
-                }
-              >
+              <td key={header.key} data-column={header.key}>
                 {renderCsvCell(row[header.key])}
               </td>
             ))}
@@ -234,12 +267,10 @@ const renderCsvCell = (value: CompleteCsvData[string]): React.ReactNode => {
   return String(value);
 };
 
-/** Styles **/
-
 const PageWrapper = styled.div`
   display: flex;
   flex-direction: column;
-  gap: 0.75rem;
+  gap: var(--spacing-md);
   width: 100%;
 `;
 
@@ -247,8 +278,9 @@ const Header = styled.header`
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 1rem;
-  padding-bottom: 0.5rem;
+  gap: var(--spacing-md);
+  padding: 0.5rem 0 0.75rem;
+  border-bottom: 1px solid var(--color-border-soft);
 
   @media screen and (max-width: 700px) {
     align-items: flex-start;
@@ -257,30 +289,26 @@ const Header = styled.header`
   }
 `;
 
-const Eyebrow = styled.span`
-  display: block;
-  margin-bottom: 0.25rem;
-  color: var(--color-text-subtle);
-  font-size: 0.72rem;
-  font-weight: 800;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-`;
-
 const Title = styled.h1`
   margin: 0;
   color: var(--color-text-primary);
-  font-size: 1.35rem;
-  font-weight: 750;
-  line-height: 1.2;
+  font-size: var(--font-size-xl);
+  font-weight: 600;
+  line-height: 1.3;
   text-align: left;
 `;
 
-const Meta = styled.span`
-  color: var(--color-text-muted);
-  font-size: 0.875rem;
+const AdmissionName = styled.p`
+  margin: 0.15rem 0 0.4rem;
+  color: var(--color-text-primary);
+  font-size: var(--font-size-md);
   font-weight: 600;
-  white-space: nowrap;
+`;
+
+const Meta = styled.p`
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-sm);
 `;
 
 const HeaderControls = styled.div`
@@ -295,13 +323,65 @@ const HeaderControls = styled.div`
   }
 `;
 
+const FilterSection = styled.section`
+  padding: var(--spacing-md);
+  border: 1.5px solid var(--color-border-soft);
+  border-radius: var(--border-radius-lg);
+  background: var(--color-surface-base);
+  box-shadow: var(--shadow-sm);
+`;
+
+const FilterTitle = styled.h2`
+  margin: 0 0 0.75rem;
+  font-size: var(--font-size-md);
+  font-weight: 600;
+`;
+
+const GroupFilters = styled.div`
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(14rem, 100%), 1fr));
+  gap: 0.75rem;
+  width: 100%;
+`;
+
+const PrivacyPlaceholder = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin: 0;
+  padding: var(--spacing-md);
+  border: 1.5px solid var(--color-border-soft);
+  border-radius: var(--border-radius-lg);
+  background: var(--color-surface-base);
+  color: var(--color-text-muted);
+  font-size: var(--font-size-sm);
+  box-shadow: var(--shadow-sm);
+
+  svg {
+    flex: 0 0 auto;
+    color: var(--color-brand);
+  }
+
+  strong,
+  span {
+    display: block;
+  }
+
+  strong {
+    margin-bottom: 0.2rem;
+    color: var(--color-text-primary);
+    font-weight: 600;
+  }
+`;
+
 const TableShell = styled.div`
   max-width: 100%;
   width: 100%;
   overflow: auto;
-  border: 1px solid var(--color-border-soft);
-  border-radius: 8px;
+  border: 1.5px solid var(--color-border-soft);
+  border-radius: var(--border-radius-lg);
   background: var(--color-surface-base);
+  box-shadow: var(--shadow-sm);
 `;
 
 const StyledTable = styled.table`
@@ -312,21 +392,16 @@ const StyledTable = styled.table`
     position: sticky;
     top: 0;
     z-index: 1;
-    background: var(--color-surface-base);
-    color: var(--color-text-subtle);
-    font-size: 0.68rem;
+    background: var(--color-gray-2);
+    color: var(--color-gray-7);
+    font-size: var(--font-size-sm);
     white-space: nowrap;
   }
 
   td {
     vertical-align: top;
     color: var(--color-text-primary);
-    line-height: 1.45;
-  }
-
-  td[data-masked="true"] {
-    color: var(--color-text-subtle);
-    font-style: italic;
+    line-height: 1.3;
   }
 
   td[data-column="priorityText"],

@@ -6,7 +6,7 @@ import { media } from "src/styles/mediaQueries";
 import LoadingBall from "src/components/LoadingBall";
 import NavBar from "./components/NavBar";
 import CreateAdmission from "./CreateAdmission";
-import Icon from "src/components/Icon";
+import { ArrowLeft } from "lucide-react";
 
 const ManageAdmissions: React.FC = () => {
   const { data, isFetching, error } = useManageAdmissions();
@@ -21,7 +21,7 @@ const ManageAdmissions: React.FC = () => {
         <Header>
           <h2>Administrer opptak</h2>
           <Link to={"/"}>
-            <Icon name="arrow-back" size={22} /> Gå tilbake til forsiden
+            <ArrowLeft size={22} aria-hidden="true" /> Gå tilbake til forsiden
           </Link>
         </Header>
         <Wrapper>
@@ -51,7 +51,7 @@ export default ManageAdmissions;
 /** Styles **/
 
 const PageWrapper = styled.div`
-  background-color: #ffffff;
+  background-color: var(--color-surface-base);
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -62,19 +62,19 @@ const PageWrapper = styled.div`
 const Header = styled.div`
   width: 100%;
   background: var(--lego-background-color);
-  margin-bottom: 1rem;
+  margin-bottom: var(--spacing-md);
   padding-bottom: 0.5rem;
 
   a,
   h2 {
-    margin-left: 1rem;
+    margin-left: var(--spacing-md);
   }
   h2 {
     margin-bottom: 0;
   }
   ${media.handheld`
     margin: 0 1em 0 1em;
-    font-size: 2.5rem;
+    font-size: var(--font-size-display-md);
   `};
 `;
 

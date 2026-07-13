@@ -56,7 +56,7 @@ const Container = styled.nav`
   display: flex;
   align-items: center;
   justify-content: space-between;
-  background: var(--color-surface-base, white);
+  background: var(--color-surface-base);
   width: 100%;
   height: 80px;
   border-bottom: 1px solid var(--color-border-soft);
@@ -70,7 +70,7 @@ const Container = styled.nav`
   ${media.handheld`        
     flex-direction: column;
     height: auto;
-    padding: 1rem;
+    padding: var(--spacing-md);
     position: relative;
   `}
 `;
@@ -85,7 +85,7 @@ const BrandContainer = styled.div`
   }
 
   ${media.handheld`        
-    margin-bottom: 1rem;
+    margin-bottom: var(--spacing-md);
     order: 1;
   `};
 `;
@@ -95,14 +95,14 @@ const NavItemsContainer = styled.ul`
   gap: 3rem;
 
   ${media.portrait`  
-    gap: 1.5rem;
+    gap: var(--spacing-lg);
   `}
 
   ${media.handheld`
     order: 3;
     width: 100%;
     justify-content: center;
-    margin-top: 1rem;
+    margin-top: var(--spacing-md);
     padding-top: 1rem;
     border-top: 1px solid var(--color-border-soft);
   `}

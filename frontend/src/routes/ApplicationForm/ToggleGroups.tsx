@@ -57,9 +57,9 @@ export default ToggleGroups;
 /** Styles **/
 
 const Wrapper = styled.div`
-  border: 2px solid #ece3e3;
-  border-radius: 13px;
-  padding: 2rem;
+  border: 2px solid var(--color-border-soft);
+  border-radius: var(--border-radius-lg);
+  padding: var(--spacing-xl);
   max-width: 290px;
 
   ${media.portrait`
@@ -75,15 +75,15 @@ const Wrapper = styled.div`
 `;
 
 const Title = styled.h4`
-  color: rgba(57, 75, 89, 0.75);
+  color: var(--color-text-muted);
   margin: 0;
 `;
 
 const Tooltip = styled.p`
-  color: rgba(57, 75, 89, 0.45);
+  color: var(--color-text-subtle);
   margin-top: 0;
-  margin-bottom: 1rem;
-  font-size: 0.8rem;
+  margin-bottom: var(--spacing-md);
+  font-size: var(--font-size-detail);
   line-height: 1rem;
 `;
 
@@ -105,11 +105,11 @@ const IconsWrapper = styled.div`
 `;
 
 const LinkToOverview = styled(Link)`
-  margin-top: 1rem;
+  margin-top: var(--spacing-md);
   display: inline-block;
   line-height: 1rem;
   text-decoration: underline;
-  font-size: 0.8rem;
+  font-size: var(--font-size-detail);
   text-align: center;
   font-weight: 500;
   width: 100%;

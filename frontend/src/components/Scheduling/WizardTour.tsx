@@ -97,7 +97,6 @@ interface WizardTourProps {
 const ADMIN_STORAGE_KEY = "admissions.wizard.admin.v1";
 const MEMBER_STORAGE_KEY = "admissions.wizard.member.v1";
 
-// Fallback when localStorage is unavailable (private mode, blocked storage).
 const memoryDismissed: Record<string, boolean> = {};
 
 const markDismissed = (storageKey: string) => {
@@ -105,7 +104,7 @@ const markDismissed = (storageKey: string) => {
   try {
     localStorage.setItem(storageKey, "1");
   } catch {
-    // ignore — in-memory flag still applies for this session
+    return;
   }
 };
 
@@ -180,24 +179,24 @@ export default function WizardTour({
 
   return (
     <div
-      className="fixed inset-0 z-[100] flex items-center justify-center p-4"
+      className="fixed inset-0 z-[200] flex items-center justify-center p-4"
       aria-modal="true"
       role="dialog"
       aria-label="Veiledning"
     >
       <div
-        className="absolute inset-0 bg-black/50 backdrop-blur-[2px]"
+        className="absolute inset-0 bg-overlay backdrop-blur-sm"
         onClick={handleClose}
       />
 
       <div
         ref={dialogRef}
         tabIndex={-1}
-        className="relative z-10 flex w-full max-w-[500px] flex-col overflow-hidden rounded-panel border border-border bg-surface-base shadow-[0_32px_64px_-12px_rgb(40_18_18/0.28)] focus:outline-none"
+        className="relative z-10 flex w-full max-w-lg flex-col overflow-hidden rounded-panel border border-border bg-surface-base shadow-modal focus:outline-none"
       >
         <div className="flex items-center justify-between border-b border-border-soft px-5 py-3">
           <div className="flex min-w-0 items-center gap-2">
-            <span className="text-label font-bold uppercase tracking-badge-wide text-text-subtle">
+            <span className="text-detail font-medium text-text-muted">
               Opptaksflyt
             </span>
             <span className="h-1 w-1 rounded-full bg-text-faded" />
@@ -236,20 +235,19 @@ export default function WizardTour({
           </div>
         </div>
 
-        {/* Step content */}
         <div
           key={step}
-          className="flex flex-col gap-5 px-6 py-7 animate-[fade-in_0.18s_ease-out]"
+          className="flex flex-col gap-5 px-6 py-7 animate-fade-in"
         >
           <div className="flex items-start gap-3.5">
             <span className="mt-0.5 inline-flex h-11 w-11 flex-none items-center justify-center rounded-xl bg-brand-fill text-brand">
               <Icon size={20} />
             </span>
             <div>
-              <span className="mb-0.5 block text-label font-bold uppercase tracking-label text-text-subtle">
+              <span className="mb-0.5 block text-detail font-medium text-text-muted">
                 {current.label}
               </span>
-              <h2 className="m-0 text-[1.05rem] font-bold leading-snug text-text-primary">
+              <h2 className="m-0 text-title font-bold leading-snug text-text-primary">
                 {current.title}
               </h2>
             </div>
@@ -260,7 +258,6 @@ export default function WizardTour({
           </p>
         </div>
 
-        {/* Step strip */}
         <div className="overflow-x-auto border-t border-border-soft">
           <div className="flex min-w-max">
             {steps.map((s, i) => {
@@ -273,7 +270,7 @@ export default function WizardTour({
                   type="button"
                   onClick={() => go(i)}
                   className={cn(
-                    "flex min-w-[76px] flex-1 flex-col items-center gap-1.5 border-r border-border-faint px-3 py-3 text-center transition-colors last:border-r-0",
+                    "flex min-w-20 flex-1 flex-col items-center gap-1.5 border-r border-border-faint px-3 py-3 text-center transition-colors last:border-r-0",
                     isActive ? "bg-brand-soft" : "hover:bg-surface-subtle",
                   )}
                 >
@@ -295,7 +292,7 @@ export default function WizardTour({
                   </span>
                   <span
                     className={cn(
-                      "text-[10px] font-semibold leading-tight",
+                      "text-tiny font-semibold leading-tight",
                       isActive ? "text-brand" : "text-text-muted",
                     )}
                   >
@@ -307,7 +304,6 @@ export default function WizardTour({
           </div>
         </div>
 
-        {/* Footer nav */}
         <div className="flex items-center justify-between gap-3 border-t border-border-soft px-5 py-3.5">
           {isLast ? (
             <label className="flex cursor-pointer select-none items-center gap-2 text-detail text-text-muted">
@@ -371,7 +367,7 @@ export function useWizardTour(isAdmin: boolean) {
     try {
       dismissed = dismissed || Boolean(localStorage.getItem(storageKey));
     } catch {
-      // localStorage unavailable — rely on the in-memory flag
+      dismissed = memoryDismissed[storageKey] ?? false;
     }
     if (!dismissed) setIsOpen(true);
   }, [storageKey]);

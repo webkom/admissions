@@ -1,7 +1,7 @@
 import React, { ReactNode } from "react";
 import { Form, Field, FormikValues } from "formik";
 import FormatTime from "src/components/Time/FormatTime";
-import Icon from "src/components/Icon";
+import { Info } from "lucide-react";
 import PhoneNumberField from "./PhoneNumberField";
 import ToggleGroups from "./ToggleGroups";
 import ErrorFocus from "./ErrorFocus";
@@ -134,7 +134,7 @@ const FormStructure: React.FC<FormStructureProps> = ({
         <GeneralInfoSection>
           <SectionHeader>Generelt</SectionHeader>
           <HelpText>
-            <Icon name="information-circle-outline" />
+            <Info aria-hidden="true" />
             Mobilnummeret vil bli brukt til å kalle deg inn på intervju.
           </HelpText>
           <Field name="phoneNumber" component={PhoneNumberField} />
@@ -143,12 +143,12 @@ const FormStructure: React.FC<FormStructureProps> = ({
               <HelpText>
                 {!(isRevy || isRevyBoard) && (
                   <>
-                    <Icon name="information-circle-outline" />
+                    <Info aria-hidden="true" />
                     Kun leder og nestleder av Abakus kan se det du skriver inn i
                     prioriterings- og kommentarfeltet.
                   </>
                 )}
-                <Icon name="information-circle-outline" />
+                <Info aria-hidden="true" />
                 Prioriteringslisten vil bli tatt hensyn til så langt det lar seg
                 gjøre, men garanterer ingenting. Ikke søk på en{" "}
                 {isRevy ? "gruppe" : isRevyBoard ? "stilling" : "komité"} du
@@ -176,7 +176,7 @@ const FormStructure: React.FC<FormStructureProps> = ({
                   {isRevy ? "Grupper" : isRevyBoard ? "Stillinger" : "Komiteer"}
                 </SectionHeader>
                 <HelpText>
-                  <Icon name="information-circle-outline" />
+                  <Info aria-hidden="true" />
                   {isRevy
                     ? "Her skriver du søknaden til gruppen(e) du har valgt."
                     : isRevyBoard
@@ -184,7 +184,7 @@ const FormStructure: React.FC<FormStructureProps> = ({
                       : "Her skriver du søknaden til komiteen(e) du har valgt. Hver komité kan kun se søknaden til sin egen komité."}
                 </HelpText>
                 <HelpText>
-                  <Icon name="information-circle-outline" />
+                  <Info aria-hidden="true" />
                   Søknadene vil brukes i opptaksprosessen, men alle søkere vil
                   bli kalt inn til intervju.
                 </HelpText>
@@ -253,8 +253,8 @@ const FormStructure: React.FC<FormStructureProps> = ({
                 ? "Søknaden din kan kun ses av revystyret."
                 : isBackup
                   ? "Søknaden din kan kun ses av medlemmer av backup."
-                  : "Din søknad til hver komité kan kun ses av den aktuelle komiteen og leder av Abakus."}{" "}
-              All søknadsinformasjon slettes etter opptaket er gjennomført.
+                  : "Søknaden kan ses av komiteene du søker, sentrale opptaksansvarlige som koordinerer intervjuer, og leder av Abakus."}{" "}
+              Opplysningene skal bare brukes til å gjennomføre opptaket.
             </SubmitInfo>
             <SubmitInfo>Du kan når som helst trekke søknaden din.</SubmitInfo>
           </div>

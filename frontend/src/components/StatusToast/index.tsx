@@ -17,13 +17,13 @@ const StatusToast: React.FC<StatusToastProps> = ({ toast, onDismiss }) => {
   if (!toast) return null;
   return (
     <div
-      role="status"
-      aria-live="polite"
-      className="pointer-events-none fixed inset-x-0 top-4 z-50 flex justify-center"
+      role={toast.tone === "error" ? "alert" : "status"}
+      aria-live={toast.tone === "error" ? "assertive" : "polite"}
+      className="pointer-events-none fixed inset-x-0 top-4 z-[300] flex justify-center"
     >
       <div
         className={cn(
-          "pointer-events-auto flex max-w-lg items-center gap-2 rounded-lg border px-4 py-2.5 text-ui font-semibold shadow-lg animate-[fade-in_0.2s_ease-out]",
+          "pointer-events-auto flex max-w-lg items-center gap-2 rounded-lg border px-4 py-2.5 text-ui font-semibold shadow-lg animate-fade-in",
           toast.tone === "error"
             ? "border-danger-border bg-danger-bg text-danger"
             : "border-success-border bg-success-bg text-success",

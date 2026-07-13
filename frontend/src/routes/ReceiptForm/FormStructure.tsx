@@ -1,7 +1,7 @@
 import React from "react";
 import { Form } from "formik";
 import FormatTime from "src/components/Time/FormatTime";
-import Icon from "src/components/Icon";
+import { Info } from "lucide-react";
 import ConfirmModal from "src/components/ConfirmModal";
 import { useAdmission, useMyApplication } from "src/query/hooks";
 import { useDeleteMyApplicationMutation } from "src/query/mutations";
@@ -82,7 +82,7 @@ const FormStructure: React.FC<FormStructureProps> = ({ toggleIsEditing }) => {
               ? "Søknaden din er mottatt. Du kan endre eller slette den frem til søknadsfristen."
               : isBackup
                 ? "Søknaden din er nå sendt til backup. Du kan endre eller slette den frem til søknadsfristen."
-                : "Søknaden din er nå sendt til de aktuelle komiteene og leder av Abakus. Du kan endre eller slette den frem til søknadsfristen."}{" "}
+                : "Søknaden din er nå sendt til de aktuelle komiteene, sentrale opptaksansvarlige som koordinerer intervjuer, og leder av Abakus. Du kan endre eller slette den frem til søknadsfristen."}{" "}
             Gå til{" "}
             <a href="https://abakus.no" target="_blank" rel="noreferrer">
               abakus.no
@@ -183,7 +183,7 @@ const FormStructure: React.FC<FormStructureProps> = ({ toggleIsEditing }) => {
           {!isBackup && (
             <Sidebar>
               <HelpText>
-                <Icon name="information-circle-outline" />
+                <Info aria-hidden="true" />
                 <span>
                   Her kan du se teksten du har skrevet i de generelle feltene.
                   Denne teksten er lik for alle komiteene du søker.
@@ -191,7 +191,7 @@ const FormStructure: React.FC<FormStructureProps> = ({ toggleIsEditing }) => {
               </HelpText>
               {!isRevy && !isRevyBoard && (
                 <HelpText>
-                  <Icon name="information-circle-outline" />
+                  <Info aria-hidden="true" />
                   <span>
                     Kun leder og nestleder av Abakus kan se det du skriver inn i
                     feltet for kommentar til leder av Abakus.
@@ -234,7 +234,7 @@ const FormStructure: React.FC<FormStructureProps> = ({ toggleIsEditing }) => {
               </ReceiptApplications>
               <Sidebar>
                 <HelpText>
-                  <Icon name="information-circle-outline" />
+                  <Info aria-hidden="true" />
                   <span>
                     Her ser du{" "}
                     {isRevy
@@ -246,7 +246,7 @@ const FormStructure: React.FC<FormStructureProps> = ({ toggleIsEditing }) => {
                   </span>
                 </HelpText>
                 <HelpText>
-                  <Icon name="information-circle-outline" />
+                  <Info aria-hidden="true" />
                   <span>
                     Noen{" "}
                     {isRevy
@@ -287,29 +287,29 @@ export default FormStructure;
 const ReceiptFields = styled.div`
   display: flex;
   flex-direction: column;
-  gap: 1rem;
+  gap: var(--spacing-md);
 `;
 
 const ReceiptField = styled.div`
-  padding: 1rem;
-  border: 1px solid #f3f4f6;
+  padding: var(--spacing-md);
+  border: 1px solid var(--color-border-soft);
   border-radius: var(--border-radius-md);
-  background: #f9fafb;
+  background: var(--color-surface-subtle);
 `;
 
 const ReceiptLabel = styled.span`
   display: block;
   margin-bottom: 0.35rem;
-  color: #6b7280;
-  font-size: 0.78rem;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-detail);
   font-weight: 700;
   letter-spacing: 0.05em;
   text-transform: uppercase;
 `;
 
 const ReceiptValue = styled.span`
-  color: #111827;
-  font-size: 0.95rem;
+  color: var(--color-text-primary);
+  font-size: var(--font-size-ui);
   font-weight: 600;
 `;
 
@@ -321,9 +321,9 @@ const ReceiptApplications = styled.div`
 
 const ReceiptApplication = styled.article`
   padding: 1.25rem;
-  border: 1px solid #f3f4f6;
+  border: 1px solid var(--color-border-soft);
   border-radius: var(--border-radius-md);
-  background: #ffffff;
+  background: var(--color-surface-base);
 `;
 
 const ReceiptApplicationHeader = styled.div`
@@ -342,22 +342,22 @@ const ReceiptLogo = styled.img`
 
 const ReceiptGroupName = styled.h3`
   margin: 0;
-  color: #111827;
-  font-size: 1.1rem;
+  color: var(--color-text-primary);
+  font-size: var(--font-size-lg);
   font-weight: 700;
 `;
 
 const ReceiptPrompt = styled.p`
   margin: 0 0 0.85rem;
-  color: #6b7280;
-  font-size: 0.875rem;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-sm);
   line-height: 1.6;
 `;
 
 const ReceiptText = styled.p`
   margin: 0;
-  color: #374151;
-  font-size: 0.95rem;
+  color: var(--color-text-body);
+  font-size: var(--font-size-ui);
   line-height: 1.65;
   white-space: pre-wrap;
 `;

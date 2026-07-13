@@ -60,14 +60,14 @@ const EditTimeDrawer = ({
       <div
         aria-hidden="true"
         onClick={onClose}
-        className="fixed inset-0 z-40 bg-overlay animate-[overlay-fade-in_0.2s_ease-out]"
+        className="fixed inset-0 z-[200] bg-overlay animate-overlay-fade-in"
       />
       <aside
         ref={drawerRef}
         role="dialog"
         aria-modal="true"
         aria-labelledby="edit-time-title"
-        className="fixed inset-y-0 right-0 z-50 flex w-full max-w-sm flex-col border-l border-border bg-surface-base shadow-drawer-left animate-[slide-in-right_0.22s_cubic-bezier(0.16,1,0.3,1)]"
+        className="fixed inset-y-0 right-0 z-[210] flex w-full max-w-sm flex-col border-l border-border bg-surface-base shadow-drawer-left animate-slide-in-right"
       >
         <header className="flex items-start justify-between gap-3 border-b border-border-soft px-5 py-4">
           <div className="min-w-0">

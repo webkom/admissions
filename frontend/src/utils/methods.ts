@@ -15,20 +15,8 @@ export const toggleFromArray: <T>(
     ? array.filter((value, index, array) => !predicate(value, index, array))
     : [...array, item];
 
-/**
- * Make an applicant-supplied value safe to put in a CSV cell.
- *
- * Defuses spreadsheet formula injection: Excel/Sheets execute a cell whose
- * value starts with =, +, -, @, tab or carriage return, so an answer like
- * `=HYPERLINK(...)` would run when a recruiter opens applications.csv. Such
- * values are prefixed with a single quote so they render as plain text.
- * Embedded double quotes are also normalised to single quotes.
- *
- * @param value The applicant-derived value
- * @returns A string safe to write to a CSV cell
- */
 export const escapeCsvCell = (value: unknown): string => {
   if (value === null || value === undefined) return "";
-  const text = String(value).replaceAll('"', "'");
-  return /^[=+\-@\t\r]/.test(text) ? `'${text}` : text;
+  const text = String(value).replaceAll('"', '""');
+  return /^[\s\p{Cc}]*[=+\-@＝＋－＠]/u.test(text) ? `'${text}` : text;
 };

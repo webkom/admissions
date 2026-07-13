@@ -16,17 +16,24 @@ export const apiClient = axios.create({
   timeout: 50000,
 });
 
-/**
- * Report errors to sentry. Registered on the apiClient instance (not the
- * global axios default) so that real API/network errors are actually captured.
- */
 apiClient.interceptors.response.use(
   (response: AxiosResponse) => response,
   (error: AxiosError) => {
-    Sentry.setContext("response", {
-      response: error.response,
-    });
-    Sentry.captureException(error);
+    const status = error.response?.status;
+    if (status === undefined || status >= 500) {
+      Sentry.withScope((scope) => {
+        scope.setTag("api.status", status ?? "network_error");
+        scope.setTag(
+          "api.method",
+          error.config?.method?.toUpperCase() ?? "UNKNOWN",
+        );
+        Sentry.captureException(
+          new Error(
+            status ? `API request failed (${status})` : "API request failed",
+          ),
+        );
+      });
+    }
     return Promise.reject(error);
   },
 );

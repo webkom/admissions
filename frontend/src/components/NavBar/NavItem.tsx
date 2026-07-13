@@ -23,7 +23,7 @@ export default NavItem;
 const Item = styled(NavLink)`
   color: var(--color-text-accent);
   font-weight: 500;
-  font-size: 0.9375rem;
+  font-size: var(--font-size-ui);
   letter-spacing: -0.01em;
   transition: var(--transition-base);
 

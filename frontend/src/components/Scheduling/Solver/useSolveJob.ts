@@ -1,60 +1,54 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { isAxiosError } from "axios";
 
 import { apiClient } from "../../../utils/callApi";
 import {
-  SOLVE_POLL_INTERVAL_MS,
-  SOLVE_POLL_TIMEOUT_MS,
   formatApiError,
   hasSchedule,
+  pollSolveJob,
+  solveFailureMessage,
   type SolveJob,
   type SolveResponse,
 } from "./solverHelpers";
+import djangoData from "src/utils/djangoData";
 
-/**
- * Owns the async solve lifecycle for one admission: enqueue a job, poll it to
- * completion, and expose the result/loading/error state.
- *
- * - `solve(payload)` enqueues and polls; call it after validating inputs.
- * - `cancel()` aborts the current poll and cancels the server-side job.
- * The draft result is persisted in sessionStorage (it holds real candidate
- * names) so it survives reloads within a sitting but clears when the tab closes.
- */
 export function useSolveJob(admissionSlug: string) {
-  const solverResultKey = `admissions.solverResult.${admissionSlug}`;
+  const solveJobKey = `admissions.solveJob.${djangoData.user.id ?? "unknown"}.${admissionSlug}`;
+  const legacySolveJobKey = `admissions.solveJob.${admissionSlug}`;
 
   const [loading, setLoading] = useState(false);
-  const [result, setResult] = useState<SolveResponse | null>(() => {
-    try {
-      const raw = window.sessionStorage.getItem(solverResultKey);
-      return raw ? (JSON.parse(raw) as SolveResponse) : null;
-    } catch {
-      return null;
-    }
-  });
+  const [result, setResult] = useState<SolveResponse | null>(null);
   const [error, setError] = useState("");
   const [planRevealed, setPlanRevealed] = useState(() =>
     hasSchedule(result?.status),
   );
   const [elapsedMs, setElapsedMs] = useState(0);
 
-  // Identifies the current solve run so a superseding solve (or an unmount)
-  // can't have a stale poll overwrite newer state.
   const solveRunRef = useRef(0);
-  // The job currently being polled, so it can be cancelled.
   const solveJobIdRef = useRef<string | null>(null);
+  const lastGoodResultRef = useRef<SolveResponse | null>(
+    result && hasSchedule(result.status) ? result : null,
+  );
 
   useEffect(() => {
     try {
-      if (result) {
-        window.sessionStorage.setItem(solverResultKey, JSON.stringify(result));
-      } else {
-        window.sessionStorage.removeItem(solverResultKey);
-      }
+      window.sessionStorage.removeItem(legacySolveJobKey);
     } catch {
-      // ignore storage failures
+      return;
     }
-  }, [result, solverResultKey]);
+  }, [legacySolveJobKey]);
+
+  useEffect(() => {
+    return () => {
+      solveRunRef.current += 1;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (result && hasSchedule(result.status)) {
+      lastGoodResultRef.current = result;
+    }
+  }, [result]);
 
   useEffect(() => {
     if (!loading) {
@@ -68,16 +62,131 @@ export function useSolveJob(admissionSlug: string) {
     return () => window.clearInterval(tick);
   }, [loading]);
 
+  const clearStoredJob = useCallback(() => {
+    try {
+      window.sessionStorage.removeItem(solveJobKey);
+    } catch {
+      return;
+    }
+  }, [solveJobKey]);
+
+  const reset = useCallback(() => {
+    const jobId = solveJobIdRef.current;
+    solveRunRef.current += 1;
+    solveJobIdRef.current = null;
+    lastGoodResultRef.current = null;
+    setLoading(false);
+    setResult(null);
+    setError("");
+    setPlanRevealed(false);
+    clearStoredJob();
+    if (jobId) {
+      void apiClient.delete(`/solve/${jobId}/`).catch(() => undefined);
+    }
+  }, [clearStoredJob]);
+
+  const restorePreviousResult = () => {
+    const previous = lastGoodResultRef.current;
+    if (!previous) return false;
+    setResult(previous);
+    setPlanRevealed(true);
+    return true;
+  };
+
+  const applyFinishedJob = (job: SolveJob) => {
+    if (job.status === "ERROR") {
+      setError(job.error || "Solveren feilet under kjøring.");
+      restorePreviousResult();
+      return;
+    }
+    const jobResult = job.result;
+    if (jobResult && hasSchedule(jobResult.status)) {
+      setResult(jobResult);
+      setPlanRevealed(true);
+      return;
+    }
+    if (jobResult) {
+      if (restorePreviousResult()) {
+        setError(solveFailureMessage(jobResult));
+      } else {
+        setResult(jobResult);
+      }
+      return;
+    }
+    restorePreviousResult();
+  };
+
+  const settleJob = async (job: SolveJob, runId: number) => {
+    const outcome = await pollSolveJob(
+      job,
+      () => solveRunRef.current !== runId,
+    );
+    if (outcome.kind === "stale") return;
+    if (outcome.kind === "timeout") {
+      const jobId = solveJobIdRef.current;
+      clearStoredJob();
+      solveJobIdRef.current = null;
+      if (jobId) {
+        void apiClient.delete(`/solve/${jobId}/`).catch(() => undefined);
+      }
+      setError(
+        "Solveren svarer ikke i tide. Prøv igjen, eller sjekk at " +
+          "solver-worker kjører.",
+      );
+      restorePreviousResult();
+      return;
+    }
+    if (solveRunRef.current !== runId) return;
+    clearStoredJob();
+    applyFinishedJob(outcome.job);
+  };
+
+  useEffect(() => {
+    let storedJobId: string | null = null;
+    try {
+      storedJobId = window.sessionStorage.getItem(solveJobKey);
+    } catch {
+      return;
+    }
+    if (!storedJobId) return;
+    const runId = ++solveRunRef.current;
+    (async () => {
+      try {
+        const { data: job } = await apiClient.get<SolveJob>(
+          `/solve/${storedJobId}/`,
+        );
+        if (solveRunRef.current !== runId) return;
+        if (job.status === "PENDING" || job.status === "RUNNING") {
+          solveJobIdRef.current = job.job_id;
+          setLoading(true);
+          await settleJob(job, runId);
+        } else {
+          clearStoredJob();
+          applyFinishedJob(job);
+        }
+      } catch {
+        if (solveRunRef.current === runId) clearStoredJob();
+      } finally {
+        if (solveRunRef.current === runId) {
+          setLoading(false);
+          solveJobIdRef.current = null;
+        }
+      }
+    })();
+  }, [solveJobKey]);
+
   const cancel = async () => {
     const jobId = solveJobIdRef.current;
-    solveRunRef.current += 1; // stop the active poll loop
+    solveRunRef.current += 1;
     solveJobIdRef.current = null;
     setLoading(false);
+    restorePreviousResult();
+    clearStoredJob();
     if (jobId) {
       try {
         await apiClient.delete(`/solve/${jobId}/`);
       } catch {
-        // Best effort — the worker's reaper cleans up if the cancel didn't land.
+        clearStoredJob();
       }
     }
   };
@@ -89,44 +198,20 @@ export function useSolveJob(admissionSlug: string) {
     setResult(null);
 
     try {
-      // Enqueue, then poll the job; solving runs in a background worker.
       const { data: created } = await apiClient.post<SolveJob>(
         "/solve/",
         payload,
       );
       solveJobIdRef.current = created.job_id;
-      let job = created;
-      const pollStart = Date.now();
-      while (job.status === "PENDING" || job.status === "RUNNING") {
-        await new Promise((resolve) =>
-          setTimeout(resolve, SOLVE_POLL_INTERVAL_MS),
-        );
-        if (solveRunRef.current !== runId) return; // superseded
-        if (Date.now() - pollStart > SOLVE_POLL_TIMEOUT_MS) {
-          setError(
-            "Solveren svarer ikke i tide. Prøv igjen, eller sjekk at " +
-              "solver-worker kjører.",
-          );
-          return;
-        }
-        const { data } = await apiClient.get<SolveJob>(
-          `/solve/${created.job_id}/`,
-        );
-        job = data;
+      try {
+        window.sessionStorage.setItem(solveJobKey, created.job_id);
+      } catch {
+        clearStoredJob();
       }
-
-      if (solveRunRef.current !== runId) return;
-      if (job.status === "ERROR") {
-        setError(job.error || "Solveren feilet under kjøring.");
-      } else if (job.result) {
-        setResult(job.result);
-        if (hasSchedule(job.result.status)) {
-          setPlanRevealed(true);
-        }
-      }
+      await settleJob(created, runId);
     } catch (err) {
       if (solveRunRef.current !== runId) return;
-      console.error(err);
+      restorePreviousResult();
       if (isAxiosError(err) && err.response) {
         setError(formatApiError(err.response.data));
       } else {
@@ -151,5 +236,6 @@ export function useSolveJob(admissionSlug: string) {
     elapsedMs,
     solve,
     cancel,
+    reset,
   };
 }

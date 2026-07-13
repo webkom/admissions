@@ -4,7 +4,7 @@ import styled from "styled-components";
 export const Overlay = styled.div`
   min-width: 100%;
   min-height: 100%;
-  background: rgba(0, 0, 0, 0.8);
+  background: var(--color-overlay);
   position: fixed;
   top: 0;
   bottom: 0;
@@ -21,8 +21,8 @@ export const ConfirmBox = styled.div`
   left: 0;
   right: 0;
   margin: 0 auto;
-  background: #fff;
-  border-radius: 5px;
+  background: var(--color-surface-base);
+  border-radius: var(--border-radius-sm);
   padding: 40px;
 `;
 

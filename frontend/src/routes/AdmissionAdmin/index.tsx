@@ -39,10 +39,10 @@ const PageWrapper = styled.div`
 `;
 
 const Wrapper = styled.div<{ $withSideNav: boolean }>`
-  max-width: 1440px;
+  max-width: var(--lego-max-width);
   width: 100%;
   margin: 0 auto;
-  padding: 1.5rem;
+  padding: var(--spacing-lg);
   display: grid;
   grid-template-columns: ${(props) =>
     props.$withSideNav ? "280px minmax(0, 1fr)" : "minmax(0, 1fr)"};
@@ -50,7 +50,7 @@ const Wrapper = styled.div<{ $withSideNav: boolean }>`
 
   @media screen and (max-width: 900px) {
     grid-template-columns: 1fr;
-    padding: 1rem;
+    padding: var(--spacing-md);
   }
 `;
 

@@ -43,6 +43,7 @@ export const nextMonday = (from: Date = new Date()): string => {
 export const dateRangeDates = (
   start: string | Date,
   end: string | Date | null | undefined,
+  limit?: number,
 ): string[] => {
   if (!start) return [];
   const startDate = toDate(start);
@@ -50,7 +51,7 @@ export const dateRangeDates = (
   if (endDate < startDate) return [];
   const out: string[] = [];
   const cursor = new Date(startDate);
-  while (cursor <= endDate) {
+  while (cursor <= endDate && (limit === undefined || out.length < limit)) {
     out.push(toIsoDate(cursor));
     cursor.setDate(cursor.getDate() + 1);
   }
@@ -69,11 +70,6 @@ export const formatDateHeader = (
   return { weekday, dayMonth: `${day}.${month}` };
 };
 
-const slotsPerDay = (sessionDuration: number): number => {
-  const duration = normalizeDuration(sessionDuration);
-  return Math.max(1, Math.floor(MINUTES_PER_DAY / duration));
-};
-
 export const buildBlockTimeChunks = ({
   dayStartMinute,
   dayEndMinute,
@@ -89,10 +85,7 @@ export const buildBlockTimeChunks = ({
 }): number[][] => {
   const duration = normalizeDuration(sessionDuration);
   const size = Math.max(1, Math.floor(chunkSize || 1));
-  const breakSlots = Math.max(
-    0,
-    Math.ceil(Math.max(0, chunkBreakMinutes || 0) / duration),
-  );
+  const breakMinutes = Math.max(0, chunkBreakMinutes || 0);
   const chunks: number[][] = [];
   let currentMinute = dayStartMinute;
 
@@ -108,7 +101,7 @@ export const buildBlockTimeChunks = ({
     }
 
     if (chunk.length > 0) chunks.push(chunk);
-    currentMinute += breakSlots * duration;
+    currentMinute += breakMinutes;
   }
 
   return chunks;
@@ -140,20 +133,17 @@ export const encodeScheduleTime = (
   minute: number,
   sessionDuration: number,
 ): number => {
-  const duration = normalizeDuration(sessionDuration);
-  const spd = slotsPerDay(duration);
-  return dayIndex * spd + Math.floor(minute / duration);
+  void sessionDuration;
+  return dayIndex * MINUTES_PER_DAY + minute;
 };
 
 export const decodeScheduleTime = (
   time: number,
   sessionDuration: number,
 ): { dayIndex: number; minute: number } => {
-  const duration = normalizeDuration(sessionDuration);
-  const spd = slotsPerDay(duration);
-  const dayIndex = Math.floor(time / spd);
-  const slotIndex = time - dayIndex * spd;
-  return { dayIndex, minute: slotIndex * duration };
+  void sessionDuration;
+  const dayIndex = Math.floor(time / MINUTES_PER_DAY);
+  return { dayIndex, minute: time - dayIndex * MINUTES_PER_DAY };
 };
 
 export const makeSlotKey = (date: string, minute: number): string =>
@@ -309,12 +299,21 @@ export const buildLockedAssignments = (
   time: number;
   panel: Array<{ id?: string; name: string }>;
 }> => {
-  const candidateIdByName = new Map(
-    candidates.map((candidate) => [candidate.name, candidate.id]),
-  );
-  const interviewerIdByName = new Map(
-    interviewers.map((interviewer) => [interviewer.name, interviewer.id]),
-  );
+  const uniqueIdByName = <T extends { id: string; name: string }>(
+    items: T[],
+  ) => {
+    const grouped = new Map<string, string[]>();
+    items.forEach((item) => {
+      grouped.set(item.name, [...(grouped.get(item.name) ?? []), item.id]);
+    });
+    return new Map(
+      Array.from(grouped.entries())
+        .filter(([, ids]) => ids.length === 1)
+        .map(([name, ids]) => [name, ids[0]]),
+    );
+  };
+  const candidateIdByName = uniqueIdByName(candidates);
+  const interviewerIdByName = uniqueIdByName(interviewers);
   return schedule
     .filter((item) => item.locked)
     .map((item) => ({
@@ -420,7 +419,7 @@ export const generateIcs = (
     ...OSLO_VTIMEZONE,
   ];
 
-  schedule.forEach((item) => {
+  schedule.forEach((item, index) => {
     const { dayIndex, minute } = decodeScheduleTime(item.time, duration);
     const dateStr = dates[dayIndex];
     if (!dateStr) return;
@@ -429,10 +428,9 @@ export const generateIcs = (
     const end = new Date(start.getTime() + duration * 60 * 1000);
     const summary = `Intervju: ${item.candidate}`;
     const panel = item.panel.map((member) => member.name).join(", ");
-    const candidateRef = slugifyIcs(item.candidate_id ?? item.candidate);
     lines.push(
       "BEGIN:VEVENT",
-      `UID:${uidBase}-${candidateRef}-${item.time}@admissions`,
+      `UID:${uidBase}-${index}-${item.time}@admissions`,
       `DTSTAMP:${dtstamp}`,
       `DTSTART;TZID=Europe/Oslo:${formatIcsLocal(start)}`,
       `DTEND;TZID=Europe/Oslo:${formatIcsLocal(end)}`,

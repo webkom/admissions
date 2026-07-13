@@ -8,6 +8,7 @@ import {
   LayoutPanelTop,
 } from "lucide-react";
 import {
+  addDays,
   buildBlockTimeChunks,
   buildBlockTimeSlots,
   dateRangeDates,
@@ -38,15 +39,19 @@ const MAX_RANGE_DAYS = 21;
 const DURATION_PRESETS = [15, 20, 30] as const;
 const PAUSE_PRESETS = [30, 60] as const;
 
+const parseIntegerInRange = (raw: string, min: number, max: number) => {
+  if (raw.trim() === "") return null;
+  const value = Number(raw);
+  return Number.isInteger(value) && value >= min && value <= max ? value : null;
+};
+
 const SectionLabel: React.FC<{
   icon: React.ElementType;
   label: string;
 }> = ({ icon: Icon, label }) => (
   <div className="flex items-center gap-1.5 pb-2">
     <Icon size={12} className="text-text-subtle" />
-    <span className="text-xs font-bold uppercase tracking-wide text-text-subtle">
-      {label}
-    </span>
+    <span className="text-detail font-medium text-text-muted">{label}</span>
   </div>
 );
 
@@ -61,7 +66,7 @@ const PresetChip: React.FC<{
     onClick={onClick}
     aria-pressed={active}
     className={cn(
-      "rounded-[10px] border px-4 py-2.5 text-sm font-bold transition-[border-color,background,box-shadow,transform] duration-200 ease-[cubic-bezier(0.2,0,0,1)] hover:-translate-y-px active:translate-y-0 active:scale-[0.985] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-focus",
+      "rounded-full border px-4 py-2 text-sm font-semibold transition-[border-color,background] duration-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-focus",
       active
         ? "border-brand-activeBorder bg-brand-panel text-text-primary shadow-toggle"
         : "border-border-soft bg-surface-base text-text-muted hover:border-brand-strongBorder hover:text-text-primary",
@@ -139,18 +144,24 @@ const AdminScheduleConfig: React.FC<AdminScheduleConfigProps> = ({
     h: Math.floor(dayEndMinute / 60),
     m: dayEndMinute % 60,
   });
-  const [pendingDuration, setPendingDuration] = useState(sessionDuration);
-  const [customDurationInput, setCustomDurationInput] = useState("");
-  const [isCustomDuration, setIsCustomDuration] = useState(
-    !DURATION_PRESETS.includes(
-      sessionDuration as (typeof DURATION_PRESETS)[number],
-    ),
+  const durationIsPreset = DURATION_PRESETS.includes(
+    sessionDuration as (typeof DURATION_PRESETS)[number],
   );
+  const [pendingDuration, setPendingDuration] = useState(sessionDuration);
+  const [customDurationInput, setCustomDurationInput] = useState(
+    durationIsPreset ? "" : String(sessionDuration),
+  );
+  const [isCustomDuration, setIsCustomDuration] = useState(!durationIsPreset);
 
   const [pendingChunkSize, setPendingChunkSize] = useState(chunkSize);
   const [pendingChunkBreak, setPendingChunkBreak] = useState(chunkBreakMinutes);
-  const [customPauseInput, setCustomPauseInput] = useState("");
-  const [isCustomPause, setIsCustomPause] = useState(false);
+  const pauseIsPreset = PAUSE_PRESETS.includes(
+    chunkBreakMinutes as (typeof PAUSE_PRESETS)[number],
+  );
+  const [customPauseInput, setCustomPauseInput] = useState(
+    pauseIsPreset ? "" : String(chunkBreakMinutes),
+  );
+  const [isCustomPause, setIsCustomPause] = useState(!pauseIsPreset);
 
   const [localStartDate, setLocalStartDate] = useState(startDate);
   const [localEndDate, setLocalEndDate] = useState(endDate);
@@ -191,7 +202,7 @@ const AdminScheduleConfig: React.FC<AdminScheduleConfigProps> = ({
       sessionDuration as (typeof DURATION_PRESETS)[number],
     );
     setIsCustomDuration(!isPreset);
-    if (!isPreset) setCustomDurationInput(String(sessionDuration));
+    setCustomDurationInput(isPreset ? "" : String(sessionDuration));
   }, [sessionDuration]);
 
   useEffect(() => {
@@ -204,12 +215,17 @@ const AdminScheduleConfig: React.FC<AdminScheduleConfigProps> = ({
       chunkBreakMinutes as (typeof PAUSE_PRESETS)[number],
     );
     setIsCustomPause(!isPreset);
-    if (!isPreset) setCustomPauseInput(String(chunkBreakMinutes));
+    setCustomPauseInput(isPreset ? "" : String(chunkBreakMinutes));
   }, [chunkBreakMinutes]);
 
   const startMinute = pendingStart.h * 60 + pendingStart.m;
   const endMinute = pendingEnd.h * 60 + pendingEnd.m;
   const isInvalidRange = startMinute >= endMinute;
+  const customDurationValue = parseIntegerInRange(customDurationInput, 5, 120);
+  const customPauseValue = parseIntegerInRange(customPauseInput, 0, 240);
+  const durationInputInvalid = isCustomDuration && customDurationValue === null;
+  const pauseInputInvalid = isCustomPause && customPauseValue === null;
+  const hasInvalidNumericInput = durationInputInvalid || pauseInputInvalid;
   const draftSlots = React.useMemo(
     () => new Set(enabledWindowsToSlots(draftWindows, pendingDuration)),
     [draftWindows, pendingDuration],
@@ -229,7 +245,7 @@ const AdminScheduleConfig: React.FC<AdminScheduleConfigProps> = ({
       pendingChunkSize !== chunkSize);
 
   const dates = React.useMemo(
-    () => dateRangeDates(localStartDate, localEndDate).slice(0, MAX_RANGE_DAYS),
+    () => dateRangeDates(localStartDate, localEndDate, MAX_RANGE_DAYS),
     [localStartDate, localEndDate],
   );
 
@@ -292,6 +308,7 @@ const AdminScheduleConfig: React.FC<AdminScheduleConfigProps> = ({
   );
 
   const hasPendingChanges =
+    hasInvalidNumericInput ||
     localStartDate !== startDate ||
     localEndDate !== endDate ||
     pendingDuration !== sessionDuration ||
@@ -312,6 +329,16 @@ const AdminScheduleConfig: React.FC<AdminScheduleConfigProps> = ({
       JSON.stringify(normalizedEnabledWindows);
   const visualGroupingChange =
     pendingChunkSize !== chunkSize && !blockShapeChange;
+
+  useEffect(() => {
+    if (!hasPendingChanges) return undefined;
+    const handleBeforeUnload = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+      event.returnValue = "";
+    };
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    return () => window.removeEventListener("beforeunload", handleBeforeUnload);
+  }, [hasPendingChanges]);
 
   const applyToggle = useCallback(
     (
@@ -376,7 +403,24 @@ const AdminScheduleConfig: React.FC<AdminScheduleConfigProps> = ({
   }, [handlePointerUp]);
 
   const handleSave = async () => {
-    if (!onSave || pendingDuration === 0 || isInvalidRange) return;
+    if (
+      !onSave ||
+      hasInvalidNumericInput ||
+      pendingDuration < 5 ||
+      pendingDuration > 120 ||
+      pendingChunkBreak < 0 ||
+      pendingChunkBreak > 240 ||
+      isInvalidRange ||
+      !dateRangeValid
+    )
+      return;
+    if (
+      gridDefiningChange &&
+      !window.confirm(
+        "Endringen sletter all registrert tilgjengelighet og nullstiller eksisterende intervjuforslag. Vil du fortsette?",
+      )
+    )
+      return;
     setIsSaving(true);
     try {
       const nextConfig = {
@@ -429,7 +473,14 @@ const AdminScheduleConfig: React.FC<AdminScheduleConfigProps> = ({
   const clearAll = () => setDraftWindows([]);
 
   const dateRangeValid =
-    localStartDate && localEndDate && localStartDate <= localEndDate;
+    Boolean(localStartDate) &&
+    Boolean(localEndDate) &&
+    localStartDate <= localEndDate &&
+    localEndDate <= addDays(localStartDate, MAX_RANGE_DAYS - 1);
+  const dateRangeTooLong =
+    Boolean(localStartDate) &&
+    Boolean(localEndDate) &&
+    localEndDate > addDays(localStartDate, MAX_RANGE_DAYS - 1);
   const columns = dates.length + 1;
 
   const dateInputClass =
@@ -437,16 +488,15 @@ const AdminScheduleConfig: React.FC<AdminScheduleConfigProps> = ({
 
   return (
     <div className="grid min-w-0 items-start gap-3 xl:grid-cols-[300px_1fr]">
-      {/* Settings column */}
       <SchedulePanel>
         <SchedulePanelHeader icon={LayoutPanelTop} title="Rammer" />
 
         <SchedulePanelBody className="grid gap-3 sm:grid-cols-2 xl:grid-cols-1">
-          {/* Intervjuperiode */}
           <Field icon={CalendarDays} label="Intervjuperiode">
             <div className="flex flex-wrap items-center gap-2">
               <input
                 id="period-start"
+                aria-label="Startdato for intervjuperioden"
                 type="date"
                 value={localStartDate}
                 className={dateInputClass}
@@ -455,6 +505,7 @@ const AdminScheduleConfig: React.FC<AdminScheduleConfigProps> = ({
               <span className="select-none text-sm text-text-disabled">→</span>
               <input
                 type="date"
+                aria-label="Sluttdato for intervjuperioden"
                 value={localEndDate}
                 min={localStartDate}
                 className={dateInputClass}
@@ -462,67 +513,93 @@ const AdminScheduleConfig: React.FC<AdminScheduleConfigProps> = ({
               />
               {!dateRangeValid && (
                 <span className="text-xs font-semibold text-brand">
-                  Ugyldig periode
+                  {dateRangeTooLong
+                    ? `Maks ${MAX_RANGE_DAYS} dager`
+                    : "Ugyldig periode"}
                 </span>
               )}
             </div>
           </Field>
 
           <Field icon={Timer} label="Intervjulengde (inkludert pauser mellom)">
-            <div className="flex flex-wrap items-center gap-2">
-              {DURATION_PRESETS.map((preset) => (
-                <PresetChip
-                  key={preset}
-                  value={preset}
-                  unit="min"
-                  active={!isCustomDuration && pendingDuration === preset}
-                  onClick={() => {
-                    setPendingDuration(preset);
-                    setIsCustomDuration(false);
-                  }}
-                />
-              ))}
-              <div
-                className={cn(
-                  "inline-flex cursor-text items-center gap-1.5 rounded-[10px] border px-3 py-2 transition-[border-color,background,box-shadow] duration-150",
-                  isCustomDuration
-                    ? "border-brand-activeBorder bg-brand-panel shadow-toggle"
-                    : "border-border-soft bg-surface-base hover:border-brand-strongBorder",
-                )}
-              >
-                <input
-                  type="number"
-                  min="5"
-                  max="120"
-                  step="5"
-                  placeholder="Egendefinert"
-                  value={isCustomDuration ? customDurationInput : ""}
-                  className="w-24 border-none bg-transparent p-0 text-sm font-bold text-text-primary [-moz-appearance:textfield] placeholder:font-normal placeholder:text-text-disabled focus:text-brand focus:outline-none [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
-                  onChange={(e) => {
-                    setCustomDurationInput(e.target.value);
-                    setIsCustomDuration(true);
-                    const val = parseInt(e.target.value, 10);
-                    if (!isNaN(val) && val > 0) setPendingDuration(val);
-                  }}
-                  onFocus={() => setIsCustomDuration(true)}
-                />
-                <span className="select-none text-xs font-semibold text-text-subtle">
-                  min
-                </span>
+            <div className="space-y-2">
+              <div className="flex flex-wrap items-center gap-2">
+                {DURATION_PRESETS.map((preset) => (
+                  <PresetChip
+                    key={preset}
+                    value={preset}
+                    unit="min"
+                    active={!isCustomDuration && pendingDuration === preset}
+                    onClick={() => {
+                      setPendingDuration(preset);
+                      setCustomDurationInput("");
+                      setIsCustomDuration(false);
+                    }}
+                  />
+                ))}
+                <div
+                  className={cn(
+                    "inline-flex cursor-text items-center gap-1.5 rounded-md border px-3 py-2 transition-[border-color,background,box-shadow] duration-150",
+                    durationInputInvalid
+                      ? "border-danger-border bg-danger-bg"
+                      : isCustomDuration
+                        ? "border-brand-activeBorder bg-brand-panel shadow-toggle"
+                        : "border-border-soft bg-surface-base hover:border-brand-strongBorder",
+                  )}
+                >
+                  <input
+                    type="number"
+                    aria-label="Egendefinert intervjulengde i minutter"
+                    aria-invalid={durationInputInvalid}
+                    aria-describedby={
+                      durationInputInvalid ? "duration-input-error" : undefined
+                    }
+                    min="5"
+                    max="120"
+                    step="5"
+                    placeholder="Egendefinert"
+                    value={isCustomDuration ? customDurationInput : ""}
+                    className="w-24 border-none bg-transparent p-0 text-sm font-bold text-text-primary [-moz-appearance:textfield] placeholder:font-normal placeholder:text-text-disabled focus:text-brand focus:outline-none [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                    onChange={(e) => {
+                      const raw = e.target.value;
+                      setCustomDurationInput(raw);
+                      setIsCustomDuration(true);
+                      const value = parseIntegerInRange(raw, 5, 120);
+                      if (value !== null) setPendingDuration(value);
+                    }}
+                    onFocus={() => setIsCustomDuration(true)}
+                  />
+                  <span className="select-none text-xs font-semibold text-text-subtle">
+                    min
+                  </span>
+                </div>
               </div>
+              {durationInputInvalid && (
+                <p
+                  id="duration-input-error"
+                  aria-live="polite"
+                  className="m-0 text-xs font-semibold text-danger"
+                >
+                  Angi et helt antall minutter fra 5 til 120.
+                </p>
+              )}
             </div>
           </Field>
 
-          {/* Tidsrom per dag */}
           <Field icon={Clock} label="Tidsrom per dag">
             <div className="flex flex-wrap items-center gap-2">
               <TimeSegmentInput
                 id="start-time"
+                aria-label="Starttid per dag"
                 value={pendingStart}
                 onChange={setPendingStart}
               />
               <span className="select-none text-sm text-text-disabled">→</span>
-              <TimeSegmentInput value={pendingEnd} onChange={setPendingEnd} />
+              <TimeSegmentInput
+                aria-label="Sluttid per dag"
+                value={pendingEnd}
+                onChange={setPendingEnd}
+              />
               {isInvalidRange && (
                 <span className="text-xs font-semibold text-brand">
                   Ugyldig tidsrom
@@ -531,7 +608,6 @@ const AdminScheduleConfig: React.FC<AdminScheduleConfigProps> = ({
             </div>
           </Field>
 
-          {/* Intervjublokk */}
           <Field icon={Layers} label="Intervjublokk">
             <div className="space-y-4">
               <div className="flex items-center justify-between gap-3">
@@ -568,14 +644,21 @@ const AdminScheduleConfig: React.FC<AdminScheduleConfigProps> = ({
                   ))}
                   <div
                     className={cn(
-                      "inline-flex cursor-text items-center gap-1.5 rounded-[10px] border px-3 py-2 transition-[border-color,background,box-shadow] duration-150",
-                      isCustomPause
-                        ? "border-brand-activeBorder bg-brand-panel shadow-toggle"
-                        : "border-border-soft bg-surface-base hover:border-brand-strongBorder",
+                      "inline-flex cursor-text items-center gap-1.5 rounded-md border px-3 py-2 transition-[border-color,background,box-shadow] duration-150",
+                      pauseInputInvalid
+                        ? "border-danger-border bg-danger-bg"
+                        : isCustomPause
+                          ? "border-brand-activeBorder bg-brand-panel shadow-toggle"
+                          : "border-border-soft bg-surface-base hover:border-brand-strongBorder",
                     )}
                   >
                     <input
                       type="number"
+                      aria-label="Egendefinert pause i minutter"
+                      aria-invalid={pauseInputInvalid}
+                      aria-describedby={
+                        pauseInputInvalid ? "pause-input-error" : undefined
+                      }
                       min="0"
                       max="240"
                       step="1"
@@ -583,10 +666,11 @@ const AdminScheduleConfig: React.FC<AdminScheduleConfigProps> = ({
                       value={isCustomPause ? customPauseInput : ""}
                       className="w-24 border-none bg-transparent p-0 text-sm font-bold text-text-primary [-moz-appearance:textfield] placeholder:font-normal placeholder:text-text-disabled focus:text-brand focus:outline-none [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
                       onChange={(e) => {
-                        setCustomPauseInput(e.target.value);
+                        const raw = e.target.value;
+                        setCustomPauseInput(raw);
                         setIsCustomPause(true);
-                        const val = parseInt(e.target.value, 10);
-                        if (!isNaN(val) && val >= 0) setPendingChunkBreak(val);
+                        const value = parseIntegerInRange(raw, 0, 240);
+                        if (value !== null) setPendingChunkBreak(value);
                       }}
                       onFocus={() => setIsCustomPause(true)}
                     />
@@ -595,6 +679,15 @@ const AdminScheduleConfig: React.FC<AdminScheduleConfigProps> = ({
                     </span>
                   </div>
                 </div>
+                {pauseInputInvalid && (
+                  <p
+                    id="pause-input-error"
+                    aria-live="polite"
+                    className="m-0 text-xs font-semibold text-danger"
+                  >
+                    Angi et helt antall minutter fra 0 til 240.
+                  </p>
+                )}
               </div>
             </div>
           </Field>
@@ -603,11 +696,11 @@ const AdminScheduleConfig: React.FC<AdminScheduleConfigProps> = ({
         <SchedulePanelFooter>
           <div className="flex flex-col gap-2">
             {hasPendingChanges && (
-              <div className="max-w-[18rem] text-detail leading-snug text-text-muted">
+              <div className="max-w-xs text-detail leading-snug text-text-muted">
                 {gridDefiningChange && hasScheduleDraft
-                  ? "Endringen påvirker tidsgrunnlaget og nullstiller eksisterende intervjuforslag."
+                  ? "Endringen sletter registrert tilgjengelighet og nullstiller eksisterende intervjuforslag."
                   : gridDefiningChange
-                    ? "Endringen remapper tilgjengelighet til de nye tidslukene."
+                    ? "Endringen sletter all registrert tilgjengelighet."
                     : visualGroupingChange
                       ? "Endringen påvirker bare hvordan tidslukene grupperes visuelt."
                       : "Konfigurasjonen har ulagrede endringer."}
@@ -616,7 +709,7 @@ const AdminScheduleConfig: React.FC<AdminScheduleConfigProps> = ({
           </div>
           <div className="flex items-center gap-3">
             {hasPendingChanges && !isSaving && (
-              <span className="rounded-full border border-brand-border bg-brand-muted px-2.5 py-1 text-label font-bold uppercase tracking-caps text-brand">
+              <span className="rounded-full border border-brand-border bg-brand-muted px-2.5 py-1 text-detail font-semibold text-brand">
                 Ulagrede endringer
               </span>
             )}
@@ -626,7 +719,13 @@ const AdminScheduleConfig: React.FC<AdminScheduleConfigProps> = ({
                 saveTick={saveTick}
                 onClick={handleSave}
                 disabled={
-                  pendingDuration === 0 || isInvalidRange || !dateRangeValid
+                  hasInvalidNumericInput ||
+                  pendingDuration < 5 ||
+                  pendingDuration > 120 ||
+                  pendingChunkBreak < 0 ||
+                  pendingChunkBreak > 240 ||
+                  isInvalidRange ||
+                  !dateRangeValid
                 }
               >
                 Lagre
@@ -636,7 +735,6 @@ const AdminScheduleConfig: React.FC<AdminScheduleConfigProps> = ({
         </SchedulePanelFooter>
       </SchedulePanel>
 
-      {/* Slot grid column */}
       <SchedulePanel>
         <SchedulePanelHeader
           icon={CalendarDays}
@@ -671,16 +769,16 @@ const AdminScheduleConfig: React.FC<AdminScheduleConfigProps> = ({
         />
         <div className="min-w-0 select-none overflow-x-auto bg-surface-muted p-5 handheld:p-4">
           <div className="mb-4 flex flex-wrap items-center gap-x-4 gap-y-2">
-            <span className="text-label font-bold uppercase tracking-label text-text-subtle">
+            <span className="text-detail font-medium text-text-muted">
               Forklaring
             </span>
             <span className="flex items-center gap-1.5 text-xs font-semibold text-text-faded">
-              <span className="h-3.5 w-[1.6rem] rounded-[4px] border border-brand bg-brand" />
+              <span className="h-3.5 w-6 rounded-sm border border-brand bg-brand" />
               Åpen for intervju
             </span>
             <span className="flex items-center gap-1.5 text-xs font-semibold text-text-faded">
               <span
-                className="h-3.5 w-[1.6rem] rounded-[4px] border border-border-faint opacity-60"
+                className="h-3.5 w-6 rounded-sm border border-border-faint opacity-60"
                 style={{
                   backgroundImage: "var(--pattern-unavailable)",
                 }}
@@ -689,7 +787,7 @@ const AdminScheduleConfig: React.FC<AdminScheduleConfigProps> = ({
             </span>
           </div>
           <div
-            className="grid touch-none gap-[5px]"
+            className="grid touch-auto gap-1"
             style={{
               gridTemplateColumns: `56px repeat(${columns - 1}, minmax(70px, 1fr))`,
               minWidth: `max(680px, ${(columns - 1) * 70 + 56}px)`,
@@ -712,7 +810,7 @@ const AdminScheduleConfig: React.FC<AdminScheduleConfigProps> = ({
                   key={date}
                   className="flex flex-col items-center gap-1 rounded-md border border-border-soft bg-surface-base px-1 py-2"
                 >
-                  <div className="text-center text-label font-bold uppercase tracking-label text-text-muted">
+                  <div className="text-center text-detail font-semibold text-text-muted">
                     {weekday}
                   </div>
                   <div className="text-center text-ui font-bold text-text-primary">
@@ -743,7 +841,7 @@ const AdminScheduleConfig: React.FC<AdminScheduleConfigProps> = ({
             {chunks.length === 0 ? (
               <div
                 className={cn(
-                  "text-label font-bold uppercase tracking-label text-text-subtle",
+                  "text-detail font-medium text-text-muted",
                   "col-[1/-1] px-4 py-10 text-center text-text-disabled",
                 )}
               >
@@ -779,14 +877,14 @@ const AdminScheduleConfig: React.FC<AdminScheduleConfigProps> = ({
                         onPointerEnter={() => handlePointerEnter(date, chunk)}
                         onKeyDown={(e) => handleCellKeyDown(e, date, chunk)}
                         className={cn(
-                          "flex min-h-[40px] cursor-pointer flex-col items-center justify-center gap-1.5 rounded-[5px] border p-1.5 transition-[background-color,border-color] duration-100",
+                          "flex min-h-10 cursor-pointer flex-col items-center justify-center gap-1.5 rounded-sm border p-1.5 transition-[background-color,border-color] duration-100",
                           "focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-focus",
                           isEnabled
                             ? "border-brand bg-brand text-text-white hover:bg-brand-hover"
                             : "border-border-faint [background-image:var(--pattern-unavailable)] opacity-60 hover:opacity-100 hover:bg-surface-base hover:border-brand-border",
                         )}
                       >
-                        <div className="flex h-1.5 w-full items-center gap-[3px]">
+                        <div className="flex h-1.5 w-full items-center gap-1">
                           {chunk.map((m) => (
                             <div
                               key={m}

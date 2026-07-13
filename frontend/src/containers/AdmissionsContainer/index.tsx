@@ -16,10 +16,10 @@ import SubComponentHeader from "./SubComponentHeader";
 import { Admission, Application } from "src/types";
 import { useState } from "react";
 import styled from "styled-components";
-import Icon from "src/components/Icon";
 import { TableWrapper } from "src/routes/AdmissionAdmin/components/StyledElements";
 import { InputResponseModel } from "src/utils/jsonFields";
 import DeleteApplication from "src/components/DeleteApplication";
+import { ArrowDown, ArrowUp } from "lucide-react";
 
 interface AdmissionsContainerProps {
   admission: Admission;
@@ -126,29 +126,44 @@ const AdmissionsContainer: React.FC<AdmissionsContainerProps> = ({
         <thead>
           {table.getHeaderGroups().map((headerGroup) => (
             <tr key={headerGroup.id}>
-              {headerGroup.headers.map((header) => (
-                <th key={header.id} style={{ width: header.getSize() }}>
-                  {header.isPlaceholder ? null : (
-                    <div
-                      style={
-                        header.column.getCanSort()
-                          ? { cursor: "pointer" }
+              {headerGroup.headers.map((header) => {
+                const sortDirection = header.column.getIsSorted();
+                const content = flexRender(
+                  header.column.columnDef.header,
+                  header.getContext(),
+                );
+                return (
+                  <th
+                    key={header.id}
+                    style={{ width: header.getSize() }}
+                    aria-sort={
+                      sortDirection === "asc"
+                        ? "ascending"
+                        : sortDirection === "desc"
+                          ? "descending"
                           : undefined
-                      }
-                      onClick={header.column.getToggleSortingHandler()}
-                    >
-                      {flexRender(
-                        header.column.columnDef.header,
-                        header.getContext(),
-                      )}
-                      {{
-                        asc: <SortArrow name="arrow-dropup" />,
-                        desc: <SortArrow name="arrow-dropdown" />,
-                      }[header.column.getIsSorted() as string] ?? null}
-                    </div>
-                  )}
-                </th>
-              ))}
+                    }
+                  >
+                    {header.isPlaceholder ? null : header.column.getCanSort() ? (
+                      <button
+                        type="button"
+                        aria-label="Sorter kolonne"
+                        onClick={header.column.getToggleSortingHandler()}
+                        className="inline-flex items-center gap-1"
+                      >
+                        {content}
+                        {sortDirection === "asc" ? (
+                          <ArrowUp size={16} aria-hidden="true" />
+                        ) : sortDirection === "desc" ? (
+                          <ArrowDown size={16} aria-hidden="true" />
+                        ) : null}
+                      </button>
+                    ) : (
+                      content
+                    )}
+                  </th>
+                );
+              })}
             </tr>
           ))}
         </thead>
@@ -184,14 +199,5 @@ const StyledTable = styled.table`
   width: 100%;
   min-width: 800px;
 `;
-
-const SortArrow = ({ name }: { name: string }) => (
-  <Icon
-    name={name}
-    size="24px"
-    padding="0 0 0 5px"
-    styles={{ verticalAlign: "text-top" }}
-  />
-);
 
 export default AdmissionsContainer;

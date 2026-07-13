@@ -12,7 +12,7 @@ const DeleteWrapper = styled.div`
 
   ${media.handheld`
     margin: 0.3rem 0;
-    padding: 0.5rem;
+    padding: var(--spacing-sm);
     justify-content: center;
     `};
 `;

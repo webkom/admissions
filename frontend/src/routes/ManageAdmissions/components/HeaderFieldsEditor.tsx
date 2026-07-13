@@ -42,7 +42,6 @@ const HeaderFieldsEditor: React.FC<Props> = ({ value, onChange }) => {
 
   const patchInput = (index: number, patch: Partial<InputFieldModel>) => {
     const field = value[index];
-    // Narrows field to InputFieldModel; unreachable for text fields.
     if (field.type === "text") return;
     replaceAt(index, { ...field, ...patch });
   };
@@ -181,8 +180,6 @@ const HeaderFieldsEditor: React.FC<Props> = ({ value, onChange }) => {
 
 export default HeaderFieldsEditor;
 
-/** Styles **/
-
 const Wrapper = styled.div`
   display: flex;
   flex-direction: column;
@@ -197,10 +194,10 @@ const Empty = styled.p`
 `;
 
 const Row = styled.div`
-  border: 1px solid #d6d6d6;
-  border-radius: 8px;
+  border: 1px solid var(--color-border-muted);
+  border-radius: var(--border-radius-md);
   padding: 0.85rem 1rem;
-  background: var(--color-surface-base, #fff);
+  background: var(--color-surface-base);
 `;
 
 const RowHeader = styled.div`
@@ -211,7 +208,7 @@ const RowHeader = styled.div`
 `;
 
 const RowKind = styled.span`
-  font-size: 0.8rem;
+  font-size: var(--font-size-detail);
   font-weight: 700;
   letter-spacing: 0.02em;
   color: var(--color-gray-6);
@@ -219,7 +216,7 @@ const RowKind = styled.span`
 
 const RowActions = styled.div`
   display: flex;
-  gap: 0.25rem;
+  gap: var(--spacing-xs);
 `;
 
 const IconButton = styled.button`
@@ -227,10 +224,10 @@ const IconButton = styled.button`
   align-items: center;
   justify-content: center;
   padding: 0.3rem;
-  border: 1px solid #d6d6d6;
-  border-radius: 6px;
-  background: #fff;
-  color: var(--color-gray-7, #374151);
+  border: 1px solid var(--color-border-muted);
+  border-radius: var(--border-radius-md);
+  background: var(--color-surface-base);
+  color: var(--color-gray-7);
   cursor: pointer;
 
   &:disabled {
@@ -252,16 +249,16 @@ const Field = styled.div`
 `;
 
 const FieldLabel = styled.label`
-  font-size: 0.8rem;
+  font-size: var(--font-size-detail);
   font-weight: 600;
-  color: var(--color-gray-7, #374151);
+  color: var(--color-gray-7);
 `;
 
 const fieldStyles = `
-  font-size: 0.95rem;
+  font-size: var(--font-size-ui);
   padding: 0.45rem 0.6rem;
-  border-radius: 6px;
-  border: 1px solid #d6d6d6;
+  border-radius: var(--border-radius-md);
+  border: 1px solid var(--color-border-muted);
   width: 100%;
 `;
 
@@ -271,7 +268,7 @@ const Input = styled.input`
 
 const Select = styled.select`
   ${fieldStyles}
-  background: #fff;
+  background: var(--color-surface-base);
 `;
 
 const TextArea = styled.textarea`
@@ -285,27 +282,27 @@ const RequiredLabel = styled.label`
   align-items: center;
   gap: 0.4rem;
   margin-top: 0.6rem;
-  font-size: 0.9rem;
-  color: var(--color-gray-7, #374151);
+  font-size: var(--font-size-ui);
+  color: var(--color-gray-7);
 `;
 
 const AddRow = styled.div`
   display: flex;
-  gap: 0.5rem;
+  gap: var(--spacing-sm);
 `;
 
 const AddButton = styled.button`
-  font-size: 0.9rem;
+  font-size: var(--font-size-ui);
   font-weight: 600;
   padding: 0.45rem 0.85rem;
-  border: 1px dashed #b6b6b6;
-  border-radius: 6px;
+  border: 1px dashed var(--color-border-quiet);
+  border-radius: var(--border-radius-md);
   background: transparent;
-  color: var(--color-gray-7, #374151);
+  color: var(--color-gray-7);
   cursor: pointer;
 
   &:hover {
-    border-color: #2563eb;
-    color: #2563eb;
+    border-color: var(--color-blue-6);
+    color: var(--color-blue-6);
   }
 `;

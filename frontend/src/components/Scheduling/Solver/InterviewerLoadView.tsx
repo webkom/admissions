@@ -6,10 +6,15 @@ import cn from "src/utils/cn";
 
 interface InterviewerLoadViewProps {
   entries: { item: ScheduleItem; scheduleIndex: number }[];
-  distribution: { name: string; count: number; overtimeCount: number }[];
+  distribution: {
+    id: string;
+    name: string;
+    count: number;
+    overtimeCount: number;
+  }[];
   totalAssignments: number;
   selectedInterviewer: string;
-  onSelectInterviewer: (name: string) => void;
+  onSelectInterviewer: (id: string) => void;
   canEditDraft: boolean;
   interviewerOptions: Interviewer[];
   onSwapPanelMember: (
@@ -18,14 +23,10 @@ interface InterviewerLoadViewProps {
     newName: string,
     newId?: string,
   ) => void;
-  displayCandidate: (name: string) => string;
+  displayCandidate: (item: ScheduleItem) => string;
   formatSlotTime: (time: number) => string;
 }
 
-/**
- * The "per interviewer" view of a generated plan: a clickable load breakdown
- * and, for the selected interviewer, the interviews they're on.
- */
 const InterviewerLoadView = ({
   entries,
   distribution,
@@ -38,15 +39,20 @@ const InterviewerLoadView = ({
   displayCandidate,
   formatSlotTime,
 }: InterviewerLoadViewProps) => {
+  const selected = distribution.find(
+    (interviewer) => interviewer.id === selectedInterviewer,
+  );
   const rows = entries.filter(({ item }) =>
-    item.panel.some((member) => member.name === selectedInterviewer),
+    item.panel.some((member) =>
+      member.id ? member.id === selected?.id : member.name === selected?.name,
+    ),
   );
 
   return (
     <div className="flex flex-col gap-4">
       <div className="mb-4">
-        <div className="mb-[0.6rem] flex flex-wrap items-baseline justify-between gap-3">
-          <span className="mb-1 block text-label font-bold uppercase tracking-label text-text-subtle">
+        <div className="mb-2.5 flex flex-wrap items-baseline justify-between gap-3">
+          <span className="mb-1 block text-detail font-medium text-text-muted">
             Fordeling
           </span>
           <p className="m-0 text-ui text-text-subtle">
@@ -54,7 +60,7 @@ const InterviewerLoadView = ({
           </p>
         </div>
 
-        <div className="grid grid-cols-[repeat(auto-fit,minmax(160px,1fr))] gap-[0.6rem]">
+        <div className="grid grid-cols-[repeat(auto-fit,minmax(160px,1fr))] gap-2.5">
           <button
             type="button"
             onClick={() => onSelectInterviewer("")}
@@ -66,22 +72,22 @@ const InterviewerLoadView = ({
             <span className="block text-xl font-extrabold text-text-primary">
               {totalAssignments}
             </span>
-            <span className="text-label font-bold uppercase tracking-label text-text-subtle">
+            <span className="text-detail font-medium text-text-muted">
               Totale tildelinger
             </span>
           </button>
 
           {distribution.map((interviewer) => (
             <button
-              key={interviewer.name}
+              key={interviewer.id}
               type="button"
               className={cn(
                 "rounded-lg border px-4 py-3 text-left transition-[border-color,background] duration-100 hover:border-brand-panelBorder",
-                selectedInterviewer === interviewer.name
+                selectedInterviewer === interviewer.id
                   ? "border-brand-activeBorder bg-toggle-active shadow-toggle"
                   : "border-border bg-surface-base hover:bg-brand-soft",
               )}
-              onClick={() => onSelectInterviewer(interviewer.name)}
+              onClick={() => onSelectInterviewer(interviewer.id)}
             >
               <span className="text-ui font-bold text-text-primary">
                 {interviewer.name}
@@ -89,7 +95,7 @@ const InterviewerLoadView = ({
               <span className="block text-xl font-extrabold text-text-primary">
                 {interviewer.count}
               </span>
-              <span className="text-label font-bold uppercase tracking-label text-text-subtle">
+              <span className="text-detail font-medium text-text-muted">
                 {interviewer.overtimeCount > 0
                   ? `${interviewer.overtimeCount} overtid`
                   : "Ingen overtid"}
@@ -105,20 +111,20 @@ const InterviewerLoadView = ({
         </div>
       ) : rows.length === 0 ? (
         <div className="rounded-lg border border-border bg-surface-base p-4 text-center text-sm font-semibold text-text-muted">
-          {selectedInterviewer} har ingen tildelte intervjuer.
+          {selected?.name ?? "Intervjueren"} har ingen tildelte intervjuer.
         </div>
       ) : (
-        <div className="overflow-hidden rounded-lg border border-border-soft">
-          <table className="w-full border-collapse">
+        <div className="overflow-x-auto rounded-lg border border-border-soft">
+          <table className="w-full min-w-[36rem] border-collapse">
             <thead>
               <tr>
-                <th className="border-b border-border-soft bg-surface-subtle px-4 py-3 text-left text-label font-bold uppercase tracking-label text-text-subtle">
+                <th className="bg-surface-subtle px-4 py-3 text-left text-ui font-semibold text-text-muted">
                   Tidspunkt
                 </th>
-                <th className="border-b border-border-soft bg-surface-subtle px-4 py-3 text-left text-label font-bold uppercase tracking-label text-text-subtle">
+                <th className="bg-surface-subtle px-4 py-3 text-left text-ui font-semibold text-text-muted">
                   Kandidat
                 </th>
-                <th className="border-b border-border-soft bg-surface-subtle px-4 py-3 text-left text-label font-bold uppercase tracking-label text-text-subtle">
+                <th className="bg-surface-subtle px-4 py-3 text-left text-ui font-semibold text-text-muted">
                   Intervjupanel
                 </th>
               </tr>
@@ -133,10 +139,10 @@ const InterviewerLoadView = ({
                     {formatSlotTime(item.time)}
                   </td>
                   <td className="px-4 py-3 text-sm font-semibold text-text-primary">
-                    {displayCandidate(item.candidate)}
+                    {displayCandidate(item)}
                   </td>
                   <td className="px-4 py-3 text-sm">
-                    <div className="flex flex-wrap gap-[0.35rem]">
+                    <div className="flex flex-wrap gap-1.5">
                       {item.panel.map((p, i) => (
                         <EditablePanelChip
                           key={i}
@@ -148,8 +154,12 @@ const InterviewerLoadView = ({
                                   id: iv.id,
                                   name: iv.name,
                                   disabled:
-                                    iv.name !== p.name &&
-                                    item.panel.some((m) => m.name === iv.name),
+                                    iv.id !== p.id &&
+                                    item.panel.some((m) =>
+                                      m.id
+                                        ? m.id === iv.id
+                                        : m.name === iv.name,
+                                    ),
                                 }))
                               : undefined
                           }

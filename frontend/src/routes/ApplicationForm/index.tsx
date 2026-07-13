@@ -8,6 +8,7 @@ import {
 
 import {
   getApplictionTextDrafts,
+  clearAllDrafts,
   getPhoneNumberDraft,
   getPriorityTextDraft,
 } from "src/utils/draftHelper";
@@ -56,10 +57,8 @@ const generateInitialValues: (
     formattedGroupApplications[group] = "";
   });
 
-  const blankHeaderFields = (
-    (admission?.header_fields as InputFieldModel[]) ?? []
-  )
-    .filter((field) => "id" in field)
+  const blankHeaderFields = (admission?.header_fields ?? [])
+    .filter((field): field is InputFieldModel => "id" in field)
     .reduce(
       (obj, field) => ({
         ...obj,
@@ -113,10 +112,10 @@ const validationSchema = (
           )),
       );
 
-    const headerFieldsSchema = (
-      (admission?.header_fields as InputFieldModel[]) ?? []
-    )
-      .filter((field) => "id" in field && field.required)
+    const headerFieldsSchema = (admission?.header_fields ?? [])
+      .filter(
+        (field): field is InputFieldModel => "id" in field && field.required,
+      )
       .reduce(
         (obj, field) => ({
           ...obj,
@@ -180,6 +179,7 @@ const ApplicationForm: React.FC<ApplicationFormProps> = ({
       { newApplication: submission },
       {
         onSuccess: () => {
+          clearAllDrafts();
           setSubmitting(false);
           toggleIsEditing();
         },

@@ -61,7 +61,7 @@ const AdmissionTimeline: React.FC<AdmissionTimelineProps> = ({ items }) => {
                 <span
                   aria-hidden="true"
                   className={cn(
-                    "w-[2px] flex-1 rounded-full",
+                    "w-0.5 flex-1 rounded-full",
                     isPast ? "bg-border-muted" : "bg-border-soft",
                   )}
                 />

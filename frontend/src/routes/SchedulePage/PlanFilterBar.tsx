@@ -17,6 +17,7 @@ interface PlanFilterBarProps {
   planViewMode: "calendar" | "table";
   onChangePlanViewMode: (mode: "calendar" | "table") => void;
   canToggleCandidateNames: boolean;
+  canHideCandidateNames: boolean;
   nameVisibility: NameVisibility;
   onSelectVisibility: (next: NameVisibility) => void;
   isUpdatingNames: boolean;
@@ -26,8 +27,6 @@ interface PlanFilterBarProps {
   conflictBadgeCount: number;
 }
 
-/** The toolbar above the distributed plan: filters, view mode, name visibility
- * and the rerun control. */
 const PlanFilterBar: React.FC<PlanFilterBarProps> = ({
   myInterviewsOnly,
   onToggleMyInterviews,
@@ -35,6 +34,7 @@ const PlanFilterBar: React.FC<PlanFilterBarProps> = ({
   planViewMode,
   onChangePlanViewMode,
   canToggleCandidateNames,
+  canHideCandidateNames,
   nameVisibility,
   onSelectVisibility,
   isUpdatingNames,
@@ -47,6 +47,7 @@ const PlanFilterBar: React.FC<PlanFilterBarProps> = ({
     <button
       type="button"
       onClick={onToggleMyInterviews}
+      aria-pressed={myInterviewsOnly}
       className={cn(
         actionButtonBase,
         myInterviewsOnly ? actionButtonActive : actionButtonNeutral,
@@ -55,13 +56,14 @@ const PlanFilterBar: React.FC<PlanFilterBarProps> = ({
     >
       Mine intervjuer
       {myInterviewsCount > 0 && (
-        <span className="ml-1 rounded-full bg-current/10 px-1.5 py-0.5 text-[10px] font-bold tabular-nums">
+        <span className="ml-1 rounded-full bg-current/10 px-1.5 py-0.5 text-tiny font-bold tabular-nums">
           {myInterviewsCount}
         </span>
       )}
     </button>
 
     <SegmentedControl<"calendar" | "table">
+      aria-label="Visning av intervjuplan"
       value={planViewMode}
       onChange={onChangePlanViewMode}
       items={[
@@ -80,11 +82,14 @@ const PlanFilterBar: React.FC<PlanFilterBarProps> = ({
         title="Hvem skal se kandidatnavnene"
       >
         <SegmentedControl<NameVisibility>
+          aria-label="Synlighet for kandidatnavn"
           value={nameVisibility}
           onChange={onSelectVisibility}
           items={[
-            { key: "hidden", label: "Skjult" },
-            { key: "admin_only", label: "Admin" },
+            ...(canHideCandidateNames
+              ? ([{ key: "hidden", label: "Skjult" }] as const)
+              : []),
+            { key: "admin_only", label: "Opptaksansvarlige" },
             { key: "committee", label: "Hele komiteen" },
           ]}
         />

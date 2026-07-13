@@ -24,20 +24,47 @@ const GroupCard: React.FC<GroupCardProps> = ({
   isRevy,
   isRevyBoard,
 }) => {
+  let safeReadMoreLink: string | null = null;
+  try {
+    const url = new URL(readMoreLink);
+    if (
+      url.protocol === "https:" &&
+      (url.hostname === "abakus.no" || url.hostname.endsWith(".abakus.no"))
+    ) {
+      safeReadMoreLink = url.href;
+    }
+  } catch {
+    safeReadMoreLink = null;
+  }
+
   return (
     <Card
       onClick={() => onToggle(name)}
+      onKeyDown={(event) => {
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          onToggle(name);
+        }
+      }}
+      role="checkbox"
+      aria-checked={isChosen}
+      tabIndex={0}
       $isChosen={isChosen}
       $isRevy={isRevy}
       $isRevyBoard={isRevyBoard}
     >
       <Header>
-        {!(isRevy || isRevyBoard) && <Logo src={logo} />}
+        {!(isRevy || isRevyBoard) && <Logo src={logo} alt="" />}
         <Name>{readmeIfy(name)}</Name>
       </Header>
       <Description>{readmeIfy(description, true)}</Description>
-      {!(isRevy || isRevyBoard) && (
-        <LearnMoreLink href={`${readMoreLink}`} target="_blank">
+      {!(isRevy || isRevyBoard) && safeReadMoreLink && (
+        <LearnMoreLink
+          href={safeReadMoreLink}
+          target="_blank"
+          rel="noopener noreferrer"
+          onClick={(event) => event.stopPropagation()}
+        >
           Les mer på abakus.no
         </LearnMoreLink>
       )}
@@ -58,8 +85,6 @@ const GroupCard: React.FC<GroupCardProps> = ({
 
 export default GroupCard;
 
-/** Styles **/
-
 interface GroupCardElementsStyledProps {
   $isChosen?: boolean;
 }
@@ -72,14 +97,14 @@ type GroupCardStyledProps = GroupCardElementsStyledProps & {
 const Card = styled.div<GroupCardStyledProps>`
   display: flex;
   flex-direction: column;
-  background: var(--color-surface-base, white);
+  background: var(--color-surface-base);
   box-shadow: ${(props) =>
     props.$isChosen ? "var(--shadow-md)" : "var(--shadow-sm)"};
   border: 1px solid
     ${(props) =>
       props.$isChosen ? "var(--color-brand)" : "var(--color-border-soft)"};
   box-sizing: border-box;
-  padding: 2rem;
+  padding: var(--spacing-xl);
   border-radius: var(--border-radius-md);
   overflow: hidden;
   position: relative;
@@ -97,36 +122,36 @@ const Card = styled.div<GroupCardStyledProps>`
   }
 
   ${media.handheld`
-    padding: 1.5rem;
+    padding: var(--spacing-lg);
   `};
 `;
 
 const Header = styled.div`
   display: flex;
   align-items: center;
-  gap: 1rem;
-  margin-bottom: 1rem;
+  gap: var(--spacing-md);
+  margin-bottom: var(--spacing-md);
 `;
 
 const Name = styled.h2`
   margin: 0;
-  font-size: 1.25rem;
+  font-size: var(--font-size-heading-xs);
   font-weight: 700;
   color: var(--color-text-strong);
   letter-spacing: -0.03em;
 
   ${media.handheld`
-    font-size: 1.125rem;
+    font-size: var(--font-size-lg);
   `};
 `;
 
 const Description = styled.p`
   margin: 0;
-  font-size: 0.875rem;
+  font-size: var(--font-size-sm);
   line-height: 1.55;
   color: var(--color-text-body);
   flex-grow: 1;
-  margin-bottom: 1.5rem;
+  margin-bottom: var(--spacing-lg);
 `;
 
 const Logo = styled.img`
@@ -138,7 +163,7 @@ const Logo = styled.img`
 
 const LearnMoreLink = styled.a`
   font-weight: 600;
-  font-size: 0.8125rem;
+  font-size: var(--font-size-detail);
   color: var(--color-brand);
   margin-bottom: 2.5rem;
 
@@ -162,17 +187,18 @@ const SelectedMark = styled.div<GroupCardElementsStyledProps>`
 `;
 
 const SelectedMarkText = styled.span<GroupCardElementsStyledProps>`
-  color: ${(props) => (props.$isChosen ? "white" : "var(--color-text-body)")};
-  font-size: 0.875rem;
+  color: ${(props) =>
+    props.$isChosen ? "var(--color-absolute-white)" : "var(--color-text-body)"};
+  font-size: var(--font-size-sm);
   font-weight: 600;
   user-select: none;
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: var(--spacing-sm);
 
   span {
     opacity: 0.8;
-    font-size: 0.75rem;
+    font-size: var(--font-size-xs);
     font-weight: 400;
   }
 `;
