@@ -110,7 +110,7 @@ class SolverQualityTestCase(APITestCase):
         for entry in res.data["unplaceable"]:
             self.assertTrue(entry["reason"])
 
-    def test_locked_time_outside_open_slots_is_a_locked_conflict(self):
+    def test_locked_time_outside_open_slots_is_rejected(self):
         payload = {
             "candidates": [
                 {"id": "candidate-1", "name": "Ada", "gender": ""},
@@ -137,13 +137,8 @@ class SolverQualityTestCase(APITestCase):
 
         res = self._solve(payload)
 
-        self.assertEqual(res.status_code, status.HTTP_200_OK)
-        self.assertEqual(res.data["status"], "LOCKED_CONFLICT")
-        self.assertEnvelope(res.data)
-        self.assertEqual(res.data["schedule"], [])
-        message = res.data["locked_conflicts"][0]["message"]
-        self.assertIn("Ada", message)
-        self.assertIn("5", message)
+        self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("locked_assignments", res.data)
 
     def test_no_open_slots_is_infeasible_with_reasons(self):
         payload = {
@@ -248,6 +243,7 @@ class SolverQualityTestCase(APITestCase):
                     "name": "Ola",
                     "gender": "M",
                     "availability": [0],
+                    "biased": ["candidate-1"],
                 },
             ],
             "panel_size": 1,
@@ -256,7 +252,7 @@ class SolverQualityTestCase(APITestCase):
                 {
                     "candidate_id": "candidate-1",
                     "candidate": "Ada",
-                    "time": 9,
+                    "time": 0,
                     "panel": [{"id": "interviewer-1", "name": "Ola"}],
                 }
             ],
@@ -329,8 +325,6 @@ class SolverQualityTestCase(APITestCase):
         self.assertIn("Eirik", message)
 
     def test_same_panel_per_block_uses_one_panel_for_the_whole_block(self):
-        # Unlocked path: the solver itself must staff every filled slot in a
-        # back-to-back block with the identical panel.
         payload = {
             "candidates": [
                 {"id": "candidate-1", "name": "Ada", "gender": ""},
@@ -370,7 +364,6 @@ class SolverQualityTestCase(APITestCase):
             tuple(sorted(member["id"] for member in item["panel"]))
             for item in res.data["schedule"]
         }
-        # A single identical panel staffed the whole block.
         self.assertEqual(len(panels), 1)
 
     def test_enforce_same_gender_matches_panel_to_candidate(self):
@@ -396,8 +389,6 @@ class SolverQualityTestCase(APITestCase):
             item["candidate_id"]: [member["id"] for member in item["panel"]]
             for item in res.data["schedule"]
         }
-        # The male candidate can only be staffed by the male interviewer and the
-        # female candidate by the female interviewer.
         self.assertEqual(panels["candidate-1"], ["int-m"])
         self.assertEqual(panels["candidate-2"], ["int-f"])
 
@@ -413,13 +404,148 @@ class SolverQualityTestCase(APITestCase):
         )
 
         self.assertEqual(res.data["status"], "SUCCESS")
-        # A trivial instance is solved to proven optimality.
         self.assertTrue(res.data["optimal"])
 
+    def test_stale_availability_outside_open_slots_is_never_scheduled(self):
+        for allow_overtime in (True, False):
+            with self.subTest(allow_overtime=allow_overtime):
+                payload = {
+                    "candidates": [{"id": "candidate-1", "name": "Ada", "gender": ""}],
+                    "interviewers": [
+                        {
+                            "id": "interviewer-1",
+                            "name": "Ola",
+                            "gender": "M",
+                            "availability": [0, 2],
+                        },
+                    ],
+                    "panel_size": 1,
+                    "all_slots": [2, 3],
+                    "options": {"allow_overtime": allow_overtime},
+                }
+
+                res = self._solve(payload)
+
+                self.assertEqual(res.status_code, status.HTTP_200_OK)
+                self.assertEqual(res.data["status"], "SUCCESS")
+                self.assertEqual(res.data["schedule"][0]["time"], 2)
+
+    def test_oversized_instance_fails_fast_with_a_clear_error(self):
+        result = solve_schedule(
+            candidates_data=[
+                {"id": f"c{i}", "name": f"Kandidat {i}", "gender": ""}
+                for i in range(100)
+            ],
+            interviewers_data=[
+                {
+                    "id": f"i{j}",
+                    "name": f"Intervjuer {j}",
+                    "gender": "",
+                    "availability": list(range(1000)),
+                }
+                for j in range(30)
+            ],
+            panel_size=2,
+        )
+
+        self.assertEqual(result["status"], "ERROR")
+        self.assertEqual(result["schedule"], [])
+        self.assertIn("for stor", result["error"])
+
+    def test_lock_without_gender_data_survives_a_resolve(self):
+        base = dict(
+            candidates_data=[{"id": "c1", "name": "Adam", "gender": "M"}],
+            interviewers_data=[
+                {"id": "i1", "name": "Ola", "gender": "", "availability": [0]},
+            ],
+            panel_size=1,
+            options_data={"enforce_same_gender": True, "allow_overtime": False},
+            all_slots_data=[0],
+        )
+
+        first = solve_schedule(**base)
+        self.assertEqual(first["status"], "SUCCESS")
+
+        second = solve_schedule(
+            **base,
+            locked_assignments_data=[
+                {
+                    "candidate_id": "c1",
+                    "candidate": "Adam",
+                    "time": first["schedule"][0]["time"],
+                    "panel": [
+                        {"id": member["id"], "name": member["name"]}
+                        for member in first["schedule"][0]["panel"]
+                    ],
+                }
+            ],
+        )
+
+        self.assertEqual(second["status"], "SUCCESS")
+        self.assertEqual(second["locked_conflicts"], [])
+
+    def test_capacity_shortage_is_not_blamed_on_gender_without_gender_data(self):
+        result = solve_schedule(
+            candidates_data=[
+                {"id": "c1", "name": "Adam", "gender": "M"},
+                {"id": "c2", "name": "Jon", "gender": "M"},
+            ],
+            interviewers_data=[
+                {"id": "i1", "name": "Ola", "gender": "", "availability": [0]},
+            ],
+            panel_size=1,
+            options_data={"enforce_same_gender": True, "allow_overtime": False},
+            all_slots_data=[0],
+        )
+
+        self.assertEqual(result["status"], "PARTIAL")
+        self.assertEqual(len(result["unplaceable"]), 1)
+        self.assertEqual(
+            result["unplaceable"][0]["reason"],
+            "Ikke nok intervjukapasitet i de åpne tidslukene.",
+        )
+
+    def test_identical_solves_are_reproducible_on_ties(self):
+        payload = dict(
+            candidates_data=[
+                {"id": "c1", "name": "Ada", "gender": ""},
+                {"id": "c2", "name": "Eirik", "gender": ""},
+            ],
+            interviewers_data=[
+                {"id": "i1", "name": "Ola", "gender": "", "availability": [0, 1]},
+                {"id": "i2", "name": "Ida", "gender": "", "availability": [0, 1]},
+            ],
+            panel_size=1,
+            all_slots_data=[0, 1],
+        )
+
+        first = solve_schedule(**payload)
+
+        self.assertEqual(first["status"], "SUCCESS")
+        for _ in range(3):
+            self.assertEqual(solve_schedule(**payload), first)
+
+    def test_warm_start_keeps_previous_panel_on_a_tie(self):
+        result = solve_schedule(
+            candidates_data=[{"id": "c1", "name": "Ada", "gender": ""}],
+            interviewers_data=[
+                {"id": "i1", "name": "Ola", "gender": "", "availability": [0, 1]},
+                {"id": "i2", "name": "Ida", "gender": "", "availability": [0, 1]},
+            ],
+            panel_size=1,
+            all_slots_data=[0, 1],
+            previous_schedule_data=[
+                {"candidate_id": "c1", "time": 0, "panel": [{"id": "i2"}]},
+            ],
+        )
+
+        self.assertEqual(result["status"], "SUCCESS")
+        self.assertEqual(result["schedule"][0]["time"], 0)
+        self.assertEqual(
+            [member["id"] for member in result["schedule"][0]["panel"]], ["i2"]
+        )
+
     def test_warm_start_keeps_previous_slots_on_a_tie(self):
-        # Two candidates / two slots: which candidate sits which slot is a tie on
-        # every objective term, so the stability tier should keep them where the
-        # previous plan had them.
         candidates = [
             {"id": "c1", "name": "Ada", "gender": ""},
             {"id": "c2", "name": "Eirik", "gender": ""},

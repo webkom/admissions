@@ -8,6 +8,11 @@ env = environ.Env(DEBUG=(bool, False))
 
 # GENERAL CONFIGURATION =======================================================
 DEBUG = True
+ALLOW_SYNTHETIC_SOLVER_INPUT = True
+ALLOW_UNMARKED_SYNTHETIC_SOLVER_INPUT = True
+REST_FRAMEWORK["DEFAULT_THROTTLE_RATES"] = {
+    scope: "10000/minute" for scope in REST_FRAMEWORK["DEFAULT_THROTTLE_RATES"]
+}
 SECRET_KEY = "secretkeythatisnotsosecret"
 runserver.default_port = "5000"
 

@@ -1,13 +1,15 @@
 from types import SimpleNamespace
 
 from django.core.management import call_command
+from django.test import override_settings
 from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APITestCase
 
-from admissions.admissions.constants import LEADER, MEMBER, RECRUITING
+from admissions.admissions.constants import LEADER, MEMBER, RECRUITING, RETIREE
 from admissions.admissions.models import (
     Group,
+    GroupApplication,
     InterviewAvailability,
     LegoUser,
     Membership,
@@ -105,6 +107,21 @@ class EditGroupTestCase(APITestCase):
 
         self.assertEqual(res.status_code, status.HTTP_403_FORBIDDEN)
 
+    def test_inactive_admin_group_member_cannot_edit_group(self):
+        admission = create_admission(slug="inactive-group-access")
+        admission.groups.add(self.arrkom)
+        admission.admin_groups.add(self.webkom)
+        retired = LegoUser.objects.create(username="retired-webkom", lego_id=60)
+        Membership.objects.create(user=retired, role=RETIREE, group=self.webkom)
+        self.client.force_authenticate(user=retired)
+
+        res = self.client.patch(
+            reverse("admin-group-detail", kwargs={"pk": self.arrkom.pk}),
+            self.edit_group_data,
+        )
+
+        self.assertEqual(res.status_code, status.HTTP_403_FORBIDDEN)
+
     # What about when not logged in aka. have a user? Rewrite api (remove LoginRequiredMixins
     # from views to stop from redirecting, and handle redirecting ourselves with permissions.
     # In this way, when using the api and not viewing in frontend, you are not redirected (disabled).
@@ -194,6 +211,20 @@ class EditAdmissionTestCase(APITestCase):
 
         self.assertEqual(res.status_code, status.HTTP_200_OK)
 
+    def test_inactive_webkom_member_cannot_edit_admission(self):
+        retired = LegoUser.objects.create(username="retired", lego_id=12)
+        webkom = Group.objects.create(name="Webkom", lego_id=14)
+        Membership.objects.create(user=retired, role=RETIREE, group=webkom)
+        self.client.force_authenticate(user=retired)
+
+        res = self.client.patch(
+            reverse("manage-admission-detail", kwargs={"slug": self.admission.slug}),
+            self.edit_admission_data,
+            format="json",
+        )
+
+        self.assertEqual(res.status_code, status.HTTP_403_FORBIDDEN)
+
     def test_staff_user_creator_can_edit_admission(self):
 
         self.client.force_authenticate(user=self.staff_user)
@@ -222,6 +253,10 @@ class EditAdmissionTestCase(APITestCase):
         self.assertEqual(res.status_code, status.HTTP_404_NOT_FOUND)
 
 
+@override_settings(
+    ALLOW_SYNTHETIC_SOLVER_INPUT=True,
+    ALLOW_UNMARKED_SYNTHETIC_SOLVER_INPUT=True,
+)
 class SolveScheduleViewTestCase(APITestCase):
     def setUp(self):
         self.group = Group.objects.create(name="Solverkom", lego_id=998)
@@ -259,6 +294,17 @@ class SolveScheduleViewTestCase(APITestCase):
     def test_unprivileged_user_cannot_solve(self):
         outsider = LegoUser.objects.create(username="solver-outsider", lego_id=997)
         self.client.force_authenticate(user=outsider)
+
+        res = self._solve({"candidates": [], "interviewers": [], "panel_size": 1})
+
+        self.assertEqual(res.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_committee_recruiter_cannot_run_global_solver(self):
+        committee = Group.objects.create(name="Bedkom", lego_id=996)
+        recruiter = LegoUser.objects.create(username="solver-recruiter", lego_id=995)
+        Membership.objects.create(user=recruiter, role=RECRUITING, group=committee)
+        self.admission.groups.add(committee)
+        self.client.force_authenticate(user=recruiter)
 
         res = self._solve({"candidates": [], "interviewers": [], "panel_size": 1})
 
@@ -449,9 +495,6 @@ class SolveScheduleViewTestCase(APITestCase):
         )
 
     def test_sequential_scheduling_works_across_empty_slots_with_overtime(self):
-        # 2 candidates, but only 1 interviewer available at t=0.
-        # Admin has enabled slots 0 and 1.
-        # Should be feasible sequentially if overtime is allowed for t=1.
         payload = {
             "candidates": [
                 {"id": "c1", "name": "C1", "gender": ""},
@@ -746,7 +789,6 @@ class SavedScheduleViewTestCase(APITestCase):
         res = self.client.post(self.url, payload, format="json")
 
         self.assertEqual(res.status_code, status.HTTP_200_OK)
-        # A structural change to the grid wipes everyone's availability.
         self.assertFalse(
             InterviewAvailability.objects.filter(
                 admission=self.admission,
@@ -797,7 +839,7 @@ class SavedScheduleViewTestCase(APITestCase):
         self.assertEqual(res.data["schedule"], [])
         self.assertFalse(res.data["is_distributed"])
 
-    def test_recruiter_can_save_schedule(self):
+    def test_recruiter_cannot_save_global_schedule(self):
         recruiter_group = Group.objects.create(name="Bedkom", lego_id=302)
         recruiter_user = LegoUser.objects.create(
             username="schedule-recruiter", lego_id=303
@@ -823,8 +865,7 @@ class SavedScheduleViewTestCase(APITestCase):
 
         res = self.client.post(self.url, payload, format="json")
 
-        self.assertEqual(res.status_code, status.HTTP_200_OK)
-        self.assertEqual(res.data["name_visibility"], "committee")
+        self.assertEqual(res.status_code, status.HTTP_403_FORBIDDEN)
 
 
 class InterviewAvailabilityViewTestCase(APITestCase):
@@ -848,11 +889,17 @@ class InterviewAvailabilityViewTestCase(APITestCase):
             schedule=[],
             start_date="2026-04-21",
             session_duration=60,
+            is_distributed=True,
             name_visibility="committee",
         )
         applicant = LegoUser.objects.create(username="eirik-applicant", lego_id=403)
         application = UserApplication.objects.create(
             user=applicant, admission=self.admission
+        )
+        GroupApplication.objects.create(
+            application=application,
+            group=self.group,
+            text="Komite application",
         )
         InterviewAvailability.objects.create(
             admission=self.admission,
@@ -898,7 +945,7 @@ class InterviewAvailabilityViewTestCase(APITestCase):
 
         self.assertEqual(res.status_code, status.HTTP_200_OK)
         self.assertEqual(len(res.data), 1)
-        self.assertEqual(res.data[0]["conflicts"], ["real-candidate-ada"])
+        self.assertEqual(res.data[0]["conflicts"], [])
 
 
 class InterviewCandidatesViewTestCase(APITestCase):
@@ -917,6 +964,11 @@ class InterviewCandidatesViewTestCase(APITestCase):
         self.application = UserApplication.objects.create(
             user=self.applicant, admission=self.admission
         )
+        GroupApplication.objects.create(
+            application=self.application,
+            group=self.group,
+            text="Intervjukomite application",
+        )
         self.url = reverse(
             "interview-candidates",
             kwargs={"admission_slug": self.admission.slug},
@@ -927,16 +979,7 @@ class InterviewCandidatesViewTestCase(APITestCase):
         res = self.client.get(self.url)
 
         self.assertEqual(res.status_code, status.HTTP_200_OK)
-        self.assertEqual(
-            res.data,
-            [
-                {
-                    "id": "candidate-0",
-                    "name": "",
-                    "gender": "",
-                }
-            ],
-        )
+        self.assertEqual(res.data, [])
 
     def test_candidate_names_hidden_when_not_released_to_committee(self):
         SavedSchedule.objects.create(
@@ -950,7 +993,7 @@ class InterviewCandidatesViewTestCase(APITestCase):
         res = self.client.get(self.url)
 
         self.assertEqual(res.status_code, status.HTTP_200_OK)
-        self.assertEqual(res.data, [{"id": "candidate-0", "name": "", "gender": ""}])
+        self.assertEqual(res.data, [])
 
     def test_committee_member_sees_names_when_released(self):
         SavedSchedule.objects.create(
@@ -958,6 +1001,7 @@ class InterviewCandidatesViewTestCase(APITestCase):
             schedule=[],
             start_date="2026-04-21",
             session_duration=60,
+            is_distributed=True,
             name_visibility="committee",
         )
 
@@ -970,12 +1014,11 @@ class InterviewCandidatesViewTestCase(APITestCase):
                 {
                     "id": str(self.application.pk),
                     "name": "Ada Lovelace",
-                    "gender": "",
                 }
             ],
         )
 
-    def test_recruiter_always_sees_names(self):
+    def test_recruiter_sees_only_candidates_for_own_committee(self):
         recruiter_group = Group.objects.create(name="Bedkom", lego_id=504)
         recruiter_user = LegoUser.objects.create(
             username="candidate-recruiter", lego_id=505
@@ -984,6 +1027,20 @@ class InterviewCandidatesViewTestCase(APITestCase):
             user=recruiter_user, role=RECRUITING, group=recruiter_group
         )
         self.admission.groups.add(recruiter_group)
+        own_applicant = LegoUser.objects.create(
+            username="grace",
+            first_name="Grace",
+            last_name="Hopper",
+            lego_id=506,
+        )
+        own_application = UserApplication.objects.create(
+            user=own_applicant, admission=self.admission
+        )
+        GroupApplication.objects.create(
+            application=own_application,
+            group=recruiter_group,
+            text="Bedkom application",
+        )
         self.client.force_authenticate(user=recruiter_user)
 
         res = self.client.get(self.url)
@@ -993,9 +1050,28 @@ class InterviewCandidatesViewTestCase(APITestCase):
             res.data,
             [
                 {
-                    "id": str(self.application.pk),
-                    "name": "Ada Lovelace",
-                    "gender": "",
+                    "id": str(own_application.pk),
+                    "name": "Grace Hopper",
                 }
             ],
+        )
+
+    def test_candidate_who_applied_to_both_committees_is_visible_to_both(self):
+        recruiter = LegoUser.objects.create(username="candidate-recruiter", lego_id=507)
+        Membership.objects.create(user=recruiter, role=RECRUITING, group=self.group)
+        other_group = Group.objects.create(name="Bedkom", lego_id=508)
+        self.admission.groups.add(other_group)
+        GroupApplication.objects.create(
+            application=self.application,
+            group=other_group,
+            text="Bedkom application",
+        )
+        self.client.force_authenticate(user=recruiter)
+
+        res = self.client.get(self.url)
+
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.assertEqual(
+            res.data,
+            [{"id": str(self.application.pk), "name": "Ada Lovelace"}],
         )

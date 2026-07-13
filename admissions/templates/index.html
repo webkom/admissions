@@ -2,7 +2,7 @@
 {% load django_vite %}
 
 <!DOCTYPE html>
-<html lang="en">
+<html lang="nb">
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
@@ -12,14 +12,8 @@
     <meta property="og:title" content="Søk komité og revy!">
     <meta property="og:description" content="Vil du være med å bidra til at Abakus skal fortsette å være den beste linjeforeningen? Da må du søke verv i Abakus!">
     <meta property="og:image" content="{% static "og_image.png" %}">
-    <!--
-      manifest.json provides metadata used when your web app is added to the
-      homescreen on Android. See https://developers.google.com/web/fundamentals/engage-and-retain/web-app-manifest/
-    -->
     <link rel="manifest" href="{% static "manifest.json" %}">
     <link rel="shortcut icon" href="{% static "favicon.png" %}">
-    <link href="https://fonts.googleapis.com/icon?family=Material+Icons"
-      rel="stylesheet">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700;800&family=Geist+Mono:wght@400;500;600&display=swap">
@@ -33,25 +27,10 @@
   </head>
   <body>
     <noscript>
-      You need to enable JavaScript to run this app.
+      Du må aktivere JavaScript for å bruke opptakssystemet.
     </noscript>
     <div id="root"></div>
-    <script>
-    window.__DJANGO__ = {
-      user: {
-        profile_picture: "{{ request.user.profile_picture|default:'' }}",
-        full_name: "{{ request.user.get_full_name }}",
-        representative_of_group: "{{ request.user.representative_of_group }}",
-        is_staff: {{ request.user.is_staff|yesno:"true,false" }},
-        is_member_of_webkom: {{ request.user.is_member_of_webkom|yesno:"true,false" }}
-      }
-    };
-    window.__CONFIG__ = {
-        SENTRY_DSN: "{{ settings.SENTRY_DSN }}",
-        RELEASE: "{{ settings.RELEASE }}",
-        ENVIRONMENT: "{{ settings.ENVIRONMENT_NAME }}",
-        API_URL: "{{ settings.API_URL }}"
-    }
-    </script>
+    {{ django_data|json_script:"django-data" }}
+    {{ frontend_config|json_script:"frontend-config" }}
   </body>
 </html>

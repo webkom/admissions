@@ -2,7 +2,7 @@ from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APITestCase
 
-from admissions.admissions.constants import LEADER, MEMBER, RECRUITING
+from admissions.admissions.constants import LEADER, MEMBER, RECRUITING, RETIREE
 from admissions.admissions.models import (
     Group,
     GroupApplication,
@@ -10,7 +10,83 @@ from admissions.admissions.models import (
     Membership,
     UserApplication,
 )
+from admissions.admissions.serializers import UserApplicationSerializer
 from admissions.admissions.tests.utils import DEFAULT_ADMISSION_SLUG, create_admission
+
+
+class AdminAdmissionPrivacyTestCase(APITestCase):
+    def setUp(self):
+        self.admission = create_admission()
+        self.committee = Group.objects.create(name="Committee", lego_id=20)
+        self.admin_group = Group.objects.create(name="Admission admins", lego_id=21)
+        self.admission.groups.add(self.committee)
+        self.admission.admin_groups.add(self.admin_group)
+        self.candidate = LegoUser.objects.create(username="candidate", lego_id=22)
+        self.recruiter = LegoUser.objects.create(username="recruiter", lego_id=23)
+        self.admin = LegoUser.objects.create(username="admin", lego_id=24)
+        Membership.objects.create(
+            user=self.recruiter, group=self.committee, role=RECRUITING
+        )
+        Membership.objects.create(user=self.admin, group=self.admin_group, role=MEMBER)
+        UserApplication.objects.create(
+            admission=self.admission,
+            user=self.candidate,
+            phone_number="12345678",
+        )
+        self.url = reverse(
+            "admin-admission-detail", kwargs={"slug": self.admission.slug}
+        )
+
+    def test_anonymous_user_cannot_retrieve_admin_admission(self):
+        response = self.client.get(self.url)
+
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+
+    def test_candidate_cannot_retrieve_admin_admission(self):
+        self.client.force_authenticate(user=self.candidate)
+
+        response = self.client.get(self.url)
+
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_recruiter_can_retrieve_admin_admission(self):
+        self.client.force_authenticate(user=self.recruiter)
+
+        response = self.client.get(self.url)
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertNotIn("applications", response.data)
+        self.assertNotIn(str(self.candidate.pk), str(response.data))
+
+    def test_empty_filtered_prefetch_does_not_expose_global_answers(self):
+        application = UserApplication.objects.get(
+            admission=self.admission, user=self.candidate
+        )
+        application.text = "private global answer"
+        application.header_fields_response = {"private": "value"}
+        application.group_applications_filtered = []
+
+        data = UserApplicationSerializer(application).data
+
+        self.assertIsNone(data["text"])
+        self.assertEqual(data["header_fields_response"], {})
+
+    def test_admin_group_member_can_retrieve_admin_admission(self):
+        self.client.force_authenticate(user=self.admin)
+
+        response = self.client.get(self.url)
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+    def test_retired_membership_does_not_grant_candidate_access(self):
+        retired = LegoUser.objects.create(username="retired", lego_id=25)
+        Membership.objects.create(user=retired, group=self.admin_group, role=RETIREE)
+        Membership.objects.create(user=retired, group=self.committee, role=RETIREE)
+        self.client.force_authenticate(user=retired)
+
+        response = self.client.get(self.url)
+
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
 
 
 class ListApplicationsTestCase(APITestCase):
@@ -70,10 +146,11 @@ class ListApplicationsTestCase(APITestCase):
             },
         }
 
-    def unauthorized_user_cannot_see_other_applications(self):
+    def test_unauthorized_user_cannot_see_other_applications(self):
         res = self.client.get(
             reverse(
-                "userapplication-list", kwargs={"admission_slug": self.admission_slug}
+                "admin-userapplication-list",
+                kwargs={"admission_slug": self.admission_slug},
             )
         )
 
@@ -310,6 +387,7 @@ class DeleteGroupApplicationsTestCase(APITestCase):
 
         self.webkom = Group.objects.create(name="Webkom", lego_id=1)
         self.arrkom = Group.objects.create(name="Arrkom", lego_id=2)
+        self.admission.groups.add(self.webkom, self.arrkom)
 
         Membership.objects.create(
             user=self.webkom_leader, role=LEADER, group=self.webkom
@@ -319,13 +397,11 @@ class DeleteGroupApplicationsTestCase(APITestCase):
             username="bigsupremeleader", lego_id=8, is_staff=True
         )
 
-    def unauthorized_user_cannot_delete_application(self):
-        """Normal users should not be able to delete group applications"""
-        self.client.force_authenticate(user=self.pleb)
+    def test_unauthorized_user_cannot_delete_application(self):
         res = self.client.delete(
             reverse(
-                "userapplication-delete_group_application",
-                kwargs={"admission_slug": self.admission_slug},
+                "admin-userapplication-detail",
+                kwargs={"admission_slug": self.admission_slug, "pk": "not-a-uuid"},
             )
         )
 
@@ -346,34 +422,31 @@ class DeleteGroupApplicationsTestCase(APITestCase):
         )
         self.assertEqual(res.status_code, status.HTTP_403_FORBIDDEN)
 
-    def leader_can_delete_group_application(self):
+    def test_leader_can_delete_group_application(self):
         application = UserApplication.objects.create(
-            user=self.pleb, admission=self.admission
+            user=self.pleb, admission=self.admission, phone_number="12345678"
         )
-        arrkomAppliction = GroupApplication.objects.create(
-            application=application.pk,
+        arrkom_application = GroupApplication.objects.create(
+            application=application,
             group=self.arrkom,
             text="Some application text",
         )
         GroupApplication.objects.create(
-            application=application.pk,
+            application=application,
             group=self.webkom,
             text="Some application text",
         )
         self.client.force_authenticate(user=self.webkom_leader)
         res = self.client.delete(
-            reverse(
-                "userapplication-delete_group_application",
-                kwargs={"admission_slug": self.admission_slug, "pk": application.pk},
-            )
+            f"{reverse('admin-userapplication-detail', kwargs={'admission_slug': self.admission_slug, 'pk': application.pk})}?groupId={self.webkom.pk}",
         )
 
-        self.assertEqual(res.status_code, status.HTTP_200_OK)
-        self.assertTrue(UserApplication.filter(application.pk).exists())
+        self.assertEqual(res.status_code, status.HTTP_204_NO_CONTENT)
+        self.assertTrue(UserApplication.objects.filter(pk=application.pk).exists())
         self.assertEqual(
             GroupApplication.objects.filter(application=application.pk).count(), 1
         )
         self.assertEqual(
             GroupApplication.objects.get(application=application.pk),
-            arrkomAppliction,
+            arrkom_application,
         )

@@ -2,16 +2,31 @@ import time
 from datetime import timedelta
 
 from django.core.management.base import BaseCommand
-from django.db import connection, transaction
+from django.db import close_old_connections, connection, models, transaction
 from django.utils import timezone
 
 from structlog import get_logger
 
 from admissions.admissions import constants
-from admissions.admissions.models import SolveJob
+from admissions.admissions.models import Admission, SavedSchedule, SolveJob
+from admissions.admissions.schedule_validation import canonicalize_solver_payload
 from admissions.admissions.solve_schedule import solve_schedule
 
 log = get_logger()
+
+WRITE_BACK_ATTEMPTS = 3
+WRITE_BACK_RETRY_SECONDS = 1.0
+
+
+def _refresh_db_connection():
+    """Drop a stale or broken DB connection so the next query reconnects.
+
+    Django only refreshes connections on request signals, which a long-lived
+    management command never receives. Skipped inside an atomic block —
+    closing mid-transaction is unrecoverable, and the worker only runs inside
+    one under the test suite (TestCase wraps every test in a transaction)."""
+    if not connection.in_atomic_block:
+        close_old_connections()
 
 
 class Command(BaseCommand):
@@ -35,12 +50,23 @@ class Command(BaseCommand):
         run_once = options["once"]
         log.info("solver_worker_started", poll_interval=poll_interval)
         while True:
-            self._reap_stale_jobs()
-            processed = self._claim_and_run()
-            if run_once:
-                return
-            if not processed:
+            try:
+                self._reap_stale_jobs()
                 self._cleanup_old_jobs()
+                processed = self._claim_and_run()
+                if run_once:
+                    return
+                if not processed:
+                    time.sleep(poll_interval)
+            except Exception:
+                # A transient DB error (restart, failover, idle-timeout) must
+                # not kill the worker: drop the broken connection so the next
+                # cycle reconnects, wait, and keep polling. In --once mode the
+                # error propagates instead so tests fail loudly.
+                if run_once:
+                    raise
+                log.exception("solver_worker_cycle_failed")
+                _refresh_db_connection()
                 time.sleep(poll_interval)
 
     def _reap_stale_jobs(self):
@@ -49,7 +75,8 @@ class Command(BaseCommand):
         client should stop waiting on them."""
         cutoff = timezone.now() - timedelta(seconds=constants.SOLVE_JOB_STALE_SECONDS)
         reaped = SolveJob.objects.filter(
-            status=SolveJob.STATUS_RUNNING, started_at__lt=cutoff
+            models.Q(status=SolveJob.STATUS_RUNNING, started_at__lt=cutoff)
+            | models.Q(status=SolveJob.STATUS_PENDING, created_at__lt=cutoff)
         ).update(
             status=SolveJob.STATUS_ERROR,
             error="Solve-worker stoppet uventet. Prøv å kjøre på nytt.",
@@ -102,33 +129,73 @@ class Command(BaseCommand):
         error = ""
         new_status = SolveJob.STATUS_DONE
         try:
+            if data.get("rehydrate"):
+                with transaction.atomic():
+                    admission = Admission.objects.select_for_update().get(
+                        pk=job.admission_id
+                    )
+                    saved = SavedSchedule.objects.get(admission=admission)
+                    canonical = canonicalize_solver_payload(
+                        admission, saved, data, job.requested_by
+                    )
+                    data = {
+                        **data,
+                        **canonical,
+                        "previous_schedule": saved.schedule or [],
+                    }
             result = solve_schedule(
                 candidates_data=data.get("candidates", []),
                 interviewers_data=data.get("interviewers", []),
                 panel_size=data["panel_size"],
                 options_data=data.get("options", {}),
                 locked_assignments_data=data.get("locked_assignments", []),
-                all_slots_data=data.get("all_slots", []),
+                all_slots_data=data.get("all_slots"),
                 blocks_data=data.get("blocks", []),
                 previous_schedule_data=data.get("previous_schedule", []),
             )
         except Exception as exc:
-            log.exception("solve_job_failed", job_id=str(job.id))
-            error = str(exc)
+            log.exception(
+                "solve_job_failed",
+                job_id=str(job.id),
+                error_type=type(exc).__name__,
+            )
+            error = "Solveren feilet under kjøring."
             new_status = SolveJob.STATUS_ERROR
 
-        # Only write back if the job is still RUNNING; a concurrent cancel
-        # (status -> CANCELLED) must win and not be overwritten by the result.
-        updated = SolveJob.objects.filter(
-            id=job.id, status=SolveJob.STATUS_RUNNING
-        ).update(
-            result=result,
-            status=new_status,
-            error=error,
-            finished_at=timezone.now(),
-        )
+        # The solve can hold the CPU for minutes while the DB connection sits
+        # idle; reconnect if it went stale so the write-back doesn't fail.
+        _refresh_db_connection()
+
+        updated = self._write_back(job, result, new_status, error)
         log.info(
             "solve_job_finished",
             job_id=str(job.id),
             status=new_status if updated else SolveJob.STATUS_CANCELLED,
         )
+
+    def _write_back(self, job, result, new_status, error):
+        """Persist the finished result, retrying briefly on transient DB
+        errors so a completed solve is not lost; raises after the final
+        attempt (the job is then reaped as stale). Only writes if the job is
+        still RUNNING; a concurrent cancel (status -> CANCELLED) must win
+        and not be overwritten by the result."""
+        for attempt in range(1, WRITE_BACK_ATTEMPTS + 1):
+            try:
+                return SolveJob.objects.filter(
+                    id=job.id, status=SolveJob.STATUS_RUNNING
+                ).update(
+                    result=result,
+                    status=new_status,
+                    error=error,
+                    finished_at=timezone.now(),
+                )
+            except Exception:
+                log.exception(
+                    "solve_job_write_back_failed",
+                    job_id=str(job.id),
+                    attempt=attempt,
+                )
+                _refresh_db_connection()
+                if attempt == WRITE_BACK_ATTEMPTS:
+                    raise
+                time.sleep(WRITE_BACK_RETRY_SECONDS)

@@ -1,0 +1,401 @@
+from datetime import date
+
+from admissions.admissions import constants
+from admissions.admissions.models import (
+    InterviewAvailability,
+    LegoUser,
+    Membership,
+    UserApplication,
+)
+from admissions.admissions.schedule_windows import (
+    enabled_windows_to_slots,
+    parse_slot_key,
+)
+
+MINUTES_PER_DAY = 24 * 60
+
+
+class ScheduleValidationError(Exception):
+    def __init__(self, field, message):
+        self.field = field
+        self.message = message
+        super().__init__(message)
+
+
+def encode_slot_keys(slot_keys, start_date):
+    encoded = set()
+    for key in slot_keys or []:
+        parsed = parse_slot_key(str(key))
+        if parsed is None:
+            continue
+        date_text, minute = parsed
+        try:
+            slot_date = date.fromisoformat(date_text)
+        except ValueError:
+            continue
+        day_index = (slot_date - start_date).days
+        if day_index >= 0 and 0 <= minute < MINUTES_PER_DAY:
+            encoded.add(day_index * MINUTES_PER_DAY + minute)
+    return encoded
+
+
+def build_solver_blocks(
+    *,
+    day_count,
+    day_start_minute,
+    day_end_minute,
+    session_duration,
+    chunk_size,
+    chunk_break_minutes,
+):
+    duration = max(int(session_duration or 60), 1)
+    chunk_size = max(int(chunk_size or 1), 1)
+    break_minutes = max(int(chunk_break_minutes or 0), 0)
+    blocks = []
+    for day_index in range(day_count):
+        minute = day_start_minute
+        while minute + duration <= day_end_minute:
+            block = []
+            for _ in range(chunk_size):
+                if minute + duration > day_end_minute:
+                    break
+                block.append(day_index * MINUTES_PER_DAY + minute)
+                minute += duration
+            if block:
+                blocks.append(block)
+            minute += break_minutes
+    return blocks
+
+
+def _solver_blocks(saved):
+    end_date = saved.end_date or saved.start_date
+    return build_solver_blocks(
+        day_count=(end_date - saved.start_date).days + 1,
+        day_start_minute=saved.day_start_minute,
+        day_end_minute=saved.day_end_minute,
+        session_duration=saved.session_duration,
+        chunk_size=saved.chunk_size,
+        chunk_break_minutes=saved.chunk_break_minutes,
+    )
+
+
+def canonicalize_solver_payload(admission, saved, data, request_user):
+    saved_slot_keys = saved.enabled_slots or enabled_windows_to_slots(
+        saved.enabled_windows, saved.session_duration
+    )
+    all_slots = sorted(encode_slot_keys(saved_slot_keys, saved.start_date))
+    if not all_slots:
+        raise ScheduleValidationError(
+            "all_slots", "Tidsoppsettet må ha minst én åpen tidsluke."
+        )
+
+    applications = list(
+        UserApplication.objects.filter(admission=admission).select_related("user")
+    )
+    application_map = {str(application.pk): application for application in applications}
+    requested_candidate_ids = [str(item["id"]) for item in data["candidates"]]
+    if set(requested_candidate_ids) != set(application_map):
+        raise ScheduleValidationError(
+            "candidates", "Kandidatlisten samsvarer ikke med det aktive opptaket."
+        )
+
+    committee_ids = set(
+        Membership.objects.filter(group__in=admission.groups.all())
+        .exclude(role__in=constants.INACTIVE_MEMBERSHIP_ROLES)
+        .values_list("user_id", flat=True)
+    )
+    admin_ids = set(
+        Membership.objects.filter(group__in=admission.admin_groups.all())
+        .exclude(role__in=constants.INACTIVE_MEMBERSHIP_ROLES)
+        .values_list("user_id", flat=True)
+    )
+    submitted = list(
+        InterviewAvailability.objects.filter(admission=admission).select_related("user")
+    )
+    submitted_ids = {item.user_id for item in submitted}
+    participant_ids = committee_ids | (submitted_ids & admin_ids)
+    requested_interviewer_ids = [str(item["id"]) for item in data["interviewers"]]
+    if set(requested_interviewer_ids) != {str(value) for value in participant_ids}:
+        raise ScheduleValidationError(
+            "interviewers", "Intervjuerlisten samsvarer ikke med opptakskomiteen."
+        )
+
+    user_map = {
+        str(user.pk): user for user in LegoUser.objects.filter(id__in=participant_ids)
+    }
+    availability_map = {str(item.user_id): item for item in submitted}
+    candidate_ids = set(application_map)
+    candidates = [
+        {
+            "id": candidate_id,
+            "name": application_map[candidate_id].user.get_full_name()
+            or application_map[candidate_id].user.username,
+            "gender": {
+                "male": "M",
+                "female": "F",
+            }.get(application_map[candidate_id].user.gender, ""),
+        }
+        for candidate_id in requested_candidate_ids
+    ]
+    interviewers = []
+    for interviewer_id in requested_interviewer_ids:
+        user = user_map.get(interviewer_id)
+        if user is None:
+            raise ScheduleValidationError(
+                "interviewers", "Intervjuerlisten inneholder en ukjent bruker."
+            )
+        availability = availability_map.get(interviewer_id)
+        interviewers.append(
+            {
+                "id": interviewer_id,
+                "name": user.get_full_name() or user.username,
+                "gender": {"male": "M", "female": "F"}.get(user.gender, ""),
+                "availability": sorted(
+                    encode_slot_keys(
+                        availability.slots if availability else [], saved.start_date
+                    ).intersection(all_slots)
+                ),
+                "biased": [
+                    str(value)
+                    for value in (availability.conflicts if availability else [])
+                    if str(value) in candidate_ids
+                ],
+            }
+        )
+
+    locked_assignments = []
+    for assignment in data.get("locked_assignments", []):
+        candidate_id = str(assignment.get("candidate_id") or "")
+        if candidate_id not in application_map:
+            raise ScheduleValidationError(
+                "locked_assignments", "En låst kandidat er ikke aktiv i opptaket."
+            )
+        panel = []
+        for member in assignment.get("panel", []):
+            interviewer_id = str(member.get("id") or "")
+            if interviewer_id not in user_map:
+                raise ScheduleValidationError(
+                    "locked_assignments", "Et låst panel har en ukjent bruker."
+                )
+            panel.append(
+                {
+                    "id": interviewer_id,
+                    "name": user_map[interviewer_id].get_full_name()
+                    or user_map[interviewer_id].username,
+                }
+            )
+        locked_assignments.append(
+            {
+                "candidate_id": candidate_id,
+                "candidate": application_map[candidate_id].user.get_full_name()
+                or application_map[candidate_id].user.username,
+                "time": assignment["time"],
+                "panel": panel,
+            }
+        )
+
+    return {
+        "candidates": candidates,
+        "interviewers": interviewers,
+        "all_slots": all_slots,
+        "blocks": _solver_blocks(saved),
+        "locked_assignments": locked_assignments,
+    }
+
+
+def canonicalize_schedule(
+    *,
+    admission,
+    schedule,
+    start_date,
+    enabled_slots,
+    panel_size,
+    solver_options,
+    request_user_id,
+    require_all_candidates,
+    end_date,
+    session_duration,
+    day_start_minute,
+    day_end_minute,
+    chunk_size,
+    chunk_break_minutes,
+):
+    if not panel_size:
+        raise ScheduleValidationError("panel_size", "Panelstørrelse må være satt.")
+
+    applications = list(
+        UserApplication.objects.filter(admission=admission).select_related("user")
+    )
+    candidate_map = {str(application.pk): application for application in applications}
+    enabled_times = encode_slot_keys(enabled_slots, start_date)
+    if not enabled_times:
+        raise ScheduleValidationError(
+            "schedule", "Tidsoppsettet må ha minst én åpen tidsluke."
+        )
+
+    committee_ids = set(
+        Membership.objects.filter(group__in=admission.groups.all())
+        .exclude(role__in=constants.INACTIVE_MEMBERSHIP_ROLES)
+        .values_list("user_id", flat=True)
+    )
+    admin_ids = set(
+        Membership.objects.filter(group__in=admission.admin_groups.all())
+        .exclude(role__in=constants.INACTIVE_MEMBERSHIP_ROLES)
+        .values_list("user_id", flat=True)
+    )
+    submitted_ids = set(
+        InterviewAvailability.objects.filter(admission=admission).values_list(
+            "user_id", flat=True
+        )
+    )
+    allowed_user_ids = committee_ids | (submitted_ids & admin_ids)
+    user_map = {
+        str(user.pk): user for user in LegoUser.objects.filter(id__in=allowed_user_ids)
+    }
+    availability = {
+        str(item.user_id): item
+        for item in InterviewAvailability.objects.filter(
+            admission=admission, user_id__in=allowed_user_ids
+        )
+    }
+
+    allow_overtime = (solver_options or {}).get("allow_overtime", True)
+    seen_candidates = set()
+    seen_times = set()
+    canonical = []
+    for item in schedule:
+        candidate_id = str(item.get("candidate_id") or "")
+        application = candidate_map.get(candidate_id)
+        if application is None:
+            raise ScheduleValidationError(
+                "schedule", "Planen inneholder en ukjent kandidat."
+            )
+        if candidate_id in seen_candidates:
+            raise ScheduleValidationError(
+                "schedule", "En kandidat kan bare ha ett intervju."
+            )
+
+        interview_time = item["time"]
+        if interview_time not in enabled_times:
+            raise ScheduleValidationError(
+                "schedule", "Planen inneholder et tidspunkt som ikke er åpnet."
+            )
+        if interview_time in seen_times:
+            raise ScheduleValidationError(
+                "schedule", "To intervjuer kan ikke ha samme tidspunkt."
+            )
+
+        panel = item.get("panel") or []
+        if len(panel) != panel_size:
+            raise ScheduleValidationError(
+                "schedule", "Alle intervjuer må ha riktig panelstørrelse."
+            )
+        panel_ids = [str(member.get("id") or "") for member in panel]
+        if len(panel_ids) != len(set(panel_ids)):
+            raise ScheduleValidationError(
+                "schedule", "Et panel kan ikke inneholde samme person flere ganger."
+            )
+        if str(application.user_id) in panel_ids:
+            raise ScheduleValidationError(
+                "schedule", "En kandidat kan ikke intervjue seg selv."
+            )
+
+        canonical_panel = []
+        for interviewer_id in panel_ids:
+            interviewer = user_map.get(interviewer_id)
+            if interviewer is None:
+                raise ScheduleValidationError(
+                    "schedule", "Planen inneholder en ukjent intervjuer."
+                )
+            saved_availability = availability.get(interviewer_id)
+            conflicts = (
+                set(str(value) for value in (saved_availability.conflicts or []))
+                if saved_availability
+                else set()
+            )
+            if candidate_id in conflicts:
+                raise ScheduleValidationError(
+                    "schedule", "Planen bryter en registrert inhabilitet."
+                )
+            available_times = (
+                encode_slot_keys(saved_availability.slots, start_date)
+                if saved_availability
+                else set()
+            )
+            is_overtime = interview_time not in available_times
+            if is_overtime and not allow_overtime:
+                raise ScheduleValidationError(
+                    "schedule", "Planen krever overtid som er slått av."
+                )
+            canonical_panel.append(
+                {
+                    "id": interviewer_id,
+                    "name": interviewer.get_full_name() or interviewer.username,
+                    "is_overtime": is_overtime,
+                }
+            )
+
+        canonical_item = {
+            "candidate_id": candidate_id,
+            "candidate": application.user.get_full_name() or application.user.username,
+            "time": interview_time,
+            "panel": canonical_panel,
+        }
+        if "locked" in item:
+            canonical_item["locked"] = item["locked"]
+        canonical.append(canonical_item)
+        seen_candidates.add(candidate_id)
+        seen_times.add(interview_time)
+
+    if require_all_candidates and seen_candidates != set(candidate_map):
+        raise ScheduleValidationError(
+            "schedule", "Alle aktive kandidater må ha et intervju før publisering."
+        )
+
+    if (solver_options or {}).get("enforce_same_gender"):
+        interviewer_genders = {
+            str(user.pk): constants.LEGO_GENDER_TO_PANEL_CODE.get(user.gender, "")
+            for user in user_map.values()
+        }
+        if any(interviewer_genders.values()):
+            for item in canonical:
+                candidate_gender = constants.LEGO_GENDER_TO_PANEL_CODE.get(
+                    candidate_map[item["candidate_id"]].user.gender, ""
+                )
+                if candidate_gender and not any(
+                    interviewer_genders.get(member["id"]) == candidate_gender
+                    for member in item["panel"]
+                ):
+                    raise ScheduleValidationError(
+                        "schedule",
+                        "Planen mangler en intervjuer med samme kjønn som kandidaten.",
+                    )
+
+    if (solver_options or {}).get("same_panel_per_block"):
+        effective_end_date = end_date or start_date
+        blocks = build_solver_blocks(
+            day_count=(effective_end_date - start_date).days + 1,
+            day_start_minute=day_start_minute,
+            day_end_minute=day_end_minute,
+            session_duration=session_duration,
+            chunk_size=chunk_size,
+            chunk_break_minutes=chunk_break_minutes,
+        )
+        block_by_time = {
+            interview_time: block_index
+            for block_index, block in enumerate(blocks)
+            for interview_time in block
+        }
+        panel_by_block = {}
+        for item in canonical:
+            block_index = block_by_time.get(item["time"])
+            if block_index is None:
+                continue
+            panel_ids = frozenset(member["id"] for member in item["panel"])
+            previous = panel_by_block.setdefault(block_index, panel_ids)
+            if previous != panel_ids:
+                raise ScheduleValidationError(
+                    "schedule", "Alle intervjuer i samme blokk må ha samme panel."
+                )
+
+    return canonical

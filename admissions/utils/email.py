@@ -34,7 +34,7 @@ def send_message(admission_title, group, recipients):
         "send_mail",
         subject=subject,
         from_email=from_email,
-        recipient_list=recipients,
+        recipient_count=len(recipients),
     )
 
     email = EmailMultiAlternatives(

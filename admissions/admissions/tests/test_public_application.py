@@ -74,6 +74,55 @@ class CreateApplicationTestCase(APITestCase):
 
         self.assertEqual(res.status_code, status.HTTP_201_CREATED)
 
+    def test_missing_group_selection_is_rejected_without_creating_candidate(self):
+        self.client.force_authenticate(user=self.pleb_anna)
+        data = {
+            key: value
+            for key, value in self.application_data.items()
+            if key != "applications"
+        }
+
+        res = self.client.post(
+            reverse(
+                "userapplication-list", kwargs={"admission_slug": self.admission_slug}
+            ),
+            data,
+            format="json",
+        )
+
+        self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertFalse(UserApplication.objects.filter(user=self.pleb_anna).exists())
+
+    def test_empty_group_selection_is_rejected_without_creating_candidate(self):
+        self.client.force_authenticate(user=self.pleb_anna)
+        data = {**self.application_data, "applications": {}}
+
+        res = self.client.post(
+            reverse(
+                "userapplication-list", kwargs={"admission_slug": self.admission_slug}
+            ),
+            data,
+            format="json",
+        )
+
+        self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertFalse(UserApplication.objects.filter(user=self.pleb_anna).exists())
+
+    def test_non_object_group_selection_is_rejected_without_server_error(self):
+        self.client.force_authenticate(user=self.pleb_anna)
+        data = {**self.application_data, "applications": ["webkom"]}
+
+        res = self.client.post(
+            reverse(
+                "userapplication-list", kwargs={"admission_slug": self.admission_slug}
+            ),
+            data,
+            format="json",
+        )
+
+        self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertFalse(UserApplication.objects.filter(user=self.pleb_anna).exists())
+
     def test_editing_application_works_correctly(self):
         self.client.force_authenticate(user=self.pleb_anna)
 
@@ -113,7 +162,6 @@ class CreateApplicationTestCase(APITestCase):
         )
 
     def test_cannot_apply_for_group_outside_admission(self):
-        # Bedkom exists but is not part of this admission.
         Group.objects.create(name="Bedkom", lego_id=5)
         self.client.force_authenticate(user=self.pleb_anna)
 
@@ -188,7 +236,6 @@ class CreateApplicationTestCase(APITestCase):
         url = reverse(
             "userapplication-list", kwargs={"admission_slug": self.admission_slug}
         )
-        # Apply to both groups first.
         self.client.post(
             url,
             self.application_data,
@@ -199,8 +246,6 @@ class CreateApplicationTestCase(APITestCase):
             UserApplication.objects.get(user=self.pleb_anna).group_applications.count(),
         )
 
-        # Re-apply with only webkom (drops koskom -> triggers withdrawal email),
-        # but the mail server is down.
         edit = {
             "text": "x",
             "phone_number": "12345678",
@@ -214,7 +259,6 @@ class CreateApplicationTestCase(APITestCase):
             res = self.client.post(url, edit, format="json")
 
         self.assertEqual(res.status_code, status.HTTP_201_CREATED)
-        # The withdrawal still persisted despite the email failure.
         self.assertEqual(
             1,
             UserApplication.objects.get(user=self.pleb_anna).group_applications.count(),
@@ -243,5 +287,4 @@ class CreateApplicationTestCase(APITestCase):
             res = self.client.delete(mine_url)
 
         self.assertEqual(res.status_code, status.HTTP_204_NO_CONTENT)
-        # The application is gone despite the notification failing.
         self.assertFalse(UserApplication.objects.filter(user=self.pleb_anna).exists())
