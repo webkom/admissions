@@ -223,6 +223,52 @@ class SavedSchedule(models.Model):
         return f"Schedule for {self.admission} (distributed={self.is_distributed})"
 
 
+class NameVisibilityAuditEvent(models.Model):
+    ACTION_REVEALED = "revealed"
+    ACTION_HIDDEN = "hidden"
+    ACTION_CHOICES = [
+        (ACTION_REVEALED, "Revealed"),
+        (ACTION_HIDDEN, "Hidden"),
+    ]
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    admission = models.ForeignKey(
+        Admission,
+        on_delete=models.CASCADE,
+        related_name="name_visibility_events",
+    )
+    saved_schedule = models.ForeignKey(
+        SavedSchedule,
+        null=True,
+        on_delete=models.SET_NULL,
+        related_name="name_visibility_events",
+    )
+    group = models.ForeignKey(Group, null=True, on_delete=models.SET_NULL)
+    group_name = models.CharField(max_length=80)
+    actor = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        on_delete=models.SET_NULL,
+        related_name="name_visibility_events",
+    )
+    actor_username = models.CharField(max_length=150)
+    action = models.CharField(max_length=16, choices=ACTION_CHOICES)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        indexes = [
+            models.Index(
+                fields=["admission", "-created_at"],
+                name="name_vis_admission_time_idx",
+            ),
+            models.Index(
+                fields=["group", "-created_at"],
+                name="name_vis_group_time_idx",
+            ),
+        ]
+
+
 class InterviewAvailability(models.Model):
     admission = models.ForeignKey(
         Admission, on_delete=models.CASCADE, related_name="interview_availabilities"

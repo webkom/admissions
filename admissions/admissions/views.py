@@ -27,6 +27,7 @@ from admissions.admissions.models import (
     InterviewAvailability,
     LegoUser,
     Membership,
+    NameVisibilityAuditEvent,
     SavedSchedule,
     SolveJob,
     UserApplication,
@@ -39,6 +40,7 @@ from admissions.admissions.serializers import (
     ApplicationCreateUpdateSerializer,
     GroupSerializer,
     InterviewAvailabilityParticipantSerializer,
+    NameVisibilityAuditEventSerializer,
     SavedScheduleSerializer,
     SaveInterviewAvailabilitySerializer,
     SaveScheduleInputSerializer,
@@ -123,6 +125,53 @@ def get_name_revealed_groups(admission, saved_schedule):
 def get_user_name_revealed_groups(admission, saved_schedule, user):
     return get_user_admission_groups(admission, user).filter(
         pk__in=get_name_revealed_groups(admission, saved_schedule)
+    )
+
+
+def get_user_candidate_visible_groups(admission, saved_schedule, user):
+    represented_groups = get_representing_groups(admission, user)
+    if saved_schedule is None:
+        return represented_groups
+    revealed_groups = get_user_name_revealed_groups(admission, saved_schedule, user)
+    return admission.groups.filter(
+        Q(pk__in=represented_groups) | Q(pk__in=revealed_groups)
+    ).distinct()
+
+
+def set_group_name_visibility(saved_schedule, groups, visible, actor):
+    groups = list(groups)
+    if not groups:
+        return
+    group_ids = {group.pk for group in groups}
+    revealed_ids = set(
+        saved_schedule.revealed_groups.filter(pk__in=group_ids).values_list(
+            "pk", flat=True
+        )
+    )
+    changed_groups = [
+        group for group in groups if (group.pk in revealed_ids) != visible
+    ]
+    if not changed_groups:
+        return
+    if visible:
+        saved_schedule.revealed_groups.add(*changed_groups)
+        action = NameVisibilityAuditEvent.ACTION_REVEALED
+    else:
+        saved_schedule.revealed_groups.remove(*changed_groups)
+        action = NameVisibilityAuditEvent.ACTION_HIDDEN
+    NameVisibilityAuditEvent.objects.bulk_create(
+        [
+            NameVisibilityAuditEvent(
+                admission=saved_schedule.admission,
+                saved_schedule=saved_schedule,
+                group=group,
+                group_name=group.name,
+                actor=actor,
+                actor_username=actor.username,
+                action=action,
+            )
+            for group in changed_groups
+        ]
     )
 
 
@@ -696,19 +745,19 @@ class SavedScheduleView(APIView):
         effective_name_visibility = saved.name_visibility
 
         if not is_admin:
+            represented_groups = get_representing_groups(admission, user)
+            visible_groups = get_user_candidate_visible_groups(admission, saved, user)
             if is_recruiter:
-                visible_groups = get_representing_groups(admission, user)
                 revealed_groups = get_name_revealed_groups(admission, saved).filter(
-                    pk__in=visible_groups
+                    pk__in=represented_groups
                 )
                 effective_name_visibility = (
                     SavedSchedule.NAME_VISIBILITY_COMMITTEE
-                    if visible_groups.exists()
-                    and not visible_groups.exclude(pk__in=revealed_groups).exists()
+                    if represented_groups.exists()
+                    and not represented_groups.exclude(pk__in=revealed_groups).exists()
                     else SavedSchedule.NAME_VISIBILITY_ADMIN_ONLY
                 )
             else:
-                visible_groups = get_user_name_revealed_groups(admission, saved, user)
                 hide_identity = not visible_groups.exists()
                 effective_name_visibility = (
                     SavedSchedule.NAME_VISIBILITY_COMMITTEE
@@ -795,10 +844,12 @@ class SavedScheduleView(APIView):
                     status=status.HTTP_400_BAD_REQUEST,
                 )
             represented_groups = get_representing_groups(admission, request.user)
-            if visibility == SavedSchedule.NAME_VISIBILITY_COMMITTEE:
-                existing.revealed_groups.add(*represented_groups)
-            else:
-                existing.revealed_groups.remove(*represented_groups)
+            set_group_name_visibility(
+                existing,
+                represented_groups,
+                visibility == SavedSchedule.NAME_VISIBILITY_COMMITTEE,
+                request.user,
+            )
             existing.save(update_fields=["updated_at"])
             return self._schedule_response(
                 existing, admission, request.user, is_admin, is_recruiter
@@ -1049,12 +1100,36 @@ class SavedScheduleView(APIView):
             )
 
             if not saved.is_distributed:
-                saved.revealed_groups.clear()
+                set_group_name_visibility(
+                    saved,
+                    saved.revealed_groups.all(),
+                    False,
+                    request.user,
+                )
             elif "name_visibility" in data:
-                if data["name_visibility"] == SavedSchedule.NAME_VISIBILITY_COMMITTEE:
-                    saved.revealed_groups.set(admission.groups.all())
+                show_names = (
+                    data["name_visibility"] == SavedSchedule.NAME_VISIBILITY_COMMITTEE
+                )
+                if not show_names:
+                    set_group_name_visibility(
+                        saved,
+                        saved.revealed_groups.all(),
+                        False,
+                        request.user,
+                    )
                 else:
-                    saved.revealed_groups.clear()
+                    set_group_name_visibility(
+                        saved,
+                        saved.revealed_groups.exclude(pk__in=admission.groups.all()),
+                        False,
+                        request.user,
+                    )
+                    set_group_name_visibility(
+                        saved,
+                        admission.groups.all(),
+                        True,
+                        request.user,
+                    )
 
             if grid_changed and existing is not None:
                 admission.interview_availabilities.all().delete()
@@ -1141,14 +1216,10 @@ class InterviewAvailabilityView(APIView):
             pass
         visible_candidate_ids = None
         if not is_admin:
-            user_groups = (
-                representing_groups
-                if is_recruiter
-                else (
-                    get_user_name_revealed_groups(admission, saved_schedule, user)
-                    if saved_schedule is not None
-                    else admission.groups.none()
-                )
+            user_groups = get_user_candidate_visible_groups(
+                admission,
+                saved_schedule,
+                user,
             )
             visible_candidate_ids = {
                 str(pk)
@@ -1274,7 +1345,11 @@ class InterviewAvailabilityView(APIView):
             visible_groups = (
                 admission.groups.all()
                 if is_admin
-                else (representing_groups if is_recruiter else revealed_groups)
+                else get_user_candidate_visible_groups(
+                    admission,
+                    saved_schedule,
+                    user,
+                )
             )
             applications = UserApplication.objects.filter(admission=admission)
             if not is_admin:
@@ -1354,18 +1429,11 @@ class InterviewCandidatesView(APIView):
         except SavedSchedule.DoesNotExist:
             pass
 
-        revealed_groups = (
-            get_user_name_revealed_groups(admission, saved, user)
-            if saved is not None
-            else admission.groups.none()
-        )
-        hide_identity = (
-            not is_admin and not is_recruiter and not revealed_groups.exists()
-        )
+        visible_groups = get_user_candidate_visible_groups(admission, saved, user)
+        hide_identity = not is_admin and not visible_groups.exists()
 
         applications = UserApplication.objects.filter(admission=admission)
         if not is_admin:
-            visible_groups = representing_groups if is_recruiter else revealed_groups
             applications = applications.filter(
                 group_applications__group__in=visible_groups
             ).distinct()
@@ -1385,3 +1453,21 @@ class InterviewCandidatesView(APIView):
             ]
 
         return Response(payload, status=status.HTTP_200_OK)
+
+
+class NameVisibilityAuditView(APIView):
+    authentication_classes = [SessionAuthentication]
+    permission_classes = [IsAuthenticated]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = "schedule"
+
+    def get(self, request, admission_slug):
+        admission = get_object_or_404(Admission, slug=admission_slug)
+        request.user.__class__ = LegoUser
+        if not user_is_admission_admin(admission, request.user):
+            return Response(status=status.HTTP_403_FORBIDDEN)
+        events = NameVisibilityAuditEvent.objects.filter(
+            admission=admission
+        ).select_related("group", "actor")[: constants.MAX_NAME_VISIBILITY_AUDIT_EVENTS]
+        serializer = NameVisibilityAuditEventSerializer(events, many=True)
+        return Response(serializer.data)

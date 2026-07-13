@@ -22,6 +22,7 @@ from admissions.admissions.models import (
     InterviewAvailability,
     LegoUser,
     Membership,
+    NameVisibilityAuditEvent,
     SavedSchedule,
     SolveJob,
     UserApplication,
@@ -501,7 +502,7 @@ class SavedScheduleSerializer(serializers.ModelSerializer):
         hide_candidate_identity = self.context.get("hide_candidate_identity")
         visible_candidate_ids = self.context.get("visible_candidate_ids")
         if hide_candidate_identity or visible_candidate_ids is not None:
-            redacted = []
+            visible_schedule = []
             for entry in data.get("schedule") or []:
                 candidate_id = entry.get("candidate_id")
                 can_see_candidate = (
@@ -510,24 +511,24 @@ class SavedScheduleSerializer(serializers.ModelSerializer):
                     and str(candidate_id) in visible_candidate_ids
                 )
                 if can_see_candidate:
-                    redacted.append(entry)
-                    continue
-                sanitized = {
-                    key: entry[key] for key in ("time", "locked") if key in entry
-                }
-                sanitized["panel"] = [
-                    {
-                        key: member[key]
-                        for key in ("id", "name", "is_overtime")
-                        if key in member
-                    }
-                    for member in entry.get("panel", [])
-                    if isinstance(member, dict)
-                ]
-                sanitized["candidate"] = ""
-                redacted.append(sanitized)
-            data["schedule"] = redacted
+                    visible_schedule.append(entry)
+            data["schedule"] = visible_schedule
         return data
+
+
+class NameVisibilityAuditEventSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = NameVisibilityAuditEvent
+        fields = (
+            "id",
+            "group",
+            "group_name",
+            "actor",
+            "actor_username",
+            "action",
+            "created_at",
+        )
+        read_only_fields = fields
 
 
 class SolveJobSerializer(serializers.ModelSerializer):

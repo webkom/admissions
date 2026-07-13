@@ -1054,15 +1054,14 @@ class SavedScheduleVisibilityTestCase(APITestCase):
 
         self.assertEqual(res.status_code, status.HTTP_200_OK)
 
-    def test_committee_member_sees_redacted_names_when_hidden(self):
+    def test_committee_member_does_not_receive_schedule_rows_when_hidden(self):
         self._create_saved(is_distributed=True, name_visibility="hidden")
         self.client.force_authenticate(user=self.member_user)
 
         res = self.client.get(self.url)
 
         self.assertEqual(res.status_code, status.HTTP_200_OK)
-        self.assertEqual(res.data["schedule"][0]["candidate"], "")
-        self.assertNotIn("candidate_id", res.data["schedule"][0])
+        self.assertEqual(res.data["schedule"], [])
 
     def test_committee_member_sees_names_when_visibility_committee(self):
         self._create_saved(is_distributed=True, name_visibility="committee")
@@ -1134,8 +1133,9 @@ class SavedScheduleVisibilityTestCase(APITestCase):
                 kwargs={"admission_slug": self.admission.slug},
             )
         )
-        self.assertEqual(own_schedule.data["schedule"][0]["candidate"], "Ada")
-        self.assertEqual(own_schedule.data["schedule"][1]["candidate"], "")
+        self.assertEqual(
+            [item["candidate"] for item in own_schedule.data["schedule"]], ["Ada"]
+        )
         self.assertEqual(
             own_candidates.data,
             [{"id": str(self.application.pk), "name": "Ada"}],
@@ -1149,9 +1149,7 @@ class SavedScheduleVisibilityTestCase(APITestCase):
                 kwargs={"admission_slug": self.admission.slug},
             )
         )
-        self.assertTrue(
-            all(item["candidate"] == "" for item in other_schedule.data["schedule"])
-        )
+        self.assertEqual(other_schedule.data["schedule"], [])
         self.assertEqual(other_candidates.data, [])
 
     def test_recruiter_name_reveal_cannot_modify_schedule(self):
@@ -1233,9 +1231,7 @@ class SavedScheduleVisibilityTestCase(APITestCase):
         res = self.client.get(self.url)
 
         self.assertEqual(res.status_code, status.HTTP_200_OK)
-        self.assertEqual(res.data["schedule"][0]["candidate"], "Ada")
-        self.assertEqual(res.data["schedule"][1]["candidate"], "")
-        self.assertNotIn("candidate_id", res.data["schedule"][1])
+        self.assertEqual([item["candidate"] for item in res.data["schedule"]], ["Ada"])
 
     def test_admin_sees_names_even_when_hidden(self):
         self._create_saved(is_distributed=True, name_visibility="hidden")
