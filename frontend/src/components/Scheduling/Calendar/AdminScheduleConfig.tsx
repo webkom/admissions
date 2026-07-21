@@ -88,6 +88,7 @@ const AdminScheduleConfig: React.FC<AdminScheduleConfigProps> = ({
 }) => {
   const [isSaving, setIsSaving] = useState(false);
   const [saveTick, setSaveTick] = useState(0);
+  const [reshapedSlotCount, setReshapedSlotCount] = useState(0);
   const [isSettingsCollapsed, setIsSettingsCollapsed] = useState(false);
 
   const [pendingStart, setPendingStart] = useState<TimeValue>({
@@ -229,9 +230,18 @@ const AdminScheduleConfig: React.FC<AdminScheduleConfigProps> = ({
   useEffect(() => {
     if (previousGridShapeKey.current === gridShapeKey) return;
     previousGridShapeKey.current = gridShapeKey;
-    setDraftSlots((currentSlots) =>
-      shapeDraftSlots(dates, chunks, currentSlots, pendingDuration),
-    );
+    setDraftSlots((currentSlots) => {
+      const nextSlots = shapeDraftSlots(
+        dates,
+        chunks,
+        currentSlots,
+        pendingDuration,
+      );
+      setReshapedSlotCount(
+        Array.from(currentSlots).filter((slot) => !nextSlots.has(slot)).length,
+      );
+      return nextSlots;
+    });
   }, [chunks, dates, gridShapeKey, pendingDuration]);
 
   const normalizedDraftWindows = React.useMemo(
@@ -308,6 +318,7 @@ const AdminScheduleConfig: React.FC<AdminScheduleConfigProps> = ({
     setBaseRevision(scheduleRevision);
     setPendingSavedRevision(null);
     setRemoteRevisionChanged(false);
+    setReshapedSlotCount(0);
   }, [
     chunkBreakMinutes,
     chunkSize,
@@ -470,6 +481,7 @@ const AdminScheduleConfig: React.FC<AdminScheduleConfigProps> = ({
     onDiscard: applyIncomingConfiguration,
     onSave: handleSave,
     openBlockCount,
+    reshapedSlotCount,
   };
 
   useEffect(() => {
@@ -540,12 +552,6 @@ const AdminScheduleConfig: React.FC<AdminScheduleConfigProps> = ({
           description="Definer når intervjuer kan gjennomføres og hvordan blokkene bygges."
         />
         <SchedulePanelBody>{settings}</SchedulePanelBody>
-        {(!isSettingsCollapsed || hasPendingChanges) && (
-          <AdminScheduleConfigFooter
-            saveStatus={saveStatus}
-            showOpenBlockCount={false}
-          />
-        )}
       </SchedulePanel>
       <SchedulePanel id="interview-blocks" className="min-w-0 scroll-mt-4">
         <SchedulePanelHeader
@@ -566,8 +572,12 @@ const AdminScheduleConfig: React.FC<AdminScheduleConfigProps> = ({
           )}
           onChangeSlots={handleChangeSlots}
         />
-        <AdminScheduleConfigFooter saveStatus={saveStatus} />
       </SchedulePanel>
+      <AdminScheduleConfigFooter
+        saveStatus={saveStatus}
+        actionLabel="Lagre oppsett"
+        className="sticky bottom-3 z-10 rounded-panel border border-border bg-surface-base shadow-lg"
+      />
     </div>
   );
 };

@@ -69,6 +69,12 @@ const FoundationWorkspaceNav: React.FC<FoundationWorkspaceNavProps> = ({
             item.key === "coverage" &&
             frameworkComplete &&
             participantCount > 0;
+          const frameworkWarning =
+            item.key === "framework" && !frameworkDraftValid
+              ? "Ugyldig"
+              : item.key === "framework" && frameworkHasPendingChanges
+                ? "Ulagret"
+                : null;
 
           return {
             key: item.key,
@@ -78,6 +84,17 @@ const FoundationWorkspaceNav: React.FC<FoundationWorkspaceNavProps> = ({
             label: (
               <>
                 <span className="text-sm font-bold">{item.title}</span>
+                {frameworkWarning && (
+                  <span
+                    className={`rounded px-1.5 py-0.5 text-label font-semibold ${
+                      frameworkWarning === "Ugyldig"
+                        ? "bg-danger-bg text-danger"
+                        : "bg-amber-100 text-amber-900"
+                    }`}
+                  >
+                    {frameworkWarning}
+                  </span>
+                )}
                 {showCoverageCount && (
                   <span className="rounded px-1.5 py-0.5 text-label font-semibold tabular-nums text-text-subtle">
                     {submittedCount}/{participantCount}

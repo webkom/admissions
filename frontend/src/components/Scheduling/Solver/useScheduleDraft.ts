@@ -23,6 +23,7 @@ interface UseScheduleDraftParams {
   dates: string[];
   enabledSlots: Set<string>;
   sessionDuration: number;
+  canonicalBlocks: number[][];
   onModify: () => void;
 }
 
@@ -49,11 +50,12 @@ export const useScheduleDraft = ({
   dates,
   enabledSlots,
   sessionDuration,
+  canonicalBlocks,
   onModify,
 }: UseScheduleDraftParams): ScheduleDraftController => {
   const presentation = useMemo(
-    () => deriveSchedulePresentation(result, interviewers),
-    [interviewers, result],
+    () => deriveSchedulePresentation(result, interviewers, canonicalBlocks),
+    [canonicalBlocks, interviewers, result],
   );
   const interviewerByName = useMemo(
     () =>

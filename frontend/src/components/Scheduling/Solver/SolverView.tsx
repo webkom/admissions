@@ -91,6 +91,25 @@ export default function SolverView({
     candidateScopeResolved,
     syntheticInput,
   });
+  const canonicalBlocks = useMemo(
+    () =>
+      buildSolveBlocks({
+        dates,
+        dayStartMinute,
+        dayEndMinute,
+        sessionDuration,
+        chunkSize,
+        chunkBreakMinutes,
+      }),
+    [
+      chunkBreakMinutes,
+      chunkSize,
+      dates,
+      dayEndMinute,
+      dayStartMinute,
+      sessionDuration,
+    ],
+  );
   const draft = useScheduleDraft({
     result: session.scopedResult,
     setResult: session.setResult,
@@ -99,6 +118,7 @@ export default function SolverView({
     dates,
     enabledSlots,
     sessionDuration,
+    canonicalBlocks,
     onModify: session.markDraftModified,
   });
   const persistenceConfig = useMemo(
@@ -179,25 +199,10 @@ export default function SolverView({
     const openSlots = new Set(
       slotsToSolverAvailability(enabledSlots, dates, sessionDuration),
     );
-    return buildSolveBlocks({
-      dates,
-      dayStartMinute,
-      dayEndMinute,
-      sessionDuration,
-      chunkSize,
-      chunkBreakMinutes,
-    })
+    return canonicalBlocks
       .map((block) => block.filter((slot) => openSlots.has(slot)))
       .filter((block) => block.length > 0);
-  }, [
-    chunkBreakMinutes,
-    chunkSize,
-    dates,
-    dayEndMinute,
-    dayStartMinute,
-    enabledSlots,
-    sessionDuration,
-  ]);
+  }, [canonicalBlocks, enabledSlots, sessionDuration]);
   const repairBaseline = session.scopedResult?.schedule ?? [];
   const repairInputFingerprint = useMemo(
     () =>
@@ -266,11 +271,7 @@ export default function SolverView({
       setRepairError("Planen ble endret. Beregn løsningene på nytt.");
       return null;
     }
-    if (
-      !outcome ||
-      outcome === "access-failure" ||
-      !hasSchedule(outcome.status)
-    ) {
+    if (!outcome || !hasSchedule(outcome.status)) {
       return null;
     }
     const scenario = buildRepairScenario({
@@ -395,6 +396,10 @@ export default function SolverView({
           enabledSlots={enabledSlots}
           editRequestKey={editRequestKey}
           assignmentConflicts={assignmentConflicts}
+          blockRestPreferenceEnabled={
+            session.proposalSolverOptions
+              ?.avoid_consecutive_interviewer_blocks ?? null
+          }
           onOpenPlan={onOpenPlan}
         />
       )}

@@ -1,5 +1,11 @@
 import React, { useMemo, useRef, useState } from "react";
-import { BarChart3, Check, X } from "lucide-react";
+import {
+  BarChart3,
+  Check,
+  ChevronDown,
+  SlidersHorizontal,
+  X,
+} from "lucide-react";
 import type { Interviewer } from "../types";
 import {
   buildBlockTimeChunks,
@@ -66,6 +72,7 @@ const AvailabilityHeatmap: React.FC<AvailabilityHeatmapProps> = ({
 }) => {
   const [genderFilter, setGenderFilter] = useState<GenderFilter>("all");
   const [highlightedInterviewer, setHighlightedInterviewer] = useState("");
+  const [isFilterOpen, setIsFilterOpen] = useState(false);
   const [isResponseDisclosureOpen, setIsResponseDisclosureOpen] =
     useState(false);
   const [selectedBlockKey, setSelectedBlockKey] = useState<string | null>(null);
@@ -239,42 +246,74 @@ const AvailabilityHeatmap: React.FC<AvailabilityHeatmapProps> = ({
           </section>
         )}
 
-        <fieldset className="flex flex-wrap items-end gap-x-4 gap-y-3">
-          <legend className="sr-only">Visning</legend>
-          <label
-            className="flex flex-col gap-1 text-detail font-medium text-text-muted"
-            htmlFor="gender-filter"
+        <div className="border-y border-border-soft py-2">
+          <button
+            type="button"
+            aria-expanded={isFilterOpen}
+            aria-controls="availability-filters"
+            onClick={() => setIsFilterOpen((open) => !open)}
+            className="flex w-full items-center justify-between gap-3 text-left text-ui font-semibold text-text-primary focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-focus"
           >
-            Kjønn på intervjuere
-            <CustomSelect
-              id="gender-filter"
-              value={genderFilter}
-              className="min-w-36"
-              onChange={(value) => setGenderFilter(value as GenderFilter)}
-              options={genderOptions}
+            <span className="inline-flex items-center gap-2">
+              <SlidersHorizontal size={iconSizes.small} aria-hidden="true" />
+              Filtrer og fremhev
+              {(genderFilter !== "all" || highlightedInterviewer) && (
+                <span className="rounded bg-brand-soft px-1.5 py-0.5 text-label font-semibold text-brand">
+                  Aktiv
+                </span>
+              )}
+            </span>
+            <ChevronDown
+              size={iconSizes.small}
+              aria-hidden="true"
+              className={cn(
+                "transition-transform",
+                isFilterOpen && "rotate-180",
+              )}
             />
-          </label>
-          <label
-            className="flex flex-col gap-1 text-detail font-medium text-text-muted"
-            htmlFor="interviewer-highlight"
-          >
-            Fremhev intervjuer
-            <CustomSelect
-              id="interviewer-highlight"
-              value={highlightedInterviewer}
-              className="min-w-44"
-              placeholder="Ingen"
-              onChange={setHighlightedInterviewer}
-              options={[
-                { value: "", label: "Ingen" },
-                ...interviewers.map((interviewer) => ({
-                  value: interviewer.id,
-                  label: interviewer.name,
-                })),
-              ]}
-            />
-          </label>
-        </fieldset>
+          </button>
+          {isFilterOpen && (
+            <fieldset
+              id="availability-filters"
+              className="mt-3 flex flex-wrap items-end gap-x-4 gap-y-3 animate-fade-in"
+            >
+              <legend className="sr-only">Visning</legend>
+              <label
+                className="flex flex-col gap-1 text-detail font-medium text-text-muted"
+                htmlFor="gender-filter"
+              >
+                Kjønn på intervjuere
+                <CustomSelect
+                  id="gender-filter"
+                  value={genderFilter}
+                  className="min-w-36"
+                  onChange={(value) => setGenderFilter(value as GenderFilter)}
+                  options={genderOptions}
+                />
+              </label>
+              <label
+                className="flex flex-col gap-1 text-detail font-medium text-text-muted"
+                htmlFor="interviewer-highlight"
+              >
+                Fremhev intervjuer
+                <CustomSelect
+                  id="interviewer-highlight"
+                  value={highlightedInterviewer}
+                  className="min-w-44"
+                  placeholder="Ingen"
+                  onChange={setHighlightedInterviewer}
+                  options={[
+                    { value: "", label: "Ingen" },
+                    ...interviewers.map((interviewer) => ({
+                      value: interviewer.id,
+                      label: interviewer.name,
+                    })),
+                  ]}
+                />
+              </label>
+            </fieldset>
+          )}
+        </div>
 
         <div className="flex flex-wrap items-center justify-between gap-x-5 gap-y-2 text-detail text-text-muted">
           <span>

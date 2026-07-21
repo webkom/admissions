@@ -113,45 +113,41 @@ export const CustomValueSegmentedControl: React.FC<
         role="radiogroup"
         aria-label={label}
         className="grid w-full gap-1 rounded-md border border-border-soft bg-surface-muted p-1"
+        style={{
+          gridTemplateColumns: `repeat(${uniquePresets.length + 1}, minmax(0, 1fr))`,
+        }}
       >
-        <div
-          className="grid gap-1"
-          style={{
-            gridTemplateColumns: `repeat(${uniquePresets.length}, minmax(0, 1fr))`,
-          }}
-        >
-          {uniquePresets.map((preset, index) => {
-            const checked = !isCustom && !isEditing && value === preset;
-            return (
-              <label
-                key={preset}
-                className="relative flex min-w-0 cursor-pointer items-center justify-center rounded px-3 py-1.5 text-detail font-semibold text-text-muted has-[:focus-visible]:outline has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-brand-focus has-[:checked]:bg-surface-base has-[:checked]:text-text-primary has-[:disabled]:cursor-not-allowed has-[:disabled]:opacity-50"
-              >
-                <input
-                  ref={(input) => {
-                    radioRefs.current[index] = input;
-                  }}
-                  type="radio"
-                  name={groupName}
-                  value={preset}
-                  checked={checked}
-                  disabled={disabled}
-                  onChange={() => {
-                    onSelectPreset(preset);
-                    setIsEditing(false);
-                  }}
-                  onKeyDown={(event) => moveRadioFocus(event, index)}
-                  className="sr-only"
-                />
-                {formatValue(preset)}
-              </label>
-            );
-          })}
-        </div>
+        {uniquePresets.map((preset, index) => {
+          const checked = !isCustom && !isEditing && value === preset;
+          return (
+            <label
+              key={preset}
+              className="relative flex min-h-9 min-w-0 cursor-pointer items-center justify-center rounded px-2 py-1.5 text-detail font-semibold text-text-muted has-[:focus-visible]:outline has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-brand-focus has-[:checked]:bg-surface-base has-[:checked]:text-text-primary has-[:disabled]:cursor-not-allowed has-[:disabled]:opacity-50"
+            >
+              <input
+                ref={(input) => {
+                  radioRefs.current[index] = input;
+                }}
+                type="radio"
+                name={groupName}
+                value={preset}
+                checked={checked}
+                disabled={disabled}
+                onChange={() => {
+                  onSelectPreset(preset);
+                  setIsEditing(false);
+                }}
+                onKeyDown={(event) => moveRadioFocus(event, index)}
+                className="sr-only"
+              />
+              {formatValue(preset)}
+            </label>
+          );
+        })}
 
-        <div className="grid min-h-9 grid-cols-[minmax(0,1fr)_2.5rem] gap-1">
+        <div className="relative min-h-9 min-w-0">
           <label
-            className={`relative flex min-w-0 cursor-pointer items-center justify-center rounded px-3 py-1.5 text-detail font-semibold has-[:focus-visible]:outline has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-brand-focus has-[:disabled]:cursor-not-allowed has-[:disabled]:opacity-50 ${
+            className={`relative flex h-full min-w-0 cursor-pointer items-center justify-center rounded px-2 py-1.5 text-detail font-semibold has-[:focus-visible]:outline has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-brand-focus has-[:disabled]:cursor-not-allowed has-[:disabled]:opacity-50 ${
               customChecked
                 ? "bg-surface-base text-text-primary"
                 : "bg-transparent text-text-muted"
@@ -219,7 +215,7 @@ export const CustomValueSegmentedControl: React.FC<
               ) : hasCustomValue ? (
                 formatValue(value)
               ) : (
-                "Egendefinert"
+                "Annet"
               )}
             </span>
           </label>
@@ -231,7 +227,7 @@ export const CustomValueSegmentedControl: React.FC<
             aria-hidden={!isEditing}
             tabIndex={isEditing ? 0 : -1}
             disabled={disabled || !isEditing || !isDraftValid}
-            className={`flex min-h-9 items-center justify-center rounded border border-border-soft bg-surface-base text-text-primary shadow-sm transition-[background-color,border-color,opacity,transform] duration-200 ease-out hover:border-brand-strongBorder hover:bg-surface-subtle active:scale-[0.96] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-focus disabled:cursor-not-allowed ${
+            className={`absolute right-1 top-1 flex h-7 w-7 items-center justify-center rounded border border-border-soft bg-surface-base text-text-primary shadow-sm transition-[background-color,border-color,opacity,transform] duration-200 ease-out hover:border-brand-strongBorder hover:bg-surface-subtle active:scale-[0.96] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-focus disabled:cursor-not-allowed ${
               isEditing
                 ? isDraftValid
                   ? "pointer-events-auto scale-100 opacity-100"

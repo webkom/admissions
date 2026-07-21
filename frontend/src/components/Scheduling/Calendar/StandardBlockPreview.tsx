@@ -1,4 +1,6 @@
 import React, { useLayoutEffect, useRef, useState } from "react";
+import { gsap } from "gsap";
+import { Flip } from "gsap/Flip";
 import { ScheduleSlotSegments } from "./ScheduleGridFrame";
 import {
   buildStandardBlockPreviewLayout,
@@ -9,6 +11,8 @@ import {
 
 type PreviewDensity = "wide" | "compact" | "narrow";
 
+gsap.registerPlugin(Flip);
+
 const InterviewBlockShell: React.FC<{
   children: React.ReactNode;
   slotCount: number;
@@ -17,7 +21,8 @@ const InterviewBlockShell: React.FC<{
   <div
     data-cy="interview-block-shell"
     data-layout-id="interview-block-shell"
-    className="min-w-0 overflow-hidden rounded-md border border-brand-activeBorder bg-brand-tint text-brand ring-1 ring-inset ring-brand-border transition-[flex-grow] duration-200 ease-out motion-reduce:transition-none"
+    data-flip="standard-block"
+    className="min-w-0 overflow-hidden rounded-md border border-brand-activeBorder bg-brand-tint text-brand ring-1 ring-inset ring-brand-border"
     style={{ flexBasis: 0, flexGrow: duration }}
     aria-hidden="true"
   >
@@ -73,29 +78,37 @@ const InterviewSlot: React.FC<{
 const SchedulePause: React.FC<{
   density: PreviewDensity;
   layout: StandardBlockPreviewLayout;
-}> = ({ density, layout }) => (
+  visualPauseMinutes: number;
+  exiting: boolean;
+}> = ({ density, layout, visualPauseMinutes, exiting }) => (
   <div
     data-cy="schedule-pause"
     data-layout-id="pause"
-    className={`flex min-w-0 origin-left flex-col items-center justify-center overflow-hidden rounded-md border border-dashed border-border-muted bg-surface-muted text-center text-text-muted transition-[flex-grow] duration-200 ease-out motion-reduce:transition-none ${
+    data-flip="standard-block"
+    data-exiting={exiting || undefined}
+    className={`flex min-w-0 origin-left flex-col items-center justify-center overflow-hidden rounded-md border border-dashed border-border-muted bg-surface-muted text-center text-text-muted ${
       density === "narrow" ? "px-0" : "px-2"
     }`}
-    style={{ flexBasis: 0, flexGrow: layout.pauseMinutes }}
+    style={{ flexBasis: 0, flexGrow: visualPauseMinutes }}
     aria-hidden="true"
   >
-    <span className="block max-w-full truncate text-detail font-bold">
-      Pause
-    </span>
-    {density === "wide" && (
-      <span className="mt-0.5 block max-w-full truncate text-tiny font-medium tabular-nums">
-        {formatClockMinute(layout.blockEndMinute)}–
-        {formatClockMinute(layout.nextBlockStartMinute)}
-      </span>
-    )}
-    {density === "compact" && (
-      <span className="mt-0.5 block text-tiny font-medium tabular-nums">
-        {layout.pauseMinutes} min
-      </span>
+    {density !== "narrow" && (
+      <>
+        <span className="block max-w-full truncate text-detail font-bold">
+          Pause
+        </span>
+        {density === "wide" && (
+          <span className="mt-0.5 block max-w-full truncate text-tiny font-medium tabular-nums">
+            {formatClockMinute(layout.blockEndMinute)}–
+            {formatClockMinute(layout.nextBlockStartMinute)}
+          </span>
+        )}
+        {density === "compact" && (
+          <span className="mt-0.5 block text-tiny font-medium tabular-nums">
+            {visualPauseMinutes} min
+          </span>
+        )}
+      </>
     )}
   </div>
 );
@@ -124,6 +137,14 @@ export const StandardBlockPreview: React.FC<StandardBlockPreviewInput> = (
     ],
   );
   const [previewWidth, setPreviewWidth] = useState<number | null>(null);
+  const [visualPauseMinutes, setVisualPauseMinutes] = useState(
+    layout.pauseMinutes,
+  );
+  const visualPauseRef = useRef(layout.pauseMinutes);
+  const requestedPauseRef = useRef(layout.pauseMinutes);
+  const flipStateRef = useRef<ReturnType<typeof Flip.getState> | null>(null);
+  const animationRef = useRef<gsap.core.Animation | null>(null);
+  const mountedRef = useRef(false);
   const descriptionId = React.useId();
   const headingId = React.useId();
 
@@ -154,6 +175,143 @@ export const StandardBlockPreview: React.FC<StandardBlockPreviewInput> = (
     return () => observer.disconnect();
   }, []);
 
+  useLayoutEffect(() => {
+    const preview = previewRef.current;
+    if (!preview) return undefined;
+
+    const requestedPauseMinutes = layout.pauseMinutes;
+    requestedPauseRef.current = requestedPauseMinutes;
+    const reduceMotion = window.matchMedia(
+      "(prefers-reduced-motion: reduce)",
+    ).matches;
+    const targets = preview.querySelectorAll<HTMLElement>(
+      '[data-flip="standard-block"]',
+    );
+    const captureFlipState = () => {
+      const currentPreview = previewRef.current;
+      if (!currentPreview) return;
+      flipStateRef.current = Flip.getState(
+        currentPreview.querySelectorAll<HTMLElement>(
+          '[data-flip="standard-block"]',
+        ),
+      );
+    };
+
+    animationRef.current?.kill();
+    animationRef.current = null;
+    Flip.killFlipsOf(targets);
+    gsap.killTweensOf(targets);
+
+    if (!mountedRef.current || reduceMotion) {
+      mountedRef.current = true;
+      visualPauseRef.current = requestedPauseMinutes;
+      setVisualPauseMinutes(requestedPauseMinutes);
+      gsap.set(targets, {
+        clearProps: "transform,opacity,visibility",
+      });
+      const pause = preview.querySelector<HTMLElement>(
+        '[data-cy="schedule-pause"]',
+      );
+      if (pause && requestedPauseMinutes > 0) {
+        gsap.set(pause, { flexGrow: requestedPauseMinutes });
+      }
+      return captureFlipState;
+    }
+
+    if (requestedPauseMinutes > 0) {
+      const entering = visualPauseRef.current === 0;
+      visualPauseRef.current = requestedPauseMinutes;
+      setVisualPauseMinutes(requestedPauseMinutes);
+      requestAnimationFrame(() => {
+        const currentPreview = previewRef.current;
+        if (
+          !currentPreview ||
+          requestedPauseRef.current !== requestedPauseMinutes
+        )
+          return;
+        const pause = currentPreview.querySelector<HTMLElement>(
+          '[data-cy="schedule-pause"]',
+        );
+        if (flipStateRef.current) {
+          Flip.from(flipStateRef.current, {
+            duration: 0.26,
+            ease: "power2.out",
+            absolute: false,
+            simple: true,
+          });
+        }
+        if (entering && pause) {
+          animationRef.current = gsap.fromTo(
+            pause,
+            { autoAlpha: 0, flexGrow: 0 },
+            {
+              autoAlpha: 1,
+              flexGrow: requestedPauseMinutes,
+              duration: 0.26,
+              ease: "power2.out",
+              clearProps: "visibility,opacity",
+              onComplete: () =>
+                gsap.set(pause, {
+                  opacity: 1,
+                  visibility: "inherit",
+                  clearProps: "opacity,visibility",
+                }),
+            },
+          );
+        } else if (pause) {
+          gsap.set(pause, {
+            autoAlpha: 1,
+            flexGrow: requestedPauseMinutes,
+            clearProps: "opacity,visibility",
+          });
+        }
+      });
+    } else if (visualPauseRef.current > 0) {
+      const pause = preview.querySelector<HTMLElement>(
+        '[data-cy="schedule-pause"]',
+      );
+      if (flipStateRef.current) {
+        Flip.from(flipStateRef.current, {
+          duration: 0.26,
+          ease: "power2.out",
+          absolute: false,
+          simple: true,
+        });
+      }
+      if (pause) {
+        animationRef.current = gsap.to(pause, {
+          autoAlpha: 0,
+          flexGrow: 0,
+          duration: 0.26,
+          ease: "power2.inOut",
+          overwrite: true,
+          onComplete: () => {
+            visualPauseRef.current = 0;
+            setVisualPauseMinutes(0);
+          },
+        });
+      } else {
+        visualPauseRef.current = 0;
+        setVisualPauseMinutes(0);
+      }
+    }
+
+    return captureFlipState;
+  }, [layout.pauseMinutes]);
+
+  useLayoutEffect(
+    () => () => {
+      animationRef.current?.kill();
+      if (!previewRef.current) return;
+      const targets = previewRef.current.querySelectorAll<HTMLElement>(
+        '[data-flip="standard-block"]',
+      );
+      Flip.killFlipsOf(targets);
+      gsap.killTweensOf(targets);
+    },
+    [],
+  );
+
   return (
     <div
       ref={previewRef}
@@ -182,14 +340,20 @@ export const StandardBlockPreview: React.FC<StandardBlockPreviewInput> = (
           className="mt-4 flex items-end justify-between gap-3 text-tiny font-semibold text-text-muted"
           aria-hidden="true"
         >
-          <span className="min-w-0 truncate whitespace-nowrap">
+          <span
+            data-flip="standard-block"
+            className="min-w-0 truncate whitespace-nowrap"
+          >
             <span className="text-brand">Én intervjublokk</span>
             <span data-time-value className="ml-1.5 tabular-nums">
               {formatClockMinute(layout.startMinute)}–
               {formatClockMinute(layout.blockEndMinute)}
             </span>
           </span>
-          <span className="flex-none whitespace-nowrap">
+          <span
+            data-flip="standard-block"
+            className="flex-none whitespace-nowrap"
+          >
             Neste blokk{" "}
             <span data-time-value className="tabular-nums text-text-primary">
               {formatClockMinute(layout.nextBlockStartMinute)}
@@ -215,20 +379,27 @@ export const StandardBlockPreview: React.FC<StandardBlockPreviewInput> = (
                 />
               ))}
             </InterviewBlockShell>
-            {layout.pauseMinutes > 0 && (
-              <SchedulePause density={density} layout={layout} />
+            {visualPauseMinutes > 0 && (
+              <SchedulePause
+                density={density}
+                layout={
+                  layout.pauseMinutes > 0
+                    ? layout
+                    : {
+                        ...layout,
+                        pauseMinutes: visualPauseMinutes,
+                        nextBlockStartMinute:
+                          layout.blockEndMinute + visualPauseMinutes,
+                      }
+                }
+                visualPauseMinutes={visualPauseMinutes}
+                exiting={layout.pauseMinutes === 0}
+              />
             )}
           </div>
           <ScheduleContinuation />
         </div>
       </figure>
-
-      <a
-        href="#interview-blocks"
-        className="mt-4 inline-flex border-t border-border-soft pt-3 text-detail font-semibold text-brand underline decoration-brand-border underline-offset-4 transition-colors hover:text-brand-dark focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-focus"
-      >
-        Tilpass dager og pauser i Intervjublokker
-      </a>
     </div>
   );
 };

@@ -89,6 +89,9 @@ describe("interview plan workflow", () => {
       .click();
     cy.contains("Mangler svar").should("be.visible");
     cy.contains("button", "Skjul").click();
+    cy.get("#gender-filter").should("not.exist");
+    cy.get("#interviewer-highlight").should("not.exist");
+    cy.contains("button", "Filtrer og fremhev").click();
     cy.get("#gender-filter").should("be.visible");
     cy.get("#interviewer-highlight").should("be.visible");
     cy.contains("Farge i strekene viser andelen").should("be.visible");

@@ -55,6 +55,8 @@ export const useSolverSession = ({
   const [solverOptions, setSolverOptions] = useState<SolverOptions>(
     DEFAULT_SOLVER_OPTIONS,
   );
+  const [proposalSolverOptions, setProposalSolverOptions] =
+    useState<SolverOptions | null>(null);
   const [solveTick, setSolveTick] = useState(0);
   const solveJob = useSolveJob(admissionSlug);
   const { data: savedSchedule, error: savedScheduleError } =
@@ -160,10 +162,12 @@ export const useSolverSession = ({
     solveJob.setResult({
       status: "SUCCESS",
       schedule: savedSchedule.schedule,
-      optimal: true,
       unplaceable: [],
       locked_conflicts: [],
     });
+    setProposalSolverOptions(
+      normalizeSolverOptions(savedSchedule.solver_options ?? {}),
+    );
     solveJob.setPlanRevealed(true);
     return true;
   }, [
@@ -444,6 +448,9 @@ export const useSolverSession = ({
         resetDraftTracking(null);
         return null;
       }
+      if (outcome && !previewOnly) {
+        setProposalSolverOptions(runOptions);
+      }
       return outcome;
     },
     [
@@ -478,6 +485,7 @@ export const useSolverSession = ({
         repair_mode: true,
       };
       setSolverOptions(nextOptions);
+      setProposalSolverOptions(nextOptions);
       markDraftModified();
       setSolveTick((tick) => tick + 1);
       solveJob.setResult(result);
@@ -515,6 +523,7 @@ export const useSolverSession = ({
     panelSize,
     setPanelSize,
     solverOptions,
+    proposalSolverOptions,
     setSolverOptions,
     readiness,
     estimatedSeconds,

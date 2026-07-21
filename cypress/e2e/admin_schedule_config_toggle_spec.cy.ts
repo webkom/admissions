@@ -24,6 +24,12 @@ describe("admin schedule configuration toggles", () => {
   });
 
   it("keeps a block off after changing the pause and rendering again", () => {
+    cy.contains("button", "Lagre oppsett")
+      .should("have.length", 1)
+      .parents(".sticky")
+      .should("have.length", 1);
+    cy.contains("button", "Lagre tidsrammer").should("not.exist");
+
     cy.get('input[aria-label^="Alle tidsluker for "]')
       .should("have.length.greaterThan", 0)
       .then(($checkboxes) => {

@@ -3,9 +3,29 @@ const mountPauseControl = (
   initialIsCustom = false,
   interviewCount = 4,
   interviewDuration = 30,
+  reduceMotion = false,
 ) => {
   cy.visit(
     `http://localhost:5001/static/cypress/fixtures/admin-schedule-settings-popover.html?value=${initialValue}&custom=${initialIsCustom ? "1" : "0"}&count=${interviewCount}&duration=${interviewDuration}`,
+    reduceMotion
+      ? {
+          onBeforeLoad: (window) => {
+            Object.defineProperty(window, "matchMedia", {
+              configurable: true,
+              value: (query: string) => ({
+                matches: query === "(prefers-reduced-motion: reduce)",
+                media: query,
+                onchange: null,
+                addListener: () => undefined,
+                removeListener: () => undefined,
+                addEventListener: () => undefined,
+                removeEventListener: () => undefined,
+                dispatchEvent: () => false,
+              }),
+            });
+          },
+        }
+      : undefined,
   );
   cy.get("[data-cy=popover-harness]").should("exist");
 };
@@ -258,6 +278,82 @@ describe("inline custom schedule controls", () => {
     cy.get("[data-cy=committed-mode]").should("have.text", "preset");
   });
 
+  it("animates the pause into and out of the proportional block track", () => {
+    mountPauseControl(0);
+
+    cy.get('[role="radiogroup"][aria-label="Pause mellom blokker"]')
+      .find('input[type="radio"][value="30"]')
+      .check({ force: true });
+    cy.get("[data-cy=schedule-pause]")
+      .should("exist")
+      .and("have.attr", "aria-hidden", "true");
+    cy.get("[data-cy=standard-block-preview] figure").then(($figure) => {
+      cy.get(`[id="${$figure.attr("aria-describedby")}"]`)
+        .should("contain.text", "pause på 30 minutter")
+        .and("contain.text", "Neste blokk starter 10:30");
+    });
+    cy.wait(320);
+    cy.get("[data-cy=schedule-pause]").should(($pause) => {
+      expect(getComputedStyle($pause[0]).opacity).to.equal("1");
+      expect(Number(getComputedStyle($pause[0]).flexGrow)).to.equal(30);
+    });
+
+    cy.get('[role="radiogroup"][aria-label="Pause mellom blokker"]')
+      .find('input[type="radio"][value="0"]')
+      .check({ force: true });
+    cy.get("[data-cy=schedule-pause]")
+      .should("exist")
+      .and("have.attr", "data-exiting", "true")
+      .and("have.attr", "aria-hidden", "true");
+    cy.get("[data-cy=standard-block-preview] figure").then(($figure) => {
+      cy.get(`[id="${$figure.attr("aria-describedby")}"]`)
+        .should("contain.text", "Det er ingen pause mellom blokkene")
+        .and("contain.text", "Neste blokk starter 10:00");
+    });
+    cy.wait(320);
+    cy.get("[data-cy=schedule-pause]").should("not.exist");
+  });
+
+  it("settles rapid pause changes without leaving a ghost segment", () => {
+    mountPauseControl(0);
+
+    cy.get('[role="radiogroup"][aria-label="Pause mellom blokker"]')
+      .find('input[type="radio"][value="30"]')
+      .check({ force: true });
+    cy.get('[role="radiogroup"][aria-label="Pause mellom blokker"]')
+      .find('input[type="radio"][value="0"]')
+      .check({ force: true });
+
+    cy.wait(350);
+    cy.get("[data-cy=schedule-pause]").should("not.exist");
+    cy.get("[data-cy=standard-block-preview]").should(
+      "contain.text",
+      "Neste blokk 10:00",
+    );
+  });
+
+  it("restores a pause that is reselected during its exit", () => {
+    mountPauseControl(30);
+
+    cy.get('[role="radiogroup"][aria-label="Pause mellom blokker"]')
+      .find('input[type="radio"][value="0"]')
+      .check({ force: true });
+    cy.get('[role="radiogroup"][aria-label="Pause mellom blokker"]')
+      .find('input[type="radio"][value="30"]')
+      .check({ force: true });
+
+    cy.wait(320);
+    cy.get("[data-cy=schedule-pause]").should(($pause) => {
+      expect(getComputedStyle($pause[0]).visibility).not.to.equal("hidden");
+      expect(getComputedStyle($pause[0]).opacity).to.equal("1");
+      expect(Number(getComputedStyle($pause[0]).flexGrow)).to.equal(30);
+    });
+    cy.get("[data-cy=standard-block-preview]").should(
+      "contain.text",
+      "Neste blokk 10:30",
+    );
+  });
+
   it("keeps the repeating preview explicit without a pause", () => {
     mountPauseControl(0);
 
@@ -355,27 +451,22 @@ describe("inline custom schedule controls", () => {
       ($segment) => {
         expect(getComputedStyle($segment[0]).transform).to.equal("none");
         expect(getComputedStyle($segment[0]).opacity).to.equal("1");
-        expect(getComputedStyle($segment[0]).transitionProperty).to.contain(
-          "flex-grow",
-        );
       },
     );
   });
 
-  it("keeps the simple expansion compatible with reduced motion", () => {
-    mountPauseControl(30, false, 4, 30);
-    cy.get('[role="radiogroup"][aria-label="Intervjulengde"]')
-      .find('input[type="radio"][value="45"]')
+  it("applies the final pause state immediately with reduced motion", () => {
+    mountPauseControl(30, false, 4, 30, true);
+    cy.get('[role="radiogroup"][aria-label="Pause mellom blokker"]')
+      .find('input[type="radio"][value="0"]')
       .check({ force: true });
     cy.get("[data-cy=standard-block-preview]")
-      .should("contain.text", "08:00–11:00")
-      .and("contain.text", "Neste blokk 11:30");
-    cy.get("[data-cy=interview-block-shell], [data-cy=schedule-pause]").each(
-      ($segment) => {
-        expect($segment).to.have.class("motion-reduce:transition-none");
-        expect($segment.attr("style") ?? "").not.to.contain("transform");
-      },
-    );
+      .should("contain.text", "08:00–10:00")
+      .and("contain.text", "Neste blokk 10:00");
+    cy.get("[data-cy=schedule-pause]").should("not.exist");
+    cy.get("[data-cy=interview-block-shell]").should(($segment) => {
+      expect($segment.attr("style") ?? "").not.to.contain("transform");
+    });
   });
 
   [390, 768, 1024].forEach((width) => {

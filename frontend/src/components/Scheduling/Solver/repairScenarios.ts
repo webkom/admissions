@@ -107,7 +107,7 @@ export const buildRepairScenario = ({
   const resultByCandidate = new Map(
     result.schedule.map((item) => [candidateKey(item), item]),
   );
-  const interviewerNameByKey = new Map(
+  const interviewerNameByKey = new Map<string, string>(
     interviewers.flatMap((interviewer) => [
       [`id:${interviewer.id}`, interviewer.name] as const,
       [`name:${interviewer.name}`, interviewer.name] as const,

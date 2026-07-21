@@ -340,7 +340,12 @@ const SolverSetupPanel = ({
             <li>
               Tildelinger holdes innenfor tilgjengelighet så langt det er mulig.
             </li>
-            <li>Stabile paneler prioriteres.</li>
+            <li>Stabile paneler brukes gjennom hver intervjublokk.</li>
+            <li>
+              {solverOptions.avoid_consecutive_interviewer_blocks
+                ? "Intervjuere får neste blokk fri når kapasiteten tillater det."
+                : "Blokkhvile er slått av i avanserte innstillinger."}
+            </li>
             <li>Kompakte intervjudager prioriteres.</li>
           </ul>
           {!panelFormationImpossible && (
@@ -479,7 +484,7 @@ const SolverSetupPanel = ({
                       id="solver-advanced-settings"
                       className="mt-3 animate-fade-in"
                     >
-                      <p className={sectionLabelClass}>Regler</p>
+                      <p className={sectionLabelClass}>Krav i første forslag</p>
                       <AdvancedOptionRow
                         title="Samme kjønn i panel"
                         description="Krev minst én intervjuer med samme kjønn der det er registrert."
@@ -488,17 +493,17 @@ const SolverSetupPanel = ({
                           toggleSolverOption("enforce_same_gender")
                         }
                       />
-                      <p className={cn(sectionLabelClass, "mt-4")}>
-                        Preferanser
-                      </p>
                       <AdvancedOptionRow
                         title="Stabile paneler per blokk"
-                        description="Prioriter samme panel gjennom en intervjublokk."
+                        description="Bruk samme panel gjennom en intervjublokk. Slå av bare når kapasiteten krever mer rotasjon."
                         checked={solverOptions.same_panel_per_block}
                         onToggle={() =>
                           toggleSolverOption("same_panel_per_block")
                         }
                       />
+                      <p className={cn(sectionLabelClass, "mt-4")}>
+                        Kvalitetspreferanser
+                      </p>
                       <AdvancedOptionRow
                         title="Unngå intervjublokker rett etter hverandre"
                         description="Prøver å la en intervjuer stå over den neste intervjublokken etter en blokk de har deltatt i. Kan fravikes dersom det er nødvendig for å lage en god plan."

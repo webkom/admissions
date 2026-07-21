@@ -56,6 +56,7 @@ interface SolverResultsProps {
   enabledSlots: Set<string>;
   editRequestKey: number;
   assignmentConflicts: AssignmentConflictSummary;
+  blockRestPreferenceEnabled: boolean | null;
   onOpenPlan: () => void;
 }
 
@@ -76,6 +77,7 @@ const SolverResults = ({
   enabledSlots,
   editRequestKey,
   assignmentConflicts,
+  blockRestPreferenceEnabled,
   onOpenPlan,
 }: SolverResultsProps) => {
   const [viewType, setViewType] = useState<"list" | "calendar" | "person">(
@@ -211,6 +213,58 @@ const SolverResults = ({
             }
           />
           <SchedulePanelBody>
+            <div
+              data-cy="block-rest-summary"
+              role="status"
+              className="mb-4 flex flex-wrap items-start justify-between gap-2 rounded-lg border border-border-soft bg-surface-subtle px-4 py-3 text-ui"
+            >
+              <div>
+                <p className="m-0 font-semibold text-text-primary">
+                  {blockRestPreferenceEnabled === null
+                    ? "Blokkhvileinnstilling ukjent"
+                    : !blockRestPreferenceEnabled
+                      ? "Blokkhvile er slått av"
+                      : presentation.blockRestSummary.honored
+                        ? "Blokkhvile oppfylt"
+                        : `${presentation.blockRestSummary.exceptionCount} unntak fra blokkhvile`}
+                </p>
+                {blockRestPreferenceEnabled === null ? (
+                  <p className="m-0 mt-1 text-detail text-text-muted">
+                    Innstillingen som genererte dette utkastet er ikke
+                    tilgjengelig.
+                  </p>
+                ) : !blockRestPreferenceEnabled ? (
+                  <p className="m-0 mt-1 text-detail text-text-muted">
+                    Forslaget forsøker ikke å holde neste intervjublokk fri.
+                  </p>
+                ) : !presentation.blockRestSummary.honored ? (
+                  <p className="m-0 mt-1 text-detail text-text-muted">
+                    Gjelder{" "}
+                    {presentation.blockRestSummary.affectedInterviewerCount}{" "}
+                    {presentation.blockRestSummary.affectedInterviewerCount ===
+                    1
+                      ? "intervjuer"
+                      : "intervjuere"}
+                    . Kapasitet, tilgjengelighet, låste intervjuer og plassering
+                    kan veie tyngre enn hvilepreferansen.
+                  </p>
+                ) : null}
+                {presentation.blockRestSummary.isNonOptimal && (
+                  <p className="m-0 mt-1 text-detail font-semibold text-amber-800">
+                    Søket ble avsluttet før optimalitet var bevist. Videre
+                    forbedring kan være mulig.
+                  </p>
+                )}
+                {presentation.blockRestSummary.optimalityUnknown && (
+                  <p className="m-0 mt-1 text-detail text-text-muted">
+                    Optimalitet er ikke kjent for dette gjenopprettede utkastet.
+                  </p>
+                )}
+              </div>
+              <span className="text-detail font-medium text-text-muted">
+                Hvile mellom arbeidsblokker
+              </span>
+            </div>
             {unplaceableCount > 0 && (
               <div
                 role="alert"

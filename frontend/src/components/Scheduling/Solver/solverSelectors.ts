@@ -23,12 +23,31 @@ interface ScheduleEntry {
   scheduleIndex: number;
 }
 
-interface InterviewerDistributionEntry {
+export interface InterviewerBlockState {
+  blockIndex: number;
+  dayIndex: number;
+  interviewCount: number;
+  status: "work" | "rest";
+  isAdjacentException: boolean;
+}
+
+export interface InterviewerDistributionEntry {
   id: string;
   name: string;
   count: number;
+  blockCount: number;
+  adjacentBlockExceptions: number;
+  blockStates: InterviewerBlockState[];
   outsideAvailabilityCount: number;
   unverifiedCount: number;
+}
+
+export interface BlockRestSummary {
+  exceptionCount: number;
+  affectedInterviewerCount: number;
+  honored: boolean;
+  isNonOptimal: boolean;
+  optimalityUnknown: boolean;
 }
 
 interface AssignmentAvailabilitySummary {
@@ -73,6 +92,7 @@ export interface SchedulePresentation {
   unplaceableSuggestions: string[];
   overviewStats: ScheduleOverviewStats | null;
   lockedCount: number;
+  blockRestSummary: BlockRestSummary;
   availabilitySummary: AssignmentAvailabilitySummary;
   availabilityStatusFor: (
     item: ScheduleItem,
@@ -83,6 +103,7 @@ export interface SchedulePresentation {
 export const deriveSchedulePresentation = (
   result: SolveResponse | null,
   interviewers: Interviewer[],
+  canonicalBlocks: number[][] = [],
 ): SchedulePresentation => {
   const sortedEntries = (result?.schedule ?? [])
     .map((item, scheduleIndex) => ({ item, scheduleIndex }))
@@ -101,6 +122,7 @@ export const deriveSchedulePresentation = (
     interviewers,
     sortedSchedule,
     availabilityStatusFor,
+    canonicalBlocks,
   );
   const totalAssignments = interviewerDistribution.reduce(
     (sum, interviewer) => sum + interviewer.count,
@@ -159,6 +181,11 @@ export const deriveSchedulePresentation = (
       interviewers.length,
     ),
     lockedCount,
+    blockRestSummary: buildBlockRestSummary(
+      interviewerDistribution,
+      result?.optimal === false,
+      result !== null && result.optimal === undefined,
+    ),
     availabilitySummary: {
       missingInterviewerNames: Array.from(missingInterviewerNames).sort(
         (a, b) => a.localeCompare(b, "nb"),
@@ -178,7 +205,31 @@ const buildInterviewerDistribution = (
     item: ScheduleItem,
     member: SchedulePanelMember,
   ) => AssignmentAvailabilityStatus,
+  canonicalBlocks: number[][],
 ): InterviewerDistributionEntry[] => {
+  const interviewerIdsByName = new Map<string, string[]>();
+  interviewers.forEach((interviewer) => {
+    interviewerIdsByName.set(interviewer.name, [
+      ...(interviewerIdsByName.get(interviewer.name) ?? []),
+      interviewer.id,
+    ]);
+  });
+  const uniqueInterviewerIdByName = new Map(
+    Array.from(interviewerIdsByName.entries())
+      .filter(([, ids]) => ids.length === 1)
+      .map(([name, ids]) => [name, ids[0]]),
+  );
+  const memberKey = (member: SchedulePanelMember) =>
+    member.id ??
+    uniqueInterviewerIdByName.get(member.name) ??
+    `legacy:${member.name}`;
+  const blockIndexByTime = new Map<number, number>();
+  canonicalBlocks.forEach((block, blockIndex) => {
+    block.forEach((time) => blockIndexByTime.set(time, blockIndex));
+  });
+  const blockDayIndexes = canonicalBlocks.map((block) =>
+    block.length > 0 ? Math.floor(block[0] / (24 * 60)) : -1,
+  );
   const counts = new Map<string, InterviewerDistributionEntry>(
     interviewers.map((interviewer) => [
       interviewer.id,
@@ -186,6 +237,9 @@ const buildInterviewerDistribution = (
         id: interviewer.id,
         name: interviewer.name,
         count: 0,
+        blockCount: 0,
+        adjacentBlockExceptions: 0,
+        blockStates: [],
         outsideAvailabilityCount: 0,
         unverifiedCount: 0,
       },
@@ -194,11 +248,14 @@ const buildInterviewerDistribution = (
 
   schedule.forEach((item) => {
     item.panel.forEach((member) => {
-      const key = member.id ?? `legacy:${member.name}`;
+      const key = memberKey(member);
       const existing = counts.get(key) ?? {
         id: key,
         name: member.name,
         count: 0,
+        blockCount: 0,
+        adjacentBlockExceptions: 0,
+        blockStates: [],
         outsideAvailabilityCount: 0,
         unverifiedCount: 0,
       };
@@ -214,10 +271,65 @@ const buildInterviewerDistribution = (
     });
   });
 
+  counts.forEach((entry) => {
+    const interviewsByBlock = new Map<number, number>();
+    schedule.forEach((item) => {
+      const assigned = item.panel.some(
+        (member) => memberKey(member) === entry.id,
+      );
+      if (!assigned) return;
+      const blockIndex = blockIndexByTime.get(item.time);
+      if (blockIndex === undefined) return;
+      interviewsByBlock.set(
+        blockIndex,
+        (interviewsByBlock.get(blockIndex) ?? 0) + 1,
+      );
+    });
+
+    entry.blockStates = canonicalBlocks.map((_, blockIndex) => {
+      const interviewCount = interviewsByBlock.get(blockIndex) ?? 0;
+      const previousWorked = (interviewsByBlock.get(blockIndex - 1) ?? 0) > 0;
+      const sameDay =
+        blockIndex > 0 &&
+        blockDayIndexes[blockIndex] === blockDayIndexes[blockIndex - 1];
+      return {
+        blockIndex,
+        dayIndex: blockDayIndexes[blockIndex],
+        interviewCount,
+        status: interviewCount > 0 ? "work" : "rest",
+        isAdjacentException: interviewCount > 0 && previousWorked && sameDay,
+      };
+    });
+    entry.blockCount = interviewsByBlock.size;
+    entry.adjacentBlockExceptions = entry.blockStates.filter(
+      (block) => block.isAdjacentException,
+    ).length;
+  });
+
   return Array.from(counts.values()).sort((a, b) => {
     if (b.count !== a.count) return b.count - a.count;
     return a.name.localeCompare(b.name, "nb");
   });
+};
+
+const buildBlockRestSummary = (
+  distribution: InterviewerDistributionEntry[],
+  isNonOptimal: boolean,
+  optimalityUnknown: boolean,
+): BlockRestSummary => {
+  const exceptionCount = distribution.reduce(
+    (sum, interviewer) => sum + interviewer.adjacentBlockExceptions,
+    0,
+  );
+  return {
+    exceptionCount,
+    affectedInterviewerCount: distribution.filter(
+      (interviewer) => interviewer.adjacentBlockExceptions > 0,
+    ).length,
+    honored: exceptionCount === 0,
+    isNonOptimal,
+    optimalityUnknown,
+  };
 };
 
 const candidateKey = (candidate: {

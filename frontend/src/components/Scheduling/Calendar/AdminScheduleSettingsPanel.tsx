@@ -65,6 +65,7 @@ export interface SaveStatus {
   onDiscard: () => void;
   onSave: () => void;
   openBlockCount: number;
+  reshapedSlotCount?: number;
 }
 
 interface AdminScheduleSettingsPanelProps {
@@ -431,8 +432,15 @@ const AdminScheduleSettingsPanel: React.FC<AdminScheduleSettingsPanelProps> = ({
 export const AdminScheduleConfigFooter: React.FC<{
   saveStatus: SaveStatus;
   showOpenBlockCount?: boolean;
-}> = ({ saveStatus, showOpenBlockCount = true }) => (
-  <SchedulePanelFooter>
+  actionLabel?: string;
+  className?: string;
+}> = ({
+  saveStatus,
+  showOpenBlockCount = true,
+  actionLabel = "Lagre tidsrammer",
+  className,
+}) => (
+  <SchedulePanelFooter className={className}>
     <div className="flex flex-col gap-2">
       {showOpenBlockCount && (
         <div className="text-ui font-semibold tabular-nums text-text-primary">
@@ -462,13 +470,16 @@ export const AdminScheduleConfigFooter: React.FC<{
       )}
       {saveStatus.hasPendingChanges && (
         <div className="max-w-xs text-detail leading-snug text-text-muted">
-          {saveStatus.gridDefiningChange && saveStatus.hasScheduleDraft
-            ? "Endringen sletter registrert tilgjengelighet og nullstiller eksisterende intervjuforslag."
-            : saveStatus.gridDefiningChange
-              ? "Endringen sletter all registrert tilgjengelighet."
-              : saveStatus.visualGroupingChange
-                ? "Endringen påvirker bare hvordan tidslukene grupperes visuelt."
-                : "Konfigurasjonen har ulagrede endringer."}
+          {saveStatus.gridDefiningChange &&
+          (saveStatus.reshapedSlotCount ?? 0) > 0
+            ? `Endringen oppdaterte intervjublokkene og fjernet ${saveStatus.reshapedSlotCount} tidligere åpne valg fra utkastet. Kontroller rutenettet før du lagrer.`
+            : saveStatus.gridDefiningChange && saveStatus.hasScheduleDraft
+              ? "Endringen sletter registrert tilgjengelighet og nullstiller eksisterende intervjuforslag."
+              : saveStatus.gridDefiningChange
+                ? "Endringen sletter all registrert tilgjengelighet."
+                : saveStatus.visualGroupingChange
+                  ? "Endringen påvirker bare hvordan tidslukene grupperes visuelt."
+                  : "Konfigurasjonen har ulagrede endringer."}
         </div>
       )}
     </div>
@@ -492,7 +503,7 @@ export const AdminScheduleConfigFooter: React.FC<{
           onClick={saveStatus.onSave}
           disabled={saveStatus.saveDisabled}
         >
-          Lagre tidsrammer
+          {actionLabel}
         </SaveButton>
       )}
     </div>

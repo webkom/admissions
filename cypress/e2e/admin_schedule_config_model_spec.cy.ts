@@ -40,11 +40,11 @@ describe("admin schedule configuration model", () => {
     expect(parseIntegerInRange("241", 0, 240)).to.equal(null);
   });
 
-  it("uses numeric 30 and 60 minute duration presets", () => {
-    expect(DURATION_PRESETS).to.deep.equal([30, 60]);
+  it("uses the compact numeric duration presets", () => {
+    expect(DURATION_PRESETS).to.deep.equal([15, 20, 30, 45]);
     expect(isDurationPreset(30)).to.equal(true);
-    expect(isDurationPreset(60)).to.equal(true);
-    expect(isDurationPreset(45)).to.equal(false);
+    expect(isDurationPreset(45)).to.equal(true);
+    expect(isDurationPreset(60)).to.equal(false);
   });
 
   it("counts the final block without requiring a trailing pause", () => {
