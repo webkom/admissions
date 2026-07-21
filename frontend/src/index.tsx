@@ -1,13 +1,30 @@
 import "vite/modulepreload-polyfill";
-import React, { PropsWithChildren, Suspense } from "react";
+import React, { Suspense } from "react";
 import {
-  BrowserRouter as Router,
+  createBrowserRouter,
+  Outlet,
+  RouterProvider,
   useParams,
-  useRoutes,
 } from "react-router-dom";
 import { createRoot } from "react-dom/client";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import {
+  MutationCache,
+  QueryCache,
+  QueryClient,
+  QueryClientProvider,
+} from "@tanstack/react-query";
+import { isAxiosError } from "axios";
 import { defaultQueryFn } from "./query/queries";
+import {
+  areSensitiveCacheWritesBlocked,
+  blockSensitiveAdmissionCacheWrites,
+  getSensitiveAdmissionAccessError,
+  getSensitiveAccessError,
+  purgeSensitiveAdmissionQueries,
+  purgeSensitiveMutations,
+  purgeSensitiveQueries,
+  purgeSensitiveQuery,
+} from "./query/sensitiveAccess";
 
 import NotFoundPage from "src/routes/NotFoundPage";
 import ErrorBoundary from "src/containers/ErrorBoundary/";
@@ -69,7 +86,114 @@ Sentry.init({
   },
 });
 
+const sensitiveFailureStatuses = new Set([401, 403, 404]);
+
+const queryCache = new QueryCache({
+  onError(error, failedQuery) {
+    if (
+      failedQuery.meta?.sensitive !== true ||
+      !isAxiosError(error) ||
+      !sensitiveFailureStatuses.has(error.response?.status ?? 0)
+    ) {
+      return;
+    }
+
+    const status = error.response?.status;
+    if (status === 404) {
+      const admissionSlug = failedQuery.meta?.admissionSlug;
+      if (
+        failedQuery.meta?.purgeAdmissionOnNotFound === true &&
+        typeof admissionSlug === "string"
+      ) {
+        const accessError = blockSensitiveAdmissionCacheWrites(
+          admissionSlug,
+          error,
+        );
+        purgeSensitiveAdmissionQueries(
+          queryCache.getAll(),
+          admissionSlug,
+          accessError,
+          false,
+        );
+        purgeSensitiveMutations(queryClient, admissionSlug);
+        return;
+      }
+      purgeSensitiveQuery(failedQuery, error);
+      return;
+    }
+    purgeSensitiveQueries(queryCache.getAll(), error, true);
+    purgeSensitiveMutations(queryClient);
+  },
+});
+
+queryCache.subscribe((event) => {
+  const admissionSlug = event.query.meta?.admissionSlug;
+  const accessError =
+    getSensitiveAccessError() ??
+    (typeof admissionSlug === "string"
+      ? getSensitiveAdmissionAccessError(admissionSlug)
+      : null);
+  if (
+    event.type !== "updated" ||
+    event.action.type !== "success" ||
+    event.query.meta?.sensitive !== true ||
+    !accessError
+  ) {
+    return;
+  }
+  purgeSensitiveQuery(event.query, accessError);
+});
+
+const getSensitiveMutationBlockError = (
+  meta: Record<string, unknown> | undefined,
+) => {
+  const admissionSlug = meta?.admissionSlug;
+  return (
+    getSensitiveAccessError() ??
+    (typeof admissionSlug === "string"
+      ? getSensitiveAdmissionAccessError(admissionSlug)
+      : null)
+  );
+};
+
+const mutationCache = new MutationCache({
+  onMutate(_variables, mutation) {
+    const accessError = getSensitiveMutationBlockError(mutation.meta);
+    if (mutation.meta?.sensitive === true && accessError) throw accessError;
+  },
+  onSuccess(_data, _variables, _context, mutation) {
+    const accessError = getSensitiveMutationBlockError(mutation.meta);
+    if (mutation.meta?.sensitive === true && accessError) throw accessError;
+  },
+  onError(error) {
+    if (
+      !isAxiosError(error) ||
+      ![401, 403].includes(error.response?.status ?? 0)
+    ) {
+      return;
+    }
+    purgeSensitiveQueries(queryCache.getAll(), error, true);
+    purgeSensitiveMutations(queryClient);
+  },
+});
+
+mutationCache.subscribe((event) => {
+  if (
+    event.type !== "updated" ||
+    !["error", "success"].includes(event.action.type) ||
+    event.mutation.meta?.sensitive !== true ||
+    (!areSensitiveCacheWritesBlocked() &&
+      (typeof event.mutation.meta?.admissionSlug !== "string" ||
+        !getSensitiveAdmissionAccessError(event.mutation.meta.admissionSlug)))
+  ) {
+    return;
+  }
+  mutationCache.remove(event.mutation);
+});
+
 const queryClient = new QueryClient({
+  queryCache,
+  mutationCache,
   defaultOptions: {
     queries: {
       refetchOnMount: false,
@@ -87,48 +211,50 @@ if (!container) {
 }
 const root = createRoot(container);
 
-const App: React.FC<PropsWithChildren> = ({ children }) => <>{children}</>;
-
 const ScopedApplicationPortal = () => {
   const { admissionSlug } = useParams();
   return <ApplicationPortal key={admissionSlug} />;
 };
 
-const AppRoutes = () =>
-  useRoutes([
-    { path: "/", element: <LandingPage /> },
-    {
-      path: "/manage/*",
-      element: (
-        <RequireAuth auth={isManager()}>
-          <ManageAdmissions />
-        </RequireAuth>
-      ),
-    },
-    {
-      path: ":admissionSlug/*",
-      element: (
-        <RequireAuth auth={isLoggedIn()}>
-          <ScopedApplicationPortal />
-        </RequireAuth>
-      ),
-    },
-    { path: "*", element: <NotFoundPage /> },
-  ]);
+const AppLayout = () => (
+  <ScrollToTop>
+    <Suspense fallback={<p>Laster…</p>}>
+      <Outlet />
+    </Suspense>
+  </ScrollToTop>
+);
+
+const router = createBrowserRouter([
+  {
+    element: <AppLayout />,
+    children: [
+      { path: "/", element: <LandingPage /> },
+      {
+        path: "/manage/*",
+        element: (
+          <RequireAuth auth={isManager()}>
+            <ManageAdmissions />
+          </RequireAuth>
+        ),
+      },
+      {
+        path: ":admissionSlug/*",
+        element: (
+          <RequireAuth auth={isLoggedIn()}>
+            <ScopedApplicationPortal />
+          </RequireAuth>
+        ),
+      },
+      { path: "*", element: <NotFoundPage /> },
+    ],
+  },
+]);
 
 root.render(
   <ErrorBoundary>
     <React.StrictMode>
       <QueryClientProvider client={queryClient}>
-        <Router>
-          <ScrollToTop>
-            <App>
-              <Suspense fallback={<p>Laster…</p>}>
-                <AppRoutes />
-              </Suspense>
-            </App>
-          </ScrollToTop>
-        </Router>
+        <RouterProvider router={router} />
       </QueryClientProvider>
     </React.StrictMode>
   </ErrorBoundary>,

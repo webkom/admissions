@@ -18,7 +18,7 @@ export const SectionCard = styled.section`
 export const SectionTitle = styled.h2`
   margin: 0;
   font-size: var(--font-size-lg);
-  font-weight: 600;
+  font-weight: var(--font-weight-semibold);
   color: var(--color-text-primary);
 `;
 
@@ -75,7 +75,7 @@ export const GroupFilterLogo = styled.img`
 
 export const GroupFilterName = styled.span`
   font-size: var(--font-size-sm);
-  font-weight: 600;
+  font-weight: var(--font-weight-semibold);
   line-height: var(--line-height-tight);
   text-align: left;
   white-space: nowrap;
@@ -87,7 +87,7 @@ export const GroupFilterCount = styled.span`
   flex-shrink: 0;
   color: var(--color-text-muted);
   font-size: var(--font-size-detail);
-  font-weight: 600;
+  font-weight: var(--font-weight-semibold);
 `;
 
 export const TableWrapper = styled.div`
@@ -106,14 +106,15 @@ export const CSVExport = styled(CSVLink)`
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  height: var(--control-height-sm);
+  gap: var(--spacing-xs);
+  min-height: var(--control-height-md);
   padding: 0 var(--spacing-xl);
   border-radius: var(--border-radius-pill);
   background: var(--color-red-6);
   color: var(--color-absolute-white);
   font-size: var(--font-size-sm);
   text-align: center;
-  font-weight: 600;
+  font-weight: var(--font-weight-semibold);
   text-decoration: none;
   transition: background var(--easing-fast);
   border: var(--border-width-emphasis) solid var(--color-red-6);

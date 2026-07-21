@@ -1,8 +1,16 @@
 import React from "react";
 
 import { EditablePanelChip } from "../ui";
-import type { Interviewer, ScheduleItem } from "../types";
+import type {
+  Interviewer,
+  ScheduleItem,
+  SchedulePanelMember,
+} from "../../../types";
 import cn from "src/utils/cn";
+import {
+  assignmentAvailabilityLabel,
+  type AssignmentAvailabilityStatus,
+} from "../assignmentAvailability";
 
 interface InterviewerLoadViewProps {
   entries: { item: ScheduleItem; scheduleIndex: number }[];
@@ -10,7 +18,8 @@ interface InterviewerLoadViewProps {
     id: string;
     name: string;
     count: number;
-    overtimeCount: number;
+    outsideAvailabilityCount: number;
+    unverifiedCount: number;
   }[];
   totalAssignments: number;
   selectedInterviewer: string;
@@ -25,6 +34,14 @@ interface InterviewerLoadViewProps {
   ) => void;
   displayCandidate: (item: ScheduleItem) => string;
   formatSlotTime: (time: number) => string;
+  availabilityStatusFor: (
+    item: ScheduleItem,
+    member: SchedulePanelMember,
+  ) => AssignmentAvailabilityStatus;
+  hasConflictFor: (
+    scheduleIndex: number,
+    member: SchedulePanelMember,
+  ) => boolean;
 }
 
 const InterviewerLoadView = ({
@@ -38,6 +55,8 @@ const InterviewerLoadView = ({
   onSwapPanelMember,
   displayCandidate,
   formatSlotTime,
+  availabilityStatusFor,
+  hasConflictFor,
 }: InterviewerLoadViewProps) => {
   const selected = distribution.find(
     (interviewer) => interviewer.id === selectedInterviewer,
@@ -96,9 +115,11 @@ const InterviewerLoadView = ({
                 {interviewer.count}
               </span>
               <span className="text-detail font-medium text-text-muted">
-                {interviewer.overtimeCount > 0
-                  ? `${interviewer.overtimeCount} overtid`
-                  : "Ingen overtid"}
+                {interviewer.unverifiedCount > 0
+                  ? `${interviewer.unverifiedCount} kan ikke verifiseres`
+                  : interviewer.outsideAvailabilityCount > 0
+                    ? `${interviewer.outsideAvailabilityCount} utenfor tilgjengelighet`
+                    : "Innenfor tilgjengelighet"}
               </span>
             </button>
           ))}
@@ -143,50 +164,69 @@ const InterviewerLoadView = ({
                   </td>
                   <td className="px-4 py-3 text-sm">
                     <div className="flex flex-wrap gap-1.5">
-                      {item.panel.map((p, i) => (
-                        <EditablePanelChip
-                          key={i}
-                          label={p.name}
-                          tone={p.is_overtime ? "overtime" : "neutral"}
-                          options={
-                            canEditDraft
-                              ? interviewerOptions.map((iv) => ({
-                                  id: iv.id,
-                                  name: iv.name,
-                                  disabled:
-                                    iv.id !== p.id &&
-                                    item.panel.some((m) =>
-                                      m.id
-                                        ? m.id === iv.id
-                                        : m.name === iv.name,
-                                    ),
-                                }))
-                              : undefined
-                          }
-                          onSelect={
-                            canEditDraft
-                              ? (newName, newId) =>
-                                  onSwapPanelMember(
-                                    scheduleIndex,
-                                    i,
-                                    newName,
-                                    newId,
-                                  )
-                              : undefined
-                          }
-                          title={
-                            canEditDraft
-                              ? `Bytt intervjuer${
-                                  p.is_overtime
-                                    ? " — utenfor registrert tilgjengelighet"
-                                    : ""
-                                }`
-                              : p.is_overtime
-                                ? "Utenfor registrert tilgjengelighet"
+                      {item.panel.map((p, i) => {
+                        const availabilityStatus = availabilityStatusFor(
+                          item,
+                          p,
+                        );
+                        const availabilityLabel =
+                          assignmentAvailabilityLabel(availabilityStatus);
+                        const hasConflict = hasConflictFor(scheduleIndex, p);
+                        const statusLabel = hasConflict
+                          ? "Registrert inhabilitet"
+                          : availabilityLabel;
+                        return (
+                          <EditablePanelChip
+                            key={i}
+                            label={p.name}
+                            tone={
+                              availabilityStatus !== "verified"
+                                ? "overtime"
+                                : "neutral"
+                            }
+                            conflict={hasConflict}
+                            timeIssue={
+                              !hasConflict && availabilityStatus !== "verified"
+                            }
+                            statusLabel={statusLabel ?? undefined}
+                            options={
+                              canEditDraft
+                                ? interviewerOptions.map((iv) => ({
+                                    id: iv.id,
+                                    name: iv.name,
+                                    disabled:
+                                      iv.id !== p.id &&
+                                      item.panel.some((m) =>
+                                        m.id
+                                          ? m.id === iv.id
+                                          : m.name === iv.name,
+                                      ),
+                                  }))
                                 : undefined
-                          }
-                        />
-                      ))}
+                            }
+                            onSelect={
+                              canEditDraft
+                                ? (newName, newId) =>
+                                    onSwapPanelMember(
+                                      scheduleIndex,
+                                      i,
+                                      newName,
+                                      newId,
+                                    )
+                                : undefined
+                            }
+                            title={
+                              canEditDraft
+                                ? `Bytt intervjuer${
+                                    statusLabel
+                                      ? ` — ${statusLabel.toLowerCase()}`
+                                      : ""
+                                  }`
+                                : (statusLabel ?? undefined)
+                            }
+                          />
+                        );
+                      })}
                     </div>
                   </td>
                 </tr>

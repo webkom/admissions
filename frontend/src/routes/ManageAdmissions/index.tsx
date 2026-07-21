@@ -93,7 +93,7 @@ const ManageOverview = ({ admissions }: { admissions: Admission[] }) => (
 export default ManageAdmissions;
 
 const PageWrapper = styled.div`
-  min-height: 100dvh;
+  min-height: var(--viewport-min-height);
   background: var(--color-surface-base);
 `;
 
@@ -135,7 +135,7 @@ const BackLink = styled(Link)`
   gap: var(--spacing-sm);
   color: var(--color-text-primary);
   font-size: var(--font-size-sm);
-  font-weight: 600;
+  font-weight: var(--font-weight-semibold);
 `;
 
 const Main = styled.main`

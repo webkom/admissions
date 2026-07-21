@@ -33,26 +33,26 @@
 // }
 
 type UserData = {
-  sessionid: string;
-  csrftoken: string;
+  sessionId: string;
+  csrfToken: string;
 };
 
 const sessions: Record<string, UserData> = {
   webkom: {
-    sessionid: "rm4i3g0ok3phcy0moqyk09c0ljjnvftd",
-    csrftoken: "D9FJfTguk1zQGiZhgXSURh9q3VlAxK4K",
+    sessionId: "rm4i3g0ok3phcy0moqyk09c0ljjnvftd",
+    csrfToken: "D9FJfTguk1zQGiZhgXSURh9q3VlAxK4K",
   },
 };
 
 Cypress.Commands.add("login", (username) => {
   if (username in sessions) {
-    cy.setCookie("sessionid", sessions[username].sessionid);
-    cy.setCookie("csrftoken", sessions[username].csrftoken);
+    cy.setCookie("admissions_sessionid", sessions[username].sessionId);
+    cy.setCookie("admissions_csrftoken", sessions[username].csrfToken);
   } else {
     throw new Error("Unknown user");
   }
 });
 
 Cypress.Commands.add("logout", () => {
-  cy.clearCookie("sessionid");
+  cy.clearCookie("admissions_sessionid");
 });

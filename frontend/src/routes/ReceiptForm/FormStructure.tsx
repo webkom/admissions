@@ -11,7 +11,6 @@ import {
   FormHeader,
   GeneralInfoSection,
   GroupsSection,
-  HelpText,
   InfoText,
   NoChosenGroupsWrapper,
   NoChosenSubTitle,
@@ -20,11 +19,11 @@ import {
   PageWrapper,
   SectionHeader,
   SeparatorLine,
-  Sidebar,
   TimeStamp,
   Title,
 } from "src/routes/ApplicationForm/FormStructureStyle";
 import { clearAllDrafts } from "src/utils/draftHelper";
+import type { InputFieldModel } from "src/utils/jsonFields";
 import LinkButton, { StyledButton } from "src/components/LinkButton";
 import { useParams } from "react-router-dom";
 import styled from "styled-components";
@@ -33,11 +32,16 @@ interface FormStructureProps {
   toggleIsEditing: () => void;
 }
 
+const formatResponse = (value: unknown): string => {
+  if (typeof value === "boolean") return value ? "Ja" : "Nei";
+  return typeof value === "string" && value.trim() ? value : "Ikke besvart";
+};
+
 const FormStructure: React.FC<FormStructureProps> = ({ toggleIsEditing }) => {
   const { admissionSlug = "" } = useParams();
-  const { data: admission, isFetching: admissionIsFetching } =
+  const { data: admission, isLoading: admissionIsLoading } =
     useAdmission(admissionSlug);
-  const { data: myApplication, isFetching: applicationIsFetching } =
+  const { data: myApplication, isLoading: applicationIsLoading } =
     useMyApplication(admissionSlug);
   const deleteApplicationMutation =
     useDeleteMyApplicationMutation(admissionSlug);
@@ -48,11 +52,8 @@ const FormStructure: React.FC<FormStructureProps> = ({ toggleIsEditing }) => {
   const { group_applications, updated_at } = myApplication || {};
 
   const hasSelected = group_applications && group_applications.length > 0;
-  const headerFields = (admission?.header_fields ?? []).filter(
-    (field) => "id" in field,
-  );
 
-  if (admissionIsFetching || applicationIsFetching) {
+  if (admissionIsLoading || applicationIsLoading) {
     return <p>Loading</p>;
   }
 
@@ -163,43 +164,7 @@ const FormStructure: React.FC<FormStructureProps> = ({ toggleIsEditing }) => {
                 {myApplication.phone_number || "Ikke oppgitt"}
               </ReceiptValue>
             </ReceiptField>
-            {headerFields.map((field) => (
-              <ReceiptField key={field.id}>
-                <ReceiptLabel>{field.title}</ReceiptLabel>
-                <ReceiptValue>
-                  {(myApplication.header_fields_response ?? {})[field.id] ||
-                    "Ikke oppgitt"}
-                </ReceiptValue>
-              </ReceiptField>
-            ))}
-            {myApplication.text && (
-              <ReceiptField>
-                <ReceiptLabel>Prioriteringer og kommentarer</ReceiptLabel>
-                <ReceiptText>{myApplication.text}</ReceiptText>
-              </ReceiptField>
-            )}
           </ReceiptFields>
-
-          {!isBackup && (
-            <Sidebar>
-              <HelpText>
-                <Info aria-hidden="true" />
-                <span>
-                  Her kan du se teksten du har skrevet i de generelle feltene.
-                  Denne teksten er lik for alle komiteene du søker.
-                </span>
-              </HelpText>
-              {!isRevy && !isRevyBoard && (
-                <HelpText>
-                  <Info aria-hidden="true" />
-                  <span>
-                    Kun leder og nestleder av Abakus kan se det du skriver inn i
-                    feltet for kommentar til leder av Abakus.
-                  </span>
-                </HelpText>
-              )}
-            </Sidebar>
-          )}
         </GeneralInfoSection>
         <SeparatorLine />
 
@@ -211,54 +176,65 @@ const FormStructure: React.FC<FormStructureProps> = ({ toggleIsEditing }) => {
           {hasSelected ? (
             <>
               <ReceiptApplications>
-                {group_applications.map((groupApplication) => (
-                  <ReceiptApplication key={groupApplication.group.pk}>
-                    <ReceiptApplicationHeader>
-                      <ReceiptLogo
-                        src={groupApplication.group.logo}
-                        alt=""
-                        aria-hidden="true"
-                      />
-                      <ReceiptGroupName>
-                        {groupApplication.group.name}
-                      </ReceiptGroupName>
-                    </ReceiptApplicationHeader>
-                    {groupApplication.group.response_label && (
-                      <ReceiptPrompt>
-                        {groupApplication.group.response_label}
-                      </ReceiptPrompt>
-                    )}
-                    <ReceiptText>{groupApplication.text}</ReceiptText>
-                  </ReceiptApplication>
-                ))}
+                {group_applications.map((groupApplication) => {
+                  const groupFields = (
+                    admission.groups.find(
+                      (group) => group.pk === groupApplication.group.pk,
+                    )?.header_fields ?? []
+                  ).filter((field): field is InputFieldModel => "id" in field);
+
+                  return (
+                    <ReceiptApplication key={groupApplication.group.pk}>
+                      <ReceiptApplicationHeader>
+                        {groupApplication.group.logo && (
+                          <ReceiptLogo
+                            src={groupApplication.group.logo}
+                            alt=""
+                            aria-hidden="true"
+                            onError={(event) => {
+                              event.currentTarget.hidden = true;
+                            }}
+                          />
+                        )}
+                        <ReceiptGroupName>
+                          {groupApplication.group.name}
+                        </ReceiptGroupName>
+                      </ReceiptApplicationHeader>
+                      {groupApplication.group.response_label && (
+                        <ReceiptPrompt>
+                          {groupApplication.group.response_label}
+                        </ReceiptPrompt>
+                      )}
+                      <ReceiptText>{groupApplication.text}</ReceiptText>
+                      {groupFields.length > 0 && (
+                        <GroupAnswers>
+                          {groupFields.map((field) => (
+                            <GroupAnswer key={field.id}>
+                              <ReceiptLabel>{field.title}</ReceiptLabel>
+                              <ReceiptValue>
+                                {formatResponse(
+                                  groupApplication.header_fields_response?.[
+                                    field.id
+                                  ],
+                                )}
+                              </ReceiptValue>
+                            </GroupAnswer>
+                          ))}
+                        </GroupAnswers>
+                      )}
+                    </ReceiptApplication>
+                  );
+                })}
+                <ReceiptNotes aria-label="Informasjon om komitésøknader">
+                  <ReceiptNote>
+                    <Info aria-hidden="true" />
+                    <span>
+                      Her ser du komiteene du har søkt på, med eventuelle egne
+                      spørsmål under hver komité.
+                    </span>
+                  </ReceiptNote>
+                </ReceiptNotes>
               </ReceiptApplications>
-              <Sidebar>
-                <HelpText>
-                  <Info aria-hidden="true" />
-                  <span>
-                    Her ser du{" "}
-                    {isRevy
-                      ? "gruppene"
-                      : isRevyBoard
-                        ? "stillingene"
-                        : "komiteene"}{" "}
-                    du har søkt på. Du kan prioritere dem ved å dra i dem.
-                  </span>
-                </HelpText>
-                <HelpText>
-                  <Info aria-hidden="true" />
-                  <span>
-                    Noen{" "}
-                    {isRevy
-                      ? "grupper"
-                      : isRevyBoard
-                        ? "stillinger"
-                        : "komiteer"}{" "}
-                    har egne spørsmål. Disse ser du under hver enkelt{" "}
-                    {isRevy ? "gruppe" : isRevyBoard ? "stilling" : "komité"}.
-                  </span>
-                </HelpText>
-              </Sidebar>
             </>
           ) : (
             <NoChosenGroupsWrapper>
@@ -287,77 +263,129 @@ export default FormStructure;
 const ReceiptFields = styled.div`
   display: flex;
   flex-direction: column;
-  gap: var(--spacing-md);
 `;
 
 const ReceiptField = styled.div`
-  padding: var(--spacing-md);
-  border: 1px solid var(--color-border-soft);
-  border-radius: var(--border-radius-md);
-  background: var(--color-surface-subtle);
+  padding: var(--spacing-lg) 0;
+  border-bottom: var(--border-width-default) solid var(--color-border-soft);
+
+  &:first-child {
+    padding-top: 0;
+  }
+
+  &:last-child {
+    border-bottom: 0;
+    padding-bottom: 0;
+  }
 `;
 
 const ReceiptLabel = styled.span`
   display: block;
-  margin-bottom: 0.35rem;
+  margin-bottom: var(--spacing-xs);
   color: var(--color-text-muted);
   font-size: var(--font-size-detail);
-  font-weight: 700;
-  letter-spacing: 0.05em;
+  font-weight: var(--font-weight-bold);
+  letter-spacing: var(--letter-spacing-caps);
   text-transform: uppercase;
 `;
 
 const ReceiptValue = styled.span`
   color: var(--color-text-primary);
   font-size: var(--font-size-ui);
-  font-weight: 600;
+  font-weight: var(--font-weight-medium);
+`;
+
+const ReceiptNotes = styled.aside`
+  display: grid;
+  gap: var(--spacing-md);
+  max-width: var(--content-width-prose);
+  margin-top: var(--spacing-lg);
+`;
+
+const ReceiptNote = styled.p`
+  display: grid;
+  grid-template-columns: var(--spacing-xl) minmax(0, 1fr);
+  gap: var(--spacing-sm);
+  align-items: start;
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-sm);
+  line-height: var(--line-height-copy);
+
+  svg {
+    width: var(--spacing-lg);
+    height: var(--spacing-lg);
+    margin-top: 0.1em;
+    color: var(--color-text-subtle);
+  }
 `;
 
 const ReceiptApplications = styled.div`
   display: flex;
   flex-direction: column;
-  gap: 1.25rem;
 `;
 
 const ReceiptApplication = styled.article`
-  padding: 1.25rem;
-  border: 1px solid var(--color-border-soft);
-  border-radius: var(--border-radius-md);
-  background: var(--color-surface-base);
+  padding: var(--spacing-xl) 0;
+  border-top: var(--border-width-default) solid var(--color-border-soft);
+
+  &:first-child {
+    padding-top: 0;
+    border-top: 0;
+  }
+
+  &:last-child {
+    padding-bottom: 0;
+  }
 `;
 
 const ReceiptApplicationHeader = styled.div`
   display: flex;
   align-items: center;
-  gap: 0.75rem;
-  margin-bottom: 0.85rem;
+  gap: var(--spacing-md);
+  margin-bottom: var(--spacing-sm);
 `;
 
 const ReceiptLogo = styled.img`
-  width: 2rem;
-  height: 2rem;
-  object-fit: scale-down;
+  width: var(--avatar-size-sm);
+  height: var(--avatar-size-sm);
+  object-fit: contain;
   flex: none;
+
+  &[hidden] {
+    display: none;
+  }
 `;
 
 const ReceiptGroupName = styled.h3`
   margin: 0;
   color: var(--color-text-primary);
   font-size: var(--font-size-lg);
-  font-weight: 700;
+  font-weight: var(--font-weight-bold);
 `;
 
 const ReceiptPrompt = styled.p`
-  margin: 0 0 0.85rem;
+  margin: 0 0 var(--spacing-md);
   color: var(--color-text-muted);
   font-size: var(--font-size-sm);
-  line-height: 1.6;
+  line-height: var(--line-height-copy);
 `;
 
 const ReceiptText = styled.p`
   margin: 0;
   color: var(--color-text-body);
   font-size: var(--font-size-ui);
-  line-height: 1.65;
+  line-height: var(--line-height-copy);
   white-space: pre-wrap;
+`;
+
+const GroupAnswers = styled.dl`
+  display: grid;
+  gap: var(--spacing-md);
+  margin: var(--spacing-lg) 0 0;
+`;
+
+const GroupAnswer = styled.div`
+  display: grid;
+  gap: var(--spacing-xs);
 `;

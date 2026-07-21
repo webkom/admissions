@@ -124,6 +124,7 @@ class AdmissionGroup(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     admission = models.ForeignKey(Admission, on_delete=models.CASCADE)
     group = models.ForeignKey(Group, on_delete=models.CASCADE)
+    header_fields = models.JSONField(default=list, null=True)
 
     class Meta:
         constraints = [
@@ -134,6 +135,21 @@ class AdmissionGroup(models.Model):
 
 
 class UserApplication(TimeStampModel):
+    INTERVIEW_STATUS_NOT_INVITED = "not_invited"
+    INTERVIEW_STATUS_INVITED = "invited"
+    INTERVIEW_STATUS_CONFIRMED = "confirmed"
+    INTERVIEW_STATUS_DECLINED = "declined"
+    INTERVIEW_STATUS_COMPLETED = "completed"
+    INTERVIEW_STATUS_CANCELLED = "cancelled"
+    INTERVIEW_STATUS_CHOICES = [
+        (INTERVIEW_STATUS_NOT_INVITED, "Not invited"),
+        (INTERVIEW_STATUS_INVITED, "Invited"),
+        (INTERVIEW_STATUS_CONFIRMED, "Confirmed"),
+        (INTERVIEW_STATUS_DECLINED, "Declined"),
+        (INTERVIEW_STATUS_COMPLETED, "Completed"),
+        (INTERVIEW_STATUS_CANCELLED, "Cancelled"),
+    ]
+
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     admission = models.ForeignKey(
         Admission, related_name="applications", on_delete=models.CASCADE
@@ -142,6 +158,22 @@ class UserApplication(TimeStampModel):
     text = models.TextField(blank=True)
     phone_number = models.CharField(max_length=20)
     header_fields_response = models.JSONField(default=None, null=True)
+    interview_status = models.CharField(
+        max_length=20,
+        choices=INTERVIEW_STATUS_CHOICES,
+        default=INTERVIEW_STATUS_NOT_INVITED,
+    )
+    interview_status_updated_at = models.DateTimeField(default=timezone.now)
+    interview_status_updated_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="interview_status_updates",
+    )
+    interview_status_updated_by_username = models.CharField(
+        max_length=150, blank=True, default=""
+    )
 
     class Meta:
         constraints = [
@@ -179,12 +211,45 @@ class GroupApplication(TimeStampModel):
         Group, related_name="applications", on_delete=models.CASCADE
     )
     text = models.TextField(blank=True)
+    header_fields_response = models.JSONField(default=dict, null=True)
 
     class Meta:
         constraints = [
             models.UniqueConstraint(
                 fields=["application", "group"],
                 name="unique_application_group_combination",
+            )
+        ]
+
+
+class InterviewStatusAuditEvent(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    application = models.ForeignKey(
+        UserApplication,
+        on_delete=models.CASCADE,
+        related_name="interview_status_events",
+    )
+    actor = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        on_delete=models.SET_NULL,
+        related_name="interview_status_events",
+    )
+    actor_username = models.CharField(max_length=150)
+    previous_status = models.CharField(
+        max_length=20, choices=UserApplication.INTERVIEW_STATUS_CHOICES
+    )
+    new_status = models.CharField(
+        max_length=20, choices=UserApplication.INTERVIEW_STATUS_CHOICES
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        indexes = [
+            models.Index(
+                fields=["application", "-created_at"],
+                name="interview_status_app_time_idx",
             )
         ]
 
@@ -206,6 +271,7 @@ class SavedSchedule(models.Model):
     panel_size = models.PositiveSmallIntegerField(null=True, blank=True)
     solver_options = models.JSONField(null=True, blank=True)
     is_distributed = models.BooleanField(default=False)
+    conflict_review_open = models.BooleanField(default=False)
 
     NAME_VISIBILITY_HIDDEN = "hidden"
     NAME_VISIBILITY_ADMIN_ONLY = "admin_only"
@@ -278,6 +344,54 @@ class NameVisibilityAuditEvent(models.Model):
         ]
 
 
+class ConflictReviewAuditEvent(models.Model):
+    ACTION_OPENED = "opened"
+    ACTION_CLOSED = "closed"
+    ACTION_VIEWED = "viewed"
+    ACTION_SUBMITTED = "submitted"
+    ACTION_FROZEN = "frozen"
+    ACTION_CHOICES = [
+        (ACTION_OPENED, "Opened"),
+        (ACTION_CLOSED, "Closed"),
+        (ACTION_VIEWED, "Viewed"),
+        (ACTION_SUBMITTED, "Submitted"),
+        (ACTION_FROZEN, "Frozen"),
+    ]
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    admission = models.ForeignKey(
+        Admission,
+        on_delete=models.CASCADE,
+        related_name="conflict_review_events",
+    )
+    saved_schedule = models.ForeignKey(
+        SavedSchedule,
+        null=True,
+        on_delete=models.SET_NULL,
+        related_name="conflict_review_events",
+    )
+    actor = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        on_delete=models.SET_NULL,
+        related_name="conflict_review_events",
+    )
+    actor_username = models.CharField(max_length=150)
+    action = models.CharField(max_length=16, choices=ACTION_CHOICES)
+    reviewed_candidate_ids = models.JSONField(default=list, blank=True)
+    conflict_candidate_ids = models.JSONField(default=list, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        indexes = [
+            models.Index(
+                fields=["admission", "-created_at"],
+                name="conflict_review_time_idx",
+            )
+        ]
+
+
 class InterviewAvailability(models.Model):
     admission = models.ForeignKey(
         Admission, on_delete=models.CASCADE, related_name="interview_availabilities"
@@ -289,6 +403,7 @@ class InterviewAvailability(models.Model):
     )
     slots = models.JSONField(default=list, blank=True)
     conflicts = models.JSONField(default=list, blank=True)
+    reviewed_candidate_ids = models.JSONField(default=list, blank=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:

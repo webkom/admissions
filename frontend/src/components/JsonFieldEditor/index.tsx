@@ -1,5 +1,5 @@
 import React, { useMemo } from "react";
-import { Field, FormikValues } from "formik";
+import { Field, FieldProps, FormikValues } from "formik";
 import styled from "styled-components";
 import { HelpText } from "src/routes/ApplicationForm/FormStructureStyle";
 import PhoneNumberField from "src/routes/ApplicationForm/PhoneNumberField";
@@ -14,7 +14,9 @@ import {
   FieldModel,
   InputFieldModel,
   PhoneInputModel,
+  CheckboxInputModel,
   TextModel,
+  getDefaultPlaceholder,
 } from "src/utils/jsonFields";
 
 const nestedError = (
@@ -38,9 +40,11 @@ const JsonInputField: React.FC<FormikValues> = ({
   title,
   label,
   placeholder,
+  type,
 }) => {
   const { name, value, onChange, onBlur } = field;
   const error = nestedError(touched, errors, name);
+  const resolvedPlaceholder = getDefaultPlaceholder(type, placeholder);
 
   return (
     <Wrapper>
@@ -54,7 +58,7 @@ const JsonInputField: React.FC<FormikValues> = ({
           onChange={onChange}
           onBlur={onBlur}
           disabled={disabled}
-          placeholder={placeholder}
+          placeholder={resolvedPlaceholder}
           $error={Boolean(error)}
         />
       ) : (
@@ -63,12 +67,49 @@ const JsonInputField: React.FC<FormikValues> = ({
           name={name}
           type={inputType}
           disabled={disabled}
-          placeholder={placeholder}
+          placeholder={resolvedPlaceholder}
           error={error}
         />
       )}
       <InputValidationFeedback error={error} />
     </Wrapper>
+  );
+};
+
+const JsonCheckboxField: React.FC<{
+  field: CheckboxInputModel;
+  title: string;
+  label: string;
+  disabled?: boolean;
+  sectionName: string;
+}> = ({ field, title, label, disabled, sectionName }) => {
+  const name = sectionName + "." + field.id;
+
+  return (
+    <Field name={name}>
+      {({ field: formikField, meta, form }: FieldProps<boolean>) => {
+        const error = meta.touched ? meta.error : undefined;
+
+        return (
+          <CheckboxWrapper>
+            <FieldLabel htmlFor={name}>{title}</FieldLabel>
+            {label ? <HelpLabel>{label}</HelpLabel> : null}
+            <CheckboxInput
+              id={name}
+              checked={Boolean(formikField.value)}
+              disabled={disabled}
+              type="checkbox"
+              onBlur={formikField.onBlur}
+              onChange={(event) =>
+                form.setFieldValue(name, event.target.checked)
+              }
+              name={name}
+            />
+            <InputValidationFeedback error={error as string} />
+          </CheckboxWrapper>
+        );
+      }}
+    </Field>
   );
 };
 
@@ -96,7 +137,7 @@ const JsonFieldEditor: React.FC<Props> = ({
       name={sectionName + "." + field.id}
       title={field.title}
       label={field.label}
-      placeholder={field.placeholder}
+      placeholder={getDefaultPlaceholder(field.type, field.placeholder)}
       disabled={disabled}
     />
   );
@@ -115,7 +156,7 @@ const JsonFieldEditor: React.FC<Props> = ({
       name={sectionName + "." + field.id}
       title={field.title}
       label={field.label}
-      placeholder={field.placeholder}
+      placeholder={getDefaultPlaceholder(field.type, field.placeholder)}
       inputType={inputType}
       multiline={multiline}
       disabled={disabled}
@@ -145,11 +186,22 @@ const JsonFieldEditor: React.FC<Props> = ({
             return (
               <InputField key={field.id} field={field} inputType="number" />
             );
+          case "checkbox":
+            return (
+              <JsonCheckboxField
+                key={field.id}
+                sectionName={sectionName}
+                field={field}
+                title={field.title}
+                label={field.label}
+                disabled={disabled}
+              />
+            );
           default:
             return null;
         }
       }),
-    [fields],
+    [fields, sectionName, disabled],
   );
 
   return <>{renderedFields}</>;
@@ -165,4 +217,17 @@ const HelpLabel = styled.p`
   margin: 0 0 0.25rem;
   color: var(--color-text-muted);
   font-size: var(--font-size-detail);
+`;
+
+const CheckboxWrapper = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-sm);
+`;
+
+const CheckboxInput = styled.input`
+  align-self: flex-start;
+  width: 1.25rem;
+  min-height: 1.25rem;
+  accent-color: var(--color-brand);
 `;

@@ -2,7 +2,7 @@ describe("submit application spec", () => {
   it("successfully apply to one group", () => {
     cy.login("webkom");
     cy.visit("/");
-    cy.contains("Komitéopptak")
+    cy.contains("Webkomopptak – åpent")
       .parent()
       .parent()
       .parent()

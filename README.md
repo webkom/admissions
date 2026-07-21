@@ -83,7 +83,7 @@ Create a local OAuth2 application in LEGO and put its client ID and secret in yo
 
 Credential-shaped OAuth values have existed in this repository's history. Treat any matching LEGO application credentials as compromised: revoke them in LEGO, create a replacement client, and update the deployment secret store. Removing a value from the current tree or rewriting Git history does not replace credential rotation.
 
-If you want to configure another one, go to the OAuth2 tab in the user settings [menu](http://localhost:3000/users/me/settings/oauth2) in the running dev version of lego-webapp. Open or create an application, and enter the values you find into your .env file. If you are creating a new OAuth2 application, enter `http://127.0.0.1:5000/complete/lego/` as the redirect url.
+If you want to configure another one, go to the OAuth2 tab in the user settings [menu](http://127.0.0.1:3000/users/me/settings/oauth2) in the running dev version of lego-webapp. Open or create an application, and enter the values you find into your .env file. If you are creating a new OAuth2 application, enter `http://127.0.0.1:5002/complete/lego/` as the redirect URL.
 
 ```sh
 # Create a copy of the example env file (run from the root of the project)
@@ -92,7 +92,7 @@ $ cp admissions/settings/example.env admissions/settings/.env
 # Edit the file and change the KEY and SECRET
 AUTH_LEGO_KEY="Client ID from OAuth2"
 AUTH_LEGO_SECRET="Client Secret from OAuth2"
-AUTH_LEGO_API_URL="http://localhost:8000/"
+AUTH_LEGO_API_URL="http://127.0.0.1:8000/"
 ```
 
 After creating and configuring your ./admissions/settings/.env file you are ready to migrate the database and run the server.
@@ -101,11 +101,13 @@ After creating and configuring your ./admissions/settings/.env file you are read
 # Migrate the database migrations
 $ poetry run python manage.py migrate
 
-# Run the Django server
-$ poetry run python manage.py runserver
+# Run the Django server and interview-scheduling worker together
+$ make dev
 ```
 
-> If coding over long periods of time, or you want to flush the database, run `poetry run python manage.py flush` to flush it, and run the server again with `poetry run python manage.py runserver`.
+> If coding over long periods of time, or you want to flush the database, stop
+> `make dev`, run `poetry run python manage.py flush`, and start `make dev`
+> again.
 
 ### Terminal 4
 
@@ -119,11 +121,11 @@ $ yarn
 $ yarn dev
 ```
 
-> Finally, you can go to [127.0.0.1:5000](http://127.0.0.1:5000/) and view the admissions page.
+> Finally, you can go to [127.0.0.1:5002](http://127.0.0.1:5002/) and view the admissions page.
 
 **NB: The project has to be accessed through 127.0.0.1, and NOT localhost.** This is because accessing both LEGO and admissions from the same hostname creates a conflict some session storage, so the login will not work.
 
-To create an admission, first, open [127.0.0.1:5000](http://127.0.0.1:5000/) and click the "Logg inn" button at the bottom of the page to authorize as a user with [permission to create admissions](#permissions). Then, click "Administrer opptak" and create an admission. Phew, now you are ready to start developing!
+To create an admission, first, open [127.0.0.1:5002](http://127.0.0.1:5002/) and click the "Logg inn" button at the bottom of the page to authorize as a user with [permission to create admissions](#permissions). Then, click "Administrer opptak" and create an admission. Phew, now you are ready to start developing!
 
 &nbsp;
 
@@ -133,7 +135,7 @@ To create an admission, first, open [127.0.0.1:5000](http://127.0.0.1:5000/) and
 
 The simplest way to create an admission is through the GUI.
 
-1. Navigate to [127.0.0.1:5000](http://127.0.0.1:5000/)
+1. Navigate to [127.0.0.1:5002](http://127.0.0.1:5002/)
 2. Log in as a user with permission to create admissions.
 3. Click "Administrer opptak" at the bottom of the screen
 4. Success
@@ -167,11 +169,16 @@ large admissions, so solving runs in a **separate worker process** instead of
 the web request. The frontend enqueues a `SolveJob`, the worker picks up pending
 jobs and runs them, and the frontend polls for the result.
 
-You must run the worker for the interview-distribution ("Fordel intervjuer")
-feature to produce results — without it, solve jobs stay `PENDING` forever.
+Each solve may search for up to five minutes. Easy cases still return as soon
+as an optimal plan is found; the limit only gives harder cases more time. Queue
+time is tracked separately and does not consume this search budget.
+
+`make dev` starts the worker together with Django. If Django is started directly
+with `manage.py runserver`, you must also run the worker — without it, solve jobs
+stay `PENDING` forever.
 
 ```sh
-# Run alongside the Django server (a 5th terminal in development)
+# Only needed when Django was started without `make dev`
 $ poetry run python manage.py run_solver_worker
 ```
 
@@ -184,14 +191,24 @@ than one safely.
 ## Permissions
 
 The project gives permissions based on group memberships imported from LEGO.
+The local membership snapshot is replaced atomically at OAuth login. LEGO role
+changes are therefore not live within an existing session; for an urgent
+revocation, invalidate that user's admissions session in addition to changing
+the LEGO role. Production sessions expire after the configured
+`SESSION_COOKIE_AGE` (one hour by default).
+
+Candidate applications do not currently have an automatic post-admission
+retention deadline. A deployment must define an approved retention period and
+deletion procedure before treating storage cleanup as automatic. Solver jobs
+are cleaned separately and are not a substitute for deleting applications.
 
 | Model                   | Action        | Requirement                                                                                                               |
 | :---------------------- | ------------- | ------------------------------------------------------------------------------------------------------------------------- |
-| Admission               | CREATE        | Either (1) any member of Webkom, (2) leader of Abakus OR (3) leader of RevyStyret. <br/> (1,2,3) `user.is_staff`          |
-| Admission               | EDIT          | Either (1) member of Webkom OR (2) creator of admission. <br/>(1) `user.is_member_of_webkom`, (2) `admission.created_by`. |
+| Admission               | CREATE        | Active Webkom member, or a staff user whose active LEGO role grants admission-management access                           |
+| Admission               | EDIT          | Active Webkom member, or the admission creator when that creator is still a staff user                                    |
 | All applications        | VIEW & DELETE | Active member of a group in `admission.admin_groups`                                                                      |
 | Applications to a group | VIEW & DELETE | Active member of a group in `admission.groups` with role LEADER or RECRUITING                                             |
-| Group                   | EDIT          | Active member of a group in `admission.groups` with role LEADER or RECRUITING                                             |
+| Group                   | EDIT          | Active admission-admin-group member, or an active LEADER or RECRUITING member of the group                                |
 
 &nbsp;
 

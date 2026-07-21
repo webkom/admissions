@@ -1,6 +1,6 @@
 import React from "react";
 import { isLoggedIn } from "src/utils/djangoData";
-import { Admission as AdmissionInterface } from "src/types";
+import { AdmissionList } from "src/types";
 import AdmissionTimeline, {
   type AdmissionTimelineItem,
 } from "src/components/AdmissionTimeline";
@@ -8,9 +8,10 @@ import CountDown from "./CountDown";
 import LinkButton from "src/components/LinkButton";
 import cn from "src/utils/cn";
 import { Calendar, Send, Settings } from "lucide-react";
+import { iconSizes } from "src/styles/designTokens";
 
 interface AdmissionProps {
-  admission: AdmissionInterface;
+  admission: AdmissionList;
 }
 
 const baseActionButtonClass =
@@ -30,7 +31,10 @@ const Admission: React.FC<AdmissionProps> = ({ admission }) => {
   const isRevy = admission.slug === "revy";
   const isRevyBoard = admission.slug === "revystyret";
   const isBackup = admission.slug === "backup";
-  const isSingleGroupAdmission = admission?.groups.length === 1;
+  const isSingleGroupAdmission = admission.groups.length === 1;
+  const adminPanelPath = isSingleGroupAdmission
+    ? `/${admission.slug}/admin/?group=${encodeURIComponent(admission.groups[0])}`
+    : `/${admission.slug}/admin/`;
   const isAdmissionMember =
     (admission.userdata.committee_groups?.length ?? 0) > 0;
   const isPrivileged = admission.userdata.is_privileged;
@@ -76,8 +80,8 @@ const Admission: React.FC<AdmissionProps> = ({ admission }) => {
   })();
 
   return (
-    <div className="mt-10 w-full max-w-6xl rounded-panel border border-border bg-surface-base p-10 shadow-panel transition-shadow duration-200 hover:shadow-panel-hover portrait:p-8 handheld:mt-6 handheld:p-5">
-      <div className="mb-8 grid grid-cols-[1.4fr_1fr] gap-10 portrait:grid-cols-1 portrait:gap-8">
+    <div className="mt-10 w-full max-w-6xl rounded-panel border border-border bg-surface-base p-10 shadow-panel transition-shadow duration-200 hover:shadow-panel-hover narrow:p-8 handheld:mt-6 handheld:p-5">
+      <div className="mb-8 grid grid-cols-admission-overview gap-10 narrow:grid-cols-1 narrow:gap-8">
         <div>
           <h2 className="mb-3 text-display-lg font-extrabold tracking-display-tight text-text-strong text-balance handheld:text-display-md">
             {admission.title}
@@ -106,7 +110,6 @@ const Admission: React.FC<AdmissionProps> = ({ admission }) => {
           )}
 
           <div className="mt-4 flex w-full flex-col gap-3">
-            <div className="flex items-center justify-between gap-3 px-1"></div>
             {(admission.is_open || admission.userdata.has_application) && (
               <LinkButton
                 className={primaryActionButtonClass}
@@ -124,7 +127,7 @@ const Admission: React.FC<AdmissionProps> = ({ admission }) => {
                 disabled={!isLoggedIn() && !admission.is_open}
               >
                 <ActionButtonContent
-                  icon={<Send size={20} aria-hidden="true" />}
+                  icon={<Send size={iconSizes.feature} aria-hidden="true" />}
                   label="Gå til søknad"
                 />
               </LinkButton>
@@ -135,10 +138,12 @@ const Admission: React.FC<AdmissionProps> = ({ admission }) => {
                 <LinkButton
                   className={secondaryActionButtonClass}
                   fullWidth
-                  to={`/${admission.slug}/admin/`}
+                  to={adminPanelPath}
                 >
                   <ActionButtonContent
-                    icon={<Settings size={18} aria-hidden="true" />}
+                    icon={
+                      <Settings size={iconSizes.standard} aria-hidden="true" />
+                    }
                     label="Admin panel"
                   />
                 </LinkButton>
@@ -153,7 +158,9 @@ const Admission: React.FC<AdmissionProps> = ({ admission }) => {
                   to={`/${admission.slug}/schedule/`}
                 >
                   <ActionButtonContent
-                    icon={<Calendar size={18} aria-hidden="true" />}
+                    icon={
+                      <Calendar size={iconSizes.standard} aria-hidden="true" />
+                    }
                     label="Velg intervjutider"
                   />
                 </LinkButton>

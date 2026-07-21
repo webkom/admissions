@@ -25,7 +25,7 @@ ENV PYTHONUNBUFFERED=1
 ENV ENV_CONFIG=1
 ENV RELEASE=${RELEASE}
 
-RUN python -m pip install --upgrade "pip>=26.1.2" \
+RUN python -m pip install --upgrade "pip==26.1.2" \
     && pip install "poetry==2.4.1"
 
 RUN mkdir /app

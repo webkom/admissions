@@ -18,21 +18,23 @@ from django.conf import settings
 from django.urls import include, path, re_path
 from rest_framework import routers
 
+from admissions.admissions.availability_views import InterviewAvailabilityView
+from admissions.admissions.candidate_views import (
+    InterviewCandidatesView,
+    NameVisibilityAuditView,
+)
+from admissions.admissions.schedule_views import SavedScheduleView
+from admissions.admissions.solve_views import SolveJobStatusView, SolveScheduleView
 from admissions.admissions.views import (
     AdminAdmissionViewSet,
     AdminApplicationViewSet,
     AdminGroupViewSet,
     AppView,
-    InterviewAvailabilityView,
-    InterviewCandidatesView,
     ManageAdmissionViewSet,
     ManageGroupViewSet,
-    NameVisibilityAuditView,
     PublicAdmissionViewSet,
     PublicApplicationViewSet,
-    SavedScheduleView,
-    SolveJobStatusView,
-    SolveScheduleView,
+    TerminateCommitteeApplicationsView,
     logout,
 )
 
@@ -87,6 +89,11 @@ urlpatterns = [
         "api/admin/admission/<slug:admission_slug>/name-visibility-audit/",
         NameVisibilityAuditView.as_view(),
         name="name-visibility-audit",
+    ),
+    path(
+        "api/admin/admission/<slug:admission_slug>/group/<uuid:group_id>/terminate/",
+        TerminateCommitteeApplicationsView.as_view(),
+        name="terminate-committee-applications",
     ),
     re_path("", include("social_django.urls", namespace="social")),
     re_path(r"^$", AppView.as_view(), name="home"),

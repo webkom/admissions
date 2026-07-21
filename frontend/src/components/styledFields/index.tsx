@@ -10,12 +10,12 @@ interface StyledFieldProps {
 export const StyledField = styled(Field)<StyledFieldProps>`
   display: block;
   width: 100%;
-  max-width: 400px;
-  padding: 0.75rem 1rem;
+  max-width: var(--form-control-width);
+  padding: var(--control-padding-block) var(--spacing-md);
   margin-top: var(--spacing-sm);
   font-size: var(--font-size-ui);
   color: var(--color-text-primary);
-  border: 1px solid
+  border: var(--border-width-default) solid
     ${(props) =>
       props.error ? "var(--lego-red-color)" : "var(--color-border-muted)"};
   border-radius: var(--border-radius-md);
@@ -27,9 +27,8 @@ export const StyledField = styled(Field)<StyledFieldProps>`
   }
 
   &:focus {
-    border-color: var(--color-blue-6);
-    box-shadow: 0 0 0 4px
-      color-mix(in srgb, var(--color-blue-6) 10%, transparent);
+    border-color: var(--color-brand);
+    box-shadow: 0 0 0 var(--focus-ring-width) var(--color-brand-ring);
     outline: none;
   }
 
@@ -43,13 +42,13 @@ export const StyledField = styled(Field)<StyledFieldProps>`
 export const StyledTextAreaField = styled(Textarea)<StyledFieldProps>`
   display: block;
   width: 100%;
-  min-height: 10rem;
+  min-height: var(--group-editor-min-height);
   padding: var(--spacing-md);
   margin-top: var(--spacing-sm);
   font-size: var(--font-size-ui);
   color: var(--color-text-primary);
-  line-height: 1.6;
-  border: 1px solid
+  line-height: var(--line-height-copy);
+  border: var(--border-width-default) solid
     ${({ $error }) =>
       $error ? "var(--lego-red-color)" : "var(--color-border-muted)"};
   border-radius: var(--border-radius-md);
@@ -62,9 +61,8 @@ export const StyledTextAreaField = styled(Textarea)<StyledFieldProps>`
   }
 
   &:focus {
-    border-color: var(--color-blue-6);
-    box-shadow: 0 0 0 4px
-      color-mix(in srgb, var(--color-blue-6) 10%, transparent);
+    border-color: var(--color-brand);
+    box-shadow: 0 0 0 var(--focus-ring-width) var(--color-brand-ring);
     outline: none;
   }
 
@@ -76,7 +74,7 @@ export const StyledTextAreaField = styled(Textarea)<StyledFieldProps>`
 `;
 
 export const FieldLabel = styled.label`
-  font-weight: 600;
+  font-weight: var(--font-weight-semibold);
   font-size: var(--font-size-sm);
   color: var(--color-text-body);
   display: block;
@@ -93,6 +91,6 @@ export const InputValidationFeedback: React.FC<
 
 const ValidationError = styled.div`
   color: var(--lego-red-color);
-  font-weight: 500;
+  font-weight: var(--font-weight-medium);
   font-size: var(--font-size-ui);
 `;

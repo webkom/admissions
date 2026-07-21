@@ -16,29 +16,29 @@ interface StyledSpanProps {
 
 export const PageWrapper = styled.div`
   width: 100%;
-  padding: 4rem 2rem;
+  padding: var(--spacing-4xl) var(--spacing-xl);
   margin: 0 auto;
   max-width: var(--lego-max-width);
-  min-height: calc(100vh - 80px);
+  min-height: var(--page-min-height);
   display: flex;
   flex-direction: column;
   align-items: center;
 
   form {
     width: 100%;
-    max-width: 800px;
+    max-width: var(--content-width-form);
   }
 
   ${media.handheld`
-    padding: 2rem 1rem;
+    padding: var(--spacing-xl) var(--spacing-md);
   `};
 `;
 
 export const Title = styled.h1`
   font-size: var(--font-size-display-md);
-  font-weight: 800;
+  font-weight: var(--font-weight-extrabold);
   color: var(--color-text-primary);
-  letter-spacing: -0.04em;
+  letter-spacing: var(--letter-spacing-display-tight);
   margin: 0;
   text-align: left;
 
@@ -50,8 +50,8 @@ export const Title = styled.h1`
 export const SeparatorLine = styled.div`
   display: block;
   background: var(--color-border-soft);
-  height: 1px;
-  margin: 3rem 0;
+  height: var(--border-width-default);
+  margin: var(--spacing-3xl) 0;
 `;
 
 export const FormHeader = styled.div`
@@ -59,8 +59,8 @@ export const FormHeader = styled.div`
   justify-content: space-between;
   align-items: flex-start;
   width: 100%;
-  max-width: 800px;
-  margin-bottom: 3rem;
+  max-width: var(--content-width-form);
+  margin-bottom: var(--spacing-3xl);
 
   ${media.handheld`
     flex-direction: column;
@@ -88,20 +88,20 @@ export const GeneralInfoSection = styled.div<InfoSectionProps>`
 
 export const SectionHeader = styled.h2`
   font-size: var(--font-size-heading-md);
-  font-weight: 700;
+  font-weight: var(--font-weight-bold);
   color: var(--color-text-primary);
-  letter-spacing: -0.025em;
+  letter-spacing: var(--letter-spacing-display);
   margin: 0;
 `;
 
 export const InfoText = styled.span`
   font-size: var(--font-size-ui);
-  line-height: 1.6;
+  line-height: var(--line-height-copy);
   color: var(--color-text-body);
 
   ul {
     list-style-type: disc;
-    margin-left: 1.25rem;
+    margin-left: var(--spacing-lg);
     margin-top: var(--spacing-sm);
   }
 `;
@@ -110,11 +110,9 @@ export const HelpText = styled(InfoText)`
   color: var(--color-text-muted);
   display: flex;
   align-items: flex-start;
-  gap: 0.75rem;
-  padding: var(--spacing-md);
-  background-color: var(--color-surface-subtle);
-  border-radius: var(--border-radius-md);
-  border: 1px solid var(--color-border-soft);
+  gap: var(--spacing-md);
+  padding: 0 0 0 var(--spacing-md);
+  border-left: var(--border-width-strong) solid var(--color-brand);
 
   i {
     color: var(--lego-red-color);
@@ -125,8 +123,8 @@ export const HelpText = styled(InfoText)`
 
 export const GroupsSection = styled.div<GroupsSectionProps>`
   display: grid;
-  grid-template-columns: 280px 1fr;
-  gap: 3rem;
+  grid-template-columns: var(--admin-sidebar-width) minmax(0, 1fr);
+  gap: var(--spacing-3xl);
   width: 100%;
 
   ${media.portrait`
@@ -139,21 +137,20 @@ export const GroupsSection = styled.div<GroupsSectionProps>`
 `;
 
 export const Sidebar = styled.div`
-  margin-bottom: var(--spacing-xl);
+  margin: var(--spacing-xl) 0 0;
+  max-width: var(--content-width-prose);
 
-  > div {
-    position: sticky;
-    top: 100px;
+  > * {
     display: flex;
     flex-direction: column;
-    gap: 1.25rem;
+    gap: var(--spacing-lg);
   }
 `;
 
 export const Applications = styled.div`
   display: flex;
   flex-direction: column;
-  gap: 2.5rem;
+  gap: var(--spacing-2xl);
 `;
 
 export const SubmitSection = styled.div`
@@ -165,7 +162,7 @@ export const SubmitSection = styled.div`
   padding: var(--spacing-xl);
   background-color: var(--color-surface-subtle);
   border-radius: var(--border-radius-lg);
-  border: 1px solid var(--color-border-soft);
+  border: var(--border-width-default) solid var(--color-border-soft);
 
   ${media.portrait`
     flex-direction: column;
@@ -175,21 +172,22 @@ export const SubmitSection = styled.div`
 
 export const StyledSpan = styled.span<StyledSpanProps>`
   color: ${(props) => (props.$red ? "var(--lego-red-color)" : "inherit")};
-  font-weight: ${(props) => (props.$bold ? "700" : "inherit")};
+  font-weight: ${(props) =>
+    props.$bold ? "var(--font-weight-bold)" : "inherit"};
 `;
 
 export const ApplicationDateInfo = styled.p`
   font-size: var(--font-size-md);
   color: var(--color-text-primary);
-  margin: 0 0 0.75rem 0;
+  margin: 0 0 var(--spacing-md) 0;
 `;
 
 export const SubmitInfo = styled.p`
   font-size: var(--font-size-sm);
   color: var(--color-text-muted);
-  line-height: 1.5;
-  margin: 0 0 0.5rem 0;
-  max-width: 500px;
+  line-height: var(--line-height-relaxed);
+  margin: 0 0 var(--spacing-sm) 0;
+  max-width: var(--content-width-short);
 `;
 
 export const NoChosenGroupsWrapper = styled.div`
@@ -197,16 +195,16 @@ export const NoChosenGroupsWrapper = styled.div`
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 4rem 2rem;
+  padding: var(--spacing-4xl) var(--spacing-xl);
   text-align: center;
   background-color: var(--color-surface-subtle);
   border-radius: var(--border-radius-lg);
-  border: 2px dashed var(--color-border-soft);
+  border: var(--border-width-emphasis) dashed var(--color-border-soft);
 `;
 
 export const NoChosenTitle = styled.h2`
   font-size: var(--font-size-heading-xs);
-  font-weight: 700;
+  font-weight: var(--font-weight-bold);
   color: var(--color-text-primary);
   margin-bottom: var(--spacing-sm);
 `;
@@ -215,7 +213,7 @@ export const NoChosenSubTitle = styled.span`
   font-size: var(--font-size-md);
   color: var(--color-text-muted);
   margin-bottom: var(--spacing-xl);
-  max-width: 300px;
+  max-width: var(--content-width-narrow);
 `;
 
 export const EditInfo = styled.div`
@@ -248,7 +246,7 @@ export const EditActions = styled.div`
 export const TimeStamp = styled.p`
   display: flex;
   align-items: center;
-  gap: 0.75rem;
+  gap: var(--spacing-md);
   font-size: var(--font-size-md);
   color: var(--color-text-body);
   margin-bottom: var(--spacing-lg);

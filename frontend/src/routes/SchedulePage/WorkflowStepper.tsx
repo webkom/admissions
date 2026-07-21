@@ -1,5 +1,6 @@
 import React from "react";
-import { Lock } from "lucide-react";
+import { Check, Lock } from "lucide-react";
+import { iconSizes } from "src/styles/designTokens";
 import cn from "src/utils/cn";
 import type { TabType, WorkflowStepDefinition } from "./types";
 
@@ -9,34 +10,6 @@ interface WorkflowStepperProps {
   onChange: (key: TabType) => void;
 }
 
-const StatusMarker: React.FC<{
-  tone: WorkflowStepDefinition["tone"];
-  active: boolean;
-}> = ({ tone, active }) => {
-  if (tone === "locked") {
-    return (
-      <Lock
-        size={10}
-        aria-hidden="true"
-        className="flex-none text-text-subtle"
-      />
-    );
-  }
-  return (
-    <span
-      aria-hidden="true"
-      className={cn(
-        "h-2 w-2 flex-none rounded-full",
-        tone === "success"
-          ? "bg-success"
-          : tone === "active" || active
-            ? "bg-brand animate-pulse-brand"
-            : "border border-border-quiet",
-      )}
-    />
-  );
-};
-
 const WorkflowStepper: React.FC<WorkflowStepperProps> = ({
   steps,
   activeKey,
@@ -44,73 +17,88 @@ const WorkflowStepper: React.FC<WorkflowStepperProps> = ({
 }) => (
   <nav
     aria-label="Steg i intervjuplanleggingen"
-    className="flex w-full overflow-x-auto border-b-2 border-border bg-surface-base px-2"
+    className="w-full bg-surface-base px-2 py-3"
   >
-    {steps.map((step, idx) => {
-      const active = activeKey === step.key;
-      const Icon = step.icon;
-      return (
-        <button
-          key={step.key}
-          type="button"
-          disabled={step.locked}
-          aria-current={active ? "step" : undefined}
-          onClick={() => onChange(step.key)}
-          className={cn(
-            "group -mb-0.5 flex min-w-fit items-center gap-2 border-b-2 px-4 py-3 text-left transition-colors duration-100",
-            active
-              ? "border-brand text-brand"
-              : step.locked
-                ? "cursor-not-allowed border-transparent text-text-disabled"
-                : "border-transparent text-text-muted hover:border-border-quiet hover:text-text-primary",
-          )}
-        >
-          <span
-            className={cn(
-              "flex h-6 w-6 flex-none items-center justify-center transition-colors duration-100",
-              active
-                ? "text-brand"
-                : step.locked
-                  ? "text-text-disabled"
-                  : step.tone === "success"
-                    ? "text-success"
-                    : "text-text-muted group-hover:text-text-primary",
-            )}
+    <ol className="m-0 flex list-none flex-col gap-2 p-0 sm:flex-row sm:gap-0">
+      {steps.map((step, idx) => {
+        const active = activeKey === step.key;
+        return (
+          <li
+            key={step.key}
+            className="flex min-w-0 flex-1 items-start sm:items-center"
           >
-            <Icon size={14} aria-hidden="true" />
-          </span>
-          <div className="min-w-0">
-            <h3
+            <button
+              type="button"
+              disabled={step.locked}
+              aria-current={active ? "step" : undefined}
+              onClick={() => onChange(step.key)}
               className={cn(
-                "m-0 whitespace-nowrap text-sm font-semibold transition-colors",
-                step.locked
-                  ? "text-text-disabled"
-                  : active
-                    ? "text-brand"
-                    : "text-inherit",
+                "group flex min-h-12 min-w-0 items-center gap-3 rounded-md px-2 py-2 text-left transition-colors duration-150",
+                "focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-focus",
+                active
+                  ? "bg-surface-subtle text-text-primary"
+                  : step.locked
+                    ? "cursor-not-allowed text-text-disabled"
+                    : "text-text-muted hover:bg-surface-subtle hover:text-text-primary",
               )}
             >
-              {idx + 1}. {step.title}
-            </h3>
-            <span className="mt-1 inline-flex items-center gap-1">
-              <StatusMarker tone={step.tone} active={active} />
               <span
                 className={cn(
-                  "text-tiny font-medium tabular-nums",
-                  step.tone === "success"
-                    ? "text-success"
-                    : step.tone === "active" || active
-                      ? "text-brand"
-                      : "text-text-subtle",
+                  "relative z-10 flex h-8 w-8 flex-none items-center justify-center rounded-full border text-detail font-bold tabular-nums transition-colors",
+                  active
+                    ? "border-brand bg-brand text-white"
+                    : step.tone === "success"
+                      ? "border-success bg-success text-white"
+                      : step.locked
+                        ? "border-border-soft bg-surface-muted text-text-disabled"
+                        : "border-border-muted bg-surface-base text-text-muted",
                 )}
               >
-                {step.status}
+                {step.tone === "success" ? (
+                  <Check
+                    size={iconSizes.compact}
+                    strokeWidth={3}
+                    aria-hidden="true"
+                  />
+                ) : step.locked ? (
+                  <Lock size={iconSizes.tiny} aria-hidden="true" />
+                ) : (
+                  idx + 1
+                )}
               </span>
-            </span>
-          </div>
-        </button>
-      );
-    })}
+              <span className="min-w-0">
+                <span className="block text-sm font-semibold leading-tight">
+                  {step.title}
+                </span>
+                <span
+                  className={cn(
+                    "mt-0.5 block text-tiny font-medium tabular-nums",
+                    active
+                      ? "text-text-muted"
+                      : step.tone === "warning"
+                        ? "text-amber-700"
+                        : "text-text-subtle",
+                  )}
+                >
+                  {step.status}
+                </span>
+              </span>
+            </button>
+            {idx < steps.length - 1 && (
+              <span
+                aria-hidden="true"
+                className={cn(
+                  "mx-2 hidden h-px min-w-4 flex-1 sm:block",
+                  step.tone === "success"
+                    ? "bg-success-border"
+                    : "bg-border-soft",
+                )}
+              />
+            )}
+          </li>
+        );
+      })}
+    </ol>
   </nav>
 );
 

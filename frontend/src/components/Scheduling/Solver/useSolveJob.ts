@@ -1,18 +1,44 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { isAxiosError } from "axios";
 
-import { apiClient } from "../../../utils/callApi";
 import {
   formatApiError,
   hasSchedule,
-  pollSolveJob,
   solveFailureMessage,
   type SolveJob,
   type SolveResponse,
 } from "./solverHelpers";
 import djangoData from "src/utils/djangoData";
+import { createSolveJobLifecycle } from "./solveJobLifecycle";
+
+interface StoredSolveJob {
+  jobId: string;
+  baseRevision: string | null;
+}
+
+const parseStoredSolveJob = (value: string): StoredSolveJob => {
+  try {
+    const parsed = JSON.parse(value) as Partial<StoredSolveJob>;
+    if (typeof parsed.jobId === "string") {
+      return {
+        jobId: parsed.jobId,
+        baseRevision:
+          typeof parsed.baseRevision === "string" ? parsed.baseRevision : null,
+      };
+    }
+  } catch {
+    return { jobId: value, baseRevision: null };
+  }
+  return { jobId: value, baseRevision: null };
+};
 
 export function useSolveJob(admissionSlug: string) {
+  const queryClient = useQueryClient();
+  const lifecycle = useMemo(
+    () => createSolveJobLifecycle(admissionSlug, queryClient),
+    [admissionSlug, queryClient],
+  );
   const solveJobKey = `admissions.solveJob.${djangoData.user.id ?? "unknown"}.${admissionSlug}`;
   const legacySolveJobKey = `admissions.solveJob.${admissionSlug}`;
 
@@ -22,7 +48,11 @@ export function useSolveJob(admissionSlug: string) {
   const [planRevealed, setPlanRevealed] = useState(() =>
     hasSchedule(result?.status),
   );
+  const [activeJob, setActiveJob] = useState<SolveJob | null>(null);
   const [elapsedMs, setElapsedMs] = useState(0);
+  const [restoredDraftBaseRevision, setRestoredDraftBaseRevision] = useState<
+    string | null | undefined
+  >(undefined);
 
   const solveRunRef = useRef(0);
   const solveJobIdRef = useRef<string | null>(null);
@@ -51,39 +81,75 @@ export function useSolveJob(admissionSlug: string) {
   }, [result]);
 
   useEffect(() => {
-    if (!loading) {
+    if (
+      !loading ||
+      !activeJob ||
+      (activeJob.status !== "PENDING" && activeJob.status !== "RUNNING")
+    ) {
       setElapsedMs(0);
       return;
     }
-    const start = performance.now();
-    const tick = window.setInterval(() => {
-      setElapsedMs(performance.now() - start);
-    }, 100);
+    const phaseStartedAt = Date.parse(
+      activeJob.status === "RUNNING" && activeJob.started_at
+        ? activeJob.started_at
+        : activeJob.created_at,
+    );
+    const updateElapsed = () => {
+      setElapsedMs(Math.max(0, Date.now() - phaseStartedAt));
+    };
+    updateElapsed();
+    const tick = window.setInterval(updateElapsed, 100);
     return () => window.clearInterval(tick);
-  }, [loading]);
+  }, [
+    activeJob?.created_at,
+    activeJob?.started_at,
+    activeJob?.status,
+    loading,
+  ]);
 
   const clearStoredJob = useCallback(() => {
+    setRestoredDraftBaseRevision(undefined);
     try {
       window.sessionStorage.removeItem(solveJobKey);
     } catch {
       return;
     }
   }, [solveJobKey]);
+  const consumeRestoredDraft = useCallback(
+    () => setRestoredDraftBaseRevision(undefined),
+    [],
+  );
+  const clearAfterAccessFailure = useCallback(
+    (showError = true) => {
+      solveJobIdRef.current = null;
+      lastGoodResultRef.current = null;
+      setActiveJob(null);
+      setLoading(false);
+      setResult(null);
+      setPlanRevealed(false);
+      setError(
+        showError ? "Tilgangen til intervjuplanleggingen er fjernet." : "",
+      );
+      clearStoredJob();
+    },
+    [clearStoredJob],
+  );
 
   const reset = useCallback(() => {
     const jobId = solveJobIdRef.current;
     solveRunRef.current += 1;
     solveJobIdRef.current = null;
     lastGoodResultRef.current = null;
+    setActiveJob(null);
     setLoading(false);
     setResult(null);
     setError("");
     setPlanRevealed(false);
     clearStoredJob();
     if (jobId) {
-      void apiClient.delete(`/solve/${jobId}/`).catch(() => undefined);
+      void lifecycle.cancel(jobId);
     }
-  }, [clearStoredJob]);
+  }, [clearStoredJob, lifecycle]);
 
   const restorePreviousResult = () => {
     const previous = lastGoodResultRef.current;
@@ -116,56 +182,90 @@ export function useSolveJob(admissionSlug: string) {
     restorePreviousResult();
   };
 
-  const settleJob = async (job: SolveJob, runId: number) => {
-    const outcome = await pollSolveJob(
+  const settleJob = async (
+    job: SolveJob,
+    runId: number,
+    beforeApply?: (finishedJob: SolveJob) => void,
+    applyResult = true,
+  ) => {
+    const outcome = await lifecycle.poll(
       job,
       () => solveRunRef.current !== runId,
+      setActiveJob,
     );
-    if (outcome.kind === "stale") return;
-    if (outcome.kind === "timeout") {
-      const jobId = solveJobIdRef.current;
+    if (outcome.kind === "stale") return null;
+    if (outcome.kind === "access-failure") {
+      clearAfterAccessFailure();
+      return "access-failure" as const;
+    }
+    if (outcome.kind === "missing") {
       clearStoredJob();
       solveJobIdRef.current = null;
-      if (jobId) {
-        void apiClient.delete(`/solve/${jobId}/`).catch(() => undefined);
-      }
-      setError(
-        "Solveren svarer ikke i tide. Prøv igjen, eller sjekk at " +
-          "solver-worker kjører.",
-      );
+      setActiveJob(null);
+      setError("Solver-jobben finnes ikke lenger. Kjør planen på nytt.");
       restorePreviousResult();
-      return;
+      return null;
     }
-    if (solveRunRef.current !== runId) return;
     clearStoredJob();
-    applyFinishedJob(outcome.job);
+    beforeApply?.(outcome.job);
+    if (applyResult) {
+      applyFinishedJob(outcome.job);
+    } else if (outcome.job.status === "ERROR") {
+      setError(outcome.job.error || "Solveren feilet under kjøring.");
+    } else if (outcome.job.result && !hasSchedule(outcome.job.result.status)) {
+      setError(solveFailureMessage(outcome.job.result));
+    }
+    return outcome.job.result;
   };
 
   useEffect(() => {
-    let storedJobId: string | null = null;
+    let storedJob: StoredSolveJob | null = null;
     try {
-      storedJobId = window.sessionStorage.getItem(solveJobKey);
+      const storedValue = window.sessionStorage.getItem(solveJobKey);
+      if (storedValue) storedJob = parseStoredSolveJob(storedValue);
     } catch {
       return;
     }
-    if (!storedJobId) return;
+    if (!storedJob) return;
     const runId = ++solveRunRef.current;
     (async () => {
       try {
-        const { data: job } = await apiClient.get<SolveJob>(
-          `/solve/${storedJobId}/`,
+        const readOutcome = await lifecycle.read(
+          storedJob.jobId,
+          () => solveRunRef.current !== runId,
         );
-        if (solveRunRef.current !== runId) return;
+        if (readOutcome.kind === "stale") return;
+        if (readOutcome.kind === "access-failure") {
+          clearAfterAccessFailure();
+          return;
+        }
+        if (readOutcome.kind === "missing") {
+          clearStoredJob();
+          setResult(null);
+          setPlanRevealed(false);
+          setError("");
+          return;
+        }
+        const { job } = readOutcome;
+        setActiveJob(job);
         if (job.status === "PENDING" || job.status === "RUNNING") {
           solveJobIdRef.current = job.job_id;
           setLoading(true);
-          await settleJob(job, runId);
+          await settleJob(job, runId, (finishedJob) => {
+            if (finishedJob.result && hasSchedule(finishedJob.result.status)) {
+              setRestoredDraftBaseRevision(storedJob.baseRevision);
+            }
+          });
         } else {
           clearStoredJob();
+          if (job.result && hasSchedule(job.result.status)) {
+            setRestoredDraftBaseRevision(storedJob.baseRevision);
+          }
           applyFinishedJob(job);
         }
       } catch {
-        if (solveRunRef.current === runId) clearStoredJob();
+        if (solveRunRef.current !== runId) return;
+        clearStoredJob();
       } finally {
         if (solveRunRef.current === runId) {
           setLoading(false);
@@ -173,50 +273,77 @@ export function useSolveJob(admissionSlug: string) {
         }
       }
     })();
-  }, [solveJobKey]);
+  }, [clearAfterAccessFailure, clearStoredJob, lifecycle, solveJobKey]);
 
   const cancel = async () => {
     const jobId = solveJobIdRef.current;
     solveRunRef.current += 1;
     solveJobIdRef.current = null;
+    setActiveJob(null);
     setLoading(false);
-    restorePreviousResult();
     clearStoredJob();
     if (jobId) {
-      try {
-        await apiClient.delete(`/solve/${jobId}/`);
-      } catch {
-        clearStoredJob();
+      const outcome = await lifecycle.cancel(jobId);
+      if (outcome.kind === "access-failure") {
+        clearAfterAccessFailure();
+        return;
       }
     }
+    restorePreviousResult();
   };
 
-  const solve = async (payload: unknown) => {
+  const solve = async (
+    payload: unknown,
+    baseRevision: string | null,
+    { applyResult = true }: { applyResult?: boolean } = {},
+  ) => {
     const runId = ++solveRunRef.current;
+    setRestoredDraftBaseRevision(undefined);
+    setActiveJob(null);
     setLoading(true);
     setError("");
-    setResult(null);
+    if (applyResult) setResult(null);
 
     try {
-      const { data: created } = await apiClient.post<SolveJob>(
-        "/solve/",
+      const requestOutcome = await lifecycle.request(
         payload,
+        () => solveRunRef.current !== runId,
       );
-      solveJobIdRef.current = created.job_id;
-      try {
-        window.sessionStorage.setItem(solveJobKey, created.job_id);
-      } catch {
-        clearStoredJob();
+      if (requestOutcome.kind === "stale") return;
+      if (requestOutcome.kind === "access-failure") {
+        clearAfterAccessFailure();
+        return "access-failure" as const;
       }
-      await settleJob(created, runId);
+      const { job: created } = requestOutcome;
+      setActiveJob(created);
+      solveJobIdRef.current = created.job_id;
+      if (applyResult) {
+        try {
+          window.sessionStorage.setItem(
+            solveJobKey,
+            JSON.stringify({ jobId: created.job_id, baseRevision }),
+          );
+        } catch {
+          clearStoredJob();
+        }
+      }
+      const settleOutcome = await settleJob(
+        created,
+        runId,
+        undefined,
+        applyResult,
+      );
+      if (settleOutcome === "access-failure") return settleOutcome;
+      return settleOutcome;
     } catch (err) {
       if (solveRunRef.current !== runId) return;
-      restorePreviousResult();
+      if (applyResult) restorePreviousResult();
       if (isAxiosError(err) && err.response) {
         setError(formatApiError(err.response.data));
       } else {
         setError("Kunne ikke koble til serveren. Er backend oppe?");
       }
+      return null;
     } finally {
       if (solveRunRef.current === runId) {
         setLoading(false);
@@ -234,6 +361,9 @@ export function useSolveJob(admissionSlug: string) {
     planRevealed,
     setPlanRevealed,
     elapsedMs,
+    jobStatus: activeJob?.status ?? null,
+    restoredDraftBaseRevision,
+    consumeRestoredDraft,
     solve,
     cancel,
     reset,

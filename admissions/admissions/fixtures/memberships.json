@@ -5,7 +5,16 @@
   "fields": {
     "user": "40667e62-e5fc-4f97-83f0-f5d6b4326652",
     "group": "7823814e-7bb2-4e51-9653-03f27216f2be",
-    "role": "leader"
+    "role": "member"
+  }
+},
+{
+  "model": "admissions.membership",
+  "pk": "ab3c4425-6d3a-4b1f-9e29-2e720d58cf04",
+  "fields": {
+    "user": "a8ef4e3d-9e1f-44f3-8ed2-8d1d2d147404",
+    "group": "7823814e-7bb2-4e51-9653-03f27216f2be",
+    "role": "member"
   }
 }
 ]

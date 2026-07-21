@@ -8,9 +8,9 @@
   content: "";
   position: absolute;
   left: 0;
-  bottom: -3px;
+  bottom: calc(-1 * var(--spacing-xs));
   display: block;
-  height: 2px;
+  height: var(--underline-thickness);
   width: 0;
   background: var(--color-brand);
   transition: width var(--easing-fast);

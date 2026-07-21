@@ -1,14 +1,13 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import {
-  BarChart3,
   CalendarCheck,
   CalendarRange,
   Check,
   ChevronLeft,
   ChevronRight,
   LayoutPanelTop,
-  ListChecks,
   Shield,
+  Sparkles,
   X,
 } from "lucide-react";
 import cn from "src/utils/cn";
@@ -45,42 +44,26 @@ const ADMIN_STEPS: WizardStep[] = [
   },
   {
     icon: LayoutPanelTop,
-    label: "Rammer",
-    title: "Start med å sette opp rammene",
+    label: "Grunnlag",
+    title: "Sett rammene og samle tilgjengelighet",
     description:
-      "Velg dager, klokkeslett, intervjulengde og pauser. Intervjuerne kan bare velge tidene du åpner.",
+      "Velg intervjutider og følg opp hvem som har svart. Tilgjengelighet er det eneste som må være klart før første planutkast.",
     target: "config",
   },
   {
-    icon: CalendarRange,
-    label: "Tilgjengelighet",
-    title: "Alle registrerer når de kan",
+    icon: Sparkles,
+    label: "Planutkast",
+    title: "Generer først, kontroller etterpå",
     description:
-      "Hver person markerer tidene de kan delta. Du følger dekningen under «Fordeling».",
-    target: "my-availability",
-  },
-  {
-    icon: BarChart3,
-    label: "Fordeling",
-    title: "Sjekk at dekningen er god nok",
-    description:
-      "Se dekning per tidsluke og hvem som fortsatt mangler tilgjengelighet.",
-    target: "heatmap",
-  },
-  {
-    icon: ListChecks,
-    label: "Intervjuforslag",
-    title: "Generer og distribuer planen",
-    description:
-      "Lag et forslag fra registrert tilgjengelighet. Kontroller resultatet før du publiserer.",
+      "Lag et internt forslag. Intervjuerne ser bare kandidatene de er foreslått til, og solveren reparerer eventuelle inhabiliteter med færrest mulig endringer.",
     target: "solver",
   },
   {
     icon: CalendarCheck,
-    label: "Intervjuplan",
-    title: "Følg opp og juster ved behov",
+    label: "Publisering",
+    title: "Publiser først når kontrollen er ferdig",
     description:
-      "Se den publiserte planen, juster paneler og styr når kandidatnavn blir synlige.",
+      "Se over utkastet og publiser endelige tider. Etterpå bruker du samme side til invitasjoner og oppfølging.",
     target: "plan",
   },
 ];
@@ -88,10 +71,10 @@ const ADMIN_STEPS: WizardStep[] = [
 const MEMBER_STEPS: WizardStep[] = [
   {
     icon: CalendarRange,
-    label: "Tilgjengelighet",
-    title: "Marker når du kan sitte i intervju",
+    label: "Mine opplysninger",
+    title: "Lagre tider, og kontroller en kort kandidatliste senere",
     description:
-      "Marker tidene du faktisk kan sitte i intervju. Dette er det viktigste du gjør før opptaksansvarlig lager planen.",
+      "Først markerer du når du kan sitte i intervju. Når et internt utkast finnes, vises bare kandidatene som er foreslått til deg—uten tidspunkt.",
     target: "my-availability",
   },
   {
@@ -99,7 +82,7 @@ const MEMBER_STEPS: WizardStep[] = [
     label: "Intervjuplan",
     title: "Se intervjuene dine når planen er klar",
     description:
-      "Når planen er distribuert, ser du intervjuene dine under «Intervjuplan». Der kan du eksportere til kalender og markere eventuell interessekonflikt når kandidatnavn er synlige.",
+      "Når kontrollen er ferdig og planen publiseres, ser du endelige tider under «Intervjuplan». Planen er skrivebeskyttet.",
     target: "plan",
   },
 ];

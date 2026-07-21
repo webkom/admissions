@@ -4,7 +4,43 @@ from six.moves.urllib.parse import urljoin
 from social_core.backends.oauth import BaseOAuth2
 
 from admissions.admissions import constants
-from admissions.admissions.models import Group, Membership
+from admissions.admissions.models import Group, LegoUser, Membership
+
+VALID_MEMBERSHIP_ROLES = frozenset(role for role, _label in constants.ROLES)
+
+
+def _parse_lego_id(value):
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, int):
+        return value if value > 0 else None
+    if isinstance(value, str) and value.isdigit():
+        parsed = int(value)
+        return parsed if parsed > 0 else None
+    return None
+
+
+def use_existing_lego_user(details, response, uid=None, user=None, **kwargs):
+    """Reuse a fixture/local user before social-auth tries to create one."""
+    if user is not None:
+        return {"user": user}
+
+    lego_id = _parse_lego_id(
+        details.get("lego_id") if isinstance(details, dict) else None
+    )
+    if lego_id is None:
+        lego_id = (
+            _parse_lego_id(response.get("id"))
+            if isinstance(response, dict)
+            else None
+        )
+    if lego_id is None:
+        lego_id = _parse_lego_id(uid)
+    if lego_id is None:
+        return {}
+
+    existing_user = LegoUser.objects.filter(lego_id=lego_id).first()
+    return {"user": existing_user} if existing_user is not None else {}
 
 
 class LegoOAuth2(BaseOAuth2):
@@ -130,55 +166,113 @@ class LegoOAuth2(BaseOAuth2):
 
 
 def _parse_group_data(response):
-    """This will parse group data,
-    and return a [(group, membership),] structure"""
-    user_memberships = response["memberships"]
-    abakus_groups = response["abakusGroups"]
+    if not isinstance(response, dict):
+        return None
+    raw_groups = response.get("abakusGroups")
+    raw_memberships = response.get("memberships")
+    if not isinstance(raw_groups, list) or not isinstance(raw_memberships, list):
+        return None
+    groups_by_id = {}
+    for group in raw_groups:
+        if not isinstance(group, dict):
+            return None
+        group_id = _parse_lego_id(group.get("id"))
+        if group_id is None:
+            return None
+        if group_id in groups_by_id:
+            return None
+        groups_by_id[group_id] = group
+
     group_data = []
-    for membership in user_memberships:
-        group = list(
-            filter(
-                lambda abakusGroup: abakusGroup["id"] == membership["abakusGroup"],
-                abakus_groups,
-            )
-        )[0]
-        group_data += [(group, membership)]
+    roles_by_group = {}
+    for membership in raw_memberships:
+        if not isinstance(membership, dict):
+            return None
+        role = membership.get("role")
+        if role not in VALID_MEMBERSHIP_ROLES:
+            return None
+        group_id = _parse_lego_id(membership.get("abakusGroup"))
+        group = groups_by_id.get(group_id)
+        if group is None:
+            return None
+        previous_role = roles_by_group.get(group_id)
+        if previous_role is not None and previous_role != role:
+            return None
+        roles_by_group[group_id] = role
+        group_data.append((group, membership))
     return group_data
 
 
 def update_custom_user_details(strategy, details, user=None, *args, **kwargs):
-    """This will run after the social auth pipelies succeeds"""
     if not user:
         return
 
-    group_data = _parse_group_data(kwargs["response"])
+    response = kwargs.get("response")
+    if not isinstance(response, dict):
+        response = {}
+    group_data = _parse_group_data(response)
+    if group_data is None:
+        group_data = []
+    upstream_group_ids = set()
+    for group, membership in group_data:
+        if membership.get("role") not in VALID_MEMBERSHIP_ROLES:
+            continue
+        try:
+            upstream_group_ids.add(int(group["id"]))
+        except (KeyError, TypeError, ValueError):
+            continue
+    groups_by_lego_id = Group.objects.in_bulk(
+        upstream_group_ids,
+        field_name="lego_id",
+    )
+
     with transaction.atomic():
-        # Remove old memberships before creating the new ones
         Membership.objects.filter(user=user).delete()
         user.is_staff = False
+        roles_by_group = {}
+        ambiguous_groups = set()
         for group, membership in group_data:
-            # Leaders of certain groups have staff_permission, which allows them to manage admissions
-            if (
-                group["name"] in constants.STAFF_LEADER_GROUPS
-                and membership["role"] == constants.LEADER
-            ):
-                user.is_staff = True
-
+            role = membership.get("role")
+            if role not in VALID_MEMBERSHIP_ROLES:
+                continue
             try:
-                group = Group.objects.get(lego_id=group["id"])
-            except Group.DoesNotExist:
-                # Do not save the membership if the group is not part of this admission
+                group_id = int(group["id"])
+            except (KeyError, TypeError, ValueError):
+                continue
+            local_group = groups_by_lego_id.get(group_id)
+            if local_group is None:
                 continue
 
-            # For all other group memebers their role is set
-            # This is used later on when we check if they are Leader or Recruitment
-            Membership.objects.create(user=user, group=group, role=membership["role"])
+            previous_membership = roles_by_group.get(local_group.pk)
+            if previous_membership is not None and previous_membership[1] != role:
+                ambiguous_groups.add(local_group.pk)
+            else:
+                roles_by_group[local_group.pk] = (local_group, role)
 
-        user.save()
+        memberships = []
+        user.is_staff = False
+        for group_id, (local_group, role) in roles_by_group.items():
+            if group_id in ambiguous_groups:
+                continue
+            if (
+                local_group.name in constants.STAFF_LEADER_GROUPS
+                and role == constants.LEADER
+            ):
+                user.is_staff = True
+            memberships.append(Membership(user=user, group=local_group, role=role))
 
-    user.profile_picture = kwargs["response"]["profilePicture"]
-    # LEGO reports gender as "male"/"female"/"other"; mirror it so the interview
-    # solver can match panel gender. "gender" is a single word so it is not
-    # camel-cased by LEGO's API.
-    user.gender = kwargs["response"].get("gender") or ""
-    user.save()
+        Membership.objects.bulk_create(memberships)
+        profile_picture = response.get("profilePicture")
+        gender = response.get("gender")
+        profile_picture_limit = user._meta.get_field("profile_picture").max_length
+        gender_limit = user._meta.get_field("gender").max_length
+        user.profile_picture = (
+            profile_picture
+            if isinstance(profile_picture, str)
+            and len(profile_picture) <= profile_picture_limit
+            else ""
+        )
+        user.gender = (
+            gender if isinstance(gender, str) and len(gender) <= gender_limit else ""
+        )
+        user.save(update_fields=["is_staff", "profile_picture", "gender"])

@@ -74,39 +74,39 @@ const Container = styled.div`
   display: flex;
   justify-content: center;
   align-items: center;
-  min-height: 50vh;
+  min-height: var(--error-state-min-height);
 `;
 
 const Snap = styled.div`
-  border: 1px red dashed;
+  border: var(--border-width-default) var(--color-danger) dashed;
   display: flex;
   justify-content: center;
   align-items: center;
-  margin: 10px;
+  margin: var(--spacing-sm);
   padding: var(--spacing-xl);
 
   img {
-    height: 100px;
-    width: 100px;
+    height: var(--error-illustration-size);
+    width: var(--error-illustration-size);
   }
 `;
 
 const Message = styled.div`
-  margin-left: 20px;
+  margin-left: var(--spacing-lg);
 `;
 
 const RetryButton = styled.button`
-  border: 1px solid currentcolor;
+  border: var(--border-width-default) solid currentcolor;
   border-radius: var(--border-radius-md);
   background: transparent;
-  padding: 0.5rem 0.75rem;
+  padding: var(--spacing-sm) var(--spacing-md);
   color: inherit;
   font: inherit;
-  font-weight: 700;
+  font-weight: var(--font-weight-bold);
   cursor: pointer;
 
   &:focus-visible {
-    outline: 2px solid currentcolor;
-    outline-offset: 2px;
+    outline: var(--focus-ring-width) solid currentcolor;
+    outline-offset: var(--focus-ring-offset);
   }
 `;

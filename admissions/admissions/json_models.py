@@ -19,6 +19,7 @@ class DataType(str, Enum):
     TEXTAREA = "textarea"
     NUMBERINPUT = "numberinput"
     PHONEINPUT = "phoneinput"
+    CHECKBOX = "checkbox"
 
 
 ####################################
@@ -57,8 +58,17 @@ class PhoneInputModel(BaseInputModel):
     type: Literal[DataType.PHONEINPUT]
 
 
+class CheckboxInputModel(BaseInputModel):
+    type: Literal[DataType.CHECKBOX]
+
+
 InputModelUnion = Union[
-    TextModel, TextInputModel, TextAreaModel, NumberInputModel, PhoneInputModel
+    TextModel,
+    TextInputModel,
+    TextAreaModel,
+    NumberInputModel,
+    PhoneInputModel,
+    CheckboxInputModel,
 ]
 
 
@@ -79,7 +89,7 @@ class InputModelList(RootModel):
 ##      INPUT RESPONSE MODEL      ##
 ####################################
 class InputResponseModel(RootModel):
-    root: Dict[str, str]
+    root: Dict[str, Union[str, bool]]
 
 
 ####################################
@@ -99,4 +109,13 @@ class PhoneNumberValidator(Validator):
             raise ValueError("Invalid UUID")
 
 
-validators = {DataType.PHONEINPUT: [PhoneNumberValidator]}
+class CheckboxValidator(Validator):
+    def validate(self, model, value):
+        if not isinstance(value, bool):
+            raise ValueError("Expected boolean value.")
+
+
+validators = {
+    DataType.PHONEINPUT: [PhoneNumberValidator],
+    DataType.CHECKBOX: [CheckboxValidator],
+}

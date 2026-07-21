@@ -1,5 +1,5 @@
 import * as React from "react";
-import { CalendarRange } from "lucide-react";
+import { CalendarRange, Check } from "lucide-react";
 import {
   buildBlockTimeChunks,
   formatDateHeader,
@@ -7,7 +7,7 @@ import {
   makeSlotKey,
 } from "../scheduleUtils";
 import cn from "src/utils/cn";
-import { calendarGrid } from "src/styles/designTokens";
+import { iconSizes, iconStrokeWidths } from "src/styles/designTokens";
 import {
   SchedulePanel,
   SchedulePanelHeader,
@@ -16,6 +16,13 @@ import {
   MetaValue,
   SaveButton,
 } from "../ui";
+import ScheduleGridFrame, {
+  ScheduleDayHeader,
+  ScheduleGridLegendItem,
+  ScheduleBlockCell,
+  ScheduleSlotSegments,
+  ScheduleTimeLabel,
+} from "./ScheduleGridFrame";
 
 interface TimeSchedulerProps {
   enabledSlots?: Set<string>;
@@ -187,135 +194,124 @@ const TimeScheduler: React.FC<TimeSchedulerProps> = ({
     }
   };
 
-  const columns = dates.length + 1;
-
+  const selectedBlockCount = React.useMemo(
+    () =>
+      dates.reduce(
+        (total, date) =>
+          total +
+          chunks.filter((chunk) =>
+            chunk.some(
+              (minute) =>
+                (!enabledSlots ||
+                  enabledSlots.has(makeSlotKey(date, minute))) &&
+                selectedSlots.has(makeSlotKey(date, minute)),
+            ),
+          ).length,
+        0,
+      ),
+    [chunks, dates, enabledSlots, selectedSlots],
+  );
   return (
-    <SchedulePanel className="select-none">
+    <SchedulePanel className="select-none !overflow-visible">
       <SchedulePanelHeader
         icon={CalendarRange}
-        title="Når kan du intervjue? Velg flest mulig!"
-        description="Klikk og dra. Grå ruter er stengt."
+        title="Når kan du intervjue?"
+        description="Velg hele intervjublokker. Hver blokk viser de enkelte intervjutidene som små streker."
         actions={
           <div className="flex flex-wrap gap-1.5">
-            <LegendItem label="Valgt" variant="selected" />
-            <LegendItem label="Ledig" variant="open" />
-            <LegendItem label="Stengt" variant="disabled" />
+            <ScheduleGridLegendItem
+              label="Valgt"
+              swatchClassName="border-brand-activeBorder bg-brand-tint"
+            />
+            <ScheduleGridLegendItem
+              label="Ledig"
+              swatchClassName="border-border bg-surface-base"
+            />
+            <ScheduleGridLegendItem
+              label="Stengt"
+              swatchClassName="border-border-soft bg-surface-neutral [background-image:var(--pattern-unavailable)]"
+            />
           </div>
         }
       />
 
       <SchedulePanelBody>
-        <div className="min-w-0 overflow-x-auto rounded-lg border border-border bg-surface-muted p-3">
-          <div
-            className="grid touch-auto gap-1"
-            style={{
-              gridTemplateColumns: `${calendarGrid.timeColumnWidth}px repeat(${columns - 1}, minmax(${calendarGrid.dayColumnMinWidth}px, 1fr))`,
-              minWidth: `max(${calendarGrid.minimumWidth}px, ${(columns - 1) * calendarGrid.dayColumnMinWidth + calendarGrid.timeColumnWidth}px)`,
-            }}
-          >
-            <div />
+        <ScheduleGridFrame dates={dates}>
+          <div />
 
-            {dates.map((date) => {
-              const { weekday, dayMonth } = formatDateHeader(date);
-              return (
-                <div
-                  key={date}
-                  className={cn(
-                    "flex min-h-9 items-center justify-center rounded-md border border-border bg-surface-base text-detail font-semibold text-text-muted",
-                    "flex-col gap-0.5",
-                  )}
-                >
-                  <span>{weekday}</span>
-                  <span className="block text-label font-semibold text-text-subtle">
-                    {dayMonth}
-                  </span>
-                </div>
-              );
-            })}
+          {dates.map((date) => (
+            <ScheduleDayHeader key={date} date={date} />
+          ))}
 
-            {chunks.map((chunk, chunkIdx) => (
-              <React.Fragment key={chunkIdx}>
-                <div className="flex flex-col items-end justify-center pr-2">
-                  <div className="text-label font-semibold tabular-nums text-text-subtle">
-                    {formatMinutes(chunk[0])}
-                  </div>
-                  {chunk.length > 1 && (
-                    <div className="text-nano font-medium leading-none tabular-nums text-text-disabled">
-                      til{" "}
-                      {formatMinutes(chunk[chunk.length - 1] + sessionDuration)}
-                    </div>
-                  )}
-                </div>
+          {chunks.map((chunk, chunkIdx) => (
+            <React.Fragment key={chunkIdx}>
+              <ScheduleTimeLabel
+                startMinute={chunk[0]}
+                endMinute={chunk[chunk.length - 1] + sessionDuration}
+                showEnd={chunk.length > 1}
+              />
 
-                {dates.map((date) => {
-                  const enabledInChunk = chunk.filter((m) =>
-                    isSlotEnabled(date, m),
+              {dates.map((date) => {
+                const enabledInChunk = chunk.filter((m) =>
+                  isSlotEnabled(date, m),
+                );
+                const isAnyEnabled = enabledInChunk.length > 0;
+                const isSelected =
+                  isAnyEnabled &&
+                  enabledInChunk.some((m) =>
+                    selectedSlots.has(makeSlotKey(date, m)),
                   );
-                  const isAnyEnabled = enabledInChunk.length > 0;
-                  const isSelected =
-                    isAnyEnabled &&
-                    enabledInChunk.some((m) =>
-                      selectedSlots.has(makeSlotKey(date, m)),
-                    );
-                  const { weekday, dayMonth } = formatDateHeader(date);
-                  const cellLabel = `${weekday} ${dayMonth} ${formatMinutes(
-                    chunk[0],
-                  )}–${formatMinutes(chunk[chunk.length - 1] + sessionDuration)}`;
+                const { weekday, dayMonth } = formatDateHeader(date);
+                const cellLabel = `${weekday} ${dayMonth} ${formatMinutes(
+                  chunk[0],
+                )}–${formatMinutes(chunk[chunk.length - 1] + sessionDuration)}`;
 
-                  return (
-                    <div
-                      key={`${date}-${chunkIdx}`}
-                      role="button"
-                      tabIndex={isAnyEnabled ? 0 : -1}
-                      aria-pressed={isSelected}
-                      aria-disabled={!isAnyEnabled}
-                      aria-label={cellLabel}
-                      onPointerDown={(e) => handlePointerDown(e, date, chunk)}
-                      onPointerEnter={() => handlePointerEnter(date, chunk)}
-                      onKeyDown={(e) => handleCellKeyDown(e, date, chunk)}
-                      className={cn(
-                        "group relative flex min-h-11 w-full flex-col items-center justify-center gap-0.5 rounded-md border p-1.5 transition-all duration-100",
-                        "focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-focus",
-                        !isAnyEnabled &&
-                          "cursor-not-allowed border-border-soft bg-surface-neutral [background-image:var(--pattern-unavailable)]",
-                        isAnyEnabled &&
-                          isSelected &&
-                          "cursor-pointer border-brand bg-brand hover:bg-brand-hover",
-                        isAnyEnabled &&
-                          !isSelected &&
-                          "cursor-pointer border-border bg-surface-base hover:border-brand-strong hover:bg-brand-soft",
+                return (
+                  <ScheduleBlockCell
+                    key={`${date}-${chunkIdx}`}
+                    role="button"
+                    tabIndex={isAnyEnabled ? 0 : -1}
+                    aria-pressed={isSelected}
+                    aria-disabled={!isAnyEnabled}
+                    aria-label={isAnyEnabled ? cellLabel : "Stengt"}
+                    onPointerDown={(e) => handlePointerDown(e, date, chunk)}
+                    onPointerEnter={() => handlePointerEnter(date, chunk)}
+                    onKeyDown={(e) => handleCellKeyDown(e, date, chunk)}
+                    closed={!isAnyEnabled}
+                    className={cn(
+                      isAnyEnabled &&
+                        isSelected &&
+                        "cursor-pointer border-brand-activeBorder bg-brand-tint text-brand ring-1 ring-inset ring-brand-border hover:bg-brand-fill",
+                      isAnyEnabled &&
+                        !isSelected &&
+                        "cursor-pointer border-border bg-surface-base hover:border-brand-strongBorder hover:bg-brand-soft",
+                    )}
+                  >
+                    <ScheduleSlotSegments
+                      closed={!isAnyEnabled}
+                      fills={chunk.map((minute) =>
+                        isSlotEnabled(date, minute) && isSelected ? 1 : 0,
                       )}
-                    >
-                      <div className="flex h-1.5 w-full items-center gap-1">
-                        {chunk.map((m) => {
-                          const enabled = isSlotEnabled(date, m);
-                          return (
-                            <div
-                              key={m}
-                              className={cn(
-                                "h-full flex-1 rounded-full",
-                                !enabled
-                                  ? "bg-border-muted/30"
-                                  : isSelected
-                                    ? "bg-white/55"
-                                    : "bg-border-faint",
-                              )}
-                            />
-                          );
-                        })}
-                      </div>
-                    </div>
-                  );
-                })}
-              </React.Fragment>
-            ))}
-          </div>
-        </div>
+                    />
+                    {isSelected && (
+                      <Check
+                        size={iconSizes.compact}
+                        strokeWidth={iconStrokeWidths.strong}
+                        className="text-brand-dark"
+                      />
+                    )}
+                  </ScheduleBlockCell>
+                );
+              })}
+            </React.Fragment>
+          ))}
+        </ScheduleGridFrame>
       </SchedulePanelBody>
 
-      <SchedulePanelFooter>
+      <SchedulePanelFooter className="sticky bottom-0 z-20 bg-surface-base">
         <div className="flex flex-wrap items-center gap-5">
-          <MetaValue label="Valgte tider" value={selectedSlots.size} />
+          <MetaValue label="Intervjublokker" value={selectedBlockCount} />
+          <MetaValue label="Intervjutider" value={selectedSlots.size} />
         </div>
         <div className="flex items-center gap-3">
           {dirtySinceSave && (
@@ -336,25 +332,5 @@ const TimeScheduler: React.FC<TimeSchedulerProps> = ({
     </SchedulePanel>
   );
 };
-
-interface LegendItemProps {
-  label: string;
-  variant: "selected" | "open" | "disabled";
-}
-
-const LegendItem = ({ label, variant }: LegendItemProps) => (
-  <span className="inline-flex items-center gap-1.5 rounded-full border border-border bg-surface-muted px-2.5 py-1 text-xs font-semibold text-text-muted">
-    <span
-      className={cn(
-        "h-2.5 w-2.5 shrink-0 rounded-sm border",
-        variant === "selected" && "border-brand bg-brand",
-        variant === "open" && "border-border-quiet bg-surface-base",
-        variant === "disabled" &&
-          "border-border-soft bg-surface-neutral [background-image:var(--pattern-unavailable)]",
-      )}
-    />
-    {label}
-  </span>
-);
 
 export default TimeScheduler;

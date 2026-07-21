@@ -42,8 +42,8 @@ interface WrapperProps {
 
 const Wrapper = styled.button<WrapperProps>`
   padding: 0;
-  width: 40px;
-  opacity: ${(props) => (props.$isChosen ? "1" : "0.2")};
+  width: var(--group-toggle-size-sm);
+  opacity: ${(props) => (props.$isChosen ? "1" : "var(--opacity-unselected)")};
 `;
 
 const Logo = styled.img`

@@ -3,9 +3,10 @@ export type DjangoConfig = {
   RELEASE?: string;
   ENVIRONMENT?: string;
   API_URL: string;
+  CSRF_COOKIE_NAME?: string;
 };
 const defaultConfig: DjangoConfig = {
-  API_URL: "http://127.0.0.1:5000/api",
+  API_URL: "/api",
 };
 const serialized = document.getElementById("frontend-config")?.textContent;
 let embedded: DjangoConfig | undefined;

@@ -95,7 +95,7 @@ const PageWrapper = styled.div`
 const Title = styled.h1`
   color: var(--color-text-body);
   font-size: var(--font-size-heading-md);
-  font-weight: 500;
+  font-weight: var(--font-weight-medium);
   margin-bottom: var(--spacing-6xl);
   text-align: center;
   line-height: var(--line-height-title);
@@ -132,7 +132,7 @@ const NextButtonWrapper = styled.div`
 
 const ErrorMessage = styled.div`
   font-size: var(--font-size-sm);
-  font-weight: 500;
+  font-weight: var(--font-weight-medium);
   color: var(--color-text-muted);
   display: flex;
   align-items: center;

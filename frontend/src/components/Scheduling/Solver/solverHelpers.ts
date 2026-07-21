@@ -1,7 +1,11 @@
 import { isAxiosError } from "axios";
 
-import { apiClient } from "../../../utils/callApi";
-import type { ScheduleItem, SolverOptions } from "../types";
+import type {
+  InitialPlanningStrategy,
+  RepairStrategy,
+  ScheduleItem,
+  SolverOptions,
+} from "../types";
 
 export interface SolveResponse {
   status:
@@ -74,71 +78,103 @@ export interface SolveJob {
   status: "PENDING" | "RUNNING" | "DONE" | "ERROR" | "CANCELLED";
   result: SolveResponse | null;
   error: string;
+  created_at: string;
+  started_at: string | null;
+  finished_at: string | null;
 }
 
-export const SOLVE_POLL_INTERVAL_MS = 1500;
-
-export const SOLVE_POLL_TIMEOUT_MS = 5 * 60 * 1000;
-
-export type SolveJobPollOutcome =
-  | { kind: "finished"; job: SolveJob }
-  | { kind: "timeout" }
-  | { kind: "stale" };
-
-export const pollSolveJob = async (
-  created: SolveJob,
-  isStale: () => boolean = () => false,
-): Promise<SolveJobPollOutcome> => {
-  let job = created;
-  const pollStart = Date.now();
-  while (job.status === "PENDING" || job.status === "RUNNING") {
-    await new Promise((resolve) => setTimeout(resolve, SOLVE_POLL_INTERVAL_MS));
-    if (isStale()) return { kind: "stale" };
-    if (Date.now() - pollStart > SOLVE_POLL_TIMEOUT_MS) {
-      return { kind: "timeout" };
-    }
-    const { data } = await apiClient.get<SolveJob>(`/solve/${created.job_id}/`);
-    job = data;
-  }
-  return { kind: "finished", job };
-};
+export const DEFAULT_MAX_SOLVER_SECONDS = 5 * 60;
+const LEGACY_DEFAULT_MAX_SOLVER_SECONDS = 120;
 
 export const DEFAULT_SOLVER_OPTIONS: SolverOptions = {
   enforce_same_gender: false,
   allow_overtime: true,
   prioritize_continuity: true,
   same_panel_per_block: true,
-  overtime_weight: 100,
-  load_balance_weight: 1,
+  avoid_consecutive_interviewer_blocks: true,
+  initial_strategy: "balanced",
+  repair_strategy: "balanced",
+  repair_mode: false,
+  overtime_weight: 40,
+  load_balance_weight: 4,
   continuity_weight: 12,
-  max_solver_seconds: 120,
+  max_solver_seconds: DEFAULT_MAX_SOLVER_SECONDS,
 };
 
-export const PRIORITY_PRESETS = [
+export const normalizeSolverOptions = (
+  options: Partial<SolverOptions> | null | undefined,
+): SolverOptions => {
+  const normalized = { ...DEFAULT_SOLVER_OPTIONS, ...options };
+  // The old value was an invisible application default, not a user choice.
+  // Upgrade saved admissions so they receive the extended runtime as well.
+  if (normalized.max_solver_seconds === LEGACY_DEFAULT_MAX_SOLVER_SECONDS) {
+    normalized.max_solver_seconds = DEFAULT_MAX_SOLVER_SECONDS;
+  }
+  return normalized;
+};
+
+export const INITIAL_STRATEGY_PRESETS: ReadonlyArray<{
+  key: InitialPlanningStrategy;
+  label: string;
+  description: string;
+  example: string;
+  overtimeWeight: number;
+  loadBalanceWeight: number;
+}> = [
   {
-    key: "protect-availability",
-    label: "Minimer overtid",
+    key: "minimize_overtime",
+    label: "Minimer avvik fra tilgjengelighet",
     description:
       "Respekter tilgjengeligheten selv om noen får flere intervjuer.",
+    example: "Eksempel: færre tildelinger utenfor oppgitt tilgjengelighet.",
     overtimeWeight: 100,
     loadBalanceWeight: 1,
   },
   {
     key: "balanced",
     label: "Balansert",
-    description: "Vei overtid og fordeling omtrent likt.",
+    description: "Kombiner få avvik, jevn fordeling og kompakte intervjudager.",
+    example:
+      "Eksempel: litt ulik belastning godtas for å unngå avvik fra tilgjengeligheten.",
     overtimeWeight: 40,
     loadBalanceWeight: 4,
   },
   {
-    key: "protect-load",
+    key: "balance_workload",
     label: "Jevn fordeling",
-    description:
-      "Alle får like mange intervjuer, men på bekostning av overtid når man egentlig ikke er tilgjengelig.",
+    description: "Fordel intervjuene så likt som mulig mellom intervjuerne.",
+    example: "Eksempel: belastningen går fra 8–2 intervjuer til omtrent 5–5.",
     overtimeWeight: 12,
     loadBalanceWeight: 8,
   },
-] as const;
+];
+
+export const REPAIR_STRATEGY_PRESETS: ReadonlyArray<{
+  key: RepairStrategy;
+  label: string;
+  description: string;
+  example: string;
+}> = [
+  {
+    key: "minimum_change",
+    label: "Minst mulig endring",
+    description: "Bevar tider og uberørte tildelinger så langt det er mulig.",
+    example: "Eksempel: bruk én vikar i ett intervju fremfor å endre blokken.",
+  },
+  {
+    key: "preserve_panels",
+    label: "Behold paneler",
+    description: "Prioriter samme panel gjennom hele intervjublokken.",
+    example: "Eksempel: bytt samme person i alle fire intervjuene i blokken.",
+  },
+  {
+    key: "balanced",
+    label: "Balansert",
+    description: "Vei panelstabilitet mot hvor mange intervjuer som berøres.",
+    example:
+      "Eksempel: tillat et lite panelavvik når det sparer flere endringer.",
+  },
+];
 
 export const PANEL_SIZE_MIN = 1;
 export const PANEL_SIZE_MAX = 10;
@@ -181,7 +217,7 @@ export const estimateSolverSeconds = (
   const continuityMult = prioritizeContinuity ? 1.6 : 1;
   const panelMult = 1 + Math.max(0, panelSize - 3) * 0.25;
   const estimate = baseSeconds * continuityMult * panelMult;
-  return Math.min(hardCap, Math.max(2, Math.round(estimate)) * 2);
+  return Math.min(hardCap, Math.max(2, Math.round(estimate * 1.4) * 2));
 };
 
 export const formatApiError = (data: unknown): string => {
@@ -195,4 +231,25 @@ export const formatApiError = (data: unknown): string => {
   return Object.entries(data)
     .map(([key, value]) => `${key}: ${formatApiError(value)}`)
     .join(" ");
+};
+
+export const scheduleSaveErrorMessage = (
+  error: unknown,
+  fallback: string,
+): string => {
+  if (!isAxiosError(error) || error.response?.status !== 400) {
+    return fallback;
+  }
+
+  const detail = formatApiError(error.response.data).replace(
+    /^schedule:\s*/i,
+    "",
+  );
+  if (!detail) return fallback;
+
+  if (detail.includes("intervjue seg selv")) {
+    return "Planen kan ikke lagres: En kandidat kan ikke intervjue seg selv. Bytt personen i panelet.";
+  }
+
+  return `Planen kan ikke lagres: ${detail}`;
 };

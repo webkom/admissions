@@ -1,10 +1,37 @@
 from datetime import timedelta
 
+from django.urls import Resolver404, resolve
 from django.utils import timezone
+from rest_framework.test import APIClient
 
-from admissions.admissions.models import Admission, LegoUser
+from admissions.admissions.models import Admission, LegoUser, SavedSchedule
 
 DEFAULT_ADMISSION_SLUG = "opptak"
+
+
+class ScheduleRevisionAPIClient(APIClient):
+    def post(self, path, data=None, *args, **kwargs):
+        payload = data
+        try:
+            match = resolve(path)
+        except Resolver404:
+            match = None
+        if (
+            match is not None
+            and match.url_name == "saved-schedule"
+            and isinstance(data, dict)
+            and "expected_updated_at" not in data
+        ):
+            saved_schedule = SavedSchedule.objects.filter(
+                admission__slug=match.kwargs["admission_slug"]
+            ).first()
+            payload = {
+                **data,
+                "expected_updated_at": (
+                    saved_schedule.updated_at.isoformat() if saved_schedule else None
+                ),
+            }
+        return super().post(path, payload, *args, **kwargs)
 
 
 def fake_timedelta(days=0):

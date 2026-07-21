@@ -29,9 +29,7 @@ import {
 } from "./FormStructureStyle";
 import { Admission, Group } from "src/types";
 import { SelectedGroups } from ".";
-import JsonFieldEditor from "src/components/JsonFieldEditor";
 import LinkButton, { StyledButton } from "src/components/LinkButton";
-import PriorityTextField from "./PriorityTextField";
 
 interface FormStructureProps extends FormikValues {
   admission?: Admission;
@@ -138,34 +136,6 @@ const FormStructure: React.FC<FormStructureProps> = ({
             Mobilnummeret vil bli brukt til å kalle deg inn på intervju.
           </HelpText>
           <Field name="phoneNumber" component={PhoneNumberField} />
-          {!isSingleGroupAdmission && (
-            <>
-              <HelpText>
-                {!(isRevy || isRevyBoard) && (
-                  <>
-                    <Info aria-hidden="true" />
-                    Kun leder og nestleder av Abakus kan se det du skriver inn i
-                    prioriterings- og kommentarfeltet.
-                  </>
-                )}
-                <Info aria-hidden="true" />
-                Prioriteringslisten vil bli tatt hensyn til så langt det lar seg
-                gjøre, men garanterer ingenting. Ikke søk på en{" "}
-                {isRevy ? "gruppe" : isRevyBoard ? "stilling" : "komité"} du
-                ikke ønsker å bli med i.
-              </HelpText>
-              <Field
-                name="priorityText"
-                component={PriorityTextField}
-                label="Prioriteringer, og andre kommentarer"
-                optional
-              />
-            </>
-          )}
-          <JsonFieldEditor
-            sectionName="headerFields"
-            fields={admission?.header_fields}
-          />
         </GeneralInfoSection>
         <SeparatorLine />
         <GroupsSection $isSingleGroupAdmission={isSingleGroupAdmission}>

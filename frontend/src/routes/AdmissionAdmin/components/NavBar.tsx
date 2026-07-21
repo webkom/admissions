@@ -3,6 +3,7 @@ import { Link, NavLink as RouterNavLink } from "react-router-dom";
 import { Admission } from "src/types";
 import styled from "styled-components";
 import { ArrowLeft } from "lucide-react";
+import { iconSizes } from "src/styles/designTokens";
 
 interface Props {
   admission?: Admission;
@@ -14,7 +15,7 @@ const NavBar: React.FC<Props> = ({ admission }) => {
       admission?.groups.filter(
         (group) =>
           admission?.userdata.is_admin ||
-          admission?.userdata.committee_groups.includes(group.name),
+          admission?.userdata.represented_groups.includes(group.name),
       ),
     [admission],
   );
@@ -22,7 +23,7 @@ const NavBar: React.FC<Props> = ({ admission }) => {
   return (
     <Wrapper>
       <BackLink to={"/"}>
-        <ArrowLeft size={20} aria-hidden="true" /> Til forsiden
+        <ArrowLeft size={iconSizes.feature} aria-hidden="true" /> Til forsiden
       </BackLink>
 
       <PanelSection>
@@ -79,14 +80,14 @@ const SectionEyebrow = styled.span`
   display: inline-block;
   margin-bottom: var(--spacing-md);
   font-size: var(--font-size-sm);
-  font-weight: 500;
+  font-weight: var(--font-weight-medium);
   color: var(--color-text-muted);
 `;
 
 const NavHeader = styled.h3`
   margin: 0;
   font-size: var(--font-size-ui);
-  font-weight: 600;
+  font-weight: var(--font-weight-semibold);
   color: var(--color-text-primary);
 `;
 
@@ -105,7 +106,7 @@ const BackLink = styled(Link)`
   background: var(--color-surface-base);
   color: var(--color-text-muted);
   font-size: var(--font-size-detail);
-  font-weight: 600;
+  font-weight: var(--font-weight-semibold);
   text-decoration: none;
   transition: color var(--easing-fast);
 
@@ -124,7 +125,7 @@ const NavLink = styled(RouterNavLink)`
   margin-top: var(--spacing-sm);
   color: var(--color-text-muted);
   font-size: var(--font-size-sm);
-  font-weight: 600;
+  font-weight: var(--font-weight-semibold);
   text-decoration: none;
   transition:
     background var(--easing-fast),

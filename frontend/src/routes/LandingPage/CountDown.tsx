@@ -34,13 +34,6 @@ const CountDown: React.FC<CountDownProps> = ({ title, dateString }) => {
             {formatMilestoneDate(dateString)}
           </p>
         </div>
-        <span
-          className={`inline-flex flex-none rounded-full px-2.5 py-1 text-label font-bold uppercase tracking-caps ${
-            isCompleted
-              ? "bg-surface-subtle text-text-muted"
-              : "bg-brand-muted text-brand"
-          }`}
-        ></span>
       </div>
       <div className="mt-4 grid w-full grid-cols-4 border-t border-border-soft pt-4 handheld:grid-cols-4">
         <CountdownItem

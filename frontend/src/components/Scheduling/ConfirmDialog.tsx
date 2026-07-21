@@ -1,6 +1,7 @@
 import React, { useEffect, useRef } from "react";
 import { AlertTriangle } from "lucide-react";
 import cn from "src/utils/cn";
+import { iconSizes } from "src/styles/designTokens";
 import {
   actionButtonBase,
   actionButtonDanger,
@@ -79,7 +80,8 @@ const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
   icon,
 }) => {
   const isDanger = tone === "danger";
-  const resolvedIcon = icon ?? (isDanger ? <AlertTriangle size={18} /> : null);
+  const resolvedIcon =
+    icon ?? (isDanger ? <AlertTriangle size={iconSizes.standard} /> : null);
   const dialogRef = useRef<HTMLDivElement>(null);
 
   useFocusTrap(dialogRef, true);
@@ -102,7 +104,7 @@ const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
 
   return (
     <div
-      className="fixed inset-0 z-[200] flex items-center justify-center overflow-y-auto bg-overlay px-4 py-4 animate-overlay-fade-in"
+      className="fixed inset-0 z-modal flex items-center justify-center overflow-y-auto bg-overlay px-4 py-4 animate-overlay-fade-in"
       onMouseDown={(event) => {
         if (event.target === event.currentTarget) onClose();
       }}
@@ -113,7 +115,7 @@ const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
         aria-modal="true"
         aria-label={title}
         tabIndex={-1}
-        className="max-h-[calc(100dvh-var(--spacing-4xl))] w-full max-w-md overflow-y-auto rounded-panel border border-border bg-surface-base p-5 shadow-modal focus:outline-none animate-fade-in"
+        className="max-h-modal w-full max-w-md overflow-y-auto rounded-panel border border-border bg-surface-base p-5 shadow-modal focus:outline-none animate-fade-in"
       >
         <div className="flex items-start gap-3">
           {resolvedIcon && (

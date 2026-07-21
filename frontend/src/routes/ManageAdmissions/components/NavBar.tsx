@@ -1,6 +1,5 @@
 import React from "react";
 import { NavLink } from "react-router-dom";
-import LinkButton from "src/components/LinkButton";
 import { Admission } from "src/types";
 import styled from "styled-components";
 
@@ -23,11 +22,6 @@ const NavBar: React.FC<Props> = ({ admissions }) => (
     {admissions?.length === 0 && (
       <EmptyText>Du har ikke opprettet noen opptak ennå.</EmptyText>
     )}
-    <CreateNewWrapper>
-      <LinkButton to="/manage/create" dark size="small">
-        Opprett opptak
-      </LinkButton>
-    </CreateNewWrapper>
   </Navigation>
 );
 
@@ -76,8 +70,4 @@ const EmptyText = styled.p`
   margin: 0;
   color: var(--color-text-muted);
   font-size: var(--font-size-sm);
-`;
-
-const CreateNewWrapper = styled.div`
-  margin-top: var(--spacing-xl);
 `;

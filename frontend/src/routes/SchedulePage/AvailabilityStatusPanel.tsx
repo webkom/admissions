@@ -1,10 +1,14 @@
-import React from "react";
-import { CalendarRange } from "lucide-react";
+import React, { useState } from "react";
+import { CalendarRange, Check, ChevronDown } from "lucide-react";
+import cn from "src/utils/cn";
+import { iconSizes } from "src/styles/designTokens";
 import {
   SchedulePanel,
   SchedulePanelHeader,
   SchedulePanelBody,
   Chip,
+  actionButtonBase,
+  actionButtonNeutral,
 } from "src/components/Scheduling/ui";
 import { InterviewAvailabilityParticipant } from "../../types";
 
@@ -17,21 +21,82 @@ const AvailabilityStatusPanel: React.FC<AvailabilityStatusPanelProps> = ({
   participants,
   isLoading = false,
 }) => {
+  const [expanded, setExpanded] = useState(false);
   const submitted = participants
-    .filter((p) => p.has_submitted)
+    .filter((participant) => participant.has_submitted)
     .sort((a, b) => a.full_name.localeCompare(b.full_name, "nb"));
   const missing = participants
-    .filter((p) => !p.has_submitted)
+    .filter((participant) => !participant.has_submitted)
     .sort((a, b) => a.full_name.localeCompare(b.full_name, "nb"));
+  const complete = participants.length > 0 && missing.length === 0;
+
+  if (complete) {
+    return (
+      <SchedulePanel>
+        <SchedulePanelBody className="py-3">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="flex min-w-0 items-center gap-3">
+              <span className="flex h-9 w-9 flex-none items-center justify-center rounded-lg border border-success-border bg-success-bg text-success">
+                <Check size={iconSizes.medium} aria-hidden="true" />
+              </span>
+              <div className="min-w-0">
+                <h2 className="m-0 text-sm font-bold text-text-primary">
+                  Alle har sendt inn tilgjengelighet
+                </h2>
+                <p className="m-0 mt-0.5 text-detail text-text-muted">
+                  {submitted.length} av {participants.length} svar mottatt
+                </p>
+              </div>
+            </div>
+            <button
+              type="button"
+              aria-expanded={expanded}
+              onClick={() => setExpanded((current) => !current)}
+              className={cn(actionButtonBase, actionButtonNeutral)}
+            >
+              {expanded ? "Skjul svar" : "Vis svar"}
+              <ChevronDown
+                size={iconSizes.small}
+                aria-hidden="true"
+                className={cn(
+                  "transition-transform duration-150",
+                  expanded && "rotate-180",
+                )}
+              />
+            </button>
+          </div>
+          {expanded && (
+            <div className="mt-3 flex flex-wrap gap-2 border-t border-border-soft pt-3">
+              {submitted.map((participant) => (
+                <ParticipantChip
+                  key={participant.user_id}
+                  participant={participant}
+                  tone="success"
+                />
+              ))}
+            </div>
+          )}
+        </SchedulePanelBody>
+      </SchedulePanel>
+    );
+  }
 
   return (
     <SchedulePanel>
       <SchedulePanelHeader
         icon={CalendarRange}
         title="Status på tilgjengelighet"
-        description="Se hvem som har sendt inn tilgjengelighet og hvem som mangler."
+        description="Følg opp intervjuere som ikke har sendt inn ennå."
         chips={
-          <Chip tone={missing.length === 0 ? "success" : "muted"}>
+          <Chip
+            tone={
+              participants.length === 0
+                ? "muted"
+                : missing.length === 0
+                  ? "success"
+                  : "warning"
+            }
+          >
             {submitted.length}/{participants.length}
           </Chip>
         }
@@ -46,52 +111,67 @@ const AvailabilityStatusPanel: React.FC<AvailabilityStatusPanelProps> = ({
         ) : (
           <>
             <div>
-              <span className="mb-2 block text-ui font-semibold text-success">
-                Sendt inn ({submitted.length})
-              </span>
-              {submitted.length === 0 ? (
-                <span className="text-ui text-text-muted">Ingen ennå.</span>
-              ) : (
-                <div className="flex flex-wrap gap-2">
-                  {submitted.map((p) => (
-                    <span
-                      key={p.user_id}
-                      className="inline-flex items-center gap-1.5 rounded-lg border border-success-border bg-success-bg px-3 py-1.5 text-sm font-semibold text-text-primary"
-                    >
-                      <span className="h-2 w-2 rounded-full bg-success" />
-                      {p.full_name}
-                    </span>
-                  ))}
-                </div>
-              )}
-            </div>
-            <div>
-              <span className="mb-2 block text-ui font-semibold text-text-muted">
+              <span className="mb-2 block text-ui font-semibold text-amber-800">
                 Mangler ({missing.length})
               </span>
-              {missing.length === 0 ? (
-                <span className="text-ui text-text-muted">
-                  Alle har sendt inn.
-                </span>
-              ) : (
-                <div className="flex flex-wrap gap-2">
-                  {missing.map((p) => (
-                    <span
-                      key={p.user_id}
-                      className="inline-flex items-center gap-1.5 rounded-lg border border-border-soft bg-surface-base px-3 py-1.5 text-sm font-semibold text-text-muted"
-                    >
-                      <span className="h-2 w-2 rounded-full bg-text-disabled" />
-                      {p.full_name}
-                    </span>
+              <div className="flex flex-wrap gap-2">
+                {missing.map((participant) => (
+                  <ParticipantChip
+                    key={participant.user_id}
+                    participant={participant}
+                    tone="warning"
+                  />
+                ))}
+              </div>
+            </div>
+            {submitted.length > 0 && (
+              <details>
+                <summary className="cursor-pointer text-ui font-semibold text-text-muted hover:text-text-primary">
+                  Vis innsendte svar ({submitted.length})
+                </summary>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {submitted.map((participant) => (
+                    <ParticipantChip
+                      key={participant.user_id}
+                      participant={participant}
+                      tone="success"
+                    />
                   ))}
                 </div>
-              )}
-            </div>
+              </details>
+            )}
           </>
         )}
       </SchedulePanelBody>
     </SchedulePanel>
   );
 };
+
+const ParticipantChip: React.FC<{
+  participant: InterviewAvailabilityParticipant;
+  tone: "success" | "warning";
+}> = ({ participant, tone }) => (
+  <span
+    className={cn(
+      "inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-sm font-semibold",
+      tone === "success"
+        ? "border-success-border bg-success-bg text-text-primary"
+        : "border-amber-200 bg-amber-50 text-amber-900",
+    )}
+  >
+    <span
+      className={cn(
+        "h-2 w-2 rounded-full",
+        tone === "success" ? "bg-success" : "bg-amber-500",
+      )}
+    />
+    {participant.full_name}
+    {participant.has_submitted && (
+      <span className="text-detail font-medium text-text-muted">
+        · {participant.slots.length} tider
+      </span>
+    )}
+  </span>
+);
 
 export default AvailabilityStatusPanel;

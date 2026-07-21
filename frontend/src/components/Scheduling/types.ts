@@ -2,8 +2,9 @@ export type {
   Candidate,
   EnabledWindow,
   Interviewer,
+  InitialPlanningStrategy,
+  RepairStrategy,
   SavedSchedule,
   ScheduleItem,
-  SchedulePanelMember,
   SolverOptions,
 } from "../../types";

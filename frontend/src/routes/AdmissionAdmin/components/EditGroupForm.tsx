@@ -74,9 +74,6 @@ const EditGroupForm: React.FC<EditGroupFormProps> = ({
               );
             },
             onError: (error) => {
-              // Field errors only exist on a 400 validation response; any other
-              // failure (500/403/network) has no such body, so guard every
-              // access instead of indexing blindly and crashing the handler.
               const data = (error.response?.data ?? {}) as Record<
                 string,
                 string[] | undefined

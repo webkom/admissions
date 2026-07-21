@@ -1,6 +1,7 @@
 import React, { useEffect, useRef } from "react";
 import { Calendar, CalendarDays, FileSpreadsheet } from "lucide-react";
 import { useFocusTrap } from "../ConfirmDialog";
+import { iconSizes } from "src/styles/designTokens";
 
 interface ExportChooserModalProps {
   onExportIcs: (target: "apple" | "google") => void;
@@ -60,7 +61,7 @@ const ExportChooserModal = ({
 
   return (
     <div
-      className="fixed inset-0 z-[200] flex items-center justify-center overflow-y-auto bg-overlay px-4 py-4 animate-overlay-fade-in"
+      className="fixed inset-0 z-modal flex items-center justify-center overflow-y-auto bg-overlay px-4 py-4 animate-overlay-fade-in"
       onMouseDown={(event) => {
         if (event.target === event.currentTarget) onClose();
       }}
@@ -71,7 +72,7 @@ const ExportChooserModal = ({
         aria-modal="true"
         aria-labelledby="export-chooser-title"
         tabIndex={-1}
-        className="max-h-[calc(100dvh-var(--spacing-4xl))] w-full max-w-md overflow-y-auto rounded-panel border border-border bg-surface-base p-5 shadow-modal focus:outline-none animate-fade-in"
+        className="max-h-modal w-full max-w-md overflow-y-auto rounded-panel border border-border bg-surface-base p-5 shadow-modal focus:outline-none animate-fade-in"
       >
         <h4
           id="export-chooser-title"
@@ -85,7 +86,7 @@ const ExportChooserModal = ({
         </p>
         <div className="mt-4 grid gap-2">
           <ExportOption
-            icon={<Calendar size={18} />}
+            icon={<Calendar size={iconSizes.standard} />}
             title="Apple Calendar / Outlook"
             hint="Åpner .ics-filen direkte"
             onClick={() => {
@@ -94,7 +95,7 @@ const ExportChooserModal = ({
             }}
           />
           <ExportOption
-            icon={<CalendarDays size={18} />}
+            icon={<CalendarDays size={iconSizes.standard} />}
             title="Google Calendar"
             hint="Importer .ics-filen via innstillinger"
             onClick={() => {
@@ -106,7 +107,7 @@ const ExportChooserModal = ({
             <>
               <div className="my-1 h-px bg-border-faint" />
               <ExportOption
-                icon={<FileSpreadsheet size={18} />}
+                icon={<FileSpreadsheet size={iconSizes.standard} />}
                 title="CSV-fil"
                 hint="For Excel eller Google Sheets"
                 onClick={() => {

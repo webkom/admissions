@@ -41,6 +41,7 @@ const FormContainer: React.FC<FormContainerProps> = ({
         group={group}
         name={"groups." + group.name.toLowerCase()}
         responseLabel={group.response_label}
+        questionFields={group.header_fields}
         error={
           touched.groups &&
           touched.groups[group.name.toLowerCase()] &&

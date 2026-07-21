@@ -22,9 +22,9 @@ export default NavItem;
 
 const Item = styled(NavLink)`
   color: var(--color-text-accent);
-  font-weight: 500;
+  font-weight: var(--font-weight-medium);
   font-size: var(--font-size-ui);
-  letter-spacing: -0.01em;
+  letter-spacing: var(--letter-spacing-ui-tight);
   transition: var(--transition-base);
 
   &:hover {
@@ -34,15 +34,15 @@ const Item = styled(NavLink)`
 
 const Container = styled.li<{ $active: boolean }>`
   position: relative;
-  padding: 0.5rem 0;
+  padding: var(--spacing-sm) 0;
 
   &::after {
     content: "";
     position: absolute;
-    bottom: -1px;
+    bottom: calc(-1 * var(--border-width-default));
     left: 0;
     width: 100%;
-    height: 2px;
+    height: var(--underline-thickness);
     background-color: var(--color-brand);
     transform: ${(props) => (props.$active ? "scaleX(1)" : "scaleX(0)")};
     transform-origin: left;

@@ -2,6 +2,8 @@ from os import environ
 from uuid import UUID, uuid4
 
 from django.conf import settings
+from django.contrib.auth import logout
+from django.shortcuts import redirect
 from django.utils.cache import patch_cache_control
 from django.utils.deprecation import MiddlewareMixin
 
@@ -48,4 +50,33 @@ class LoggingMiddleware(MiddlewareMixin):
             response.setdefault(
                 "Permissions-Policy", "camera=(), microphone=(), geolocation=()"
             )
+        return response
+
+
+class StaleSessionRecoveryMiddleware:
+    """Recover browser sessions that no longer have access to the web app.
+
+    API consumers must receive the original 401/403 response so that the
+    frontend can handle it without unexpectedly navigating away. A regular
+    browser navigation, however, is more useful when it clears the stale
+    session and returns to the public landing page.
+    """
+
+    def __init__(self, get_response):
+        self.get_response = get_response
+
+    def __call__(self, request):
+        response = self.get_response(request)
+        is_browser_navigation = (
+            request.method in {"GET", "HEAD"}
+            and not request.path.startswith("/api/")
+            and request.accepts("text/html")
+        )
+        if (
+            response.status_code == 403
+            and is_browser_navigation
+            and getattr(request.user, "is_authenticated", False)
+        ):
+            logout(request)
+            return redirect("/")
         return response

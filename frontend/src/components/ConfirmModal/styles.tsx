@@ -15,15 +15,17 @@ export const Overlay = styled.div`
 
 export const ConfirmBox = styled.div`
   position: fixed;
-  max-width: 420px;
-  height: 200px;
-  top: 100px;
+  width: min(
+    calc(100% - (2 * var(--spacing-xl))),
+    var(--content-width-compact)
+  );
+  top: var(--content-sticky-offset);
   left: 0;
   right: 0;
   margin: 0 auto;
   background: var(--color-surface-base);
   border-radius: var(--border-radius-sm);
-  padding: 40px;
+  padding: var(--spacing-2xl);
 `;
 
 export const Title = styled.h2`
@@ -40,6 +42,6 @@ export const ActionButtonsWrapper = styled.div`
   flex-direction: row;
   width: 100%;
   justify-content: space-between;
-  margin-top: 20px;
+  margin-top: var(--spacing-lg);
   padding: 0;
 `;

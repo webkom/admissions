@@ -1,5 +1,6 @@
 import React from "react";
 import { AlertTriangle, Check, X } from "lucide-react";
+import { iconSizes } from "src/styles/designTokens";
 import cn from "src/utils/cn";
 
 export interface StatusToastState {
@@ -19,7 +20,7 @@ const StatusToast: React.FC<StatusToastProps> = ({ toast, onDismiss }) => {
     <div
       role={toast.tone === "error" ? "alert" : "status"}
       aria-live={toast.tone === "error" ? "assertive" : "polite"}
-      className="pointer-events-none fixed inset-x-0 top-4 z-[300] flex justify-center"
+      className="pointer-events-none fixed inset-x-0 top-4 z-toast flex justify-center"
     >
       <div
         className={cn(
@@ -30,9 +31,17 @@ const StatusToast: React.FC<StatusToastProps> = ({ toast, onDismiss }) => {
         )}
       >
         {toast.tone === "error" ? (
-          <AlertTriangle size={15} aria-hidden="true" className="flex-none" />
+          <AlertTriangle
+            size={iconSizes.control}
+            aria-hidden="true"
+            className="flex-none"
+          />
         ) : (
-          <Check size={15} aria-hidden="true" className="flex-none" />
+          <Check
+            size={iconSizes.control}
+            aria-hidden="true"
+            className="flex-none"
+          />
         )}
         <span>{toast.message}</span>
         {onDismiss && (
@@ -42,7 +51,7 @@ const StatusToast: React.FC<StatusToastProps> = ({ toast, onDismiss }) => {
             aria-label="Lukk melding"
             className="inline-flex h-5 w-5 flex-none cursor-pointer items-center justify-center rounded-full text-current opacity-70 transition-opacity hover:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-current"
           >
-            <X size={13} />
+            <X size={iconSizes.detail} />
           </button>
         )}
       </div>

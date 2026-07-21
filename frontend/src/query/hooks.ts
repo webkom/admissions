@@ -4,9 +4,11 @@ import {
   useQueryClient,
   type UseQueryResult,
 } from "@tanstack/react-query";
-import { AxiosError } from "axios";
+import { AxiosError, isAxiosError } from "axios";
 import {
   Admission,
+  AdmissionList,
+  AdminApplication,
   Candidate,
   Application,
   Group,
@@ -14,111 +16,174 @@ import {
   SavedSchedule,
 } from "src/types";
 import { apiClient } from "src/utils/callApi";
+import {
+  areSensitiveAdmissionCacheWritesBlocked,
+  areSensitiveCacheWritesBlocked,
+  purgeSensitiveAdmissionAccess,
+  sensitiveAdmissionMutationOptions,
+} from "./sensitiveAccess";
 
-type SaveSchedulePayload = Partial<Omit<SavedSchedule, "id" | "updated_at">> & {
-  expected_updated_at?: string;
+type SaveSchedulePayload = Partial<
+  Omit<SavedSchedule, "id" | "updated_at" | "revealed_groups">
+> & {
+  expected_updated_at: string | null;
 };
 
-const sensitiveQueryOptions = {
+const accessFailureStatus = (error: unknown) =>
+  isAxiosError(error) ? (error.response?.status ?? 0) : 0;
+
+const sensitiveQueryOptions = (admissionSlug: string) => ({
   retry: false,
-  refetchInterval: 5000,
+  refetchInterval: (query: { state: { error: unknown } }) =>
+    areSensitiveAdmissionCacheWritesBlocked(admissionSlug) ||
+    [401, 403, 404].includes(accessFailureStatus(query.state.error))
+      ? false
+      : 5000,
   refetchIntervalInBackground: false,
-  refetchOnMount: "always",
-  refetchOnWindowFocus: "always",
+  refetchOnMount: () =>
+    areSensitiveAdmissionCacheWritesBlocked(admissionSlug)
+      ? false
+      : ("always" as const),
+  refetchOnWindowFocus: () =>
+    areSensitiveAdmissionCacheWritesBlocked(admissionSlug)
+      ? false
+      : ("always" as const),
   staleTime: 0,
   gcTime: 0,
+  meta: { sensitive: true },
+});
+
+const admissionSensitiveQueryMeta = (
+  admissionSlug: string,
+  purgeAdmissionOnNotFound: boolean,
+) => ({
+  sensitive: true,
+  admissionSlug,
+  purgeAdmissionOnNotFound,
+});
+
+const personalQueryOptions = {
+  retry: false,
+  gcTime: 0,
+  meta: { sensitive: true },
 } as const;
 
-const hideDataAfterAccessDenied = <T>(
+const HTTP_CONFLICT_STATUS = 409;
+
+const hideDataAfterSensitiveQueryFailure = <T>(
   query: UseQueryResult<T, AxiosError>,
 ): UseQueryResult<T, AxiosError> => {
-  if (![401, 403].includes(query.error?.response?.status ?? 0)) return query;
+  if (![401, 403, 404].includes(query.error?.response?.status ?? 0))
+    return query;
   return { ...query, data: undefined } as UseQueryResult<T, AxiosError>;
 };
 
 export const useAdmissions = () => {
-  return useQuery<Admission[], AxiosError>({
+  const query = useQuery<AdmissionList[], AxiosError>({
     queryKey: ["/admission/"],
+    enabled: !areSensitiveCacheWritesBlocked(),
+    ...personalQueryOptions,
   });
+  return hideDataAfterSensitiveQueryFailure(query);
 };
 
 export const useAdmission = (slug: string) => {
-  return useQuery<Admission, AxiosError>({
+  const query = useQuery<Admission, AxiosError>({
     queryKey: [`/admission/${slug}/`],
-    enabled: Boolean(slug),
-    refetchInterval: 15000,
-    refetchOnWindowFocus: "always",
+    enabled: Boolean(slug) && !areSensitiveAdmissionCacheWritesBlocked(slug),
+    refetchInterval: (query) =>
+      areSensitiveAdmissionCacheWritesBlocked(slug) ||
+      [401, 403, 404].includes(accessFailureStatus(query.state.error))
+        ? false
+        : 15000,
+    refetchOnWindowFocus: () =>
+      areSensitiveAdmissionCacheWritesBlocked(slug) ? false : "always",
     staleTime: 0,
+    ...personalQueryOptions,
+    meta: admissionSensitiveQueryMeta(slug, true),
   });
+  return hideDataAfterSensitiveQueryFailure(query);
 };
 
 export const useMyApplication = (slug: string) => {
-  return useQuery<Application, AxiosError>({
+  const query = useQuery<Application, AxiosError>({
     queryKey: [`/admission/${slug}/application/mine/`],
-    enabled: Boolean(slug),
+    enabled: Boolean(slug) && !areSensitiveAdmissionCacheWritesBlocked(slug),
+    ...personalQueryOptions,
+    meta: admissionSensitiveQueryMeta(slug, false),
   });
-};
-
-export const useAdminAdmissions = () => {
-  return useQuery<Admission[], AxiosError>({
-    queryKey: ["/admin/admission/"],
-  });
-};
-
-export const useAdminAdmission = (slug: string) => {
-  return useQuery<Admission, AxiosError>({
-    queryKey: [`/admin/admission/${slug}/`],
-    enabled: Boolean(slug),
-  });
+  return hideDataAfterSensitiveQueryFailure(query);
 };
 
 export const useAdminApplications = (admissionSlug: string) => {
-  const query = useQuery<Application[], AxiosError>({
+  const query = useQuery<AdminApplication[], AxiosError>({
     queryKey: [`/admin/admission/${admissionSlug}/application/`],
-    enabled: Boolean(admissionSlug),
-    ...sensitiveQueryOptions,
+    enabled:
+      Boolean(admissionSlug) &&
+      !areSensitiveAdmissionCacheWritesBlocked(admissionSlug),
+    ...sensitiveQueryOptions(admissionSlug),
+    meta: admissionSensitiveQueryMeta(admissionSlug, true),
   });
-  return hideDataAfterAccessDenied(query);
+  return hideDataAfterSensitiveQueryFailure(query);
 };
 
 export const useInterviewCandidates = (slug: string) => {
   const query = useQuery<Candidate[], AxiosError>({
     queryKey: [`/admin/admission/${slug}/candidates/`],
-    enabled: Boolean(slug),
-    ...sensitiveQueryOptions,
+    enabled: Boolean(slug) && !areSensitiveAdmissionCacheWritesBlocked(slug),
+    ...sensitiveQueryOptions(slug),
+    meta: admissionSensitiveQueryMeta(slug, true),
   });
-  return hideDataAfterAccessDenied(query);
-};
-
-export const useAdminGroups = () => {
-  return useQuery<Group[], AxiosError>({
-    queryKey: ["/admin/group/"],
-  });
+  return hideDataAfterSensitiveQueryFailure(query);
 };
 
 export const useSavedSchedule = (slug: string) => {
   const query = useQuery<SavedSchedule, AxiosError>({
     queryKey: [`/admin/admission/${slug}/schedule/`],
-    enabled: Boolean(slug),
-    ...sensitiveQueryOptions,
+    enabled: Boolean(slug) && !areSensitiveAdmissionCacheWritesBlocked(slug),
+    ...sensitiveQueryOptions(slug),
+    meta: admissionSensitiveQueryMeta(slug, false),
   });
-  return hideDataAfterAccessDenied(query);
+  return hideDataAfterSensitiveQueryFailure(query);
 };
 
 export const useSaveSchedule = (slug: string) => {
   const queryClient = useQueryClient();
+  const scheduleQueryKey = [`/admin/admission/${slug}/schedule/`];
+  const candidatesQueryKey = [`/admin/admission/${slug}/candidates/`];
   return useMutation<SavedSchedule, AxiosError, SaveSchedulePayload>({
+    ...sensitiveAdmissionMutationOptions(slug),
     mutationFn: (payload) =>
       apiClient
         .post(`/admin/admission/${slug}/schedule/`, payload)
         .then((r) => r.data),
     onSuccess: (data) => {
-      queryClient.setQueryData([`/admin/admission/${slug}/schedule/`], data);
+      if (areSensitiveAdmissionCacheWritesBlocked(slug)) return;
+      queryClient.setQueryData(scheduleQueryKey, data);
       queryClient.invalidateQueries({
         queryKey: [`/admin/admission/${slug}/availability/`],
       });
       queryClient.invalidateQueries({
-        queryKey: [`/admin/admission/${slug}/candidates/`],
+        queryKey: candidatesQueryKey,
+      });
+    },
+    onError: async (error) => {
+      const status = error.response?.status ?? 0;
+      if ([401, 403].includes(status)) return;
+      if (status === 404) {
+        queryClient.removeQueries({ queryKey: scheduleQueryKey, exact: true });
+        await queryClient.invalidateQueries({
+          queryKey: candidatesQueryKey,
+          exact: true,
+          refetchType: "all",
+        });
+        return;
+      }
+      if (error.response?.status !== HTTP_CONFLICT_STATUS) return;
+      await queryClient.invalidateQueries({
+        queryKey: scheduleQueryKey,
+        exact: true,
+        refetchType: "active",
       });
     },
   });
@@ -127,27 +192,40 @@ export const useSaveSchedule = (slug: string) => {
 export const useInterviewAvailability = (slug: string) => {
   const query = useQuery<InterviewAvailabilityParticipant[], AxiosError>({
     queryKey: [`/admin/admission/${slug}/availability/`],
-    enabled: Boolean(slug),
-    ...sensitiveQueryOptions,
+    enabled: Boolean(slug) && !areSensitiveAdmissionCacheWritesBlocked(slug),
+    ...sensitiveQueryOptions(slug),
+    meta: admissionSensitiveQueryMeta(slug, true),
   });
-  return hideDataAfterAccessDenied(query);
+  return hideDataAfterSensitiveQueryFailure(query);
 };
 
 export const useSaveInterviewAvailability = (slug: string) => {
   const queryClient = useQueryClient();
+  const availabilityQueryKey = [`/admin/admission/${slug}/availability/`];
   return useMutation<
     InterviewAvailabilityParticipant,
     AxiosError,
-    { slots?: string[]; conflicts?: string[] }
+    {
+      slots?: string[];
+      conflicts?: string[];
+      reviewed_candidate_ids?: string[];
+    }
   >({
+    ...sensitiveAdmissionMutationOptions(slug),
     mutationFn: (payload) =>
       apiClient
         .post(`/admin/admission/${slug}/availability/`, payload)
         .then((r) => r.data),
     onSuccess: () => {
+      if (areSensitiveAdmissionCacheWritesBlocked(slug)) return;
       queryClient.invalidateQueries({
-        queryKey: [`/admin/admission/${slug}/availability/`],
+        queryKey: availabilityQueryKey,
       });
+    },
+    onError: (error) => {
+      const status = error.response?.status ?? 0;
+      if (status !== 404) return;
+      purgeSensitiveAdmissionAccess(queryClient, slug, error);
     },
   });
 };

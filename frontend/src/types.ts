@@ -7,6 +7,7 @@ export interface Group {
   logo: string;
   response_label: string;
   detail_link: string;
+  header_fields?: FieldModel[];
 }
 
 export interface User {
@@ -20,6 +21,7 @@ export interface User {
 export interface GroupApplication {
   group: Group;
   text: string;
+  header_fields_response: InputResponseModel;
 }
 
 export interface Application {
@@ -28,10 +30,22 @@ export interface Application {
   created_at: string;
   updated_at: string;
   applied_within_deadline: boolean;
-  text?: string;
   phone_number: string;
-  header_fields_response: InputResponseModel;
   group_applications: GroupApplication[];
+}
+
+export type InterviewStatus =
+  | "not_invited"
+  | "invited"
+  | "confirmed"
+  | "declined"
+  | "completed"
+  | "cancelled";
+
+export interface AdminApplication extends Application {
+  interview_status: InterviewStatus;
+  interview_status_updated_at: string;
+  interview_status_updated_by: string;
 }
 
 interface AdmissionUserData {
@@ -41,6 +55,7 @@ interface AdmissionUserData {
   is_recruiter: boolean;
   committee_role: "leader" | "recruiting" | "member" | null;
   committee_groups: string[];
+  represented_groups: string[];
 }
 
 export interface Admission {
@@ -56,9 +71,12 @@ export interface Admission {
   closed_from: string;
   admin_groups?: Group[];
   groups: Group[];
-  header_fields: FieldModel[];
   userdata: AdmissionUserData;
 }
+
+export type AdmissionList = Omit<Admission, "groups"> & {
+  groups: string[];
+};
 
 export interface Candidate {
   id: string;
@@ -72,13 +90,25 @@ export interface Interviewer {
   gender?: string;
   availability: number[];
   biased: string[];
+  has_submitted: boolean;
 }
+
+export type InitialPlanningStrategy =
+  | "balanced"
+  | "minimize_overtime"
+  | "balance_workload";
+
+export type RepairStrategy = "minimum_change" | "preserve_panels" | "balanced";
 
 export interface SolverOptions {
   enforce_same_gender: boolean;
   allow_overtime: boolean;
   prioritize_continuity: boolean;
   same_panel_per_block: boolean;
+  avoid_consecutive_interviewer_blocks: boolean;
+  initial_strategy: InitialPlanningStrategy;
+  repair_strategy: RepairStrategy;
+  repair_mode: boolean;
   overtime_weight: number;
   load_balance_weight: number;
   continuity_weight: number;
@@ -97,6 +127,11 @@ export interface ScheduleItem {
   time: number;
   panel: SchedulePanelMember[];
   locked?: boolean;
+  booking_source?: "solver" | "manual";
+  interview_status?: InterviewStatus;
+  interview_status_updated_at?: string;
+  interview_status_updated_by?: string;
+  candidate_phone?: string;
 }
 
 export interface EnabledWindow {
@@ -125,13 +160,19 @@ export interface SavedSchedule {
     allow_overtime?: boolean;
     prioritize_continuity?: boolean;
     same_panel_per_block?: boolean;
+    avoid_consecutive_interviewer_blocks?: boolean;
+    initial_strategy?: InitialPlanningStrategy;
+    repair_strategy?: RepairStrategy;
+    repair_mode?: boolean;
     overtime_weight?: number;
     load_balance_weight?: number;
     continuity_weight?: number;
     max_solver_seconds?: number;
   } | null;
   is_distributed: boolean;
+  conflict_review_open: boolean;
   name_visibility: NameVisibility;
+  revealed_groups?: Array<{ id: string; name: string }>;
   updated_at: string;
 }
 
@@ -142,6 +183,9 @@ export interface InterviewAvailabilityParticipant {
   gender?: string;
   slots: string[];
   conflicts: string[];
+  reviewed_candidate_ids: string[];
+  proposed_candidate_ids: string[];
+  conflict_review_complete: boolean;
   has_submitted: boolean;
   is_me: boolean;
 }

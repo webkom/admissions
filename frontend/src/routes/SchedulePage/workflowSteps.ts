@@ -1,144 +1,173 @@
 import {
-  BarChart3,
   CalendarCheck,
   CalendarRange,
   LayoutPanelTop,
   Sparkles,
 } from "lucide-react";
 
-import type { TabType, WorkflowStepDefinition } from "./types";
+import type { ConflictReviewSummary, WorkflowStepDefinition } from "./types";
 
 interface WorkflowStepParams {
   isAdmin: boolean;
-  activeSection: TabType;
   hasConfiguredAvailabilityWindows: boolean;
   hasDistributedPlan: boolean;
+  conflictReviewSummary: ConflictReviewSummary;
+  myConflictReviewComplete: boolean;
+  myProposalCandidateCount: number;
   hasSavedConfig: boolean;
   hasScheduleDraft: boolean;
   myAvailabilitySaved: boolean;
   availabilityParticipantCount: number;
   submittedAvailabilityCount: number;
+  proposalConflictCount: number;
 }
 
 export const buildWorkflowSteps = ({
   isAdmin,
-  activeSection,
   hasConfiguredAvailabilityWindows,
   hasDistributedPlan,
+  conflictReviewSummary,
+  myConflictReviewComplete,
+  myProposalCandidateCount,
   hasSavedConfig,
   hasScheduleDraft,
   myAvailabilitySaved,
   availabilityParticipantCount,
   submittedAvailabilityCount,
+  proposalConflictCount,
 }: WorkflowStepParams): WorkflowStepDefinition[] => {
   if (!isAdmin) {
+    const proposedCandidatesReady =
+      myProposalCandidateCount === 0 || myConflictReviewComplete;
+    const memberInputComplete =
+      hasDistributedPlan ||
+      (myAvailabilitySaved && hasScheduleDraft && proposedCandidatesReady);
     return [
       {
         key: "my-availability",
-        title: "Tilgjengelighet",
+        title: "Mine opplysninger",
         description: hasConfiguredAvailabilityWindows
-          ? "Marker når du kan intervjue."
+          ? "Lagre tilgjengelighet og kontroller foreslåtte kandidater."
           : "Vent til opptaksansvarlig åpner intervjutider.",
         icon: CalendarRange,
-        status: hasConfiguredAvailabilityWindows
-          ? myAvailabilitySaved
-            ? "Ferdig"
-            : "Pågår…"
-          : "Ikke åpnet",
-        tone: hasConfiguredAvailabilityWindows
-          ? myAvailabilitySaved
+        status: hasDistributedPlan
+          ? "Ferdig"
+          : hasConfiguredAvailabilityWindows
+            ? memberInputComplete
+              ? "Ferdig"
+              : !myAvailabilitySaved
+                ? "Tider mangler"
+                : hasScheduleDraft && !proposedCandidatesReady
+                  ? "Sjekk kandidater"
+                  : hasScheduleDraft
+                    ? "Ferdig"
+                    : "Tider lagret"
+            : "Ikke åpnet",
+        tone:
+          memberInputComplete || myAvailabilitySaved
             ? "success"
-            : "active"
-          : "locked",
-        locked: !hasConfiguredAvailabilityWindows,
+            : hasConfiguredAvailabilityWindows
+              ? "warning"
+              : "locked",
+        complete: memberInputComplete,
+        locked: !hasConfiguredAvailabilityWindows && !hasDistributedPlan,
       },
       {
         key: "plan",
         title: "Intervjuplan",
-        description: "Se dine intervjuer når planen er klar.",
+        description: "Se dine intervjuer når planen er publisert.",
         icon: CalendarCheck,
         status: hasDistributedPlan ? "Klar" : "Låst",
         tone: hasDistributedPlan ? "success" : "locked",
+        complete: hasDistributedPlan,
         locked: !hasDistributedPlan,
       },
     ];
   }
 
+  const availabilityComplete =
+    availabilityParticipantCount > 0 &&
+    submittedAvailabilityCount >= availabilityParticipantCount;
+  const missingAvailabilityCount = Math.max(
+    0,
+    availabilityParticipantCount - submittedAvailabilityCount,
+  );
+  const draftReadyForPublish =
+    hasScheduleDraft &&
+    conflictReviewSummary.isComplete &&
+    proposalConflictCount === 0;
+
   return [
     {
       key: "config",
-      title: "Rammer",
-      description: "Velg periode, lengde og åpne tidsluker.",
+      title: "Grunnlag",
+      description: "Sett rammene og samle tilgjengelighet.",
       icon: LayoutPanelTop,
-      status: hasSavedConfig ? "Ferdig" : "Pågår…",
-      tone: hasSavedConfig ? "success" : "active",
-    },
-    {
-      key: "my-availability",
-      title: "Tilgjengelighet",
-      description: "La komiteen registrere tider og habilitet.",
-      icon: CalendarRange,
-      status:
-        availabilityParticipantCount > 0
-          ? `${submittedAvailabilityCount}/${availabilityParticipantCount}`
-          : myAvailabilitySaved
-            ? "Ferdig"
-            : "Pågår…",
-      tone:
-        availabilityParticipantCount > 0 &&
-        submittedAvailabilityCount >= availabilityParticipantCount
-          ? "success"
-          : activeSection === "my-availability"
-            ? "active"
-            : "muted",
-    },
-    {
-      key: "heatmap",
-      title: "Fordeling",
-      description: "Sjekk dekning før planen genereres.",
-      icon: BarChart3,
-      status: hasScheduleDraft
+      status: hasDistributedPlan
         ? "Ferdig"
-        : submittedAvailabilityCount > 0
-          ? "Klar"
-          : "Venter",
-      tone: hasScheduleDraft
-        ? "success"
-        : activeSection === "heatmap"
-          ? "active"
-          : "muted",
+        : !hasSavedConfig
+          ? "Sett opp"
+          : availabilityComplete
+            ? "Ferdig"
+            : `${missingAvailabilityCount} mangler tider`,
+      tone: hasDistributedPlan || availabilityComplete ? "success" : "warning",
+      complete: availabilityComplete || hasDistributedPlan,
     },
     {
       key: "solver",
-      title: "Intervjuforslag",
-      description: "Generer og se over forslaget.",
+      title: "Planutkast",
+      description: "Generer, kontroller kandidater og løs avvik.",
       icon: Sparkles,
-      status: !hasSavedConfig ? "Låst" : hasScheduleDraft ? "Utkast" : "Klar",
+      status: !hasSavedConfig
+        ? "Låst"
+        : hasDistributedPlan
+          ? "Ferdig"
+          : !availabilityComplete
+            ? "Venter på tider"
+            : !hasScheduleDraft
+              ? "Klar"
+              : proposalConflictCount > 0
+                ? `${proposalConflictCount} må løses`
+                : !conflictReviewSummary.isComplete
+                  ? `${conflictReviewSummary.incompleteReviewerCount} må bekrefte`
+                  : "Kontrollert",
       tone: !hasSavedConfig
         ? "locked"
-        : hasScheduleDraft
+        : hasDistributedPlan
           ? "success"
-          : activeSection === "solver"
-            ? "active"
-            : "muted",
+          : !availabilityComplete || proposalConflictCount > 0
+            ? "warning"
+            : hasScheduleDraft && conflictReviewSummary.isComplete
+              ? "success"
+              : "muted",
+      complete: draftReadyForPublish || hasDistributedPlan,
       locked: !hasSavedConfig,
     },
     {
       key: "plan",
-      title: "Intervjuplan",
-      description: "Publiser, eksporter og følg opp.",
+      title: hasDistributedPlan ? "Gjennomføring" : "Publisering",
+      description: hasDistributedPlan
+        ? "Inviter, eksporter og følg opp intervjuene."
+        : "Se over utkastet og publiser endelige tider.",
       icon: CalendarCheck,
       status: hasDistributedPlan
-        ? "Publisert"
-        : hasScheduleDraft
-          ? "Klar"
-          : "Låst",
+        ? "Ferdig"
+        : !hasScheduleDraft
+          ? "Låst"
+          : proposalConflictCount > 0
+            ? "Løs inhabilitet"
+            : !conflictReviewSummary.isComplete
+              ? "Venter på kontroll"
+              : "Klar",
       tone: hasDistributedPlan
         ? "success"
-        : hasScheduleDraft || activeSection === "plan"
-          ? "active"
-          : "locked",
-      locked: !hasScheduleDraft,
+        : !hasScheduleDraft
+          ? "locked"
+          : draftReadyForPublish
+            ? "success"
+            : "warning",
+      complete: hasDistributedPlan,
+      locked: !hasScheduleDraft && !hasDistributedPlan,
     },
   ];
 };

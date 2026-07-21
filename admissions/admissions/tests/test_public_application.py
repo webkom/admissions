@@ -5,11 +5,13 @@ from rest_framework import status
 from rest_framework.test import APITestCase
 
 from admissions.admissions.models import (
+    AdmissionGroup,
     Group,
     GroupApplication,
     LegoUser,
     UserApplication,
 )
+from admissions.admissions.serializers import AdmissionPublicSerializer
 from admissions.admissions.tests.utils import DEFAULT_ADMISSION_SLUG, create_admission
 
 
@@ -19,7 +21,12 @@ class CreateApplicationTestCase(APITestCase):
         self.admission_slug = DEFAULT_ADMISSION_SLUG
         # Create admission and group
         self.admission = create_admission()
-        self.webkom = Group.objects.create(name="Webkom", lego_id=13)
+        self.webkom = Group.objects.create(
+            name="Webkom",
+            lego_id=13,
+            logo="https://example.com/webkom.png",
+            response_label="Hvorfor vil du søke Webkom?",
+        )
         self.koskom = Group.objects.create(name="Koskom", lego_id=9)
         self.admission.groups.add(self.webkom, self.koskom)
 
@@ -27,9 +34,7 @@ class CreateApplicationTestCase(APITestCase):
         self.pleb_anna = LegoUser.objects.create(username="Anna", lego_id=2)
 
         self.application_data = {
-            "text": "Ønsker Webkom mest",
             "phone_number": "12345678",
-            "header_fields_response": {},
             "applications": {
                 "webkom": "Hohohohohohohohohohooho webbis",
                 "koskom": "Hahahahahahahahahahaha arris",
@@ -73,6 +78,28 @@ class CreateApplicationTestCase(APITestCase):
         )
 
         self.assertEqual(res.status_code, status.HTTP_201_CREATED)
+
+    def test_my_application_includes_group_receipt_details(self):
+        self.client.force_authenticate(user=self.pleb_anna)
+        list_url = reverse(
+            "userapplication-list", kwargs={"admission_slug": self.admission_slug}
+        )
+        self.client.post(list_url, self.application_data, format="json")
+
+        res = self.client.get(
+            reverse(
+                "userapplication-mine", kwargs={"admission_slug": self.admission_slug}
+            )
+        )
+
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        webkom = next(
+            group_application["group"]
+            for group_application in res.json()["group_applications"]
+            if group_application["group"]["name"] == "Webkom"
+        )
+        self.assertEqual(webkom["logo"], "https://example.com/webkom.png")
+        self.assertEqual(webkom["response_label"], "Hvorfor vil du søke Webkom?")
 
     def test_missing_group_selection_is_rejected_without_creating_candidate(self):
         self.client.force_authenticate(user=self.pleb_anna)
@@ -141,9 +168,7 @@ class CreateApplicationTestCase(APITestCase):
         )
 
         self.application_data = {
-            "text": "Ønsker Webkom mest",
             "phone_number": "12345678",
-            "header_fields_response": {},
             "applications": {"webkom": "Hohohohohohohohohohooho webbis"},
         }
 
@@ -166,9 +191,7 @@ class CreateApplicationTestCase(APITestCase):
         self.client.force_authenticate(user=self.pleb_anna)
 
         data = {
-            "text": "x",
             "phone_number": "12345678",
-            "header_fields_response": {},
             "applications": {"bedkom": "should be rejected"},
         }
         res = self.client.post(
@@ -185,9 +208,7 @@ class CreateApplicationTestCase(APITestCase):
     def test_unknown_group_name_returns_400_not_500(self):
         self.client.force_authenticate(user=self.pleb_anna)
         data = {
-            "text": "x",
             "phone_number": "12345678",
-            "header_fields_response": {},
             "applications": {"this-group-does-not-exist": "x"},
         }
         res = self.client.post(
@@ -200,7 +221,7 @@ class CreateApplicationTestCase(APITestCase):
 
         self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
 
-    def test_missing_required_header_field_is_rejected(self):
+    def test_legacy_general_questions_do_not_block_submission(self):
         self.admission.header_fields = [
             {
                 "id": "q1",
@@ -215,9 +236,7 @@ class CreateApplicationTestCase(APITestCase):
         self.client.force_authenticate(user=self.pleb_anna)
 
         data = {
-            "text": "x",
             "phone_number": "12345678",
-            "header_fields_response": {},  # required q1 omitted
             "applications": {"webkom": "x"},
         }
         res = self.client.post(
@@ -228,8 +247,221 @@ class CreateApplicationTestCase(APITestCase):
             format="json",
         )
 
-        self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(res.status_code, status.HTTP_201_CREATED)
+        self.assertTrue(UserApplication.objects.filter(user=self.pleb_anna).exists())
+
+    def test_rejects_deprecated_general_application_answers(self):
+        self.client.force_authenticate(user=self.pleb_anna)
+
+        response = self.client.post(
+            reverse(
+                "userapplication-list", kwargs={"admission_slug": self.admission_slug}
+            ),
+            {
+                **self.application_data,
+                "text": "Dette hører ikke til en komité.",
+                "header_fields_response": {},
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("text", response.data)
+        self.assertIn("header_fields_response", response.data)
+
+    def test_group_questions_are_saved_with_only_that_groups_application(self):
+        AdmissionGroup.objects.filter(
+            admission=self.admission, group=self.webkom
+        ).update(
+            header_fields=[
+                {
+                    "id": "webkom_experience",
+                    "type": "textinput",
+                    "title": "Hva vil du lære i Webkom?",
+                    "label": "",
+                    "placeholder": "",
+                    "required": True,
+                }
+            ]
+        )
+        self.client.force_authenticate(user=self.pleb_anna)
+
+        data = {
+            **self.application_data,
+            "group_answers": {
+                "webkom": {"webkom_experience": "Bygge nyttige ting"},
+                "koskom": {},
+            },
+        }
+        response = self.client.post(
+            reverse(
+                "userapplication-list", kwargs={"admission_slug": self.admission_slug}
+            ),
+            data,
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        webkom_application = GroupApplication.objects.get(
+            application__user=self.pleb_anna, group=self.webkom
+        )
+        koskom_application = GroupApplication.objects.get(
+            application__user=self.pleb_anna, group=self.koskom
+        )
+        self.assertEqual(
+            webkom_application.header_fields_response,
+            {"webkom_experience": "Bygge nyttige ting"},
+        )
+        self.assertEqual(koskom_application.header_fields_response, {})
+
+    def test_public_admission_exposes_questions_for_the_matching_group(self):
+        question = {
+            "id": "webkom_experience",
+            "type": "textinput",
+            "title": "Hva vil du lære i Webkom?",
+            "label": "",
+            "placeholder": "",
+            "required": True,
+        }
+        AdmissionGroup.objects.filter(
+            admission=self.admission, group=self.webkom
+        ).update(header_fields=[question])
+
+        groups = AdmissionPublicSerializer(self.admission).data["groups"]
+        questions_by_group = {group["name"]: group["header_fields"] for group in groups}
+
+        self.assertEqual(questions_by_group["Webkom"], [question])
+        self.assertEqual(questions_by_group["Koskom"], [])
+
+    def test_missing_required_group_question_is_rejected(self):
+        AdmissionGroup.objects.filter(
+            admission=self.admission, group=self.webkom
+        ).update(
+            header_fields=[
+                {
+                    "id": "webkom_experience",
+                    "type": "textinput",
+                    "title": "Hva vil du lære i Webkom?",
+                    "label": "",
+                    "placeholder": "",
+                    "required": True,
+                }
+            ]
+        )
+        self.client.force_authenticate(user=self.pleb_anna)
+
+        response = self.client.post(
+            reverse(
+                "userapplication-list", kwargs={"admission_slug": self.admission_slug}
+            ),
+            {**self.application_data, "group_answers": {"webkom": {}}},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertFalse(UserApplication.objects.filter(user=self.pleb_anna).exists())
+
+    def test_group_checkbox_question_can_be_answered_with_boolean(self):
+        AdmissionGroup.objects.filter(
+            admission=self.admission, group=self.webkom
+        ).update(
+            header_fields=[
+                {
+                    "id": "q_checkbox",
+                    "type": "checkbox",
+                    "title": "Har du erfaring?",
+                    "label": "Merke dette",
+                    "placeholder": "",
+                    "required": True,
+                }
+            ]
+        )
+        self.client.force_authenticate(user=self.pleb_anna)
+
+        data = {
+            "phone_number": "12345678",
+            "applications": {"webkom": "x"},
+            "group_answers": {"webkom": {"q_checkbox": True}},
+        }
+        res = self.client.post(
+            reverse(
+                "userapplication-list", kwargs={"admission_slug": self.admission_slug}
+            ),
+            data,
+            format="json",
+        )
+
+        self.assertEqual(res.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(
+            GroupApplication.objects.get(
+                application__user=self.pleb_anna, group=self.webkom
+            ).header_fields_response,
+            {"q_checkbox": True},
+        )
+
+    def test_group_checkbox_question_rejects_false_when_required(self):
+        AdmissionGroup.objects.filter(
+            admission=self.admission, group=self.webkom
+        ).update(
+            header_fields=[
+                {
+                    "id": "q_checkbox",
+                    "type": "checkbox",
+                    "title": "Har du erfaring?",
+                    "label": "Merke dette",
+                    "placeholder": "",
+                    "required": True,
+                }
+            ]
+        )
+        self.client.force_authenticate(user=self.pleb_anna)
+
+        data = {
+            "phone_number": "12345678",
+            "applications": {"webkom": "x"},
+            "group_answers": {"webkom": {"q_checkbox": False}},
+        }
+        res = self.client.post(
+            reverse(
+                "userapplication-list", kwargs={"admission_slug": self.admission_slug}
+            ),
+            data,
+            format="json",
+        )
+
+        self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_group_checkbox_question_rejects_non_boolean_payload(self):
+        AdmissionGroup.objects.filter(
+            admission=self.admission, group=self.webkom
+        ).update(
+            header_fields=[
+                {
+                    "id": "q_checkbox",
+                    "type": "checkbox",
+                    "title": "Har du erfaring?",
+                    "label": "Merke dette",
+                    "placeholder": "",
+                    "required": False,
+                }
+            ]
+        )
+        self.client.force_authenticate(user=self.pleb_anna)
+
+        data = {
+            "phone_number": "12345678",
+            "applications": {"webkom": "x"},
+            "group_answers": {"webkom": {"q_checkbox": "true"}},
+        }
+        res = self.client.post(
+            reverse(
+                "userapplication-list", kwargs={"admission_slug": self.admission_slug}
+            ),
+            data,
+            format="json",
+        )
+
+        self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
 
     def test_email_failure_does_not_block_application_edit(self):
         self.client.force_authenticate(user=self.pleb_anna)
@@ -247,9 +479,7 @@ class CreateApplicationTestCase(APITestCase):
         )
 
         edit = {
-            "text": "x",
             "phone_number": "12345678",
-            "header_fields_response": {},
             "applications": {"webkom": "still want webkom"},
         }
         with patch(

@@ -1,5 +1,7 @@
 import React, { useEffect, useId, useRef, useState } from "react";
-import { AlertTriangle, Check, ChevronDown } from "lucide-react";
+import { createPortal } from "react-dom";
+import { AlertTriangle, Check, ChevronDown, Clock3 } from "lucide-react";
+import { iconSizes } from "src/styles/designTokens";
 import cn from "src/utils/cn";
 
 export {
@@ -16,6 +18,7 @@ export {
   Stepper,
   ToggleCard,
   SegmentedControl,
+  CustomValueSegmentedControl,
   StatTile,
   CustomSelect,
 } from "../ui";
@@ -71,7 +74,7 @@ export const SchedulePanelHeader: React.FC<SchedulePanelHeaderProps> = ({
     <div className="flex min-w-0 flex-1 items-start gap-3">
       {Icon && (
         <span className="mt-0.5 inline-flex h-7 w-7 flex-none items-center justify-center text-brand">
-          <Icon size={18} />
+          <Icon size={iconSizes.standard} />
         </span>
       )}
       <div className="min-w-0">
@@ -100,14 +103,19 @@ interface SchedulePanelBodyProps {
   children: React.ReactNode;
   className?: string;
   noPadding?: boolean;
+  id?: string;
 }
 
 export const SchedulePanelBody: React.FC<SchedulePanelBodyProps> = ({
   children,
   className,
   noPadding = false,
+  id,
 }) => (
-  <div className={cn(!noPadding && "px-5 py-4 handheld:px-4", className)}>
+  <div
+    id={id}
+    className={cn(!noPadding && "px-5 py-4 handheld:px-4", className)}
+  >
     {children}
   </div>
 );
@@ -142,6 +150,8 @@ interface EditablePanelChipProps {
   label: string;
   tone?: "neutral" | "overtime";
   conflict?: boolean;
+  timeIssue?: boolean;
+  statusLabel?: string;
   isCurrentUser?: boolean;
   options?: PanelChipOption[];
   onSelect?: (newName: string, id?: string) => void;
@@ -154,6 +164,8 @@ export const EditablePanelChip: React.FC<EditablePanelChipProps> = ({
   label,
   tone = "neutral",
   conflict = false,
+  timeIssue = false,
+  statusLabel,
   isCurrentUser = false,
   options,
   onSelect,
@@ -168,9 +180,38 @@ export const EditablePanelChip: React.FC<EditablePanelChipProps> = ({
   const wrapRef = useRef<HTMLDivElement>(null);
   const chipRef = useRef<HTMLButtonElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+  const [menuPosition, setMenuPosition] = useState<React.CSSProperties>({});
   const baseId = useId();
   const listboxId = `${baseId}-listbox`;
   const optionId = (index: number) => `${baseId}-option-${index}`;
+
+  const updateMenuPosition = () => {
+    const chip = chipRef.current;
+    if (!chip) return;
+
+    const rect = chip.getBoundingClientRect();
+    const viewportPadding = 12;
+    const menuWidth = Math.max(rect.width, 256);
+    const spaceBelow = window.innerHeight - rect.bottom;
+    const spaceAbove = rect.top;
+    const openUpwards = spaceBelow < 300 && spaceAbove > spaceBelow;
+    const availableHeight = Math.max(
+      160,
+      Math.min(360, (openUpwards ? spaceAbove : spaceBelow) - viewportPadding),
+    );
+
+    setMenuPosition({
+      left: Math.max(
+        viewportPadding,
+        Math.min(rect.left, window.innerWidth - menuWidth - viewportPadding),
+      ),
+      width: menuWidth,
+      top: openUpwards ? undefined : rect.bottom + 6,
+      bottom: openUpwards ? window.innerHeight - rect.top + 6 : undefined,
+      maxHeight: availableHeight,
+    });
+  };
 
   useEffect(() => {
     if (!open) {
@@ -180,7 +221,13 @@ export const EditablePanelChip: React.FC<EditablePanelChipProps> = ({
     }
     const focusTimer = window.setTimeout(() => inputRef.current?.focus(), 30);
     const handleClickOutside = (event: MouseEvent) => {
-      if (!wrapRef.current?.contains(event.target as Node)) setOpen(false);
+      const target = event.target as Node;
+      if (
+        !wrapRef.current?.contains(target) &&
+        !menuRef.current?.contains(target)
+      ) {
+        setOpen(false);
+      }
     };
     const handleKey = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
@@ -188,12 +235,17 @@ export const EditablePanelChip: React.FC<EditablePanelChipProps> = ({
         setOpen(false);
       }
     };
+    updateMenuPosition();
     document.addEventListener("mousedown", handleClickOutside);
     document.addEventListener("keydown", handleKey);
+    window.addEventListener("resize", updateMenuPosition);
+    window.addEventListener("scroll", updateMenuPosition, true);
     return () => {
       window.clearTimeout(focusTimer);
       document.removeEventListener("mousedown", handleClickOutside);
       document.removeEventListener("keydown", handleKey);
+      window.removeEventListener("resize", updateMenuPosition);
+      window.removeEventListener("scroll", updateMenuPosition, true);
     };
   }, [open]);
 
@@ -266,6 +318,7 @@ export const EditablePanelChip: React.FC<EditablePanelChipProps> = ({
         disabled={!editable}
         onClick={() => editable && setOpen((prev) => !prev)}
         title={title}
+        aria-label={statusLabel ? `${label}: ${statusLabel}` : label}
         aria-haspopup={editable ? "listbox" : undefined}
         aria-expanded={editable ? open : undefined}
         className={cn(
@@ -279,17 +332,28 @@ export const EditablePanelChip: React.FC<EditablePanelChipProps> = ({
             : isCurrentUser
               ? "border-brand-border bg-brand-soft font-bold text-brand"
               : tone === "overtime"
-                ? "border-brand-panelBorder bg-brand-badge text-brand"
+                ? "border-danger-border bg-danger-bg font-semibold text-danger"
                 : "border-border-soft bg-surface-subtle text-text-body",
         )}
       >
         {conflict && (
-          <AlertTriangle size={11} aria-hidden="true" className="flex-none" />
+          <AlertTriangle
+            size={iconSizes.tiny}
+            aria-hidden="true"
+            className="flex-none"
+          />
+        )}
+        {timeIssue && !conflict && (
+          <Clock3
+            size={iconSizes.tiny}
+            aria-hidden="true"
+            className="flex-none"
+          />
         )}
         <span>{label}</span>
         {editable && (
           <ChevronDown
-            size={10}
+            size={iconSizes.micro}
             aria-hidden="true"
             className={cn(
               "transition-[transform,opacity] duration-150",
@@ -300,86 +364,89 @@ export const EditablePanelChip: React.FC<EditablePanelChipProps> = ({
           />
         )}
       </button>
-      {editable && open && (
-        <div className="absolute left-0 top-full z-30 mt-1 w-64 origin-top-left rounded-lg border border-border bg-surface-base shadow-panel animate-fade-in">
-          <div className="border-b border-border-soft px-2 py-1.5">
-            <input
-              ref={inputRef}
-              type="search"
-              role="combobox"
-              aria-expanded={filtered.length > 0}
-              aria-controls={filtered.length > 0 ? listboxId : undefined}
-              aria-activedescendant={
-                highlightedIndex >= 0 && highlightedIndex < filtered.length
-                  ? optionId(highlightedIndex)
-                  : undefined
-              }
-              aria-autocomplete="list"
-              value={query}
-              onChange={(event) => {
-                setQuery(event.target.value);
-                setHighlightedIndex(-1);
-              }}
-              onKeyDown={handleInputKeyDown}
-              placeholder={searchPlaceholder}
-              aria-label={searchPlaceholder}
-              className="w-full bg-transparent px-1 py-1 text-sm font-semibold text-text-primary placeholder:font-normal placeholder:text-text-faded focus:outline-none"
-            />
-          </div>
-          {filtered.length === 0 ? (
-            <p className="m-0 px-3 py-2 text-detail text-text-muted">
-              {emptyLabel}
-            </p>
-          ) : (
-            <ul
-              id={listboxId}
-              role="listbox"
-              className="m-0 max-h-60 overflow-y-auto p-1"
-            >
-              {filtered.map((opt, index) => {
-                const isCurrent = opt.name === label;
-                const isHighlighted = index === highlightedIndex;
-                return (
-                  <li key={opt.id ?? opt.name} role="none">
-                    <button
-                      id={optionId(index)}
-                      type="button"
-                      tabIndex={-1}
-                      role="option"
-                      aria-selected={isCurrent}
-                      disabled={opt.disabled}
-                      title={opt.disabledReason}
-                      onClick={() => selectOption(opt)}
-                      onMouseEnter={() => {
-                        if (!opt.disabled) setHighlightedIndex(index);
-                      }}
-                      className={cn(
-                        "flex w-full items-center justify-between gap-2 rounded-md px-2 py-1.5 text-left text-sm font-semibold transition-colors",
-                        opt.disabled
-                          ? "cursor-not-allowed text-text-faded"
-                          : isCurrent
-                            ? "bg-brand-soft text-brand"
-                            : isHighlighted
-                              ? "bg-surface-subtle text-text-primary"
-                              : "text-text-primary hover:bg-surface-subtle",
-                      )}
-                    >
-                      <span className="truncate">{opt.name}</span>
-                      {isCurrent ? (
-                        <Check size={12} aria-hidden="true" />
-                      ) : opt.disabled ? (
-                        <span className="text-detail font-medium text-text-muted">
-                          I panelet
-                        </span>
-                      ) : null}
-                    </button>
-                  </li>
-                );
-              })}
-            </ul>
-          )}
-        </div>
-      )}
+      {editable &&
+        open &&
+        createPortal(
+          <div
+            ref={menuRef}
+            style={menuPosition}
+            className="fixed z-modal flex origin-top-left flex-col overflow-y-auto rounded-lg border border-border bg-surface-base shadow-panel animate-fade-in"
+          >
+            <div className="border-b border-border-soft bg-surface-subtle px-2.5 py-2">
+              <input
+                ref={inputRef}
+                type="search"
+                role="combobox"
+                aria-expanded={filtered.length > 0}
+                aria-controls={filtered.length > 0 ? listboxId : undefined}
+                aria-activedescendant={
+                  highlightedIndex >= 0 && highlightedIndex < filtered.length
+                    ? optionId(highlightedIndex)
+                    : undefined
+                }
+                aria-autocomplete="list"
+                value={query}
+                onChange={(event) => {
+                  setQuery(event.target.value);
+                  setHighlightedIndex(-1);
+                }}
+                onKeyDown={handleInputKeyDown}
+                placeholder={searchPlaceholder}
+                aria-label={searchPlaceholder}
+                className="w-full rounded-md border border-border-soft bg-surface-base px-2.5 py-1.5 text-sm font-semibold text-text-primary placeholder:font-normal placeholder:text-text-faded focus:border-brand-input focus:outline-none focus:ring-2 focus:ring-brand-ringSoft"
+              />
+            </div>
+            {filtered.length === 0 ? (
+              <p className="m-0 px-3 py-3 text-detail text-text-muted">
+                {emptyLabel}
+              </p>
+            ) : (
+              <ul id={listboxId} role="listbox" className="m-0 p-1.5">
+                {filtered.map((opt, index) => {
+                  const isCurrent = opt.name === label;
+                  const isHighlighted = index === highlightedIndex;
+                  return (
+                    <li key={opt.id ?? opt.name} role="none">
+                      <button
+                        id={optionId(index)}
+                        type="button"
+                        tabIndex={-1}
+                        role="option"
+                        aria-selected={isCurrent}
+                        disabled={opt.disabled}
+                        title={opt.disabledReason}
+                        onClick={() => selectOption(opt)}
+                        onMouseEnter={() => {
+                          if (!opt.disabled) setHighlightedIndex(index);
+                        }}
+                        className={cn(
+                          "flex w-full items-center justify-between gap-2 rounded-md px-2.5 py-2 text-left text-sm font-semibold transition-colors",
+                          opt.disabled
+                            ? "cursor-not-allowed text-text-faded"
+                            : isCurrent
+                              ? "bg-brand-soft text-brand"
+                              : isHighlighted
+                                ? "bg-surface-subtle text-text-primary"
+                                : "text-text-primary hover:bg-surface-subtle",
+                        )}
+                      >
+                        <span className="truncate">{opt.name}</span>
+                        {isCurrent ? (
+                          <Check size={iconSizes.compact} aria-hidden="true" />
+                        ) : opt.disabled ? (
+                          <span className="text-detail font-medium text-text-muted">
+                            I panelet
+                          </span>
+                        ) : null}
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </div>,
+          document.body,
+        )}
     </div>
   );
 };
@@ -391,9 +458,14 @@ export interface TimeValue {
 
 interface TimeSegmentInputProps {
   id?: string;
+  className?: string;
   value: TimeValue;
   onChange: (next: TimeValue) => void;
+  allowEndOfDay?: boolean;
+  bare?: boolean;
   "aria-label": string;
+  "aria-invalid"?: boolean;
+  "aria-describedby"?: string;
 }
 
 const padSegment = (segment: number) => String(segment).padStart(2, "0");
@@ -466,28 +538,44 @@ const TimeSegmentField: React.FC<TimeSegmentFieldProps> = ({
 
 export const TimeSegmentInput: React.FC<TimeSegmentInputProps> = ({
   id,
+  className,
   value,
   onChange,
+  allowEndOfDay = false,
+  bare = false,
   "aria-label": ariaLabel,
-}) => (
-  <div
-    id={id}
-    role="group"
-    aria-label={ariaLabel}
-    className="inline-flex items-center gap-0.5 rounded-lg border border-border-soft bg-surface-base px-2 py-1.5"
-  >
-    <TimeSegmentField
-      max={23}
-      committed={value.h}
-      onCommit={(h) => onChange({ h, m: value.m })}
-      aria-label={`${ariaLabel}, time`}
-    />
-    <span className="select-none text-sm font-bold text-text-subtle">:</span>
-    <TimeSegmentField
-      max={59}
-      committed={value.m}
-      onCommit={(m) => onChange({ h: value.h, m })}
-      aria-label={`${ariaLabel}, minutt`}
-    />
-  </div>
-);
+  "aria-invalid": ariaInvalid,
+  "aria-describedby": ariaDescribedBy,
+}) => {
+  const isEndOfDay = allowEndOfDay && value.h === 24;
+
+  return (
+    <div
+      id={id}
+      role="group"
+      aria-label={ariaLabel}
+      aria-invalid={ariaInvalid}
+      aria-describedby={ariaDescribedBy}
+      className={cn(
+        bare
+          ? "inline-flex items-center gap-0.5"
+          : "inline-flex h-control-md items-center gap-0.5 rounded-md border border-border-soft bg-surface-base px-2 transition-[border-color,box-shadow] focus-within:border-brand focus-within:ring-3 focus-within:ring-brand-ringSoft",
+        className,
+      )}
+    >
+      <TimeSegmentField
+        max={allowEndOfDay ? 24 : 23}
+        committed={value.h}
+        onCommit={(h) => onChange({ h, m: h === 24 ? 0 : value.m })}
+        aria-label={`${ariaLabel}, time`}
+      />
+      <span className="select-none text-sm font-bold text-text-subtle">:</span>
+      <TimeSegmentField
+        max={isEndOfDay ? 0 : 59}
+        committed={value.m}
+        onCommit={(m) => onChange({ h: value.h, m: isEndOfDay ? 0 : m })}
+        aria-label={`${ariaLabel}, minutt`}
+      />
+    </div>
+  );
+};

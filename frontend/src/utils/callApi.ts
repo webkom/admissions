@@ -1,7 +1,8 @@
 import Cookie from "js-cookie";
 import * as Sentry from "@sentry/browser";
 import config from "src/utils/config";
-import axios, { AxiosError, AxiosResponse } from "axios";
+import axios, { type AxiosError, type AxiosResponse } from "axios";
+import { sanitizeAxiosError } from "src/utils/sanitizeAxiosError";
 
 /**
  * API base
@@ -11,9 +12,16 @@ export const apiClient = axios.create({
   headers: {
     Accept: "application/json",
     "Content-Type": "application/json",
-    "X-CSRFToken": Cookie.get("csrftoken") ?? "",
   },
   timeout: 50000,
+});
+
+apiClient.interceptors.request.use((request) => {
+  request.headers.set(
+    "X-CSRFToken",
+    Cookie.get(config.CSRF_COOKIE_NAME ?? "csrftoken") ?? "",
+  );
+  return request;
 });
 
 apiClient.interceptors.response.use(
@@ -34,6 +42,6 @@ apiClient.interceptors.response.use(
         );
       });
     }
-    return Promise.reject(error);
+    return Promise.reject(sanitizeAxiosError(error));
   },
 );

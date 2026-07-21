@@ -3,13 +3,16 @@ import styled from "styled-components";
 import { media } from "src/styles/mediaQueries";
 import avatar from "assets/avatar.png";
 import djangoData from "src/utils/djangoData";
+import { clearApplicationDraftNamespace } from "src/utils/draftHelper";
 
 const UserInfo: React.FC = () => {
   return (
     <Container>
       <NameLogOutWrapper>
         <Name>{djangoData.user.full_name}</Name>
-        <LogoutButton href="/logout/">Logg ut</LogoutButton>
+        <LogoutButton href="/logout/" onClick={clearApplicationDraftNamespace}>
+          Logg ut
+        </LogoutButton>
       </NameLogOutWrapper>
       <ProfilePicture src={djangoData.user.profile_picture || avatar} />
     </Container>
@@ -84,7 +87,7 @@ const ProfilePicture = styled.img`
   height: auto;
   width: var(--avatar-size-md);
   height: var(--avatar-size-md);
-  border-radius: 50%;
+  border-radius: var(--border-radius-pill);
   margin-left: var(--spacing-md);
 
   ${media.portrait`        

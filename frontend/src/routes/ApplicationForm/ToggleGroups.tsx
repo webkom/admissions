@@ -57,20 +57,20 @@ export default ToggleGroups;
 /** Styles **/
 
 const Wrapper = styled.div`
-  border: 2px solid var(--color-border-soft);
+  border: var(--border-width-strong) solid var(--color-border-soft);
   border-radius: var(--border-radius-lg);
   padding: var(--spacing-xl);
-  max-width: 290px;
+  max-width: var(--form-toggle-width);
 
   ${media.portrait`
     max-width: 100%;
-    padding: 1.5rem 2rem;
+    padding: var(--spacing-lg) var(--spacing-xl);
 
   `};
 
   ${media.handheld`
      margin: auto;
-     max-width: 290px;
+     max-width: var(--form-toggle-width);
   `};
 `;
 
@@ -84,33 +84,33 @@ const Tooltip = styled.p`
   margin-top: 0;
   margin-bottom: var(--spacing-md);
   font-size: var(--font-size-detail);
-  line-height: 1rem;
+  line-height: var(--line-height-tiny);
 `;
 
 const IconsWrapper = styled.div`
   grid-area: togglegroups;
   display: grid;
-  grid-template-columns: repeat(4, 40px);
+  grid-template-columns: repeat(4, var(--avatar-size-sm));
   grid-template-rows: auto;
-  grid-gap: 5px 10px;
-  padding: 5px 10px;
+  gap: var(--spacing-xs) var(--spacing-sm);
+  padding: var(--spacing-xs) var(--spacing-sm);
 
   ${media.portrait`
-    grid-template-columns: repeat(8, 40px);
+    grid-template-columns: repeat(8, var(--avatar-size-sm));
   `};
 
   ${media.handheld`
-    grid-template-columns: repeat(4, 40px);
+    grid-template-columns: repeat(4, var(--avatar-size-sm));
   `};
 `;
 
 const LinkToOverview = styled(Link)`
   margin-top: var(--spacing-md);
   display: inline-block;
-  line-height: 1rem;
+  line-height: var(--line-height-tiny);
   text-decoration: underline;
   font-size: var(--font-size-detail);
   text-align: center;
-  font-weight: 500;
+  font-weight: var(--font-weight-medium);
   width: 100%;
 `;

@@ -45,9 +45,10 @@ const AdmissionTimeline: React.FC<AdmissionTimelineProps> = ({ items }) => {
                 className={cn(
                   "relative z-10 mt-1 flex h-6 w-6 flex-none items-center justify-center rounded-full border-2 transition-colors",
                   isPast && "border-border-muted bg-surface-muted",
-                  isCurrent &&
-                    "animate-[timeline-pulse_2s_ease-in-out_infinite] border-brand bg-brand",
-                  !isPast && !isCurrent && "border-brand/40 bg-surface-base",
+                  isCurrent && "animate-pulse-brand border-brand bg-brand",
+                  !isPast &&
+                    !isCurrent &&
+                    "border-brand-activeBorder bg-surface-base",
                 )}
               >
                 {isPast && (

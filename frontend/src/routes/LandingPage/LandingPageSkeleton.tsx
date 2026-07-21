@@ -2,11 +2,12 @@ import React, { PropsWithChildren } from "react";
 import AbakusLogo from "src/components/AbakusLogo";
 import { isLoggedIn, isManager } from "src/utils/djangoData";
 import LinkButton from "src/components/LinkButton";
+import { clearApplicationDraftNamespace } from "src/utils/draftHelper";
 
 const LandingPageSkeleton: React.FC<PropsWithChildren> = ({ children }) => {
   return (
-    <div className="mx-auto flex min-h-[100dvh] w-full max-w-6xl flex-col items-center px-8 py-16 handheld:px-4 handheld:py-8">
-      <div className="mb-8 max-w-44 transition-transform duration-200 hover:scale-[1.02] handheld:max-w-36">
+    <div className="mx-auto flex min-h-viewport w-full max-w-6xl flex-col items-center px-8 py-16 handheld:px-4 handheld:py-8">
+      <div className="mb-8 max-w-44 handheld:max-w-36">
         <AbakusLogo />
       </div>
       <h1 className="mb-4 text-center text-[length:var(--font-size-hero-fluid)] font-extrabold tracking-display-tight text-text-strong handheld:text-display-lg">
@@ -30,6 +31,7 @@ const LandingPageSkeleton: React.FC<PropsWithChildren> = ({ children }) => {
           <a
             className="text-sm font-medium text-text-secondary transition-colors duration-200 hover:text-text-strong"
             href="/logout/"
+            onClick={clearApplicationDraftNamespace}
           >
             Logg ut
           </a>

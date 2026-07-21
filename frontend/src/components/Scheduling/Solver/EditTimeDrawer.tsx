@@ -1,6 +1,7 @@
 import React, { useEffect, useRef } from "react";
 import { X } from "lucide-react";
 import cn from "src/utils/cn";
+import { iconSizes } from "src/styles/designTokens";
 import { useFocusTrap } from "../ConfirmDialog";
 import {
   CustomSelect,
@@ -60,14 +61,14 @@ const EditTimeDrawer = ({
       <div
         aria-hidden="true"
         onClick={onClose}
-        className="fixed inset-0 z-[200] bg-overlay animate-overlay-fade-in"
+        className="fixed inset-0 z-modal bg-overlay animate-overlay-fade-in"
       />
       <aside
         ref={drawerRef}
         role="dialog"
         aria-modal="true"
         aria-labelledby="edit-time-title"
-        className="fixed inset-y-0 right-0 z-[210] flex w-full max-w-sm flex-col border-l border-border bg-surface-base shadow-drawer-left animate-slide-in-right"
+        className="fixed inset-y-0 right-0 z-drawer flex w-full max-w-sm flex-col border-l border-border bg-surface-base shadow-drawer-left animate-slide-in-right"
       >
         <header className="flex items-start justify-between gap-3 border-b border-border-soft px-5 py-4">
           <div className="min-w-0">
@@ -88,7 +89,7 @@ const EditTimeDrawer = ({
             aria-label="Lukk"
             className="inline-flex h-8 w-8 flex-none cursor-pointer items-center justify-center rounded-md text-text-muted transition-colors hover:bg-surface-subtle hover:text-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-ring"
           >
-            <X size={16} />
+            <X size={iconSizes.medium} />
           </button>
         </header>
         <div className="flex-1 overflow-y-auto px-5 py-4">

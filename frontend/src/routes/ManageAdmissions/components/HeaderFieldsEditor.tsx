@@ -1,7 +1,11 @@
 import React from "react";
 import styled from "styled-components";
-import { ArrowDown, ArrowUp, Trash2 } from "lucide-react";
-import { FieldModel, InputFieldModel } from "src/utils/jsonFields";
+import { ArrowDown, ArrowUp, Layers3, Trash2 } from "lucide-react";
+import {
+  FieldModel,
+  InputFieldModel,
+  getDefaultPlaceholder,
+} from "src/utils/jsonFields";
 import { iconSizes } from "src/styles/designTokens";
 
 const INPUT_TYPE_OPTIONS: { value: InputFieldModel["type"]; label: string }[] =
@@ -10,6 +14,7 @@ const INPUT_TYPE_OPTIONS: { value: InputFieldModel["type"]; label: string }[] =
     { value: "textarea", label: "Lang tekst" },
     { value: "numberinput", label: "Tall" },
     { value: "phoneinput", label: "Telefon" },
+    { value: "checkbox", label: "Avkrysningsboks" },
   ];
 
 const makeInputField = (): InputFieldModel => ({
@@ -56,6 +61,16 @@ const HeaderFieldsEditor: React.FC<Props> = ({
 
   return (
     <Wrapper>
+      <ScopeCallout>
+        <Layers3 size={iconSizes.control} aria-hidden="true" />
+        <div>
+          <ScopeTitle>Gjelder denne komiteen i dette opptaket</ScopeTitle>
+          <ScopeDescription>
+            Svaret vises bare når søkeren velger denne komiteen, og blir ikke
+            gjenbrukt i andre opptak.
+          </ScopeDescription>
+        </div>
+      </ScopeCallout>
       {value.length === 0 && <Empty>Ingen ekstra spørsmål er lagt til.</Empty>}
 
       {value.map((field, index) => {
@@ -68,7 +83,9 @@ const HeaderFieldsEditor: React.FC<Props> = ({
           <Row key={fieldKey}>
             <RowHeader>
               <RowKind>
-                {field.type === "text" ? "Infotekst" : `Spørsmål ${index + 1}`}
+                {field.type === "text"
+                  ? "Infotekst for komiteen"
+                  : `Spørsmål for komiteen ${index + 1}`}
               </RowKind>
               <RowActions>
                 <IconButton
@@ -139,6 +156,7 @@ const HeaderFieldsEditor: React.FC<Props> = ({
                     <Input
                       id={`${contentId}-title`}
                       value={field.title}
+                      data-admission-field="header_fields"
                       aria-invalid={titleError}
                       aria-describedby={
                         titleError ? `${contentId}-title-error` : undefined
@@ -197,27 +215,36 @@ const HeaderFieldsEditor: React.FC<Props> = ({
         );
       })}
 
-      {error && <EditorError role="alert">{error}</EditorError>}
+      {error && (
+        <EditorError
+          id="header-fields-error"
+          role="alert"
+          tabIndex={-1}
+          data-admission-field="header_fields"
+        >
+          {error}
+        </EditorError>
+      )}
 
       <AddRow>
         <AddButton
           type="button"
           onClick={() => onChange([...value, makeInputField()])}
         >
-          Legg til spørsmål
+          Legg til spørsmål for komiteen
         </AddButton>
         <AddButton
           type="button"
           onClick={() => onChange([...value, { type: "text", text: "" }])}
         >
-          Legg til infotekst
+          Legg til infotekst for komiteen
         </AddButton>
       </AddRow>
 
       {value.length > 0 && (
         <Preview aria-labelledby="question-preview-title">
           <PreviewTitle id="question-preview-title">
-            Forhåndsvisning for søkeren
+            Forhåndsvisning av komitéspørsmål
           </PreviewTitle>
           {value.map((field, index) =>
             field.type === "text" ? (
@@ -231,7 +258,11 @@ const HeaderFieldsEditor: React.FC<Props> = ({
                   {field.required ? " *" : ""}
                 </strong>
                 {field.label && <span>{field.label}</span>}
-                <PreviewValue>{field.placeholder || "Svarfelt"}</PreviewValue>
+                <PreviewValue>
+                  {field.type === "checkbox"
+                    ? "Ikke avkrysset / avkrysset"
+                    : getDefaultPlaceholder(field.type, field.placeholder)}
+                </PreviewValue>
               </PreviewField>
             ),
           )}
@@ -256,6 +287,31 @@ const Empty = styled.p`
   font-style: italic;
 `;
 
+const ScopeCallout = styled.div`
+  display: flex;
+  align-items: flex-start;
+  gap: var(--spacing-md);
+  padding: var(--spacing-md) var(--spacing-lg);
+  border: var(--border-width-default) solid var(--color-brand-border);
+  border-left-width: var(--border-width-emphasis);
+  border-radius: var(--border-radius-md);
+  background: var(--color-brand-soft);
+  color: var(--color-brand);
+`;
+
+const ScopeTitle = styled.strong`
+  display: block;
+  color: var(--color-text-primary);
+  font-size: var(--font-size-sm);
+`;
+
+const ScopeDescription = styled.p`
+  margin: var(--spacing-xs) 0 0;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-detail);
+  line-height: var(--line-height-base);
+`;
+
 const Row = styled.div`
   padding: var(--spacing-lg);
   border: var(--border-width-default) solid var(--color-border-muted);
@@ -274,7 +330,7 @@ const RowHeader = styled.div`
 const RowKind = styled.span`
   color: var(--color-text-muted);
   font-size: var(--font-size-detail);
-  font-weight: 700;
+  font-weight: var(--font-weight-bold);
   letter-spacing: var(--letter-spacing-caps);
 `;
 
@@ -297,7 +353,7 @@ const IconButton = styled.button`
   cursor: pointer;
 
   &:disabled {
-    opacity: 0.4;
+    opacity: var(--opacity-faint);
     cursor: not-allowed;
   }
 `;
@@ -320,7 +376,7 @@ const Field = styled.div`
 const FieldLabel = styled.label`
   color: var(--color-text-primary);
   font-size: var(--font-size-detail);
-  font-weight: 600;
+  font-weight: var(--font-weight-semibold);
 `;
 
 const fieldStyles = `
@@ -375,7 +431,7 @@ const AddButton = styled.button`
   background: transparent;
   color: var(--color-text-primary);
   font-size: var(--font-size-ui);
-  font-weight: 600;
+  font-weight: var(--font-weight-semibold);
   cursor: pointer;
 
   &:hover {

@@ -1,27 +1,42 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { AxiosError } from "axios";
 import { FieldModel, InputResponseModel } from "src/utils/jsonFields";
+import { AdminApplication, InterviewStatus, SavedSchedule } from "src/types";
 import { apiClient } from "../utils/callApi";
+import {
+  areSensitiveAdmissionCacheWritesBlocked,
+  sensitiveAdmissionMutationOptions,
+} from "./sensitiveAccess";
 
 // Public mutations
 
 export const useDeleteMyApplicationMutation = (slug: string) => {
   const queryClient = useQueryClient();
+  const applicationQueryKey = [`/admission/${slug}/application/mine/`];
   return useMutation<unknown, AxiosError>({
+    ...sensitiveAdmissionMutationOptions(slug),
     mutationFn: () => apiClient.delete(`/admission/${slug}/application/mine/`),
     onSuccess: () => {
+      if (areSensitiveAdmissionCacheWritesBlocked(slug)) return;
       queryClient.invalidateQueries({
-        queryKey: [`/admission/${slug}/application/mine/`],
+        queryKey: applicationQueryKey,
+      });
+    },
+    onError: async (error) => {
+      const status = error.response?.status ?? 0;
+      if (status !== 404) return;
+      await queryClient.resetQueries({
+        queryKey: applicationQueryKey,
+        exact: true,
       });
     },
   });
 };
 
 export interface MutationApplication {
-  text: string;
   phone_number: string;
   applications: Record<string, string>;
-  header_fields_response: InputResponseModel;
+  group_answers: Record<string, InputResponseModel>;
 }
 
 interface CreateApplicationProps {
@@ -30,15 +45,26 @@ interface CreateApplicationProps {
 
 export const useCreateApplicationMutation = (admissionSlug: string) => {
   const queryClient = useQueryClient();
+  const applicationQueryKey = [`/admission/${admissionSlug}/application/mine/`];
   return useMutation<unknown, AxiosError, CreateApplicationProps>({
+    ...sensitiveAdmissionMutationOptions(admissionSlug),
     mutationFn: ({ newApplication }) =>
       apiClient.post(
         `/admission/${admissionSlug}/application/`,
         newApplication,
       ),
     onSuccess: () => {
+      if (areSensitiveAdmissionCacheWritesBlocked(admissionSlug)) return;
       queryClient.invalidateQueries({
-        queryKey: [`/admission/${admissionSlug}/application/mine/`],
+        queryKey: applicationQueryKey,
+      });
+    },
+    onError: async (error) => {
+      const status = error.response?.status ?? 0;
+      if (status !== 404) return;
+      await queryClient.resetQueries({
+        queryKey: applicationQueryKey,
+        exact: true,
       });
     },
   });
@@ -70,9 +96,229 @@ interface DeleteGroupApplicationProps {
   groupId?: string;
 }
 
+interface TerminateCommitteeProps {
+  groupId: string;
+  confirmationName: string;
+}
+
+export const useTerminateCommitteeMutation = (admissionSlug: string) => {
+  const queryClient = useQueryClient();
+
+  return useMutation<unknown, AxiosError, TerminateCommitteeProps>({
+    ...sensitiveAdmissionMutationOptions(admissionSlug),
+    mutationFn: ({ groupId, confirmationName }) =>
+      apiClient.post(
+        `/admin/admission/${admissionSlug}/group/${groupId}/terminate/`,
+        { confirmation_name: confirmationName },
+      ),
+    onSuccess: () => {
+      if (areSensitiveAdmissionCacheWritesBlocked(admissionSlug)) return;
+      [
+        `/admin/admission/${admissionSlug}/application/`,
+        `/admin/admission/${admissionSlug}/candidates/`,
+        `/admin/admission/${admissionSlug}/schedule/`,
+        `/admin/admission/${admissionSlug}/availability/`,
+      ].forEach((queryKey) => {
+        queryClient.invalidateQueries({ queryKey: [queryKey] });
+      });
+    },
+  });
+};
+
+interface UpdateInterviewStatusProps {
+  applicationId: string;
+  interviewStatus: InterviewStatus;
+  expectedInterviewStatusUpdatedAt: string;
+}
+
+interface InterviewStatusUpdateResponse {
+  interview_status: InterviewStatus;
+  interview_status_updated_at: string;
+  interview_status_updated_by: string;
+}
+
+interface InterviewStatusMutationContext {
+  previousStatus?: Pick<
+    AdminApplication,
+    | "interview_status"
+    | "interview_status_updated_at"
+    | "interview_status_updated_by"
+  >;
+  previousSchedule?: SavedSchedule;
+}
+
+export const useAdminUpdateInterviewStatusMutation = (
+  admissionSlug: string,
+) => {
+  const queryClient = useQueryClient();
+  const applicationsQueryKey = [
+    `/admin/admission/${admissionSlug}/application/`,
+  ];
+  const scheduleQueryKey = [`/admin/admission/${admissionSlug}/schedule/`];
+
+  return useMutation<
+    InterviewStatusUpdateResponse,
+    AxiosError,
+    UpdateInterviewStatusProps,
+    InterviewStatusMutationContext
+  >({
+    ...sensitiveAdmissionMutationOptions(admissionSlug),
+    mutationFn: async ({
+      applicationId,
+      interviewStatus,
+      expectedInterviewStatusUpdatedAt,
+    }) =>
+      (
+        await apiClient.patch<InterviewStatusUpdateResponse>(
+          `/admin/admission/${admissionSlug}/application/${applicationId}/interview-status/`,
+          {
+            interview_status: interviewStatus,
+            expected_interview_status_updated_at:
+              expectedInterviewStatusUpdatedAt,
+          },
+        )
+      ).data,
+    onMutate: async ({ applicationId, interviewStatus }) => {
+      if (areSensitiveAdmissionCacheWritesBlocked(admissionSlug)) return {};
+      await Promise.all([
+        queryClient.cancelQueries({ queryKey: applicationsQueryKey }),
+        queryClient.cancelQueries({ queryKey: scheduleQueryKey }),
+      ]);
+      const previousApplication = queryClient
+        .getQueryData<AdminApplication[]>(applicationsQueryKey)
+        ?.find((application) => application.pk === applicationId);
+      const previousSchedule =
+        queryClient.getQueryData<SavedSchedule>(scheduleQueryKey);
+
+      queryClient.setQueryData<AdminApplication[]>(
+        applicationsQueryKey,
+        (currentApplications) =>
+          currentApplications?.map((application) =>
+            application.pk === applicationId
+              ? { ...application, interview_status: interviewStatus }
+              : application,
+          ),
+      );
+      queryClient.setQueryData<SavedSchedule>(scheduleQueryKey, (current) =>
+        current
+          ? {
+              ...current,
+              schedule: current.schedule.map((item) =>
+                item.candidate_id === applicationId
+                  ? { ...item, interview_status: interviewStatus }
+                  : item,
+              ),
+            }
+          : current,
+      );
+
+      return {
+        previousStatus: previousApplication
+          ? {
+              interview_status: previousApplication.interview_status,
+              interview_status_updated_at:
+                previousApplication.interview_status_updated_at,
+              interview_status_updated_by:
+                previousApplication.interview_status_updated_by,
+            }
+          : undefined,
+        previousSchedule,
+      };
+    },
+    onError: async (error, { applicationId }, context) => {
+      const status = error.response?.status ?? 0;
+      if (
+        [401, 403].includes(status) ||
+        areSensitiveAdmissionCacheWritesBlocked(admissionSlug)
+      ) {
+        return;
+      }
+      if (status === 404) {
+        await Promise.all([
+          queryClient.resetQueries({
+            queryKey: applicationsQueryKey,
+            exact: true,
+          }),
+          queryClient.resetQueries({ queryKey: scheduleQueryKey, exact: true }),
+        ]);
+        return;
+      }
+      const previousStatus = context?.previousStatus;
+      if (previousStatus) {
+        queryClient.setQueryData<AdminApplication[]>(
+          applicationsQueryKey,
+          (currentApplications) =>
+            currentApplications?.map((application) =>
+              application.pk === applicationId
+                ? { ...application, ...previousStatus }
+                : application,
+            ),
+        );
+      }
+      if (context?.previousSchedule) {
+        queryClient.setQueryData(scheduleQueryKey, context.previousSchedule);
+      }
+    },
+    onSuccess: (updatedStatus, { applicationId }) => {
+      if (areSensitiveAdmissionCacheWritesBlocked(admissionSlug)) return;
+      queryClient.setQueryData<AdminApplication[]>(
+        applicationsQueryKey,
+        (currentApplications) =>
+          currentApplications?.map((application) =>
+            application.pk === applicationId
+              ? {
+                  ...application,
+                  interview_status: updatedStatus.interview_status,
+                  interview_status_updated_at:
+                    updatedStatus.interview_status_updated_at,
+                  interview_status_updated_by:
+                    updatedStatus.interview_status_updated_by,
+                }
+              : application,
+          ),
+      );
+      queryClient.setQueryData<SavedSchedule>(scheduleQueryKey, (current) =>
+        current
+          ? {
+              ...current,
+              schedule: current.schedule.map((item) =>
+                item.candidate_id === applicationId
+                  ? {
+                      ...item,
+                      interview_status: updatedStatus.interview_status,
+                      interview_status_updated_at:
+                        updatedStatus.interview_status_updated_at,
+                      interview_status_updated_by:
+                        updatedStatus.interview_status_updated_by,
+                    }
+                  : item,
+              ),
+            }
+          : current,
+      );
+    },
+    onSettled: (_data, error) => {
+      if (
+        areSensitiveAdmissionCacheWritesBlocked(admissionSlug) ||
+        [401, 403, 404].includes(error?.response?.status ?? 0)
+      ) {
+        return;
+      }
+      void queryClient.invalidateQueries({
+        queryKey: applicationsQueryKey,
+      });
+      void queryClient.invalidateQueries({ queryKey: scheduleQueryKey });
+    },
+  });
+};
+
 export const useAdminDeleteApplicationMutation = (admissionSlug: string) => {
   const queryClient = useQueryClient();
+  const applicationsQueryKey = [
+    `/admin/admission/${admissionSlug}/application/`,
+  ];
   return useMutation<unknown, AxiosError, DeleteGroupApplicationProps>({
+    ...sensitiveAdmissionMutationOptions(admissionSlug),
     mutationFn: ({ applicationId, groupId }) =>
       apiClient.delete(
         `/admin/admission/${admissionSlug}/application/${applicationId}/${
@@ -81,8 +327,17 @@ export const useAdminDeleteApplicationMutation = (admissionSlug: string) => {
       ),
 
     onSuccess: () => {
+      if (areSensitiveAdmissionCacheWritesBlocked(admissionSlug)) return;
       queryClient.invalidateQueries({
-        queryKey: [`/admin/admission/${admissionSlug}/application/`],
+        queryKey: applicationsQueryKey,
+      });
+    },
+    onError: async (error) => {
+      const status = error.response?.status ?? 0;
+      if (status !== 404) return;
+      await queryClient.resetQueries({
+        queryKey: applicationsQueryKey,
+        exact: true,
       });
     },
   });
@@ -94,7 +349,7 @@ export interface MutationAdmission {
   title: string;
   slug?: string;
   description: string;
-  header_fields: FieldModel[];
+  group_questions: Record<string, FieldModel[]>;
   open_from: string;
   public_deadline: string;
   closed_from: string;

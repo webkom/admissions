@@ -1,15 +1,16 @@
-import React, { useMemo } from "react";
-import { Lock } from "lucide-react";
+import React, { useMemo, useState } from "react";
+import { GripVertical, Lock } from "lucide-react";
 import type { ScheduleItem } from "../../../types";
 import {
   buildBlockTimeChunks,
   decodeScheduleTime,
+  encodeScheduleTime,
   formatDateHeader,
   formatMinutes,
   makeSlotKey,
 } from "../scheduleUtils";
 import cn from "src/utils/cn";
-import { calendarGrid } from "src/styles/designTokens";
+import { calendarGrid, iconSizes } from "src/styles/designTokens";
 
 interface GridCalendarViewProps {
   schedule: ScheduleItem[];
@@ -20,7 +21,11 @@ interface GridCalendarViewProps {
   chunkSize?: number;
   chunkBreakMinutes?: number;
   availableSlots?: Set<string>;
+  occupiedTimes?: ReadonlySet<number>;
+  showAvailabilityLegend?: boolean;
   renderItem?: (item: ScheduleItem, scheduleIndex: number) => React.ReactNode;
+  onMoveItem?: (scheduleIndex: number, nextTime: number) => void;
+  moveDisabled?: boolean;
 }
 
 const GridCalendarView: React.FC<GridCalendarViewProps> = ({
@@ -32,8 +37,15 @@ const GridCalendarView: React.FC<GridCalendarViewProps> = ({
   chunkSize = 1,
   chunkBreakMinutes = 0,
   availableSlots,
+  occupiedTimes,
+  showAvailabilityLegend = false,
   renderItem,
+  onMoveItem,
+  moveDisabled = false,
 }) => {
+  const [dropTarget, setDropTarget] = useState<string | null>(null);
+  const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
+  const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
   const minutes = useMemo(() => {
     const chunks = buildBlockTimeChunks({
       dayStartMinute,
@@ -42,7 +54,7 @@ const GridCalendarView: React.FC<GridCalendarViewProps> = ({
       chunkSize,
       chunkBreakMinutes,
     });
-    const chunkMinutes = chunks.map((c) => c[0]);
+    const chunkMinutes = chunks.flat();
     const scheduleMinutes = new Set<number>();
     schedule.forEach((item) => {
       scheduleMinutes.add(
@@ -90,7 +102,11 @@ const GridCalendarView: React.FC<GridCalendarViewProps> = ({
     >
       <div className="flex items-center gap-1">
         {item.locked && (
-          <Lock size={11} aria-label="Låst" className="flex-none text-brand" />
+          <Lock
+            size={iconSizes.tiny}
+            aria-label="Låst"
+            className="flex-none text-brand"
+          />
         )}
         <span className="truncate whitespace-nowrap text-xs font-bold text-text-primary">
           {item.candidate}
@@ -110,71 +126,218 @@ const GridCalendarView: React.FC<GridCalendarViewProps> = ({
   );
 
   return (
-    <div className="overflow-x-auto rounded-xl border border-border-soft bg-surface-base shadow-sm">
-      <div
-        className="grid gap-px bg-border-muted"
-        style={{
-          gridTemplateColumns: `${calendarGrid.scheduleTimeColumnWidth}px repeat(${dates.length}, minmax(${calendarGrid.scheduleDayColumnMinWidth}px, 1fr))`,
-          minWidth: `max(${calendarGrid.minimumWidth}px, ${dates.length * calendarGrid.scheduleDayColumnMinWidth + calendarGrid.scheduleTimeColumnWidth}px)`,
-        }}
-      >
-        <div className="bg-surface-base" />
-        {dates.map((date) => {
-          const { weekday, dayMonth } = formatDateHeader(date);
-          return (
-            <div
-              key={date}
-              className="flex flex-col items-center justify-center bg-surface-base py-3"
-            >
-              <span className="text-detail font-medium text-text-muted">
-                {weekday}
-              </span>
-              <span className="text-sm font-semibold text-text-primary">
-                {dayMonth}
-              </span>
-            </div>
-          );
-        })}
+    <div className="overflow-hidden rounded-xl border border-border-soft bg-surface-base shadow-sm">
+      {showAvailabilityLegend && availableSlots !== undefined && (
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 border-b border-border-soft bg-surface-subtle px-4 py-2.5 text-detail font-semibold text-text-muted">
+          <CalendarLegendItem label="Ledig" variant="available" />
+          <CalendarLegendItem label="Planlagt" variant="scheduled" />
+          <CalendarLegendItem label="Ikke tilgjengelig" variant="unavailable" />
+        </div>
+      )}
+      <div className="overflow-x-auto">
+        <div
+          className="grid gap-px bg-border-muted"
+          style={{
+            gridTemplateColumns: `${calendarGrid.scheduleTimeColumnWidth}px repeat(${dates.length}, minmax(${calendarGrid.scheduleDayColumnMinWidth}px, 1fr))`,
+            minWidth: `max(${calendarGrid.minimumWidth}px, ${dates.length * calendarGrid.scheduleDayColumnMinWidth + calendarGrid.scheduleTimeColumnWidth}px)`,
+          }}
+        >
+          <div className="bg-surface-subtle" />
+          {dates.map((date) => {
+            const { weekday, dayMonth } = formatDateHeader(date);
+            return (
+              <div
+                key={date}
+                className="flex flex-col items-center justify-center border-b-2 border-border-soft bg-surface-subtle py-3"
+              >
+                <span className="text-detail font-medium text-text-muted">
+                  {weekday}
+                </span>
+                <span className="text-sm font-semibold text-text-primary">
+                  {dayMonth}
+                </span>
+              </div>
+            );
+          })}
 
-        {minutes.map((minute) => (
-          <React.Fragment key={minute}>
-            <div className="flex items-center justify-end bg-surface-base pr-4 text-xs font-bold tabular-nums text-text-muted">
-              {formatMinutes(minute)}
-            </div>
-            {dates.map((date, dayIndex) => {
-              const entries = scheduleMap.get(`${dayIndex}-${minute}`) ?? [];
-              const isUnavailable =
-                availableSlots !== undefined &&
-                entries.length === 0 &&
-                !availableSlots.has(makeSlotKey(date, minute));
-              return (
-                <div
-                  key={`${dayIndex}-${minute}`}
-                  title={
-                    isUnavailable ? "Ikke tilgjengelig for intervju" : undefined
-                  }
-                  className={cn(
-                    "flex min-h-20 flex-col gap-1 p-1.5",
-                    isUnavailable
-                      ? "bg-surface-base [background-image:var(--pattern-unavailable)]"
-                      : entries.length === 0
-                        ? "bg-surface-base"
-                        : "bg-brand-tint",
-                  )}
-                >
-                  {entries.map(({ item, index }) =>
-                    renderItem
-                      ? renderItem(item, index)
-                      : defaultRenderItem(item, index),
-                  )}
+          {minutes.map((minute) => {
+            return (
+              <React.Fragment key={minute}>
+                <div className="flex min-h-20 flex-col items-end justify-center bg-surface-subtle pr-4 text-xs font-bold tabular-nums text-text-muted">
+                  {formatMinutes(minute)}
                 </div>
-              );
-            })}
-          </React.Fragment>
-        ))}
+                {dates.map((date, dayIndex) => {
+                  const entries =
+                    scheduleMap.get(`${dayIndex}-${minute}`) ?? [];
+                  const hasEntries = entries.length > 0;
+                  const targetTime = encodeScheduleTime(
+                    dayIndex,
+                    minute,
+                    sessionDuration,
+                  );
+                  const isOccupied =
+                    occupiedTimes?.has(targetTime) ?? hasEntries;
+                  const isUnavailable =
+                    availableSlots !== undefined &&
+                    !hasEntries &&
+                    !availableSlots.has(makeSlotKey(date, minute));
+                  const moveIndex = draggedIndex ?? selectedIndex;
+                  const canDrop = Boolean(
+                    onMoveItem &&
+                      moveIndex !== null &&
+                      !moveDisabled &&
+                      !isUnavailable &&
+                      !isOccupied,
+                  );
+                  const slotKey = `${dayIndex}-${minute}`;
+                  const isDropTarget = dropTarget === slotKey;
+                  return (
+                    <div
+                      key={slotKey}
+                      title={
+                        isUnavailable
+                          ? "Ikke tilgjengelig for intervju"
+                          : canDrop
+                            ? selectedIndex !== null
+                              ? "Klikk for å flytte intervjuet hit"
+                              : "Dra et intervju hit"
+                            : undefined
+                      }
+                      onClick={() => {
+                        if (!canDrop || selectedIndex === null || !onMoveItem) {
+                          return;
+                        }
+                        onMoveItem(selectedIndex, targetTime);
+                        setSelectedIndex(null);
+                        setDropTarget(null);
+                      }}
+                      onDragOver={(event) => {
+                        if (!canDrop) return;
+                        event.preventDefault();
+                        event.dataTransfer.dropEffect = "move";
+                        setDropTarget(slotKey);
+                      }}
+                      onDragLeave={(event) => {
+                        if (
+                          event.currentTarget.contains(
+                            event.relatedTarget as Node | null,
+                          )
+                        ) {
+                          return;
+                        }
+                        if (dropTarget === slotKey) setDropTarget(null);
+                      }}
+                      onDrop={(event) => {
+                        if (!canDrop || !onMoveItem) return;
+                        event.preventDefault();
+                        const rawIndex =
+                          event.dataTransfer.getData("text/plain");
+                        const parsedIndex = Number(rawIndex);
+                        const scheduleIndex = Number.isInteger(parsedIndex)
+                          ? parsedIndex
+                          : draggedIndex;
+                        setDropTarget(null);
+                        setDraggedIndex(null);
+                        setSelectedIndex(null);
+                        if (scheduleIndex === null) return;
+                        onMoveItem(scheduleIndex, targetTime);
+                      }}
+                      className={cn(
+                        "flex min-h-20 flex-col gap-1 border border-transparent p-1.5 transition-colors",
+                        isUnavailable
+                          ? "bg-surface-neutral [background-image:var(--pattern-unavailable)]"
+                          : hasEntries
+                            ? "border-border-soft bg-surface-subtle"
+                            : "border-border-soft bg-surface-base",
+                        isDropTarget &&
+                          "border-brand-strongBorder bg-surface-subtle ring-2 ring-inset ring-brand-ring",
+                        canDrop && selectedIndex !== null && "cursor-pointer",
+                      )}
+                    >
+                      {entries.map(({ item, index }) => {
+                        const content = renderItem
+                          ? renderItem(item, index)
+                          : defaultRenderItem(item, index);
+                        if (!onMoveItem) return content;
+                        return (
+                          <div
+                            key={`${item.candidate}-${item.time}-${index}`}
+                            className={cn(
+                              "flex min-w-0 items-stretch gap-1 rounded-md",
+                              draggedIndex === index && "opacity-50",
+                              selectedIndex === index &&
+                                "ring-2 ring-brand-ring ring-offset-1",
+                            )}
+                          >
+                            <button
+                              type="button"
+                              draggable={!moveDisabled}
+                              disabled={moveDisabled}
+                              aria-pressed={selectedIndex === index}
+                              aria-label={`Flytt intervjuet for ${item.candidate}`}
+                              title="Dra intervjuet, eller klikk og velg en ledig tidsluke"
+                              onClick={() =>
+                                setSelectedIndex((current) =>
+                                  current === index ? null : index,
+                                )
+                              }
+                              onDragStart={(event) => {
+                                event.dataTransfer.effectAllowed = "move";
+                                event.dataTransfer.setData(
+                                  "text/plain",
+                                  String(index),
+                                );
+                                setDraggedIndex(index);
+                                setSelectedIndex(null);
+                              }}
+                              onDragEnd={() => {
+                                setDraggedIndex(null);
+                                setDropTarget(null);
+                              }}
+                              className={cn(
+                                "flex w-5 flex-none cursor-grab items-center justify-center rounded border border-border-soft bg-surface-base text-text-faded hover:border-border-quiet hover:text-text-muted active:cursor-grabbing disabled:cursor-not-allowed disabled:opacity-50",
+                                selectedIndex === index &&
+                                  "border-brand-strongBorder text-brand ring-2 ring-brand-ring",
+                              )}
+                            >
+                              <GripVertical
+                                size={iconSizes.detail}
+                                aria-hidden="true"
+                              />
+                            </button>
+                            <div className="min-w-0 flex-1">{content}</div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  );
+                })}
+              </React.Fragment>
+            );
+          })}
+        </div>
       </div>
     </div>
   );
 };
+
+const CalendarLegendItem: React.FC<{
+  label: string;
+  variant: "available" | "scheduled" | "unavailable";
+}> = ({ label, variant }) => (
+  <span className="inline-flex items-center gap-1.5">
+    <span
+      aria-hidden="true"
+      className={cn(
+        "h-2.5 w-4 rounded-sm border",
+        variant === "available" && "border-border-soft bg-surface-base",
+        variant === "scheduled" && "border-border-soft bg-surface-subtle",
+        variant === "unavailable" &&
+          "border-border-soft bg-surface-neutral [background-image:var(--pattern-unavailable)]",
+      )}
+    />
+    {label}
+  </span>
+);
 
 export default GridCalendarView;

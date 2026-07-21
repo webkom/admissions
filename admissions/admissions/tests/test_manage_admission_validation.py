@@ -8,7 +8,13 @@ from rest_framework import status
 from rest_framework.test import APITestCase
 
 from admissions.admissions.constants import MEMBER, RETIREE
-from admissions.admissions.models import Admission, Group, LegoUser, Membership
+from admissions.admissions.models import (
+    Admission,
+    AdmissionGroup,
+    Group,
+    LegoUser,
+    Membership,
+)
 
 
 class ManageAdmissionValidationTestCase(APITestCase):
@@ -30,7 +36,7 @@ class ManageAdmissionValidationTestCase(APITestCase):
             "title": "Komiteopptak 2027",
             "slug": "komiteopptak-2027",
             "description": "Opptak til Abakus sine komiteer.",
-            "header_fields": [],
+            "group_questions": {},
             "open_from": opening,
             "public_deadline": opening + timedelta(days=7),
             "closed_from": opening + timedelta(days=8),
@@ -85,27 +91,145 @@ class ManageAdmissionValidationTestCase(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertIn("closed_from", response.data)
 
+    def test_allows_checkbox_questions(self):
+        question = {
+            "id": "q_checkbox",
+            "type": "checkbox",
+            "title": "Har du erfaring?",
+            "label": "Markér dette",
+            "placeholder": "",
+            "required": False,
+        }
+        response = self.client.post(
+            self.url,
+            self.payload(group_questions={str(self.committee.pk): [question]}),
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        admission = Admission.objects.get(slug="komiteopptak-2027")
+        self.assertEqual(
+            AdmissionGroup.objects.get(
+                admission=admission, group=self.committee
+            ).header_fields,
+            [question],
+        )
+
+    def test_group_questions_are_not_reused_by_a_later_admission(self):
+        question = {
+            "id": "q_experience",
+            "type": "textinput",
+            "title": "Hva slags erfaring har du?",
+            "label": "",
+            "placeholder": "",
+            "required": False,
+        }
+        first = self.client.post(
+            self.url,
+            self.payload(group_questions={str(self.committee.pk): [question]}),
+            format="json",
+        )
+        self.assertEqual(first.status_code, status.HTTP_201_CREATED)
+
+        second = self.client.post(
+            self.url,
+            self.payload(
+                title="Komiteopptak 2028",
+                slug="komiteopptak-2028",
+                group_questions={},
+            ),
+            format="json",
+        )
+        self.assertEqual(second.status_code, status.HTTP_201_CREATED)
+
+        self.assertEqual(
+            AdmissionGroup.objects.get(
+                admission__slug="komiteopptak-2027", group=self.committee
+            ).header_fields,
+            [question],
+        )
+        self.assertEqual(
+            AdmissionGroup.objects.get(
+                admission__slug="komiteopptak-2028", group=self.committee
+            ).header_fields,
+            [],
+        )
+
+    def test_saves_questions_on_the_selected_admission_group(self):
+        question = {
+            "id": "why_fagkom",
+            "type": "textarea",
+            "title": "Hva vil du bidra med i Fagkom?",
+            "label": "",
+            "placeholder": "",
+            "required": True,
+        }
+        response = self.client.post(
+            self.url,
+            self.payload(group_questions={str(self.committee.pk): [question]}),
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        admission = Admission.objects.get(slug="komiteopptak-2027")
+        self.assertEqual(
+            AdmissionGroup.objects.get(
+                admission=admission, group=self.committee
+            ).header_fields,
+            [question],
+        )
+
+    def test_rejects_questions_for_a_group_outside_the_admission(self):
+        question = {
+            "id": "why_webkom",
+            "type": "textinput",
+            "title": "Hva vil du bidra med i Webkom?",
+            "label": "",
+            "placeholder": "",
+            "required": False,
+        }
+        response = self.client.post(
+            self.url,
+            self.payload(group_questions={str(self.webkom.pk): [question]}),
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("group_questions", response.data)
+
+    def test_rejects_deprecated_general_questions(self):
+        response = self.client.post(
+            self.url,
+            self.payload(header_fields=[]),
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("header_fields", response.data)
+
     def test_invalid_custom_questions_return_a_safe_error(self):
         response = self.client.post(
             self.url,
             self.payload(
-                header_fields=[
-                    {
-                        "type": "textinput",
-                        "id": "question-with-private-draft",
-                        "title": "No",
-                        "label": "private draft value",
-                        "placeholder": "",
-                        "required": False,
-                    }
-                ]
+                group_questions={
+                    str(self.committee.pk): [
+                        {
+                            "type": "textinput",
+                            "id": "question-with-private-draft",
+                            "title": "No",
+                            "label": "private draft value",
+                            "placeholder": "",
+                            "required": False,
+                        }
+                    ]
+                }
             ),
             format="json",
         )
 
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertEqual(
-            response.data["header_fields"],
+            str(response.data["group_questions"][0]),
             "Spørsmålsoppsettet er ugyldig.",
         )
         self.assertNotContains(response, "private draft value", status_code=400)
@@ -122,16 +246,35 @@ class ManageAdmissionValidationTestCase(APITestCase):
 
         response = self.client.post(
             self.url,
-            self.payload(header_fields=[question, question]),
+            self.payload(
+                group_questions={str(self.committee.pk): [question, question]}
+            ),
             format="json",
         )
 
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertEqual(
-            response.data["header_fields"],
+            str(response.data["group_questions"][0]),
             "Spørsmålsoppsettet er ugyldig.",
         )
         self.assertFalse(Admission.objects.filter(slug="komiteopptak-2027").exists())
+
+    def test_rejects_duplicate_slug_with_a_field_error(self):
+        created = self.client.post(self.url, self.payload(), format="json")
+        self.assertEqual(created.status_code, status.HTTP_201_CREATED)
+
+        duplicate = self.client.post(
+            self.url,
+            self.payload(title="Et annet opptak"),
+            format="json",
+        )
+
+        self.assertEqual(duplicate.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("slug", duplicate.data)
+        self.assertEqual(
+            Admission.objects.filter(slug="komiteopptak-2027").count(),
+            1,
+        )
 
     def test_inactive_webkom_member_cannot_create_an_admission(self):
         inactive = LegoUser.objects.create(username="inactive-manager", lego_id=703)

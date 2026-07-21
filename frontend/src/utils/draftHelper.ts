@@ -2,7 +2,6 @@ enum KeyType {
   applicationText,
   selectedGroups,
   isEditingApplication,
-  priorityText,
   phoneNumber,
 }
 
@@ -22,11 +21,18 @@ export const setDraftAdmissionScope = (
   userId: string,
 ) => {
   const admission = encodeURIComponent(admissionSlug || "unscoped");
+  const userPrefix = `${DRAFT_PREFIX}.${encodeURIComponent(
+    userId || "anonymous",
+  )}.`;
   const legacyPrefix = `${DRAFT_PREFIX}.${admission}.`;
   draftScope = createDraftAdmissionScope(admissionSlug, userId);
   try {
     Object.keys(sessionStorage)
-      .filter((key) => key.startsWith(legacyPrefix))
+      .filter(
+        (key) =>
+          key.startsWith(legacyPrefix) ||
+          (key.startsWith(`${DRAFT_PREFIX}.`) && !key.startsWith(userPrefix)),
+      )
       .forEach((key) => sessionStorage.removeItem(key));
   } catch {
     return;
@@ -79,6 +85,16 @@ export const clearAllDrafts = () => {
   }
 };
 
+export const clearApplicationDraftNamespace = () => {
+  try {
+    Object.keys(sessionStorage)
+      .filter((key) => key.startsWith(`${DRAFT_PREFIX}.`))
+      .forEach((key) => sessionStorage.removeItem(key));
+  } catch {
+    return;
+  }
+};
+
 export const saveApplicationTextDraft = ([groupName, applicationText]: [
   string,
   string,
@@ -101,11 +117,6 @@ export const saveSelectedGroupsDraft = (selectedGroups: SelectedGroupsDraft) =>
 
 export const getSelectedGroupsDraft = (scope?: string): SelectedGroupsDraft =>
   getParsedJson(KeyType.selectedGroups, "", scope ?? draftScope);
-
-export const savePriorityTextDraft = (priorityText: string) =>
-  saveObject(KeyType.priorityText, priorityText);
-
-export const getPriorityTextDraft = () => getParsedJson(KeyType.priorityText);
 
 export const savePhoneNumberDraft = (phoneNumber: string) =>
   saveObject(KeyType.phoneNumber, phoneNumber);

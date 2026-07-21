@@ -100,7 +100,7 @@ const Card = styled.div<GroupCardStyledProps>`
   background: var(--color-surface-base);
   box-shadow: ${(props) =>
     props.$isChosen ? "var(--shadow-md)" : "var(--shadow-sm)"};
-  border: 1px solid
+  border: var(--border-width-default) solid
     ${(props) =>
       props.$isChosen ? "var(--color-brand)" : "var(--color-border-soft)"};
   box-sizing: border-box;
@@ -114,7 +114,7 @@ const Card = styled.div<GroupCardStyledProps>`
   &:hover {
     cursor: pointer;
     box-shadow: var(--shadow-md);
-    transform: translateY(-2px);
+    transform: translateY(calc(-1 * var(--spacing-xs) / 2));
     border-color: ${(props) =>
       props.$isChosen
         ? "var(--color-brand)"
@@ -136,9 +136,9 @@ const Header = styled.div`
 const Name = styled.h2`
   margin: 0;
   font-size: var(--font-size-heading-xs);
-  font-weight: 700;
+  font-weight: var(--font-weight-bold);
   color: var(--color-text-strong);
-  letter-spacing: -0.03em;
+  letter-spacing: var(--letter-spacing-display);
 
   ${media.handheld`
     font-size: var(--font-size-lg);
@@ -148,7 +148,7 @@ const Name = styled.h2`
 const Description = styled.p`
   margin: 0;
   font-size: var(--font-size-sm);
-  line-height: 1.55;
+  line-height: var(--line-height-copy);
   color: var(--color-text-body);
   flex-grow: 1;
   margin-bottom: var(--spacing-lg);
@@ -156,16 +156,16 @@ const Description = styled.p`
 
 const Logo = styled.img`
   object-fit: contain;
-  width: 40px;
-  height: 40px;
+  width: var(--avatar-size-sm);
+  height: var(--avatar-size-sm);
   border-radius: var(--border-radius-sm);
 `;
 
 const LearnMoreLink = styled.a`
-  font-weight: 600;
+  font-weight: var(--font-weight-semibold);
   font-size: var(--font-size-detail);
   color: var(--color-brand);
-  margin-bottom: 2.5rem;
+  margin-bottom: var(--spacing-2xl);
 
   &:hover {
     text-decoration: underline;
@@ -174,7 +174,7 @@ const LearnMoreLink = styled.a`
 
 const SelectedMark = styled.div<GroupCardElementsStyledProps>`
   width: 100%;
-  padding: 0.75rem 0;
+  padding: var(--control-padding-block) 0;
   position: absolute;
   left: 0;
   bottom: 0;
@@ -190,15 +190,15 @@ const SelectedMarkText = styled.span<GroupCardElementsStyledProps>`
   color: ${(props) =>
     props.$isChosen ? "var(--color-absolute-white)" : "var(--color-text-body)"};
   font-size: var(--font-size-sm);
-  font-weight: 600;
+  font-weight: var(--font-weight-semibold);
   user-select: none;
   display: flex;
   align-items: center;
   gap: var(--spacing-sm);
 
   span {
-    opacity: 0.8;
+    opacity: var(--opacity-hover);
     font-size: var(--font-size-xs);
-    font-weight: 400;
+    font-weight: var(--font-weight-normal);
   }
 `;

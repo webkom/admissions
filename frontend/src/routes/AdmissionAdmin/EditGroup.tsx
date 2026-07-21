@@ -22,20 +22,26 @@ const EditGroup = () => {
 
   const {
     data: admission,
-    isFetching,
+    isLoading,
     error,
   } = useAdmission(admissionSlug ?? "");
   const { groups } = admission ?? {};
 
   if (error) {
     return <div>Error: {error.message}</div>;
-  } else if (isFetching) {
+  } else if (isLoading) {
     return <LoadingBall />;
-  } else if (!groups) {
+  } else if (!admission || !groups) {
     return <div>Feil: klarte ikke laste inn grupper.</div>;
   } else {
     const group = (groups ?? []).find((group) => group.pk === groupId);
     if (!group) return <div>Feil: Ugyldig gruppe</div>;
+    if (
+      !admission.userdata.is_admin &&
+      !admission.userdata.represented_groups.includes(group.name)
+    ) {
+      return <div>Du har ikke tilgang til å redigere denne gruppen.</div>;
+    }
 
     return (
       <PageWrapper>
@@ -84,14 +90,14 @@ const SectionEyebrow = styled.span`
   display: inline-block;
   margin-bottom: var(--spacing-md);
   font-size: var(--font-size-sm);
-  font-weight: 500;
+  font-weight: var(--font-weight-medium);
   color: var(--color-text-muted);
 `;
 
 const GroupTitle = styled.h1`
   margin: 0;
   font-size: var(--font-size-xl);
-  font-weight: 600;
+  font-weight: var(--font-weight-semibold);
   color: var(--color-text-primary);
 `;
 

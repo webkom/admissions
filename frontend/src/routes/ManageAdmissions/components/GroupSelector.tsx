@@ -7,18 +7,32 @@ interface GroupSelectorProps {
   id: string;
   value: Group["pk"][];
   toggleGroup: (groupId: string) => void;
+  addLabel?: string;
+  emptyLabel?: string;
+  selectedLabel?: string;
   describedBy?: string;
   invalid?: boolean;
+  admissionField?: "admin_groups" | "groups";
 }
 
 const GroupSelector: React.FC<GroupSelectorProps> = ({
   id,
   value: selectedGroups,
   toggleGroup,
+  addLabel = "Legg til gruppe",
+  emptyLabel = "Ingen grupper er valgt.",
+  selectedLabel = "Valgte grupper",
   describedBy,
   invalid = false,
+  admissionField,
 }) => {
-  const { data: groups, isLoading, error } = useManageGroups();
+  const {
+    data: groups,
+    isLoading,
+    isFetching,
+    error,
+    refetch,
+  } = useManageGroups();
 
   const toggleSelectedGroup = (groupId: string) => {
     const group = groups?.find((candidate) => candidate.pk === groupId);
@@ -33,10 +47,11 @@ const GroupSelector: React.FC<GroupSelectorProps> = ({
         disabled={isLoading || Boolean(error)}
         aria-describedby={describedBy}
         aria-invalid={invalid}
+        data-admission-field={admissionField}
         onChange={(event) => toggleSelectedGroup(event.target.value)}
       >
         <option value="" disabled>
-          {isLoading ? "Laster grupper…" : "Legg til gruppe"}
+          {isLoading ? "Laster grupper…" : addLabel}
         </option>
         {groups
           ?.filter((group) => !selectedGroups.includes(group.pk))
@@ -48,15 +63,22 @@ const GroupSelector: React.FC<GroupSelectorProps> = ({
       </Select>
 
       {error && (
-        <SelectorStatus role="alert">
-          Gruppene kunne ikke lastes. Last siden på nytt og prøv igjen.
-        </SelectorStatus>
+        <SelectorError role="alert">
+          <span>Gruppene kunne ikke lastes.</span>
+          <RetryButton
+            type="button"
+            disabled={isFetching}
+            onClick={() => void refetch()}
+          >
+            {isFetching ? "Prøver igjen…" : "Prøv igjen"}
+          </RetryButton>
+        </SelectorError>
       )}
 
       {selectedGroups.length === 0 ? (
-        <SelectorStatus>Ingen grupper er valgt.</SelectorStatus>
+        <SelectorStatus>{emptyLabel}</SelectorStatus>
       ) : (
-        <SelectedGroupList aria-label="Valgte grupper">
+        <SelectedGroupList aria-label={selectedLabel}>
           {selectedGroups.map((groupId) => {
             const group = groups?.find((candidate) => candidate.pk === groupId);
             if (!group) return null;
@@ -158,12 +180,12 @@ const GroupFallback = styled.span`
   background: var(--color-surface-neutral);
   color: var(--color-text-muted);
   font-size: var(--font-size-sm);
-  font-weight: 700;
+  font-weight: var(--font-weight-bold);
 `;
 
 const GroupName = styled.span`
   font-size: var(--font-size-sm);
-  font-weight: 600;
+  font-weight: var(--font-weight-semibold);
 `;
 
 const RemoveLabel = styled.span`
@@ -175,4 +197,30 @@ const SelectorStatus = styled.p`
   margin: 0;
   color: var(--color-text-muted);
   font-size: var(--font-size-sm);
+`;
+
+const SelectorError = styled.div`
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--spacing-md);
+  color: var(--color-danger);
+  font-size: var(--font-size-sm);
+`;
+
+const RetryButton = styled.button`
+  min-height: var(--control-height-sm);
+  padding: 0 var(--spacing-md);
+  border: var(--border-width-default) solid var(--color-danger-border);
+  border-radius: var(--border-radius-md);
+  background: var(--color-surface-base);
+  color: var(--color-danger);
+  font: inherit;
+  font-weight: var(--font-weight-semibold);
+  cursor: pointer;
+
+  &:disabled {
+    opacity: var(--opacity-muted);
+    cursor: wait;
+  }
 `;

@@ -2,19 +2,23 @@ from django.db import transaction
 from django.db.models.signals import pre_delete
 from django.dispatch import receiver
 
+from admissions.admissions.admission_access import get_name_revealed_groups
 from admissions.admissions.models import (
     Admission,
     InterviewAvailability,
+    NameVisibilityAuditEvent,
     SavedSchedule,
     SolveJob,
     UserApplication,
 )
 
+SYSTEM_ACTOR_USERNAME = "system"
+
 
 @receiver(pre_delete, sender=UserApplication)
 def purge_withdrawn_candidate(sender, instance, **kwargs):
     with transaction.atomic():
-        Admission.objects.select_for_update().get(pk=instance.admission_id)
+        admission = Admission.objects.select_for_update().get(pk=instance.admission_id)
         candidate_id = str(instance.pk)
         try:
             saved = SavedSchedule.objects.get(admission_id=instance.admission_id)
@@ -22,6 +26,7 @@ def purge_withdrawn_candidate(sender, instance, **kwargs):
             saved = None
 
         if saved is not None:
+            revealed_groups = list(get_name_revealed_groups(admission, saved))
             current_schedule = saved.schedule or []
             current_candidate_ids = {
                 str(value)
@@ -53,6 +58,20 @@ def purge_withdrawn_candidate(sender, instance, **kwargs):
                         "is_distributed",
                         "name_visibility",
                         "updated_at",
+                    ]
+                )
+                NameVisibilityAuditEvent.objects.bulk_create(
+                    [
+                        NameVisibilityAuditEvent(
+                            admission=admission,
+                            saved_schedule=saved,
+                            group=group,
+                            group_name=group.name,
+                            actor=None,
+                            actor_username=SYSTEM_ACTOR_USERNAME,
+                            action=NameVisibilityAuditEvent.ACTION_HIDDEN,
+                        )
+                        for group in revealed_groups
                     ]
                 )
                 saved.revealed_groups.clear()

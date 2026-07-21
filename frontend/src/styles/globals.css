@@ -10,6 +10,11 @@
     helvetica, arial, sans-serif;
   --font-display: inter, -apple-system, blinkmacsystemfont, "Segoe UI", roboto,
     helvetica, arial, sans-serif;
+  --font-weight-normal: 400;
+  --font-weight-medium: 500;
+  --font-weight-semibold: 600;
+  --font-weight-bold: 700;
+  --font-weight-extrabold: 800;
   --font-size-nano: 0.5625rem;
   --font-size-tiny: 0.65rem;
   --font-size-label: var(--font-size-xs);
@@ -31,18 +36,26 @@
   --line-height-title: 1.4rem;
   --line-height-action: 1.5rem;
   --line-height-body-lg: 1.7rem;
+  --line-height-heading-md: 2rem;
   --line-height-countdown: 2.25rem;
   --line-height-display-md: 2.5rem;
   --line-height-display-lg: 3.25rem;
+  --line-height-none: 1;
   --line-height-base: 1.3;
   --line-height-tight: 1.25;
+  --line-height-snug: 1.375;
+  --line-height-normal: 1.5;
   --line-height-relaxed: 1.5;
+  --line-height-comfortable: 1.625;
+  --line-height-loose: 2;
+  --line-height-copy: 1.6;
   --letter-spacing-badge: 0.06em;
   --letter-spacing-badge-wide: 0.12em;
   --letter-spacing-caps: 0.05em;
   --letter-spacing-label: 0.08em;
   --letter-spacing-display: -0.03em;
   --letter-spacing-display-tight: -0.045em;
+  --letter-spacing-ui-tight: -0.01em;
   --spacing-xs: calc(var(--lego-default-padding) / 8);
   --spacing-sm: calc(var(--lego-default-padding) / 4);
   --spacing-md: calc(var(--lego-default-padding) / 2);
@@ -56,18 +69,32 @@
   --spacing-7xl: calc(var(--lego-default-padding) * 4);
   --border-width-default: 1px;
   --border-width-emphasis: 1.5px;
+  --border-width-strong: 2px;
   --focus-ring-width: 3px;
   --focus-ring-offset: 2px;
   --border-radius-pill: 999px;
   --navigation-height: 5rem;
   --navigation-logo-width: 8.75rem;
   --navigation-layer: 100;
-  --page-min-height: calc(100dvh - var(--navigation-height));
+  --viewport-min-height: 100dvh;
+  --page-min-height: calc(
+    var(--viewport-min-height) - var(--navigation-height)
+  );
+  --content-sticky-offset: calc(var(--navigation-height) + var(--spacing-lg));
   --content-width-readable: 44rem;
+  --content-width-xs: 20rem;
+  --content-width-short: 31.25rem;
   --content-width-compact: 24rem;
+  --content-width-md: 28rem;
+  --content-width-lg: 32rem;
+  --content-width-xl: 36rem;
+  --content-width-narrow: 18.75rem;
   --content-width-form: 50rem;
   --content-width-wide: 72rem;
+  --content-width-prose: 65ch;
   --admin-sidebar-width: 17.5rem;
+  --schedule-page-max-width: 90rem;
+  --schedule-sidebar-width: 20.5rem;
   --management-sidebar-width: 16rem;
   --group-editor-min-height: 10rem;
   --application-table-min-width: 73.75rem;
@@ -75,26 +102,59 @@
   --control-min-width: 13.75rem;
   --control-height-sm: 2.25rem;
   --control-height-md: 2.75rem;
+  --control-padding-block: calc(var(--spacing-md) * 3 / 4);
+  --control-width-short: 6rem;
   --form-control-width: 20rem;
+  --form-toggle-width: 18.75rem;
   --form-textarea-min-height: 7.5rem;
   --table-header-layer: 1;
+  --content-raised-layer: 10;
+  --popover-layer: 30;
   --modal-layer: 200;
+  --drawer-layer: 210;
+  --toast-layer: 300;
   --avatar-size-lg: 3.5rem;
   --avatar-size-md: 3.125rem;
   --avatar-size-sm: 2.5rem;
+  --group-toggle-size-sm: var(--avatar-size-sm);
+  --opacity-unselected: 0.2;
+  --opacity-hidden: 0;
+  --opacity-minimal: 0.05;
+  --opacity-soft: 0.1;
+  --opacity-low: 0.3;
+  --opacity-faint: 0.4;
+  --opacity-disabled: 0.5;
+  --opacity-medium: 0.55;
+  --opacity-muted: 0.6;
+  --opacity-subtle: 0.7;
+  --opacity-hover: 0.8;
+  --opacity-visible: 1;
+  --application-logo-size: 2.8125rem;
+  --error-illustration-size: 6.25rem;
+  --error-state-min-height: 50vh;
   --group-card-min-width: 21.875rem;
   --layout-card-min-sm: 8.75rem;
   --layout-card-min-md: 11.25rem;
   --layout-card-min-lg: 13.75rem;
   --schedule-label-width: 6.25rem;
   --schedule-name-width: 8.75rem;
+  --schedule-progress-height: 0.375rem;
   --motion-distance-sm: 0.375rem;
   --motion-pulse-radius: 0.875rem;
+  --backdrop-blur-sm: 4px;
+  --animation-duration-spin: 1s;
+  --animation-duration-pulse: 2s;
+  --decorative-line-thickness: 5px;
+  --decorative-line-min-length: 10px;
   --underline-inset: 0.75rem;
   --underline-inset-tight: 0.5rem;
   --underline-offset: 0.5rem;
   --underline-thickness: 0.125rem;
   --transition-base: var(--easing-fast);
+  --transition-duration-fast: 100ms;
+  --transition-duration-standard: 150ms;
+  --transition-duration-medium: 200ms;
+  --transition-duration-progress: 500ms;
   --color-brand: var(--lego-red-color);
 
   --color-brand-hover: var(--lego-red-color-hover);
@@ -132,7 +192,33 @@
   --color-brand-focus: color-mix(in srgb, var(--color-brand) 45%, transparent);
   --color-success: var(--color-green-7);
   --color-success-bg: var(--color-green-2);
+  --color-success-bg-soft: color-mix(
+    in srgb,
+    var(--color-success-bg) 60%,
+    transparent
+  );
   --color-success-border: var(--color-green-7);
+  --color-coverage-low: color-mix(
+    in srgb,
+    var(--color-blue-6) 8%,
+    var(--color-surface-base)
+  );
+  --color-coverage-low-border: color-mix(
+    in srgb,
+    var(--color-blue-6) 22%,
+    var(--color-border-soft)
+  );
+  --color-coverage-medium: color-mix(
+    in srgb,
+    var(--color-blue-6) 18%,
+    var(--color-surface-base)
+  );
+  --color-coverage-medium-border: color-mix(
+    in srgb,
+    var(--color-blue-6) 42%,
+    var(--color-border-soft)
+  );
+  --color-coverage-text: var(--color-blue-8);
   --color-danger: var(--color-red-6);
   --color-danger-bg: var(--color-red-1);
   --color-danger-border: var(--color-red-6);
@@ -143,6 +229,16 @@
   --color-surface-soft: var(--lego-background-color);
   --color-surface-subtle: var(--color-gray-1);
   --color-surface-muted: var(--color-gray-1);
+  --color-surface-muted-soft: color-mix(
+    in srgb,
+    var(--color-surface-muted) 40%,
+    transparent
+  );
+  --color-surface-translucent: color-mix(
+    in srgb,
+    var(--color-surface-base) 55%,
+    transparent
+  );
   --color-surface-hover: var(--lego-background-color);
   --color-surface-neutral: var(--color-gray-2);
   --color-surface-disabled: var(--color-gray-2);
@@ -150,6 +246,16 @@
   --color-border: var(--border-gray);
   --color-border-soft: var(--color-gray-2);
   --color-border-muted: var(--color-gray-3);
+  --color-border-muted-soft: color-mix(
+    in srgb,
+    var(--color-border-muted) 30%,
+    transparent
+  );
+  --color-border-muted-medium: color-mix(
+    in srgb,
+    var(--color-border-muted) 50%,
+    transparent
+  );
   --color-border-quiet: var(--color-gray-4);
   --color-border-faint: var(--color-gray-2);
   --color-text-primary: var(--lego-font-color);
@@ -162,6 +268,16 @@
   --color-text-subtle: var(--color-gray-5);
   --color-text-faded: var(--color-gray-4);
   --color-text-disabled: var(--color-gray-4);
+  --color-on-dark-muted: color-mix(
+    in srgb,
+    var(--color-absolute-white) 55%,
+    transparent
+  );
+  --color-on-dark-strong: color-mix(
+    in srgb,
+    var(--color-absolute-white) 92%,
+    transparent
+  );
   --pattern-unavailable: repeating-linear-gradient(
     135deg,
     var(--color-border-faint) 0 1px,
@@ -204,7 +320,7 @@ body {
 }
 
 #root {
-  min-height: 100dvh;
+  min-height: var(--viewport-min-height);
 }
 
 @keyframes timeline-pulse {
@@ -253,12 +369,37 @@ body {
   }
 }
 
+@keyframes solver-barberpole {
+  from {
+    background-position: 0 0;
+  }
+
+  to {
+    background-position: 16px 0;
+  }
+}
+
+.solver-barberpole-progress {
+  background-image: linear-gradient(
+    45deg,
+    rgba(255, 255, 255, 0.35) 25%,
+    transparent 25%,
+    transparent 50%,
+    rgba(255, 255, 255, 0.35) 50%,
+    rgba(255, 255, 255, 0.35) 75%,
+    transparent 75%,
+    transparent
+  );
+  background-size: 16px 16px;
+  animation: solver-barberpole 1.1s linear infinite;
+}
+
 h1,
 h2,
 h3,
 h4 {
   font-family: var(--font-display);
-  font-weight: 600;
+  font-weight: var(--font-weight-semibold);
   color: var(--lego-font-color);
   line-height: var(--line-height-base);
   text-wrap: balance;
@@ -298,7 +439,7 @@ a:hover {
 
 a[disabled] {
   pointer-events: none;
-  opacity: 0.5;
+  opacity: var(--opacity-disabled);
 }
 
 ul {
@@ -314,7 +455,7 @@ table {
 
 th {
   padding: var(--spacing-sm);
-  font-weight: 600;
+  font-weight: var(--font-weight-semibold);
   color: var(--color-gray-7);
   background: var(--color-gray-2);
 }
@@ -327,11 +468,11 @@ td {
 }
 
 th:first-child {
-  border-radius: 2em 0 0 2em;
+  border-radius: var(--border-radius-pill) 0 0 var(--border-radius-pill);
 }
 
 th:last-child {
-  border-radius: 0 2em 2em 0;
+  border-radius: 0 var(--border-radius-pill) var(--border-radius-pill) 0;
 }
 
 tbody tr:nth-child(even) {
@@ -354,8 +495,8 @@ tbody tr:nth-child(even) {
   transform: scaleX(0);
   transform-origin: left;
   transition:
-    transform 220ms cubic-bezier(0.2, 0, 0, 1),
-    background-color 220ms cubic-bezier(0.2, 0, 0, 1);
+    transform var(--easing-medium),
+    background-color var(--easing-medium);
 }
 
 .slide-underline:hover::after,
@@ -375,20 +516,12 @@ tbody tr:nth-child(even) {
 }
 
 .slide-underline-on-dark::after {
-  background-color: color-mix(
-    in srgb,
-    var(--color-absolute-white) 55%,
-    transparent
-  );
+  background-color: var(--color-on-dark-muted);
 }
 
 .slide-underline-on-dark:hover::after,
 .slide-underline-on-dark:focus::after {
-  background-color: color-mix(
-    in srgb,
-    var(--color-absolute-white) 92%,
-    transparent
-  );
+  background-color: var(--color-on-dark-strong);
 }
 
 @media (prefers-reduced-motion: reduce) {

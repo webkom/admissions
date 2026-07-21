@@ -16,6 +16,8 @@ MIGRATION_0015 = (
 MIGRATION_0016 = ("admissions", "0016_use_absolute_schedule_minutes")
 MIGRATION_0018 = ("admissions", "0018_name_visibility_audit_event")
 MIGRATION_0019 = ("admissions", "0019_admission_date_order")
+MIGRATION_0020 = ("admissions", "0020_normalize_group_name_visibility")
+MIGRATION_0021 = ("admissions", "0021_userapplication_interview_status")
 
 
 def create_admission(apps, *, slug, lego_id):
@@ -163,6 +165,113 @@ class AdmissionDateOrderMigrationTestCase(MigrationTestCase):
         admission = Admission.objects.get(pk=self.admission_id)
         self.assertLess(admission.open_from, admission.public_deadline)
         self.assertLessEqual(admission.public_deadline, admission.closed_from)
+
+
+class GroupNameVisibilityMigrationTestCase(MigrationTestCase):
+    migrate_from = MIGRATION_0019
+    migrate_to = MIGRATION_0020
+
+    def set_up_before_migration(self, apps):
+        Group = apps.get_model("admissions", "Group")
+        NameVisibilityAuditEvent = apps.get_model(
+            "admissions", "NameVisibilityAuditEvent"
+        )
+        SavedSchedule = apps.get_model("admissions", "SavedSchedule")
+
+        user, admission = create_admission(
+            apps,
+            slug="legacy-global-visibility",
+            lego_id=91004,
+        )
+        hidden_group = Group.objects.create(name="Legacy hidden", lego_id=91005)
+        revealed_group = Group.objects.create(name="Legacy revealed", lego_id=91006)
+        admission.groups.add(hidden_group, revealed_group)
+
+        legacy_global = SavedSchedule.objects.create(
+            admission=admission,
+            schedule=[],
+            start_date=date(2026, 4, 20),
+            is_distributed=True,
+            name_visibility="committee",
+        )
+
+        _, scoped_admission = create_admission(
+            apps,
+            slug="partially-hidden-visibility",
+            lego_id=91007,
+        )
+        scoped_hidden_group = Group.objects.create(name="Scoped hidden", lego_id=91008)
+        scoped_revealed_group = Group.objects.create(
+            name="Scoped revealed", lego_id=91009
+        )
+        scoped_admission.groups.add(scoped_hidden_group, scoped_revealed_group)
+        scoped = SavedSchedule.objects.create(
+            admission=scoped_admission,
+            schedule=[],
+            start_date=date(2026, 4, 20),
+            is_distributed=True,
+            name_visibility="committee",
+        )
+        scoped.revealed_groups.add(scoped_revealed_group)
+        NameVisibilityAuditEvent.objects.create(
+            admission=scoped_admission,
+            saved_schedule=scoped,
+            group=scoped_hidden_group,
+            group_name=scoped_hidden_group.name,
+            actor=user,
+            actor_username=user.username,
+            action="hidden",
+        )
+
+        self.legacy_global_id = legacy_global.pk
+        self.legacy_group_ids = {hidden_group.pk, revealed_group.pk}
+        self.scoped_id = scoped.pk
+        self.scoped_revealed_group_id = scoped_revealed_group.pk
+
+    def test_materializes_legacy_global_visibility_without_revealing_hidden_groups(
+        self,
+    ):
+        SavedSchedule = self.apps.get_model("admissions", "SavedSchedule")
+
+        legacy_global = SavedSchedule.objects.get(pk=self.legacy_global_id)
+        self.assertEqual(legacy_global.name_visibility, "committee")
+        self.assertEqual(
+            set(legacy_global.revealed_groups.values_list("pk", flat=True)),
+            self.legacy_group_ids,
+        )
+
+        scoped = SavedSchedule.objects.get(pk=self.scoped_id)
+        self.assertEqual(scoped.name_visibility, "admin_only")
+        self.assertEqual(
+            set(scoped.revealed_groups.values_list("pk", flat=True)),
+            {self.scoped_revealed_group_id},
+        )
+
+
+class InterviewStatusMigrationTestCase(MigrationTestCase):
+    migrate_from = MIGRATION_0020
+    migrate_to = MIGRATION_0021
+
+    def set_up_before_migration(self, apps):
+        UserApplication = apps.get_model("admissions", "UserApplication")
+        user, admission = create_admission(
+            apps,
+            slug="interview-status-default",
+            lego_id=91010,
+        )
+        application = UserApplication.objects.create(
+            user=user,
+            admission=admission,
+            phone_number="00000000",
+        )
+        self.application_id = application.pk
+
+    def test_existing_applications_start_as_not_invited(self):
+        UserApplication = self.apps.get_model("admissions", "UserApplication")
+
+        application = UserApplication.objects.get(pk=self.application_id)
+        self.assertEqual(application.interview_status, "not_invited")
+        self.assertIsNotNone(application.interview_status_updated_at)
 
 
 class AbsoluteScheduleMinutesMigrationTestCase(MigrationTestCase):

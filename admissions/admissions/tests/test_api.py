@@ -17,7 +17,11 @@ from admissions.admissions.models import (
     SolveJob,
     UserApplication,
 )
-from admissions.admissions.tests.utils import create_admission, fake_timedelta
+from admissions.admissions.tests.utils import (
+    ScheduleRevisionAPIClient,
+    create_admission,
+    fake_timedelta,
+)
 
 
 class EditGroupTestCase(APITestCase):
@@ -145,7 +149,6 @@ class EditAdmissionTestCase(APITestCase):
             "open_from": fake_timedelta(days=10),
             "public_deadline": fake_timedelta(days=11),
             "closed_from": fake_timedelta(days=12),
-            "header_fields": [],
             "admin_groups": [str(self.admin_group.pk)],
             "groups": [str(self.committee.pk)],
         }
@@ -267,7 +270,7 @@ class SolveScheduleViewTestCase(APITestCase):
     def setUp(self):
         self.group = Group.objects.create(name="Solverkom", lego_id=998)
         self.user = LegoUser.objects.create(username="solver-user", lego_id=999)
-        Membership.objects.create(user=self.user, role=MEMBER, group=self.group)
+        Membership.objects.create(user=self.user, role=RECRUITING, group=self.group)
         self.admission = create_admission(created_by=self.user, slug="solve-opptak")
         self.admission.admin_groups.add(self.group)
         self.client.force_authenticate(user=self.user)
@@ -305,7 +308,7 @@ class SolveScheduleViewTestCase(APITestCase):
 
         self.assertEqual(res.status_code, status.HTTP_403_FORBIDDEN)
 
-    def test_committee_recruiter_cannot_run_global_solver(self):
+    def test_committee_recruiter_can_run_global_solver(self):
         committee = Group.objects.create(name="Bedkom", lego_id=996)
         recruiter = LegoUser.objects.create(username="solver-recruiter", lego_id=995)
         Membership.objects.create(user=recruiter, role=RECRUITING, group=committee)
@@ -314,7 +317,7 @@ class SolveScheduleViewTestCase(APITestCase):
 
         res = self._solve({"candidates": [], "interviewers": [], "panel_size": 1})
 
-        self.assertEqual(res.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
 
     def test_invalid_panel_size_is_rejected(self):
         res = self._solve({"candidates": [], "interviewers": [], "panel_size": 0})
@@ -653,13 +656,15 @@ class SolveScheduleViewTestCase(APITestCase):
 
 
 class SavedScheduleViewTestCase(APITestCase):
+    client_class = ScheduleRevisionAPIClient
+
     def setUp(self):
         self.admin_group = Group.objects.create(name="Webkom", lego_id=300)
         self.admin_user = LegoUser.objects.create(
             username="schedule-admin", lego_id=301
         )
         Membership.objects.create(
-            user=self.admin_user, role=MEMBER, group=self.admin_group
+            user=self.admin_user, role=RECRUITING, group=self.admin_group
         )
         self.admission = create_admission(
             created_by=self.admin_user, slug="schedule-opptak"
@@ -845,7 +850,7 @@ class SavedScheduleViewTestCase(APITestCase):
         self.assertEqual(res.data["schedule"], [])
         self.assertFalse(res.data["is_distributed"])
 
-    def test_recruiter_cannot_save_global_schedule(self):
+    def test_recruiter_can_save_global_schedule(self):
         recruiter_group = Group.objects.create(name="Bedkom", lego_id=302)
         recruiter_user = LegoUser.objects.create(
             username="schedule-recruiter", lego_id=303
@@ -866,12 +871,11 @@ class SavedScheduleViewTestCase(APITestCase):
             "day_start_minute": 540,
             "day_end_minute": 900,
             "is_distributed": False,
-            "name_visibility": "committee",
         }
 
         res = self.client.post(self.url, payload, format="json")
 
-        self.assertEqual(res.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
 
 
 class InterviewAvailabilityViewTestCase(APITestCase):

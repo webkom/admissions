@@ -1,0 +1,283 @@
+import React from "react";
+import styled from "styled-components";
+import { ChevronDown, MessageCircle, Phone, Timer } from "lucide-react";
+import InterviewStatusControl from "src/containers/AdmissionsContainer/InterviewStatusControl";
+import ApplicationDetails from "src/containers/AdmissionsContainer/ApplicationDetails";
+import FormatTime from "src/components/Time/FormatTime";
+import { Admission, AdminApplication } from "src/types";
+import { breakpoints, iconSizes } from "src/styles/designTokens";
+import { encodeSmsAddress } from "src/utils/emailLinks";
+
+interface InterviewTriageListProps {
+  admission: Admission;
+  applications: AdminApplication[];
+}
+
+const formatGroupNames = (application: AdminApplication): string => {
+  const names = application.group_applications.map(({ group }) => group.name);
+  if (names.length <= 2) return names.join(" · ");
+  return `${names.slice(0, 2).join(" · ")} +${names.length - 2}`;
+};
+
+const InterviewTriageList: React.FC<InterviewTriageListProps> = ({
+  admission,
+  applications,
+}) => {
+  const [expandedApplicationIds, setExpandedApplicationIds] = React.useState<
+    Set<string>
+  >(new Set());
+
+  const toggleApplication = (applicationId: string) => {
+    setExpandedApplicationIds((current) => {
+      const next = new Set(current);
+      if (next.has(applicationId)) next.delete(applicationId);
+      else next.add(applicationId);
+      return next;
+    });
+  };
+
+  return (
+    <MobileSection aria-label="Søknader">
+      <CardList>
+        {applications.map((application) => {
+          const phone = application.phone_number.trim();
+          const phoneRecipient = encodeSmsAddress(phone);
+          const isExpanded = expandedApplicationIds.has(application.pk);
+
+          return (
+            <CandidateCard key={application.pk} $expanded={isExpanded}>
+              <CandidateToggle
+                type="button"
+                aria-expanded={isExpanded}
+                aria-controls={`mobile-application-${application.pk}`}
+                onClick={() => toggleApplication(application.pk)}
+              >
+                <div>
+                  <CandidateName>{application.user.full_name}</CandidateName>
+                  <Username>@{application.user.username}</Username>
+                  <Groups
+                    title={application.group_applications
+                      .map(({ group }) => group.name)
+                      .join(", ")}
+                  >
+                    {formatGroupNames(application)}
+                  </Groups>
+                </div>
+                <ChevronDown
+                  size={iconSizes.standard}
+                  aria-hidden="true"
+                  data-expanded={isExpanded}
+                />
+              </CandidateToggle>
+
+              <CandidateSummary>
+                <InterviewStatusControl
+                  admissionSlug={admission.slug}
+                  applicationId={application.pk}
+                  candidateName={application.user.full_name}
+                  status={application.interview_status}
+                  statusUpdatedAt={application.interview_status_updated_at}
+                  statusUpdatedBy={application.interview_status_updated_by}
+                  canEdit={
+                    admission.userdata.is_admin ||
+                    admission.userdata.is_recruiter
+                  }
+                  compact
+                />
+
+                <SentMeta>
+                  Sendt{" "}
+                  <FormatTime format="d. MMM HH:mm">
+                    {application.created_at}
+                  </FormatTime>
+                  {!application.applied_within_deadline && (
+                    <Timer
+                      size={iconSizes.control}
+                      aria-label="Søkte etter fristen"
+                    />
+                  )}
+                </SentMeta>
+              </CandidateSummary>
+
+              {phoneRecipient && (
+                <ContactActions>
+                  <ContactNumber>{phone}</ContactNumber>
+                  <ContactLink
+                    href={`tel:${phoneRecipient}`}
+                    aria-label={`Ring ${application.user.full_name}`}
+                    title={`Ring ${application.user.full_name}`}
+                  >
+                    <Phone size={iconSizes.control} aria-hidden="true" />
+                  </ContactLink>
+                  <ContactLink
+                    href={`sms:${phoneRecipient}`}
+                    aria-label={`Send melding til ${application.user.full_name}`}
+                    title={`Send melding til ${application.user.full_name}`}
+                  >
+                    <MessageCircle
+                      size={iconSizes.control}
+                      aria-hidden="true"
+                    />
+                  </ContactLink>
+                </ContactActions>
+              )}
+
+              {isExpanded && (
+                <ExpandedContent id={`mobile-application-${application.pk}`}>
+                  <ApplicationDetails
+                    admission={admission}
+                    application={application}
+                  />
+                </ExpandedContent>
+              )}
+            </CandidateCard>
+          );
+        })}
+      </CardList>
+    </MobileSection>
+  );
+};
+
+export default InterviewTriageList;
+
+const MobileSection = styled.section`
+  display: none;
+
+  @media screen and (max-width: ${breakpoints.handheld}) {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-md);
+  }
+`;
+
+const CardList = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-md);
+`;
+
+const CandidateCard = styled.article<{ $expanded: boolean }>`
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-md);
+  padding: var(--spacing-md);
+  border: var(--border-width-default) solid var(--color-border-soft);
+  border-radius: var(--border-radius-md);
+  background: ${({ $expanded }) =>
+    $expanded ? "var(--color-surface-subtle)" : "var(--color-surface-base)"};
+`;
+
+const CandidateToggle = styled.button`
+  display: flex;
+  width: 100%;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--spacing-md);
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
+
+  svg {
+    flex: 0 0 auto;
+    margin-top: var(--spacing-xs);
+    color: var(--color-text-muted);
+    transition: transform var(--easing-fast);
+  }
+
+  svg[data-expanded="true"] {
+    transform: rotate(180deg);
+  }
+
+  &:focus-visible {
+    border-radius: var(--border-radius-sm);
+    outline: none;
+    box-shadow: 0 0 0 3px var(--color-brand-ring-soft);
+  }
+`;
+
+const CandidateName = styled.h3`
+  margin: 0;
+  color: var(--color-text-primary);
+  font-size: var(--font-size-md);
+  font-weight: var(--font-weight-semibold);
+`;
+
+const Username = styled.span`
+  display: block;
+  margin-top: var(--spacing-xs);
+  color: var(--color-text-muted);
+  font-size: var(--font-size-detail);
+`;
+
+const Groups = styled.p`
+  margin: var(--spacing-xs) 0 0;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-sm);
+`;
+
+const CandidateSummary = styled.div`
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  gap: var(--spacing-md);
+`;
+
+const SentMeta = styled.span`
+  display: inline-flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+  color: var(--color-text-muted);
+  font-size: var(--font-size-detail);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+`;
+
+const ContactActions = styled.div`
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: var(--spacing-sm);
+`;
+
+const ContactNumber = styled.span`
+  overflow: hidden;
+  color: var(--color-text-primary);
+  font-size: var(--font-size-ui);
+  font-weight: var(--font-weight-semibold);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+`;
+
+const ContactLink = styled.a`
+  display: inline-flex;
+  width: var(--control-height-md);
+  min-height: var(--control-height-md);
+  align-items: center;
+  justify-content: center;
+  border: var(--border-width-default) solid var(--color-border-soft);
+  border-radius: var(--border-radius-md);
+  background: var(--color-surface-subtle);
+  color: var(--color-text-primary);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+  text-decoration: none;
+
+  &:hover {
+    border-color: var(--color-brand);
+    color: var(--color-brand);
+  }
+
+  &:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 3px var(--color-brand-ring-soft);
+  }
+`;
+
+const ExpandedContent = styled.div`
+  padding-top: var(--spacing-lg);
+  border-top: var(--border-width-default) solid var(--color-border-soft);
+`;

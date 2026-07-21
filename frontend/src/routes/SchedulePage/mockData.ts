@@ -61,7 +61,7 @@ const createSeededRandom = (seed: number) => {
   };
 };
 
-export interface ScheduleConfig {
+interface ScheduleConfig {
   numDays: number;
   dayStartHour: number;
   dayEndHour: number;
@@ -191,5 +191,6 @@ export const createMockInterviewers = (
       gender,
       availability: buildAvailability(index, config),
       biased: [],
+      has_submitted: true,
     };
   });

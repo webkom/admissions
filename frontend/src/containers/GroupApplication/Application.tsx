@@ -12,6 +12,8 @@ import { saveApplicationTextDraft } from "src/utils/draftHelper";
 import { Group } from "src/types";
 import { FieldInputProps, FormikProps } from "formik";
 import { FormValues } from "src/routes/ApplicationForm";
+import JsonFieldEditor from "src/components/JsonFieldEditor";
+import { FieldModel } from "src/utils/jsonFields";
 
 type FieldValue = string;
 
@@ -21,6 +23,7 @@ export interface ApplicationProps {
   field: FieldInputProps<FieldValue>;
   form: FormikProps<FormValues>;
   disabled: boolean;
+  questionFields?: FieldModel[];
 }
 
 const Application: React.FC<ApplicationProps> = ({
@@ -29,6 +32,7 @@ const Application: React.FC<ApplicationProps> = ({
   field: { name, onChange, value },
   form: { touched, errors, handleBlur },
   disabled,
+  questionFields,
 }) => {
   const debouncedValue = useDebouncedState(value);
 
@@ -72,6 +76,11 @@ const Application: React.FC<ApplicationProps> = ({
           disabled={disabled}
         />
         <InputValidationFeedback error={error} />
+        <JsonFieldEditor
+          sectionName={`groupAnswers.${group.name.toLowerCase()}`}
+          fields={questionFields}
+          disabled={disabled}
+        />
       </InputWrapper>
     </Container>
   );
@@ -87,11 +96,11 @@ const Container = styled.div`
     "logoname"
     "responselabel"
     "input";
-  grid-gap: 0.7rem;
+  gap: var(--spacing-md);
   align-items: center;
-  margin: 2rem 0rem;
-  padding-bottom: 2rem;
-  border-bottom: 1px solid var(--color-gray-3);
+  margin: var(--spacing-xl) 0;
+  padding-bottom: var(--spacing-xl);
+  border-bottom: var(--border-width-default) solid var(--color-border-muted);
 
   &:last-of-type {
     border-bottom: 0;
@@ -99,7 +108,7 @@ const Container = styled.div`
   }
 
   ${media.portrait`
-    margin: 1em 0;
+    margin: var(--spacing-md) 0;
     `};
 `;
 
@@ -113,12 +122,11 @@ const Name = styled.h3`
   grid-area: name;
   margin: 0;
   font-size: var(--font-size-heading-md);
-  line-height: 2rem;
-  letter-spacing: 0.7px;
+  line-height: var(--line-height-heading-md);
 
   ${media.portrait`
     font-size: var(--font-size-heading-xs);
-    padding: 0
+    padding: 0;
     text-align: left;
     align-self: center;
     `};
@@ -128,7 +136,7 @@ const Logo = styled.img`
   grid-area: logo;
   justify-self: start;
   object-fit: scale-down;
-  max-width: 45px;
+  max-width: var(--application-logo-size);
   margin-right: var(--spacing-md);
 `;
 
@@ -140,11 +148,11 @@ const ResponseLabel = styled.div`
     var(--color-border-soft) 100%
   );
   background-repeat: repeat;
-  border: 1px solid var(--color-blue-2);
+  border: var(--border-width-default) solid var(--color-blue-2);
   border-radius: var(--border-radius-lg);
   padding: var(--spacing-md);
   font-size: var(--font-size-detail);
-  line-height: 1rem;
+  line-height: var(--line-height-tiny);
   color: var(--color-text-muted);
 `;
 
@@ -154,5 +162,5 @@ const InputWrapper = styled.div`
 `;
 
 const InputArea = styled(StyledTextAreaField)`
-  min-height: 10rem;
+  min-height: var(--group-editor-min-height);
 `;
