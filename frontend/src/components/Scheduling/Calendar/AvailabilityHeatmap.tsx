@@ -1,5 +1,6 @@
 import React, { useMemo, useRef, useState } from "react";
 import {
+  AlertTriangle,
   BarChart3,
   Check,
   ChevronDown,
@@ -23,23 +24,34 @@ import {
   SchedulePanelFooter,
   SchedulePanelHeader,
 } from "../ui";
-import ScheduleGridFrame, {
+import {
   ScheduleBlockCell,
   ScheduleDayHeader,
   ScheduleGridLegendItem,
   ScheduleSlotSegments,
   ScheduleTimeLabel,
 } from "./ScheduleGridFrame";
+import ScheduleCalendarGrid from "./ScheduleCalendarGrid";
+import {
+  buildAvailabilityCoverage,
+  type BlockCoverage,
+} from "./availabilityCoverage";
 
 interface AvailabilityHeatmapProps {
   interviewers: Interviewer[];
   availableSlots: Set<string>;
+  panelSize: number;
+  samePanelPerBlock: boolean;
   dates: string[];
   dayStartMinute?: number;
   dayEndMinute?: number;
   sessionDuration: number;
   chunkSize: number;
   chunkBreakMinutes: number;
+  onParticipationChange?: (
+    userId: string,
+    participation: "awaiting_response" | "not_participating",
+  ) => Promise<void>;
 }
 
 interface AvailabilityBlock {
@@ -47,9 +59,8 @@ interface AvailabilityBlock {
   chunkIndex: number;
   minutes: number[];
   enabledMinutes: number[];
-  slotAvailableCounts: number[];
+  coverage: BlockCoverage;
   allAvailableInterviewers: Interviewer[];
-  availableInterviewers: Interviewer[];
 }
 
 type GenderFilter = "all" | "male" | "female";
@@ -63,12 +74,15 @@ const genderOptions = [
 const AvailabilityHeatmap: React.FC<AvailabilityHeatmapProps> = ({
   interviewers,
   availableSlots,
+  panelSize,
+  samePanelPerBlock,
   dates,
   dayStartMinute = 8 * 60,
   dayEndMinute = 18 * 60,
   sessionDuration,
   chunkSize,
   chunkBreakMinutes,
+  onParticipationChange,
 }) => {
   const [genderFilter, setGenderFilter] = useState<GenderFilter>("all");
   const [highlightedInterviewer, setHighlightedInterviewer] = useState("");
@@ -76,6 +90,8 @@ const AvailabilityHeatmap: React.FC<AvailabilityHeatmapProps> = ({
   const [isResponseDisclosureOpen, setIsResponseDisclosureOpen] =
     useState(false);
   const [selectedBlockKey, setSelectedBlockKey] = useState<string | null>(null);
+  const [participationSavingId, setParticipationSavingId] = useState("");
+  const [pendingOptOutId, setPendingOptOutId] = useState("");
   const selectedBlockTriggerRef = useRef<HTMLElement | null>(null);
   const chunks = useMemo(
     () =>
@@ -113,68 +129,124 @@ const AvailabilityHeatmap: React.FC<AvailabilityHeatmapProps> = ({
       ),
     [dates, interviewers, sessionDuration],
   );
+  const participatingInterviewers = useMemo(
+    () =>
+      interviewers.filter(
+        (interviewer) =>
+          interviewer.participation === "participating" ||
+          (interviewer.participation === undefined &&
+            interviewer.has_submitted),
+      ),
+    [interviewers],
+  );
+  const missingResponse = useMemo(
+    () =>
+      interviewers.filter(
+        (interviewer) =>
+          interviewer.participation === "awaiting_response" ||
+          (interviewer.participation === undefined &&
+            !interviewer.has_submitted),
+      ),
+    [interviewers],
+  );
+  const optedOut = useMemo(
+    () =>
+      interviewers.filter(
+        (interviewer) => interviewer.participation === "not_participating",
+      ),
+    [interviewers],
+  );
   const inspectedInterviewers = useMemo(
     () =>
       genderFilter === "male"
-        ? interviewers.filter((interviewer) => interviewer.gender === "M")
+        ? participatingInterviewers.filter(
+            (interviewer) => interviewer.gender === "M",
+          )
         : genderFilter === "female"
-          ? interviewers.filter((interviewer) => interviewer.gender === "F")
-          : interviewers,
-    [genderFilter, interviewers],
+          ? participatingInterviewers.filter(
+              (interviewer) => interviewer.gender === "F",
+            )
+          : participatingInterviewers,
+    [genderFilter, participatingInterviewers],
   );
-  const submitted = interviewers.filter(
-    (interviewer) => interviewer.has_submitted,
+  const submitted = useMemo(
+    () =>
+      participatingInterviewers.filter(
+        (interviewer) => interviewer.has_submitted,
+      ),
+    [participatingInterviewers],
   );
-  const missingResponse = interviewers.filter(
-    (interviewer) => !interviewer.has_submitted,
+  const respondentsInScope = useMemo(
+    () =>
+      inspectedInterviewers.filter((interviewer) => interviewer.has_submitted),
+    [inspectedInterviewers],
   );
-  const respondentsInScope = inspectedInterviewers.filter(
-    (interviewer) => interviewer.has_submitted,
+  const globalCoverage = useMemo(
+    () =>
+      buildAvailabilityCoverage({
+        interviewers: submitted,
+        availableSlots,
+        dates,
+        chunks,
+        sessionDuration,
+        panelSize,
+        samePanelPerBlock,
+      }),
+    [
+      availableSlots,
+      chunks,
+      dates,
+      panelSize,
+      samePanelPerBlock,
+      sessionDuration,
+      submitted,
+    ],
+  );
+  const inspectionCoverage = useMemo(
+    () =>
+      buildAvailabilityCoverage({
+        interviewers: respondentsInScope,
+        availableSlots,
+        dates,
+        chunks,
+        sessionDuration,
+        panelSize,
+        samePanelPerBlock,
+      }),
+    [
+      availableSlots,
+      chunks,
+      dates,
+      panelSize,
+      respondentsInScope,
+      samePanelPerBlock,
+      sessionDuration,
+    ],
   );
   const blocks = useMemo<AvailabilityBlock[]>(
     () =>
-      dates.flatMap((date) =>
-        chunks.map((minutes, chunkIndex) => {
-          const enabledMinutes = minutes.filter((minute) =>
-            availableSlots.has(makeSlotKey(date, minute)),
-          );
-          const allAvailableInterviewers =
-            enabledMinutes.length === 0
-              ? []
-              : submitted.filter((interviewer) =>
-                  enabledMinutes.every((minute) =>
-                    interviewerSlots
-                      .get(interviewer.id)
-                      ?.has(makeSlotKey(date, minute)),
-                  ),
-                );
-          const availableInterviewerIds = new Set(
-            allAvailableInterviewers.map((interviewer) => interviewer.id),
-          );
-          const availableInterviewers = respondentsInScope.filter(
-            (interviewer) => availableInterviewerIds.has(interviewer.id),
-          );
-          const slotAvailableCounts = minutes.map((minute) =>
-            availableSlots.has(makeSlotKey(date, minute))
-              ? respondentsInScope.filter((interviewer) =>
+      inspectionCoverage.blocks.map((coverage) => {
+        const { date, minutes, enabledMinutes } = coverage;
+        const allAvailableInterviewers =
+          enabledMinutes.length === 0
+            ? []
+            : submitted.filter((interviewer) =>
+                enabledMinutes.every((minute) =>
                   interviewerSlots
                     .get(interviewer.id)
                     ?.has(makeSlotKey(date, minute)),
-                ).length
-              : 0,
-          );
-          return {
-            date,
-            chunkIndex,
-            minutes,
-            enabledMinutes,
-            slotAvailableCounts,
-            allAvailableInterviewers,
-            availableInterviewers,
-          };
-        }),
-      ),
-    [availableSlots, chunks, dates, interviewerSlots, respondentsInScope],
+                ),
+              );
+        return {
+          date,
+          chunkIndex: coverage.chunkIndex,
+          minutes,
+          enabledMinutes,
+          coverage,
+          allAvailableInterviewers,
+        };
+      }),
+    [inspectionCoverage.blocks, interviewerSlots, submitted],
   );
   const blocksByKey = useMemo(
     () =>
@@ -183,9 +255,6 @@ const AvailabilityHeatmap: React.FC<AvailabilityHeatmapProps> = ({
       ),
     [blocks],
   );
-  const openBlockCount = blocks.filter(
-    (block) => block.enabledMinutes.length > 0,
-  ).length;
   const selectedBlock = selectedBlockKey
     ? blocksByKey.get(selectedBlockKey)
     : undefined;
@@ -209,41 +278,190 @@ const AvailabilityHeatmap: React.FC<AvailabilityHeatmapProps> = ({
       selectedBlockTriggerRef.current?.focus(),
     );
   };
+  const changeParticipation = async (
+    interviewer: Interviewer,
+    participation: "awaiting_response" | "not_participating",
+  ) => {
+    if (!onParticipationChange) return;
+    setParticipationSavingId(interviewer.id);
+    try {
+      await onParticipationChange(interviewer.id, participation);
+      if (participation === "not_participating") {
+        setPendingOptOutId("");
+      }
+    } finally {
+      setParticipationSavingId("");
+    }
+  };
+  const optOutControl = (interviewer: Interviewer) => (
+    <div className="flex flex-wrap items-center justify-end gap-2">
+      {pendingOptOutId === interviewer.id ? (
+        <>
+          <span className="text-right text-detail text-text-muted">
+            {(interviewer.affected_assignment_count ?? 0) > 0
+              ? `${interviewer.affected_assignment_count} planlagte intervju må repareres.`
+              : "Intervjueren fjernes fra planleggingen."}
+          </span>
+          <button
+            type="button"
+            disabled={participationSavingId === interviewer.id}
+            onClick={() => setPendingOptOutId("")}
+            className="text-detail font-semibold text-text-muted hover:underline disabled:opacity-50"
+          >
+            Avbryt
+          </button>
+          <button
+            type="button"
+            disabled={participationSavingId === interviewer.id}
+            onClick={() =>
+              void changeParticipation(interviewer, "not_participating")
+            }
+            className="text-detail font-semibold text-danger hover:underline disabled:opacity-50"
+          >
+            Bekreft
+          </button>
+        </>
+      ) : (
+        <button
+          type="button"
+          disabled={participationSavingId === interviewer.id}
+          onClick={() => setPendingOptOutId(interviewer.id)}
+          className="text-detail font-semibold text-brand hover:underline disabled:opacity-50"
+        >
+          Deltar ikke
+        </button>
+      )}
+    </div>
+  );
 
   return (
     <SchedulePanel className="min-w-0">
       <SchedulePanelHeader
         icon={BarChart3}
         title="Tilgjengelighetsoversikt"
-        description="Se felles intervjukapasitet for hele opptaket. Opptaksgrupper avgjør hvem som deltar og hvilke søkere de kan se, ikke egne intervjugrupper."
+        description="Se hvem som deltar, og om dere har nok felles kapasitet til intervjuene."
         actions={
           <ResponseStatus
             missingResponse={missingResponse}
+            optedOut={optedOut}
+            canManage={Boolean(onParticipationChange)}
             isOpen={isResponseDisclosureOpen}
             onToggle={() => setIsResponseDisclosureOpen((open) => !open)}
           />
         }
       />
       <SchedulePanelBody className="flex flex-col gap-4">
-        {isResponseDisclosureOpen && missingResponse.length > 0 && (
-          <section
-            className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-border-soft bg-surface-subtle px-3 py-2"
-            aria-label="Mangler svar"
-          >
-            <div className="text-detail text-text-muted">
-              <strong className="mr-2 text-text-primary">Mangler svar</strong>
-              {missingResponse
-                .map((interviewer) => interviewer.name)
-                .join(" · ")}
-            </div>
-            <button
-              type="button"
-              className="text-detail font-semibold text-brand hover:text-brand-dark"
-              onClick={() => setIsResponseDisclosureOpen(false)}
+        {isResponseDisclosureOpen &&
+          (missingResponse.length > 0 ||
+            optedOut.length > 0 ||
+            Boolean(onParticipationChange)) && (
+            <section
+              className="rounded-md border border-border-soft bg-surface-subtle px-3 py-2"
+              aria-label="Deltakelse"
             >
-              Skjul
-            </button>
-          </section>
+              <div className="divide-y divide-border-soft">
+                {missingResponse.map((interviewer) => (
+                  <div
+                    key={interviewer.id}
+                    className="flex flex-wrap items-center justify-between gap-2 py-2 first:pt-0"
+                  >
+                    <div className="text-detail">
+                      <strong className="text-text-primary">
+                        {interviewer.name}
+                      </strong>
+                      <span className="ml-2 text-text-muted">Mangler svar</span>
+                    </div>
+                    {onParticipationChange && optOutControl(interviewer)}
+                  </div>
+                ))}
+                {onParticipationChange &&
+                  participatingInterviewers.map((interviewer) => (
+                    <div
+                      key={interviewer.id}
+                      className="flex flex-wrap items-center justify-between gap-2 py-2"
+                    >
+                      <div className="text-detail">
+                        <strong className="text-text-primary">
+                          {interviewer.name}
+                        </strong>
+                        <span className="ml-2 text-text-muted">Deltar</span>
+                      </div>
+                      {optOutControl(interviewer)}
+                    </div>
+                  ))}
+                {optedOut.map((interviewer) => (
+                  <div
+                    key={interviewer.id}
+                    className="flex flex-wrap items-center justify-between gap-2 py-2 last:pb-0"
+                  >
+                    <div className="text-detail">
+                      <strong className="text-text-primary">
+                        {interviewer.name}
+                      </strong>
+                      <span className="ml-2 text-text-muted">Deltar ikke</span>
+                    </div>
+                    {onParticipationChange && (
+                      <button
+                        type="button"
+                        disabled={participationSavingId === interviewer.id}
+                        onClick={() =>
+                          void changeParticipation(
+                            interviewer,
+                            "awaiting_response",
+                          )
+                        }
+                        className="text-detail font-semibold text-brand hover:underline disabled:opacity-50"
+                      >
+                        Ta med igjen
+                      </button>
+                    )}
+                  </div>
+                ))}
+              </div>
+              <div className="mt-2 flex justify-end border-t border-border-soft pt-2">
+                <button
+                  type="button"
+                  onClick={() => setIsResponseDisclosureOpen(false)}
+                  className="text-detail font-semibold text-brand hover:underline"
+                >
+                  Skjul
+                </button>
+              </div>
+            </section>
+          )}
+
+        <section
+          aria-label="Oppsummering av intervjukapasitet"
+          className="grid gap-px overflow-hidden rounded-md border border-border-soft bg-border-soft sm:grid-cols-3"
+        >
+          <CoverageMetric
+            label="Svar mottatt"
+            value={`${submitted.length}/${participatingInterviewers.length}`}
+          />
+          <CoverageMetric
+            label="Åpne intervjutider"
+            value={globalCoverage.openSlotCount}
+          />
+          <CoverageMetric
+            label={`Intervjutider med fullt panel · panel på ${panelSize}`}
+            value={globalCoverage.completeSlotCount}
+          />
+        </section>
+
+        {participatingInterviewers.length < panelSize && (
+          <div
+            role="alert"
+            className="flex items-start gap-2 rounded-md bg-amber-50 px-3 py-2 text-ui font-semibold text-amber-900"
+          >
+            <AlertTriangle
+              size={iconSizes.small}
+              className="mt-0.5 flex-none"
+              aria-hidden="true"
+            />
+            Panel på {panelSize} er ikke mulig med bare{" "}
+            {participatingInterviewers.length} deltakende intervjuere. Reduser
+            panelstørrelsen eller ta med flere.
+          </div>
         )}
 
         <div className="border-y border-border-soft py-2">
@@ -304,7 +522,7 @@ const AvailabilityHeatmap: React.FC<AvailabilityHeatmapProps> = ({
                   onChange={setHighlightedInterviewer}
                   options={[
                     { value: "", label: "Ingen" },
-                    ...interviewers.map((interviewer) => ({
+                    ...participatingInterviewers.map((interviewer) => ({
                       value: interviewer.id,
                       label: interviewer.name,
                     })),
@@ -317,12 +535,12 @@ const AvailabilityHeatmap: React.FC<AvailabilityHeatmapProps> = ({
 
         <div className="flex flex-wrap items-center justify-between gap-x-5 gap-y-2 text-detail text-text-muted">
           <span>
-            Farge i strekene viser andelen av de som har svart. Tallet viser
-            antall tilgjengelige gjennom hele blokken.
+            Tallet viser tilgjengelige intervjuere mot panelstørrelsen. Strekene
+            viser dekningen for hver intervjutid i blokken.
           </span>
           <div className="flex flex-wrap items-center gap-3 font-medium">
-            <SegmentLegend label="Lav tilgjengelighet" fill={0.2} />
-            <SegmentLegend label="Høy tilgjengelighet" fill={0.9} />
+            <SegmentLegend label="Lav dekning" fill={0.33} />
+            <SegmentLegend label="Full dekning" fill={1} />
             <ScheduleGridLegendItem
               label="Stengt"
               swatchClassName="border-border-soft bg-surface-neutral [background-image:var(--pattern-unavailable)]"
@@ -333,6 +551,7 @@ const AvailabilityHeatmap: React.FC<AvailabilityHeatmapProps> = ({
           <p className="m-0 text-detail text-text-muted">
             Viser {genderFilter === "male" ? "mannlige" : "kvinnelige"}{" "}
             intervjuere. {respondentsInScope.length} i utvalget har svart.
+            Oppsummeringen over gjelder fortsatt alle intervjuere.
           </p>
         )}
         {selectedInterviewer && (
@@ -343,109 +562,109 @@ const AvailabilityHeatmap: React.FC<AvailabilityHeatmapProps> = ({
           </p>
         )}
 
-        <ScheduleGridFrame dates={dates}>
-          <div />
-          {dates.map((date) => (
-            <ScheduleDayHeader
-              key={date}
-              date={date}
-              className="sticky top-0 z-10"
+        <ScheduleCalendarGrid
+          dates={dates}
+          chunks={chunks}
+          sessionDuration={sessionDuration}
+          renderDayHeader={(date) => (
+            <ScheduleDayHeader date={date} className="sticky top-0 z-10" />
+          )}
+          renderTimeLabel={({ chunk }) => (
+            <ScheduleTimeLabel
+              startMinute={chunk[0]}
+              endMinute={chunk[chunk.length - 1] + sessionDuration}
+              className="sticky left-0 z-10"
             />
-          ))}
-          {chunks.map((chunk, chunkIndex) => {
+          )}
+          renderCell={({ date, chunkIndex }) => {
+            const key = `${date}|${chunkIndex}`;
+            const block = blocksByKey.get(key);
+            if (!block) return <div key={key} />;
+            const { weekday, dayMonth } = formatDateHeader(date);
+            const count = block.coverage.availableCount;
+            const closed = block.enabledMinutes.length === 0;
+            const highlighted = isHighlighted(block);
+            const label = closed
+              ? `${weekday} ${dayMonth}: stengt`
+              : `${weekday} ${dayMonth}: ${count} av ${panelSize} i paneldekning`;
             return (
-              <React.Fragment key={chunkIndex}>
-                <ScheduleTimeLabel
-                  startMinute={chunk[0]}
-                  endMinute={chunk[chunk.length - 1] + sessionDuration}
-                  className="sticky left-0 z-10"
-                />
-                {dates.map((date) => {
-                  const key = `${date}|${chunkIndex}`;
-                  const block = blocksByKey.get(key);
-                  if (!block) return <div key={key} />;
-                  const { weekday, dayMonth } = formatDateHeader(date);
-                  const count = block.availableInterviewers.length;
-                  const closed = block.enabledMinutes.length === 0;
-                  const highlighted = isHighlighted(block);
-                  const label = closed
-                    ? `${weekday} ${dayMonth}: stengt`
-                    : `${weekday} ${dayMonth}: ${count} av ${respondentsInScope.length} intervjuere tilgjengelige`;
-                  return (
-                    <ScheduleBlockCell
-                      key={key}
-                      role="button"
-                      tabIndex={closed ? -1 : 0}
-                      aria-label={
-                        closed
-                          ? "Stengt"
-                          : `${label}. Vis hvem som er tilgjengelige.`
-                      }
-                      aria-pressed={
-                        closed ? undefined : selectedBlockKey === key
-                      }
-                      onClick={(event) => {
-                        if (closed) return;
-                        selectedBlockTriggerRef.current = event.currentTarget;
-                        setSelectedBlockKey((current) =>
-                          current === key ? null : key,
-                        );
-                      }}
-                      onKeyDown={(event) => {
-                        if (
-                          closed ||
-                          (event.key !== "Enter" && event.key !== " ")
-                        )
-                          return;
-                        event.preventDefault();
-                        selectedBlockTriggerRef.current = event.currentTarget;
-                        setSelectedBlockKey((current) =>
-                          current === key ? null : key,
-                        );
-                      }}
-                      closed={closed}
-                      className={cn(
-                        "text-center text-lg tabular-nums",
-                        !closed &&
-                          "cursor-pointer hover:border-brand-border hover:bg-brand-soft",
-                        !closed &&
-                          count === 0 &&
-                          "font-semibold text-text-muted",
-                        !closed && count > 0 && "font-bold text-text-primary",
-                        highlighted &&
-                          !closed &&
-                          "ring-2 ring-inset ring-brand-border",
-                      )}
-                    >
-                      <ScheduleSlotSegments
-                        closed={closed}
-                        fills={block.slotAvailableCounts.map((slotCount) =>
-                          respondentsInScope.length === 0
-                            ? 0
-                            : slotCount / respondentsInScope.length,
-                        )}
-                      />
-                      {!closed && <span>{count}</span>}
-                      {highlighted && (
-                        <span
-                          aria-label="Valgt intervjuer er tilgjengelig"
-                          className="absolute bottom-1.5 right-1.5 h-1.5 w-1.5 rounded-full bg-brand"
-                        />
-                      )}
-                    </ScheduleBlockCell>
+              <ScheduleBlockCell
+                key={key}
+                data-coverage-status={block.coverage.status}
+                role="button"
+                tabIndex={closed ? -1 : 0}
+                aria-label={
+                  closed ? "Stengt" : `${label}. Vis hvem som er tilgjengelige.`
+                }
+                aria-pressed={closed ? undefined : selectedBlockKey === key}
+                onClick={(event) => {
+                  if (closed) return;
+                  selectedBlockTriggerRef.current = event.currentTarget;
+                  setSelectedBlockKey((current) =>
+                    current === key ? null : key,
                   );
-                })}
-              </React.Fragment>
+                }}
+                onKeyDown={(event) => {
+                  if (closed || (event.key !== "Enter" && event.key !== " "))
+                    return;
+                  event.preventDefault();
+                  selectedBlockTriggerRef.current = event.currentTarget;
+                  setSelectedBlockKey((current) =>
+                    current === key ? null : key,
+                  );
+                }}
+                closed={closed}
+                className={cn(
+                  "text-center text-lg tabular-nums",
+                  !closed &&
+                    "cursor-pointer hover:border-brand-border hover:bg-brand-soft",
+                  !closed && count === 0 && "font-semibold text-text-muted",
+                  !closed && count > 0 && "font-bold text-text-primary",
+                  block.coverage.status === "complete" &&
+                    "border-success-border bg-success-bg",
+                  block.coverage.status === "partial" && "bg-brand-soft/45",
+                  highlighted &&
+                    !closed &&
+                    "ring-2 ring-inset ring-brand-border",
+                )}
+              >
+                <ScheduleSlotSegments
+                  closed={closed}
+                  fills={block.minutes.map((minute) => {
+                    const slot = block.coverage.slotCoverage.find(
+                      (candidate) => candidate.minute === minute,
+                    );
+                    return slot
+                      ? Math.min(1, slot.availableCount / panelSize)
+                      : 0;
+                  })}
+                />
+                {!closed && (
+                  <span>
+                    {count}/{panelSize}
+                  </span>
+                )}
+                {highlighted && (
+                  <span
+                    aria-label="Valgt intervjuer er tilgjengelig"
+                    className="absolute bottom-1.5 right-1.5 h-1.5 w-1.5 rounded-full bg-brand"
+                  />
+                )}
+              </ScheduleBlockCell>
             );
-          })}
-        </ScheduleGridFrame>
+          }}
+        />
 
         {selectedBlock && (
           <BlockDetail
             block={selectedBlock}
             interviewers={inspectedInterviewers}
+            interviewerSlots={interviewerSlots}
+            panelSize={panelSize}
+            samePanelPerBlock={samePanelPerBlock}
             sessionDuration={sessionDuration}
             onClose={closeBlockDetail}
+            missingResponse={missingResponse}
           />
         )}
       </SchedulePanelBody>
@@ -454,7 +673,8 @@ const AvailabilityHeatmap: React.FC<AvailabilityHeatmapProps> = ({
           Klikk på en blokk for å se hvem som er tilgjengelige.
         </span>
         <span className="text-detail font-medium tabular-nums text-text-muted">
-          {openBlockCount} åpne blokker
+          {globalCoverage.completeBlockCount} av {globalCoverage.openBlockCount}{" "}
+          blokker har full paneldekning
         </span>
       </SchedulePanelFooter>
     </SchedulePanel>
@@ -473,14 +693,30 @@ const SegmentLegend: React.FC<{ label: string; fill: number }> = ({
   </span>
 );
 
+const CoverageMetric: React.FC<{
+  label: string;
+  value: string | number;
+}> = ({ label, value }) => (
+  <div className="bg-surface-base px-3 py-2.5">
+    <span className="block text-nano font-semibold uppercase tracking-wide text-text-muted">
+      {label}
+    </span>
+    <strong className="mt-0.5 block text-lg tabular-nums text-text-primary">
+      {value}
+    </strong>
+  </div>
+);
+
 const ResponseStatus: React.FC<{
   missingResponse: Interviewer[];
+  optedOut: Interviewer[];
+  canManage: boolean;
   isOpen: boolean;
   onToggle: () => void;
-}> = ({ missingResponse, isOpen, onToggle }) =>
-  missingResponse.length === 0 ? (
+}> = ({ missingResponse, optedOut, canManage, isOpen, onToggle }) =>
+  missingResponse.length === 0 && optedOut.length === 0 && !canManage ? (
     <span className="inline-flex items-center gap-1 text-detail font-semibold text-success">
-      <Check size={iconSizes.compact} aria-hidden="true" /> Alle har svart
+      <Check size={iconSizes.compact} aria-hidden="true" /> Alle er avklart
     </span>
   ) : (
     <button
@@ -489,16 +725,33 @@ const ResponseStatus: React.FC<{
       className="text-detail font-semibold text-brand hover:text-brand-dark hover:underline"
       onClick={onToggle}
     >
-      {missingResponse.length} mangler svar ›
+      {missingResponse.length > 0
+        ? `${missingResponse.length} mangler svar ›`
+        : optedOut.length > 0
+          ? `${optedOut.length} deltar ikke ›`
+          : "Alle er avklart · administrer ›"}
     </button>
   );
 
 const BlockDetail: React.FC<{
   block: AvailabilityBlock;
   interviewers: Interviewer[];
+  interviewerSlots: Map<string, Set<string>>;
+  panelSize: number;
+  samePanelPerBlock: boolean;
   sessionDuration: number;
   onClose: () => void;
-}> = ({ block, interviewers, sessionDuration, onClose }) => {
+  missingResponse: Interviewer[];
+}> = ({
+  block,
+  interviewers,
+  interviewerSlots,
+  panelSize,
+  samePanelPerBlock,
+  sessionDuration,
+  onClose,
+  missingResponse,
+}) => {
   const { weekday, dayMonth } = formatDateHeader(block.date);
   const availableIds = new Set(
     block.allAvailableInterviewers.map((interviewer) => interviewer.id),
@@ -510,9 +763,6 @@ const BlockDetail: React.FC<{
   const unavailable = interviewers.filter(
     (interviewer) =>
       interviewer.has_submitted && !availableIds.has(interviewer.id),
-  );
-  const noResponse = interviewers.filter(
-    (interviewer) => !interviewer.has_submitted,
   );
   return (
     <section
@@ -530,7 +780,9 @@ const BlockDetail: React.FC<{
           <p className="m-0 mt-1 text-detail text-text-muted">
             {block.enabledMinutes.length === 0
               ? "Denne blokken er stengt."
-              : `${available.length} intervjuere er tilgjengelige gjennom hele blokken.`}
+              : samePanelPerBlock
+                ? `${block.coverage.availableCount} av ${panelSize} kan danne samme panel gjennom hele blokken.`
+                : `${block.coverage.availableCount} av ${panelSize} er laveste paneldekning i blokkens intervjutider.`}
           </p>
         </div>
         <button
@@ -543,11 +795,44 @@ const BlockDetail: React.FC<{
         </button>
       </div>
       {block.enabledMinutes.length > 0 && (
-        <div className="mt-3 grid gap-3 sm:grid-cols-3">
-          <PersonList title="Tilgjengelige" people={available} />
-          <PersonList title="Ikke tilgjengelige" people={unavailable} />
-          <PersonList title="Ikke svart" people={noResponse} />
-        </div>
+        <>
+          <div className="mt-3 divide-y divide-border-soft border-y border-border-soft">
+            {block.enabledMinutes.map((minute) => {
+              const availableAtTime = interviewers.filter(
+                (interviewer) =>
+                  interviewer.has_submitted &&
+                  interviewerSlots
+                    .get(interviewer.id)
+                    ?.has(makeSlotKey(block.date, minute)),
+              );
+              return (
+                <div
+                  key={minute}
+                  className="grid gap-1 py-2 text-detail sm:grid-cols-[5rem_5rem_1fr] sm:items-baseline"
+                >
+                  <strong className="tabular-nums text-text-primary">
+                    {formatMinutes(minute)}
+                  </strong>
+                  <span className="font-semibold tabular-nums text-text-muted">
+                    {availableAtTime.length}/{panelSize}
+                  </span>
+                  <span className="text-text-muted">
+                    {availableAtTime.length > 0
+                      ? availableAtTime
+                          .map((interviewer) => interviewer.name)
+                          .join(" · ")
+                      : "Ingen tilgjengelige"}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+          <div className="mt-3 grid gap-3 sm:grid-cols-3">
+            <PersonList title="Hele blokken" people={available} />
+            <PersonList title="Ikke hele blokken" people={unavailable} />
+            <PersonList title="Ikke svart" people={missingResponse} />
+          </div>
+        </>
       )}
     </section>
   );

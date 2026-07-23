@@ -1,11 +1,14 @@
 import { isAxiosError } from "axios";
 
 import type {
+  AvailabilityFallback,
   InitialPlanningStrategy,
+  PanelStability,
   RepairStrategy,
   ScheduleItem,
   SolverOptions,
 } from "../types";
+import type { SavedSchedule } from "src/types";
 
 export interface SolveResponse {
   status:
@@ -24,6 +27,17 @@ export interface SolveResponse {
   }>;
   locked_conflicts?: Array<{ message: string; assignment?: unknown }>;
   error?: string;
+  request_fingerprint?: string;
+  policy_snapshot?: {
+    policy_version: number | null;
+    panel_stability: PanelStability;
+    availability_fallback: AvailabilityFallback;
+  };
+  deviation_review?: {
+    deviation_count: number;
+    deviation_fingerprint: string;
+    requires_approval: boolean;
+  };
 }
 
 export const hasSchedule = (status?: SolveResponse["status"]) =>
@@ -75,36 +89,156 @@ export const unplaceableSuggestion = (reason?: string): string | null => {
 
 export interface SolveJob {
   job_id: string;
+  request_fingerprint: string;
   status: "PENDING" | "RUNNING" | "DONE" | "ERROR" | "CANCELLED";
   result: SolveResponse | null;
   error: string;
   created_at: string;
   started_at: string | null;
   finished_at: string | null;
+  applied_at: string | null;
+  discarded_at: string | null;
+  proposal_expires_at: string | null;
+  baseline_updated_at: string | null;
+  auto_apply_if_empty: boolean;
+}
+
+export interface PendingSolveProposal {
+  job: SolveJob;
+  result: SolveResponse;
+  baseRevision: string;
+}
+
+export interface AppliedSolveProposal {
+  schedule: SavedSchedule;
+  result: SolveResponse;
 }
 
 export const DEFAULT_MAX_SOLVER_SECONDS = 5 * 60;
 const LEGACY_DEFAULT_MAX_SOLVER_SECONDS = 120;
 
 export const DEFAULT_SOLVER_OPTIONS: SolverOptions = {
+  policy_version: 2,
+  panel_stability: "preferred",
+  availability_fallback: "stop",
   enforce_same_gender: false,
-  allow_overtime: true,
+  allow_overtime: false,
   prioritize_continuity: true,
-  same_panel_per_block: true,
+  same_panel_per_block: false,
   avoid_consecutive_interviewer_blocks: true,
   initial_strategy: "balanced",
-  repair_strategy: "balanced",
+  repair_strategy: "minimum_change",
   repair_mode: false,
   overtime_weight: 40,
   load_balance_weight: 4,
-  continuity_weight: 12,
+  continuity_weight: 1,
   max_solver_seconds: DEFAULT_MAX_SOLVER_SECONDS,
 };
 
+export const ADVANCED_SOLVER_OPTION_KEYS = [
+  "enforce_same_gender",
+  "avoid_consecutive_interviewer_blocks",
+] as const;
+
+export type AdvancedSolverOptionKey =
+  (typeof ADVANCED_SOLVER_OPTION_KEYS)[number];
+
+export const ADVANCED_SOLVER_DEFAULTS: Pick<
+  SolverOptions,
+  AdvancedSolverOptionKey | "panel_stability" | "same_panel_per_block"
+> = {
+  enforce_same_gender: DEFAULT_SOLVER_OPTIONS.enforce_same_gender,
+  panel_stability: DEFAULT_SOLVER_OPTIONS.panel_stability,
+  same_panel_per_block: DEFAULT_SOLVER_OPTIONS.same_panel_per_block,
+  avoid_consecutive_interviewer_blocks:
+    DEFAULT_SOLVER_OPTIONS.avoid_consecutive_interviewer_blocks,
+};
+
+export interface AdvancedSettingsSummary {
+  requirementCount: number;
+  preferenceCount: number;
+  customizationCount: number;
+  availabilityLabel: string;
+  text: string;
+}
+
+export const deriveAdvancedSettingsSummary = (
+  options: SolverOptions,
+): AdvancedSettingsSummary => {
+  const requirementCount =
+    Number(options.enforce_same_gender) +
+    Number(options.panel_stability === "required");
+  const preferenceCount = Number(options.avoid_consecutive_interviewer_blocks);
+  const customizationCount =
+    ADVANCED_SOLVER_OPTION_KEYS.filter(
+      (key) => options[key] !== ADVANCED_SOLVER_DEFAULTS[key],
+    ).length +
+    Number(options.panel_stability !== DEFAULT_SOLVER_OPTIONS.panel_stability);
+  const availabilityLabel =
+    options.availability_fallback === "stop"
+      ? "stopper ved kapasitetsmangel"
+      : options.availability_fallback === "propose"
+        ? "foreslår tydelig markerte avvik for godkjenning"
+        : "kan bruke tydelig markerte avvik automatisk";
+  const panelLabel =
+    options.panel_stability === "required"
+      ? "krever samme panel i hver blokk"
+      : options.panel_stability === "preferred"
+        ? "foretrekker samme panel i hver blokk"
+        : "lar panelet variere mellom intervjuene";
+  const extraPreferences = [
+    options.avoid_consecutive_interviewer_blocks && "hvile mellom blokker",
+  ].filter(Boolean);
+  const preferenceLabel =
+    extraPreferences.length > 0
+      ? ` og prioriterer ${extraPreferences.join(" og ")}`
+      : "";
+
+  return {
+    requirementCount,
+    preferenceCount,
+    customizationCount,
+    availabilityLabel,
+    text: `Planen ${panelLabel}${preferenceLabel}, og ${availabilityLabel}.`,
+  };
+};
+
 export const normalizeSolverOptions = (
-  options: Partial<SolverOptions> | null | undefined,
+  options:
+    | (Omit<Partial<SolverOptions>, "policy_version"> & {
+        policy_version?: number;
+      })
+    | null
+    | undefined,
 ): SolverOptions => {
-  const normalized = { ...DEFAULT_SOLVER_OPTIONS, ...options };
+  const raw = options ?? {};
+  const hasV2Policy = raw.policy_version === 2;
+  const legacyPanelStability: PanelStability = raw.same_panel_per_block
+    ? raw.repair_mode
+      ? "preferred"
+      : "required"
+    : "flexible";
+  const panelStability = hasV2Policy
+    ? (raw.panel_stability ?? DEFAULT_SOLVER_OPTIONS.panel_stability)
+    : legacyPanelStability;
+  const availabilityFallback = hasV2Policy
+    ? (raw.availability_fallback ??
+      DEFAULT_SOLVER_OPTIONS.availability_fallback)
+    : raw.allow_overtime === false
+      ? "stop"
+      : "automatic";
+  const normalized: SolverOptions = {
+    ...DEFAULT_SOLVER_OPTIONS,
+    ...raw,
+    policy_version: 2,
+    panel_stability: panelStability,
+    availability_fallback: availabilityFallback,
+    same_panel_per_block: panelStability === "required",
+    allow_overtime: availabilityFallback === "automatic",
+  };
+  if (normalized.initial_strategy === "minimize_overtime") {
+    normalized.initial_strategy = "balanced";
+  }
   // The old value was an invisible application default, not a user choice.
   // Upgrade saved admissions so they receive the extended runtime as well.
   if (normalized.max_solver_seconds === LEGACY_DEFAULT_MAX_SOLVER_SECONDS) {
@@ -120,32 +254,43 @@ export const INITIAL_STRATEGY_PRESETS: ReadonlyArray<{
   example: string;
   overtimeWeight: number;
   loadBalanceWeight: number;
+  continuityWeight: number;
+  prioritizeContinuity: boolean;
 }> = [
-  {
-    key: "minimize_overtime",
-    label: "Minimer avvik fra tilgjengelighet",
-    description:
-      "Respekter tilgjengeligheten selv om noen får flere intervjuer.",
-    example: "Eksempel: færre tildelinger utenfor oppgitt tilgjengelighet.",
-    overtimeWeight: 100,
-    loadBalanceWeight: 1,
-  },
   {
     key: "balanced",
     label: "Balansert",
-    description: "Kombiner få avvik, jevn fordeling og kompakte intervjudager.",
+    description: "En rolig kombinasjon av korte dager og jevn arbeidsmengde.",
     example:
-      "Eksempel: litt ulik belastning godtas for å unngå avvik fra tilgjengeligheten.",
+      "Eksempel: når flere planer har like få avvik, velges en moderat jevn fordeling.",
     overtimeWeight: 40,
     loadBalanceWeight: 4,
+    continuityWeight: 1,
+    prioritizeContinuity: true,
+  },
+  {
+    key: "compact_days",
+    label: "Kompakte intervjudager",
+    description:
+      "Samler intervjuene i færre sammenhengende perioder med færre hull.",
+    example:
+      "Eksempel: intervjuene legges tettere når tilgjengeligheten tillater det.",
+    overtimeWeight: 40,
+    loadBalanceWeight: 2,
+    continuityWeight: 48,
+    prioritizeContinuity: true,
   },
   {
     key: "balance_workload",
-    label: "Jevn fordeling",
-    description: "Fordel intervjuene så likt som mulig mellom intervjuerne.",
-    example: "Eksempel: belastningen går fra 8–2 intervjuer til omtrent 5–5.",
+    label: "Jevn arbeidsmengde",
+    description:
+      "Minimerer avvik først og prioriterer jevn fordeling sterkest.",
+    example:
+      "Eksempel: blant planer med like få avvik foretrekkes den jevneste belastningen.",
     overtimeWeight: 12,
-    loadBalanceWeight: 8,
+    loadBalanceWeight: 10,
+    continuityWeight: 0,
+    prioritizeContinuity: false,
   },
 ];
 

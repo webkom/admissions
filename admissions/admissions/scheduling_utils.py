@@ -16,18 +16,94 @@ def panel_gender_code(lego_gender):
 
 def get_eligible_interviewer_ids(admission):
     committee_ids = set(
-        Membership.objects.filter(group__in=admission.groups.all())
-        .values_list("user_id", flat=True)
+        Membership.objects.filter(group__in=admission.groups.all()).values_list(
+            "user_id", flat=True
+        )
     )
     admin_ids = set(
-        Membership.objects.filter(group__in=admission.admin_groups.all())
-        .values_list("user_id", flat=True)
+        Membership.objects.filter(group__in=admission.admin_groups.all()).values_list(
+            "user_id", flat=True
+        )
     )
     # Availability status must include every committee/admin member, even if
     # their membership role is inactive. The response panel uses this roster to
     # decide when "Alle har svart" is true, so excluding IR/retiree members
     # would make the UI report completion too early.
     return committee_ids | admin_ids
+
+
+def availability_submission_is_current(availability, saved_schedule):
+    if availability is None:
+        return False
+    current_generation = (
+        saved_schedule.availability_generation if saved_schedule is not None else 1
+    )
+    if availability.submitted_grid_generation == current_generation:
+        return True
+    return bool(
+        availability.submitted_grid_generation is None
+        and (
+            saved_schedule is None
+            or saved_schedule.layout_version == 1
+            or not saved_schedule.resolved_blocks
+        )
+    )
+
+
+def get_interviewer_participation(admission, saved_schedule=None):
+    """Resolve the full roster without conflating membership with planning.
+
+    A missing or stale availability response remains awaiting. Explicit opt-out
+    is durable, while a current submission always means participating.
+    """
+
+    if saved_schedule is None:
+        try:
+            saved_schedule = admission.saved_schedule
+        except SavedSchedule.DoesNotExist:
+            saved_schedule = None
+    roster_ids = get_eligible_interviewer_ids(admission)
+    rows = {
+        row.user_id: row
+        for row in InterviewAvailability.objects.filter(
+            admission=admission,
+            user_id__in=roster_ids,
+        )
+    }
+    resolved = {}
+    for user_id in roster_ids:
+        row = rows.get(user_id)
+        if (
+            row is not None
+            and row.participation
+            == InterviewAvailability.PARTICIPATION_NOT_PARTICIPATING
+        ):
+            resolved[user_id] = InterviewAvailability.PARTICIPATION_NOT_PARTICIPATING
+        elif availability_submission_is_current(row, saved_schedule):
+            resolved[user_id] = InterviewAvailability.PARTICIPATION_PARTICIPATING
+        else:
+            resolved[user_id] = InterviewAvailability.PARTICIPATION_AWAITING
+    return resolved
+
+
+def get_participating_interviewer_ids(admission, saved_schedule=None):
+    return {
+        user_id
+        for user_id, participation in get_interviewer_participation(
+            admission, saved_schedule
+        ).items()
+        if participation == InterviewAvailability.PARTICIPATION_PARTICIPATING
+    }
+
+
+def get_unresolved_interviewer_ids(admission, saved_schedule=None):
+    return {
+        user_id
+        for user_id, participation in get_interviewer_participation(
+            admission, saved_schedule
+        ).items()
+        if participation == InterviewAvailability.PARTICIPATION_AWAITING
+    }
 
 
 def user_has_interview_availability(admission, user_id):
@@ -127,7 +203,7 @@ def get_conflict_review_readiness(admission, saved_schedule=None, schedule=None)
 
 
 def canonicalize_slot_keys(keys):
-    canonical = []
+    canonical = set()
     for key in keys:
         parsed = parse_slot_key(str(key))
         if not parsed:
@@ -139,5 +215,5 @@ def canonicalize_slot_keys(keys):
             return None, key
         if not 0 <= minute < 24 * 60:
             return None, key
-        canonical.append(make_slot_key(slot_date, minute))
-    return canonical, None
+        canonical.add(make_slot_key(slot_date, minute))
+    return sorted(canonical, key=parse_slot_key), None

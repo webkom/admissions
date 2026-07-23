@@ -418,18 +418,11 @@ export const deriveSolverReadiness = ({
     ? enabledTimes.length
     : slotsWithFullPanel;
   const neededCapacity = candidateCount * panelSize;
-  const availabilityReady =
-    allowOvertime ||
-    (submittedInterviewers >= panelSize &&
-      slotsWithFullPanel >= candidateCount &&
-      totalCapacity >= neededCapacity);
-
   return {
     ready:
       candidateCount > 0 &&
       interviewers.length >= panelSize &&
-      usableSlotCount >= candidateCount &&
-      availabilityReady,
+      enabledTimes.length > 0,
     submittedInterviewers,
     enabledSlotCount: enabledSlots.size,
     totalCapacity,

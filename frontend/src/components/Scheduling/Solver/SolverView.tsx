@@ -1,24 +1,37 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { ArrowRight, CalendarCheck } from "lucide-react";
+import { ArrowRight, CalendarCheck, ChevronDown, Sparkles } from "lucide-react";
 
 import type {
   Candidate,
   EnabledWindow,
   Interviewer,
+  ManualScheduleBlock,
   RepairStrategy,
+  ScheduleBlockMode,
+  SlotOverride,
 } from "../types";
-import { buildSolveBlocks, slotsToSolverAvailability } from "../scheduleUtils";
+import {
+  buildSolveBlocks,
+  formatSlotLabel,
+  manualBlocksToSolverBlocks,
+  slotsToSolverAvailability,
+} from "../scheduleUtils";
 import {
   SchedulePanel,
   SchedulePanelBody,
   actionButtonBase,
+  actionButtonNeutral,
   actionButtonPrimary,
 } from "../ui";
 import cn from "../../../utils/cn";
 import { deriveAssignmentConflictSummary } from "./assignmentConflicts";
 import { hasSchedule } from "./solverHelpers";
 import RepairScenarioPanel from "./RepairScenarioPanel";
-import { buildRepairScenario, type RepairScenario } from "./repairScenarios";
+import {
+  buildRepairPreviewOptions,
+  buildRepairScenario,
+  type RepairScenario,
+} from "./repairScenarios";
 import SolverResults from "./SolverResults";
 import SolverSetupPanel from "./SolverSetupPanel";
 import { useScheduleDraft } from "./useScheduleDraft";
@@ -40,11 +53,23 @@ interface Props {
   dayEndMinute: number;
   chunkSize: number;
   chunkBreakMinutes: number;
+  blockMode: ScheduleBlockMode;
+  manualBlocks: ManualScheduleBlock[];
+  slotOverrides: SlotOverride[];
   candidateScopeResolved: boolean;
   availabilityReady: boolean;
   syntheticInput?: boolean;
   editRequestKey: number;
+  currentReviewRequired: boolean;
+  currentReviewComplete: boolean;
+  completeReviewerCount: number;
+  requiredReviewerCount: number;
+  pendingReviewerCount: number;
+  missingReviewerNames: string[];
+  publicationReady: boolean;
   onOpenAvailability: () => void;
+  onOpenFramework: () => void;
+  onOpenConflictReview: () => void;
   onOpenPlan: () => void;
 }
 
@@ -62,21 +87,61 @@ export default function SolverView({
   dayEndMinute,
   chunkSize,
   chunkBreakMinutes,
+  blockMode,
+  manualBlocks,
+  slotOverrides,
   candidateScopeResolved,
   availabilityReady,
   syntheticInput = false,
   editRequestKey,
+  currentReviewRequired,
+  currentReviewComplete,
+  completeReviewerCount,
+  requiredReviewerCount,
+  pendingReviewerCount,
+  missingReviewerNames,
+  publicationReady,
   onOpenAvailability,
+  onOpenFramework,
+  onOpenConflictReview,
   onOpenPlan,
 }: Props) {
+  const [generationSettingsRequestKey, setGenerationSettingsRequestKey] =
+    useState(0);
   const [repairScenarios, setRepairScenarios] = useState<RepairScenario[]>([]);
   const [selectedRepairStrategy, setSelectedRepairStrategy] =
-    useState<RepairStrategy>("balanced");
+    useState<RepairStrategy>("minimum_change");
   const [selectedScenarioStrategy, setSelectedScenarioStrategy] =
     useState<RepairStrategy>();
   const [runningRepairStrategy, setRunningRepairStrategy] =
     useState<RepairStrategy>();
   const [repairError, setRepairError] = useState("");
+  const [repairOpen, setRepairOpen] = useState(false);
+  const [proposalDetailsOpen, setProposalDetailsOpen] = useState(false);
+  const canonicalBlocks = useMemo(
+    () =>
+      blockMode === "manual"
+        ? manualBlocksToSolverBlocks(manualBlocks, dates, sessionDuration)
+        : buildSolveBlocks({
+            dates,
+            dayStartMinute,
+            dayEndMinute,
+            sessionDuration,
+            chunkSize,
+            chunkBreakMinutes,
+          }),
+    [
+      blockMode,
+      chunkBreakMinutes,
+      chunkSize,
+      dates,
+      dayEndMinute,
+      dayStartMinute,
+      manualBlocks,
+      slotOverrides,
+      sessionDuration,
+    ],
+  );
   const session = useSolverSession({
     admissionSlug,
     candidates,
@@ -84,32 +149,10 @@ export default function SolverView({
     dates,
     sessionDuration,
     enabledSlots,
-    dayStartMinute,
-    dayEndMinute,
-    chunkSize,
-    chunkBreakMinutes,
+    canonicalBlocks,
     candidateScopeResolved,
     syntheticInput,
   });
-  const canonicalBlocks = useMemo(
-    () =>
-      buildSolveBlocks({
-        dates,
-        dayStartMinute,
-        dayEndMinute,
-        sessionDuration,
-        chunkSize,
-        chunkBreakMinutes,
-      }),
-    [
-      chunkBreakMinutes,
-      chunkSize,
-      dates,
-      dayEndMinute,
-      dayStartMinute,
-      sessionDuration,
-    ],
-  );
   const draft = useScheduleDraft({
     result: session.scopedResult,
     setResult: session.setResult,
@@ -133,11 +176,15 @@ export default function SolverView({
       dayEndMinute,
       chunkSize,
       chunkBreakMinutes,
+      blockMode,
+      manualBlocks,
+      slotOverrides,
       panelSize: session.panelSize,
       solverOptions: session.solverOptions,
     }),
     [
       admissionSlug,
+      blockMode,
       chunkBreakMinutes,
       chunkSize,
       dayEndMinute,
@@ -145,6 +192,7 @@ export default function SolverView({
       enabledSlots,
       enabledWindows,
       endDate,
+      manualBlocks,
       session.panelSize,
       session.solverOptions,
       sessionDuration,
@@ -191,17 +239,13 @@ export default function SolverView({
     [candidates, interviewers, session.scopedResult?.schedule],
   );
 
-  useEffect(() => {
-    setSelectedRepairStrategy(session.solverOptions.repair_strategy);
-  }, [session.solverOptions.repair_strategy]);
-
   const solveBlocks = useMemo(() => {
     const openSlots = new Set(
       slotsToSolverAvailability(enabledSlots, dates, sessionDuration),
     );
-    return canonicalBlocks
-      .map((block) => block.filter((slot) => openSlots.has(slot)))
-      .filter((block) => block.length > 0);
+    return canonicalBlocks.map((block) =>
+      block.filter((slot) => openSlots.has(slot)),
+    );
   }, [canonicalBlocks, enabledSlots, sessionDuration]);
   const repairBaseline = session.scopedResult?.schedule ?? [];
   const repairInputFingerprint = useMemo(
@@ -228,6 +272,7 @@ export default function SolverView({
   useEffect(() => {
     repairBaselineKeyRef.current = repairBaselineKey;
     setRepairScenarios([]);
+    setSelectedRepairStrategy("minimum_change");
     setSelectedScenarioStrategy(undefined);
     setRepairError("");
   }, [repairBaselineKey]);
@@ -236,7 +281,9 @@ export default function SolverView({
     void session.solvePlan(draft.lockedAssignments);
   };
   const retryWithAvailabilityDeviation = () => {
-    void session.solvePlan(draft.lockedAssignments, { allowOvertime: true });
+    void session.solvePlan(draft.lockedAssignments, {
+      availabilityFallback: "propose",
+    });
   };
   const locksWithoutCurrentConflicts = () =>
     draft.lockedAssignments.filter((assignment) =>
@@ -261,11 +308,10 @@ export default function SolverView({
     const baseline = repairBaseline;
     setRepairError("");
     setRunningRepairStrategy(strategy);
-    const outcome = await session.solvePlan(locksWithoutCurrentConflicts(), {
-      mode: "repair",
-      repairStrategy: strategy,
-      previewOnly: true,
-    });
+    const outcome = await session.solvePlan(
+      locksWithoutCurrentConflicts(),
+      buildRepairPreviewOptions(strategy),
+    );
     setRunningRepairStrategy(undefined);
     if (repairBaselineKeyRef.current !== baselineKey) {
       setRepairError("Planen ble endret. Beregn løsningene på nytt.");
@@ -308,6 +354,7 @@ export default function SolverView({
       setRepairError("Planen ble endret. Beregn løsningen på nytt.");
       return;
     }
+    setRepairOpen(false);
     session.applyRepairPreview(scenario.result, scenario.strategy);
   };
   const selectRepairStrategy = (strategy: RepairStrategy) => {
@@ -326,6 +373,38 @@ export default function SolverView({
     (scenario) => scenario.strategy === selectedScenarioStrategy,
   );
   const hasProposal = hasSchedule(session.scopedResult?.status);
+  const repairAvailable =
+    hasProposal &&
+    requiredReviewerCount > 0 &&
+    completeReviewerCount === requiredReviewerCount &&
+    assignmentConflicts.assignmentCount > 0;
+
+  useEffect(() => {
+    if (!repairAvailable) setRepairOpen(false);
+  }, [repairAvailable]);
+
+  const pendingProposal = session.pendingProposal;
+  const pendingOutsideAvailability =
+    pendingProposal?.result.schedule.reduce(
+      (count, item) =>
+        count + item.panel.filter((member) => member.is_overtime).length,
+      0,
+    ) ?? 0;
+  const pendingUnplaced = pendingProposal?.result.unplaceable?.length ?? 0;
+  const pendingProposalIsStale = Boolean(
+    pendingProposal &&
+      session.savedSchedule?.updated_at !== pendingProposal.baseRevision,
+  );
+  const pendingProposalExpiry = pendingProposal?.job.proposal_expires_at
+    ? new Intl.DateTimeFormat("nb-NO", {
+        day: "numeric",
+        month: "long",
+      }).format(new Date(pendingProposal.job.proposal_expires_at))
+    : null;
+  const pendingProposalHasExpired = Boolean(
+    pendingProposal?.job.proposal_expires_at &&
+      Date.parse(pendingProposal.job.proposal_expires_at) <= Date.now(),
+  );
 
   if (session.savedSchedule?.is_distributed) {
     return (
@@ -360,8 +439,10 @@ export default function SolverView({
 
   return (
     <div className="flex flex-col gap-3">
-      {hasProposal && assignmentConflicts.assignmentCount > 0 && (
+      {repairAvailable && (
         <RepairScenarioPanel
+          open={repairOpen}
+          onClose={() => setRepairOpen(false)}
           conflictCount={assignmentConflicts.assignmentCount}
           selectedStrategy={selectedRepairStrategy}
           onSelectedStrategyChange={selectRepairStrategy}
@@ -378,6 +459,173 @@ export default function SolverView({
           sessionDuration={sessionDuration}
         />
       )}
+      {pendingProposal && (
+        <SchedulePanel dataCy="candidate-proposal" className="animate-fade-in">
+          <SchedulePanelBody className="space-y-4 px-5 py-5">
+            <div className="flex flex-wrap items-start justify-between gap-4">
+              <div className="flex min-w-0 items-start gap-3">
+                <span className="flex h-9 w-9 flex-none items-center justify-center rounded-lg bg-brand-soft text-brand">
+                  <Sparkles size={18} aria-hidden="true" />
+                </span>
+                <div>
+                  <h2 className="m-0 text-sm font-bold text-text-primary">
+                    Nytt forslag er klart
+                  </h2>
+                  <p className="m-0 mt-1 text-detail text-text-muted">
+                    Det gjeldende utkastet er ikke endret. Se forskjellen og
+                    velg om du vil bruke forslaget.
+                  </p>
+                  {pendingProposalExpiry && !pendingProposalHasExpired && (
+                    <p className="m-0 mt-1 text-label text-text-subtle">
+                      Forslaget lagres til {pendingProposalExpiry}.
+                    </p>
+                  )}
+                </div>
+              </div>
+              <div className="flex flex-wrap gap-4 text-detail tabular-nums text-text-muted">
+                <span>
+                  <strong className="text-text-primary">
+                    {pendingProposal.result.schedule.length}
+                  </strong>{" "}
+                  planlagt
+                </span>
+                <span>
+                  <strong className="text-text-primary">
+                    {pendingUnplaced}
+                  </strong>{" "}
+                  uten plass
+                </span>
+                <span>
+                  <strong className="text-text-primary">
+                    {pendingOutsideAvailability}
+                  </strong>{" "}
+                  utenfor tilgjengelighet
+                </span>
+              </div>
+            </div>
+
+            <button
+              type="button"
+              aria-expanded={proposalDetailsOpen}
+              onClick={() => setProposalDetailsOpen((open) => !open)}
+              className="flex items-center gap-1 text-detail font-semibold text-brand hover:underline"
+            >
+              {proposalDetailsOpen ? "Skjul forslag" : "Se forslaget"}
+              <ChevronDown
+                size={15}
+                aria-hidden="true"
+                className={cn(
+                  "transition-transform",
+                  proposalDetailsOpen && "rotate-180",
+                )}
+              />
+            </button>
+
+            {proposalDetailsOpen && (
+              <div className="max-h-72 overflow-auto rounded-lg border border-border-soft">
+                <table className="w-full border-collapse text-left text-detail">
+                  <thead className="sticky top-0 bg-surface-subtle text-text-muted">
+                    <tr>
+                      <th className="px-3 py-2 font-semibold">Tid</th>
+                      <th className="px-3 py-2 font-semibold">Søker</th>
+                      <th className="px-3 py-2 font-semibold">Panel</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {[...pendingProposal.result.schedule]
+                      .sort((left, right) => left.time - right.time)
+                      .map((item) => (
+                        <tr
+                          key={`${item.candidate_id ?? item.candidate}-${item.time}`}
+                          className="border-t border-border-faint"
+                        >
+                          <td className="whitespace-nowrap px-3 py-2 font-semibold text-text-muted">
+                            {formatSlotLabel(item.time, dates, sessionDuration)}
+                          </td>
+                          <td className="px-3 py-2 font-semibold text-text-primary">
+                            {item.candidate}
+                          </td>
+                          <td className="px-3 py-2 text-text-muted">
+                            {item.panel.map((member) => member.name).join(", ")}
+                          </td>
+                        </tr>
+                      ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+
+            {pendingProposalIsStale && (
+              <p className="m-0 text-detail font-semibold text-danger">
+                Utkastet er endret etter beregningen. Forkast forslaget og
+                generer et nytt.
+              </p>
+            )}
+            {pendingProposalHasExpired && (
+              <p className="m-0 text-detail font-semibold text-danger">
+                Forslaget har utløpt. Forkast det og generer et nytt.
+              </p>
+            )}
+
+            <div className="flex flex-wrap justify-end gap-2">
+              <button
+                type="button"
+                disabled={session.proposalActionLoading}
+                onClick={() => void session.discardPendingProposal()}
+                className={cn(actionButtonBase, actionButtonNeutral)}
+              >
+                Forkast forslag
+              </button>
+              <button
+                type="button"
+                disabled={
+                  session.proposalActionLoading ||
+                  pendingProposalIsStale ||
+                  pendingProposalHasExpired
+                }
+                onClick={() => void session.applyPendingProposal()}
+                className={cn(actionButtonBase, actionButtonPrimary)}
+              >
+                Bruk dette forslaget
+              </button>
+            </div>
+          </SchedulePanelBody>
+        </SchedulePanel>
+      )}
+      <SolverSetupPanel
+        interviewerCount={interviewers.length}
+        solverOptions={session.solverOptions}
+        onSolverOptionsChange={session.setSolverOptions}
+        panelSize={session.panelSize}
+        onPanelSizeChange={session.setPanelSize}
+        openBlockCount={solveBlocks.length}
+        interviewSlotCount={session.readiness.enabledSlotCount}
+        readiness={session.readiness}
+        availabilityReady={availabilityReady}
+        loading={session.loading}
+        error={session.error}
+        elapsedMs={session.elapsedMs}
+        jobStatus={session.jobStatus}
+        estimatedSeconds={session.estimatedSeconds}
+        lockedCount={draft.presentation.lockedCount}
+        hasProposal={hasProposal}
+        changeableInterviewCount={Math.max(
+          (session.scopedResult?.schedule.length ?? 0) -
+            draft.presentation.lockedCount,
+          0,
+        )}
+        currentDraftReady={
+          !hasProposal ||
+          (persistence.isSaved &&
+            !persistence.isSaving &&
+            !persistence.hasConflict)
+        }
+        openRequestKey={generationSettingsRequestKey}
+        onSolve={solvePlan}
+        onCancel={() => void session.cancel()}
+        onOpenAvailability={onOpenAvailability}
+        onOpenFramework={onOpenFramework}
+      />
       {hasProposal && (
         <SolverResults
           result={session.scopedResult}
@@ -400,33 +648,31 @@ export default function SolverView({
             session.proposalSolverOptions
               ?.avoid_consecutive_interviewer_blocks ?? null
           }
+          panelSize={session.panelSize}
+          proposalStrategy={
+            session.proposalSolverOptions?.initial_strategy ??
+            session.solverOptions.initial_strategy
+          }
+          canonicalBlocks={canonicalBlocks}
+          currentReviewRequired={currentReviewRequired}
+          currentReviewComplete={currentReviewComplete}
+          completeReviewerCount={completeReviewerCount}
+          requiredReviewerCount={requiredReviewerCount}
+          pendingReviewerCount={pendingReviewerCount}
+          missingReviewerNames={missingReviewerNames}
+          publicationReady={publicationReady}
+          solverError={session.error}
+          onOpenSettings={() =>
+            setGenerationSettingsRequestKey((key) => key + 1)
+          }
+          onOpenConflictReview={onOpenConflictReview}
+          onOpenRepair={() => setRepairOpen(true)}
+          onRetrySolve={solvePlan}
           onOpenPlan={onOpenPlan}
+          onPreviewWithAvailabilityDeviation={retryWithAvailabilityDeviation}
+          previewLoading={session.loading}
         />
       )}
-      <SolverSetupPanel
-        interviewerCount={interviewers.length}
-        solverOptions={session.solverOptions}
-        onSolverOptionsChange={session.setSolverOptions}
-        panelSize={session.panelSize}
-        onPanelSizeChange={session.setPanelSize}
-        openBlockCount={solveBlocks.length}
-        interviewSlotCount={session.readiness.enabledSlotCount}
-        readiness={session.readiness}
-        availabilityReady={availabilityReady}
-        loading={session.loading}
-        error={session.error}
-        result={session.scopedResult}
-        elapsedMs={session.elapsedMs}
-        jobStatus={session.jobStatus}
-        estimatedSeconds={session.estimatedSeconds}
-        lockedCount={draft.presentation.lockedCount}
-        hasProposal={hasProposal}
-        editRequestKey={editRequestKey}
-        onSolve={solvePlan}
-        onCancel={() => void session.cancel()}
-        onRetryWithAvailabilityDeviation={retryWithAvailabilityDeviation}
-        onOpenAvailability={onOpenAvailability}
-      />
     </div>
   );
 }

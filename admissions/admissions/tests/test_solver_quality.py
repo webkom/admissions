@@ -895,6 +895,69 @@ class SolverQualityTestCase(APITestCase):
             self._consecutive_block_penalties(result["schedule"], blocks), 0
         )
 
+    def test_strategy_presets_have_observable_compact_and_workload_outcomes(self):
+        candidates = [
+            {"id": "c1", "name": "Ada", "gender": ""},
+            {"id": "c2", "name": "Eirik", "gender": ""},
+        ]
+        interviewers = [
+            {
+                "id": "early",
+                "name": "Early",
+                "gender": "",
+                "availability": [0, 1],
+            },
+            {
+                "id": "late",
+                "name": "Late",
+                "gender": "",
+                "availability": [4, 5],
+            },
+        ]
+
+        def run(strategy):
+            return solve_schedule(
+                candidates_data=candidates,
+                interviewers_data=interviewers,
+                panel_size=1,
+                options_data={
+                    "initial_strategy": strategy,
+                    "allow_overtime": False,
+                    "same_panel_per_block": False,
+                    "avoid_consecutive_interviewer_blocks": False,
+                },
+                all_slots_data=[0, 1, 2, 3, 4, 5],
+                blocks_data=[[0, 1, 2, 3, 4, 5]],
+            )
+
+        balanced = run("balanced")
+        compact = run("compact_days")
+        workload = run("balance_workload")
+
+        self.assertEqual(compact["status"], "SUCCESS")
+        compact_times = sorted(item["time"] for item in compact["schedule"])
+        balanced_times = sorted(item["time"] for item in balanced["schedule"])
+        self.assertLess(
+            compact_times[-1] - compact_times[0],
+            balanced_times[-1] - balanced_times[0],
+        )
+
+        workload_counts = {}
+        compact_counts = {}
+        for result, counts in (
+            (workload, workload_counts),
+            (compact, compact_counts),
+        ):
+            for item in result["schedule"]:
+                interviewer_id = item["panel"][0]["id"]
+                counts[interviewer_id] = counts.get(interviewer_id, 0) + 1
+            for interviewer in interviewers:
+                counts.setdefault(interviewer["id"], 0)
+        self.assertLess(
+            max(workload_counts.values()) - min(workload_counts.values()),
+            max(compact_counts.values()) - min(compact_counts.values()),
+        )
+
     def test_locked_adjacent_block_assignments_survive_and_unlockeds_still_prefer_rest(
         self,
     ):

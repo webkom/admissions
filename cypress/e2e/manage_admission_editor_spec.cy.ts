@@ -17,11 +17,48 @@ const groups = [
   },
 ];
 
+const existingAdmission = {
+  pk: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+  slug: "webkom-test",
+  title: "Sommeropptak 2027",
+  description: "",
+  is_open: false,
+  is_appliable: false,
+  is_closed: false,
+  open_from: "2027-03-01T10:00:00Z",
+  public_deadline: "2027-03-08T10:00:00Z",
+  closed_from: "2027-03-09T10:00:00Z",
+  admin_groups: [groups[0]],
+  groups: [groups[0]],
+  userdata: {
+    has_application: false,
+    is_privileged: true,
+    is_admin: true,
+    is_recruiter: true,
+    committee_role: "leader",
+    committee_groups: ["Webkom"],
+    represented_groups: ["Webkom"],
+  },
+};
+
 const visitEditor = () => {
   cy.intercept("GET", "**/api/manage/admission/", []).as("admissions");
   cy.login("webkom");
   cy.visit("/manage/create");
   cy.wait("@admissions");
+};
+
+const visitExistingEditor = () => {
+  cy.intercept("GET", "**/api/manage/admission/", []).as("admissions");
+  cy.intercept(
+    "GET",
+    "**/api/manage/admission/webkom-test/",
+    existingAdmission,
+  ).as("admission");
+  cy.intercept("GET", "**/api/manage/group/", groups).as("groups");
+  cy.login("webkom");
+  cy.visit("/manage/webkom-test");
+  cy.wait(["@admissions", "@admission", "@groups"]);
 };
 
 const fillRequiredFields = () => {
@@ -117,6 +154,84 @@ describe("manage admission editor", () => {
     ).should("be.visible");
     cy.contains("Opptaksgrupper som rekrutterer").should("be.visible");
     cy.get("#admission-groups").should("contain", "Legg til opptaksgruppe");
+  });
+
+  it("uses the group name and input type when adding group-specific questions", () => {
+    cy.intercept("GET", "**/api/manage/group/", groups);
+    visitEditor();
+    cy.get("#admission-groups").select(groups[0].pk);
+
+    cy.contains("Telefonnummer innhentes alltid").should("be.visible");
+    cy.contains(
+      "Alle søkere blir bedt om telefonnummer, så du trenger ikke å legge til et eget spørsmål om det her.",
+    ).should("be.visible");
+
+    cy.contains("button", "Legg til spørsmål for komiteen").click();
+    cy.contains("Spørsmål 1 for Webkom").should("be.visible");
+    cy.contains("label", "Type")
+      .next("select")
+      .find('option[value="phoneinput"]')
+      .should("not.exist");
+    cy.contains("label", "Spørsmål")
+      .next("input")
+      .should("have.attr", "placeholder", "Hvilket trinn går du på?");
+    cy.contains("label", "Plassholder")
+      .next("input")
+      .should("have.attr", "placeholder", "Skriv et kort svar");
+
+    cy.contains("label", "Type").next("select").select("textarea");
+    cy.contains("label", "Spørsmål")
+      .next("input")
+      .should("have.attr", "placeholder", "Fortell litt om deg selv");
+    cy.contains("label", "Plassholder")
+      .next("input")
+      .should("have.attr", "placeholder", "Skriv et lengre svar");
+  });
+
+  it("discards unsaved changes without updating an existing admission", () => {
+    cy.intercept("PATCH", "**/api/manage/admission/webkom-test/").as(
+      "updateAdmission",
+    );
+    visitExistingEditor();
+
+    cy.contains("button", "Lagre endringer").should("be.disabled");
+    cy.get("#admission-title")
+      .should("have.value", "Sommeropptak 2027")
+      .clear()
+      .type("Ulagret tittel");
+    cy.get("#admission-description").type("Ulagret beskrivelse");
+    cy.contains("Ulagrede endringer").should("be.visible");
+    cy.contains("button", "Lagre endringer").should("not.be.disabled");
+
+    cy.contains("button", "Forkast endringer").click();
+    cy.contains(
+      "Er du sikker? Alle ulagrede endringer i dette opptaket blir forkastet.",
+    ).should("be.visible");
+    cy.get("#admission-title").should("have.value", "Ulagret tittel");
+    cy.get("#admission-description").should(
+      "have.value",
+      "Ulagret beskrivelse",
+    );
+    cy.contains("button", "Avbryt").click();
+    cy.contains("Ulagrede endringer").should("be.visible");
+
+    cy.contains("button", "Forkast endringer").click();
+    cy.contains("button", "Forkast endringer").click();
+
+    cy.get("#admission-title").should("have.value", "Sommeropptak 2027");
+    cy.get("#admission-description").should("have.value", "");
+    cy.contains("Ulagrede endringer").should("not.exist");
+    cy.contains("button", "Lagre endringer").should("be.disabled");
+    cy.get("@updateAdmission.all").should("have.length", 0);
+  });
+
+  it("only offers discard for existing admissions", () => {
+    cy.intercept("GET", "**/api/manage/group/", groups);
+    visitEditor();
+
+    cy.get("#admission-title").type("Ulagret opptak");
+
+    cy.contains("button", "Forkast endringer").should("not.exist");
   });
 
   it("protects unsaved changes during internal navigation", () => {

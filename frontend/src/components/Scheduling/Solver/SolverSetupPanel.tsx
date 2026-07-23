@@ -5,12 +5,18 @@ import React, {
   type Dispatch,
   type SetStateAction,
 } from "react";
-import { Check, ChevronDown, Sparkles } from "lucide-react";
-import { iconSizes } from "src/styles/designTokens";
-
-import cn from "../../../utils/cn";
 import {
-  Chip,
+  AlertTriangle,
+  Check,
+  ChevronDown,
+  RotateCcw,
+  SlidersHorizontal,
+  Sparkles,
+} from "lucide-react";
+
+import ScheduleDrawer from "../ScheduleDrawer";
+import {
+  CustomSelect,
   SchedulePanel,
   SchedulePanelBody,
   SchedulePanelFooter,
@@ -21,13 +27,19 @@ import {
   actionButtonPrimary,
   sectionLabelClass,
 } from "../ui";
-import type { InitialPlanningStrategy, SolverOptions } from "../types";
+import type {
+  InitialPlanningStrategy,
+  PanelStability,
+  SolverOptions,
+} from "../types";
+import { iconSizes } from "src/styles/designTokens";
+import cn from "src/utils/cn";
 import {
+  ADVANCED_SOLVER_DEFAULTS,
   INITIAL_STRATEGY_PRESETS,
-  REPAIR_STRATEGY_PRESETS,
+  deriveAdvancedSettingsSummary,
   progressMessageFor,
   type SolveJob,
-  type SolveResponse,
 } from "./solverHelpers";
 import type { SolverReadiness } from "./solverSelectors";
 
@@ -43,74 +55,56 @@ interface SolverSetupPanelProps {
   availabilityReady: boolean;
   loading: boolean;
   error: string;
-  result: SolveResponse | null;
   elapsedMs: number;
   jobStatus: SolveJob["status"] | null;
   estimatedSeconds: number;
   lockedCount: number;
   hasProposal: boolean;
-  editRequestKey: number;
+  changeableInterviewCount: number;
+  currentDraftReady: boolean;
+  openRequestKey: number;
   onSolve: () => void;
   onCancel: () => void;
-  onRetryWithAvailabilityDeviation: () => void;
   onOpenAvailability: () => void;
+  onOpenFramework: () => void;
 }
-
-const advancedOptionKeys = [
-  "enforce_same_gender",
-  "same_panel_per_block",
-  "avoid_consecutive_interviewer_blocks",
-  "prioritize_continuity",
-  "allow_overtime",
-] as const;
-
-type AdvancedOptionKey = (typeof advancedOptionKeys)[number];
 
 const presetFor = (options: SolverOptions) =>
   INITIAL_STRATEGY_PRESETS.find(
     (preset) =>
       preset.key === options.initial_strategy &&
       preset.overtimeWeight === options.overtime_weight &&
-      preset.loadBalanceWeight === options.load_balance_weight,
+      preset.loadBalanceWeight === options.load_balance_weight &&
+      preset.continuityWeight === options.continuity_weight &&
+      preset.prioritizeContinuity === options.prioritize_continuity,
   );
-
-const hasAdvancedCustomization = (options: SolverOptions) =>
-  options.enforce_same_gender ||
-  !options.same_panel_per_block ||
-  !options.avoid_consecutive_interviewer_blocks ||
-  !options.prioritize_continuity ||
-  !options.allow_overtime;
 
 const AdvancedOptionRow = ({
   title,
   description,
   checked,
   onToggle,
-  exception = false,
+  autofocus = false,
 }: {
   title: string;
   description: string;
   checked: boolean;
   onToggle: () => void;
-  exception?: boolean;
+  autofocus?: boolean;
 }) => (
   <button
     type="button"
     role="switch"
     aria-checked={checked}
     onClick={onToggle}
+    data-autofocus={autofocus || undefined}
     className="flex w-full items-center justify-between gap-4 border-b border-border-soft py-3 text-left last:border-b-0 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-focus"
   >
     <span className="min-w-0">
       <span className="block text-ui font-semibold text-text-primary">
         {title}
       </span>
-      <span
-        className={cn(
-          "mt-0.5 block text-detail leading-snug",
-          exception ? "text-amber-800" : "text-text-muted",
-        )}
-      >
+      <span className="mt-0.5 block text-detail leading-snug text-text-muted">
         {description}
       </span>
     </span>
@@ -145,54 +139,54 @@ const SolverSetupPanel = ({
   availabilityReady,
   loading,
   error,
-  result,
   elapsedMs,
   jobStatus,
   estimatedSeconds,
   lockedCount,
   hasProposal,
-  editRequestKey,
+  changeableInterviewCount,
+  currentDraftReady,
+  openRequestKey,
   onSolve,
   onCancel,
-  onRetryWithAvailabilityDeviation,
   onOpenAvailability,
+  onOpenFramework,
 }: SolverSetupPanelProps) => {
-  const [customizationOpen, setCustomizationOpen] = useState(false);
-  const [advancedOpen, setAdvancedOpen] = useState(false);
-  const [exampleOpen, setExampleOpen] = useState(false);
-  const settingsRef = useRef<HTMLDivElement>(null);
-  const shouldFocusSettingsRef = useRef(false);
+  const [advancedDrawerOpen, setAdvancedDrawerOpen] = useState(false);
+  const [regenerationOpen, setRegenerationOpen] = useState(false);
+  const [strategyComparisonOpen, setStrategyComparisonOpen] = useState(false);
+  const lastOpenRequestRef = useRef(openRequestKey);
+  const configurationRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (editRequestKey <= 0) return;
-    shouldFocusSettingsRef.current = true;
-    setCustomizationOpen(true);
-  }, [editRequestKey]);
-
-  useEffect(() => {
-    if (!customizationOpen || !shouldFocusSettingsRef.current) return;
-    shouldFocusSettingsRef.current = false;
-    settingsRef.current?.scrollIntoView({
-      behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches
-        ? "auto"
-        : "smooth",
-      block: "center",
-    });
-    settingsRef.current
-      ?.querySelector<HTMLButtonElement>("button:not(:disabled)")
-      ?.focus({
-        preventScroll: true,
-      });
-  }, [customizationOpen]);
+    if (openRequestKey === lastOpenRequestRef.current) return;
+    lastOpenRequestRef.current = openRequestKey;
+    setRegenerationOpen(true);
+    window.requestAnimationFrame(() =>
+      configurationRef.current?.scrollIntoView({
+        behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches
+          ? "auto"
+          : "smooth",
+        block: "start",
+      }),
+    );
+  }, [openRequestKey]);
 
   const panelFormationImpossible = interviewerCount < panelSize;
+  const allInterviewersRequired =
+    interviewerCount > 0 && interviewerCount === panelSize;
   const generationBlocked =
-    panelFormationImpossible || !availabilityReady || !readiness.ready;
+    !currentDraftReady ||
+    panelFormationImpossible ||
+    !availabilityReady ||
+    !readiness.ready;
   const matchedPreset = presetFor(solverOptions);
-  const isCustom = !matchedPreset || hasAdvancedCustomization(solverOptions);
-  const activePreset = isCustom ? undefined : matchedPreset;
+  const selectedPreset =
+    INITIAL_STRATEGY_PRESETS.find(
+      (preset) => preset.key === solverOptions.initial_strategy,
+    ) ?? INITIAL_STRATEGY_PRESETS[0];
+  const advancedSummary = deriveAdvancedSettingsSummary(solverOptions);
   const waitingForWorker = jobStatus === "PENDING";
-  const workerWaitIsLong = waitingForWorker && elapsedMs >= 8000;
   const estimatedMs = estimatedSeconds * 1000;
   const progressTargetMs = estimatedMs * 1.35;
   const progressPercent = waitingForWorker
@@ -204,16 +198,12 @@ const SolverSetupPanel = ({
           : 92 + Math.min(5, ((elapsedMs - progressTargetMs) / 1000) * 0.08),
       );
   const progressMessage = waitingForWorker
-    ? workerWaitIsLong
+    ? elapsedMs >= 8000
       ? import.meta.env.DEV
         ? "Planleggingstjenesten har ikke hentet jobben — start utviklingsmiljøet med «make dev»."
         : "Planleggingstjenesten har ikke hentet jobben — kontroller bakgrunnstjenesten."
       : "Venter på ledig planleggingstjeneste…"
     : progressMessageFor(elapsedMs, estimatedMs);
-
-  const toggleSolverOption = (key: AdvancedOptionKey) => {
-    onSolverOptionsChange((current) => ({ ...current, [key]: !current[key] }));
-  };
 
   const choosePreset = (key: InitialPlanningStrategy) => {
     const preset = INITIAL_STRATEGY_PRESETS.find((item) => item.key === key);
@@ -223,514 +213,468 @@ const SolverSetupPanel = ({
       initial_strategy: preset.key,
       overtime_weight: preset.overtimeWeight,
       load_balance_weight: preset.loadBalanceWeight,
+      continuity_weight: preset.continuityWeight,
+      prioritize_continuity: preset.prioritizeContinuity,
     }));
   };
 
-  const blockedDescription = !availabilityReady
-    ? "Alle intervjuere må lagre tilgjengelighet før et intervjuforslag kan genereres."
-    : "Fullfør grunnlaget før et intervjuforslag kan genereres.";
+  const choosePanelStability = (value: PanelStability) => {
+    onSolverOptionsChange((current) => ({
+      ...current,
+      policy_version: 2,
+      panel_stability: value,
+      same_panel_per_block: value === "required",
+    }));
+  };
 
-  const selectedPresetDescription =
-    matchedPreset?.description ?? "Individuelle innstillinger er tilpasset.";
-  const showRecovery =
-    !solverOptions.allow_overtime &&
-    (result?.status === "INFEASIBLE" ||
-      result?.status === "PARTIAL" ||
-      result?.status === "TIMEOUT");
+  const resetAdvancedOptions = () => {
+    onSolverOptionsChange((current) => ({
+      ...current,
+      enforce_same_gender: ADVANCED_SOLVER_DEFAULTS.enforce_same_gender,
+      panel_stability: ADVANCED_SOLVER_DEFAULTS.panel_stability,
+      same_panel_per_block: ADVANCED_SOLVER_DEFAULTS.same_panel_per_block,
+      avoid_consecutive_interviewer_blocks:
+        ADVANCED_SOLVER_DEFAULTS.avoid_consecutive_interviewer_blocks,
+    }));
+  };
+
+  const blockedDescription = !currentDraftReady
+    ? "Vent til endringene i utkastet er lagret før du lager et nytt forslag."
+    : panelFormationImpossible
+      ? `Velg maksimalt ${interviewerCount} per intervju.`
+      : !availabilityReady
+        ? "Vent til alle intervjuere har svart eller meldt at de ikke deltar."
+        : readiness.neededCapacity === 0
+          ? "Ingen aktive kandidater er klare for planlegging."
+          : readiness.usableSlotCount <
+              readiness.neededCapacity / Math.max(panelSize, 1)
+            ? "Det er ikke nok åpne intervjutider med full paneldekning."
+            : "Intervjuerne har ikke nok samlet tilgjengelig kapasitet.";
+  const blockedAction = !currentDraftReady
+    ? null
+    : panelFormationImpossible
+      ? interviewerCount > 0
+        ? {
+            label: `Bruk ${interviewerCount} per intervju`,
+            run: () => onPanelSizeChange(interviewerCount),
+          }
+        : { label: "Se intervjuere", run: onOpenAvailability }
+      : !availabilityReady
+        ? { label: "Se hvem som mangler", run: onOpenAvailability }
+        : readiness.neededCapacity === 0
+          ? null
+          : readiness.usableSlotCount <
+              readiness.neededCapacity / Math.max(panelSize, 1)
+            ? { label: "Juster tidsoppsettet", run: onOpenFramework }
+            : { label: "Se tilgjengelighet", run: onOpenAvailability };
+
+  const showConfiguration = !hasProposal || regenerationOpen;
 
   return (
-    <SchedulePanel id={hasProposal ? "solver-review" : undefined}>
-      <SchedulePanelHeader
-        icon={Sparkles}
-        title="Generer intervjuforslag"
-        description={
-          hasProposal
-            ? "Velg panelstørrelse og oppdater forslaget. Låste intervjuer beholdes."
-            : "Velg panelstørrelse og generer et forslag basert på tilgjengeligheten."
-        }
-        chips={
-          hasProposal && lockedCount > 0 ? (
-            <Chip tone="brand">
-              {lockedCount} låst{lockedCount === 1 ? "" : "e"}
-            </Chip>
-          ) : undefined
-        }
-      />
-      <SchedulePanelBody className="space-y-5">
-        <section aria-label="Grunnlag">
-          <p className="m-0 text-ui text-text-muted tabular-nums">
-            {interviewerCount} intervjuere · {readiness.submittedInterviewers}{" "}
-            av {interviewerCount} har svart · {openBlockCount} åpne blokker ·{" "}
-            {interviewSlotCount} intervjutider
-          </p>
-        </section>
-
-        <section
-          className="border-y border-border-soft py-4"
-          aria-labelledby="panel-size-heading"
+    <>
+      {showConfiguration && (
+        <div
+          ref={configurationRef}
+          data-cy={
+            hasProposal ? "regeneration-settings" : "generation-settings"
+          }
+          className="mx-auto w-full max-w-3xl scroll-mt-4"
         >
-          <h3
-            id="panel-size-heading"
-            className="m-0 text-ui font-semibold text-text-primary"
-          >
-            Panelstørrelse
-          </h3>
-          <p className="m-0 mt-1 text-detail text-text-muted">
-            Hvor mange intervjuere skal delta i hvert intervju?
-          </p>
-          <div className="mt-3 flex flex-wrap items-center gap-3">
-            <Stepper
-              value={panelSize}
-              min={1}
-              max={10}
-              onStep={onPanelSizeChange}
-              aria-label="Panelstørrelse"
-            />
-            <span className="text-detail font-semibold text-text-muted">
-              intervjuere per kandidat
-            </span>
-          </div>
-          {panelFormationImpossible ? (
-            <div
-              role="alert"
-              className="mt-3 flex flex-wrap items-center gap-3 text-ui text-danger"
-            >
-              <span>
-                Du har {interviewerCount} registrerte intervjuere, men
-                panelstørrelsen er {panelSize}. Velg maksimalt{" "}
-                {interviewerCount} eller legg til flere intervjuere.
-              </span>
-              <button
-                type="button"
-                onClick={onOpenAvailability}
-                className="font-semibold underline underline-offset-2"
-              >
-                Åpne tilgjengelighet
-              </button>
-            </div>
-          ) : !availabilityReady ? (
-            <div
-              role="status"
-              className="mt-3 flex flex-wrap items-center gap-3 text-ui text-text-muted"
-            >
-              <span>{blockedDescription}</span>
-              <button
-                type="button"
-                onClick={onOpenAvailability}
-                className="font-semibold text-brand hover:underline"
-              >
-                Åpne tilgjengelighet
-              </button>
-            </div>
-          ) : (
-            <p className="m-0 mt-3 text-ui font-semibold text-success">
-              Klar til å generere
-            </p>
-          )}
-        </section>
-
-        <section className="border-b border-border-soft pb-4">
-          <p className={sectionLabelClass}>Anbefalt oppsett</p>
-          <p className="m-0 text-ui font-semibold text-text-primary">
-            {isCustom
-              ? "Tilpasset"
-              : "Balanserer tilgjengelighet, arbeidsmengde og kompakte dager."}
-          </p>
-          <ul className="mt-3 space-y-1.5 pl-5 text-detail text-text-muted">
-            <li>
-              Tildelinger holdes innenfor tilgjengelighet så langt det er mulig.
-            </li>
-            <li>Stabile paneler brukes gjennom hver intervjublokk.</li>
-            <li>
-              {solverOptions.avoid_consecutive_interviewer_blocks
-                ? "Intervjuere får neste blokk fri når kapasiteten tillater det."
-                : "Blokkhvile er slått av i avanserte innstillinger."}
-            </li>
-            <li>Kompakte intervjudager prioriteres.</li>
-          </ul>
-          {!panelFormationImpossible && (
-            <button
-              type="button"
-              onClick={() => setExampleOpen((open) => !open)}
-              aria-expanded={exampleOpen}
-              className="mt-3 text-detail font-semibold text-brand hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-focus"
-            >
-              Se eksempel
-            </button>
-          )}
-          {!panelFormationImpossible && exampleOpen && (
-            <div className="mt-3 border-l-2 border-border-quiet pl-3 text-detail text-text-muted">
-              <p className="m-0 font-semibold text-text-primary">
-                Illustrativt eksempel
-              </p>
-              <p className="m-0 mt-1">
-                Et stabilt panel kan gjennomføre flere intervjuer i samme blokk,
-                fremfor at hver intervjuer får spredte enkelttimer.
-              </p>
-              <p className="m-0 mt-2">
-                Det faktiske forslaget avhenger av tilgjengelighet, konflikter,
-                låste intervjuer og de øvrige innstillingene.
-              </p>
-            </div>
-          )}
-        </section>
-
-        {!panelFormationImpossible && (
-          <div ref={settingsRef}>
-            <button
-              type="button"
-              onClick={() => setCustomizationOpen((open) => !open)}
-              aria-expanded={customizationOpen}
-              aria-controls="solver-customization"
-              className="flex w-full items-center justify-between gap-3 text-left text-ui font-semibold text-text-primary focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-focus"
-            >
-              Tilpass hvordan forslaget genereres
-              <ChevronDown
-                size={iconSizes.small}
-                aria-hidden="true"
-                className={cn(
-                  "transition-transform",
-                  customizationOpen && "rotate-180",
-                )}
-              />
-            </button>
-            {customizationOpen && (
-              <div
-                id="solver-customization"
-                className="mt-4 space-y-5 animate-fade-in"
-              >
-                <section>
-                  <p className={sectionLabelClass}>
-                    Hva skal forslaget prioritere?
-                  </p>
-                  <div
-                    role="radiogroup"
-                    aria-label="Hva skal forslaget prioritere?"
-                    className="divide-y divide-border-soft border-y border-border-soft"
-                  >
-                    {INITIAL_STRATEGY_PRESETS.map((preset) => {
-                      const active = activePreset?.key === preset.key;
-                      return (
-                        <button
-                          key={preset.key}
-                          type="button"
-                          role="radio"
-                          aria-checked={active}
-                          onClick={() => choosePreset(preset.key)}
-                          className="flex w-full items-start gap-3 py-3 text-left focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-focus"
-                        >
-                          <span
-                            aria-hidden="true"
-                            className={cn(
-                              "mt-0.5 flex h-4 w-4 flex-none items-center justify-center rounded-full border",
-                              active
-                                ? "border-brand bg-brand"
-                                : "border-border-muted bg-surface-base",
-                            )}
-                          >
-                            {active && (
-                              <Check
-                                size={10}
-                                strokeWidth={3}
-                                className="text-white"
-                              />
-                            )}
-                          </span>
-                          <span>
-                            <span className="block text-ui font-semibold text-text-primary">
-                              {preset.key === "balanced"
-                                ? "Anbefalt"
-                                : preset.key === "minimize_overtime"
-                                  ? "Følg tilgjengeligheten"
-                                  : "Jevn arbeidsmengde"}
-                            </span>
-                            <span className="mt-0.5 block text-detail text-text-muted">
-                              {preset.key === "balanced"
-                                ? "Balanserer tilgjengelighet, arbeidsmengde og kompakte dager."
-                                : preset.description}
-                            </span>
-                          </span>
-                        </button>
-                      );
-                    })}
-                  </div>
-                  {isCustom && (
-                    <p className="m-0 mt-2 text-detail text-text-muted">
-                      Tilpasset: {selectedPresetDescription}
-                    </p>
-                  )}
-                </section>
-
-                <section>
+          <SchedulePanel dataCy="generation-status">
+            <SchedulePanelHeader
+              icon={Sparkles}
+              title={hasProposal ? "Lag et nytt forslag" : "Lag planutkast"}
+              description={
+                hasProposal
+                  ? "Det gjeldende utkastet beholdes til du eventuelt velger det nye forslaget."
+                  : "Start med det anbefalte oppsettet. Flere valg er tilgjengelige når du trenger dem."
+              }
+              actions={
+                hasProposal ? (
                   <button
                     type="button"
-                    onClick={() => setAdvancedOpen((open) => !open)}
-                    aria-expanded={advancedOpen}
-                    aria-controls="solver-advanced-settings"
-                    className="flex w-full items-center justify-between gap-3 border-t border-border-soft pt-4 text-left text-ui font-semibold text-text-primary focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-focus"
+                    onClick={() => setRegenerationOpen(false)}
+                    className={cn(actionButtonBase, actionButtonNeutral)}
                   >
-                    Avanserte innstillinger
-                    <ChevronDown
-                      size={iconSizes.small}
-                      aria-hidden="true"
-                      className={cn(
-                        "transition-transform",
-                        advancedOpen && "rotate-180",
-                      )}
-                    />
+                    Skjul
                   </button>
-                  {advancedOpen && (
-                    <div
-                      id="solver-advanced-settings"
-                      className="mt-3 animate-fade-in"
-                    >
-                      <p className={sectionLabelClass}>Krav i første forslag</p>
-                      <AdvancedOptionRow
-                        title="Samme kjønn i panel"
-                        description="Krev minst én intervjuer med samme kjønn der det er registrert."
-                        checked={solverOptions.enforce_same_gender}
-                        onToggle={() =>
-                          toggleSolverOption("enforce_same_gender")
-                        }
-                      />
-                      <AdvancedOptionRow
-                        title="Stabile paneler per blokk"
-                        description="Bruk samme panel gjennom en intervjublokk. Slå av bare når kapasiteten krever mer rotasjon."
-                        checked={solverOptions.same_panel_per_block}
-                        onToggle={() =>
-                          toggleSolverOption("same_panel_per_block")
-                        }
-                      />
-                      <p className={cn(sectionLabelClass, "mt-4")}>
-                        Kvalitetspreferanser
-                      </p>
-                      <AdvancedOptionRow
-                        title="Unngå intervjublokker rett etter hverandre"
-                        description="Prøver å la en intervjuer stå over den neste intervjublokken etter en blokk de har deltatt i. Kan fravikes dersom det er nødvendig for å lage en god plan."
-                        checked={
-                          solverOptions.avoid_consecutive_interviewer_blocks
-                        }
-                        onToggle={() =>
-                          toggleSolverOption(
-                            "avoid_consecutive_interviewer_blocks",
-                          )
-                        }
-                      />
-                      <AdvancedOptionRow
-                        title="Kompakte intervjudager"
-                        description="Prioriter færre hull mellom intervjuene."
-                        checked={solverOptions.prioritize_continuity}
-                        onToggle={() =>
-                          toggleSolverOption("prioritize_continuity")
-                        }
-                      />
-                      <p className={cn(sectionLabelClass, "mt-4")}>Unntak</p>
-                      <AdvancedOptionRow
-                        title="Tillat avvik fra oppgitt tilgjengelighet"
-                        description="Brukes når en gyldig plan ellers ikke kan lages. Avvik markeres tydelig."
-                        checked={solverOptions.allow_overtime}
-                        onToggle={() => toggleSolverOption("allow_overtime")}
-                        exception
-                      />
-                    </div>
-                  )}
-                </section>
+                ) : undefined
+              }
+            />
+            <SchedulePanelBody className="space-y-5 px-5 py-5">
+              <p className="m-0 text-detail text-text-muted tabular-nums">
+                {readiness.submittedInterviewers} intervjuere klare ·{" "}
+                {openBlockCount} åpne blokker · {interviewSlotCount}{" "}
+                intervjutider
+              </p>
 
-                {hasProposal && (
-                  <section>
-                    <p className={sectionLabelClass}>Ved ny generering</p>
-                    <div
-                      role="radiogroup"
-                      aria-label="Ved ny generering"
-                      className="divide-y divide-border-soft border-y border-border-soft"
+              {hasProposal && lockedCount > 0 && (
+                <p className="m-0 rounded-md bg-surface-subtle px-3 py-2 text-detail text-text-muted">
+                  {lockedCount} låste intervjuer beholdes;{" "}
+                  {changeableInterviewCount} kan flyttes.
+                </p>
+              )}
+
+              <section
+                aria-labelledby="panel-size-heading"
+                className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center"
+              >
+                <div>
+                  <h3
+                    id="panel-size-heading"
+                    className="m-0 text-ui font-semibold text-text-primary"
+                  >
+                    Intervjuere per intervju
+                  </h3>
+                  <p className="m-0 mt-1 text-detail text-text-muted">
+                    Hvert intervju får dette antallet personer i panelet.
+                  </p>
+                </div>
+                <div data-cy="panel-size">
+                  <Stepper
+                    value={panelSize}
+                    min={1}
+                    max={Math.max(1, interviewerCount)}
+                    onStep={onPanelSizeChange}
+                    aria-label="Panelstørrelse"
+                  />
+                </div>
+              </section>
+
+              <section aria-labelledby="strategy-heading">
+                <h3
+                  id="strategy-heading"
+                  className="m-0 text-ui font-semibold text-text-primary"
+                >
+                  Fordeling
+                </h3>
+                {allInterviewersRequired ? (
+                  <p className="m-0 mt-1 text-detail text-text-muted">
+                    Alle intervjuere må delta i hvert intervju, så en
+                    fordelingsstrategi vil ikke endre resultatet.
+                  </p>
+                ) : (
+                  <>
+                    <CustomSelect
+                      value={solverOptions.initial_strategy}
+                      onChange={(value) =>
+                        choosePreset(value as InitialPlanningStrategy)
+                      }
+                      options={INITIAL_STRATEGY_PRESETS.map((preset) => ({
+                        value: preset.key,
+                        label: `${preset.label}${
+                          preset.key === "balanced" ? " — anbefalt" : ""
+                        }`,
+                      }))}
+                      aria-label="Planleggingsstrategi"
+                      className="mt-2 w-full sm:max-w-md"
+                    />
+                    <p className="m-0 mt-2 text-detail leading-relaxed text-text-muted">
+                      {matchedPreset
+                        ? matchedPreset.description
+                        : `Tilpasset · basert på ${selectedPreset.label}.`}
+                    </p>
+                    <button
+                      type="button"
+                      aria-expanded={strategyComparisonOpen}
+                      onClick={() => setStrategyComparisonOpen((open) => !open)}
+                      className="mt-2 inline-flex items-center gap-1 text-detail font-semibold text-brand hover:underline"
                     >
-                      {REPAIR_STRATEGY_PRESETS.map((preset) => {
-                        const active =
-                          solverOptions.repair_strategy === preset.key;
-                        const label =
-                          preset.key === "minimum_change"
-                            ? "Behold mest mulig"
-                            : preset.key === "preserve_panels"
-                              ? "Behold panelene"
-                              : "Tillat flere endringer";
-                        return (
+                      Sammenlign strategier
+                      <ChevronDown
+                        size={15}
+                        aria-hidden="true"
+                        className={cn(
+                          "transition-transform",
+                          strategyComparisonOpen && "rotate-180",
+                        )}
+                      />
+                    </button>
+                    {strategyComparisonOpen && (
+                      <div className="mt-3 grid gap-2 sm:grid-cols-3">
+                        {INITIAL_STRATEGY_PRESETS.map((preset) => (
                           <button
                             key={preset.key}
                             type="button"
-                            role="radio"
-                            aria-checked={active}
-                            onClick={() =>
-                              onSolverOptionsChange((current) => ({
-                                ...current,
-                                repair_strategy: preset.key,
-                              }))
-                            }
-                            className="flex w-full items-start gap-3 py-3 text-left focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-focus"
+                            onClick={() => choosePreset(preset.key)}
+                            className={cn(
+                              "rounded-lg border px-3 py-3 text-left",
+                              solverOptions.initial_strategy === preset.key
+                                ? "border-brand-border bg-brand-soft"
+                                : "border-border-soft bg-surface-base hover:bg-surface-subtle",
+                            )}
                           >
-                            <span
-                              aria-hidden="true"
-                              className={cn(
-                                "mt-0.5 flex h-4 w-4 flex-none items-center justify-center rounded-full border",
-                                active
-                                  ? "border-brand bg-brand"
-                                  : "border-border-muted bg-surface-base",
-                              )}
-                            >
-                              {active && (
-                                <Check
-                                  size={10}
-                                  strokeWidth={3}
-                                  className="text-white"
-                                />
-                              )}
-                            </span>
-                            <span>
-                              <span className="block text-ui font-semibold text-text-primary">
-                                {label}
-                              </span>
-                              {active && (
-                                <span className="mt-0.5 block text-detail text-text-muted">
-                                  {preset.description}
-                                </span>
-                              )}
+                            <strong className="block text-detail text-text-primary">
+                              {preset.label}
+                            </strong>
+                            <span className="mt-1 block text-detail leading-snug text-text-muted">
+                              {preset.description}
                             </span>
                           </button>
-                        );
-                      })}
-                    </div>
-                  </section>
+                        ))}
+                      </div>
+                    )}
+                  </>
                 )}
+              </section>
+
+              <section className="flex flex-wrap items-center justify-between gap-3 border-y border-border-soft py-3">
+                <div className="min-w-0">
+                  <h3 className="m-0 text-ui font-semibold text-text-primary">
+                    Regler
+                  </h3>
+                  <p
+                    data-cy="advanced-settings-summary"
+                    className="m-0 mt-1 text-detail text-text-muted"
+                  >
+                    {advancedSummary.text}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setAdvancedDrawerOpen(true)}
+                  data-cy="open-advanced-generation-settings"
+                  className={cn(actionButtonBase, actionButtonNeutral)}
+                >
+                  <SlidersHorizontal
+                    size={iconSizes.small}
+                    aria-hidden="true"
+                  />
+                  Tilpass regler
+                </button>
+              </section>
+
+              {error && !hasProposal && (
+                <div
+                  role="alert"
+                  className="rounded-lg border border-danger-border bg-danger-bg px-4 py-3 text-ui font-semibold text-danger"
+                >
+                  {error}
+                </div>
+              )}
+
+              {!error &&
+                (generationBlocked ? (
+                  <div
+                    role="alert"
+                    className="flex flex-wrap items-center justify-between gap-3 rounded-lg bg-amber-50 px-4 py-3"
+                  >
+                    <p className="m-0 flex items-start gap-2 text-ui font-semibold text-amber-900">
+                      <AlertTriangle
+                        size={iconSizes.small}
+                        className="mt-0.5 flex-none"
+                        aria-hidden="true"
+                      />
+                      {blockedDescription}
+                    </p>
+                    {blockedAction && (
+                      <button
+                        type="button"
+                        onClick={blockedAction.run}
+                        className="text-ui font-semibold text-brand hover:underline"
+                      >
+                        {blockedAction.label}
+                      </button>
+                    )}
+                  </div>
+                ) : (
+                  <p className="m-0 flex items-center gap-2 text-detail font-semibold text-success">
+                    <Check size={iconSizes.small} aria-hidden="true" />
+                    Klar til å generere.
+                  </p>
+                ))}
+            </SchedulePanelBody>
+
+            {loading && (
+              <div className="border-t border-border-soft bg-surface-mutedSoft px-5 py-3">
+                <div
+                  role="progressbar"
+                  aria-label="Genererer plan"
+                  aria-valuenow={
+                    waitingForWorker ? undefined : Math.round(progressPercent)
+                  }
+                  aria-valuemin={0}
+                  aria-valuemax={100}
+                  className="h-1.5 w-full overflow-hidden rounded-full bg-surface-muted"
+                >
+                  <div
+                    className="h-full rounded-full bg-brand transition-[width] duration-500 ease-out solver-barberpole-progress"
+                    style={{ width: `${progressPercent}%` }}
+                  />
+                </div>
+                <div className="mt-2 flex justify-between gap-2 text-detail text-text-muted">
+                  <span aria-live="polite">{progressMessage}</span>
+                  <strong className="tabular-nums text-text-primary">
+                    {(elapsedMs / 1000).toFixed(1)}s
+                  </strong>
+                </div>
               </div>
             )}
-          </div>
-        )}
 
-        {(error ||
-          result?.status === "INFEASIBLE" ||
-          result?.status === "PARTIAL" ||
-          result?.status === "TIMEOUT" ||
-          result?.status === "ERROR" ||
-          result?.status === "LOCKED_CONFLICT") && (
-          <section
-            aria-live="polite"
-            className="border-t border-border-soft pt-4"
-          >
-            <p className="m-0 text-ui font-semibold text-text-primary">
-              {error ||
-                result?.error ||
-                (result?.status === "INFEASIBLE"
-                  ? "Ingen løsning finnes med de valgte begrensningene."
-                  : result?.status === "TIMEOUT"
-                    ? "Solveren rakk ikke å bli ferdig."
-                    : result?.status === "LOCKED_CONFLICT"
-                      ? "Låst endring krasjer med inhabiliteter."
-                      : "Solveren feilet på grunn av ugyldige innstillinger.")}
-            </p>
-            {showRecovery && (
-              <button
-                type="button"
-                onClick={onRetryWithAvailabilityDeviation}
-                className="mt-2 text-ui font-semibold text-brand hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-focus"
-              >
-                Prøv igjen med avvik fra tilgjengelighet
-              </button>
-            )}
-          </section>
-        )}
-      </SchedulePanelBody>
-
-      {loading && (
-        <div className="border-t border-border-soft bg-surface-mutedSoft px-5 py-3 handheld:px-4">
-          <div
-            role="progressbar"
-            aria-label={
-              waitingForWorker
-                ? "Venter på planleggingstjenesten"
-                : "Genererer plan"
-            }
-            aria-valuenow={
-              waitingForWorker
-                ? undefined
-                : Math.round(Math.min(97, progressPercent))
-            }
-            aria-valuemin={0}
-            aria-valuemax={100}
-            className="h-1.5 w-full overflow-hidden rounded-full bg-surface-muted"
-          >
-            <div
-              className="h-full rounded-full bg-brand transition-[width] duration-500 ease-out solver-barberpole-progress"
-              style={{ width: `${progressPercent}%` }}
-            />
-          </div>
-          <div className="mt-2 flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 text-detail text-text-muted">
-            <span
-              className={cn(
-                "italic",
-                workerWaitIsLong && "font-semibold text-brand",
-              )}
-              aria-live="polite"
-            >
-              {progressMessage}
-            </span>
-            <span className="font-bold text-text-primary tabular-nums">
-              {waitingForWorker
-                ? `${(elapsedMs / 1000).toFixed(1)}s i kø`
-                : `${(elapsedMs / 1000).toFixed(1)}s / ~${estimatedSeconds}s`}
-            </span>
-          </div>
+            <SchedulePanelFooter className="justify-end">
+              <div className="flex w-full flex-wrap justify-end gap-2 sm:w-auto">
+                {loading && (
+                  <button
+                    type="button"
+                    onClick={onCancel}
+                    className={cn(
+                      actionButtonBase,
+                      actionButtonNeutral,
+                      "handheld:flex-1",
+                    )}
+                  >
+                    Avbryt
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={onSolve}
+                  disabled={loading || generationBlocked}
+                  data-cy="generate-proposal"
+                  className={cn(
+                    actionButtonBase,
+                    actionButtonPrimary,
+                    "handheld:flex-1",
+                  )}
+                >
+                  <Sparkles size={iconSizes.small} aria-hidden="true" />
+                  {loading
+                    ? "Genererer…"
+                    : hasProposal
+                      ? "Lag nytt forslag"
+                      : "Lag planutkast"}
+                </button>
+              </div>
+            </SchedulePanelFooter>
+          </SchedulePanel>
         </div>
       )}
 
-      <SchedulePanelFooter>
-        <span className="text-detail text-text-muted">
-          {panelFormationImpossible ? "Kan ikke generere ennå" : ""}
-        </span>
-        <div className="flex flex-wrap items-center justify-end gap-2">
-          {!loading && lockedCount > 0 && (
-            <Chip tone="brand">
-              {lockedCount} låst{lockedCount === 1 ? "" : "e"} beholdes
-            </Chip>
-          )}
-          {loading && (
+      <ScheduleDrawer
+        open={advancedDrawerOpen}
+        onClose={() => setAdvancedDrawerOpen(false)}
+        title="Tilpass regler"
+        description="Krav må alltid oppfylles. Prioriteringer brukes når flere gyldige planer finnes."
+        dataCy="generation-drawer"
+        footer={
+          <div className="flex flex-wrap items-center justify-between gap-3">
             <button
               type="button"
+              onClick={resetAdvancedOptions}
+              data-cy="reset-advanced-generation-settings"
               className={cn(actionButtonBase, actionButtonNeutral)}
-              onClick={onCancel}
             >
-              Avbryt
+              <RotateCcw size={iconSizes.small} aria-hidden="true" />
+              Tilbakestill
             </button>
-          )}
-          <button
-            type="button"
-            className={cn(
-              actionButtonBase,
-              hasProposal ? actionButtonNeutral : actionButtonPrimary,
-            )}
-            onClick={onSolve}
-            disabled={loading || generationBlocked}
-            title={
-              generationBlocked
-                ? blockedDescription
-                : lockedCount > 0
-                  ? "Genererer planen på nytt og beholder de manuelt låste radene."
-                  : undefined
-            }
-          >
-            <Sparkles
-              size={iconSizes.small}
-              className={loading ? "animate-pulse" : undefined}
+            <button
+              type="button"
+              onClick={() => setAdvancedDrawerOpen(false)}
+              className={cn(actionButtonBase, actionButtonPrimary)}
+            >
+              Ferdig
+            </button>
+          </div>
+        }
+      >
+        <div className="space-y-6" data-cy="advanced-settings">
+          <section>
+            <p className={sectionLabelClass}>Krav</p>
+            <AdvancedOptionRow
+              title="Samme kjønn i panel"
+              description="Krev minst én intervjuer med samme kjønn der kjønn er registrert."
+              checked={solverOptions.enforce_same_gender}
+              onToggle={() =>
+                onSolverOptionsChange((current) => ({
+                  ...current,
+                  enforce_same_gender: !current.enforce_same_gender,
+                }))
+              }
+              autofocus
             />
-            {loading
-              ? waitingForWorker
-                ? "Venter på tjenesten…"
-                : "Optimaliserer…"
-              : hasProposal
-                ? "Generer på nytt"
-                : "Generer forslag"}
-          </button>
+            {allInterviewersRequired ? (
+              <p className="m-0 py-3 text-detail text-text-muted">
+                Panelstabilitet har ingen effekt når alle må delta i hvert
+                intervju.
+              </p>
+            ) : (
+              <div className="py-3">
+                <p className="m-0 text-ui font-semibold text-text-primary">
+                  Panel i samme blokk
+                </p>
+                <div
+                  role="radiogroup"
+                  aria-label="Panelstabilitet"
+                  className="mt-2 grid gap-2"
+                >
+                  {(
+                    [
+                      {
+                        key: "preferred",
+                        label: "Foretrekk samme panel — anbefalt",
+                        description:
+                          "Bevar panelet når det er mulig, men tillat nødvendige bytter.",
+                      },
+                      {
+                        key: "required",
+                        label: "Krev samme panel",
+                        description:
+                          "Avvis planer som bytter panel i en blokk.",
+                      },
+                      {
+                        key: "flexible",
+                        label: "La panelet variere",
+                        description:
+                          "Ikke prioriter samme panel gjennom blokken.",
+                      },
+                    ] as const
+                  ).map((option) => (
+                    <button
+                      key={option.key}
+                      type="button"
+                      role="radio"
+                      aria-checked={
+                        solverOptions.panel_stability === option.key
+                      }
+                      onClick={() => choosePanelStability(option.key)}
+                      className={cn(
+                        "rounded-md border px-3 py-2 text-left",
+                        solverOptions.panel_stability === option.key
+                          ? "border-brand bg-brand-soft"
+                          : "border-border-soft bg-surface-base",
+                      )}
+                    >
+                      <span className="block text-detail font-semibold text-text-primary">
+                        {option.label}
+                      </span>
+                      <span className="mt-0.5 block text-detail text-text-muted">
+                        {option.description}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+          </section>
+
+          <section>
+            <p className={sectionLabelClass}>Prioritering</p>
+            <AdvancedOptionRow
+              title="Hvile mellom arbeidsblokker"
+              description="Prøv å la en intervjuer stå over neste blokk. Strategien styrer hvor kompakt dagen ellers blir."
+              checked={solverOptions.avoid_consecutive_interviewer_blocks}
+              onToggle={() =>
+                onSolverOptionsChange((current) => ({
+                  ...current,
+                  avoid_consecutive_interviewer_blocks:
+                    !current.avoid_consecutive_interviewer_blocks,
+                }))
+              }
+            />
+          </section>
         </div>
-      </SchedulePanelFooter>
-    </SchedulePanel>
+      </ScheduleDrawer>
+    </>
   );
 };
 

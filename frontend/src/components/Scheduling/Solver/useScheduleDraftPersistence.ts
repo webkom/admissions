@@ -1,7 +1,14 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { useSaveSchedule } from "../../../query/hooks";
-import type { EnabledWindow, SavedSchedule, SolverOptions } from "../types";
+import type {
+  EnabledWindow,
+  ManualScheduleBlock,
+  SavedSchedule,
+  ScheduleBlockMode,
+  SlotOverride,
+  SolverOptions,
+} from "../types";
 import {
   CONFLICT_MESSAGE,
   hasSchedule,
@@ -23,6 +30,9 @@ interface DraftPersistenceConfig {
   dayEndMinute: number;
   chunkSize: number;
   chunkBreakMinutes: number;
+  blockMode: ScheduleBlockMode;
+  manualBlocks: ManualScheduleBlock[];
+  slotOverrides: SlotOverride[];
   panelSize: number;
   solverOptions: SolverOptions;
 }
@@ -40,6 +50,7 @@ interface PendingDraft {
     day_end_minute: number;
     chunk_size: number;
     chunk_break_minutes: number;
+    slot_overrides: SlotOverride[];
     panel_size: number;
     solver_options: SolverOptions;
     is_distributed: false;
@@ -156,6 +167,9 @@ export const useScheduleDraftPersistence = ({
     dayEndMinute: config.dayEndMinute,
     chunkSize: config.chunkSize,
     chunkBreakMinutes: config.chunkBreakMinutes,
+    blockMode: config.blockMode,
+    manualBlocks: config.manualBlocks,
+    slotOverrides: config.slotOverrides,
     panelSize: config.panelSize,
     solverOptions: config.solverOptions,
   });
@@ -185,6 +199,7 @@ export const useScheduleDraftPersistence = ({
         day_end_minute: config.dayEndMinute,
         chunk_size: config.chunkSize,
         chunk_break_minutes: config.chunkBreakMinutes,
+        slot_overrides: config.slotOverrides,
         panel_size: config.panelSize,
         solver_options: config.solverOptions,
         is_distributed: false,

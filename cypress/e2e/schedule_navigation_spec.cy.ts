@@ -46,26 +46,23 @@ describe("schedule navigation hierarchy", () => {
       "have.focus",
     );
     cy.get("#foundation-panel-framework").should("have.attr", "hidden");
-    cy.get("#foundation-panel-availability").should(
-      "not.have.attr",
-      "hidden",
-    );
+    cy.get("#foundation-panel-availability").should("not.have.attr", "hidden");
 
-    cy.get('#foundation-tab-framework').click();
-    cy.get('#foundation-panel-framework').within(() => {
+    cy.get("#foundation-tab-framework").click();
+    cy.get("#foundation-panel-framework").within(() => {
       cy.contains("Tidsrammer").should("be.visible");
       cy.contains("Intervjublokker").should("be.visible");
       cy.get('input[aria-label="Ulagret oppsettsendring"]').type("behold meg");
     });
-    cy.get('#foundation-tab-coverage').click();
-    cy.get('#foundation-panel-coverage').should("not.have.attr", "hidden");
-    cy.get('#foundation-panel-coverage').should(
+    cy.get("#foundation-tab-coverage").click();
+    cy.get("#foundation-panel-coverage").should("not.have.attr", "hidden");
+    cy.get("#foundation-panel-coverage").should(
       "contain.text",
       "Dekningsoversikt",
     );
-    cy.get('#foundation-panel-framework').should("have.attr", "hidden");
-    cy.get('#foundation-panel-availability').should("have.attr", "hidden");
-    cy.get('#foundation-tab-framework').click();
+    cy.get("#foundation-panel-framework").should("have.attr", "hidden");
+    cy.get("#foundation-panel-availability").should("have.attr", "hidden");
+    cy.get("#foundation-tab-framework").click();
     cy.get('input[aria-label="Ulagret oppsettsendring"]').should(
       "have.value",
       "behold meg",

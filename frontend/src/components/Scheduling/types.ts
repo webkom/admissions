@@ -1,10 +1,17 @@
 export type {
   Candidate,
+  AvailabilityFallback,
   EnabledWindow,
   Interviewer,
+  InterviewerParticipation,
   InitialPlanningStrategy,
+  ManualScheduleBlock,
+  PanelStability,
   RepairStrategy,
   SavedSchedule,
+  ScheduleBlockMode,
+  ScheduleLayoutCapabilities,
   ScheduleItem,
+  SlotOverride,
   SolverOptions,
 } from "../../types";

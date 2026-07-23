@@ -21,10 +21,12 @@ from admissions.admissions.models import (
     LegoUser,
     Membership,
     SavedSchedule,
+    ScheduleDeviationApproval,
     UserApplication,
 )
 from admissions.admissions.schedule_windows import enabled_windows_to_slots
 from admissions.admissions.scheduling_utils import (
+    availability_submission_is_current,
     canonicalize_slot_keys,
     get_eligible_interviewer_ids,
     get_proposed_candidate_ids_by_interviewer,
@@ -42,6 +44,31 @@ class InterviewAvailabilityView(APIView):
     permission_classes = [IsAuthenticated]
     throttle_classes = [ScopedRateThrottle]
     throttle_scope = "availability"
+
+    @staticmethod
+    def _participation(item, saved_schedule):
+        if item is None:
+            return InterviewAvailability.PARTICIPATION_AWAITING
+        if item.participation == InterviewAvailability.PARTICIPATION_NOT_PARTICIPATING:
+            return InterviewAvailability.PARTICIPATION_NOT_PARTICIPATING
+        if availability_submission_is_current(item, saved_schedule):
+            return InterviewAvailability.PARTICIPATION_PARTICIPATING
+        return InterviewAvailability.PARTICIPATION_AWAITING
+
+    @staticmethod
+    def _affected_assignment_count(saved_schedule, user_id):
+        if saved_schedule is None:
+            return 0
+        target_id = str(user_id)
+        return sum(
+            1
+            for assignment in saved_schedule.schedule or []
+            if any(
+                str(member.get("id") or "") == target_id
+                for member in assignment.get("panel") or []
+                if isinstance(member, dict)
+            )
+        )
 
     def _get_admission(self, admission_slug):
         try:
@@ -136,7 +163,7 @@ class InterviewAvailabilityView(APIView):
             admission=admission,
             user_id__in=users.values_list("id", flat=True),
         )
-        availability_map = {item.user_id: item.slots for item in saved_items}
+        availability_map = {item.user_id: item for item in saved_items}
         saved_schedule = None
         try:
             saved_schedule = admission.saved_schedule
@@ -144,6 +171,9 @@ class InterviewAvailabilityView(APIView):
             pass
         proposed_candidate_ids_map = get_proposed_candidate_ids_by_interviewer(
             saved_schedule
+        )
+        availability_generation = (
+            saved_schedule.availability_generation if saved_schedule is not None else 1
         )
         visible_candidate_ids = self._visible_candidate_ids(
             admission,
@@ -178,8 +208,14 @@ class InterviewAvailabilityView(APIView):
                 "user_id": person.id,
                 "username": person.username,
                 "full_name": person.get_full_name() or person.username,
-                "gender": panel_gender_code(person.gender) if is_interview_admin else "",
-                "slots": availability_map.get(person.id, []),
+                "gender": (
+                    panel_gender_code(person.gender) if is_interview_admin else ""
+                ),
+                "slots": (
+                    availability_map[person.id].slots
+                    if person.id in availability_map
+                    else []
+                ),
                 "conflicts": conflicts_map.get(person.id, []),
                 "reviewed_candidate_ids": reviewed_candidates_map.get(person.id, []),
                 "proposed_candidate_ids": sorted(
@@ -188,7 +224,28 @@ class InterviewAvailabilityView(APIView):
                 "conflict_review_complete": conflict_review_complete_map.get(
                     person.id, False
                 ),
-                "has_submitted": person.id in availability_map,
+                "has_submitted": (
+                    person.id in availability_map
+                    and availability_map[person.id].participation
+                    != InterviewAvailability.PARTICIPATION_NOT_PARTICIPATING
+                    and availability_submission_is_current(
+                        availability_map[person.id], saved_schedule
+                    )
+                ),
+                "participation": self._participation(
+                    availability_map.get(person.id), saved_schedule
+                ),
+                "needs_review": (
+                    person.id in availability_map
+                    and availability_map[person.id].submitted_grid_generation
+                    is not None
+                    and availability_map[person.id].submitted_grid_generation
+                    != availability_generation
+                ),
+                "availability_generation": availability_generation,
+                "affected_assignment_count": self._affected_assignment_count(
+                    saved_schedule, person.id
+                ),
                 "is_me": person.id == user.id,
             }
             for person in users
@@ -216,6 +273,23 @@ class InterviewAvailabilityView(APIView):
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
         admission = Admission.objects.select_for_update().get(pk=admission.pk)
 
+        target_user = user
+        target_user_id = serializer.validated_data.get("user_id")
+        if target_user_id is not None and target_user_id != user.id:
+            if not is_interview_admin:
+                return Response(status=status.HTTP_403_FORBIDDEN)
+            if target_user_id not in get_eligible_interviewer_ids(admission):
+                return Response(
+                    {"user_id": ["Brukeren er ikke i intervjuergruppen."]},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            target_user = LegoUser.objects.filter(pk=target_user_id).first()
+            if target_user is None:
+                return Response(
+                    {"user_id": ["Ukjent intervjuer."]},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
         try:
             saved_schedule = admission.saved_schedule
         except SavedSchedule.DoesNotExist:
@@ -232,6 +306,36 @@ class InterviewAvailabilityView(APIView):
                 )
             serializer.validated_data["slots"] = canonical_slots
 
+            expected_generation = serializer.validated_data.get(
+                "expected_availability_generation"
+            )
+            current_generation = (
+                saved_schedule.availability_generation
+                if saved_schedule is not None
+                else 1
+            )
+            if expected_generation is None and current_generation != 1:
+                return Response(
+                    {
+                        "expected_availability_generation": [
+                            "Dette feltet er påkrevd når tilgjengelighet lagres."
+                        ]
+                    },
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            if (
+                expected_generation is not None
+                and expected_generation != current_generation
+            ):
+                return Response(
+                    {
+                        "expected_availability_generation": [
+                            "Tidsoppsettet er endret. Last inn siden på nytt før du bekrefter."
+                        ],
+                        "availability_generation": current_generation,
+                    },
+                    status=status.HTTP_409_CONFLICT,
+                )
             enabled_slots = []
             if saved_schedule is not None:
                 enabled_slots = list(saved_schedule.enabled_slots or [])
@@ -311,7 +415,7 @@ class InterviewAvailabilityView(APIView):
             InterviewAvailability.objects.select_for_update()
             .filter(
                 admission=admission,
-                user=user,
+                user=target_user,
             )
             .first()
         )
@@ -320,6 +424,18 @@ class InterviewAvailabilityView(APIView):
             for key in ("slots", "conflicts", "reviewed_candidate_ids")
             if key in serializer.validated_data
         }
+        requested_participation = serializer.validated_data.get("participation")
+        if "slots" in serializer.validated_data:
+            defaults["participation"] = (
+                InterviewAvailability.PARTICIPATION_PARTICIPATING
+            )
+            defaults["submitted_grid_generation"] = (
+                saved_schedule.availability_generation
+            )
+        elif requested_participation is not None:
+            defaults["participation"] = requested_participation
+            defaults["slots"] = []
+            defaults["submitted_grid_generation"] = None
         if review_fields_present:
             next_conflicts = set(
                 defaults.get(
@@ -347,9 +463,21 @@ class InterviewAvailabilityView(APIView):
             defaults["reviewed_candidate_ids"] = sorted(next_reviewed)
         saved, _ = InterviewAvailability.objects.update_or_create(
             admission=admission,
-            user=user,
+            user=target_user,
             defaults=defaults,
         )
+        participation_changed = bool(
+            requested_participation is not None
+            and (existing is None or existing.participation != requested_participation)
+        )
+        planning_input_changed = (
+            "slots" in serializer.validated_data or participation_changed
+        )
+        if planning_input_changed and saved_schedule is not None:
+            saved_schedule.save(update_fields=["updated_at"])
+            ScheduleDeviationApproval.objects.filter(
+                saved_schedule=saved_schedule
+            ).delete()
         if "reviewed_candidate_ids" in serializer.validated_data:
             ConflictReviewAuditEvent.objects.create(
                 admission=admission,
@@ -363,14 +491,19 @@ class InterviewAvailabilityView(APIView):
 
         proposed_candidate_ids = get_proposed_candidate_ids_by_interviewer(
             saved_schedule
-        ).get(str(user.id), set())
+        ).get(str(target_user.id), set())
+        current_generation = (
+            saved_schedule.availability_generation if saved_schedule is not None else 1
+        )
 
         return Response(
             {
-                "user_id": user.id,
-                "username": user.username,
-                "full_name": user.get_full_name() or user.username,
-                "gender": panel_gender_code(user.gender) if is_admin else "",
+                "user_id": target_user.id,
+                "username": target_user.username,
+                "full_name": target_user.get_full_name() or target_user.username,
+                "gender": (
+                    panel_gender_code(target_user.gender) if is_interview_admin else ""
+                ),
                 "slots": saved.slots,
                 "conflicts": self._visible_conflicts(
                     saved.conflicts,
@@ -385,8 +518,21 @@ class InterviewAvailabilityView(APIView):
                     saved.reviewed_candidate_ids,
                     proposed_candidate_ids,
                 ),
-                "has_submitted": True,
-                "is_me": True,
+                "has_submitted": (
+                    saved.participation
+                    != InterviewAvailability.PARTICIPATION_NOT_PARTICIPATING
+                    and availability_submission_is_current(saved, saved_schedule)
+                ),
+                "participation": self._participation(saved, saved_schedule),
+                "needs_review": (
+                    saved.submitted_grid_generation is not None
+                    and saved.submitted_grid_generation != current_generation
+                ),
+                "availability_generation": current_generation,
+                "affected_assignment_count": self._affected_assignment_count(
+                    saved_schedule, target_user.id
+                ),
+                "is_me": target_user.id == user.id,
             },
             status=status.HTTP_200_OK,
         )

@@ -13,9 +13,16 @@ const INPUT_TYPE_OPTIONS: { value: InputFieldModel["type"]; label: string }[] =
     { value: "textinput", label: "Kort tekst" },
     { value: "textarea", label: "Lang tekst" },
     { value: "numberinput", label: "Tall" },
-    { value: "phoneinput", label: "Telefon" },
     { value: "checkbox", label: "Avkrysningsboks" },
   ];
+
+const QUESTION_PLACEHOLDERS_BY_TYPE: Record<InputFieldModel["type"], string> = {
+  textinput: "Hvilket trinn går du på?",
+  textarea: "Fortell litt om deg selv",
+  numberinput: "Hvor mange ...?",
+  phoneinput: "Hva er telefonnummeret ditt?",
+  checkbox: "Har du ...?",
+};
 
 const makeInputField = (): InputFieldModel => ({
   id: crypto.randomUUID(),
@@ -27,6 +34,7 @@ const makeInputField = (): InputFieldModel => ({
 });
 
 type Props = {
+  groupName: string;
   value: FieldModel[];
   onChange: (fields: FieldModel[]) => void;
   error?: string;
@@ -34,6 +42,7 @@ type Props = {
 };
 
 const HeaderFieldsEditor: React.FC<Props> = ({
+  groupName,
   value,
   onChange,
   error,
@@ -64,10 +73,10 @@ const HeaderFieldsEditor: React.FC<Props> = ({
       <ScopeCallout>
         <Layers3 size={iconSizes.control} aria-hidden="true" />
         <div>
-          <ScopeTitle>Gjelder denne komiteen i dette opptaket</ScopeTitle>
+          <ScopeTitle>Telefonnummer innhentes alltid</ScopeTitle>
           <ScopeDescription>
-            Svaret vises bare når søkeren velger denne komiteen, og blir ikke
-            gjenbrukt i andre opptak.
+            Alle søkere blir bedt om telefonnummer, så du trenger ikke å legge
+            til et eget spørsmål om det her.
           </ScopeDescription>
         </div>
       </ScopeCallout>
@@ -84,8 +93,8 @@ const HeaderFieldsEditor: React.FC<Props> = ({
             <RowHeader>
               <RowKind>
                 {field.type === "text"
-                  ? "Infotekst for komiteen"
-                  : `Spørsmål for komiteen ${index + 1}`}
+                  ? `Infotekst for ${groupName}`
+                  : `Spørsmål ${index + 1} for ${groupName}`}
               </RowKind>
               <RowActions>
                 <IconButton
@@ -147,6 +156,11 @@ const HeaderFieldsEditor: React.FC<Props> = ({
                           {option.label}
                         </option>
                       ))}
+                      {field.type === "phoneinput" && (
+                        <option value="phoneinput" disabled>
+                          Telefonnummer (spørres alltid)
+                        </option>
+                      )}
                     </Select>
                   </Field>
                   <Field>
@@ -164,7 +178,7 @@ const HeaderFieldsEditor: React.FC<Props> = ({
                       onChange={(event) =>
                         patchInput(index, { title: event.target.value })
                       }
-                      placeholder="Hvilket trinn går du på?"
+                      placeholder={QUESTION_PLACEHOLDERS_BY_TYPE[field.type]}
                     />
                     {titleError && (
                       <FieldError id={`${contentId}-title-error`}>
@@ -195,7 +209,7 @@ const HeaderFieldsEditor: React.FC<Props> = ({
                       onChange={(event) =>
                         patchInput(index, { placeholder: event.target.value })
                       }
-                      placeholder="Vises i tomt felt"
+                      placeholder={getDefaultPlaceholder(field.type)}
                     />
                   </Field>
                 </Grid>

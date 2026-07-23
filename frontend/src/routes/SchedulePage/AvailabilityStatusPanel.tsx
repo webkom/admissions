@@ -28,6 +28,9 @@ const AvailabilityStatusPanel: React.FC<AvailabilityStatusPanelProps> = ({
   const missing = participants
     .filter((participant) => !participant.has_submitted)
     .sort((a, b) => a.full_name.localeCompare(b.full_name, "nb"));
+  const needsReviewCount = missing.filter(
+    (participant) => participant.needs_review,
+  ).length;
   const complete = participants.length > 0 && missing.length === 0;
 
   if (complete) {
@@ -86,7 +89,7 @@ const AvailabilityStatusPanel: React.FC<AvailabilityStatusPanelProps> = ({
       <SchedulePanelHeader
         icon={CalendarRange}
         title="Status på tilgjengelighet"
-        description="Følg opp intervjuere som ikke har sendt inn ennå."
+        description="Følg opp intervjuere som ikke har sendt inn eller må bekrefte et endret tidsoppsett."
         chips={
           <Chip
             tone={
@@ -114,6 +117,11 @@ const AvailabilityStatusPanel: React.FC<AvailabilityStatusPanelProps> = ({
               <span className="mb-2 block text-ui font-semibold text-amber-800">
                 Mangler ({missing.length})
               </span>
+              {needsReviewCount > 0 && (
+                <p className="m-0 mb-2 text-detail text-text-muted">
+                  {needsReviewCount} må bekrefte tilgjengeligheten på nytt.
+                </p>
+              )}
               <div className="flex flex-wrap gap-2">
                 {missing.map((participant) => (
                   <ParticipantChip
@@ -169,6 +177,11 @@ const ParticipantChip: React.FC<{
     {participant.has_submitted && (
       <span className="text-detail font-medium text-text-muted">
         · {participant.slots.length} tider
+      </span>
+    )}
+    {participant.needs_review && (
+      <span className="text-detail font-medium text-amber-800">
+        · må bekrefte på nytt
       </span>
     )}
   </span>

@@ -5,13 +5,16 @@ import {
   Sparkles,
 } from "lucide-react";
 
-import type { ConflictReviewSummary, WorkflowStepDefinition } from "./types";
+import type {
+  PublicationReadiness,
+  WorkflowPhase,
+  WorkflowStepDefinition,
+} from "./types";
 
 interface WorkflowStepParams {
   isAdmin: boolean;
   hasConfiguredAvailabilityWindows: boolean;
   hasDistributedPlan: boolean;
-  conflictReviewSummary: ConflictReviewSummary;
   myConflictReviewComplete: boolean;
   myProposalCandidateCount: number;
   hasSavedConfig: boolean;
@@ -20,13 +23,14 @@ interface WorkflowStepParams {
   availabilityParticipantCount: number;
   submittedAvailabilityCount: number;
   proposalConflictCount: number;
+  workflowPhase: WorkflowPhase;
+  publicationReadiness: PublicationReadiness;
 }
 
 export const buildWorkflowSteps = ({
   isAdmin,
   hasConfiguredAvailabilityWindows,
   hasDistributedPlan,
-  conflictReviewSummary,
   myConflictReviewComplete,
   myProposalCandidateCount,
   hasSavedConfig,
@@ -34,7 +38,7 @@ export const buildWorkflowSteps = ({
   myAvailabilitySaved,
   availabilityParticipantCount,
   submittedAvailabilityCount,
-  proposalConflictCount,
+  publicationReadiness,
 }: WorkflowStepParams): WorkflowStepDefinition[] => {
   if (!isAdmin) {
     const proposedCandidatesReady =
@@ -55,14 +59,8 @@ export const buildWorkflowSteps = ({
           : hasConfiguredAvailabilityWindows
             ? memberInputComplete
               ? "Ferdig"
-              : !myAvailabilitySaved
-                ? "Tider mangler"
-                : hasScheduleDraft && !proposedCandidatesReady
-                  ? "Sjekk kandidater"
-                  : hasScheduleDraft
-                    ? "Ferdig"
-                    : "Tider lagret"
-            : "Ikke åpnet",
+              : "Pågår"
+            : "Låst",
         tone:
           memberInputComplete || myAvailabilitySaved
             ? "success"
@@ -77,7 +75,7 @@ export const buildWorkflowSteps = ({
         title: "Intervjuplan",
         description: "Se dine intervjuer når planen er publisert.",
         icon: CalendarCheck,
-        status: hasDistributedPlan ? "Klar" : "Låst",
+        status: hasDistributedPlan ? "Ferdig" : "Låst",
         tone: hasDistributedPlan ? "success" : "locked",
         complete: hasDistributedPlan,
         locked: !hasDistributedPlan,
@@ -88,14 +86,7 @@ export const buildWorkflowSteps = ({
   const availabilityComplete =
     availabilityParticipantCount > 0 &&
     submittedAvailabilityCount >= availabilityParticipantCount;
-  const missingAvailabilityCount = Math.max(
-    0,
-    availabilityParticipantCount - submittedAvailabilityCount,
-  );
-  const draftReadyForPublish =
-    hasScheduleDraft &&
-    conflictReviewSummary.isComplete &&
-    proposalConflictCount === 0;
+  const draftReadyForPublish = publicationReadiness.ready;
 
   return [
     {
@@ -103,13 +94,7 @@ export const buildWorkflowSteps = ({
       title: "Grunnlag",
       description: "Sett rammene og samle tilgjengelighet.",
       icon: LayoutPanelTop,
-      status: hasDistributedPlan
-        ? "Ferdig"
-        : !hasSavedConfig
-          ? "Sett opp"
-          : availabilityComplete
-            ? "Ferdig"
-            : `${missingAvailabilityCount} mangler tider`,
+      status: hasDistributedPlan || availabilityComplete ? "Ferdig" : "Pågår",
       tone: hasDistributedPlan || availabilityComplete ? "success" : "warning",
       complete: availabilityComplete || hasDistributedPlan,
     },
@@ -120,26 +105,14 @@ export const buildWorkflowSteps = ({
       icon: Sparkles,
       status: !hasSavedConfig
         ? "Låst"
-        : hasDistributedPlan
+        : hasDistributedPlan || draftReadyForPublish
           ? "Ferdig"
-          : !availabilityComplete
-            ? "Venter på tider"
-            : !hasScheduleDraft
-              ? "Klar"
-              : proposalConflictCount > 0
-                ? `${proposalConflictCount} må løses`
-                : !conflictReviewSummary.isComplete
-                  ? `${conflictReviewSummary.incompleteReviewerCount} må bekrefte`
-                  : "Kontrollert",
+          : "Pågår",
       tone: !hasSavedConfig
         ? "locked"
-        : hasDistributedPlan
+        : hasDistributedPlan || draftReadyForPublish
           ? "success"
-          : !availabilityComplete || proposalConflictCount > 0
-            ? "warning"
-            : hasScheduleDraft && conflictReviewSummary.isComplete
-              ? "success"
-              : "muted",
+          : "muted",
       complete: draftReadyForPublish || hasDistributedPlan,
       locked: !hasSavedConfig,
     },
@@ -152,22 +125,16 @@ export const buildWorkflowSteps = ({
       icon: CalendarCheck,
       status: hasDistributedPlan
         ? "Ferdig"
-        : !hasScheduleDraft
-          ? "Låst"
-          : proposalConflictCount > 0
-            ? "Løs inhabilitet"
-            : !conflictReviewSummary.isComplete
-              ? "Venter på kontroll"
-              : "Klar",
+        : draftReadyForPublish
+          ? "Pågår"
+          : "Låst",
       tone: hasDistributedPlan
         ? "success"
-        : !hasScheduleDraft
-          ? "locked"
-          : draftReadyForPublish
-            ? "success"
-            : "warning",
+        : draftReadyForPublish
+          ? "muted"
+          : "locked",
       complete: hasDistributedPlan,
-      locked: !hasScheduleDraft && !hasDistributedPlan,
+      locked: !draftReadyForPublish && !hasDistributedPlan,
     },
   ];
 };

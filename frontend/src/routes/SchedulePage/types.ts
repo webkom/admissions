@@ -27,3 +27,27 @@ export interface ConflictReviewSummary {
   remainingPairCount: number;
   isComplete: boolean;
 }
+
+export type WorkflowPhase =
+  | "setup"
+  | "draft"
+  | "awaiting-conflict-checks"
+  | "ready-to-publish"
+  | "published";
+
+export type CandidateReviewState = "unreviewed" | "no-conflict" | "conflict";
+
+export interface PublicationReadiness {
+  draftSaved: boolean;
+  candidateScopeResolved: boolean;
+  scheduledCandidateCount: number;
+  candidateCount: number;
+  allCandidatesScheduled: boolean;
+  reviewResolved: boolean;
+  requiredReviewerCount: number;
+  completeReviewerCount: number;
+  incompleteReviewerCount: number;
+  missingReviewerNames: string[];
+  proposalConflictCount: number;
+  ready: boolean;
+}

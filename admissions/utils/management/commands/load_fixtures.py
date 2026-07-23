@@ -101,17 +101,17 @@ class Command(BaseCommand):
 
         date = timezone.now().replace(hour=16, minute=15, second=0, microsecond=0)
         schedules = {
-            "webkom-apent": (
+            "webkom-open": (
                 date - timedelta(days=1),
                 date + timedelta(days=365 * 100),
                 date + timedelta(days=365 * 100),
             ),
-            "webkom-utlopt": (
+            "webkom-past-deadline": (
                 date - timedelta(days=30),
                 date + timedelta(days=-2, hours=4),
                 date + timedelta(days=-1, hours=4),
             ),
-            "webkom-uten-admin": (
+            "webkom-no-admin": (
                 date - timedelta(days=30),
                 date + timedelta(days=-2, hours=4),
                 date + timedelta(days=-1, hours=4),

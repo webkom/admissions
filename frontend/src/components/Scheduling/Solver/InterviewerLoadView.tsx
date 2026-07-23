@@ -75,13 +75,24 @@ const InterviewerLoadView = ({
       member.id ? member.id === selected?.id : member.name === selected?.name,
     ),
   );
+  const restViolationCount = distribution.reduce(
+    (total, interviewer) => total + interviewer.adjacentBlockExceptions,
+    0,
+  );
+  const timeDeviationCount = distribution.reduce(
+    (total, interviewer) =>
+      total +
+      interviewer.outsideAvailabilityCount +
+      interviewer.unverifiedCount,
+    0,
+  );
 
   return (
     <div className="flex flex-col gap-4">
       <div className="mb-2">
         <div className="mb-2.5 flex flex-wrap items-baseline justify-between gap-3">
           <span className="mb-1 block text-detail font-medium text-text-muted">
-            Fordeling
+            Belastning per person
           </span>
           <p className="m-0 text-ui text-text-subtle">
             Klikk på en person for å åpne intervjuene deres.
@@ -93,11 +104,11 @@ const InterviewerLoadView = ({
           className="overflow-x-auto rounded-lg border border-border-soft bg-surface-base"
         >
           <div className="grid min-w-schedule-table grid-cols-[minmax(9rem,1fr)_5rem_4.5rem_6rem_5rem] gap-2 border-b border-border-soft bg-surface-subtle px-3 py-2 text-label font-semibold uppercase tracking-wide text-text-muted">
-            <span>Intervjuer</span>
-            <span className="text-right">Intervjuer</span>
-            <span className="text-right">Blokker</span>
-            <span className="text-right">Tilgjengelighet</span>
-            <span className="text-right">Blokkhvile</span>
+            <span>Person</span>
+            <span className="text-right">Antall</span>
+            <span className="text-right">Arbeidsblokker</span>
+            <span className="text-right">Tidsavvik</span>
+            <span className="text-right">Hvilebrudd</span>
           </div>
           {distribution.map((interviewer) => {
             const availabilityDeviationCount =
@@ -156,8 +167,9 @@ const InterviewerLoadView = ({
           })}
         </div>
         <p className="m-0 mt-2 text-detail text-text-muted">
-          {totalAssignments} tildelinger totalt. Blokkhvile teller arbeid i to
-          naboblokker samme dag.
+          {totalAssignments} tildelinger · {timeDeviationCount} tidsavvik ·{" "}
+          {restViolationCount} hvilebrudd. Velg en person for å se tidslinje og
+          intervjuer.
         </p>
       </div>
 

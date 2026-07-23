@@ -1,13 +1,12 @@
 import * as React from "react";
-import { CalendarRange, Check } from "lucide-react";
+import { CalendarRange, UserMinus } from "lucide-react";
+import type { InterviewerParticipation } from "src/types";
 import {
   buildBlockTimeChunks,
   formatDateHeader,
   formatMinutes,
   makeSlotKey,
 } from "../scheduleUtils";
-import cn from "src/utils/cn";
-import { iconSizes, iconStrokeWidths } from "src/styles/designTokens";
 import {
   SchedulePanel,
   SchedulePanelHeader,
@@ -15,14 +14,11 @@ import {
   SchedulePanelFooter,
   MetaValue,
   SaveButton,
+  actionButtonBase,
+  actionButtonNeutral,
 } from "../ui";
-import ScheduleGridFrame, {
-  ScheduleDayHeader,
-  ScheduleGridLegendItem,
-  ScheduleBlockCell,
-  ScheduleSlotSegments,
-  ScheduleTimeLabel,
-} from "./ScheduleGridFrame";
+import { ScheduleGridLegendItem } from "./ScheduleGridFrame";
+import SelectableScheduleGrid from "./SelectableScheduleGrid";
 
 interface TimeSchedulerProps {
   enabledSlots?: Set<string>;
@@ -36,6 +32,10 @@ interface TimeSchedulerProps {
   onSaveSuccess?: () => void;
   sessionDuration: number;
   dates: string[];
+  participation?: InterviewerParticipation;
+  affectedAssignmentCount?: number;
+  onOptOut?: () => Promise<void>;
+  onRejoin?: () => Promise<void>;
 }
 
 const TimeScheduler: React.FC<TimeSchedulerProps> = ({
@@ -50,6 +50,10 @@ const TimeScheduler: React.FC<TimeSchedulerProps> = ({
   onSaveSuccess,
   sessionDuration,
   dates,
+  participation,
+  affectedAssignmentCount = 0,
+  onOptOut,
+  onRejoin,
 }) => {
   const [internalSelectedSlots, setInternalSelectedSlots] = React.useState<
     Set<string>
@@ -57,11 +61,11 @@ const TimeScheduler: React.FC<TimeSchedulerProps> = ({
   const selectedSlots = externalSelectedSlots ?? internalSelectedSlots;
   const setSelectedSlots = onSlotsChange ?? setInternalSelectedSlots;
 
-  const [isDragging, setIsDragging] = React.useState(false);
-  const [addMode, setAddMode] = React.useState(false);
   const [isSaving, setIsSaving] = React.useState(false);
   const [saveTick, setSaveTick] = React.useState(0);
   const [dirtySinceSave, setDirtySinceSave] = React.useState(false);
+  const [confirmOptOut, setConfirmOptOut] = React.useState(false);
+  const [participationSaving, setParticipationSaving] = React.useState(false);
 
   const chunks = React.useMemo(() => {
     return buildBlockTimeChunks({
@@ -84,80 +88,13 @@ const TimeScheduler: React.FC<TimeSchedulerProps> = ({
     return enabledSlots.has(makeSlotKey(date, minute));
   };
 
-  const toggleChunk = React.useCallback(
-    (
-      date: string,
-      chunk: number[],
-      mode: boolean,
-      currentSlots: Set<string>,
-    ) => {
-      const next = new Set(currentSlots);
-      chunk.forEach((minute) => {
-        if (!enabledSlots || !enabledSlots.has(makeSlotKey(date, minute)))
-          return;
-        const slotId = makeSlotKey(date, minute);
-        if (mode) next.add(slotId);
-        else next.delete(slotId);
-      });
-      setSelectedSlots(next);
+  const handleGridChange = React.useCallback(
+    (nextSlots: Set<string>) => {
+      setSelectedSlots(nextSlots);
       setDirtySinceSave(true);
     },
-    [enabledSlots, setSelectedSlots],
+    [setSelectedSlots],
   );
-
-  const blockAddMode = (date: string, chunk: number[]) => {
-    const enabledInChunk = chunk.filter((m) => isSlotEnabled(date, m));
-    return !enabledInChunk.some((m) => selectedSlots.has(makeSlotKey(date, m)));
-  };
-
-  const handlePointerDown = (
-    e: React.PointerEvent<HTMLDivElement>,
-    date: string,
-    chunk: number[],
-  ) => {
-    if (!chunk.some((m) => isSlotEnabled(date, m))) return;
-
-    // Touch pointers capture implicitly on pointerdown; release so cells
-    // under the moving finger receive pointerenter during the drag.
-    if (e.currentTarget.hasPointerCapture(e.pointerId)) {
-      e.currentTarget.releasePointerCapture(e.pointerId);
-    }
-
-    const newAddMode = blockAddMode(date, chunk);
-    setAddMode(newAddMode);
-    setIsDragging(true);
-    toggleChunk(date, chunk, newAddMode, selectedSlots);
-  };
-
-  const handlePointerEnter = (date: string, chunk: number[]) => {
-    if (isDragging && chunk.some((m) => isSlotEnabled(date, m))) {
-      toggleChunk(date, chunk, addMode, selectedSlots);
-    }
-  };
-
-  const handleCellKeyDown = (
-    e: React.KeyboardEvent<HTMLDivElement>,
-    date: string,
-    chunk: number[],
-  ) => {
-    if (e.key !== "Enter" && e.key !== " ") return;
-    e.preventDefault();
-    if (!chunk.some((m) => isSlotEnabled(date, m))) return;
-    toggleChunk(date, chunk, blockAddMode(date, chunk), selectedSlots);
-  };
-
-  const handlePointerUp = React.useCallback(() => {
-    setIsDragging(false);
-  }, []);
-
-  React.useEffect(() => {
-    window.addEventListener("pointerup", handlePointerUp);
-    window.addEventListener("pointercancel", handlePointerUp);
-    return () => {
-      window.removeEventListener("pointerup", handlePointerUp);
-      window.removeEventListener("pointercancel", handlePointerUp);
-    };
-  }, [handlePointerUp]);
 
   React.useEffect(() => {
     if (!dirtySinceSave) return;
@@ -211,6 +148,47 @@ const TimeScheduler: React.FC<TimeSchedulerProps> = ({
       ),
     [chunks, dates, enabledSlots, selectedSlots],
   );
+
+  const changeParticipation = async (action?: () => Promise<void>) => {
+    if (!action) return;
+    setParticipationSaving(true);
+    try {
+      await action();
+      setConfirmOptOut(false);
+    } finally {
+      setParticipationSaving(false);
+    }
+  };
+
+  if (participation === "not_participating") {
+    return (
+      <SchedulePanel>
+        <SchedulePanelBody className="flex flex-wrap items-center justify-between gap-4 py-4">
+          <div className="flex min-w-0 items-center gap-3">
+            <span className="flex h-9 w-9 flex-none items-center justify-center rounded-lg bg-surface-muted text-text-muted">
+              <UserMinus size={18} aria-hidden="true" />
+            </span>
+            <div>
+              <h2 className="m-0 text-sm font-bold text-text-primary">
+                Du deltar ikke i intervjuene
+              </h2>
+              <p className="m-0 mt-0.5 text-detail text-text-muted">
+                Du trenger ikke sende inn tilgjengelighet.
+              </p>
+            </div>
+          </div>
+          <button
+            type="button"
+            disabled={participationSaving || !onRejoin}
+            onClick={() => void changeParticipation(onRejoin)}
+            className={actionButtonBase + " " + actionButtonNeutral}
+          >
+            Jeg skal delta
+          </button>
+        </SchedulePanelBody>
+      </SchedulePanel>
+    );
+  }
   return (
     <SchedulePanel className="select-none !overflow-visible">
       <SchedulePanelHeader
@@ -236,76 +214,24 @@ const TimeScheduler: React.FC<TimeSchedulerProps> = ({
       />
 
       <SchedulePanelBody>
-        <ScheduleGridFrame dates={dates}>
-          <div />
-
-          {dates.map((date) => (
-            <ScheduleDayHeader key={date} date={date} />
-          ))}
-
-          {chunks.map((chunk, chunkIdx) => (
-            <React.Fragment key={chunkIdx}>
-              <ScheduleTimeLabel
-                startMinute={chunk[0]}
-                endMinute={chunk[chunk.length - 1] + sessionDuration}
-                showEnd={chunk.length > 1}
-              />
-
-              {dates.map((date) => {
-                const enabledInChunk = chunk.filter((m) =>
-                  isSlotEnabled(date, m),
-                );
-                const isAnyEnabled = enabledInChunk.length > 0;
-                const isSelected =
-                  isAnyEnabled &&
-                  enabledInChunk.some((m) =>
-                    selectedSlots.has(makeSlotKey(date, m)),
-                  );
-                const { weekday, dayMonth } = formatDateHeader(date);
-                const cellLabel = `${weekday} ${dayMonth} ${formatMinutes(
-                  chunk[0],
-                )}–${formatMinutes(chunk[chunk.length - 1] + sessionDuration)}`;
-
-                return (
-                  <ScheduleBlockCell
-                    key={`${date}-${chunkIdx}`}
-                    role="button"
-                    tabIndex={isAnyEnabled ? 0 : -1}
-                    aria-pressed={isSelected}
-                    aria-disabled={!isAnyEnabled}
-                    aria-label={isAnyEnabled ? cellLabel : "Stengt"}
-                    onPointerDown={(e) => handlePointerDown(e, date, chunk)}
-                    onPointerEnter={() => handlePointerEnter(date, chunk)}
-                    onKeyDown={(e) => handleCellKeyDown(e, date, chunk)}
-                    closed={!isAnyEnabled}
-                    className={cn(
-                      isAnyEnabled &&
-                        isSelected &&
-                        "cursor-pointer border-brand-activeBorder bg-brand-tint text-brand ring-1 ring-inset ring-brand-border hover:bg-brand-fill",
-                      isAnyEnabled &&
-                        !isSelected &&
-                        "cursor-pointer border-border bg-surface-base hover:border-brand-strongBorder hover:bg-brand-soft",
-                    )}
-                  >
-                    <ScheduleSlotSegments
-                      closed={!isAnyEnabled}
-                      fills={chunk.map((minute) =>
-                        isSlotEnabled(date, minute) && isSelected ? 1 : 0,
-                      )}
-                    />
-                    {isSelected && (
-                      <Check
-                        size={iconSizes.compact}
-                        strokeWidth={iconStrokeWidths.strong}
-                        className="text-brand-dark"
-                      />
-                    )}
-                  </ScheduleBlockCell>
-                );
-              })}
-            </React.Fragment>
-          ))}
-        </ScheduleGridFrame>
+        <SelectableScheduleGrid
+          dates={dates}
+          chunks={chunks}
+          sessionDuration={sessionDuration}
+          selectableSlots={enabledSlots}
+          activeSlots={selectedSlots}
+          onChangeActiveSlots={handleGridChange}
+          unselectedPresentation="available"
+          labels={{
+            unavailableCell: "Stengt",
+            cell: ({ date, startMinute, endMinute }) => {
+              const { weekday, dayMonth } = formatDateHeader(date);
+              return `${weekday} ${dayMonth} ${formatMinutes(
+                startMinute,
+              )}–${formatMinutes(endMinute)}`;
+            },
+          }}
+        />
       </SchedulePanelBody>
 
       <SchedulePanelFooter className="sticky bottom-0 z-20 bg-surface-base">
@@ -314,6 +240,39 @@ const TimeScheduler: React.FC<TimeSchedulerProps> = ({
           <MetaValue label="Intervjutider" value={selectedSlots.size} />
         </div>
         <div className="flex items-center gap-3">
+          {onOptOut && !confirmOptOut && (
+            <button
+              type="button"
+              onClick={() => setConfirmOptOut(true)}
+              className="text-detail font-semibold text-text-muted underline-offset-2 hover:text-text-primary hover:underline"
+            >
+              Jeg deltar ikke
+            </button>
+          )}
+          {confirmOptOut && (
+            <span className="flex flex-wrap items-center justify-end gap-2 text-detail text-text-muted">
+              <span>
+                {affectedAssignmentCount > 0
+                  ? `${affectedAssignmentCount} planlagte intervju må repareres.`
+                  : "Du fjernes fra planleggingen."}
+              </span>
+              <button
+                type="button"
+                onClick={() => setConfirmOptOut(false)}
+                className="font-semibold hover:underline"
+              >
+                Avbryt
+              </button>
+              <button
+                type="button"
+                disabled={participationSaving}
+                onClick={() => void changeParticipation(onOptOut)}
+                className="font-semibold text-danger hover:underline disabled:opacity-50"
+              >
+                Bekreft
+              </button>
+            </span>
+          )}
           {dirtySinceSave && (
             <span className="text-detail font-semibold italic text-text-faded">
               Ulagrede endringer

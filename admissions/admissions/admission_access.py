@@ -242,6 +242,7 @@ def schedule_response_context(
         "effective_name_visibility": effective_name_visibility,
         "revealed_group_summaries": revealed_group_summaries,
         "include_candidate_contact": is_admin or is_recruiter,
+        "include_deviation_review": is_interview_admin,
     }
 
 

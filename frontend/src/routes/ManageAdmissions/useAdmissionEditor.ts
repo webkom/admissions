@@ -406,6 +406,12 @@ export const useAdmissionEditor = () => {
     void formik.setFieldValue("slug", slug);
   };
 
+  const discardChanges = () => {
+    failedSubmissionValues.current = undefined;
+    formik.resetForm();
+    setSaveStatus(undefined);
+  };
+
   const handleDeleteAdmission = () => {
     if (!load.data || !admissionHasClosed(load.data.closed_from)) return;
     setDeleteStatus(undefined);
@@ -483,6 +489,7 @@ export const useAdmissionEditor = () => {
       focusField,
       hasUnsavedChanges,
       invalidSubmission: formik.submitCount > 0 && !formik.isValid,
+      discardChanges,
       updateTitle,
       updateSlug,
     },

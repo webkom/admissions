@@ -16,9 +16,9 @@ export interface CustomValueSegmentedControlProps {
 }
 
 /**
- * Shared compact radio control for numeric presets with one in-place custom
- * segment. Its value is controlled by the caller; only the transient editor
- * state is local.
+ * Shared compact radio control for numeric presets with a full-width custom
+ * row. Its value is controlled by the caller; only the transient editor state
+ * is local.
  */
 export const CustomValueSegmentedControl: React.FC<
   CustomValueSegmentedControlProps
@@ -112,40 +112,44 @@ export const CustomValueSegmentedControl: React.FC<
       <div
         role="radiogroup"
         aria-label={label}
-        className="grid w-full gap-1 rounded-md border border-border-soft bg-surface-muted p-1"
-        style={{
-          gridTemplateColumns: `repeat(${uniquePresets.length + 1}, minmax(0, 1fr))`,
-        }}
+        className="w-full rounded-md border border-border-soft bg-surface-muted p-1"
       >
-        {uniquePresets.map((preset, index) => {
-          const checked = !isCustom && !isEditing && value === preset;
-          return (
-            <label
-              key={preset}
-              className="relative flex min-h-9 min-w-0 cursor-pointer items-center justify-center rounded px-2 py-1.5 text-detail font-semibold text-text-muted has-[:focus-visible]:outline has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-brand-focus has-[:checked]:bg-surface-base has-[:checked]:text-text-primary has-[:disabled]:cursor-not-allowed has-[:disabled]:opacity-50"
-            >
-              <input
-                ref={(input) => {
-                  radioRefs.current[index] = input;
-                }}
-                type="radio"
-                name={groupName}
-                value={preset}
-                checked={checked}
-                disabled={disabled}
-                onChange={() => {
-                  onSelectPreset(preset);
-                  setIsEditing(false);
-                }}
-                onKeyDown={(event) => moveRadioFocus(event, index)}
-                className="sr-only"
-              />
-              {formatValue(preset)}
-            </label>
-          );
-        })}
+        <div
+          className="grid w-full gap-1"
+          style={{
+            gridTemplateColumns: `repeat(${uniquePresets.length}, minmax(0, 1fr))`,
+          }}
+        >
+          {uniquePresets.map((preset, index) => {
+            const checked = !isCustom && !isEditing && value === preset;
+            return (
+              <label
+                key={preset}
+                className="relative flex min-h-9 min-w-0 cursor-pointer items-center justify-center rounded px-2 py-1.5 text-detail font-semibold text-text-muted has-[:focus-visible]:outline has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-brand-focus has-[:checked]:bg-surface-base has-[:checked]:text-text-primary has-[:disabled]:cursor-not-allowed has-[:disabled]:opacity-50"
+              >
+                <input
+                  ref={(input) => {
+                    radioRefs.current[index] = input;
+                  }}
+                  type="radio"
+                  name={groupName}
+                  value={preset}
+                  checked={checked}
+                  disabled={disabled}
+                  onChange={() => {
+                    onSelectPreset(preset);
+                    setIsEditing(false);
+                  }}
+                  onKeyDown={(event) => moveRadioFocus(event, index)}
+                  className="sr-only"
+                />
+                {formatValue(preset)}
+              </label>
+            );
+          })}
+        </div>
 
-        <div className="relative min-h-9 min-w-0">
+        <div className="relative mt-1 min-h-9 min-w-0 border-t border-border-soft pt-1">
           <label
             className={`relative flex h-full min-w-0 cursor-pointer items-center justify-center rounded px-2 py-1.5 text-detail font-semibold has-[:focus-visible]:outline has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-brand-focus has-[:disabled]:cursor-not-allowed has-[:disabled]:opacity-50 ${
               customChecked
@@ -213,9 +217,9 @@ export const CustomValueSegmentedControl: React.FC<
                   <span>min</span>
                 </span>
               ) : hasCustomValue ? (
-                formatValue(value)
+                `Egendefinert · ${formatValue(value)}`
               ) : (
-                "Annet"
+                "Egendefinert"
               )}
             </span>
           </label>

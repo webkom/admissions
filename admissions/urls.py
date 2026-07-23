@@ -24,7 +24,12 @@ from admissions.admissions.candidate_views import (
     NameVisibilityAuditView,
 )
 from admissions.admissions.schedule_views import SavedScheduleView
-from admissions.admissions.solve_views import SolveJobStatusView, SolveScheduleView
+from admissions.admissions.solve_views import (
+    LatestSolveJobView,
+    SolveJobApplyView,
+    SolveJobStatusView,
+    SolveScheduleView,
+)
 from admissions.admissions.views import (
     AdminAdmissionViewSet,
     AdminApplicationViewSet,
@@ -66,9 +71,19 @@ urlpatterns = [
     path("api/", include(publicRouter.urls)),
     path("api/solve/", SolveScheduleView.as_view(), name="solve-schedule"),
     path(
+        "api/solve/latest/",
+        LatestSolveJobView.as_view(),
+        name="latest-solve-job",
+    ),
+    path(
         "api/solve/<uuid:job_id>/",
         SolveJobStatusView.as_view(),
         name="solve-job",
+    ),
+    path(
+        "api/solve/<uuid:job_id>/apply/",
+        SolveJobApplyView.as_view(),
+        name="solve-job-apply",
     ),
     path(
         "api/admin/admission/<slug:admission_slug>/schedule/",

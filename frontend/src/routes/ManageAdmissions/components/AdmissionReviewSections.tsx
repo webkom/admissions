@@ -25,6 +25,7 @@ interface AdmissionReviewSectionsProps {
   saveStatus?: AdmissionFormStatus;
   deleteStatus?: AdmissionFormStatus;
   canDelete: boolean;
+  onDiscardChanges: () => void;
   onDelete: () => void;
 }
 
@@ -37,6 +38,7 @@ const AdmissionReviewSections = ({
   saveStatus,
   deleteStatus,
   canDelete,
+  onDiscardChanges,
   onDelete,
 }: AdmissionReviewSectionsProps) => (
   <>
@@ -65,9 +67,27 @@ const AdmissionReviewSections = ({
       {saveStatus && <StatusMessage status={saveStatus} />}
 
       <ActionRow>
-        <StyledButton type="submit" disabled={isSaving || isDeleting} success>
+        <StyledButton
+          type="submit"
+          disabled={isSaving || isDeleting || (!isNew && !hasUnsavedChanges)}
+          success
+        >
           {isSaving ? "Lagrer…" : isNew ? "Opprett opptak" : "Lagre endringer"}
         </StyledButton>
+        {!isNew && hasUnsavedChanges && (
+          <ConfirmModal
+            title="Forkast endringer"
+            trigger={({ onClick }) => (
+              <StyledButton type="button" onClick={onClick}>
+                Forkast endringer
+              </StyledButton>
+            )}
+            message="Er du sikker? Alle ulagrede endringer i dette opptaket blir forkastet."
+            cancelText="Avbryt"
+            confirmText="Forkast endringer"
+            onConfirm={onDiscardChanges}
+          />
+        )}
         {hasUnsavedChanges && (
           <UnsavedStatus role="status">Ulagrede endringer</UnsavedStatus>
         )}

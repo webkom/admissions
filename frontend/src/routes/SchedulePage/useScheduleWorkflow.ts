@@ -5,21 +5,31 @@ import type {
 } from "src/types";
 import type {
   ConflictReviewSummary,
+  PublicationReadiness,
   TabType,
+  WorkflowPhase,
   WorkflowStepDefinition,
 } from "./types";
 import { buildWorkflowSteps } from "./workflowSteps";
+import {
+  derivePublicationReadiness,
+  deriveWorkflowPhase,
+} from "./workflowState";
 
 interface ScheduleWorkflowParams {
   isAdmin: boolean;
   savedSchedule: SavedSchedule | undefined;
   participants: InterviewAvailabilityParticipant[] | undefined;
+  candidateIds: string[];
+  candidateScopeResolved: boolean;
 }
 
 export const useScheduleWorkflow = ({
   isAdmin,
   savedSchedule,
   participants,
+  candidateIds,
+  candidateScopeResolved,
 }: ScheduleWorkflowParams) => {
   const initialSection: TabType = isAdmin ? "config" : "my-availability";
   const [activeSection, setActiveSection] = useState<TabType>(initialSection);
@@ -59,11 +69,19 @@ export const useScheduleWorkflow = ({
   const hasScheduleDraft = Boolean(savedSchedule?.schedule.length);
   const hasDistributedPlan = Boolean(savedSchedule?.is_distributed);
   const submittedAvailabilityCount =
-    participants?.filter((participant) => participant.has_submitted).length ??
-    0;
-  const availabilityParticipantCount = participants?.length ?? 0;
+    participants?.filter(
+      (participant) =>
+        participant.participation !== "not_participating" &&
+        participant.has_submitted,
+    ).length ?? 0;
+  const availabilityParticipantCount =
+    participants?.filter(
+      (participant) => participant.participation !== "not_participating",
+    ).length ?? 0;
+  const myParticipant = participants?.find((participant) => participant.is_me);
   const myAvailabilitySaved = Boolean(
-    participants?.find((participant) => participant.is_me)?.has_submitted,
+    myParticipant?.has_submitted ||
+      myParticipant?.participation === "not_participating",
   );
   const reviewParticipants = useMemo(
     () =>
@@ -134,6 +152,33 @@ export const useScheduleWorkflow = ({
       );
     }).length;
   }, [participants, savedSchedule?.schedule]);
+  const publicationReadiness = useMemo<PublicationReadiness>(
+    () =>
+      derivePublicationReadiness({
+        schedule: savedSchedule?.schedule ?? [],
+        candidateIds,
+        candidateScopeResolved,
+        conflictReviewSummary,
+        proposalConflictCount,
+        reviewParticipants,
+      }),
+    [
+      candidateIds,
+      candidateScopeResolved,
+      conflictReviewSummary,
+      proposalConflictCount,
+      reviewParticipants,
+      savedSchedule?.schedule,
+    ],
+  );
+  const workflowPhase = useMemo<WorkflowPhase>(
+    () =>
+      deriveWorkflowPhase({
+        isDistributed: hasDistributedPlan,
+        publicationReadiness,
+      }),
+    [hasDistributedPlan, publicationReadiness],
+  );
 
   const steps = useMemo<WorkflowStepDefinition[]>(
     () =>
@@ -141,7 +186,6 @@ export const useScheduleWorkflow = ({
         isAdmin,
         hasConfiguredAvailabilityWindows,
         hasDistributedPlan,
-        conflictReviewSummary,
         myConflictReviewComplete,
         myProposalCandidateCount:
           currentParticipant?.proposed_candidate_ids.length ?? 0,
@@ -151,10 +195,11 @@ export const useScheduleWorkflow = ({
         availabilityParticipantCount,
         submittedAvailabilityCount,
         proposalConflictCount,
+        workflowPhase,
+        publicationReadiness,
       }),
     [
       availabilityParticipantCount,
-      conflictReviewSummary,
       hasConfiguredAvailabilityWindows,
       hasDistributedPlan,
       hasSavedConfig,
@@ -164,7 +209,9 @@ export const useScheduleWorkflow = ({
       myConflictReviewComplete,
       myAvailabilitySaved,
       proposalConflictCount,
+      publicationReadiness,
       submittedAvailabilityCount,
+      workflowPhase,
     ],
   );
 
@@ -187,6 +234,12 @@ export const useScheduleWorkflow = ({
     hasConfiguredAvailabilityWindows,
     hasScheduleDraft,
     conflictReviewSummary,
+    currentParticipant,
+    currentReviewRequired:
+      (currentParticipant?.proposed_candidate_ids.length ?? 0) > 0,
+    currentReviewComplete: myConflictReviewComplete,
+    publicationReadiness,
+    workflowPhase,
     availabilityReady,
     proposalConflictCount,
   };

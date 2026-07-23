@@ -276,6 +276,7 @@ const AdmissionDetailsContent = ({
               <QuestionEditor key={group.pk}>
                 <QuestionEditorTitle>{group.name}</QuestionEditorTitle>
                 <HeaderFieldsEditor
+                  groupName={group.name}
                   value={formik.values.group_questions[group.pk] ?? []}
                   onChange={(fields) => {
                     void formik.setFieldTouched("group_questions", true, false);

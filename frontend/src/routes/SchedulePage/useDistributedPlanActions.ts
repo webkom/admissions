@@ -93,7 +93,10 @@ export const useDistributedPlanActions = ({
     }
   };
 
-  const publishSchedule = async (visibility: NameVisibility) => {
+  const publishSchedule = async (
+    visibility: NameVisibility,
+    deviationApprovalFingerprint?: string,
+  ) => {
     if (!savedSchedule || savedSchedule.schedule.length === 0) return false;
     setPlanTransition("publishing");
     setPlanTransitionError("");
@@ -101,6 +104,11 @@ export const useDistributedPlanActions = ({
       await saveSchedule.mutateAsync({
         is_distributed: true,
         name_visibility: visibility,
+        ...(deviationApprovalFingerprint
+          ? {
+              deviation_approval_fingerprint: deviationApprovalFingerprint,
+            }
+          : {}),
         expected_updated_at: savedSchedule.updated_at,
       });
       if (areSensitiveAdmissionCacheWritesBlocked(admissionSlug)) return false;

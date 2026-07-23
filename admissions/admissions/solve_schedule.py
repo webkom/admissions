@@ -5,6 +5,7 @@ from typing import Any, Dict, List, Sequence
 from ortools.sat.python import cp_model
 
 from admissions.admissions import constants
+from admissions.admissions.schedule_policy import normalize_solver_options
 
 MINUTES_PER_DAY = 24 * 60
 INT64_MAX = (1 << 63) - 1
@@ -37,6 +38,9 @@ class SolveOptions:
     load_balance_weight: int = 4
     continuity_weight: int = 12
     max_solver_seconds: float = constants.MAX_SOLVER_SECONDS
+    policy_version: int | None = None
+    panel_stability: str | None = None
+    availability_fallback: str | None = None
 
 
 @dataclass(frozen=True)
@@ -156,19 +160,33 @@ def solve_schedule(
 ) -> Dict[str, Any]:
     candidates = [Candidate(**c) for c in candidates_data]
     interviewers = [Interviewer(**i) for i in interviewers_data]
-    options = SolveOptions(**(options_data or {}))
-    initial_strategy_weights = {
-        "minimize_overtime": (100, 1),
-        "balanced": (40, 4),
-        "balance_workload": (12, 8),
+    normalized_options, policy = normalize_solver_options(options_data)
+    options = SolveOptions(**normalized_options)
+    initial_strategy_defaults = {
+        "minimize_overtime": (100, 1, 0, False),
+        "balanced": (40, 4, 1, True),
+        "compact_days": (40, 2, 48, True),
+        "balance_workload": (12, 10, 0, False),
     }
     if (
         "initial_strategy" in (options_data or {})
-        and options.initial_strategy in initial_strategy_weights
+        and options.initial_strategy in initial_strategy_defaults
+        and not any(
+            field in (options_data or {})
+            for field in (
+                "overtime_weight",
+                "load_balance_weight",
+                "continuity_weight",
+                "prioritize_continuity",
+            )
+        )
     ):
-        options.overtime_weight, options.load_balance_weight = initial_strategy_weights[
-            options.initial_strategy
-        ]
+        (
+            options.overtime_weight,
+            options.load_balance_weight,
+            options.continuity_weight,
+            options.prioritize_continuity,
+        ) = initial_strategy_defaults[options.initial_strategy]
     locked_assignments_data = locked_assignments_data or []
     restrict_to_grid = all_slots_data is not None
     all_slots_data = all_slots_data or []
@@ -312,11 +330,7 @@ def solve_schedule(
     # satisfy the same-panel-per-block constraint; report the pair instead of
     # letting the solver return an opaque INFEASIBLE. Canonical blocks depend
     # on the final usable-slot set, so this check belongs after normalization.
-    if (
-        options.same_panel_per_block
-        and not options.repair_mode
-        and len(locked_by_candidate) > 1
-    ):
+    if policy.requires_stable_panel and len(locked_by_candidate) > 1:
         for block in canonical_blocks:
             block_set = set(block.usable_slots)
             in_block = [
@@ -345,11 +359,18 @@ def solve_schedule(
         if options.avoid_consecutive_interviewer_blocks and canonical_blocks
         else 0
     )
+    preferred_panel_var_bound = (
+        sum(len(block.usable_slots) for block in canonical_blocks) * len(interviewers)
+        + len(canonical_blocks) * (len(interviewers) + 1)
+        if (policy.prefers_stable_panel or options.repair_mode)
+        else 0
+    )
     if (
         model_var_bound
         + block_constraint_bound
         + continuity_var_bound
         + consecutive_block_var_bound
+        + preferred_panel_var_bound
         > constants.MAX_SOLVER_MODEL_VARS
     ):
         return {
@@ -551,7 +572,7 @@ def solve_schedule(
     # Same panel per block: every filled slot within a canonical block is
     # staffed by the identical set of interviewers, so one panel sits the whole
     # block of back-to-back interviews. A slot left empty imposes no constraint.
-    if options.same_panel_per_block and not options.repair_mode and canonical_blocks:
+    if policy.requires_stable_panel and canonical_blocks:
         for block in canonical_blocks:
             block_slots = list(block.usable_slots)
             if len(block_slots) < 2:
@@ -593,36 +614,41 @@ def solve_schedule(
                     model.Add(consecutive_block <= right_work)
                     consecutive_block_violation_vars.append(consecutive_block)
 
-    # Repairs may use a one-interview substitute. Count panel membership
-    # transitions inside occupied neighbouring slots so each strategy can
-    # decide whether that small exception is better than replacing a whole
-    # block member. This is a preference only; conflicts and capacity remain
-    # hard constraints.
+    # Preferred panels and repair strategies compare every occupied slot with
+    # one representative panel for the block. Looking only at neighbouring
+    # interviews misses a panel change across an empty slot, which made the old
+    # preference dependent on whether the draft happened to contain a gap.
     panel_break_vars = []
-    if options.repair_mode and canonical_blocks:
+    if (policy.prefers_stable_panel or options.repair_mode) and canonical_blocks:
         for block in canonical_blocks:
-            for position, (left, right) in enumerate(
-                zip(block.usable_slots, block.usable_slots[1:])
-            ):
-                both_occupied = model.NewBoolVar(
-                    f"both_occupied_{block.index}_{position}"
+            block_slots = list(block.usable_slots)
+            if not block_slots:
+                continue
+            block_occupied = model.NewBoolVar(f"block_occupied_{block.index}")
+            model.AddMaxEquality(
+                block_occupied,
+                [occupied_var(t) for t in block_slots],
+            )
+            reference_panel = {
+                interviewer.id: model.NewBoolVar(
+                    f"reference_panel_{block.index}_{interviewer.id}"
                 )
-                left_occupied = occupied_var(left)
-                right_occupied = occupied_var(right)
-                model.Add(both_occupied <= left_occupied)
-                model.Add(both_occupied <= right_occupied)
-                model.Add(both_occupied >= left_occupied + right_occupied - 1)
+                for interviewer in interviewers
+            }
+            model.Add(sum(reference_panel.values()) == panel_size * block_occupied)
+            for position, t in enumerate(block_slots):
+                occupied = occupied_var(t)
                 for interviewer in interviewers:
-                    left_busy = sum(iview_time_vars.get((interviewer.id, left), []))
-                    right_busy = sum(iview_time_vars.get((interviewer.id, right), []))
+                    busy = sum(iview_time_vars.get((interviewer.id, t), []))
+                    reference = reference_panel[interviewer.id]
                     panel_break = model.NewBoolVar(
                         f"panel_break_{block.index}_{position}_{interviewer.id}"
                     )
-                    model.Add(panel_break <= both_occupied)
-                    model.Add(panel_break >= left_busy - right_busy + both_occupied - 1)
-                    model.Add(panel_break >= right_busy - left_busy + both_occupied - 1)
-                    model.Add(panel_break <= left_busy + right_busy)
-                    model.Add(panel_break <= 2 - left_busy - right_busy)
+                    model.Add(panel_break <= occupied)
+                    model.Add(panel_break >= busy - reference)
+                    model.Add(panel_break >= reference + occupied - busy - 1)
+                    model.Add(panel_break <= busy + reference)
+                    model.Add(panel_break <= 2 - busy - reference)
                     panel_break_vars.append(panel_break)
 
     max_load = model.NewIntVar(0, len(candidates), "max_load")
@@ -730,7 +756,7 @@ def solve_schedule(
                 "time": 100_000,
                 "row": 20_000,
                 "member": 1_000,
-                "panel_break": 30_000,
+                "panel_break": 50_000,
             },
             "balanced": {
                 "time": 100_000,
@@ -764,6 +790,8 @@ def solve_schedule(
     max_stability_tie_cost = (previous_panel_member_count + 1) * len(
         prev_time_by_candidate
     ) + previous_panel_member_count
+    panel_stability_cost = sum(panel_break_vars)
+    max_panel_stability_cost = len(panel_break_vars)
 
     if options.repair_mode and prev_time_by_candidate:
         objective_tiers = [
@@ -772,8 +800,8 @@ def solve_schedule(
                 len(candidates) - total_placed,
                 len(candidates),
             ),
-            ObjectiveTier("repair_cost", repair_cost, max_repair_cost),
             ObjectiveTier("availability", sum(overtime_vars), len(overtime_vars)),
+            ObjectiveTier("repair_cost", repair_cost, max_repair_cost),
             ObjectiveTier(
                 "adjacent_block_rest",
                 consecutive_block_penalty,
@@ -802,6 +830,17 @@ def solve_schedule(
                 len(candidates),
             ),
             ObjectiveTier("availability", sum(overtime_vars), len(overtime_vars)),
+            *(
+                [
+                    ObjectiveTier(
+                        "panel_stability",
+                        panel_stability_cost,
+                        max_panel_stability_cost,
+                    )
+                ]
+                if policy.prefers_stable_panel
+                else []
+            ),
             ObjectiveTier(
                 "adjacent_block_rest",
                 consecutive_block_penalty,

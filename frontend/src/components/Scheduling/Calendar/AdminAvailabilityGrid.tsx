@@ -1,126 +1,243 @@
 import React from "react";
-import { Check } from "lucide-react";
 import cn from "src/utils/cn";
-import { iconSizes, iconStrokeWidths } from "src/styles/designTokens";
-import { actionButtonBase, actionButtonGhost } from "../ui";
-import { formatDateHeader, formatMinutes, makeSlotKey } from "../scheduleUtils";
-import { useAvailabilityGridInteractions } from "./useAvailabilityGridInteractions";
-import ScheduleGridFrame, {
-  ScheduleDayHeader,
-  ScheduleGridLegendItem,
-  ScheduleBlockCell,
-  ScheduleSlotSegments,
-  ScheduleTimeLabel,
-} from "./ScheduleGridFrame";
+import { SegmentedControl, actionButtonBase, actionButtonGhost } from "../ui";
+import { formatDateHeader, makeSlotKey } from "../scheduleUtils";
+import AdminSchedulePatternGrid from "./AdminSchedulePatternGrid";
+import { ScheduleDayHeader, ScheduleGridLegendItem } from "./ScheduleGridFrame";
+import { buildSchedulePatternRows } from "./adminScheduleConfigModel";
+
+type EditorView = "blocks" | "fine";
 
 interface AdminAvailabilityGridProps {
   dates: string[];
-  timeSlots: number[];
   chunks: number[][];
+  blockSize: number;
   enabledSlots: ReadonlySet<string>;
   sessionDuration: number;
-  totalInterviewSlotCount: number;
-  onChangeSlots: (slots: Set<string>) => void;
+  view: EditorView;
+  customizationCount: number;
+  fineTuningDisabled?: boolean;
+  editingDisabled?: boolean;
+  onChangeView: (view: EditorView) => void;
+  onResetCustomizations: () => void;
+  onSetBlock: (date: string, minutes: number[], open: boolean) => void;
+  onToggleSlot: (date: string, minute: number) => void;
+  onOpenAllStandardBlocks: () => void;
+  onCloseAllCapacity: () => void;
+  onToggleDayStandardBlocks: (date: string, open: boolean) => void;
 }
 
 const AdminAvailabilityGrid: React.FC<AdminAvailabilityGridProps> = ({
   dates,
-  timeSlots,
   chunks,
+  blockSize,
   enabledSlots,
   sessionDuration,
-  totalInterviewSlotCount,
-  onChangeSlots,
+  view,
+  customizationCount,
+  fineTuningDisabled = false,
+  editingDisabled = false,
+  onChangeView,
+  onResetCustomizations,
+  onSetBlock,
+  onToggleSlot,
+  onOpenAllStandardBlocks,
+  onCloseAllCapacity,
+  onToggleDayStandardBlocks,
 }) => {
-  const {
-    clearAll,
-    clearAllForDay,
-    handleCellKeyDown,
-    handlePointerDown,
-    handlePointerEnter,
-    selectAll,
-    selectAllForDay,
-  } = useAvailabilityGridInteractions({
-    dates,
-    selectedSlots: enabledSlots,
-    timeSlots,
-    onChangeSlots,
-  });
+  const standardMinutes = React.useMemo(() => chunks.flat(), [chunks]);
+  const patternRows = React.useMemo(
+    () => buildSchedulePatternRows(chunks, sessionDuration, blockSize),
+    [blockSize, chunks, sessionDuration],
+  );
+  const regularPauseMinutes = React.useMemo(() => {
+    const pauseDurations = patternRows
+      .filter((row) => row.kind === "pause")
+      .map((row) => row.endMinute - row.startMinute)
+      .filter((duration) => duration > 0);
+    return pauseDurations.length > 0 ? Math.min(...pauseDurations) : null;
+  }, [patternRows]);
+  const openedPauseSlotCount = React.useMemo(
+    () =>
+      patternRows.reduce(
+        (count, row) =>
+          row.kind === "pause"
+            ? count +
+              dates.reduce(
+                (dateCount, date) =>
+                  dateCount +
+                  row.minutes.filter((minute) =>
+                    enabledSlots.has(makeSlotKey(date, minute)),
+                  ).length,
+                0,
+              )
+            : count,
+        0,
+      ),
+    [dates, enabledSlots, patternRows],
+  );
+  const hasOpenedPauseSlot = openedPauseSlotCount > 0;
+
+  const handleCloseAllCapacity = () => {
+    if (
+      view === "blocks" &&
+      hasOpenedPauseSlot &&
+      !window.confirm(
+        `Dette stenger også ${openedPauseSlotCount} ${
+          openedPauseSlotCount === 1 ? "ekstratid" : "ekstratider"
+        } som er åpnet i planlagte pauser.`,
+      )
+    )
+      return;
+    onCloseAllCapacity();
+  };
 
   return (
     <section className="border-t border-border-soft">
-      <div className="flex flex-wrap items-center justify-between gap-3 px-5 py-3 handheld:px-4">
-        <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
-          <ScheduleGridLegendItem
-            label="Åpen for intervju"
-            swatchClassName="border-brand-activeBorder bg-brand-tint"
-          />
-          <ScheduleGridLegendItem
-            label="Stengt"
-            swatchClassName="border-border-soft bg-surface-neutral [background-image:var(--pattern-unavailable)]"
-          />
-          {totalInterviewSlotCount > 0 && (
-            <span className="text-detail font-medium tabular-nums text-text-muted">
-              {totalInterviewSlotCount} mulige intervjutider
-            </span>
+      <div className="grid gap-3 px-5 py-3 handheld:px-4 tablet:grid-cols-[minmax(0,1fr)_auto] tablet:items-center">
+        <div className="min-w-0">
+          {view === "blocks" && (
+            <p
+              data-cy="standard-block-pattern"
+              className="m-0 text-detail font-medium tabular-nums text-text-muted"
+            >
+              {blockSize * sessionDuration} min blokk
+              {regularPauseMinutes !== null &&
+                ` · ${regularPauseMinutes} min pause`}
+            </p>
+          )}
+          <div
+            data-cy="schedule-grid-legend"
+            className="mt-1.5 flex flex-wrap items-center gap-x-4 gap-y-2"
+          >
+            <ScheduleGridLegendItem
+              label="Åpen for intervju"
+              swatchClassName="border-brand-activeBorder bg-surface-base"
+            />
+            <ScheduleGridLegendItem
+              label="Stengt"
+              swatchClassName="border-border-soft bg-surface-neutral [background-image:var(--pattern-unavailable)]"
+            />
+            {(view === "fine" || hasOpenedPauseSlot) && (
+              <ScheduleGridLegendItem
+                label="Ekstratid"
+                swatchClassName="border-dashed border-brand-border bg-brand-soft"
+              />
+            )}
+          </div>
+        </div>
+        <SegmentedControl<EditorView>
+          value={view}
+          onChange={onChangeView}
+          aria-label="Redigeringsnivå for intervjutider"
+          items={[
+            { key: "blocks", label: "Standardblokker" },
+            {
+              key: "fine",
+              label: "Finjuster enkelttider",
+              disabled: fineTuningDisabled,
+              title: fineTuningDisabled
+                ? "Tilbakestill eldre blokkoppsett før finjustering"
+                : undefined,
+            },
+          ]}
+        />
+      </div>
+
+      {fineTuningDisabled && (
+        <p className="mx-5 mb-3 mt-0 text-detail font-medium text-warning handheld:mx-4">
+          Tilbakestill det eldre blokkoppsettet før du endrer intervjutidene.
+        </p>
+      )}
+
+      {view === "fine" && (
+        <div
+          data-cy="manual-slot-editing-notice"
+          className="mx-5 mb-3 flex flex-wrap items-center justify-between gap-3 border-y border-border-soft py-2.5 text-detail text-text-muted handheld:mx-4"
+        >
+          <p className="m-0 leading-relaxed">
+            Velg enkelttider i blokkene. Planlagte pauser åpnes som ekstratider.
+          </p>
+          {customizationCount > 0 && (
+            <button
+              type="button"
+              className={cn(actionButtonBase, actionButtonGhost, "px-0 py-1")}
+              disabled={editingDisabled}
+              onClick={onResetCustomizations}
+            >
+              Tilbakestill til standardmønster
+            </button>
           )}
         </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <button
-            type="button"
-            className={cn(actionButtonBase, actionButtonGhost, "px-3 py-1.5")}
-            onClick={selectAll}
-          >
-            Velg alle
-          </button>
-          <button
-            type="button"
-            className={cn(actionButtonBase, actionButtonGhost, "px-3 py-1.5")}
-            onClick={clearAll}
-          >
-            Tøm alle
-          </button>
-        </div>
+      )}
+
+      <div className="flex flex-wrap items-center justify-end gap-2 px-5 pb-3 handheld:px-4">
+        <button
+          type="button"
+          className={cn(actionButtonBase, actionButtonGhost, "px-3 py-1.5")}
+          disabled={editingDisabled}
+          onClick={onOpenAllStandardBlocks}
+        >
+          Åpne alle standardblokker
+        </button>
+        <button
+          type="button"
+          className={cn(actionButtonBase, actionButtonGhost, "px-3 py-1.5")}
+          disabled={editingDisabled}
+          onClick={handleCloseAllCapacity}
+        >
+          Steng alle intervjutider
+        </button>
       </div>
+
       <div className="select-none px-5 pb-5 handheld:px-4 handheld:pb-4">
-        <ScheduleGridFrame dates={dates}>
-          <div />
-          {dates.map((date) => {
+        <AdminSchedulePatternGrid
+          dates={dates}
+          rows={patternRows}
+          blockSize={blockSize}
+          sessionDuration={sessionDuration}
+          activeSlots={enabledSlots}
+          view={view}
+          disabled={editingDisabled}
+          onSetBlock={onSetBlock}
+          onToggleSlot={onToggleSlot}
+          renderDayHeader={(date) => {
             const { weekday, dayMonth } = formatDateHeader(date);
             const isAllSelected =
-              timeSlots.length > 0 &&
-              timeSlots.every((minute) =>
+              standardMinutes.length > 0 &&
+              standardMinutes.every((minute) =>
                 enabledSlots.has(makeSlotKey(date, minute)),
               );
-            const isSomeSelected = timeSlots.some((minute) =>
+            const isSomeSelected = standardMinutes.some((minute) =>
               enabledSlots.has(makeSlotKey(date, minute)),
             );
 
             return (
-              <ScheduleDayHeader key={date} date={date}>
+              <ScheduleDayHeader
+                key={date}
+                date={date}
+                className="h-auto min-h-16"
+              >
                 <label className="flex cursor-pointer items-center gap-1 text-label font-semibold text-text-subtle">
                   <input
                     type="checkbox"
-                    aria-label={`Alle tidsluker for ${weekday} ${dayMonth}`}
-                    disabled={timeSlots.length === 0}
+                    aria-label={`Alle standardblokker for ${weekday} ${dayMonth}`}
+                    disabled={editingDisabled || standardMinutes.length === 0}
                     checked={isAllSelected}
                     ref={(input) => {
-                      if (input) {
+                      if (input)
                         input.indeterminate = isSomeSelected && !isAllSelected;
-                      }
                     }}
-                    onChange={() => {
-                      if (isAllSelected) clearAllForDay(date);
-                      else selectAllForDay(date);
-                    }}
+                    onChange={() =>
+                      onToggleDayStandardBlocks(date, !isAllSelected)
+                    }
                   />
-                  Alle
+                  Alle standardblokker
                 </label>
               </ScheduleDayHeader>
             );
-          })}
-
-          {chunks.length === 0 ? (
+          }}
+          emptyState={
             <div
               className={cn(
                 "text-detail font-medium text-text-muted",
@@ -129,84 +246,10 @@ const AdminAvailabilityGrid: React.FC<AdminAvailabilityGridProps> = ({
             >
               {dates.length === 0
                 ? "Velg en datoperiode for å se tidsplanen."
-                : "Ingen tidsluker — endre tidsrom og lagre."}
+                : "Ingen intervjutider — endre tidsrommet."}
             </div>
-          ) : (
-            chunks.map((chunk, chunkIndex) => (
-              <React.Fragment key={chunkIndex}>
-                <ScheduleTimeLabel
-                  startMinute={chunk[0]}
-                  endMinute={chunk[chunk.length - 1] + sessionDuration}
-                  showEnd={chunk.length > 1}
-                />
-                {dates.map((date) => {
-                  const isEnabled = chunk.some((minute) =>
-                    enabledSlots.has(makeSlotKey(date, minute)),
-                  );
-                  const { weekday, dayMonth } = formatDateHeader(date);
-                  const cellLabel = `${weekday} ${dayMonth} ${formatMinutes(
-                    chunk[0],
-                  )}–${formatMinutes(
-                    chunk[chunk.length - 1] + sessionDuration,
-                  )}`;
-
-                  return (
-                    <ScheduleBlockCell
-                      key={`${date}-${chunkIndex}`}
-                      role="button"
-                      tabIndex={0}
-                      aria-pressed={isEnabled}
-                      aria-label={cellLabel}
-                      onPointerDown={(event) =>
-                        handlePointerDown(event, date, chunk)
-                      }
-                      onPointerEnter={() => handlePointerEnter(date, chunk)}
-                      onKeyDown={(event) =>
-                        handleCellKeyDown(event, date, chunk)
-                      }
-                      closed={!isEnabled}
-                      className={cn(
-                        "cursor-pointer",
-                        isEnabled
-                          ? "border-brand-activeBorder bg-brand-tint text-brand ring-1 ring-inset ring-brand-border hover:bg-brand-fill"
-                          : "hover:border-brand-border",
-                      )}
-                    >
-                      <span
-                        aria-hidden="true"
-                        className={cn(
-                          "pointer-events-none absolute inset-0 transition-[opacity,background-position] duration-300 ease-out motion-reduce:transition-none",
-                          "[background-image:var(--pattern-unavailable)]",
-                          isEnabled
-                            ? "opacity-0 [background-position:8px_8px]"
-                            : "opacity-70 [background-position:0_0] group-hover:opacity-100",
-                        )}
-                      />
-                      <ScheduleSlotSegments
-                        className="relative z-10 h-schedule-progress"
-                        closed={!isEnabled}
-                        fills={chunk.map((minute) =>
-                          enabledSlots.has(makeSlotKey(date, minute)) ? 1 : 0,
-                        )}
-                      />
-                      <Check
-                        size={iconSizes.compact}
-                        strokeWidth={iconStrokeWidths.strong}
-                        aria-hidden="true"
-                        className={cn(
-                          "relative z-10 text-brand-dark transition-[opacity,transform] duration-200 motion-reduce:transition-none",
-                          isEnabled
-                            ? "scale-100 opacity-100"
-                            : "scale-75 opacity-0",
-                        )}
-                      />
-                    </ScheduleBlockCell>
-                  );
-                })}
-              </React.Fragment>
-            ))
-          )}
-        </ScheduleGridFrame>
+          }
+        />
       </div>
     </section>
   );

@@ -2,6 +2,7 @@ import type {
   Candidate,
   EnabledWindow,
   Interviewer,
+  ManualScheduleBlock,
   ScheduleItem,
 } from "../../types";
 
@@ -111,6 +112,27 @@ export const buildBlockTimeSlots = (
   input: Parameters<typeof buildBlockTimeChunks>[0],
 ): number[] => buildBlockTimeChunks(input).flat();
 
+export const buildContinuousTimeSlots = ({
+  dayStartMinute,
+  dayEndMinute,
+  sessionDuration,
+}: {
+  dayStartMinute: number;
+  dayEndMinute: number;
+  sessionDuration: number;
+}): number[] => {
+  const duration = normalizeDuration(sessionDuration);
+  const slots: number[] = [];
+  for (
+    let minute = dayStartMinute;
+    minute + duration <= dayEndMinute;
+    minute += duration
+  ) {
+    slots.push(minute);
+  }
+  return slots;
+};
+
 export const slotsToSolverAvailability = (
   slots: Set<string> | string[],
   dates: string[],
@@ -127,6 +149,15 @@ export const slotsToSolverAvailability = (
   });
   return Array.from(availability).sort((a, b) => a - b);
 };
+
+export const manualBlocksToSolverBlocks = (
+  blocks: ManualScheduleBlock[],
+  dates: string[],
+  sessionDuration: number,
+): number[][] =>
+  blocks.map((block) =>
+    slotsToSolverAvailability(block.slots, dates, sessionDuration),
+  );
 
 export const encodeScheduleTime = (
   dayIndex: number,

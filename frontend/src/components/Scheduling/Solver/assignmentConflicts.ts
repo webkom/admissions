@@ -7,6 +7,7 @@ export interface AssignmentConflictSummary {
   affectedCandidateNames: Set<string>;
   affectedScheduleIndexes: Set<number>;
   affectedPanelMemberKeys: Set<string>;
+  optedOutPanelMemberKeys: Set<string>;
 }
 
 export const assignmentPanelMemberKey = (
@@ -36,6 +37,7 @@ export const deriveAssignmentConflictSummary = (
   const affectedCandidateNames = new Set<string>();
   const affectedScheduleIndexes = new Set<number>();
   const affectedPanelMemberKeys = new Set<string>();
+  const optedOutPanelMemberKeys = new Set<string>();
 
   schedule.forEach((item, scheduleIndex) => {
     const candidateId =
@@ -48,7 +50,9 @@ export const deriveAssignmentConflictSummary = (
         ? (interviewerById.get(member.id) ?? interviewerByName.get(member.name))
         : interviewerByName.get(member.name);
       return Boolean(
-        interviewer && candidateId && interviewer.biased.includes(candidateId),
+        interviewer &&
+          (interviewer.participation === "not_participating" ||
+            (candidateId && interviewer.biased.includes(candidateId))),
       );
     });
 
@@ -57,9 +61,14 @@ export const deriveAssignmentConflictSummary = (
     affectedCandidateNames.add(item.candidate);
     if (candidateId) affectedCandidateIds.add(candidateId);
     conflictedMembers.forEach((member) => {
-      affectedPanelMemberKeys.add(
-        assignmentPanelMemberKey(scheduleIndex, member),
-      );
+      const key = assignmentPanelMemberKey(scheduleIndex, member);
+      affectedPanelMemberKeys.add(key);
+      const interviewer = member.id
+        ? (interviewerById.get(member.id) ?? interviewerByName.get(member.name))
+        : interviewerByName.get(member.name);
+      if (interviewer?.participation === "not_participating") {
+        optedOutPanelMemberKeys.add(key);
+      }
     });
   });
 
@@ -69,5 +78,6 @@ export const deriveAssignmentConflictSummary = (
     affectedCandidateNames,
     affectedScheduleIndexes,
     affectedPanelMemberKeys,
+    optedOutPanelMemberKeys,
   };
 };

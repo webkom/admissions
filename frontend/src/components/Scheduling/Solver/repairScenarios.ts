@@ -1,6 +1,12 @@
 import type { Interviewer, RepairStrategy, ScheduleItem } from "../types";
 import type { SolveResponse } from "./solverHelpers";
 
+export const buildRepairPreviewOptions = (strategy: RepairStrategy) => ({
+  mode: "repair" as const,
+  repairStrategy: strategy,
+  previewOnly: true,
+});
+
 export interface RepairScenarioMetrics {
   changedInterviews: number;
   changedTimes: number;

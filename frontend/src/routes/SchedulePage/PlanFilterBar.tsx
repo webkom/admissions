@@ -19,14 +19,10 @@ interface PlanFilterBarProps {
   onChangePlanViewMode: (mode: "calendar" | "table") => void;
   canToggleCandidateNames: boolean;
   canHideCandidateNames: boolean;
-  isDistributed: boolean;
   nameVisibility: NameVisibility;
   revealedGroupNames: string[];
   onSelectVisibility: (next: NameVisibility) => void;
   isUpdatingNames: boolean;
-  showRerun: boolean;
-  onRerun: () => void;
-  isRerunning: boolean;
   conflictBadgeCount: number;
 }
 
@@ -38,14 +34,10 @@ const PlanFilterBar: React.FC<PlanFilterBarProps> = ({
   onChangePlanViewMode,
   canToggleCandidateNames,
   canHideCandidateNames,
-  isDistributed,
   nameVisibility,
   revealedGroupNames,
   onSelectVisibility,
   isUpdatingNames,
-  showRerun,
-  onRerun,
-  isRerunning,
   conflictBadgeCount,
 }) => {
   const disclosureGroupPreviewLimit = 3;
@@ -99,7 +91,7 @@ const PlanFilterBar: React.FC<PlanFilterBarProps> = ({
         ]}
       />
 
-      {canToggleCandidateNames && isDistributed && (
+      {canToggleCandidateNames && (
         <div
           className="inline-flex items-center gap-2"
           title="Hvem skal se kandidatnavnene"
@@ -132,23 +124,6 @@ const PlanFilterBar: React.FC<PlanFilterBarProps> = ({
           )}
         </div>
       )}
-      {canToggleCandidateNames && !isDistributed && (
-        <span className="rounded-full border border-border-soft bg-surface-subtle px-2.5 py-1 text-label font-semibold text-text-muted">
-          Kandidatnavn er skjult til planen publiseres.
-        </span>
-      )}
-
-      {showRerun && (
-        <button
-          type="button"
-          onClick={onRerun}
-          disabled={isRerunning}
-          className={cn(actionButtonBase, actionButtonNeutral, "px-3 py-1.5")}
-        >
-          {isRerunning ? "Kjører…" : "Kjør på nytt med inhabiliteter"}
-        </button>
-      )}
-
       <span className="ml-auto text-detail text-text-muted">
         {conflictBadgeCount > 0 && (
           <span className="ml-2 rounded-full border border-brand-border bg-brand-muted px-2 py-0.5 text-label font-bold text-brand">

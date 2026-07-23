@@ -1,6 +1,8 @@
 import {
   useCallback,
   useMemo,
+  useRef,
+  useState,
   type Dispatch,
   type SetStateAction,
 } from "react";
@@ -27,9 +29,24 @@ interface UseScheduleDraftParams {
   onModify: () => void;
 }
 
+export const toggleScheduleDraftLock = (item: ScheduleItem): ScheduleItem => {
+  const locked = !item.locked;
+  return {
+    ...item,
+    locked,
+    ...(!locked && item.booking_source === "manual"
+      ? { booking_source: "solver" as const }
+      : {}),
+  };
+};
+
 export interface ScheduleDraftController {
   presentation: SchedulePresentation;
   lockedAssignments: ReturnType<typeof buildLockedAssignments>;
+  canRestoreEditSession: boolean;
+  beginEditSession: () => void;
+  restoreEditSession: () => void;
+  finishEditSession: () => void;
   timeOptionsFor: (scheduleIndex: number) => number[];
   toggleLock: (scheduleIndex: number) => void;
   changeTime: (scheduleIndex: number, nextTime: string) => void;
@@ -53,6 +70,8 @@ export const useScheduleDraft = ({
   canonicalBlocks,
   onModify,
 }: UseScheduleDraftParams): ScheduleDraftController => {
+  const editBaselineRef = useRef<SolveResponse | null>(null);
+  const [canRestoreEditSession, setCanRestoreEditSession] = useState(false);
   const presentation = useMemo(
     () => deriveSchedulePresentation(result, interviewers, canonicalBlocks),
     [canonicalBlocks, interviewers, result],
@@ -83,6 +102,24 @@ export const useScheduleDraft = ({
     [enabledTimeOptions, result],
   );
 
+  const beginEditSession = useCallback(() => {
+    editBaselineRef.current =
+      result && hasSchedule(result.status) ? result : null;
+    setCanRestoreEditSession(false);
+  }, [result]);
+
+  const finishEditSession = useCallback(() => {
+    editBaselineRef.current = null;
+    setCanRestoreEditSession(false);
+  }, []);
+
+  const restoreEditSession = useCallback(() => {
+    if (!editBaselineRef.current || !canRestoreEditSession) return;
+    onModify();
+    setResult(editBaselineRef.current);
+    setCanRestoreEditSession(false);
+  }, [canRestoreEditSession, onModify, setResult]);
+
   const updateScheduleItem = useCallback(
     (scheduleIndex: number, updater: (item: ScheduleItem) => ScheduleItem) => {
       if (
@@ -94,6 +131,7 @@ export const useScheduleDraft = ({
       }
       const currentItem = result.schedule[scheduleIndex];
       if (updater(currentItem) === currentItem) return;
+      setCanRestoreEditSession(Boolean(editBaselineRef.current));
       onModify();
       setResult((current) => {
         if (!current || !hasSchedule(current.status)) return current;
@@ -118,6 +156,7 @@ export const useScheduleDraft = ({
           ...item,
           time: nextTime,
           locked: true,
+          booking_source: "manual",
         };
       });
     },
@@ -126,10 +165,7 @@ export const useScheduleDraft = ({
 
   const toggleLock = useCallback(
     (scheduleIndex: number) => {
-      updateScheduleItem(scheduleIndex, (item) => ({
-        ...item,
-        locked: !item.locked,
-      }));
+      updateScheduleItem(scheduleIndex, toggleScheduleDraftLock);
     },
     [updateScheduleItem],
   );
@@ -156,6 +192,7 @@ export const useScheduleDraft = ({
         return {
           ...item,
           locked: true,
+          booking_source: "manual",
           panel: item.panel.map((member, index) =>
             index === panelMemberIndex
               ? {
@@ -185,6 +222,7 @@ export const useScheduleDraft = ({
       ) {
         return;
       }
+      setCanRestoreEditSession(Boolean(editBaselineRef.current));
       onModify();
       setResult((current) => {
         if (!current || !hasSchedule(current.status)) return current;
@@ -195,10 +233,20 @@ export const useScheduleDraft = ({
           ...current,
           schedule: current.schedule.map((item, index) => {
             if (index === sourceScheduleIndex) {
-              return { ...item, time: target.time, locked: true };
+              return {
+                ...item,
+                time: target.time,
+                locked: true,
+                booking_source: "manual",
+              };
             }
             if (index === targetScheduleIndex) {
-              return { ...item, time: source.time, locked: true };
+              return {
+                ...item,
+                time: source.time,
+                locked: true,
+                booking_source: "manual",
+              };
             }
             return item;
           }),
@@ -211,6 +259,10 @@ export const useScheduleDraft = ({
   return {
     presentation,
     lockedAssignments,
+    canRestoreEditSession,
+    beginEditSession,
+    restoreEditSession,
+    finishEditSession,
     timeOptionsFor,
     toggleLock,
     changeTime,

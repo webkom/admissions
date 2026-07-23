@@ -8,6 +8,7 @@ interface SegmentedControlItem<Key extends string> {
   title?: string;
   ariaLabel?: string;
   count?: number;
+  disabled?: boolean;
 }
 
 interface SegmentedControlProps<Key extends string> {
@@ -32,7 +33,16 @@ export function SegmentedControl<Key extends string>({
     event.preventDefault();
     const direction = event.key === "ArrowRight" ? 1 : -1;
     const currentIndex = activeIndex >= 0 ? activeIndex : 0;
-    const nextIndex = (currentIndex + direction + items.length) % items.length;
+    let nextIndex = currentIndex;
+    for (let offset = 1; offset <= items.length; offset += 1) {
+      const candidate =
+        (currentIndex + direction * offset + items.length) % items.length;
+      if (!items[candidate].disabled) {
+        nextIndex = candidate;
+        break;
+      }
+    }
+    if (nextIndex === currentIndex) return;
     onChange(items[nextIndex].key);
     buttonRefs.current[nextIndex]?.focus();
   };
@@ -60,10 +70,11 @@ export function SegmentedControl<Key extends string>({
             }
             tabIndex={active || (activeIndex < 0 && index === 0) ? 0 : -1}
             title={item.title}
+            disabled={item.disabled}
             onClick={() => onChange(item.key)}
             onKeyDown={handleKeyDown}
             className={cn(
-              "inline-flex h-full cursor-pointer items-center gap-1.5 rounded px-3 text-ui font-semibold transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-brand-focus",
+              "inline-flex h-full cursor-pointer items-center gap-1.5 rounded px-3 text-ui font-semibold transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-brand-focus disabled:cursor-not-allowed disabled:opacity-45",
               active
                 ? "bg-brand-tint text-brand"
                 : "text-text-muted hover:bg-brand-soft hover:text-text-primary",

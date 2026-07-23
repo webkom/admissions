@@ -22,6 +22,7 @@ export const useAvailabilityEditor = ({
   const saveInterviewAvailability = useSaveInterviewAvailability(admissionSlug);
   const [selectedSlots, setSelectedSlots] = useState<Set<string>>(new Set());
   const lastAppliedServerSlotsRef = useRef<string | null>(null);
+  const lastAppliedGenerationRef = useRef<number | null>(null);
   const currentParticipant = participants?.find(
     (participant) => participant.is_me,
   );
@@ -29,27 +30,39 @@ export const useAvailabilityEditor = ({
   useEffect(() => {
     if (!currentParticipant) return;
 
-    const serverKey = serializeSlots(currentParticipant.slots);
-    if (serverKey === lastAppliedServerSlotsRef.current) return;
-
     const localKey = serializeSlots(selectedSlots);
     const baselineKey = lastAppliedServerSlotsRef.current ?? "";
     if (localKey !== baselineKey) return;
 
-    setSelectedSlots(new Set(currentParticipant.slots));
-    lastAppliedServerSlotsRef.current = serverKey;
+    const serverKey = serializeSlots(currentParticipant.slots);
+    if (serverKey !== lastAppliedServerSlotsRef.current) {
+      setSelectedSlots(new Set(currentParticipant.slots));
+      lastAppliedServerSlotsRef.current = serverKey;
+    }
+    lastAppliedGenerationRef.current =
+      currentParticipant.availability_generation;
   }, [currentParticipant, selectedSlots]);
 
   const saveAvailability = async (slots: Set<string>) => {
     try {
-      await saveInterviewAvailability.mutateAsync({
+      const saved = await saveInterviewAvailability.mutateAsync({
         slots: Array.from(slots),
+        expected_availability_generation:
+          lastAppliedGenerationRef.current ?? undefined,
       });
       lastAppliedServerSlotsRef.current = serializeSlots(slots);
+      lastAppliedGenerationRef.current = saved.availability_generation;
       notify("Tilgjengelighet lagret.");
-    } catch {
-      notify("Kunne ikke lagre tilgjengelighet.", "error");
-      throw new Error("Kunne ikke lagre tilgjengelighet.");
+    } catch (error) {
+      const responseStatus = (error as { response?: { status?: number } })
+        .response?.status;
+      notify(
+        responseStatus === 409
+          ? "Tidsoppsettet er endret. Last inn siden på nytt før du bekrefter."
+          : "Kunne ikke lagre tilgjengelighet.",
+        "error",
+      );
+      throw error;
     }
   };
 
@@ -68,11 +81,36 @@ export const useAvailabilityEditor = ({
     }
   };
 
+  const setParticipation = async (
+    participation: "awaiting_response" | "not_participating",
+    userId?: string,
+  ) => {
+    try {
+      await saveInterviewAvailability.mutateAsync({
+        user_id: userId,
+        participation,
+      });
+      if (!userId || userId === currentParticipant?.user_id) {
+        setSelectedSlots(new Set());
+        lastAppliedServerSlotsRef.current = "";
+      }
+      notify(
+        participation === "not_participating"
+          ? "Registrert som ikke deltakende."
+          : "Intervjueren må sende inn tilgjengelighet.",
+      );
+    } catch (error) {
+      notify("Kunne ikke oppdatere deltakelsen.", "error");
+      throw error;
+    }
+  };
+
   return {
     selectedSlots,
     setSelectedSlots,
     currentParticipant,
     saveAvailability,
     saveConflictReview,
+    setParticipation,
   };
 };

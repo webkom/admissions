@@ -27,6 +27,7 @@ type SaveSchedulePayload = Partial<
   Omit<SavedSchedule, "id" | "updated_at" | "revealed_groups">
 > & {
   expected_updated_at: string | null;
+  deviation_approval_fingerprint?: string;
 };
 
 const accessFailureStatus = (error: unknown) =>
@@ -206,9 +207,12 @@ export const useSaveInterviewAvailability = (slug: string) => {
     InterviewAvailabilityParticipant,
     AxiosError,
     {
+      user_id?: string;
+      participation?: "awaiting_response" | "not_participating";
       slots?: string[];
       conflicts?: string[];
       reviewed_candidate_ids?: string[];
+      expected_availability_generation?: number;
     }
   >({
     ...sensitiveAdmissionMutationOptions(slug),
@@ -220,6 +224,9 @@ export const useSaveInterviewAvailability = (slug: string) => {
       if (areSensitiveAdmissionCacheWritesBlocked(slug)) return;
       queryClient.invalidateQueries({
         queryKey: availabilityQueryKey,
+      });
+      queryClient.invalidateQueries({
+        queryKey: [`/admin/admission/${slug}/schedule/`],
       });
     },
     onError: (error) => {

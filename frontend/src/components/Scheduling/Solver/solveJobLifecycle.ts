@@ -9,6 +9,7 @@ import {
 import { apiClient } from "src/utils/callApi";
 
 import type { SolveJob } from "./solverHelpers";
+import type { SavedSchedule } from "src/types";
 
 const SOLVE_POLL_INTERVAL_MS = 1500;
 
@@ -33,7 +34,9 @@ type SolveJobPollOutcome =
   | { kind: "finished"; job: SolveJob }
   | { kind: "missing" };
 
-type SolveJobCancelOutcome = SolveJobInterruption | { kind: "cancelled" };
+type SolveJobCancelOutcome =
+  | SolveJobInterruption
+  | { kind: "cancelled"; job: SolveJob };
 
 const neverStale = () => false;
 
@@ -98,6 +101,31 @@ export const createSolveJobLifecycle = (
     }
   };
 
+  const latest = async (
+    isStale: IsStale = neverStale,
+  ): Promise<SolveJobReadOutcome> => {
+    const beforeRequest = interruption(isStale);
+    if (beforeRequest) return beforeRequest;
+
+    try {
+      const response = await apiClient.get<SolveJob | "">("/solve/latest/", {
+        params: { admission_slug: admissionSlug },
+      });
+      const interrupted = interruption(isStale);
+      if (interrupted) return interrupted;
+      return response.status === 204 || !response.data
+        ? { kind: "missing" }
+        : { kind: "job", job: response.data };
+    } catch (error) {
+      const purged = purgeSensitiveAuthorizationFailure(queryClient, error);
+      if (isStale()) return { kind: "stale" };
+      if (purged) return { kind: "access-failure", purged };
+      const afterRequest = interruption(isStale);
+      if (afterRequest) return afterRequest;
+      throw error;
+    }
+  };
+
   const cancel = async (
     jobId: string,
     isStale: IsStale = neverStale,
@@ -106,15 +134,54 @@ export const createSolveJobLifecycle = (
     if (beforeRequest) return beforeRequest;
 
     try {
-      await apiClient.delete(`/solve/${jobId}/`);
+      const { data } = await apiClient.delete<SolveJob>(`/solve/${jobId}/`);
+      return interruption(isStale) ?? { kind: "cancelled", job: data };
     } catch (error) {
       const purged = purgeSensitiveAuthorizationFailure(queryClient, error);
       if (isStale()) return { kind: "stale" };
       if (purged) return { kind: "access-failure", purged };
       const afterRequest = interruption(isStale);
       if (afterRequest) return afterRequest;
+      throw error;
     }
-    return interruption(isStale) ?? { kind: "cancelled" };
+  };
+
+  const apply = async (
+    jobId: string,
+    expectedUpdatedAt: string,
+    isStale: IsStale = neverStale,
+  ) => {
+    const beforeRequest = interruption(isStale);
+    if (beforeRequest) return beforeRequest;
+
+    try {
+      const { data } = await apiClient.post<SavedSchedule>(
+        `/solve/${jobId}/apply/`,
+        { expected_updated_at: expectedUpdatedAt },
+      );
+      const interrupted = interruption(isStale);
+      if (interrupted) return interrupted;
+      queryClient.setQueryData(
+        [`/admin/admission/${admissionSlug}/schedule/`],
+        data,
+      );
+      await Promise.all([
+        queryClient.invalidateQueries({
+          queryKey: [`/admin/admission/${admissionSlug}/availability/`],
+        }),
+        queryClient.invalidateQueries({
+          queryKey: [`/admin/admission/${admissionSlug}/candidates/`],
+        }),
+      ]);
+      return { kind: "applied" as const, schedule: data };
+    } catch (error) {
+      const purged = purgeSensitiveAuthorizationFailure(queryClient, error);
+      if (isStale()) return { kind: "stale" as const };
+      if (purged) return { kind: "access-failure" as const, purged };
+      const afterRequest = interruption(isStale);
+      if (afterRequest) return afterRequest;
+      throw error;
+    }
   };
 
   const poll = async (
@@ -143,5 +210,5 @@ export const createSolveJobLifecycle = (
     return interruption(isStale) ?? { kind: "finished", job };
   };
 
-  return { request, read, poll, cancel };
+  return { request, read, latest, poll, cancel, apply };
 };

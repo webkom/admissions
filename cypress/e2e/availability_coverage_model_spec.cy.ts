@@ -4,6 +4,7 @@ import {
   makeSlotKey,
 } from "../../frontend/src/components/Scheduling/scheduleUtils";
 import type { Interviewer } from "../../frontend/src/types";
+import { deriveSolverReadiness } from "../../frontend/src/components/Scheduling/Solver/solverSelectors";
 
 describe("availability coverage model", () => {
   const date = "2026-07-20";
@@ -78,6 +79,27 @@ describe("availability coverage model", () => {
     expect(allCoverage.openBlockCount).to.equal(
       femaleInspection.openBlockCount,
     );
+  });
+
+  it("allows a strict run to return a partial proposal when capacity is short", () => {
+    const minute = chunks[0][0];
+    const readiness = deriveSolverReadiness({
+      candidateCount: 2,
+      interviewers: [
+        interviewer("Anna", [minute]),
+        interviewer("Per", [minute]),
+        interviewer("Sara", [minute]),
+      ],
+      panelSize: 3,
+      enabledSlots: new Set([makeSlotKey(date, minute)]),
+      dates,
+      sessionDuration: 15,
+      allowOvertime: false,
+    });
+
+    expect(readiness.ready).to.equal(true);
+    expect(readiness.usableSlotCount).to.equal(1);
+    expect(readiness.usableSlotCount).to.be.lessThan(2);
   });
 
   it("uses minimum per-slot coverage when panels may change", () => {

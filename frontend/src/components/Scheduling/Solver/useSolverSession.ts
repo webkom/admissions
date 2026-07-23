@@ -10,7 +10,6 @@ import type {
 } from "../types";
 import {
   buildLockedAssignments,
-  buildSolveBlocks,
   slotsToSolverAvailability,
 } from "../scheduleUtils";
 import {
@@ -29,10 +28,7 @@ interface UseSolverSessionParams {
   dates: string[];
   sessionDuration: number;
   enabledSlots: Set<string>;
-  dayStartMinute: number;
-  dayEndMinute: number;
-  chunkSize: number;
-  chunkBreakMinutes: number;
+  canonicalBlocks: number[][];
   syntheticInput: boolean;
   candidateScopeResolved: boolean;
 }
@@ -44,10 +40,7 @@ export const useSolverSession = ({
   dates,
   sessionDuration,
   enabledSlots,
-  dayStartMinute,
-  dayEndMinute,
-  chunkSize,
-  chunkBreakMinutes,
+  canonicalBlocks,
   syntheticInput,
   candidateScopeResolved,
 }: UseSolverSessionParams) => {
@@ -56,6 +49,8 @@ export const useSolverSession = ({
     DEFAULT_SOLVER_OPTIONS,
   );
   const [proposalSolverOptions, setProposalSolverOptions] =
+    useState<SolverOptions | null>(null);
+  const [pendingProposalSolverOptions, setPendingProposalSolverOptions] =
     useState<SolverOptions | null>(null);
   const [solveTick, setSolveTick] = useState(0);
   const solveJob = useSolveJob(admissionSlug);
@@ -159,10 +154,24 @@ export const useSolverSession = ({
     ) {
       return false;
     }
+    const scheduledCandidateIds = new Set(
+      savedSchedule.schedule.flatMap((item) => {
+        if (item.candidate_id) return [item.candidate_id];
+        const candidateId = uniqueCandidateIdsByName.get(item.candidate);
+        return candidateId ? [candidateId] : [];
+      }),
+    );
+    const unplaceable = candidates
+      .filter((candidate) => !scheduledCandidateIds.has(candidate.id))
+      .map((candidate) => ({
+        candidate_id: candidate.id,
+        candidate: candidate.name,
+        reason: "Ikke nok intervjukapasitet i de åpne tidslukene.",
+      }));
     solveJob.setResult({
-      status: "SUCCESS",
+      status: unplaceable.length > 0 ? "PARTIAL" : "SUCCESS",
       schedule: savedSchedule.schedule,
-      unplaceable: [],
+      unplaceable,
       locked_conflicts: [],
     });
     setProposalSolverOptions(
@@ -172,10 +181,12 @@ export const useSolverSession = ({
     return true;
   }, [
     candidateScopeResolved,
+    candidates,
     isCurrentCandidate,
     savedSchedule,
     solveJob.setPlanRevealed,
     solveJob.setResult,
+    uniqueCandidateIdsByName,
   ]);
 
   const restoreSavedProposal = useCallback(() => {
@@ -320,7 +331,7 @@ export const useSolverSession = ({
         enabledSlots,
         dates,
         sessionDuration,
-        allowOvertime: solverOptions.allow_overtime,
+        allowOvertime: solverOptions.availability_fallback !== "stop",
       }),
     [
       candidates.length,
@@ -329,7 +340,7 @@ export const useSolverSession = ({
       interviewers,
       panelSize,
       sessionDuration,
-      solverOptions.allow_overtime,
+      solverOptions.availability_fallback,
     ],
   );
   const estimatedSeconds = useMemo(
@@ -359,17 +370,17 @@ export const useSolverSession = ({
         mode = "initial",
         repairStrategy,
         previewOnly = false,
-        allowOvertime,
+        availabilityFallback,
       }: {
         mode?: "initial" | "repair";
         repairStrategy?: RepairStrategy;
         previewOnly?: boolean;
-        allowOvertime?: boolean;
+        availabilityFallback?: SolverOptions["availability_fallback"];
       } = {},
     ) => {
       if (!readiness.ready) {
         solveJob.setError(
-          "Tidsoppsettet må ha nok intervjuere og åpne luker for hele panelet.",
+          "Planleggingen trenger kandidater, et mulig panel og minst én åpen intervjutid.",
         );
         return null;
       }
@@ -378,16 +389,16 @@ export const useSolverSession = ({
         ...solverOptions,
         repair_strategy: repairStrategy ?? solverOptions.repair_strategy,
         repair_mode: mode === "repair",
-        ...(allowOvertime === undefined
+        ...(availabilityFallback === undefined
           ? {}
-          : { allow_overtime: allowOvertime }),
+          : {
+              availability_fallback: availabilityFallback,
+              allow_overtime: availabilityFallback === "automatic",
+            }),
       };
-      if (!previewOnly) {
+      if (!previewOnly && syntheticInput) {
         setSolverOptions(runOptions);
         markDraftModified();
-        setSolveTick((tick) => tick + 1);
-      }
-      if (!previewOnly) {
         solveJob.setPlanRevealed(Boolean(lockedAssignments.length));
       }
       const allSlots = slotsToSolverAvailability(
@@ -396,16 +407,9 @@ export const useSolverSession = ({
         sessionDuration,
       );
       const openSlots = new Set(allSlots);
-      const blocks = buildSolveBlocks({
-        dates,
-        dayStartMinute,
-        dayEndMinute,
-        sessionDuration,
-        chunkSize,
-        chunkBreakMinutes,
-      })
-        .map((block) => block.filter((slot) => openSlots.has(slot)))
-        .filter((block) => block.length > 0);
+      const blocks = canonicalBlocks.map((block) =>
+        block.filter((slot) => openSlots.has(slot)),
+      );
       const lockedIds = lockedAssignments.map((assignment) => ({
         candidate_id: assignment.candidate_id,
         time: assignment.time,
@@ -433,15 +437,22 @@ export const useSolverSession = ({
               interviewers: interviewers.map(({ id }) => ({ id })),
               panel_size: panelSize,
               options: runOptions,
-              ...(mode === "repair" && savedSchedule?.updated_at
+              ...(savedSchedule?.updated_at
                 ? { baseline_updated_at: savedSchedule.updated_at }
                 : {}),
               ...(lockedIds.length > 0
                 ? { locked_assignments: lockedIds }
                 : {}),
             },
-        draftBaseRevisionRef.current,
-        { applyResult: !previewOnly },
+        savedSchedule?.updated_at ?? draftBaseRevisionRef.current,
+        {
+          applyResult: syntheticInput && !previewOnly,
+          retainAsProposal: !syntheticInput && !previewOnly,
+          autoApplyIfEmpty:
+            !syntheticInput &&
+            !previewOnly &&
+            (savedSchedule?.schedule.length ?? 0) === 0,
+        },
       );
       if (outcome === "access-failure") {
         syncedRevisionRef.current = null;
@@ -449,18 +460,32 @@ export const useSolverSession = ({
         return null;
       }
       if (outcome && !previewOnly) {
-        setProposalSolverOptions(runOptions);
+        if (syntheticInput) {
+          setProposalSolverOptions(runOptions);
+          setSolveTick((tick) => tick + 1);
+        } else if ((savedSchedule?.schedule.length ?? 0) === 0) {
+          const applied = await solveJob.applyProposal();
+          if (!applied) return null;
+          const appliedOptions = normalizeSolverOptions(
+            applied.schedule.solver_options ?? runOptions,
+          );
+          setSolverOptions(appliedOptions);
+          setProposalSolverOptions(appliedOptions);
+          setPendingProposalSolverOptions(null);
+          syncedRevisionRef.current = applied.schedule.updated_at;
+          resetDraftTracking(applied.schedule.updated_at);
+          setSolveTick((tick) => tick + 1);
+        } else {
+          setPendingProposalSolverOptions(runOptions);
+        }
       }
       return outcome;
     },
     [
       admissionSlug,
       candidates,
-      chunkBreakMinutes,
-      chunkSize,
+      canonicalBlocks,
       dates,
-      dayEndMinute,
-      dayStartMinute,
       enabledSlots,
       interviewers,
       markDraftModified,
@@ -468,14 +493,40 @@ export const useSolverSession = ({
       readiness.ready,
       resetDraftTracking,
       savedSchedule?.updated_at,
+      savedSchedule?.schedule.length,
       sessionDuration,
       solveJob.setError,
       solveJob.setPlanRevealed,
       solveJob.solve,
+      solveJob.applyProposal,
       solverOptions,
       syntheticInput,
     ],
   );
+
+  const applyPendingProposal = useCallback(async () => {
+    const applied = await solveJob.applyProposal();
+    if (!applied) return false;
+    const appliedOptions = normalizeSolverOptions(
+      applied.schedule.solver_options ?? pendingProposalSolverOptions ?? {},
+    );
+    setSolverOptions(appliedOptions);
+    setProposalSolverOptions(appliedOptions);
+    setPendingProposalSolverOptions(null);
+    syncedRevisionRef.current = applied.schedule.updated_at;
+    resetDraftTracking(applied.schedule.updated_at);
+    setSolveTick((tick) => tick + 1);
+    return true;
+  }, [
+    pendingProposalSolverOptions,
+    resetDraftTracking,
+    solveJob.applyProposal,
+  ]);
+
+  const discardPendingProposal = useCallback(async () => {
+    await solveJob.discardProposal();
+    setPendingProposalSolverOptions(null);
+  }, [solveJob.discardProposal]);
 
   const applyRepairPreview = useCallback(
     (result: SolveResponse, repairStrategy: RepairStrategy) => {
@@ -524,11 +575,14 @@ export const useSolverSession = ({
     setPanelSize,
     solverOptions,
     proposalSolverOptions,
+    pendingProposalSolverOptions,
     setSolverOptions,
     readiness,
     estimatedSeconds,
     solveTick,
     solvePlan,
+    applyPendingProposal,
+    discardPendingProposal,
     applyRepairPreview,
     draftBaseRevision: effectiveDraftBaseRevision,
     hasLocalDraft: effectiveHasLocalDraft,

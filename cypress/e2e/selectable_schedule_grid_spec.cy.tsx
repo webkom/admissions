@@ -1,0 +1,438 @@
+const mountGrids = () => {
+  cy.visit(
+    "http://localhost:5001/static/cypress/fixtures/selectable-schedule-grid.html",
+  );
+  cy.get("[data-cy=selectable-grid-harness]").should("exist");
+};
+
+const cell = (mode: "personal" | "setup", date: string, minute: number) =>
+  cy.get(
+    `[data-cy=${mode}-grid] [role="button"][aria-label^="${mode}-${date}-${minute},"]`,
+  );
+
+describe("shared selectable schedule grid", () => {
+  beforeEach(mountGrids);
+
+  it("keeps selected, available, closed and blocked semantics distinct", () => {
+    cell("personal", "2026-07-21", 480)
+      .should("have.attr", "aria-pressed", "true")
+      .and("have.attr", "aria-disabled", "false")
+      .and("have.attr", "tabindex", "0")
+      .find("[data-schedule-slot-segment]")
+      .should("have.length", 2);
+
+    cell("personal", "2026-07-21", 480)
+      .click()
+      .should("have.attr", "aria-pressed", "false")
+      .and("have.class", "bg-surface-base");
+
+    cell("setup", "2026-07-21", 480)
+      .click()
+      .should("have.attr", "aria-pressed", "false")
+      .and("have.class", "bg-surface-neutral")
+      .and("have.attr", "tabindex", "0");
+
+    cy.get(
+      '[data-cy=personal-grid] [role="button"][aria-label="personal-blocked"]',
+    )
+      .should("have.attr", "aria-disabled", "true")
+      .and("have.attr", "tabindex", "-1")
+      .trigger("pointerdown", { pointerId: 3, force: true })
+      .should("have.attr", "aria-pressed", "false");
+  });
+
+  it("keeps day headers focused on the standard-block checkbox", () => {
+    const dayCheckbox =
+      '[data-cy=admin-grid] input[aria-label^="Alle standardblokker for"]';
+    cy.get(dayCheckbox).should("have.length.greaterThan", 0).first().check();
+    cy.get(
+      '[data-cy=admin-grid] [data-date="2026-07-21"][data-cy="pattern-block"]',
+    )
+      .should("have.length.greaterThan", 0)
+      .and("have.attr", "aria-pressed", "true");
+    cy.get(dayCheckbox).first().uncheck();
+    cy.get(
+      '[data-cy=admin-grid] [data-date="2026-07-21"][data-cy="pattern-block"]',
+    )
+      .should("have.length.greaterThan", 0)
+      .and("have.attr", "aria-pressed", "false");
+    cy.contains("Steng all kapasitet denne dagen").should("not.exist");
+  });
+
+  it("uses the same Enter and Space toggle path in both modes", () => {
+    cell("personal", "2026-07-21", 600)
+      .focus()
+      .trigger("keydown", { key: "Enter" })
+      .should("have.attr", "aria-pressed", "true")
+      .trigger("keydown", { key: " " })
+      .should("have.attr", "aria-pressed", "false");
+
+    cell("setup", "2026-07-21", 600)
+      .focus()
+      .trigger("keydown", { key: " " })
+      .should("have.attr", "aria-pressed", "true")
+      .trigger("keydown", { key: "Enter" })
+      .should("have.attr", "aria-pressed", "false");
+  });
+
+  it("exposes a partial block as mixed and clears it completely", () => {
+    cy.get('[data-cy=partial-grid] [role="button"]')
+      .should("have.attr", "aria-pressed", "mixed")
+      .and("have.attr", "aria-label", "partial-block, 1 av 2")
+      .click()
+      .should("have.attr", "aria-pressed", "false")
+      .and("have.attr", "aria-label", "partial-block, 0 av 2");
+  });
+
+  it("adds and removes cells through pointer drag in both modes", () => {
+    (["personal", "setup"] as const).forEach((mode, index) => {
+      cell(mode, "2026-07-21", 600).trigger("pointerdown", {
+        pointerId: 10 + index,
+      });
+      cell(mode, "2026-07-22", 600).trigger("pointerover", {
+        pointerId: 10 + index,
+      });
+      cy.window().trigger("pointerup", { pointerId: 10 + index });
+      cell(mode, "2026-07-21", 600).should("have.attr", "aria-pressed", "true");
+      cell(mode, "2026-07-22", 600).should("have.attr", "aria-pressed", "true");
+
+      cell(mode, "2026-07-21", 600).trigger("pointerdown", {
+        pointerId: 20 + index,
+      });
+      cell(mode, "2026-07-22", 600).trigger("pointerover", {
+        pointerId: 20 + index,
+      });
+      cy.window().trigger("pointercancel", { pointerId: 20 + index });
+      cell(mode, "2026-07-21", 600).should(
+        "have.attr",
+        "aria-pressed",
+        "false",
+      );
+      cell(mode, "2026-07-22", 600).should(
+        "have.attr",
+        "aria-pressed",
+        "false",
+      );
+    });
+  });
+
+  it("keeps block identities while fine tuning expands the pause timeline", () => {
+    cy.get(
+      '[data-cy=admin-grid] [data-cy=pattern-block][data-date="2026-07-21"]',
+    ).should("have.length", 2);
+    cy.get("[data-cy=admin-grid]")
+      .contains("button", "Finjuster enkelttider")
+      .click();
+    cy.get('[data-cy=admin-grid] [data-date="2026-07-21"][data-row-id]').should(
+      "have.length",
+      3,
+    );
+    cy.get(
+      '[data-cy=admin-grid] [data-cy=pattern-block][data-date="2026-07-21"]',
+    ).should("have.length", 2);
+    cy.get(
+      '[data-cy=admin-grid] [data-cy=pattern-block][data-row-id="block-480"]',
+    ).should("exist");
+    cy.get(
+      '[data-cy=admin-grid] [data-cy=pattern-block][data-row-id="block-600"]',
+    ).should("exist");
+    cy.get(
+      '[data-cy=admin-grid] [data-cy=planned-pause][data-date="2026-07-21"]',
+    ).should("exist");
+
+    cy.get(
+      '[data-cy=admin-grid] [data-cy=fine-slot][data-date="2026-07-21"][data-minute="510"]',
+    )
+      .click()
+      .should("have.attr", "aria-pressed", "false");
+    cy.get(
+      '[data-cy=admin-grid] [data-cy=pattern-block][data-date="2026-07-21"][data-row-id="block-480"]',
+    ).should("contain.text", "1/2");
+    cy.get(
+      '[data-cy=admin-grid] [data-cy=pattern-block][data-boundary-short="true"]',
+    )
+      .should("have.length.greaterThan", 0)
+      .each(($block) => {
+        cy.wrap($block).find("[data-cy=fine-slot]").should("have.length", 1);
+      });
+  });
+
+  it("supports keyboard toggles and pointer drag in the stable pattern grid", () => {
+    const firstBlock =
+      '[data-cy=admin-grid] [data-cy=pattern-block][data-date="2026-07-21"][data-row-id="block-480"]';
+    cy.get(firstBlock)
+      .focus()
+      .trigger("keydown", { key: "Enter" })
+      .should("have.attr", "aria-pressed", "false")
+      .trigger("keydown", { key: " " })
+      .should("have.attr", "aria-pressed", "true");
+
+    const shortBlock = (date: string) =>
+      `[data-cy=admin-grid] [data-cy=pattern-block][data-date="${date}"][data-row-id="block-600"]`;
+    cy.get(shortBlock("2026-07-21")).trigger("pointerdown", {
+      pointerId: 31,
+    });
+    cy.get(shortBlock("2026-07-22")).trigger("pointerover", {
+      pointerId: 31,
+    });
+    cy.window().trigger("pointerup", { pointerId: 31 });
+    cy.get(shortBlock("2026-07-21")).should(
+      "have.attr",
+      "aria-pressed",
+      "true",
+    );
+    cy.get(shortBlock("2026-07-22")).should(
+      "have.attr",
+      "aria-pressed",
+      "true",
+    );
+
+    cy.get("[data-cy=admin-grid]")
+      .contains("button", "Finjuster enkelttider")
+      .click();
+    const fineSlot = (minute: number) =>
+      `[data-cy=admin-grid] [data-cy=fine-slot][data-date="2026-07-22"][data-minute="${minute}"]`;
+    cy.get(fineSlot(480)).trigger("pointerdown", { pointerId: 32 });
+    cy.get(fineSlot(510)).trigger("pointerover", { pointerId: 32 });
+    cy.window().trigger("pointerup", { pointerId: 32 });
+    cy.get(fineSlot(480)).should("have.attr", "aria-pressed", "true");
+    cy.get(fineSlot(510)).should("have.attr", "aria-pressed", "true");
+  });
+
+  it("keeps standard blocks compact and preserves pause extras in fine tuning", () => {
+    cy.get("[data-cy=admin-grid]").within(() => {
+      cy.get("[data-cy=standard-block-pattern]").should(
+        "have.text",
+        "60 min blokk · 60 min pause",
+      );
+      cy.get("[data-cy=planned-pause]").should("not.exist");
+      cy.get("[data-cy=schedule-grid-legend]").should(
+        "not.contain.text",
+        "Ekstratid",
+      );
+    });
+
+    cy.get("[data-cy=admin-grid]")
+      .contains("button", "Finjuster enkelttider")
+      .click();
+    cy.get(
+      '[data-cy=admin-grid] [data-cy=planned-pause][data-date="2026-07-21"]',
+    )
+      .as("pauseTrigger")
+      .click();
+    cy.get("[data-cy=schedule-slot-editor]")
+      .should("contain.text", "Planlagt pause")
+      .and("contain.text", "09:00–10:00")
+      .contains("button", "09:00–09:30")
+      .click();
+    cy.get("[data-cy=schedule-slot-editor]").should(
+      "contain.text",
+      "Ekstratid",
+    );
+    cy.get("body").type("{esc}");
+    cy.focused().should("have.attr", "data-cy", "planned-pause");
+    cy.get("[data-cy=admin-grid] [data-cy=schedule-grid-legend]").should(
+      "contain.text",
+      "Ekstratid",
+    );
+
+    cy.get("[data-cy=admin-grid]")
+      .contains("button", "Standardblokker")
+      .click();
+    cy.get(
+      '[data-cy=admin-grid] [data-cy=planned-pause][data-date="2026-07-21"]',
+    ).should("not.exist");
+    cy.on("window:confirm", (message) => {
+      expect(message).to.contain("1 ekstratid");
+      return false;
+    });
+    cy.get("[data-cy=admin-grid]")
+      .contains("button", "Steng alle intervjutider")
+      .click();
+    cy.get("[data-cy=admin-grid]")
+      .contains("button", "Åpne alle standardblokker")
+      .click();
+    cy.get("[data-cy=admin-grid]")
+      .contains("button", "Finjuster enkelttider")
+      .click();
+    cy.get(
+      '[data-cy=admin-grid] [data-cy=planned-pause][data-date="2026-07-21"]',
+    ).should("contain.text", "Ekstratid · 1");
+  });
+
+  it("uses one divider for a longer pause in the compact block matrix", () => {
+    cy.get("[data-cy=long-pause-admin-grid]").within(() => {
+      cy.get("[data-cy=planned-pause]").should("not.exist");
+      cy.get("[data-cy=long-pause-divider]").should(
+        "contain.text",
+        "Lengre pause · 90 min",
+      );
+      cy.contains("button", "Finjuster enkelttider").click();
+      cy.get("[data-cy=long-pause-divider]").should("not.exist");
+      cy.get("[data-cy=planned-pause]").should("have.length", 2);
+    });
+  });
+
+  it("uses a viewport-aware popover for blocks larger than four interviews", () => {
+    cy.viewport(390, 720);
+    cy.get(
+      '[data-cy=large-admin-grid] [data-cy=pattern-block][data-row-id="block-720"]',
+    )
+      .scrollIntoView()
+      .click({ force: true });
+    cy.get("[data-cy=schedule-slot-editor]")
+      .should("be.visible")
+      .and("contain.text", "12:00–14:30")
+      .find("[data-slot]")
+      .should("have.length", 5);
+    cy.get("[data-cy=schedule-slot-editor]").then(($popover) => {
+      const rect = $popover[0].getBoundingClientRect();
+      expect(rect.left).to.be.at.least(0);
+      expect(rect.right).to.be.at.most(390);
+      expect(rect.bottom).to.be.at.most(720);
+    });
+    cy.get("body").type("{esc}");
+    cy.focused()
+      .should("have.attr", "data-cy", "pattern-block")
+      .and("have.attr", "data-row-id", "block-720");
+  });
+
+  it("keeps the slot editor inside a short viewport and restores outside-click focus", () => {
+    cy.viewport(390, 220);
+    cy.get(
+      '[data-cy=large-admin-grid] [data-cy=pattern-block][data-row-id="block-720"]',
+    )
+      .scrollIntoView()
+      .as("largeBlock")
+      .click({ force: true });
+    cy.get("[data-cy=schedule-slot-editor]").then(($popover) => {
+      const rect = $popover[0].getBoundingClientRect();
+      expect(rect.top).to.be.at.least(0);
+      expect(rect.left).to.be.at.least(0);
+      expect(rect.right).to.be.at.most(390);
+      expect(rect.bottom).to.be.at.most(220);
+    });
+    cy.get("body").click(2, 2, { force: true });
+    cy.get("[data-cy=schedule-slot-editor]").should("not.exist");
+    cy.focused()
+      .should("have.attr", "data-cy", "pattern-block")
+      .and("have.attr", "data-row-id", "block-720");
+  });
+
+  it("restores the current whole-block baseline after fine-tuning", () => {
+    cy.get("[data-cy=admin-config-harness]").within(() => {
+      cy.contains("button", "Finjuster enkelttider").click();
+      cy.get('[data-cy=fine-slot][data-date="2026-07-21"][data-minute="510"]')
+        .click()
+        .should("have.attr", "aria-pressed", "false");
+
+      cy.contains("button", "Standardblokker").click();
+      cy.get(
+        '[data-cy=pattern-block][data-date="2026-07-21"][data-row-id="block-480"]',
+      ).should("have.attr", "aria-pressed", "mixed");
+
+      cy.contains("button", "Finjuster enkelttider").click();
+      cy.on("window:confirm", () => true);
+      cy.contains("button", "Tilbakestill til standardmønster").click();
+      cy.get(
+        '[data-cy=fine-slot][data-date="2026-07-21"][data-minute="510"]',
+      ).should("have.attr", "aria-pressed", "true");
+    });
+  });
+
+  it("preserves a closed internal segment through save, reload and reset", () => {
+    cy.get("[data-cy=persistence-admin-config-harness]").within(() => {
+      cy.contains("button", "Finjuster enkelttider").click();
+      cy.get('[data-cy=fine-slot][data-minute="510"]')
+        .click()
+        .should("have.attr", "aria-pressed", "false");
+      cy.contains("button", "Lagre oppsett").click();
+      cy.get("[data-cy=reload-persisted-config]").click();
+
+      cy.get('[data-cy=pattern-block][data-row-id="block-480"]').should(
+        "have.attr",
+        "aria-pressed",
+        "mixed",
+      );
+      cy.contains("button", "Finjuster enkelttider").click();
+      cy.on("window:confirm", () => true);
+      cy.contains("button", "Tilbakestill til standardmønster").click();
+      cy.get('[data-cy=fine-slot][data-minute="510"]').should(
+        "have.attr",
+        "aria-pressed",
+        "true",
+      );
+    });
+  });
+
+  it("requires an explicit reset before legacy layouts can use v2 editing", () => {
+    cy.get("[data-cy=legacy-admin-config-harness]").within(() => {
+      cy.contains("button", "Finjuster enkelttider").should("be.disabled");
+      cy.contains("button", "Åpne alle standardblokker").should("be.disabled");
+      cy.contains("button", "Steng alle intervjutider").should("be.disabled");
+      cy.get('input[aria-label^="Alle standardblokker for"]').should(
+        "be.disabled",
+      );
+      cy.get('[data-cy=pattern-block][data-row-id="block-480"]')
+        .should("have.attr", "aria-disabled", "true")
+        .and("have.attr", "tabindex", "-1")
+        .and("have.attr", "aria-pressed", "mixed");
+      cy.get("[data-cy=legacy-save-payload]").should("have.text", "not-saved");
+
+      cy.on("window:confirm", () => true);
+      cy.contains("button", "Tilbakestill til dagens blokkmønster").click();
+      cy.contains("button", "Åpne alle standardblokker").should(
+        "not.be.disabled",
+      );
+      cy.get('[data-cy=pattern-block][data-row-id="block-480"]').should(
+        "have.attr",
+        "aria-disabled",
+        "false",
+      );
+      cy.contains("button", "Lagre oppsett").click();
+      cy.get("[data-cy=legacy-save-payload]").should(
+        "have.text",
+        "slot-overrides-present",
+      );
+    });
+  });
+
+  it("warns before a date change invalidates an existing proposal", () => {
+    cy.window().then((window) => {
+      cy.stub(window, "confirm").returns(false).as("proposalConfirm");
+    });
+    cy.get("[data-cy=proposal-confirmation-harness]").within(() => {
+      cy.get('input[aria-label="Startdato for intervjuperioden"]')
+        .clear()
+        .type("2026-07-22")
+        .should("have.value", "2026-07-22");
+      cy.contains("button", "Lagre oppsett").should("not.be.disabled").click();
+      cy.get("[data-cy=proposal-confirmation-save-result]").should(
+        "have.text",
+        "not-saved",
+      );
+      cy.get('input[aria-label="Startdato for intervjuperioden"]').should(
+        "have.value",
+        "2026-07-21",
+      );
+    });
+    cy.get("@proposalConfirm").should(
+      "have.been.calledWithMatch",
+      "kan fjerne eller flytte intervjutider",
+    );
+  });
+
+  it("lets the final grid row clear the sticky save footer", () => {
+    cy.viewport(768, 720);
+    cy.scrollTo("bottom");
+    cy.get("[data-cy=admin-config-harness] [data-cy=pattern-block]")
+      .last()
+      .then(($lastRow) => {
+        cy.get("[data-cy=admin-schedule-config-footer]").then(($footer) => {
+          expect($lastRow[0].getBoundingClientRect().bottom).to.be.at.most(
+            $footer[0].getBoundingClientRect().top,
+          );
+        });
+      });
+  });
+});

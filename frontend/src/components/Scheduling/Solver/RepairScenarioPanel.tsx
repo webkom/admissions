@@ -1,20 +1,12 @@
 import React from "react";
-import {
-  AlertTriangle,
-  ArrowRight,
-  GitCompareArrows,
-  LoaderCircle,
-} from "lucide-react";
+import { ArrowRight, GitCompareArrows, LoaderCircle } from "lucide-react";
 
 import cn from "../../../utils/cn";
+import ScheduleDrawer from "../ScheduleDrawer";
 import { decodeScheduleTime } from "../scheduleUtils";
 import type { RepairStrategy } from "../types";
 import {
   Chip,
-  SchedulePanel,
-  SchedulePanelBody,
-  SchedulePanelFooter,
-  SchedulePanelHeader,
   actionButtonBase,
   actionButtonNeutral,
   actionButtonPrimary,
@@ -23,6 +15,8 @@ import { REPAIR_STRATEGY_PRESETS } from "./solverHelpers";
 import type { RepairScenario } from "./repairScenarios";
 
 interface RepairScenarioPanelProps {
+  open: boolean;
+  onClose: () => void;
   conflictCount: number;
   selectedStrategy: RepairStrategy;
   onSelectedStrategyChange: (strategy: RepairStrategy) => void;
@@ -67,6 +61,8 @@ const regenerationLabel = (strategy: RepairStrategy) =>
       : "Tillat flere endringer";
 
 const RepairScenarioPanel = ({
+  open,
+  onClose,
   conflictCount,
   selectedStrategy,
   onSelectedStrategyChange,
@@ -82,22 +78,57 @@ const RepairScenarioPanel = ({
   dates,
   sessionDuration,
 }: RepairScenarioPanelProps) => (
-  <SchedulePanel>
-    <SchedulePanelHeader
-      icon={AlertTriangle}
-      title={`${conflictCount} ny inhabilitet${conflictCount === 1 ? "" : "er"}`}
-      description="Velg hva solveren skal beskytte. Først forhåndsviser vi endringene; utkastet lagres ikke før du bruker løsningen."
-      chips={<Chip tone="warning">Må løses før publisering</Chip>}
-    />
-    <SchedulePanelBody className="flex flex-col gap-5 px-5 py-5">
+  <ScheduleDrawer
+    open={open}
+    onClose={onClose}
+    title="Løs inhabiliteter"
+    description={`${conflictCount} tildeling${conflictCount === 1 ? "" : "er"} må endres før planen kan publiseres. Ingen endringer lagres før du bruker en løsning.`}
+    widthClassName="sm:max-w-2xl"
+    dataCy="repair-schedule-drawer"
+    footer={
+      <div className="flex flex-wrap items-center justify-end gap-2">
+        <button
+          type="button"
+          className={cn(actionButtonBase, actionButtonNeutral)}
+          onClick={onCompare}
+          disabled={loading}
+        >
+          <GitCompareArrows size={16} aria-hidden="true" />
+          Sammenlign alternativer
+        </button>
+        {selectedScenario ? (
+          <button
+            type="button"
+            className={cn(actionButtonBase, actionButtonPrimary)}
+            onClick={() => onApply(selectedScenario)}
+            disabled={loading}
+          >
+            Bruk denne løsningen
+            <ArrowRight size={16} aria-hidden="true" />
+          </button>
+        ) : (
+          <button
+            type="button"
+            className={cn(actionButtonBase, actionButtonPrimary)}
+            onClick={() => onPreview(selectedStrategy)}
+            disabled={loading}
+          >
+            Forhåndsvis løsning
+            <ArrowRight size={16} aria-hidden="true" />
+          </button>
+        )}
+      </div>
+    }
+  >
+    <div className="flex flex-col gap-5">
       <div>
-        <p className="m-0 mb-2 text-detail font-semibold uppercase tracking-badge text-text-muted">
-          Ved ny generering
+        <p className="m-0 mb-2 text-ui font-bold text-text-primary">
+          Hva skal bevares?
         </p>
         <div
           role="radiogroup"
           aria-label="Ved ny generering"
-          className="divide-y divide-border-soft border-y border-border-soft"
+          className="overflow-hidden rounded-lg border border-border-soft"
         >
           {REPAIR_STRATEGY_PRESETS.map((preset) => {
             const active = selectedStrategy === preset.key;
@@ -109,7 +140,10 @@ const RepairScenarioPanel = ({
                 aria-checked={active}
                 onClick={() => onSelectedStrategyChange(preset.key)}
                 disabled={loading}
-                className="flex w-full items-start gap-3 py-3 text-left focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-focus disabled:cursor-wait disabled:opacity-60"
+                className={cn(
+                  "flex w-full items-start gap-3 border-b border-border-soft px-4 py-3 text-left last:border-b-0 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-focus disabled:cursor-wait disabled:opacity-60",
+                  active ? "bg-brand-soft" : "hover:bg-surface-subtle",
+                )}
               >
                 <span
                   aria-hidden="true"
@@ -128,11 +162,9 @@ const RepairScenarioPanel = ({
                   <span className="block text-ui font-semibold text-text-primary">
                     {regenerationLabel(preset.key)}
                   </span>
-                  {active && (
-                    <span className="mt-0.5 block text-detail leading-relaxed text-text-muted">
-                      {preset.description}
-                    </span>
-                  )}
+                  <span className="mt-0.5 block text-detail leading-relaxed text-text-muted">
+                    {preset.description}
+                  </span>
                 </span>
               </button>
             );
@@ -147,61 +179,41 @@ const RepairScenarioPanel = ({
       )}
 
       {scenarios.length > 0 && (
-        <div className="overflow-hidden rounded-lg border border-border-soft">
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[720px] border-collapse text-left text-detail">
-              <thead className="bg-surface-mutedSoft text-text-muted">
-                <tr>
-                  <th className="px-3 py-2.5 font-semibold">Løsning</th>
-                  <th className="px-3 py-2.5 font-semibold">Intervjuer</th>
-                  <th className="px-3 py-2.5 font-semibold">Nye tider</th>
-                  <th className="px-3 py-2.5 font-semibold">
-                    Berørte personer
-                  </th>
-                  <th className="px-3 py-2.5 font-semibold">Panelavvik</th>
-                  <th className="px-3 py-2.5 font-semibold">Overtid</th>
-                </tr>
-              </thead>
-              <tbody>
-                {scenarios.map((scenario) => {
-                  const active =
-                    selectedScenario?.strategy === scenario.strategy;
-                  return (
-                    <tr
-                      key={scenario.strategy}
-                      className={cn(
-                        "cursor-pointer border-t border-border-soft",
-                        active ? "bg-brand-panel" : "hover:bg-surface-subtle",
-                      )}
-                      onClick={() => onSelectScenario(scenario.strategy)}
-                    >
-                      <td className="px-3 py-3 font-semibold text-text-primary">
-                        {strategyLabel(scenario.strategy)}
-                      </td>
-                      <td className="px-3 py-3 tabular-nums">
-                        {scenario.metrics.changedInterviews}
-                      </td>
-                      <td className="px-3 py-3 tabular-nums">
-                        {scenario.metrics.changedTimes}
-                      </td>
-                      <td className="px-3 py-3 tabular-nums">
-                        {scenario.metrics.affectedInterviewers}
-                      </td>
-                      <td className="px-3 py-3 tabular-nums">
-                        {scenario.metrics.brokenPanelBlocks}
-                      </td>
-                      <td className="px-3 py-3 tabular-nums">
-                        {signedMinutes(scenario.metrics.overtimeDeltaMinutes)}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+        <div className="space-y-3">
+          <p className="m-0 text-ui font-bold text-text-primary">
+            Beregnede alternativer
+          </p>
+          <div className="grid gap-2">
+            {scenarios.map((scenario) => {
+              const active = selectedScenario?.strategy === scenario.strategy;
+              return (
+                <button
+                  key={scenario.strategy}
+                  type="button"
+                  onClick={() => onSelectScenario(scenario.strategy)}
+                  className={cn(
+                    "rounded-lg border px-4 py-3 text-left",
+                    active
+                      ? "border-brand-strongBorder bg-brand-soft ring-1 ring-brand-ring"
+                      : "border-border-soft hover:bg-surface-subtle",
+                  )}
+                >
+                  <span className="block text-ui font-bold text-text-primary">
+                    {strategyLabel(scenario.strategy)}
+                  </span>
+                  <span className="mt-1 block text-detail text-text-muted">
+                    {scenario.metrics.changedInterviews} endrede intervjuer ·{" "}
+                    {scenario.metrics.changedTimes} nye tider ·{" "}
+                    {scenario.metrics.affectedInterviewers} berørte personer ·{" "}
+                    {signedMinutes(scenario.metrics.overtimeDeltaMinutes)}
+                  </span>
+                </button>
+              );
+            })}
           </div>
 
           {selectedScenario && (
-            <div className="border-t border-border-soft bg-surface-subtle px-4 py-4">
+            <div className="rounded-lg bg-surface-subtle px-4 py-4">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <div>
                   <p className="m-0 text-ui font-bold text-text-primary">
@@ -217,37 +229,41 @@ const RepairScenarioPanel = ({
                   <Chip tone="success">Ingen kandidater flyttes</Chip>
                 )}
               </div>
-              <div className="mt-3 flex flex-col gap-2">
-                {selectedScenario.changes.slice(0, 6).map((change) => (
-                  <div
-                    key={`${change.candidate}:${change.beforeTime ?? "new"}`}
-                    className="flex flex-wrap items-baseline gap-x-2 text-detail text-text-muted"
-                  >
-                    <strong className="text-text-primary">
-                      {change.candidate}
-                    </strong>
-                    {change.beforeTime !== change.afterTime && (
-                      <span>
-                        {formatTime(change.beforeTime, dates, sessionDuration)}{" "}
-                        → {formatTime(change.afterTime, dates, sessionDuration)}
-                      </span>
-                    )}
-                    {(change.removedInterviewers.length > 0 ||
-                      change.addedInterviewers.length > 0) && (
-                      <span>
-                        {change.removedInterviewers.join(", ") || "Ingen"} →{" "}
-                        {change.addedInterviewers.join(", ") || "Ingen"}
-                      </span>
-                    )}
-                  </div>
-                ))}
-                {selectedScenario.changes.length > 6 && (
-                  <p className="m-0 text-detail text-text-subtle">
-                    + {selectedScenario.changes.length - 6} flere endrede
-                    intervjuer
-                  </p>
-                )}
-              </div>
+              <details className="group mt-3">
+                <summary className="cursor-pointer text-detail font-semibold text-brand">
+                  Se konkrete endringer
+                </summary>
+                <div className="mt-3 flex flex-col gap-2">
+                  {selectedScenario.changes.map((change) => (
+                    <div
+                      key={`${change.candidate}:${change.beforeTime ?? "new"}`}
+                      className="flex flex-col gap-0.5 border-t border-border-soft pt-2 text-detail text-text-muted first:border-0 first:pt-0"
+                    >
+                      <strong className="text-text-primary">
+                        {change.candidate}
+                      </strong>
+                      {change.beforeTime !== change.afterTime && (
+                        <span>
+                          {formatTime(
+                            change.beforeTime,
+                            dates,
+                            sessionDuration,
+                          )}{" "}
+                          →{" "}
+                          {formatTime(change.afterTime, dates, sessionDuration)}
+                        </span>
+                      )}
+                      {(change.removedInterviewers.length > 0 ||
+                        change.addedInterviewers.length > 0) && (
+                        <span>
+                          {change.removedInterviewers.join(", ") || "Ingen"} →{" "}
+                          {change.addedInterviewers.join(", ") || "Ingen"}
+                        </span>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </details>
             </div>
           )}
         </div>
@@ -263,45 +279,8 @@ const RepairScenarioPanel = ({
           fra samme utkast…
         </div>
       )}
-    </SchedulePanelBody>
-    <SchedulePanelFooter>
-      <div className="text-detail text-text-muted">
-        Alle alternativer bruker samme plan og samme inhabiliteter.
-      </div>
-      <div className="flex flex-wrap items-center justify-end gap-2">
-        <button
-          type="button"
-          className={cn(actionButtonBase, actionButtonNeutral)}
-          onClick={onCompare}
-          disabled={loading}
-        >
-          <GitCompareArrows size={16} />
-          Sammenlign tre løsninger
-        </button>
-        {selectedScenario ? (
-          <button
-            type="button"
-            className={cn(actionButtonBase, actionButtonPrimary)}
-            onClick={() => onApply(selectedScenario)}
-            disabled={loading}
-          >
-            Bruk denne løsningen
-            <ArrowRight size={16} />
-          </button>
-        ) : (
-          <button
-            type="button"
-            className={cn(actionButtonBase, actionButtonPrimary)}
-            onClick={() => onPreview(selectedStrategy)}
-            disabled={loading}
-          >
-            Forhåndsvis løsning
-            <ArrowRight size={16} />
-          </button>
-        )}
-      </div>
-    </SchedulePanelFooter>
-  </SchedulePanel>
+    </div>
+  </ScheduleDrawer>
 );
 
 export default RepairScenarioPanel;

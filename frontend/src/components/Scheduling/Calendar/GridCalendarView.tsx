@@ -23,6 +23,7 @@ interface GridCalendarViewProps {
   availableSlots?: Set<string>;
   occupiedTimes?: ReadonlySet<number>;
   showAvailabilityLegend?: boolean;
+  compactSchedule?: boolean;
   renderItem?: (item: ScheduleItem, scheduleIndex: number) => React.ReactNode;
   onMoveItem?: (scheduleIndex: number, nextTime: number) => void;
   moveDisabled?: boolean;
@@ -39,6 +40,7 @@ const GridCalendarView: React.FC<GridCalendarViewProps> = ({
   availableSlots,
   occupiedTimes,
   showAvailabilityLegend = false,
+  compactSchedule = false,
   renderItem,
   onMoveItem,
   moveDisabled = false,
@@ -46,6 +48,23 @@ const GridCalendarView: React.FC<GridCalendarViewProps> = ({
   const [dropTarget, setDropTarget] = useState<string | null>(null);
   const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
   const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
+  const [showFullPeriod, setShowFullPeriod] = useState(false);
+  const scheduledDayIndexes = useMemo(
+    () =>
+      new Set(
+        schedule.map(
+          (item) => decodeScheduleTime(item.time, sessionDuration).dayIndex,
+        ),
+      ),
+    [schedule, sessionDuration],
+  );
+  const visibleDays = useMemo(() => {
+    const allDays = dates.map((date, dayIndex) => ({ date, dayIndex }));
+    if (!compactSchedule || showFullPeriod || scheduledDayIndexes.size === 0) {
+      return allDays;
+    }
+    return allDays.filter(({ dayIndex }) => scheduledDayIndexes.has(dayIndex));
+  }, [compactSchedule, dates, scheduledDayIndexes, showFullPeriod]);
   const minutes = useMemo(() => {
     const chunks = buildBlockTimeChunks({
       dayStartMinute,
@@ -61,10 +80,18 @@ const GridCalendarView: React.FC<GridCalendarViewProps> = ({
         decodeScheduleTime(item.time, sessionDuration).minute,
       );
     });
-    const allMinutes = new Set([
-      ...chunkMinutes,
-      ...Array.from(scheduleMinutes),
-    ]);
+    const scheduledMinutes = Array.from(scheduleMinutes);
+    const cropToSchedule =
+      compactSchedule && !showFullPeriod && scheduledMinutes.length > 0;
+    const firstScheduledMinute = Math.min(...scheduledMinutes);
+    const lastScheduledMinute = Math.max(...scheduledMinutes);
+    const visibleChunkMinutes = cropToSchedule
+      ? chunkMinutes.filter(
+          (minute) =>
+            minute >= firstScheduledMinute && minute <= lastScheduledMinute,
+        )
+      : chunkMinutes;
+    const allMinutes = new Set([...visibleChunkMinutes, ...scheduledMinutes]);
     return Array.from(allMinutes).sort((a, b) => a - b);
   }, [
     schedule,
@@ -73,6 +100,8 @@ const GridCalendarView: React.FC<GridCalendarViewProps> = ({
     dayEndMinute,
     chunkSize,
     chunkBreakMinutes,
+    compactSchedule,
+    showFullPeriod,
   ]);
 
   const scheduleMap = useMemo(() => {
@@ -127,23 +156,42 @@ const GridCalendarView: React.FC<GridCalendarViewProps> = ({
 
   return (
     <div className="overflow-hidden rounded-xl border border-border-soft bg-surface-base shadow-sm">
-      {showAvailabilityLegend && availableSlots !== undefined && (
-        <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 border-b border-border-soft bg-surface-subtle px-4 py-2.5 text-detail font-semibold text-text-muted">
-          <CalendarLegendItem label="Ledig" variant="available" />
-          <CalendarLegendItem label="Planlagt" variant="scheduled" />
-          <CalendarLegendItem label="Ikke tilgjengelig" variant="unavailable" />
+      {(compactSchedule ||
+        (showAvailabilityLegend && availableSlots !== undefined)) && (
+        <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 border-b border-border-soft bg-surface-subtle px-4 py-2.5 text-detail font-semibold text-text-muted">
+          {showAvailabilityLegend && availableSlots !== undefined && (
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5">
+              <CalendarLegendItem label="Ledig" variant="available" />
+              <CalendarLegendItem label="Planlagt" variant="scheduled" />
+              <CalendarLegendItem
+                label="Ikke tilgjengelig"
+                variant="unavailable"
+              />
+            </div>
+          )}
+          {compactSchedule && (
+            <button
+              type="button"
+              onClick={() => setShowFullPeriod((value) => !value)}
+              className="ml-auto font-semibold text-brand underline-offset-2 hover:underline"
+            >
+              {showFullPeriod ? "Vis bare intervjuer" : "Vis hele perioden"}
+            </button>
+          )}
         </div>
       )}
       <div className="overflow-x-auto">
         <div
           className="grid gap-px bg-border-muted"
           style={{
-            gridTemplateColumns: `${calendarGrid.scheduleTimeColumnWidth}px repeat(${dates.length}, minmax(${calendarGrid.scheduleDayColumnMinWidth}px, 1fr))`,
-            minWidth: `max(${calendarGrid.minimumWidth}px, ${dates.length * calendarGrid.scheduleDayColumnMinWidth + calendarGrid.scheduleTimeColumnWidth}px)`,
+            gridTemplateColumns: `${calendarGrid.scheduleTimeColumnWidth}px repeat(${visibleDays.length}, minmax(${calendarGrid.scheduleDayColumnMinWidth}px, 1fr))`,
+            minWidth: compactSchedule
+              ? `${visibleDays.length * calendarGrid.scheduleDayColumnMinWidth + calendarGrid.scheduleTimeColumnWidth}px`
+              : `max(${calendarGrid.minimumWidth}px, ${visibleDays.length * calendarGrid.scheduleDayColumnMinWidth + calendarGrid.scheduleTimeColumnWidth}px)`,
           }}
         >
           <div className="bg-surface-subtle" />
-          {dates.map((date) => {
+          {visibleDays.map(({ date }) => {
             const { weekday, dayMonth } = formatDateHeader(date);
             return (
               <div
@@ -166,7 +214,7 @@ const GridCalendarView: React.FC<GridCalendarViewProps> = ({
                 <div className="flex min-h-20 flex-col items-end justify-center bg-surface-subtle pr-4 text-xs font-bold tabular-nums text-text-muted">
                   {formatMinutes(minute)}
                 </div>
-                {dates.map((date, dayIndex) => {
+                {visibleDays.map(({ date, dayIndex }) => {
                   const entries =
                     scheduleMap.get(`${dayIndex}-${minute}`) ?? [];
                   const hasEntries = entries.length > 0;

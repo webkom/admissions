@@ -27,15 +27,18 @@ interface SchedulePanelProps {
   children: React.ReactNode;
   className?: string;
   id?: string;
+  dataCy?: string;
 }
 
 export const SchedulePanel: React.FC<SchedulePanelProps> = ({
   children,
   className,
   id,
+  dataCy,
 }) => (
   <section
     id={id}
+    data-cy={dataCy}
     className={cn(
       "overflow-hidden rounded-panel border border-border bg-surface-base shadow-sm",
       className,
@@ -123,13 +126,16 @@ export const SchedulePanelBody: React.FC<SchedulePanelBodyProps> = ({
 interface SchedulePanelFooterProps {
   children: React.ReactNode;
   className?: string;
+  dataCy?: string;
 }
 
 export const SchedulePanelFooter: React.FC<SchedulePanelFooterProps> = ({
   children,
   className,
+  dataCy,
 }) => (
   <div
+    data-cy={dataCy}
     className={cn(
       "flex flex-wrap items-center justify-between gap-3 border-t border-border-soft px-5 py-4 handheld:px-4 handheld:py-3",
       className,

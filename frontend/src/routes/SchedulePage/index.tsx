@@ -10,6 +10,7 @@ import {
 import StatusToast, { StatusToastState } from "src/components/StatusToast";
 import TimeScheduler from "src/components/Scheduling/Calendar/Calendar";
 import SolverView from "src/components/Scheduling/Solver/SolverView";
+import { normalizeSolverOptions } from "src/components/Scheduling/Solver/solverHelpers";
 import AvailabilityHeatmap from "src/components/Scheduling/Calendar/AvailabilityHeatmap";
 import AdminScheduleConfig from "src/components/Scheduling/Calendar/AdminScheduleConfig";
 import djangoData from "src/utils/djangoData";
@@ -21,6 +22,7 @@ import WorkflowStepper from "./WorkflowStepper";
 import MemberAvailabilityPending from "./MemberAvailabilityPending";
 import DistributedPlanView from "./DistributedPlanView";
 import ConflictReviewView from "./ConflictReviewView";
+import PublicationGate from "./PublicationGate";
 import { useAvailabilityEditor } from "./useAvailabilityEditor";
 import { useDistributedPlanActions } from "./useDistributedPlanActions";
 import { useScheduleConfiguration } from "./useScheduleConfiguration";
@@ -240,6 +242,7 @@ const LoadedScheduleView: React.FC<LoadedScheduleViewProps> = ({
 
   const [toast, setToast] = useState<StatusToastState | null>(null);
   const [solverEditRequestKey, setSolverEditRequestKey] = useState(0);
+  const [conflictReviewRequestKey, setConflictReviewRequestKey] = useState(0);
   const [foundationWorkspace, setFoundationWorkspace] =
     useState<FoundationWorkspace>("framework");
   const [frameworkDraftStatus, setFrameworkDraftStatus] = useState({
@@ -276,6 +279,8 @@ const LoadedScheduleView: React.FC<LoadedScheduleViewProps> = ({
     isAdmin: canManageSchedule,
     savedSchedule,
     participants: availabilityParticipants,
+    candidateIds: interviewCandidates?.map((candidate) => candidate.id) ?? [],
+    candidateScopeResolved,
   });
   const participants = useScheduleParticipants({
     isAdmin: canManageSchedule,
@@ -300,6 +305,10 @@ const LoadedScheduleView: React.FC<LoadedScheduleViewProps> = ({
     sessionDuration,
     chunkSize,
     chunkBreakMinutes,
+    blockMode,
+    manualBlocks,
+    layoutVersion,
+    slotOverrides,
     enabledWindows,
     enabledSlots,
     dates,
@@ -312,6 +321,7 @@ const LoadedScheduleView: React.FC<LoadedScheduleViewProps> = ({
     currentParticipant: myAvailabilityParticipant,
     saveAvailability,
     saveConflictReview,
+    setParticipation,
   } = availability;
   const {
     activeSection,
@@ -320,9 +330,11 @@ const LoadedScheduleView: React.FC<LoadedScheduleViewProps> = ({
     changeSection: handleSectionChange,
     hasConfiguredAvailabilityWindows,
     hasScheduleDraft,
-    conflictReviewSummary,
+    currentReviewRequired,
+    currentReviewComplete,
+    publicationReadiness,
+    workflowPhase,
     availabilityReady,
-    proposalConflictCount,
   } = workflow;
   const {
     realCandidates,
@@ -347,9 +359,17 @@ const LoadedScheduleView: React.FC<LoadedScheduleViewProps> = ({
     setSolverEditRequestKey((key) => key + 1);
     handleSectionChange("solver");
   };
-  const submittedAvailabilityCount =
-    availabilityParticipants?.filter((participant) => participant.has_submitted)
-      .length ?? 0;
+  const openConflictReview = () => {
+    setConflictReviewRequestKey((key) => key + 1);
+    handleSectionChange(isAdmin ? "solver" : "my-availability");
+  };
+  const activeAvailabilityParticipants =
+    availabilityParticipants?.filter(
+      (participant) => participant.participation !== "not_participating",
+    ) ?? [];
+  const submittedAvailabilityCount = activeAvailabilityParticipants.filter(
+    (participant) => participant.has_submitted,
+  ).length;
 
   const currentUserName = djangoData.user?.full_name ?? "";
 
@@ -363,6 +383,7 @@ const LoadedScheduleView: React.FC<LoadedScheduleViewProps> = ({
         </div>
 
         <div className="flex items-center gap-3">
+          {developmentTools}
           <span className="hidden text-detail font-semibold text-text-subtle sm:inline">
             {roleLabel}
           </span>
@@ -393,9 +414,11 @@ const LoadedScheduleView: React.FC<LoadedScheduleViewProps> = ({
         </div>
       )}
 
-      {developmentTools}
-
-      <div className="border-b border-border bg-surface-base">
+      <div
+        data-cy="workflow-phase"
+        data-phase={workflowPhase}
+        className="border-b border-border bg-surface-base"
+      >
         <WorkflowStepper
           steps={workflowSteps}
           activeKey={activeSection}
@@ -407,10 +430,12 @@ const LoadedScheduleView: React.FC<LoadedScheduleViewProps> = ({
             onChange={setFoundationWorkspace}
             frameworkComplete={hasConfiguredAvailabilityWindows}
             availabilityComplete={Boolean(
-              myAvailabilityParticipant?.has_submitted,
+              myAvailabilityParticipant?.has_submitted ||
+                myAvailabilityParticipant?.participation ===
+                  "not_participating",
             )}
             submittedCount={submittedAvailabilityCount}
-            participantCount={availabilityParticipants?.length ?? 0}
+            participantCount={activeAvailabilityParticipants.length}
             frameworkDraftValid={frameworkDraftStatus.isValid}
             frameworkHasPendingChanges={frameworkDraftStatus.hasPendingChanges}
           />
@@ -435,6 +460,12 @@ const LoadedScheduleView: React.FC<LoadedScheduleViewProps> = ({
                   dayStartMinute={dayStartMinute}
                   dayEndMinute={dayEndMinute}
                   onSave={saveAvailability}
+                  participation={myAvailabilityParticipant?.participation}
+                  affectedAssignmentCount={
+                    myAvailabilityParticipant?.affected_assignment_count ?? 0
+                  }
+                  onOptOut={() => setParticipation("not_participating")}
+                  onRejoin={() => setParticipation("awaiting_response")}
                 />
                 {savedSchedule?.conflict_review_open &&
                   (myAvailabilityParticipant?.slots.length ?? 0) > 0 && (
@@ -442,6 +473,7 @@ const LoadedScheduleView: React.FC<LoadedScheduleViewProps> = ({
                       candidates={interviewCandidates}
                       currentParticipant={myAvailabilityParticipant}
                       onSaveReview={saveConflictReview}
+                      openRequestKey={conflictReviewRequestKey}
                     />
                   )}
               </div>
@@ -460,6 +492,8 @@ const LoadedScheduleView: React.FC<LoadedScheduleViewProps> = ({
               sessionDuration={sessionDuration}
               chunkSize={chunkSize}
               chunkBreakMinutes={chunkBreakMinutes}
+              layoutVersion={layoutVersion}
+              slotOverrides={slotOverrides}
               enabledSlots={enabledSlots}
               enabledWindows={enabledWindows}
               scheduleRevision={configurationRevision}
@@ -490,6 +524,12 @@ const LoadedScheduleView: React.FC<LoadedScheduleViewProps> = ({
                   dayStartMinute={dayStartMinute}
                   dayEndMinute={dayEndMinute}
                   onSave={saveAvailability}
+                  participation={myAvailabilityParticipant?.participation}
+                  affectedAssignmentCount={
+                    myAvailabilityParticipant?.affected_assignment_count ?? 0
+                  }
+                  onOptOut={() => setParticipation("not_participating")}
+                  onRejoin={() => setParticipation("awaiting_response")}
                 />
               )}
             </div>
@@ -514,11 +554,22 @@ const LoadedScheduleView: React.FC<LoadedScheduleViewProps> = ({
                   dates={dates}
                   interviewers={realInterviewers}
                   availableSlots={enabledSlots}
+                  panelSize={savedSchedule?.panel_size ?? 3}
+                  samePanelPerBlock={
+                    savedSchedule
+                      ? normalizeSolverOptions(
+                          savedSchedule.solver_options ?? {},
+                        ).panel_stability === "required"
+                      : false
+                  }
                   sessionDuration={sessionDuration}
                   chunkSize={chunkSize}
                   chunkBreakMinutes={chunkBreakMinutes}
                   dayStartMinute={dayStartMinute}
                   dayEndMinute={dayEndMinute}
+                  onParticipationChange={(userId, participation) =>
+                    setParticipation(participation, userId)
+                  }
                 />
               )}
             </div>
@@ -547,14 +598,31 @@ const LoadedScheduleView: React.FC<LoadedScheduleViewProps> = ({
               dayEndMinute={dayEndMinute}
               chunkSize={chunkSize}
               chunkBreakMinutes={chunkBreakMinutes}
+              blockMode={blockMode}
+              manualBlocks={manualBlocks}
+              slotOverrides={slotOverrides}
               candidateScopeResolved={candidateScopeResolved}
               availabilityReady={availabilityReady}
               syntheticInput={syntheticInput}
               editRequestKey={solverEditRequestKey}
+              currentReviewRequired={currentReviewRequired}
+              currentReviewComplete={currentReviewComplete}
+              completeReviewerCount={publicationReadiness.completeReviewerCount}
+              requiredReviewerCount={publicationReadiness.requiredReviewerCount}
+              pendingReviewerCount={
+                publicationReadiness.incompleteReviewerCount
+              }
+              missingReviewerNames={publicationReadiness.missingReviewerNames}
+              publicationReady={publicationReadiness.ready}
               onOpenAvailability={() => {
                 setFoundationWorkspace("availability");
                 handleSectionChange("config");
               }}
+              onOpenFramework={() => {
+                setFoundationWorkspace("framework");
+                handleSectionChange("config");
+              }}
+              onOpenConflictReview={openConflictReview}
               onOpenPlan={() => handleSectionChange("plan")}
             />
             {savedSchedule?.conflict_review_open &&
@@ -564,44 +632,58 @@ const LoadedScheduleView: React.FC<LoadedScheduleViewProps> = ({
                   candidates={interviewCandidates}
                   currentParticipant={myAvailabilityParticipant}
                   onSaveReview={saveConflictReview}
+                  openRequestKey={conflictReviewRequestKey}
+                  showSummary={false}
+                  reviewProgress={{
+                    complete: publicationReadiness.completeReviewerCount,
+                    total: publicationReadiness.requiredReviewerCount,
+                    missingNames: publicationReadiness.missingReviewerNames,
+                  }}
                 />
               )}
           </div>
         )}
 
-        {activeSection === "plan" && (
-          <DistributedPlanView
-            admissionSlug={admissionSlug}
-            admissionTitle={admissionTitle}
-            committeeName={committeeName}
-            savedSchedule={savedSchedule}
-            dates={dates}
-            isAdmin={isAdmin}
-            canManageInterviewWorkflow={canManageInterviewWorkflow}
-            currentUserName={currentUserName}
-            currentUserId={myAvailabilityParticipant?.user_id}
-            canToggleCandidateNames={canRevealCandidateNames}
-            onSetNameVisibility={handleSetNameVisibility}
-            onReplacePanelMember={handleReplacePanelMember}
-            onChangeInterviewTime={handleChangeInterviewTime}
-            onToggleLock={handleToggleLock}
-            onSetBookingSource={handleSetBookingSource}
-            onPublish={handlePublishSchedule}
-            onUnlock={handleUnlockSchedule}
-            planTransition={planTransition}
-            planTransitionError={planTransitionError}
-            onEditProposal={openProposalForEditing}
-            proposalReviewReady={conflictReviewSummary.isComplete}
-            proposalReviewPendingCount={
-              conflictReviewSummary.incompleteReviewerCount
-            }
-            proposalConflictCount={proposalConflictCount}
-            myConflicts={myAvailabilityParticipant?.conflicts ?? []}
-            realCandidates={realCandidates}
-            interviewers={interviewers}
-            enabledSlots={enabledSlots}
-          />
-        )}
+        {activeSection === "plan" &&
+          (savedSchedule?.is_distributed ? (
+            <DistributedPlanView
+              admissionSlug={admissionSlug}
+              admissionTitle={admissionTitle}
+              committeeName={committeeName}
+              savedSchedule={savedSchedule}
+              dates={dates}
+              isAdmin={isAdmin}
+              canManageInterviewWorkflow={canManageInterviewWorkflow}
+              currentUserName={currentUserName}
+              currentUserId={myAvailabilityParticipant?.user_id}
+              canToggleCandidateNames={canRevealCandidateNames}
+              onSetNameVisibility={handleSetNameVisibility}
+              onReplacePanelMember={handleReplacePanelMember}
+              onChangeInterviewTime={handleChangeInterviewTime}
+              onToggleLock={handleToggleLock}
+              onSetBookingSource={handleSetBookingSource}
+              onUnlock={handleUnlockSchedule}
+              onUnlocked={openProposalForEditing}
+              planTransition={planTransition}
+              planTransitionError={planTransitionError}
+              myConflicts={myAvailabilityParticipant?.conflicts ?? []}
+              realCandidates={realCandidates}
+              interviewers={interviewers}
+              enabledSlots={enabledSlots}
+            />
+          ) : (
+            <PublicationGate
+              savedSchedule={savedSchedule}
+              readiness={publicationReadiness}
+              currentReviewRequired={currentReviewRequired}
+              currentReviewComplete={currentReviewComplete}
+              planTransition={planTransition}
+              planTransitionError={planTransitionError}
+              onOpenDraft={() => handleSectionChange("solver")}
+              onOpenOwnReview={openConflictReview}
+              onPublish={handlePublishSchedule}
+            />
+          ))}
       </main>
 
       <WizardTour

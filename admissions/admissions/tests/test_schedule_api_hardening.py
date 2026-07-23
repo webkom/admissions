@@ -10,7 +10,7 @@ from rest_framework import status
 from rest_framework.test import APIClient, APITestCase
 
 from admissions.admissions import constants
-from admissions.admissions.constants import MEMBER, RECRUITING
+from admissions.admissions.constants import MEMBER, RECRUITING, RETIREE
 from admissions.admissions.models import (
     ConflictReviewAuditEvent,
     Group,
@@ -20,11 +20,12 @@ from admissions.admissions.models import (
     Membership,
     NameVisibilityAuditEvent,
     SavedSchedule,
+    ScheduleDeviationApproval,
     SolveJob,
     UserApplication,
 )
-from admissions.admissions.serializers import SolveOptionsSerializer
 from admissions.admissions.schedule_validation import canonicalize_solver_payload
+from admissions.admissions.serializers import SolveOptionsSerializer
 from admissions.admissions.tests.utils import (
     ScheduleRevisionAPIClient,
     create_admission,
@@ -172,6 +173,63 @@ class SavedSchedulePublishSemanticsTestCase(APITestCase):
                 admission=self.admission,
                 action=ConflictReviewAuditEvent.ACTION_CLOSED,
             ).exists()
+        )
+
+    def test_proposed_availability_deviation_requires_exact_publish_approval(self):
+        InterviewAvailability.objects.filter(
+            admission=self.admission,
+            user=self.admin_user,
+        ).update(slots=["2026-04-20|540"])
+        self._create_saved(
+            schedule=[],
+            is_distributed=False,
+            conflict_review_open=False,
+        )
+        draft = self.client.post(
+            self.url,
+            {
+                "schedule": self._schedule(time=600),
+                "panel_size": 1,
+                "solver_options": {
+                    "policy_version": 2,
+                    "panel_stability": "preferred",
+                    "availability_fallback": "propose",
+                    "same_panel_per_block": False,
+                    "allow_overtime": False,
+                },
+                "is_distributed": False,
+            },
+            format="json",
+        )
+        self.assertEqual(draft.status_code, status.HTTP_200_OK, draft.data)
+        review = draft.data["deviation_review"]
+        self.assertTrue(review["requires_approval"])
+        self.assertEqual(review["deviation_count"], 1)
+        self._mark_reviewed(self.application)
+
+        blocked = self.client.post(
+            self.url,
+            {"is_distributed": True},
+            format="json",
+        )
+        self.assertEqual(blocked.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("deviation_approval_fingerprint", blocked.data)
+
+        published = self.client.post(
+            self.url,
+            {
+                "is_distributed": True,
+                "deviation_approval_fingerprint": review["deviation_fingerprint"],
+            },
+            format="json",
+        )
+        self.assertEqual(published.status_code, status.HTTP_200_OK, published.data)
+        self.assertTrue(published.data["is_distributed"])
+        self.assertEqual(
+            ScheduleDeviationApproval.objects.filter(
+                saved_schedule__admission=self.admission
+            ).count(),
+            1,
         )
 
     def test_saving_first_timed_draft_opens_assignment_review(self):
@@ -817,6 +875,14 @@ class SolveScheduleInputCapTestCase(APITestCase):
             serializer.validated_data["avoid_consecutive_interviewer_blocks"]
         )
 
+    def test_compact_strategy_supplies_real_continuity_defaults(self):
+        serializer = SolveOptionsSerializer(data={"initial_strategy": "compact_days"})
+
+        self.assertTrue(serializer.is_valid(), serializer.errors)
+        self.assertEqual(serializer.validated_data["continuity_weight"], 48)
+        self.assertEqual(serializer.validated_data["load_balance_weight"], 2)
+        self.assertTrue(serializer.validated_data["prioritize_continuity"])
+
     def test_solver_runtime_budget_is_five_minutes_with_stale_job_headroom(self):
         self.assertEqual(constants.MAX_SOLVER_SECONDS, 5 * 60)
         self.assertGreaterEqual(
@@ -845,6 +911,15 @@ class SolveScheduleInputCapTestCase(APITestCase):
         self.assertEqual(first.data["job_id"], second.data["job_id"])
         self.assertEqual(SolveJob.objects.filter(admission=self.admission).count(), 1)
 
+    def test_second_enqueue_with_different_request_returns_conflict(self):
+        first = self._solve({})
+        self.assertEqual(first.status_code, status.HTTP_202_ACCEPTED)
+
+        second = self._solve({"options": {"allow_overtime": False}})
+
+        self.assertEqual(second.status_code, status.HTTP_409_CONFLICT)
+        self.assertEqual(second.data["active_job"]["job_id"], first.data["job_id"])
+
     def test_db_rejects_a_second_active_job_for_the_same_admission(self):
         SolveJob.objects.create(
             admission=self.admission, requested_by=self.user, request_data={}
@@ -871,7 +946,7 @@ class SolveScheduleInputCapTestCase(APITestCase):
         self.assertEqual(res.status_code, status.HTTP_202_ACCEPTED)
         self.assertEqual(SolveJob.objects.filter(admission=self.admission).count(), 2)
 
-    def test_enqueue_losing_the_race_returns_the_winning_job(self):
+    def test_enqueue_losing_the_race_rejects_a_different_winning_job(self):
         winner = SolveJob.objects.create(
             admission=self.admission, requested_by=self.user, request_data={}
         )
@@ -890,8 +965,8 @@ class SolveScheduleInputCapTestCase(APITestCase):
         ):
             res = self._solve({})
 
-        self.assertEqual(res.status_code, status.HTTP_202_ACCEPTED)
-        self.assertEqual(str(res.data["job_id"]), str(winner.id))
+        self.assertEqual(res.status_code, status.HTTP_409_CONFLICT)
+        self.assertEqual(str(res.data["active_job"]["job_id"]), str(winner.id))
         self.assertEqual(SolveJob.objects.filter(admission=self.admission).count(), 1)
 
 
@@ -1477,6 +1552,91 @@ class InterviewAvailabilityHardeningTestCase(APITestCase):
 
         self.assertEqual(res.status_code, status.HTTP_200_OK)
         self.assertEqual(res.data[0]["conflicts"], [])
+
+    def test_saving_slots_marks_self_as_participating(self):
+        self._create_saved_schedule(enabled_slots=["2026-04-21|540"])
+        self.client.force_authenticate(user=self.member)
+
+        response = self.client.post(
+            self.url,
+            {"slots": ["2026-04-21|540"]},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
+        self.assertEqual(response.data["participation"], "participating")
+
+    def test_member_cannot_change_another_users_participation(self):
+        self._create_saved_schedule(enabled_slots=["2026-04-21|540"])
+        self.client.force_authenticate(user=self.member)
+
+        response = self.client.post(
+            self.url,
+            {
+                "user_id": str(self.recruiter.pk),
+                "participation": "not_participating",
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_admin_opt_out_preserves_published_schedule_and_advances_revision(self):
+        saved = self._create_saved_schedule(
+            enabled_slots=["2026-04-21|540"],
+            is_distributed=True,
+            schedule=[
+                {
+                    "candidate_id": str(self.application.pk),
+                    "candidate": self.applicant.username,
+                    "time": 540,
+                    "panel": [
+                        {
+                            "id": str(self.member.pk),
+                            "name": self.member.username,
+                        }
+                    ],
+                }
+            ],
+        )
+        original_schedule = saved.schedule
+        original_revision = saved.updated_at
+        self.client.force_authenticate(user=self.admin_user)
+
+        response = self.client.post(
+            self.url,
+            {
+                "user_id": str(self.member.pk),
+                "participation": "not_participating",
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
+        self.assertEqual(response.data["affected_assignment_count"], 1)
+        saved.refresh_from_db()
+        self.assertEqual(saved.schedule, original_schedule)
+        self.assertTrue(saved.is_distributed)
+        self.assertGreater(saved.updated_at, original_revision)
+
+    def test_admin_cannot_set_participation_for_non_roster_user(self):
+        self._create_saved_schedule()
+        outsider = LegoUser.objects.create(
+            username="availability-outsider",
+            lego_id=629,
+        )
+        self.client.force_authenticate(user=self.admin_user)
+
+        response = self.client.post(
+            self.url,
+            {
+                "user_id": str(outsider.pk),
+                "participation": "not_participating",
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
 
 
 class SavedScheduleVisibilityTestCase(APITestCase):
@@ -2541,6 +2701,25 @@ class SolveJobLifecycleTestCase(APITestCase):
 
         self.assertEqual(res.status_code, status.HTTP_200_OK)
 
+    def test_latest_endpoint_recovers_an_unfinished_or_unconsumed_job(self):
+        job_id = self._enqueue().data["job_id"]
+
+        pending = self.client.get(
+            reverse("latest-solve-job"),
+            {"admission_slug": self.admission.slug},
+        )
+        call_command("run_solver_worker", once=True)
+        completed = self.client.get(
+            reverse("latest-solve-job"),
+            {"admission_slug": self.admission.slug},
+        )
+
+        self.assertEqual(pending.status_code, status.HTTP_200_OK)
+        self.assertEqual(pending.data["job_id"], job_id)
+        self.assertEqual(completed.status_code, status.HTTP_200_OK)
+        self.assertEqual(completed.data["job_id"], job_id)
+        self.assertEqual(completed.data["status"], SolveJob.STATUS_DONE)
+
     def test_other_admission_admin_cannot_read_or_cancel_job(self):
         job_id = self._enqueue().data["job_id"]
         other_group = Group.objects.create(name="OtherAsyncKom", lego_id=955)
@@ -2637,7 +2816,7 @@ class SolveJobLifecycleTestCase(APITestCase):
         )
         SolveJob.objects.filter(id=old.id).update(
             finished_at=timezone.now()
-            - timedelta(days=constants.SOLVE_JOB_RETENTION_DAYS + 1)
+            - timedelta(days=constants.SOLVE_PROPOSAL_RETENTION_DAYS + 1)
         )
 
         Command()._cleanup_old_jobs()
@@ -2654,13 +2833,184 @@ class SolveJobLifecycleTestCase(APITestCase):
         )
         SolveJob.objects.filter(id=old.id).update(
             finished_at=timezone.now()
-            - timedelta(days=constants.SOLVE_JOB_RETENTION_DAYS + 1)
+            - timedelta(days=constants.SOLVE_PROPOSAL_RETENTION_DAYS + 1)
         )
         self._enqueue()
 
         call_command("run_solver_worker", once=True)
 
         self.assertFalse(SolveJob.objects.filter(id=old.id).exists())
+
+
+class SolveProposalApplyTestCase(APITestCase):
+    client_class = ScheduleRevisionAPIClient
+
+    def setUp(self):
+        self.group = Group.objects.create(name="Proposal admins", lego_id=9590)
+        self.user = LegoUser.objects.create(username="proposal-admin", lego_id=9591)
+        Membership.objects.create(
+            user=self.user,
+            group=self.group,
+            role=RECRUITING,
+        )
+        self.admission = create_admission(
+            created_by=self.user,
+            slug="proposal-apply",
+        )
+        self.admission.admin_groups.add(self.group)
+        candidate = LegoUser.objects.create(
+            username="proposal-candidate",
+            lego_id=9592,
+        )
+        self.application = UserApplication.objects.create(
+            admission=self.admission,
+            user=candidate,
+        )
+        self.saved = SavedSchedule.objects.create(
+            admission=self.admission,
+            schedule=[],
+            start_date="2026-04-20",
+            end_date="2026-04-20",
+            session_duration=60,
+            enabled_slots=["2026-04-20|540"],
+            resolved_blocks=[{"slots": ["2026-04-20|540"]}],
+            panel_size=1,
+        )
+        InterviewAvailability.objects.create(
+            admission=self.admission,
+            user=self.user,
+            slots=["2026-04-20|540"],
+            submitted_grid_generation=self.saved.availability_generation,
+            participation=InterviewAvailability.PARTICIPATION_PARTICIPATING,
+        )
+        self.client.force_authenticate(user=self.user)
+
+    def _job(self):
+        return SolveJob.objects.create(
+            admission=self.admission,
+            requested_by=self.user,
+            status=SolveJob.STATUS_DONE,
+            finished_at=timezone.now(),
+            request_data={
+                "baseline_updated_at": self.saved.updated_at.isoformat(),
+                "panel_size": 1,
+                "options": {
+                    "policy_version": 2,
+                    "panel_stability": "preferred",
+                    "availability_fallback": "stop",
+                    "same_panel_per_block": False,
+                    "allow_overtime": False,
+                },
+            },
+            result={
+                "status": "SUCCESS",
+                "schedule": [
+                    {
+                        "candidate_id": str(self.application.pk),
+                        "candidate": "spoofed",
+                        "time": 540,
+                        "panel": [
+                            {
+                                "id": str(self.user.pk),
+                                "name": "spoofed",
+                                "is_overtime": False,
+                            }
+                        ],
+                    }
+                ],
+                "unplaceable": [],
+            },
+        )
+
+    def _apply(self, job, expected=None):
+        return self.client.post(
+            reverse("solve-job-apply", kwargs={"job_id": job.id}),
+            {"expected_updated_at": expected or self.saved.updated_at.isoformat()},
+            format="json",
+        )
+
+    def test_apply_promotes_exact_job_idempotently(self):
+        job = self._job()
+
+        first = self._apply(job)
+        second = self._apply(job, first.data["updated_at"])
+
+        self.assertEqual(first.status_code, status.HTTP_200_OK, first.data)
+        self.assertEqual(len(first.data["schedule"]), 1)
+        self.assertEqual(second.status_code, status.HTTP_200_OK, second.data)
+        job.refresh_from_db()
+        self.assertIsNotNone(job.applied_at)
+
+    def test_apply_rejects_stale_or_published_draft(self):
+        stale_job = self._job()
+        SavedSchedule.objects.filter(pk=self.saved.pk).update(updated_at=timezone.now())
+        stale = self._apply(stale_job)
+        self.assertEqual(stale.status_code, status.HTTP_409_CONFLICT)
+
+        self.saved.refresh_from_db()
+        published_job = self._job()
+        SavedSchedule.objects.filter(pk=self.saved.pk).update(is_distributed=True)
+        published = self._apply(published_job)
+        self.assertEqual(published.status_code, status.HTTP_409_CONFLICT)
+
+    def test_discarded_proposal_cannot_be_applied(self):
+        job = self._job()
+        discard = self.client.delete(reverse("solve-job", kwargs={"job_id": job.id}))
+
+        applied = self._apply(job)
+
+        self.assertEqual(discard.status_code, status.HTTP_200_OK)
+        self.assertIsNotNone(discard.data["discarded_at"])
+        self.assertEqual(applied.status_code, status.HTTP_409_CONFLICT)
+
+    def test_applied_proposal_cannot_also_be_discarded(self):
+        job = self._job()
+        applied = self._apply(job)
+
+        discarded = self.client.delete(
+            reverse("solve-job", kwargs={"job_id": job.id})
+        )
+
+        self.assertEqual(applied.status_code, status.HTTP_200_OK, applied.data)
+        self.assertEqual(discarded.status_code, status.HTTP_409_CONFLICT)
+        job.refresh_from_db()
+        self.assertIsNotNone(job.applied_at)
+        self.assertIsNone(job.discarded_at)
+
+    def test_expired_proposal_cannot_be_applied(self):
+        job = self._job()
+        SolveJob.objects.filter(pk=job.pk).update(
+            finished_at=timezone.now()
+            - timedelta(days=constants.SOLVE_PROPOSAL_RETENTION_DAYS + 1)
+        )
+
+        response = self._apply(job)
+
+        self.assertEqual(response.status_code, status.HTTP_409_CONFLICT)
+        self.assertIn("utløpt", response.data["detail"])
+
+    def test_database_rejects_a_job_marked_applied_and_discarded(self):
+        job = self._job()
+
+        with self.assertRaises(IntegrityError), transaction.atomic():
+            SolveJob.objects.filter(pk=job.pk).update(
+                applied_at=timezone.now(),
+                discarded_at=timezone.now(),
+            )
+
+    def test_generic_schedule_save_preserves_proposal_history(self):
+        job = self._job()
+        response = self.client.post(
+            reverse(
+                "saved-schedule",
+                kwargs={"admission_slug": self.admission.slug},
+            ),
+            {"panel_size": 1},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
+        self.assertTrue(SolveJob.objects.filter(pk=job.pk).exists())
 
 
 @override_settings(ALLOW_SYNTHETIC_SOLVER_INPUT=False)
@@ -2670,7 +3020,9 @@ class CanonicalSolverInputTestCase(APITestCase):
         self.admin = LegoUser.objects.create(
             username="canonical-admin", lego_id=961, gender="female"
         )
-        Membership.objects.create(user=self.admin, group=self.admin_group, role=MEMBER)
+        Membership.objects.create(
+            user=self.admin, group=self.admin_group, role=RECRUITING
+        )
         self.admission = create_admission(
             created_by=self.admin, slug="canonical-opptak"
         )
@@ -2735,6 +3087,47 @@ class CanonicalSolverInputTestCase(APITestCase):
         self.assertEqual(request_data["interviewers"], [{"id": str(self.admin.pk)}])
         self.assertNotIn(self.candidate.username, str(request_data))
         self.assertNotIn(self.admin.username, str(request_data))
+
+    def test_solve_waits_for_unresolved_roster_and_excludes_opted_out_member(self):
+        optional = LegoUser.objects.create(
+            username="canonical-optional",
+            lego_id=965,
+        )
+        Membership.objects.create(
+            user=optional,
+            group=self.admin_group,
+            role=MEMBER,
+        )
+        unresolved_payload = self._payload()
+        unresolved_payload["interviewers"].append(
+            {
+                "id": str(optional.pk),
+                "name": "Spoofed optional",
+                "gender": "",
+                "availability": [999],
+                "biased": [],
+            }
+        )
+
+        blocked = self.client.post(self.url, unresolved_payload, format="json")
+
+        self.assertEqual(blocked.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("interviewers", blocked.data)
+
+        InterviewAvailability.objects.create(
+            admission=self.admission,
+            user=optional,
+            slots=[],
+            participation=InterviewAvailability.PARTICIPATION_NOT_PARTICIPATING,
+        )
+        accepted = self.client.post(self.url, self._payload(), format="json")
+
+        self.assertEqual(accepted.status_code, status.HTTP_202_ACCEPTED, accepted.data)
+        request_data = SolveJob.objects.get(id=accepted.data["job_id"]).request_data
+        self.assertEqual(
+            request_data["interviewers"],
+            [{"id": str(self.admin.pk)}],
+        )
 
     def test_repair_preview_rejects_a_stale_baseline(self):
         payload = {
@@ -2841,7 +3234,7 @@ class CanonicalSolverInputTestCase(APITestCase):
         self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertIn("candidates", res.data)
 
-    def test_worker_rehydrates_minimal_payload_at_claim_time(self):
+    def test_worker_rehydrates_and_auto_applies_first_solve(self):
         res = self.client.post(self.url, self._payload(), format="json")
         job = SolveJob.objects.get(id=res.data["job_id"])
 
@@ -2854,6 +3247,11 @@ class CanonicalSolverInputTestCase(APITestCase):
         )
         self.assertEqual(
             job.result["schedule"][0]["panel"][0]["name"], self.admin.username
+        )
+        self.assertIsNotNone(job.applied_at)
+        self.assertEqual(
+            len(SavedSchedule.objects.get(admission=self.admission).schedule),
+            1,
         )
 
 

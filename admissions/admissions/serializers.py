@@ -1,6 +1,6 @@
 import json
 from collections.abc import Mapping
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from uuid import UUID
 
 from django.core.validators import MinLengthValidator
@@ -17,9 +17,9 @@ from admissions.admissions.admission_access import (
     synchronize_admission_group_disclosures,
 )
 from admissions.admissions.json_models import (
+    DataType,
     InputModelList,
     InputResponseModel,
-    DataType,
     validators,
 )
 from admissions.admissions.models import (
@@ -34,6 +34,18 @@ from admissions.admissions.models import (
     SavedSchedule,
     SolveJob,
     UserApplication,
+)
+from admissions.admissions.schedule_policy import (
+    AVAILABILITY_FALLBACKS,
+    PANEL_STABILITIES,
+    POLICY_VERSION,
+    SchedulePolicyError,
+    build_deviation_review,
+    normalize_schedule_policy,
+)
+from admissions.admissions.schedule_validation import (
+    ScheduleValidationError,
+    canonicalize_schedule,
 )
 from admissions.admissions.scheduling_utils import get_eligible_interviewer_ids
 from admissions.utils.email import send_message
@@ -683,6 +695,82 @@ class ApplicationCreateUpdateSerializer(serializers.HyperlinkedModelSerializer):
 
 
 class SavedScheduleSerializer(serializers.ModelSerializer):
+    manual_blocks = serializers.JSONField(source="resolved_blocks", read_only=True)
+    layout_capabilities = serializers.SerializerMethodField()
+    deviation_review = serializers.SerializerMethodField()
+
+    def get_layout_capabilities(self, _instance):
+        return {
+            "version": 2,
+            "slot_overrides": True,
+            "availability_projection": True,
+            "opened_pause_semantics": "separate_block",
+        }
+
+    def get_deviation_review(self, instance):
+        if not self.context.get("include_deviation_review", False):
+            return None
+        try:
+            policy = normalize_schedule_policy(
+                instance.solver_options,
+                persisted=True,
+            )
+        except SchedulePolicyError:
+            return {
+                "policy": None,
+                "deviation_count": 0,
+                "deviations": [],
+                "deviation_fingerprint": "",
+                "requires_approval": False,
+                "approved": False,
+                "error": "Lagret planleggingspolicy er ugyldig.",
+            }
+        try:
+            canonical_schedule = canonicalize_schedule(
+                admission=instance.admission,
+                schedule=instance.schedule,
+                start_date=instance.start_date,
+                enabled_slots=instance.enabled_slots,
+                panel_size=instance.panel_size,
+                solver_options=instance.solver_options,
+                request_user_id=getattr(self.context.get("request"), "user_id", None),
+                require_all_candidates=False,
+                end_date=instance.end_date,
+                session_duration=instance.session_duration,
+                day_start_minute=instance.day_start_minute,
+                day_end_minute=instance.day_end_minute,
+                chunk_size=instance.chunk_size,
+                chunk_break_minutes=instance.chunk_break_minutes,
+                resolved_blocks=instance.resolved_blocks,
+                availability_generation=instance.availability_generation,
+                legacy_submission_without_generation=(
+                    instance.layout_version == 1 or not instance.resolved_blocks
+                ),
+            )
+        except ScheduleValidationError as exc:
+            return {
+                "policy": policy.snapshot(),
+                "deviation_count": 0,
+                "deviations": [],
+                "deviation_fingerprint": "",
+                "requires_approval": False,
+                "approved": False,
+                "error": exc.message,
+            }
+        review = build_deviation_review(
+            schedule=canonical_schedule,
+            policy=policy,
+            availability_generation=instance.availability_generation,
+            layout_version=instance.layout_version,
+        )
+        review["approved"] = instance.deviation_approvals.filter(
+            deviation_fingerprint=review["deviation_fingerprint"],
+            schedule_fingerprint=review["schedule_fingerprint"],
+            availability_generation=instance.availability_generation,
+            layout_version=instance.layout_version,
+        ).exists()
+        return review
+
     class Meta:
         model = SavedSchedule
         fields = [
@@ -697,6 +785,14 @@ class SavedScheduleSerializer(serializers.ModelSerializer):
             "day_end_minute",
             "chunk_size",
             "chunk_break_minutes",
+            "block_mode",
+            "resolved_blocks",
+            "manual_blocks",
+            "layout_version",
+            "slot_overrides",
+            "availability_generation",
+            "layout_capabilities",
+            "deviation_review",
             "panel_size",
             "solver_options",
             "is_distributed",
@@ -845,29 +941,67 @@ class NameVisibilityAuditEventSerializer(serializers.ModelSerializer):
 
 class SolveJobSerializer(serializers.ModelSerializer):
     job_id = serializers.UUIDField(source="id", read_only=True)
+    proposal_expires_at = serializers.SerializerMethodField()
+    baseline_updated_at = serializers.SerializerMethodField()
+    auto_apply_if_empty = serializers.SerializerMethodField()
+
+    def get_proposal_expires_at(self, obj):
+        if obj.finished_at is None or obj.applied_at or obj.discarded_at:
+            return None
+        return obj.finished_at + timedelta(days=constants.SOLVE_PROPOSAL_RETENTION_DAYS)
+
+    def get_baseline_updated_at(self, obj):
+        return (obj.request_data or {}).get("baseline_updated_at")
+
+    def get_auto_apply_if_empty(self, obj):
+        return bool((obj.request_data or {}).get("auto_apply_if_empty"))
 
     class Meta:
         model = SolveJob
         fields = (
             "job_id",
             "status",
+            "request_fingerprint",
             "result",
             "error",
             "created_at",
             "started_at",
             "finished_at",
+            "applied_at",
+            "discarded_at",
+            "proposal_expires_at",
+            "baseline_updated_at",
+            "auto_apply_if_empty",
         )
         read_only_fields = fields
 
 
+class ApplySolveJobSerializer(serializers.Serializer):
+    expected_updated_at = serializers.DateTimeField()
+
+
 class SolveOptionsSerializer(serializers.Serializer):
     enforce_same_gender = serializers.BooleanField(default=False)
-    allow_overtime = serializers.BooleanField(default=True)
+    allow_overtime = serializers.BooleanField(required=False)
     prioritize_continuity = serializers.BooleanField(default=True)
-    same_panel_per_block = serializers.BooleanField(default=True)
+    same_panel_per_block = serializers.BooleanField(required=False)
     avoid_consecutive_interviewer_blocks = serializers.BooleanField(default=True)
+    policy_version = serializers.IntegerField(required=False)
+    panel_stability = serializers.ChoiceField(
+        choices=PANEL_STABILITIES,
+        required=False,
+    )
+    availability_fallback = serializers.ChoiceField(
+        choices=AVAILABILITY_FALLBACKS,
+        required=False,
+    )
     initial_strategy = serializers.ChoiceField(
-        choices=["balanced", "minimize_overtime", "balance_workload"],
+        choices=[
+            "balanced",
+            "compact_days",
+            "minimize_overtime",
+            "balance_workload",
+        ],
         required=False,
     )
     repair_strategy = serializers.ChoiceField(
@@ -889,6 +1023,93 @@ class SolveOptionsSerializer(serializers.Serializer):
         max_value=constants.MAX_SOLVER_SECONDS,
         default=constants.MAX_SOLVER_SECONDS,
     )
+
+    def validate(self, attrs):
+        # Nested serializers do not expose ``initial_data`` themselves. These
+        # policy fields have no defaults, so membership in ``attrs`` preserves
+        # whether the client supplied each compatibility shadow.
+        supplied_fields = set(attrs)
+        parent_input = getattr(self.parent, "initial_data", {})
+        direct_input = getattr(self, "initial_data", {})
+        submitted_options = (
+            parent_input.get(self.field_name, {})
+            if isinstance(parent_input, dict) and self.field_name in parent_input
+            else direct_input
+        )
+        if not isinstance(submitted_options, dict):
+            submitted_options = {}
+        strategy_defaults = {
+            "minimize_overtime": (100, 1, 0, False),
+            "balanced": (40, 4, 1, True),
+            "compact_days": (40, 2, 48, True),
+            "balance_workload": (12, 10, 0, False),
+        }
+        strategy = attrs.get("initial_strategy")
+        if strategy in strategy_defaults and not any(
+            field in submitted_options
+            for field in (
+                "overtime_weight",
+                "load_balance_weight",
+                "continuity_weight",
+                "prioritize_continuity",
+            )
+        ):
+            overtime, load, continuity, prioritize = strategy_defaults[strategy]
+            attrs.update(
+                overtime_weight=overtime,
+                load_balance_weight=load,
+                continuity_weight=continuity,
+                prioritize_continuity=prioritize,
+            )
+        version = attrs.get("policy_version")
+        has_v2_fields = any(
+            key in supplied_fields
+            for key in ("panel_stability", "availability_fallback")
+        )
+        if version is None and has_v2_fields:
+            raise serializers.ValidationError(
+                {"policy_version": ["Policyversjon 2 må oppgis eksplisitt."]}
+            )
+        if version is not None:
+            if version != POLICY_VERSION:
+                raise serializers.ValidationError(
+                    {"policy_version": ["Ukjent versjon av planleggingspolicy."]}
+                )
+            missing = [
+                key
+                for key in ("panel_stability", "availability_fallback")
+                if key not in attrs
+            ]
+            if missing:
+                raise serializers.ValidationError(
+                    {key: ["Feltet er påkrevd for policyversjon 2."] for key in missing}
+                )
+            expected_same_panel = attrs["panel_stability"] == "required"
+            expected_allow_overtime = attrs["availability_fallback"] == "automatic"
+            if (
+                "same_panel_per_block" in supplied_fields
+                and attrs.get("same_panel_per_block") != expected_same_panel
+            ):
+                raise serializers.ValidationError(
+                    {
+                        "same_panel_per_block": [
+                            "Legacy-feltet samsvarer ikke med policyen."
+                        ]
+                    }
+                )
+            if (
+                "allow_overtime" in supplied_fields
+                and attrs.get("allow_overtime") != expected_allow_overtime
+            ):
+                raise serializers.ValidationError(
+                    {"allow_overtime": ["Legacy-feltet samsvarer ikke med policyen."]}
+                )
+            attrs["same_panel_per_block"] = expected_same_panel
+            attrs["allow_overtime"] = expected_allow_overtime
+        else:
+            attrs.setdefault("same_panel_per_block", True)
+            attrs.setdefault("allow_overtime", True)
+        return attrs
 
 
 class SchedulePanelMemberSerializer(serializers.Serializer):
@@ -935,10 +1156,27 @@ class SaveScheduleInputSerializer(serializers.Serializer):
     chunk_break_minutes = serializers.IntegerField(
         min_value=0, max_value=240, required=False
     )
+    block_mode = serializers.ChoiceField(choices=["standard", "manual"], required=False)
+    manual_blocks = serializers.ListField(
+        child=serializers.DictField(),
+        required=False,
+        max_length=constants.MAX_SCHEDULE_SLOTS,
+    )
+    slot_overrides = serializers.ListField(
+        child=serializers.DictField(),
+        required=False,
+        max_length=constants.MAX_SCHEDULE_SLOTS,
+    )
     panel_size = serializers.IntegerField(
         min_value=1, max_value=10, required=False, allow_null=True
     )
     solver_options = SolveOptionsSerializer(required=False, allow_null=True)
+    deviation_approval_fingerprint = serializers.CharField(
+        required=False,
+        max_length=64,
+        min_length=64,
+        write_only=True,
+    )
     is_distributed = serializers.BooleanField(required=False)
     conflict_review_open = serializers.BooleanField(required=False)
     name_visibility = serializers.ChoiceField(
@@ -1136,6 +1374,14 @@ class ScheduleRequestsSerializer(serializers.Serializer):
 
 
 class SaveInterviewAvailabilitySerializer(serializers.Serializer):
+    user_id = serializers.UUIDField(required=False)
+    participation = serializers.ChoiceField(
+        choices=[
+            InterviewAvailability.PARTICIPATION_AWAITING,
+            InterviewAvailability.PARTICIPATION_NOT_PARTICIPATING,
+        ],
+        required=False,
+    )
     slots = serializers.ListField(
         child=serializers.CharField(),
         required=False,
@@ -1147,12 +1393,23 @@ class SaveInterviewAvailabilitySerializer(serializers.Serializer):
     reviewed_candidate_ids = serializers.ListField(
         child=serializers.CharField(), required=False, max_length=500
     )
+    expected_availability_generation = serializers.IntegerField(
+        min_value=1, required=False
+    )
 
     def validate(self, attrs):
         for field in ("slots", "conflicts", "reviewed_candidate_ids"):
             values = attrs.get(field)
             if values is not None and len(values) != len(set(values)):
                 raise serializers.ValidationError({field: ["Verdiene må være unike."]})
+        if (
+            attrs.get("participation")
+            == InterviewAvailability.PARTICIPATION_NOT_PARTICIPATING
+            and "slots" in attrs
+        ):
+            raise serializers.ValidationError(
+                {"slots": ["En som ikke deltar kan ikke samtidig sende inn tider."]}
+            )
         return attrs
 
 
@@ -1171,4 +1428,10 @@ class InterviewAvailabilityParticipantSerializer(serializers.Serializer):
     )
     conflict_review_complete = serializers.BooleanField(default=False)
     has_submitted = serializers.BooleanField()
+    participation = serializers.ChoiceField(
+        choices=InterviewAvailability.PARTICIPATION_CHOICES
+    )
+    needs_review = serializers.BooleanField(default=False)
+    affected_assignment_count = serializers.IntegerField(min_value=0, default=0)
+    availability_generation = serializers.IntegerField(min_value=1, default=1)
     is_me = serializers.BooleanField()

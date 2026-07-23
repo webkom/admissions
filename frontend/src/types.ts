@@ -91,16 +91,51 @@ export interface Interviewer {
   availability: number[];
   biased: string[];
   has_submitted: boolean;
+  participation?: InterviewerParticipation;
+  affected_assignment_count?: number;
 }
 
 export type InitialPlanningStrategy =
   | "balanced"
   | "minimize_overtime"
+  | "compact_days"
   | "balance_workload";
 
+export type InterviewerParticipation =
+  | "awaiting_response"
+  | "participating"
+  | "not_participating";
+
 export type RepairStrategy = "minimum_change" | "preserve_panels" | "balanced";
+export type PanelStability = "required" | "preferred" | "flexible";
+export type AvailabilityFallback = "stop" | "propose" | "automatic";
+
+export interface ScheduleDeviation {
+  kind: "availability";
+  candidate_id: string;
+  interviewer_id: string;
+  time: number;
+}
+
+export interface ScheduleDeviationReview {
+  policy: {
+    policy_version: number | null;
+    panel_stability: PanelStability;
+    availability_fallback: AvailabilityFallback;
+  } | null;
+  schedule_fingerprint?: string;
+  deviation_fingerprint: string;
+  deviations: ScheduleDeviation[];
+  deviation_count: number;
+  requires_approval: boolean;
+  approved: boolean;
+  error?: string;
+}
 
 export interface SolverOptions {
+  policy_version: 2;
+  panel_stability: PanelStability;
+  availability_fallback: AvailabilityFallback;
   enforce_same_gender: boolean;
   allow_overtime: boolean;
   prioritize_continuity: boolean;
@@ -141,6 +176,23 @@ export interface EnabledWindow {
 }
 
 export type NameVisibility = "hidden" | "admin_only" | "committee";
+export type ScheduleBlockMode = "standard" | "manual";
+
+export interface ManualScheduleBlock {
+  slots: string[];
+}
+
+export interface SlotOverride {
+  slot: string;
+  open: boolean;
+}
+
+export interface ScheduleLayoutCapabilities {
+  version: number;
+  slot_overrides: boolean;
+  availability_projection: boolean;
+  opened_pause_semantics: "separate_block";
+}
 
 export interface SavedSchedule {
   id: number;
@@ -154,8 +206,18 @@ export interface SavedSchedule {
   day_end_minute: number;
   chunk_size: number;
   chunk_break_minutes: number;
+  block_mode: ScheduleBlockMode;
+  resolved_blocks: ManualScheduleBlock[];
+  manual_blocks: ManualScheduleBlock[];
+  layout_version: number;
+  slot_overrides: SlotOverride[];
+  availability_generation: number;
+  layout_capabilities: ScheduleLayoutCapabilities;
   panel_size?: number | null;
   solver_options?: {
+    policy_version?: number;
+    panel_stability?: PanelStability;
+    availability_fallback?: AvailabilityFallback;
     enforce_same_gender?: boolean;
     allow_overtime?: boolean;
     prioritize_continuity?: boolean;
@@ -169,6 +231,7 @@ export interface SavedSchedule {
     continuity_weight?: number;
     max_solver_seconds?: number;
   } | null;
+  deviation_review?: ScheduleDeviationReview | null;
   is_distributed: boolean;
   conflict_review_open: boolean;
   name_visibility: NameVisibility;
@@ -187,5 +250,9 @@ export interface InterviewAvailabilityParticipant {
   proposed_candidate_ids: string[];
   conflict_review_complete: boolean;
   has_submitted: boolean;
+  participation: InterviewerParticipation;
+  needs_review: boolean;
+  affected_assignment_count: number;
+  availability_generation: number;
   is_me: boolean;
 }

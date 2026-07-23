@@ -1,22 +1,12 @@
 import React, { useEffect, useMemo, useState } from "react";
-import {
-  AlertTriangle,
-  CalendarCheck,
-  Check,
-  MoreHorizontal,
-  Pencil,
-  Unlock,
-} from "lucide-react";
+import { CalendarCheck, MoreHorizontal, Unlock } from "lucide-react";
 import {
   Chip,
-  SegmentedControl,
   SchedulePanel,
   SchedulePanelHeader,
   SchedulePanelBody,
   actionButtonBase,
   actionButtonNeutral,
-  actionButtonPrimary,
-  sectionLabelClass,
 } from "src/components/Scheduling/ui";
 import ConfirmDialog from "src/components/Scheduling/ConfirmDialog";
 import ExportChooserModal from "src/components/Scheduling/Solver/ExportChooserModal";
@@ -80,14 +70,10 @@ interface DistributedPlanViewProps {
     scheduleIndex: number,
     source: "solver" | "manual",
   ) => Promise<boolean>;
-  onPublish: (visibility: NameVisibility) => Promise<boolean>;
   onUnlock: () => Promise<boolean>;
+  onUnlocked: () => void;
   planTransition: "publishing" | "unlocking" | null;
   planTransitionError: string;
-  onEditProposal: () => void;
-  proposalReviewReady: boolean;
-  proposalReviewPendingCount: number;
-  proposalConflictCount: number;
   myConflicts: string[];
   realCandidates: Candidate[];
   interviewers: Interviewer[];
@@ -110,14 +96,10 @@ const DistributedPlanView: React.FC<DistributedPlanViewProps> = ({
   onChangeInterviewTime,
   onToggleLock,
   onSetBookingSource,
-  onPublish,
   onUnlock,
+  onUnlocked,
   planTransition,
   planTransitionError,
-  onEditProposal,
-  proposalReviewReady,
-  proposalReviewPendingCount,
-  proposalConflictCount,
   myConflicts,
   realCandidates,
   interviewers,
@@ -132,11 +114,7 @@ const DistributedPlanView: React.FC<DistributedPlanViewProps> = ({
   const [isConfirmingShowNames, setIsConfirmingShowNames] = useState(false);
   const [isChangingTime, setIsChangingTime] = useState(false);
   const [lockBusyIndex, setLockBusyIndex] = useState<number | null>(null);
-  const [isPublishDialogOpen, setIsPublishDialogOpen] = useState(false);
   const [isUnlockDialogOpen, setIsUnlockDialogOpen] = useState(false);
-  const canPublishDraft = proposalReviewReady && proposalConflictCount === 0;
-  const [publishVisibility, setPublishVisibility] =
-    useState<NameVisibility>("hidden");
   const [outreachPersistenceState, setOutreachPersistenceState] = useState<
     "saving" | "saved" | "error"
   >("saved");
@@ -322,65 +300,21 @@ const DistributedPlanView: React.FC<DistributedPlanViewProps> = ({
     }
   };
 
-  const openPublishDialog = () => {
-    if (!canPublishDraft) return;
-    setPublishVisibility(savedSchedule.name_visibility ?? "hidden");
-    setIsPublishDialogOpen(true);
-  };
-
-  const confirmPublish = async () => {
-    const published = await onPublish(publishVisibility);
-    if (published) setIsPublishDialogOpen(false);
-  };
-
   const confirmUnlock = async () => {
     const unlocked = await onUnlock();
     if (!unlocked) return;
     setIsUnlockDialogOpen(false);
-    onEditProposal();
+    onUnlocked();
   };
 
   return (
     <SchedulePanel>
       <SchedulePanelHeader
         icon={CalendarCheck}
-        title={savedSchedule.is_distributed ? "Intervjuplan" : "Planutkast"}
-        chips={
-          savedSchedule.is_distributed ? (
-            <Chip tone="success">Publisert</Chip>
-          ) : (
-            <Chip tone="muted">Kladd</Chip>
-          )
-        }
+        title="Intervjuplan"
+        chips={<Chip tone="success">Publisert</Chip>}
         actions={
           <div className="flex flex-wrap items-center gap-2">
-            {isAdmin && !savedSchedule.is_distributed && (
-              <button
-                type="button"
-                onClick={onEditProposal}
-                className={cn(actionButtonBase, actionButtonNeutral)}
-              >
-                <Pencil size={iconSizes.small} aria-hidden="true" />
-                Rediger forslag
-              </button>
-            )}
-            {isAdmin && !savedSchedule.is_distributed && (
-              <button
-                type="button"
-                onClick={openPublishDialog}
-                disabled={planTransition !== null || !canPublishDraft}
-                title={
-                  proposalConflictCount > 0
-                    ? "Løs registrerte inhabiliteter før planen publiseres."
-                    : !proposalReviewReady
-                      ? "Alle panelmedlemmer må kontrollere foreslåtte kandidater først."
-                      : undefined
-                }
-                className={cn(actionButtonBase, actionButtonPrimary)}
-              >
-                {planTransition === "publishing" ? "Publiserer…" : "Publiser"}
-              </button>
-            )}
             <details className="relative">
               <summary
                 className={cn(
@@ -400,7 +334,7 @@ const DistributedPlanView: React.FC<DistributedPlanViewProps> = ({
                 >
                   Eksporter plan
                 </button>
-                {isAdmin && savedSchedule.is_distributed && (
+                {isAdmin && (
                   <button
                     type="button"
                     onClick={() => setIsUnlockDialogOpen(true)}
@@ -426,45 +360,6 @@ const DistributedPlanView: React.FC<DistributedPlanViewProps> = ({
         </div>
       )}
 
-      {isAdmin && !savedSchedule.is_distributed && (
-        <div
-          className={cn(
-            "flex flex-wrap items-center justify-between gap-3 border-b px-6 py-3 text-ui",
-            canPublishDraft
-              ? "border-success-border bg-success-bg text-success"
-              : "border-amber-200 bg-amber-50 text-amber-900",
-          )}
-        >
-          <div className="flex items-center gap-2.5 font-semibold">
-            {canPublishDraft ? (
-              <Check size={iconSizes.standard} aria-hidden="true" />
-            ) : (
-              <AlertTriangle size={iconSizes.standard} aria-hidden="true" />
-            )}
-            <span>
-              {proposalConflictCount > 0
-                ? `${proposalConflictCount} intervju${
-                    proposalConflictCount === 1 ? "" : "er"
-                  } har en registrert inhabilitet og må repareres.`
-                : !proposalReviewReady
-                  ? `${proposalReviewPendingCount} panelmedlem${
-                      proposalReviewPendingCount === 1 ? "" : "mer"
-                    } må kontrollere foreslåtte kandidater.`
-                  : "Alle foreslåtte kandidater er kontrollert. Planen kan publiseres."}
-            </span>
-          </div>
-          {!canPublishDraft && (
-            <button
-              type="button"
-              onClick={onEditProposal}
-              className={cn(actionButtonBase, actionButtonNeutral)}
-            >
-              Åpne planutkast
-            </button>
-          )}
-        </div>
-      )}
-
       <PlanFilterBar
         myInterviewsOnly={myInterviewsOnly}
         onToggleMyInterviews={() => setMyInterviewsOnly((value) => !value)}
@@ -473,7 +368,6 @@ const DistributedPlanView: React.FC<DistributedPlanViewProps> = ({
         onChangePlanViewMode={setPlanViewMode}
         canToggleCandidateNames={canToggleCandidateNames}
         canHideCandidateNames={isAdmin}
-        isDistributed={savedSchedule.is_distributed}
         nameVisibility={savedSchedule.name_visibility}
         revealedGroupNames={
           savedSchedule.revealed_groups?.map((group) => group.name) ?? []
@@ -482,9 +376,6 @@ const DistributedPlanView: React.FC<DistributedPlanViewProps> = ({
           if (!isUpdatingNames) handleSelectVisibility(next);
         }}
         isUpdatingNames={isUpdatingNames}
-        showRerun={false}
-        onRerun={() => undefined}
-        isRerunning={false}
         conflictBadgeCount={
           namesVisible && myConflicts.length > 0 ? myConflicts.length : 0
         }
@@ -510,19 +401,17 @@ const DistributedPlanView: React.FC<DistributedPlanViewProps> = ({
           formatTimeLabel={formatTimeLabel}
         />
 
-        {canManageInterviewWorkflow &&
-          namesVisible &&
-          savedSchedule.is_distributed && (
-            <InterviewOutreachTemplateEditor
-              value={outreachTemplates}
-              onChange={(nextTemplates) => {
-                setOutreachPersistenceState("saving");
-                setOutreachTemplates(nextTemplates);
-              }}
-              persistenceState={outreachPersistenceState}
-              committeeName={committeeName}
-            />
-          )}
+        {canManageInterviewWorkflow && namesVisible && (
+          <InterviewOutreachTemplateEditor
+            value={outreachTemplates}
+            onChange={(nextTemplates) => {
+              setOutreachPersistenceState("saving");
+              setOutreachTemplates(nextTemplates);
+            }}
+            persistenceState={outreachPersistenceState}
+            committeeName={committeeName}
+          />
+        )}
 
         {planViewMode === "calendar" ? (
           <DistributedPlanCalendar
@@ -591,36 +480,6 @@ const DistributedPlanView: React.FC<DistributedPlanViewProps> = ({
             intervjuplanen, ikke bare deg. Bruk det kun når komiteen trenger
             navnene for å gjennomføre intervjuene.
           </p>
-        </ConfirmDialog>
-      )}
-
-      {isPublishDialogOpen && (
-        <ConfirmDialog
-          title="Publiser intervjuplan"
-          confirmLabel={
-            planTransition === "publishing" ? "Publiserer…" : "Publiser"
-          }
-          onConfirm={confirmPublish}
-          onClose={() => setIsPublishDialogOpen(false)}
-          busy={planTransition === "publishing"}
-        >
-          <p className="m-0">
-            Planen blir synlig for komiteen. Velg hvem som skal se
-            kandidatnavnene.
-          </p>
-          <div className="mt-4">
-            <span className={sectionLabelClass}>Kandidatnavn</span>
-            <SegmentedControl<NameVisibility>
-              aria-label="Synlighet for kandidatnavn ved publisering"
-              value={publishVisibility}
-              onChange={setPublishVisibility}
-              items={[
-                { key: "hidden", label: "Skjult" },
-                { key: "admin_only", label: "Opptaksansvarlige" },
-                { key: "committee", label: "Hele komiteen" },
-              ]}
-            />
-          </div>
         </ConfirmDialog>
       )}
 

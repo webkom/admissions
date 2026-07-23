@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { LayoutPanelTop } from "lucide-react";
+import cn from "src/utils/cn";
 import {
   buildBlockTimeChunks,
   buildBlockTimeSlots,
@@ -12,26 +13,40 @@ import {
   SchedulePanel,
   SchedulePanelBody,
   SchedulePanelHeader,
+  actionButtonBase,
+  actionButtonGhost,
   type TimeValue,
 } from "../ui";
-import type { EnabledWindow } from "../types";
+import type { EnabledWindow, SlotOverride } from "../types";
 import { isConflictError } from "../Solver/solverHelpers";
 import AdminAvailabilityGrid from "./AdminAvailabilityGrid";
 import AdminScheduleSettingsPanel, {
   AdminScheduleConfigFooter,
 } from "./AdminScheduleSettingsPanel";
 import {
+  canonicalizeSlotOverrides,
+  buildFineTuneTimeSlots,
   CHUNK_BREAK_LIMITS,
+  closeAllScheduleCapacity,
+  deriveScheduleDraftSummary,
+  deriveSlotOverrides,
   getDateRangeState,
   getScheduleConfigChangeState,
-  getTotalInterviewSlotCount,
   isDurationPreset,
   isPausePreset,
   MAX_RANGE_DAYS,
   normalizeSourceWindows,
+  openAllStandardBlocks,
   parseIntegerInRange,
+  preserveManualDraftSlots,
+  rebuildBaseForBlockPattern,
+  reconstructBaseSlots,
+  setDayStandardBlocksOpen,
+  setStandardBlockOpen,
   SESSION_DURATION_LIMITS,
+  toggleFineTuneSlot,
   type ScheduleConfigBaseline,
+  type ScheduleDraftState,
   shapeDraftSlots,
 } from "./adminScheduleConfigModel";
 
@@ -43,6 +58,8 @@ interface AdminScheduleConfigProps {
   dayEndMinute: number;
   chunkSize: number;
   chunkBreakMinutes: number;
+  layoutVersion: number;
+  slotOverrides: SlotOverride[];
   enabledWindows: EnabledWindow[];
   enabledSlots: Set<string>;
   hasScheduleDraft?: boolean;
@@ -63,6 +80,7 @@ export interface ScheduleConfigInput {
   dayEndMinute: number;
   chunkSize: number;
   chunkBreakMinutes: number;
+  slotOverrides?: SlotOverride[];
   enabledSlots: string[];
   enabledWindows: EnabledWindow[];
   expectedUpdatedAt: string | null;
@@ -77,6 +95,8 @@ const AdminScheduleConfig: React.FC<AdminScheduleConfigProps> = ({
   dayEndMinute,
   chunkSize,
   chunkBreakMinutes,
+  layoutVersion,
+  slotOverrides,
   enabledWindows,
   enabledSlots,
   hasScheduleDraft = false,
@@ -90,6 +110,9 @@ const AdminScheduleConfig: React.FC<AdminScheduleConfigProps> = ({
   const [saveTick, setSaveTick] = useState(0);
   const [reshapedSlotCount, setReshapedSlotCount] = useState(0);
   const [isSettingsCollapsed, setIsSettingsCollapsed] = useState(false);
+  const [editorView, setEditorView] = useState<"blocks" | "fine">("blocks");
+  const [layoutResetRequested, setLayoutResetRequested] = useState(false);
+  const legacyLayoutLocked = layoutVersion < 2 && !layoutResetRequested;
 
   const [pendingStart, setPendingStart] = useState<TimeValue>({
     h: Math.floor(dayStartMinute / 60),
@@ -124,6 +147,17 @@ const AdminScheduleConfig: React.FC<AdminScheduleConfigProps> = ({
     );
     return new Set(enabledWindowsToSlots(sourceWindows, sessionDuration));
   });
+  const [draftOverrides, setDraftOverrides] = useState<SlotOverride[]>(() =>
+    canonicalizeSlotOverrides(slotOverrides),
+  );
+  const draftStateRef = useRef<ScheduleDraftState>({
+    enabledSlots: draftSlots,
+    slotOverrides: draftOverrides,
+  });
+  draftStateRef.current = {
+    enabledSlots: draftSlots,
+    slotOverrides: draftOverrides,
+  };
   const [baseline, setBaseline] = useState<ScheduleConfigBaseline>(() => ({
     startDate,
     endDate,
@@ -131,6 +165,7 @@ const AdminScheduleConfig: React.FC<AdminScheduleConfigProps> = ({
     dayEndMinute,
     chunkSize,
     chunkBreakMinutes,
+    slotOverrides: canonicalizeSlotOverrides(slotOverrides),
     enabledWindows: normalizeSourceWindows(
       enabledWindows,
       enabledSlots,
@@ -203,19 +238,25 @@ const AdminScheduleConfig: React.FC<AdminScheduleConfigProps> = ({
     isInvalidRange,
   ]);
 
-  // A shape change needs one overlap-based migration from the previous grid.
-  // Keep the result as the editable source of truth so toggling a block cannot
-  // be undone by re-deriving it from merged windows on the next render.
-  const gridShapeKey = React.useMemo(
-    () =>
-      JSON.stringify({
+  const manualTimeSlots = React.useMemo(() => {
+    if (isInvalidRange) return [];
+    return buildFineTuneTimeSlots(chunks, pendingDuration);
+  }, [chunks, isInvalidRange, pendingDuration]);
+
+  const gridShape = React.useMemo(
+    () => ({
+      key: JSON.stringify({
         dates,
         startMinute,
         endMinute,
         sessionDuration: pendingDuration,
         chunkBreakMinutes: pendingChunkBreak,
-        chunkSize: pendingChunkBreak > 0 ? pendingChunkSize : null,
+        chunkSize: pendingChunkSize,
       }),
+      sessionDuration: pendingDuration,
+      chunkBreakMinutes: pendingChunkBreak,
+      chunkSize: pendingChunkSize,
+    }),
     [
       dates,
       endMinute,
@@ -225,24 +266,57 @@ const AdminScheduleConfig: React.FC<AdminScheduleConfigProps> = ({
       startMinute,
     ],
   );
-  const previousGridShapeKey = useRef(gridShapeKey);
+  const previousGridShape = useRef(gridShape);
 
   useEffect(() => {
-    if (previousGridShapeKey.current === gridShapeKey) return;
-    previousGridShapeKey.current = gridShapeKey;
+    if (previousGridShape.current.key === gridShape.key) return;
+    const previous = previousGridShape.current;
+    previousGridShape.current = gridShape;
     setDraftSlots((currentSlots) => {
-      const nextSlots = shapeDraftSlots(
-        dates,
-        chunks,
-        currentSlots,
-        pendingDuration,
-      );
+      const previousBase = reconstructBaseSlots(currentSlots, draftOverrides);
+      const durationChanged =
+        previous.sessionDuration !== gridShape.sessionDuration;
+      const blockPatternChanged =
+        previous.chunkSize !== gridShape.chunkSize ||
+        previous.chunkBreakMinutes !== gridShape.chunkBreakMinutes;
+      let nextSlots: Set<string>;
+      if (durationChanged) {
+        nextSlots = shapeDraftSlots(
+          dates,
+          chunks,
+          currentSlots,
+          pendingDuration,
+        );
+        setDraftOverrides([]);
+      } else if (blockPatternChanged) {
+        nextSlots = rebuildBaseForBlockPattern(dates, chunks, previousBase);
+        setDraftOverrides([]);
+      } else {
+        nextSlots = preserveManualDraftSlots(
+          dates,
+          manualTimeSlots,
+          currentSlots,
+        );
+        const nextBase = preserveManualDraftSlots(
+          dates,
+          manualTimeSlots,
+          previousBase,
+        );
+        setDraftOverrides(deriveSlotOverrides(nextSlots, nextBase));
+      }
       setReshapedSlotCount(
         Array.from(currentSlots).filter((slot) => !nextSlots.has(slot)).length,
       );
       return nextSlots;
     });
-  }, [chunks, dates, gridShapeKey, pendingDuration]);
+  }, [
+    chunks,
+    dates,
+    draftOverrides,
+    gridShape,
+    manualTimeSlots,
+    pendingDuration,
+  ]);
 
   const normalizedDraftWindows = React.useMemo(
     () => slotsToEnabledWindows(draftSlots, pendingDuration),
@@ -250,19 +324,31 @@ const AdminScheduleConfig: React.FC<AdminScheduleConfigProps> = ({
   );
   const { isValid: dateRangeValid, isTooLong: dateRangeTooLong } =
     getDateRangeState(localStartDate, localEndDate);
-  const { hasPendingChanges, gridDefiningChange, visualGroupingChange } =
-    getScheduleConfigChangeState({
-      baseline,
-      startDate: localStartDate,
-      endDate: localEndDate,
-      startMinute,
-      endMinute,
-      sessionDuration: pendingDuration,
-      chunkSize: pendingChunkSize,
-      chunkBreakMinutes: pendingChunkBreak,
-      enabledWindows: normalizedDraftWindows,
-      hasInvalidNumericInput,
-    });
+  const {
+    hasPendingChanges: configurationHasPendingChanges,
+    gridDefiningChange,
+    proposalInvalidatingChange: modelProposalInvalidatingChange,
+    blockStructureChange,
+    visualGroupingChange,
+    availabilityAddition,
+    availabilityRemoval,
+  } = getScheduleConfigChangeState({
+    baseline,
+    startDate: localStartDate,
+    endDate: localEndDate,
+    startMinute,
+    endMinute,
+    sessionDuration: pendingDuration,
+    chunkSize: pendingChunkSize,
+    chunkBreakMinutes: pendingChunkBreak,
+    slotOverrides: draftOverrides,
+    enabledWindows: normalizedDraftWindows,
+    hasInvalidNumericInput,
+  });
+  const hasPendingChanges =
+    configurationHasPendingChanges || layoutResetRequested;
+  const proposalInvalidatingChange =
+    modelProposalInvalidatingChange || layoutResetRequested;
   const isInitialCreate =
     baseRevision === null &&
     scheduleRevision === null &&
@@ -302,9 +388,14 @@ const AdminScheduleConfig: React.FC<AdminScheduleConfigProps> = ({
     setIsCustomDuration(!nextDurationIsPreset);
     setPendingChunkSize(chunkSize);
     setPendingChunkBreak(chunkBreakMinutes);
+    setEditorView("blocks");
     setCustomPauseInput(nextPauseIsPreset ? "" : String(chunkBreakMinutes));
     setIsCustomPause(!nextPauseIsPreset);
-    setDraftSlots(new Set(enabledWindowsToSlots(nextWindows, sessionDuration)));
+    const nextSlots = new Set(
+      enabledWindowsToSlots(nextWindows, sessionDuration),
+    );
+    setDraftSlots(nextSlots);
+    setDraftOverrides(canonicalizeSlotOverrides(slotOverrides));
     setBaseline({
       startDate,
       endDate,
@@ -312,6 +403,7 @@ const AdminScheduleConfig: React.FC<AdminScheduleConfigProps> = ({
       dayEndMinute,
       chunkSize,
       chunkBreakMinutes,
+      slotOverrides: canonicalizeSlotOverrides(slotOverrides),
       enabledWindows: nextWindows,
       sessionDuration,
     });
@@ -319,6 +411,7 @@ const AdminScheduleConfig: React.FC<AdminScheduleConfigProps> = ({
     setPendingSavedRevision(null);
     setRemoteRevisionChanged(false);
     setReshapedSlotCount(0);
+    setLayoutResetRequested(false);
   }, [
     chunkBreakMinutes,
     chunkSize,
@@ -329,6 +422,7 @@ const AdminScheduleConfig: React.FC<AdminScheduleConfigProps> = ({
     endDate,
     scheduleRevision,
     sessionDuration,
+    slotOverrides,
     startDate,
   ]);
 
@@ -368,9 +462,69 @@ const AdminScheduleConfig: React.FC<AdminScheduleConfigProps> = ({
     return () => window.removeEventListener("beforeunload", handleBeforeUnload);
   }, [hasPendingChanges]);
 
-  const handleChangeSlots = useCallback(
-    (slots: Set<string>) => setDraftSlots(new Set(slots)),
-    [],
+  const commitDraftState = useCallback((next: ScheduleDraftState) => {
+    draftStateRef.current = next;
+    setDraftSlots(next.enabledSlots);
+    setDraftOverrides(next.slotOverrides);
+  }, []);
+
+  const handleSetBlock = useCallback(
+    (date: string, minutes: number[], open: boolean) => {
+      if (legacyLayoutLocked) return;
+      commitDraftState(
+        setStandardBlockOpen({
+          date,
+          minutes,
+          open,
+          ...draftStateRef.current,
+        }),
+      );
+    },
+    [commitDraftState, legacyLayoutLocked],
+  );
+
+  const handleToggleSlot = useCallback(
+    (date: string, minute: number) => {
+      if (legacyLayoutLocked) return;
+      commitDraftState(
+        toggleFineTuneSlot({
+          slot: makeSlotKey(date, minute),
+          ...draftStateRef.current,
+        }),
+      );
+    },
+    [commitDraftState, legacyLayoutLocked],
+  );
+
+  const handleOpenAllStandardBlocks = useCallback(() => {
+    if (legacyLayoutLocked) return;
+    commitDraftState(
+      openAllStandardBlocks({
+        dates,
+        chunks,
+        ...draftStateRef.current,
+      }),
+    );
+  }, [chunks, commitDraftState, dates, legacyLayoutLocked]);
+
+  const handleCloseAllCapacity = useCallback(() => {
+    if (legacyLayoutLocked) return;
+    commitDraftState(closeAllScheduleCapacity());
+  }, [commitDraftState, legacyLayoutLocked]);
+
+  const handleToggleDayStandardBlocks = useCallback(
+    (date: string, open: boolean) => {
+      if (legacyLayoutLocked) return;
+      commitDraftState(
+        setDayStandardBlocksOpen({
+          date,
+          chunks,
+          open,
+          ...draftStateRef.current,
+        }),
+      );
+    },
+    [chunks, commitDraftState, legacyLayoutLocked],
   );
 
   const handleSave = async () => {
@@ -378,10 +532,23 @@ const AdminScheduleConfig: React.FC<AdminScheduleConfigProps> = ({
     if (
       gridDefiningChange &&
       !window.confirm(
-        "Endringen sletter all registrert tilgjengelighet og nullstiller eksisterende intervjuforslag. Vil du fortsette?",
+        "Ny intervjulengde tømmer valgte tider og bekreftelsen, men beholder inhabiliteter. Eksisterende intervjuforslag nullstilles. Vil du fortsette?",
       )
-    )
+    ) {
+      applyIncomingConfiguration();
       return;
+    }
+    if (
+      !gridDefiningChange &&
+      proposalInvalidatingChange &&
+      hasScheduleDraft &&
+      !window.confirm(
+        "Endringen kan fjerne eller flytte intervjutider og nullstiller eksisterende intervjuforslag, men beholder registrert tilgjengelighet. Vil du fortsette?",
+      )
+    ) {
+      applyIncomingConfiguration();
+      return;
+    }
     setIsSaving(true);
     try {
       const nextConfig: ScheduleConfigInput = {
@@ -391,6 +558,10 @@ const AdminScheduleConfig: React.FC<AdminScheduleConfigProps> = ({
         dayEndMinute: endMinute,
         chunkSize: pendingChunkSize,
         chunkBreakMinutes: pendingChunkBreak,
+        slotOverrides:
+          layoutVersion >= 2 || layoutResetRequested
+            ? canonicalizeSlotOverrides(draftOverrides)
+            : undefined,
         enabledSlots: enabledWindowsToSlots(
           normalizedDraftWindows,
           pendingDuration,
@@ -407,6 +578,7 @@ const AdminScheduleConfig: React.FC<AdminScheduleConfigProps> = ({
         dayEndMinute: nextConfig.dayEndMinute,
         chunkSize: nextConfig.chunkSize,
         chunkBreakMinutes: nextConfig.chunkBreakMinutes,
+        slotOverrides: nextConfig.slotOverrides ?? [],
         enabledWindows: nextConfig.enabledWindows,
         sessionDuration: nextConfig.sessionDuration,
       });
@@ -421,6 +593,34 @@ const AdminScheduleConfig: React.FC<AdminScheduleConfigProps> = ({
     } finally {
       setIsSaving(false);
     }
+  };
+
+  const handleResetCustomizations = () => {
+    if (legacyLayoutLocked) return;
+    if (!window.confirm("Tilbakestille alle finjusteringer i hele perioden?"))
+      return;
+    commitDraftState({
+      enabledSlots: reconstructBaseSlots(
+        draftStateRef.current.enabledSlots,
+        draftStateRef.current.slotOverrides,
+      ),
+      slotOverrides: [],
+    });
+  };
+
+  const handleResetLegacyLayout = () => {
+    if (
+      !window.confirm(
+        "Tilbakestille det eldre blokkoppsettet til dagens standardmønster?",
+      )
+    )
+      return;
+    setDraftSlots(
+      rebuildBaseForBlockPattern(dates, chunks, new Set(draftSlots)),
+    );
+    setDraftOverrides([]);
+    setLayoutResetRequested(true);
+    setEditorView("blocks");
   };
 
   const handleDurationPreset = (value: number) => {
@@ -459,18 +659,21 @@ const AdminScheduleConfig: React.FC<AdminScheduleConfigProps> = ({
     if (value !== null) setPendingChunkBreak(value);
   };
 
-  const openBlockCount = dates.reduce(
-    (total, date) =>
-      total +
-      chunks.filter((chunk) =>
-        chunk.some((minute) => draftSlots.has(makeSlotKey(date, minute))),
-      ).length,
-    0,
-  );
+  const draftSummary = deriveScheduleDraftSummary({
+    dates,
+    chunks,
+    blockSize: pendingChunkSize,
+    enabledSlots: draftSlots,
+    slotOverrides: draftOverrides,
+  });
   const saveStatus = {
     hasPendingChanges,
     gridDefiningChange,
+    proposalInvalidatingChange,
+    blockStructureChange,
     visualGroupingChange,
+    availabilityAddition,
+    availabilityRemoval,
     hasScheduleDraft,
     remoteRevisionChanged,
     isSaving,
@@ -480,7 +683,12 @@ const AdminScheduleConfig: React.FC<AdminScheduleConfigProps> = ({
     discardDisabled: scheduleRevision === baseRevision,
     onDiscard: applyIncomingConfiguration,
     onSave: handleSave,
-    openBlockCount,
+    openBlockCount:
+      draftSummary.wholeBlockCount +
+      draftSummary.shortBlockCount +
+      draftSummary.partialBlockCount,
+    customizationCount: draftSummary.manualChangeCount,
+    ...draftSummary,
     reshapedSlotCount,
   };
 
@@ -543,7 +751,9 @@ const AdminScheduleConfig: React.FC<AdminScheduleConfigProps> = ({
       role="tabpanel"
       aria-labelledby="foundation-tab-framework"
       hidden={activeTab !== "framework"}
-      className={activeTab === "framework" ? "flex flex-col gap-3" : "hidden"}
+      className={
+        activeTab === "framework" ? "flex flex-col gap-3 pb-24" : "hidden"
+      }
     >
       <SchedulePanel className="min-w-0">
         <SchedulePanelHeader
@@ -556,21 +766,48 @@ const AdminScheduleConfig: React.FC<AdminScheduleConfigProps> = ({
       <SchedulePanel id="interview-blocks" className="min-w-0 scroll-mt-4">
         <SchedulePanelHeader
           icon={LayoutPanelTop}
-          title="Intervjublokker"
-          description="Velg hvilke blokker som skal være åpne."
+          title="Intervjutider"
+          description="Velg blokker først, og finjuster bare tidene som trenger et unntak."
         />
+        {layoutVersion < 2 && !layoutResetRequested && (
+          <div className="mx-5 mt-4 rounded-md border border-warning-border bg-warning-bg px-4 py-3 text-detail text-text-muted">
+            <p className="m-0 font-semibold text-text-primary">
+              Eldre blokkoppsett
+            </p>
+            <p className="m-0 mt-1">
+              Oppsettet kan brukes av løseren, men må tilbakestilles før
+              intervjutidene kan endres.
+            </p>
+            <button
+              type="button"
+              className={cn(
+                actionButtonBase,
+                actionButtonGhost,
+                "mt-2 px-0 py-1",
+              )}
+              onClick={handleResetLegacyLayout}
+            >
+              Tilbakestill til dagens blokkmønster
+            </button>
+          </div>
+        )}
         <AdminAvailabilityGrid
           dates={dates}
-          timeSlots={timeSlots}
           chunks={chunks}
+          blockSize={pendingChunkSize}
           enabledSlots={draftSlots}
           sessionDuration={pendingDuration}
-          totalInterviewSlotCount={getTotalInterviewSlotCount(
-            dateRangeValid && !isInvalidRange && !hasInvalidNumericInput,
-            dates.length,
-            timeSlots.length,
-          )}
-          onChangeSlots={handleChangeSlots}
+          view={editorView}
+          customizationCount={draftOverrides.length}
+          fineTuningDisabled={legacyLayoutLocked}
+          editingDisabled={legacyLayoutLocked}
+          onChangeView={setEditorView}
+          onResetCustomizations={handleResetCustomizations}
+          onSetBlock={handleSetBlock}
+          onToggleSlot={handleToggleSlot}
+          onOpenAllStandardBlocks={handleOpenAllStandardBlocks}
+          onCloseAllCapacity={handleCloseAllCapacity}
+          onToggleDayStandardBlocks={handleToggleDayStandardBlocks}
         />
       </SchedulePanel>
       <AdminScheduleConfigFooter

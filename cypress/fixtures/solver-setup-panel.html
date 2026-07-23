@@ -1,0 +1,219 @@
+<!doctype html>
+<html lang="nb">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Solver setup panel test harness</title>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module">
+      import React from "react";
+      import { createRoot } from "react-dom/client";
+      import SolverResults from "/static/frontend/src/components/Scheduling/Solver/SolverResults.tsx";
+      import SolverSetupPanel from "/static/frontend/src/components/Scheduling/Solver/SolverSetupPanel.tsx";
+      import { DEFAULT_SOLVER_OPTIONS } from "/static/frontend/src/components/Scheduling/Solver/solverHelpers.ts";
+      import { deriveSchedulePresentation } from "/static/frontend/src/components/Scheduling/Solver/solverSelectors.ts";
+      import "/static/frontend/src/styles/globals.css";
+
+      const h = React.createElement;
+      const scenario =
+        new URLSearchParams(window.location.search).get("scenario") ?? "ready";
+      const ready = scenario !== "blocked";
+      const result = {
+        status: "PARTIAL",
+        optimal: true,
+        schedule: [
+          {
+            candidate_id: "candidate-1",
+            candidate: "Kandidat 1",
+            time: 480,
+            locked: true,
+            panel: [
+              {
+                id: "interviewer-1",
+                name: "Ada",
+                is_overtime: false,
+              },
+            ],
+          },
+        ],
+        unplaceable: [
+          {
+            candidate_id: "candidate-2",
+            candidate: "Kandidat 2",
+            reason: "Ikke nok intervjukapasitet i de åpne tidslukene.",
+          },
+        ],
+      };
+      const interviewers = [
+        {
+          id: "interviewer-1",
+          name: "Ada",
+          availability: [480],
+          biased: [],
+          has_submitted: true,
+        },
+      ];
+      const presentation = deriveSchedulePresentation(result, interviewers, [
+        [480],
+      ]);
+      const draft = {
+        presentation,
+        lockedAssignments: [],
+        canRestoreEditSession: false,
+        beginEditSession: () => {},
+        restoreEditSession: () => {},
+        finishEditSession: () => {},
+        timeOptionsFor: () => [480],
+        toggleLock: () => {},
+        changeTime: () => {},
+        swapTimes: () => {},
+        swapPanelMember: () => {},
+      };
+      const persistence = {
+        state: "saved",
+        error: "",
+        isSaving: false,
+        hasConflict: false,
+        isSaved: true,
+        retry: () => {},
+      };
+      const assignmentConflicts = {
+        assignmentCount: 0,
+        affectedCandidateIds: new Set(),
+        affectedCandidateNames: new Set(),
+        affectedScheduleIndexes: new Set(),
+        affectedPanelMemberKeys: new Set(),
+        optedOutPanelMemberKeys: new Set(),
+      };
+
+      const readiness = ready
+        ? {
+            ready: true,
+            submittedInterviewers: 6,
+            enabledSlotCount: 40,
+            totalCapacity: 120,
+            neededCapacity: 12,
+            conflictCount: 0,
+            slotsWithFullPanel: 40,
+            usableSlotCount: 40,
+          }
+        : {
+            ready: false,
+            submittedInterviewers: 4,
+            enabledSlotCount: 40,
+            totalCapacity: 80,
+            neededCapacity: 12,
+            conflictCount: 0,
+            slotsWithFullPanel: 40,
+            usableSlotCount: 40,
+          };
+
+      const Harness = () => {
+        const [solverOptions, setSolverOptions] = React.useState({
+          ...DEFAULT_SOLVER_OPTIONS,
+        });
+        const [panelSize, setPanelSize] = React.useState(1);
+        const [solveCount, setSolveCount] = React.useState(0);
+        const [openRequestKey, setOpenRequestKey] = React.useState(0);
+        const [navigationAction, setNavigationAction] = React.useState("");
+        const rerun = scenario === "rerun";
+
+        const setup = h(SolverSetupPanel, {
+          interviewerCount: 6,
+          solverOptions,
+          onSolverOptionsChange: setSolverOptions,
+          panelSize,
+          onPanelSizeChange: setPanelSize,
+          openBlockCount: 10,
+          interviewSlotCount: 40,
+          readiness,
+          availabilityReady: ready,
+          loading: false,
+          error: "",
+          elapsedMs: 0,
+          jobStatus: null,
+          estimatedSeconds: 2,
+          lockedCount: rerun ? 2 : 0,
+          hasProposal: rerun,
+          changeableInterviewCount: rerun ? 10 : 0,
+          currentDraftReady: true,
+          openRequestKey,
+          onSolve: () => setSolveCount((count) => count + 1),
+          onCancel: () => {},
+          onOpenAvailability: () => setNavigationAction("availability"),
+          onOpenFramework: () => setNavigationAction("framework"),
+        });
+
+        const results =
+          rerun &&
+          h(SolverResults, {
+            result,
+            planRevealed: true,
+            solveTick: 1,
+            savedSchedule: undefined,
+            draft,
+            persistence,
+            hasLocalDraft: false,
+            dates: ["2026-07-20"],
+            sessionDuration: 30,
+            dayStartMinute: 480,
+            dayEndMinute: 1020,
+            chunkSize: 4,
+            chunkBreakMinutes: 30,
+            enabledSlots: new Set(["2026-07-20:480"]),
+            editRequestKey: 0,
+            assignmentConflicts,
+            blockRestPreferenceEnabled: true,
+            panelSize: 1,
+            proposalStrategy: "balanced",
+            canonicalBlocks: [[480]],
+            currentReviewRequired: false,
+            currentReviewComplete: false,
+            completeReviewerCount: 0,
+            requiredReviewerCount: 0,
+            pendingReviewerCount: 0,
+            missingReviewerNames: [],
+            publicationReady: false,
+            solverError: "",
+            onOpenSettings: () => setOpenRequestKey((key) => key + 1),
+            onOpenConflictReview: () => {},
+            onOpenRepair: () => {},
+            onRetrySolve: () => {},
+            onOpenPlan: () => {},
+            onPreviewWithAvailabilityDeviation: () => {},
+            previewLoading: false,
+          });
+
+        return h(
+          "main",
+          {
+            "data-cy": "solver-setup-harness",
+            style: { maxWidth: 980, margin: "0 auto", padding: 24 },
+          },
+          h(
+            "output",
+            { "data-cy": "solver-options", hidden: true },
+            JSON.stringify(solverOptions),
+          ),
+          h(
+            "output",
+            { "data-cy": "panel-size-value", hidden: true },
+            panelSize,
+          ),
+          h("output", { "data-cy": "solve-count", hidden: true }, solveCount),
+          h(
+            "output",
+            { "data-cy": "navigation-action", hidden: true },
+            navigationAction,
+          ),
+          setup,
+          results,
+        );
+      };
+
+      createRoot(document.getElementById("root")).render(h(Harness));
+    </script>
+  </body>
+</html>

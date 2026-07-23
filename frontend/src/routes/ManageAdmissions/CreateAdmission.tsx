@@ -118,6 +118,7 @@ const CreateAdmission = () => {
         }
         deleteStatus={editor.deletion.status}
         canDelete={editor.deletion.canDelete}
+        onDiscardChanges={editor.form.discardChanges}
         onDelete={editor.deletion.run}
       />
     </Form>

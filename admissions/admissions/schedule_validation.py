@@ -4,13 +4,21 @@ from admissions.admissions import constants
 from admissions.admissions.models import (
     InterviewAvailability,
     LegoUser,
+    SavedSchedule,
     UserApplication,
+)
+from admissions.admissions.schedule_policy import (
+    SchedulePolicyError,
+    normalize_schedule_policy,
 )
 from admissions.admissions.schedule_windows import (
     enabled_windows_to_slots,
     parse_slot_key,
 )
-from admissions.admissions.scheduling_utils import get_eligible_interviewer_ids
+from admissions.admissions.scheduling_utils import (
+    get_eligible_interviewer_ids,
+    get_interviewer_participation,
+)
 
 MINUTES_PER_DAY = 24 * 60
 
@@ -94,16 +102,69 @@ def build_solver_block_metadata(blocks, open_slots):
     return metadata
 
 
+def build_resolved_solver_blocks(resolved_blocks, start_date):
+    """Encode persisted layout block definitions for the solver.
+
+    Manual definitions are validated when they are saved. This defensive
+    conversion still rejects malformed persisted data instead of silently
+    changing block membership during a rehydrated solve.
+    """
+    blocks = []
+    for raw_block in resolved_blocks or []:
+        if not isinstance(raw_block, dict) or not isinstance(
+            raw_block.get("slots"), list
+        ):
+            raise ScheduleValidationError(
+                "resolved_blocks", "Lagrede blokker har ugyldig format."
+            )
+        encoded_slots = []
+        for key in raw_block["slots"]:
+            parsed = parse_slot_key(str(key))
+            if parsed is None:
+                raise ScheduleValidationError(
+                    "resolved_blocks", "Lagrede blokker har en ugyldig tidsluke."
+                )
+            date_text, minute = parsed
+            try:
+                slot_date = date.fromisoformat(date_text)
+            except ValueError as exc:
+                raise ScheduleValidationError(
+                    "resolved_blocks", "Lagrede blokker har en ugyldig dato."
+                ) from exc
+            day_index = (slot_date - start_date).days
+            if day_index < 0 or not 0 <= minute < MINUTES_PER_DAY:
+                raise ScheduleValidationError(
+                    "resolved_blocks", "Lagrede blokker har en ugyldig tidsluke."
+                )
+            encoded_slots.append(day_index * MINUTES_PER_DAY + minute)
+        if not encoded_slots:
+            raise ScheduleValidationError(
+                "resolved_blocks", "En lagret blokk må inneholde minst én tidsluke."
+            )
+        blocks.append(encoded_slots)
+    if not blocks:
+        raise ScheduleValidationError(
+            "resolved_blocks", "Det lagrede oppsettet krever minst én blokk."
+        )
+    return blocks
+
+
 def _solver_blocks(saved, open_slots):
-    end_date = saved.end_date or saved.start_date
-    configured_blocks = build_solver_blocks(
-        day_count=(end_date - saved.start_date).days + 1,
-        day_start_minute=saved.day_start_minute,
-        day_end_minute=saved.day_end_minute,
-        session_duration=saved.session_duration,
-        chunk_size=saved.chunk_size,
-        chunk_break_minutes=saved.chunk_break_minutes,
-    )
+    if saved.resolved_blocks:
+        configured_blocks = build_resolved_solver_blocks(
+            saved.resolved_blocks,
+            saved.start_date,
+        )
+    else:
+        end_date = saved.end_date or saved.start_date
+        configured_blocks = build_solver_blocks(
+            day_count=(end_date - saved.start_date).days + 1,
+            day_start_minute=saved.day_start_minute,
+            day_end_minute=saved.day_end_minute,
+            session_duration=saved.session_duration,
+            chunk_size=saved.chunk_size,
+            chunk_break_minutes=saved.chunk_break_minutes,
+        )
     return build_solver_block_metadata(configured_blocks, open_slots)
 
 
@@ -131,11 +192,31 @@ def canonicalize_solver_payload(admission, saved, data, request_user):
     submitted = list(
         InterviewAvailability.objects.filter(admission=admission).select_related("user")
     )
-    participant_ids = get_eligible_interviewer_ids(admission)
+    participation = get_interviewer_participation(admission, saved)
+    unresolved_ids = {
+        user_id
+        for user_id, state in participation.items()
+        if state == InterviewAvailability.PARTICIPATION_AWAITING
+    }
+    if unresolved_ids:
+        raise ScheduleValidationError(
+            "interviewers",
+            "Alle intervjuere må sende inn tilgjengelighet eller melde at de ikke deltar.",
+        )
+    participant_ids = {
+        user_id
+        for user_id, state in participation.items()
+        if state == InterviewAvailability.PARTICIPATION_PARTICIPATING
+    }
+    if data["panel_size"] > len(participant_ids):
+        raise ScheduleValidationError(
+            "panel_size",
+            "Panelstørrelsen kan ikke være større enn intervjuergruppen.",
+        )
     requested_interviewer_ids = [str(item["id"]) for item in data["interviewers"]]
     if set(requested_interviewer_ids) != {str(value) for value in participant_ids}:
         raise ScheduleValidationError(
-            "interviewers", "Intervjuerlisten samsvarer ikke med opptakskomiteen."
+            "interviewers", "Intervjuerlisten samsvarer ikke med de som deltar."
         )
 
     user_map = {
@@ -163,15 +244,16 @@ def canonicalize_solver_payload(admission, saved, data, request_user):
                 "interviewers", "Intervjuerlisten inneholder en ukjent bruker."
             )
         availability = availability_map.get(interviewer_id)
+        submitted_slots = availability.slots if availability is not None else []
         interviewers.append(
             {
                 "id": interviewer_id,
                 "name": user.get_full_name() or user.username,
                 "gender": {"male": "M", "female": "F"}.get(user.gender, ""),
                 "availability": sorted(
-                    encode_slot_keys(
-                        availability.slots if availability else [], saved.start_date
-                    ).intersection(all_slots)
+                    encode_slot_keys(submitted_slots, saved.start_date).intersection(
+                        all_slots
+                    )
                 ),
                 "biased": [
                     str(value)
@@ -216,7 +298,9 @@ def canonicalize_solver_payload(admission, saved, data, request_user):
         "candidates": candidates,
         "interviewers": interviewers,
         "all_slots": all_slots,
-        "blocks": [block["usable_slots"] for block in solver_blocks],
+        "blocks": [
+            block["usable_slots"] for block in solver_blocks if block["usable_slots"]
+        ],
         "block_metadata": solver_blocks,
         "locked_assignments": locked_assignments,
     }
@@ -238,9 +322,16 @@ def canonicalize_schedule(
     day_end_minute,
     chunk_size,
     chunk_break_minutes,
+    resolved_blocks=None,
+    availability_generation=1,
+    legacy_submission_without_generation=False,
 ):
     if not panel_size:
         raise ScheduleValidationError("panel_size", "Panelstørrelse må være satt.")
+    try:
+        policy = normalize_schedule_policy(solver_options, persisted=True)
+    except SchedulePolicyError as exc:
+        raise ScheduleValidationError("solver_options", str(exc)) from exc
 
     applications = list(
         UserApplication.objects.filter(admission=admission).select_related("user")
@@ -253,6 +344,16 @@ def canonicalize_schedule(
         )
 
     allowed_user_ids = get_eligible_interviewer_ids(admission)
+    participating_user_ids = {
+        user_id
+        for user_id, state in get_interviewer_participation(admission).items()
+        if state == InterviewAvailability.PARTICIPATION_PARTICIPATING
+    }
+    if panel_size > len(participating_user_ids):
+        raise ScheduleValidationError(
+            "panel_size",
+            "Panelstørrelsen kan ikke være større enn intervjuergruppen.",
+        )
     user_map = {
         str(user.pk): user for user in LegoUser.objects.filter(id__in=allowed_user_ids)
     }
@@ -263,7 +364,7 @@ def canonicalize_schedule(
         )
     }
 
-    allow_overtime = (solver_options or {}).get("allow_overtime", True)
+    allow_overtime = policy.allows_availability_deviations
     seen_candidates = set()
     seen_times = set()
     canonical = []
@@ -311,6 +412,11 @@ def canonicalize_schedule(
                 raise ScheduleValidationError(
                     "schedule", "Planen inneholder en ukjent intervjuer."
                 )
+            if interviewer.pk not in participating_user_ids:
+                raise ScheduleValidationError(
+                    "schedule",
+                    "Planen inneholder en intervjuer som ikke deltar.",
+                )
             saved_availability = availability.get(interviewer_id)
             conflicts = (
                 set(str(value) for value in (saved_availability.conflicts or []))
@@ -324,6 +430,14 @@ def canonicalize_schedule(
             available_times = (
                 encode_slot_keys(saved_availability.slots, start_date)
                 if saved_availability
+                and (
+                    saved_availability.submitted_grid_generation
+                    == availability_generation
+                    or (
+                        legacy_submission_without_generation
+                        and saved_availability.submitted_grid_generation is None
+                    )
+                )
                 else set()
             )
             is_overtime = interview_time not in available_times
@@ -377,18 +491,21 @@ def canonicalize_schedule(
                         "Planen mangler en intervjuer med samme kjønn som kandidaten.",
                     )
 
-    if (solver_options or {}).get("same_panel_per_block") and not (
-        solver_options or {}
-    ).get("repair_mode"):
-        effective_end_date = end_date or start_date
-        configured_blocks = build_solver_blocks(
-            day_count=(effective_end_date - start_date).days + 1,
-            day_start_minute=day_start_minute,
-            day_end_minute=day_end_minute,
-            session_duration=session_duration,
-            chunk_size=chunk_size,
-            chunk_break_minutes=chunk_break_minutes,
-        )
+    if policy.requires_stable_panel:
+        if resolved_blocks:
+            configured_blocks = build_resolved_solver_blocks(
+                resolved_blocks, start_date
+            )
+        else:
+            effective_end_date = end_date or start_date
+            configured_blocks = build_solver_blocks(
+                day_count=(effective_end_date - start_date).days + 1,
+                day_start_minute=day_start_minute,
+                day_end_minute=day_end_minute,
+                session_duration=session_duration,
+                chunk_size=chunk_size,
+                chunk_break_minutes=chunk_break_minutes,
+            )
         blocks = build_solver_block_metadata(configured_blocks, enabled_times)
         block_by_time = {
             interview_time: block["index"]

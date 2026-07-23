@@ -1,0 +1,320 @@
+<!doctype html>
+<html lang="nb">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Selectable schedule grid test harness</title>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module">
+      import React from "react";
+      import { createRoot } from "react-dom/client";
+      import SelectableScheduleGrid from "/static/frontend/src/components/Scheduling/Calendar/SelectableScheduleGrid.tsx";
+      import AdminAvailabilityGrid from "/static/frontend/src/components/Scheduling/Calendar/AdminAvailabilityGrid.tsx";
+      import AdminScheduleConfig from "/static/frontend/src/components/Scheduling/Calendar/AdminScheduleConfig.tsx";
+      import { makeSlotKey } from "/static/frontend/src/components/Scheduling/scheduleUtils.ts";
+      import "/static/frontend/src/styles/globals.css";
+
+      const dates = ["2026-07-21", "2026-07-22"];
+      const chunks = [
+        [480, 510],
+        [600, 630],
+      ];
+      const personalSelectable = new Set([
+        makeSlotKey(dates[0], 480),
+        makeSlotKey(dates[0], 510),
+        makeSlotKey(dates[0], 600),
+        makeSlotKey(dates[0], 630),
+        makeSlotKey(dates[1], 600),
+        makeSlotKey(dates[1], 630),
+      ]);
+      const initiallyActive = new Set([
+        makeSlotKey(dates[0], 480),
+        makeSlotKey(dates[0], 510),
+      ]);
+
+      const GridHarness = ({ mode }) => {
+        const [activeSlots, setActiveSlots] = React.useState(initiallyActive);
+        const personal = mode === "personal";
+        return React.createElement(
+          "section",
+          { "data-cy": `${mode}-grid` },
+          React.createElement("h2", null, mode),
+          React.createElement(SelectableScheduleGrid, {
+            dates,
+            chunks,
+            sessionDuration: 30,
+            selectableSlots: personal ? personalSelectable : undefined,
+            activeSlots,
+            onChangeActiveSlots: setActiveSlots,
+            unselectedPresentation: personal ? "available" : "closed",
+            labels: {
+              unavailableCell: `${mode}-blocked`,
+              cell: ({ date, startMinute }) => `${mode}-${date}-${startMinute}`,
+            },
+          }),
+        );
+      };
+
+      const AdminGridHarness = ({
+        dataCy = "admin-grid",
+        gridDates = dates,
+        gridChunks = [[480, 510], [600]],
+        blockSize = 2,
+        initialView = "blocks",
+      }) => {
+        const [activeSlots, setActiveSlots] = React.useState(
+          new Set(
+            gridChunks[0].map((minute) => makeSlotKey(gridDates[0], minute)),
+          ),
+        );
+        const [view, setView] = React.useState(initialView);
+        const setBlock = (date, minutes, open) =>
+          setActiveSlots((current) => {
+            const next = new Set(current);
+            minutes.forEach((minute) => {
+              const key = makeSlotKey(date, minute);
+              if (open) next.add(key);
+              else next.delete(key);
+            });
+            return next;
+          });
+        const toggleSlot = (date, minute) =>
+          setActiveSlots((current) => {
+            const next = new Set(current);
+            const key = makeSlotKey(date, minute);
+            if (next.has(key)) next.delete(key);
+            else next.add(key);
+            return next;
+          });
+        return React.createElement(
+          "section",
+          { "data-cy": dataCy },
+          React.createElement("h2", null, "admin"),
+          React.createElement(
+            "output",
+            { "data-cy": "admin-grid-mode", hidden: true },
+            view,
+          ),
+          React.createElement(AdminAvailabilityGrid, {
+            dates: gridDates,
+            chunks: gridChunks,
+            blockSize,
+            enabledSlots: activeSlots,
+            sessionDuration: 30,
+            view,
+            customizationCount: 0,
+            onChangeView: setView,
+            onResetCustomizations: () => {},
+            onSetBlock: setBlock,
+            onToggleSlot: toggleSlot,
+            onOpenAllStandardBlocks: () =>
+              gridDates.forEach((date) =>
+                setBlock(date, gridChunks.flat(), true),
+              ),
+            onCloseAllCapacity: () => setActiveSlots(new Set()),
+            onToggleDayStandardBlocks: (date, open) =>
+              setBlock(date, gridChunks.flat(), open),
+          }),
+        );
+      };
+
+      const PartialGridHarness = () => {
+        const [activeSlots, setActiveSlots] = React.useState(
+          new Set([makeSlotKey(dates[0], 480)]),
+        );
+        return React.createElement(
+          "section",
+          { "data-cy": "partial-grid" },
+          React.createElement(SelectableScheduleGrid, {
+            dates: [dates[0]],
+            chunks: [[480, 510]],
+            sessionDuration: 30,
+            activeSlots,
+            onChangeActiveSlots: setActiveSlots,
+            unselectedPresentation: "closed",
+            labels: {
+              unavailableCell: "blocked",
+              cell: () => "partial-block",
+            },
+          }),
+        );
+      };
+
+      const LegacyConfigHarness = () => {
+        const [savedPayload, setSavedPayload] = React.useState(null);
+        return React.createElement(
+          "section",
+          { "data-cy": "legacy-admin-config-harness" },
+          React.createElement(
+            "output",
+            { "data-cy": "legacy-save-payload" },
+            savedPayload === null
+              ? "not-saved"
+              : savedPayload
+                ? "slot-overrides-present"
+                : "slot-overrides-absent",
+          ),
+          React.createElement(AdminScheduleConfig, {
+            activeTab: "framework",
+            startDate: dates[0],
+            endDate: dates[0],
+            dayStartMinute: 480,
+            dayEndMinute: 660,
+            chunkSize: 2,
+            chunkBreakMinutes: 30,
+            layoutVersion: 1,
+            slotOverrides: [],
+            enabledWindows: [],
+            enabledSlots: new Set([makeSlotKey(dates[0], 480)]),
+            scheduleRevision: "legacy-fixture-revision",
+            sessionDuration: 30,
+            onSave: async (input) => {
+              setSavedPayload(input.slotOverrides !== undefined);
+              return "legacy-fixture-saved";
+            },
+          }),
+        );
+      };
+
+      const PersistenceConfigHarness = () => {
+        const [mountKey, setMountKey] = React.useState(0);
+        const [configuration, setConfiguration] = React.useState({
+          slotOverrides: [],
+          enabledWindows: [],
+          enabledSlots: new Set([
+            makeSlotKey(dates[0], 480),
+            makeSlotKey(dates[0], 510),
+          ]),
+          revision: "persistence-0",
+        });
+        return React.createElement(
+          "section",
+          { "data-cy": "persistence-admin-config-harness" },
+          React.createElement(
+            "button",
+            {
+              type: "button",
+              "data-cy": "reload-persisted-config",
+              onClick: () => setMountKey((value) => value + 1),
+            },
+            "Last inn lagret oppsett på nytt",
+          ),
+          React.createElement(AdminScheduleConfig, {
+            key: mountKey,
+            activeTab: "framework",
+            startDate: dates[0],
+            endDate: dates[0],
+            dayStartMinute: 480,
+            dayEndMinute: 660,
+            chunkSize: 2,
+            chunkBreakMinutes: 30,
+            layoutVersion: 2,
+            slotOverrides: configuration.slotOverrides,
+            enabledWindows: configuration.enabledWindows,
+            enabledSlots: configuration.enabledSlots,
+            scheduleRevision: configuration.revision,
+            sessionDuration: 30,
+            onSave: async (input) => {
+              const revision = `persistence-${Date.now()}`;
+              setConfiguration({
+                slotOverrides: input.slotOverrides ?? [],
+                enabledWindows: input.enabledWindows,
+                enabledSlots: new Set(input.enabledSlots),
+                revision,
+              });
+              return revision;
+            },
+          }),
+        );
+      };
+
+      const ProposalConfirmationHarness = () => {
+        const [saved, setSaved] = React.useState(false);
+        return React.createElement(
+          "section",
+          { "data-cy": "proposal-confirmation-harness" },
+          React.createElement(
+            "output",
+            { "data-cy": "proposal-confirmation-save-result" },
+            saved ? "saved" : "not-saved",
+          ),
+          React.createElement(AdminScheduleConfig, {
+            activeTab: "framework",
+            startDate: dates[0],
+            endDate: dates[1],
+            dayStartMinute: 480,
+            dayEndMinute: 660,
+            chunkSize: 2,
+            chunkBreakMinutes: 30,
+            layoutVersion: 2,
+            slotOverrides: [],
+            enabledWindows: [],
+            enabledSlots: initiallyActive,
+            hasScheduleDraft: true,
+            scheduleRevision: "proposal-confirmation-revision",
+            sessionDuration: 30,
+            onSave: async () => {
+              setSaved(true);
+              return "proposal-confirmation-saved";
+            },
+          }),
+        );
+      };
+
+      const Harness = () =>
+        React.createElement(
+          "main",
+          { "data-cy": "selectable-grid-harness", style: { padding: 32 } },
+          React.createElement(GridHarness, { mode: "personal" }),
+          React.createElement(GridHarness, { mode: "setup" }),
+          React.createElement(AdminGridHarness),
+          React.createElement(AdminGridHarness, {
+            dataCy: "long-pause-admin-grid",
+            gridDates: [dates[0]],
+            gridChunks: [
+              [480, 510],
+              [600, 630],
+              [750, 780],
+            ],
+            blockSize: 2,
+          }),
+          React.createElement(AdminGridHarness, {
+            dataCy: "large-admin-grid",
+            gridDates: [dates[0]],
+            gridChunks: [[720, 750, 780, 810, 840], [930]],
+            blockSize: 5,
+            initialView: "fine",
+          }),
+          React.createElement(PartialGridHarness),
+          React.createElement(
+            "section",
+            { "data-cy": "admin-config-harness" },
+            React.createElement(AdminScheduleConfig, {
+              activeTab: "framework",
+              startDate: dates[0],
+              endDate: dates[1],
+              dayStartMinute: 480,
+              dayEndMinute: 660,
+              chunkSize: 2,
+              chunkBreakMinutes: 30,
+              layoutVersion: 2,
+              slotOverrides: [],
+              enabledWindows: [],
+              enabledSlots: initiallyActive,
+              scheduleRevision: "fixture-revision",
+              sessionDuration: 30,
+            }),
+          ),
+          React.createElement(LegacyConfigHarness),
+          React.createElement(PersistenceConfigHarness),
+          React.createElement(ProposalConfirmationHarness),
+        );
+
+      createRoot(document.getElementById("root")).render(
+        React.createElement(Harness),
+      );
+    </script>
+  </body>
+</html>

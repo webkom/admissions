@@ -6,7 +6,7 @@ describe("interview plan workflow", () => {
     cy.env<{ SESSION_ID: string }>(["SESSION_ID"]).then(({ SESSION_ID }) => {
       if (SESSION_ID) cy.setCookie("admissions_sessionid", SESSION_ID);
       else cy.login("webkom");
-      cy.visit("/webkom-apent/schedule", {
+      cy.visit("/webkom-open/schedule", {
         onBeforeLoad(window) {
           window.localStorage.removeItem(templateStorageKey);
           window.localStorage.setItem("admissions.wizard.admin.v1", "1");
@@ -94,33 +94,36 @@ describe("interview plan workflow", () => {
     cy.contains("button", "Filtrer og fremhev").click();
     cy.get("#gender-filter").should("be.visible");
     cy.get("#interviewer-highlight").should("be.visible");
-    cy.contains("Farge i strekene viser andelen").should("be.visible");
-    cy.contains("Lav tilgjengelighet").should("be.visible");
-    cy.contains("Høy tilgjengelighet").should("be.visible");
+    cy.contains(
+      "Tallet viser tilgjengelige intervjuere mot panelstørrelsen",
+    ).should("be.visible");
+    cy.contains("Lav dekning").should("be.visible");
+    cy.contains("Full dekning").should("be.visible");
     cy.contains("Stengt").should("be.visible");
     cy.get("[data-schedule-slot-segment]").should("have.length.greaterThan", 0);
     cy.get("#gender-filter").click();
     cy.get('[role="listbox"]').contains('[role="option"]', "Menn").click();
     cy.contains("Viser mannlige intervjuere").should("be.visible");
-    cy.get('[role="button"][aria-label*="intervjuere tilgjengelige."]')
+    cy.get('[role="button"][aria-label*="i paneldekning"]')
       .should("have.length.greaterThan", 0)
       .first()
       .should("have.attr", "aria-label")
-      .and("match", /av \d+ intervjuere tilgjengelige/);
+      .and("match", /\d+ av \d+ i paneldekning/);
     cy.get('[role="button"][aria-label*="Vis hvem som er tilgjengelige."]')
       .first()
       .click();
     cy.get('[aria-label="Tilgjengelighet for valgt tidsblokk"]').within(() => {
-      cy.contains("Tilgjengelige").should("be.visible");
-      cy.contains("Ikke tilgjengelige").should("be.visible");
+      cy.contains("Hele blokken").should("be.visible");
+      cy.contains("Ikke hele blokken").should("be.visible");
       cy.contains("Ikke svart").should("be.visible");
     });
     cy.get('[aria-label="Tilgjengelighet for valgt tidsblokk"]')
       .find('button[aria-label="Lukk detaljer"]')
       .click();
     cy.contains("Vis stengte tider").should("not.exist");
-    cy.contains("Svar mottatt").should("not.exist");
-    cy.contains("Åpne intervjutider").should("not.exist");
+    cy.contains("Svar mottatt").should("be.visible");
+    cy.contains("Åpne intervjutider").should("be.visible");
+    cy.contains(/Intervjutider med fullt panel/).should("be.visible");
   });
 
   it("keeps published-plan controls out of the proposal step", () => {

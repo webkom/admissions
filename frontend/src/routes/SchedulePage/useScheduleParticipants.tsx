@@ -42,10 +42,10 @@ const DevelopmentDataPanel: React.FC<DevelopmentDataPanelProps> = ({
   interviewerInput,
   onInterviewerInputChange,
 }) => (
-  <details className="group mb-8 overflow-hidden rounded-panel border border-border bg-surface-base shadow-sm">
-    <summary className="flex cursor-pointer list-none items-center justify-between px-6 py-4 text-sm font-bold text-text-muted hover:text-text-primary">
+  <details className="group relative">
+    <summary className="flex h-9 cursor-pointer list-none items-center gap-2 rounded-full border border-border bg-surface-subtle px-3 text-detail font-semibold text-text-muted transition-colors hover:bg-surface-neutral hover:text-text-primary [&::-webkit-details-marker]:hidden">
       <div className="flex items-center gap-2.5">
-        <span className="flex h-5 w-5 items-center justify-center rounded-md bg-surface-subtle text-text-faded group-hover:bg-brand-soft group-hover:text-brand">
+        <span className="flex h-5 w-5 items-center justify-center rounded-md text-text-faded group-hover:text-brand">
           <LayoutPanelTop size={iconSizes.compact} />
         </span>
         Testdata
@@ -55,7 +55,7 @@ const DevelopmentDataPanel: React.FC<DevelopmentDataPanelProps> = ({
         className="transition-transform group-open:rotate-180"
       />
     </summary>
-    <div className="border-t border-border-faint px-6 py-5">
+    <div className="absolute right-0 top-full z-40 mt-2 w-[min(34rem,calc(100vw-2rem))] rounded-xl border border-border bg-surface-base px-5 py-4 shadow-xl">
       <div className="flex flex-wrap items-end gap-6">
         <div className="flex items-center gap-3">
           <label className="flex cursor-pointer items-center gap-2 text-sm font-semibold text-text-muted">
@@ -179,8 +179,17 @@ export const useScheduleParticipants = ({
         ),
         biased: participant.conflicts,
         has_submitted: participant.has_submitted,
+        participation: participant.participation,
+        affected_assignment_count: participant.affected_assignment_count,
       })),
     [dates, participants, sessionDuration],
+  );
+  const participatingInterviewers = useMemo(
+    () =>
+      realInterviewers.filter(
+        (interviewer) => interviewer.participation === "participating",
+      ),
+    [realInterviewers],
   );
   const mockScheduleConfig = useMemo(
     () => ({
@@ -199,14 +208,14 @@ export const useScheduleParticipants = ({
     return appendMockToReal ? [...realCandidates, ...mocks] : mocks;
   }, [appendMockToReal, candidateCount, realCandidates, useMockData]);
   const solverInterviewers = useMemo<Interviewer[]>(() => {
-    if (!import.meta.env.DEV || !useMockData) return realInterviewers;
+    if (!import.meta.env.DEV || !useMockData) return participatingInterviewers;
     const mocks = createMockInterviewers(interviewerCount, mockScheduleConfig);
-    return appendMockToReal ? [...realInterviewers, ...mocks] : mocks;
+    return appendMockToReal ? [...participatingInterviewers, ...mocks] : mocks;
   }, [
     appendMockToReal,
     interviewerCount,
     mockScheduleConfig,
-    realInterviewers,
+    participatingInterviewers,
     useMockData,
   ]);
 

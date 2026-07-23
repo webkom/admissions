@@ -18,6 +18,10 @@ MIGRATION_0018 = ("admissions", "0018_name_visibility_audit_event")
 MIGRATION_0019 = ("admissions", "0019_admission_date_order")
 MIGRATION_0020 = ("admissions", "0020_normalize_group_name_visibility")
 MIGRATION_0021 = ("admissions", "0021_userapplication_interview_status")
+MIGRATION_0026 = ("admissions", "0026_savedschedule_manual_blocks")
+MIGRATION_0027 = ("admissions", "0027_versioned_schedule_layout")
+MIGRATION_0028 = ("admissions", "0028_schedule_policy_approval")
+MIGRATION_0029 = ("admissions", "0029_scheduler_proposals_and_participation")
 
 
 def create_admission(apps, *, slug, lego_id):
@@ -322,14 +326,14 @@ class AbsoluteScheduleMinutesMigrationTestCase(MigrationTestCase):
                 {
                     "candidate_id": "candidate-c",
                     "candidate": "Charlie",
-                    "time": 20,
+                    "time": 21,
                     "panel": [],
                 }
             ],
             start_date=date(2026, 4, 20),
             end_date=date(2026, 4, 20),
             session_duration=25,
-            enabled_slots=["2026-04-20|500", "2026-04-20|510"],
+            enabled_slots=["2026-04-20|480", "2026-04-20|505"],
             is_distributed=True,
             name_visibility="committee",
         )
@@ -376,3 +380,96 @@ class AbsoluteScheduleMinutesMigrationTestCase(MigrationTestCase):
         self.assertEqual(ambiguous.name_visibility, "hidden")
 
         self.assertFalse(SolveJob.objects.exists())
+
+
+class VersionedScheduleLayoutMigrationTestCase(MigrationTestCase):
+    migrate_from = MIGRATION_0026
+    migrate_to = MIGRATION_0027
+
+    def set_up_before_migration(self, apps):
+        SavedSchedule = apps.get_model("admissions", "SavedSchedule")
+        InterviewAvailability = apps.get_model("admissions", "InterviewAvailability")
+        user, admission = create_admission(
+            apps,
+            slug="versioned-layout",
+            lego_id=91020,
+        )
+        saved = SavedSchedule.objects.create(
+            admission=admission,
+            schedule=[],
+            start_date=date(2026, 4, 20),
+            end_date=date(2026, 4, 20),
+            session_duration=30,
+            enabled_slots=["2026-04-20|540", "2026-04-20|600"],
+            day_start_minute=540,
+            day_end_minute=720,
+            chunk_size=2,
+            chunk_break_minutes=30,
+            block_mode="standard",
+            manual_blocks=[],
+        )
+        availability = InterviewAvailability.objects.create(
+            admission=admission,
+            user=user,
+            slots=[],
+        )
+        self.saved_id = saved.pk
+        self.availability_id = availability.pk
+
+    def test_preserves_capacity_and_materializes_version_two_boundaries(self):
+        SavedSchedule = self.apps.get_model("admissions", "SavedSchedule")
+        InterviewAvailability = self.apps.get_model(
+            "admissions", "InterviewAvailability"
+        )
+
+        saved = SavedSchedule.objects.get(pk=self.saved_id)
+        self.assertEqual(
+            saved.enabled_slots,
+            ["2026-04-20|540", "2026-04-20|600"],
+        )
+        self.assertEqual(saved.layout_version, 2)
+        self.assertEqual(
+            saved.slot_overrides,
+            [
+                {"slot": "2026-04-20|540", "open": True},
+                {"slot": "2026-04-20|600", "open": True},
+            ],
+        )
+        self.assertEqual(
+            saved.resolved_blocks,
+            [
+                {"slots": ["2026-04-20|540", "2026-04-20|570"]},
+                {"slots": ["2026-04-20|600"]},
+                {"slots": ["2026-04-20|630", "2026-04-20|660"]},
+            ],
+        )
+        availability = InterviewAvailability.objects.get(pk=self.availability_id)
+        self.assertEqual(availability.submitted_grid_generation, 1)
+
+
+class SchedulerParticipationMigrationTestCase(MigrationTestCase):
+    migrate_from = MIGRATION_0028
+    migrate_to = MIGRATION_0029
+
+    def set_up_before_migration(self, apps):
+        InterviewAvailability = apps.get_model("admissions", "InterviewAvailability")
+        user, admission = create_admission(
+            apps,
+            slug="scheduler-participation",
+            lego_id=91030,
+        )
+        availability = InterviewAvailability.objects.create(
+            admission=admission,
+            user=user,
+            slots=[],
+        )
+        self.availability_id = availability.pk
+
+    def test_existing_availability_rows_remain_participating(self):
+        InterviewAvailability = self.apps.get_model(
+            "admissions", "InterviewAvailability"
+        )
+
+        availability = InterviewAvailability.objects.get(pk=self.availability_id)
+
+        self.assertEqual(availability.participation, "participating")
