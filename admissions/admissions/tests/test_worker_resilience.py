@@ -150,7 +150,14 @@ class WriteBackResilienceTestCase(TestCase):
 
     def test_write_back_retries_and_saves_the_result(self):
         job = self._create_job()
-        result = {"status": "SUCCESS", "schedule": []}
+        result = {
+            "status": "SUCCESS",
+            "schedule": [],
+            "_solver_metrics": {
+                "solver_engine_version": "v2",
+                "placed_count": 0,
+            },
+        }
         real_filter = SolveJob.objects.filter
         attempts = []
 
@@ -172,6 +179,14 @@ class WriteBackResilienceTestCase(TestCase):
         job.refresh_from_db()
         self.assertEqual(job.status, SolveJob.STATUS_DONE)
         self.assertEqual(job.result, result)
+        self.assertNotIn("_solver_metrics", job.result)
+        self.assertEqual(
+            job.solver_metrics,
+            {
+                "solver_engine_version": "v2",
+                "placed_count": 0,
+            },
+        )
         self.assertEqual(len(attempts), 2)
 
     def test_write_back_gives_up_after_bounded_attempts(self):

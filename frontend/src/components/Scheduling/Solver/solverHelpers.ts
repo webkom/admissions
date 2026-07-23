@@ -79,6 +79,8 @@ export const unplaceableSuggestion = (reason?: string): string | null => {
       return "Åpne flere tidsluker eller reduser panelstørrelsen.";
     case "Ingen tilgjengelige intervjuere med samme kjønn.":
       return "Slå av «samme kjønn i panel», eller legg til en intervjuer med matchende kjønn.";
+    case "Ingen tilgjengelige paneler har en erfaren intervjuer.":
+      return "Klassifiser en deltakende intervjuer som erfaren, eller slå av erfaringskravet.";
     case "Ingen ledige tidsluker igjen.":
     case "Ingen aktive tidsluker er åpnet.":
       return "Åpne flere tidsluker i kalenderen.";
@@ -101,6 +103,7 @@ export interface SolveJob {
   proposal_expires_at: string | null;
   baseline_updated_at: string | null;
   auto_apply_if_empty: boolean;
+  preview_only: boolean;
 }
 
 export interface PendingSolveProposal {
@@ -114,14 +117,15 @@ export interface AppliedSolveProposal {
   result: SolveResponse;
 }
 
-export const DEFAULT_MAX_SOLVER_SECONDS = 5 * 60;
-const LEGACY_DEFAULT_MAX_SOLVER_SECONDS = 120;
+export const DEFAULT_MAX_SOLVER_SECONDS = 30;
+const LEGACY_DEFAULT_MAX_SOLVER_SECONDS = new Set([120, 5 * 60]);
 
 export const DEFAULT_SOLVER_OPTIONS: SolverOptions = {
   policy_version: 2,
   panel_stability: "preferred",
   availability_fallback: "stop",
   enforce_same_gender: false,
+  require_experienced_panel: true,
   allow_overtime: false,
   prioritize_continuity: true,
   same_panel_per_block: false,
@@ -137,6 +141,7 @@ export const DEFAULT_SOLVER_OPTIONS: SolverOptions = {
 
 export const ADVANCED_SOLVER_OPTION_KEYS = [
   "enforce_same_gender",
+  "require_experienced_panel",
   "avoid_consecutive_interviewer_blocks",
 ] as const;
 
@@ -148,6 +153,7 @@ export const ADVANCED_SOLVER_DEFAULTS: Pick<
   AdvancedSolverOptionKey | "panel_stability" | "same_panel_per_block"
 > = {
   enforce_same_gender: DEFAULT_SOLVER_OPTIONS.enforce_same_gender,
+  require_experienced_panel: DEFAULT_SOLVER_OPTIONS.require_experienced_panel,
   panel_stability: DEFAULT_SOLVER_OPTIONS.panel_stability,
   same_panel_per_block: DEFAULT_SOLVER_OPTIONS.same_panel_per_block,
   avoid_consecutive_interviewer_blocks:
@@ -167,6 +173,7 @@ export const deriveAdvancedSettingsSummary = (
 ): AdvancedSettingsSummary => {
   const requirementCount =
     Number(options.enforce_same_gender) +
+    Number(options.require_experienced_panel) +
     Number(options.panel_stability === "required");
   const preferenceCount = Number(options.avoid_consecutive_interviewer_blocks);
   const customizationCount =
@@ -233,6 +240,8 @@ export const normalizeSolverOptions = (
     policy_version: 2,
     panel_stability: panelStability,
     availability_fallback: availabilityFallback,
+    // Legacy saved admissions did not have this field and must remain compatible.
+    require_experienced_panel: raw.require_experienced_panel ?? false,
     same_panel_per_block: panelStability === "required",
     allow_overtime: availabilityFallback === "automatic",
   };
@@ -241,7 +250,7 @@ export const normalizeSolverOptions = (
   }
   // The old value was an invisible application default, not a user choice.
   // Upgrade saved admissions so they receive the extended runtime as well.
-  if (normalized.max_solver_seconds === LEGACY_DEFAULT_MAX_SOLVER_SECONDS) {
+  if (LEGACY_DEFAULT_MAX_SOLVER_SECONDS.has(normalized.max_solver_seconds)) {
     normalized.max_solver_seconds = DEFAULT_MAX_SOLVER_SECONDS;
   }
   return normalized;
@@ -252,7 +261,6 @@ export const INITIAL_STRATEGY_PRESETS: ReadonlyArray<{
   label: string;
   description: string;
   example: string;
-  overtimeWeight: number;
   loadBalanceWeight: number;
   continuityWeight: number;
   prioritizeContinuity: boolean;
@@ -263,7 +271,6 @@ export const INITIAL_STRATEGY_PRESETS: ReadonlyArray<{
     description: "En rolig kombinasjon av korte dager og jevn arbeidsmengde.",
     example:
       "Eksempel: når flere planer har like få avvik, velges en moderat jevn fordeling.",
-    overtimeWeight: 40,
     loadBalanceWeight: 4,
     continuityWeight: 1,
     prioritizeContinuity: true,
@@ -275,7 +282,6 @@ export const INITIAL_STRATEGY_PRESETS: ReadonlyArray<{
       "Samler intervjuene i færre sammenhengende perioder med færre hull.",
     example:
       "Eksempel: intervjuene legges tettere når tilgjengeligheten tillater det.",
-    overtimeWeight: 40,
     loadBalanceWeight: 2,
     continuityWeight: 48,
     prioritizeContinuity: true,
@@ -287,7 +293,6 @@ export const INITIAL_STRATEGY_PRESETS: ReadonlyArray<{
       "Minimerer avvik først og prioriterer jevn fordeling sterkest.",
     example:
       "Eksempel: blant planer med like få avvik foretrekkes den jevneste belastningen.",
-    overtimeWeight: 12,
     loadBalanceWeight: 10,
     continuityWeight: 0,
     prioritizeContinuity: false,

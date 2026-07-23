@@ -7,6 +7,7 @@ export const EXPAND_CONTRACT_MOTION = {
   transformOrigin: "center top",
   reducedMotionQuery: "(prefers-reduced-motion: reduce)",
   enterClearProps: "opacity,visibility,transform",
+  autoHeightEnterClearProps: "height,opacity,visibility,transform",
 } as const;
 
 export interface ExpandContractState {
@@ -28,13 +29,19 @@ export const readExpandContractState = (
   };
 };
 
-export const setExpandedElement = (element: HTMLElement, height: number) => {
+export const setExpandedElement = (
+  element: HTMLElement,
+  height: number,
+  clearHeight = false,
+) => {
   gsap.set(element, {
     autoAlpha: 1,
     height,
     scaleY: 1,
     transformOrigin: EXPAND_CONTRACT_MOTION.transformOrigin,
-    clearProps: EXPAND_CONTRACT_MOTION.enterClearProps,
+    clearProps: clearHeight
+      ? EXPAND_CONTRACT_MOTION.autoHeightEnterClearProps
+      : EXPAND_CONTRACT_MOTION.enterClearProps,
   });
 };
 
@@ -43,11 +50,13 @@ export const animateExpandedElement = ({
   from,
   height,
   durationSeconds = EXPAND_CONTRACT_MOTION.durationSeconds,
+  clearHeightOnComplete = false,
 }: {
   element: HTMLElement;
   from: ExpandContractState;
   height: number;
   durationSeconds?: number;
+  clearHeightOnComplete?: boolean;
 }) =>
   gsap.fromTo(
     element,
@@ -65,7 +74,9 @@ export const animateExpandedElement = ({
       duration: durationSeconds,
       ease: EXPAND_CONTRACT_MOTION.enterEase,
       overwrite: true,
-      clearProps: EXPAND_CONTRACT_MOTION.enterClearProps,
+      clearProps: clearHeightOnComplete
+        ? EXPAND_CONTRACT_MOTION.autoHeightEnterClearProps
+        : EXPAND_CONTRACT_MOTION.enterClearProps,
     },
   );
 
@@ -74,12 +85,14 @@ export const animateExpandedElementOnNextFrame = ({
   from,
   height,
   durationSeconds,
+  clearHeightOnComplete,
   onStart,
 }: {
   resolveElement: () => HTMLElement | null;
   from: ExpandContractState;
   height: number | ((element: HTMLElement) => number);
   durationSeconds?: number;
+  clearHeightOnComplete?: boolean;
   onStart: (animation: gsap.core.Tween) => void;
 }) => {
   const animationFrame = requestAnimationFrame(() => {
@@ -92,6 +105,7 @@ export const animateExpandedElementOnNextFrame = ({
         from,
         height: typeof height === "function" ? height(element) : height,
         durationSeconds,
+        clearHeightOnComplete,
       }),
     );
   });

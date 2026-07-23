@@ -172,6 +172,7 @@ export const useScheduleParticipants = ({
         id: participant.user_id,
         name: participant.full_name,
         gender: participant.gender,
+        experience_level: participant.experience_level,
         availability: slotsToSolverAvailability(
           new Set(participant.slots),
           dates,

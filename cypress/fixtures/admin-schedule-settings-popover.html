@@ -19,6 +19,7 @@
       const initialIsCustom = search.get("custom") === "1";
       const initialInterviewCount = Number(search.get("count") ?? "4");
       const initialDuration = Number(search.get("duration") ?? "30");
+      const pending = search.get("pending") === "1";
 
       const Harness = () => {
         const [value, setValue] = React.useState(initialValue);
@@ -122,11 +123,11 @@
               },
             },
             saveStatus: {
-              hasPendingChanges: false,
+              hasPendingChanges: pending,
               gridDefiningChange: false,
               blockStructureChange: false,
               visualGroupingChange: false,
-              availabilityAddition: false,
+              availabilityAddition: pending,
               availabilityRemoval: false,
               hasScheduleDraft: false,
               remoteRevisionChanged: false,

@@ -37,6 +37,13 @@ import type {
 import FoundationWorkspaceNav, {
   type FoundationWorkspace,
 } from "./FoundationWorkspaceNav";
+import {
+  deriveScheduleDataHealth,
+  scheduleDataSourceLabel,
+  type ScheduleDataHealth,
+  type ScheduleDataSource,
+} from "./scheduleDataHealth";
+import { SchedulingButton } from "src/components/Scheduling/ui";
 
 const SchedulePage: React.FC = () => {
   const { admissionSlug } = useParams();
@@ -174,18 +181,51 @@ const CommonScheduleView: React.FC<CommonScheduleViewProps> = (props) => {
     );
   }
 
-  const scheduleLoadFailed =
-    isSavedScheduleError && savedScheduleError?.response?.status !== 404;
-  const showLoadError =
-    scheduleLoadFailed || isAvailabilityError || isCandidatesError;
+  const dataHealth = deriveScheduleDataHealth({
+    savedSchedule,
+    savedScheduleError,
+    isSavedScheduleError,
+    availabilityParticipants,
+    availabilityError,
+    isAvailabilityError,
+    interviewCandidates,
+    candidatesError,
+    isCandidatesError,
+  });
   const candidateScopeResolved =
     interviewCandidates !== undefined ||
     [401, 403, 404].includes(candidatesError?.response?.status ?? 0);
-  const retryLoad = () => {
-    if (scheduleLoadFailed) void refetchSavedSchedule();
-    if (isAvailabilityError) void refetchAvailability();
-    if (isCandidatesError) void refetchCandidates();
+  const retryLoad = (
+    sources: ScheduleDataSource[] = dataHealth.failedSources,
+  ) => {
+    if (sources.includes("schedule")) void refetchSavedSchedule();
+    if (sources.includes("availability")) void refetchAvailability();
+    if (sources.includes("candidates")) void refetchCandidates();
   };
+
+  if (dataHealth.kind === "initial_error") {
+    return (
+      <div className="mx-auto w-full max-w-6xl px-5 py-16 handheld:px-4">
+        <div
+          role="alert"
+          className="flex flex-wrap items-center justify-between gap-3 rounded-panel border border-danger-border bg-danger-bg px-5 py-4"
+        >
+          <div>
+            <p className="m-0 text-ui font-semibold text-danger">
+              Kunne ikke laste intervjuplanleggingen.
+            </p>
+            <p className="m-0 mt-1 text-detail text-danger">
+              Prøv igjen for å hente nødvendige data før du fortsetter.
+            </p>
+          </div>
+          <SchedulingButton variant="danger" onClick={() => retryLoad()}>
+            <RefreshCw size={iconSizes.detail} aria-hidden="true" />
+            Prøv igjen
+          </SchedulingButton>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <LoadedScheduleView
@@ -194,7 +234,7 @@ const CommonScheduleView: React.FC<CommonScheduleViewProps> = (props) => {
       interviewCandidates={interviewCandidates}
       availabilityParticipants={availabilityParticipants}
       isAvailabilityLoading={isAvailabilityLoading}
-      showLoadError={showLoadError}
+      dataHealth={dataHealth}
       candidateScopeResolved={candidateScopeResolved}
       onRetryLoad={retryLoad}
     />
@@ -206,7 +246,7 @@ interface LoadedScheduleViewProps extends CommonScheduleViewProps {
   interviewCandidates: Candidate[] | undefined;
   availabilityParticipants: InterviewAvailabilityParticipant[] | undefined;
   isAvailabilityLoading: boolean;
-  showLoadError: boolean;
+  dataHealth: ScheduleDataHealth;
   candidateScopeResolved: boolean;
   onRetryLoad: () => void;
 }
@@ -223,7 +263,7 @@ const LoadedScheduleView: React.FC<LoadedScheduleViewProps> = ({
   savedSchedule,
   interviewCandidates,
   availabilityParticipants,
-  showLoadError,
+  dataHealth,
   candidateScopeResolved,
   onRetryLoad,
 }) => {
@@ -322,6 +362,7 @@ const LoadedScheduleView: React.FC<LoadedScheduleViewProps> = ({
     saveAvailability,
     saveConflictReview,
     setParticipation,
+    setExperienceLevel,
   } = availability;
   const {
     activeSection,
@@ -398,19 +439,23 @@ const LoadedScheduleView: React.FC<LoadedScheduleViewProps> = ({
         </div>
       </header>
 
-      {showLoadError && (
-        <div className="mb-6 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-danger-border bg-danger-bg px-4 py-3">
-          <p className="m-0 text-ui font-semibold text-danger">
-            Kunne ikke hente oppdaterte data for intervjuplanleggingen.
+      {dataHealth.kind === "refresh_error" && (
+        <div
+          role="status"
+          className="mb-4 flex flex-wrap items-center justify-between gap-3 border-y border-border-soft bg-surface-subtle px-4 py-3"
+        >
+          <p className="m-0 text-detail text-text-muted">
+            Viser sist hentede data. Kunne ikke oppdatere{" "}
+            {dataHealth.failedSources.map(scheduleDataSourceLabel).join(", ")}.
           </p>
-          <button
-            type="button"
+          <SchedulingButton
+            variant="quiet"
             onClick={onRetryLoad}
-            className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-danger-border bg-surface-base px-3 text-detail font-bold text-danger transition-colors hover:bg-danger-bg"
+            className="h-8 px-3 text-detail"
           >
-            <RefreshCw size={iconSizes.detail} />
-            Prøv igjen
-          </button>
+            <RefreshCw size={iconSizes.detail} aria-hidden="true" />
+            Oppdater
+          </SchedulingButton>
         </div>
       )}
 
@@ -500,6 +545,11 @@ const LoadedScheduleView: React.FC<LoadedScheduleViewProps> = ({
               hasScheduleDraft={hasScheduleDraft}
               onDraftStatusChange={setFrameworkDraftStatus}
               onSave={saveConfig}
+              onAvailabilityAdditionSaved={() =>
+                showToast(
+                  "Nye intervjutider er lagt til. Intervjuerne må bekrefte tilgjengelighet på nytt.",
+                )
+              }
             />
             <div
               id="foundation-panel-availability"
@@ -570,6 +620,7 @@ const LoadedScheduleView: React.FC<LoadedScheduleViewProps> = ({
                   onParticipationChange={(userId, participation) =>
                     setParticipation(participation, userId)
                   }
+                  onExperienceLevelChange={setExperienceLevel}
                 />
               )}
             </div>
@@ -583,6 +634,20 @@ const LoadedScheduleView: React.FC<LoadedScheduleViewProps> = ({
               activeSection !== "solver" && "hidden",
             )}
           >
+            {savedSchedule?.conflict_review_open &&
+              myAvailabilityParticipant && (
+                <ConflictReviewView
+                  candidates={interviewCandidates}
+                  currentParticipant={myAvailabilityParticipant}
+                  onSaveReview={saveConflictReview}
+                  openRequestKey={conflictReviewRequestKey}
+                  reviewProgress={{
+                    complete: publicationReadiness.completeReviewerCount,
+                    total: publicationReadiness.requiredReviewerCount,
+                    missingNames: publicationReadiness.missingReviewerNames,
+                  }}
+                />
+              )}
             <SolverView
               candidates={candidates}
               interviewers={interviewers}
@@ -625,22 +690,6 @@ const LoadedScheduleView: React.FC<LoadedScheduleViewProps> = ({
               onOpenConflictReview={openConflictReview}
               onOpenPlan={() => handleSectionChange("plan")}
             />
-            {savedSchedule?.conflict_review_open &&
-              (myAvailabilityParticipant?.proposed_candidate_ids.length ?? 0) >
-                0 && (
-                <ConflictReviewView
-                  candidates={interviewCandidates}
-                  currentParticipant={myAvailabilityParticipant}
-                  onSaveReview={saveConflictReview}
-                  openRequestKey={conflictReviewRequestKey}
-                  showSummary={false}
-                  reviewProgress={{
-                    complete: publicationReadiness.completeReviewerCount,
-                    total: publicationReadiness.requiredReviewerCount,
-                    missingNames: publicationReadiness.missingReviewerNames,
-                  }}
-                />
-              )}
           </div>
         )}
 

@@ -2,6 +2,7 @@ import time
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Sequence
 
+from django.conf import settings
 from ortools.sat.python import cp_model
 
 from admissions.admissions import constants
@@ -16,17 +17,20 @@ class Candidate:
     id: str
     name: str
     gender: str | None = None
+    user_id: str | None = None
 
 
 @dataclass
 class Interviewer(Candidate):
     availability: List[int] = field(default_factory=list)
     biased: List[str] = field(default_factory=list)
+    experience_level: str = "unknown"
 
 
 @dataclass
 class SolveOptions:
     enforce_same_gender: bool = False
+    require_experienced_panel: bool = False
     allow_overtime: bool = True
     prioritize_continuity: bool = True
     same_panel_per_block: bool = True
@@ -37,7 +41,7 @@ class SolveOptions:
     overtime_weight: int = 40
     load_balance_weight: int = 4
     continuity_weight: int = 12
-    max_solver_seconds: float = constants.MAX_SOLVER_SECONDS
+    max_solver_seconds: float = constants.DEFAULT_SOLVER_SECONDS
     policy_version: int | None = None
     panel_stability: str | None = None
     availability_fallback: str | None = None
@@ -147,7 +151,7 @@ def _build_lexicographic_objective(tiers: Sequence[ObjectiveTier]):
     return sum(weight * tier.expression for weight, tier in zip(weights, tiers))
 
 
-def solve_schedule(
+def solve_schedule_v1(
     candidates_data: List[dict],
     interviewers_data: List[dict],
     panel_size: int,
@@ -157,7 +161,10 @@ def solve_schedule(
     blocks_data: List[List[int]] | None = None,
     block_metadata_data: List[dict] | None = None,
     previous_schedule_data: List[dict] | None = None,
+    *,
+    include_metrics: bool = False,
 ) -> Dict[str, Any]:
+    solve_started = time.monotonic()
     candidates = [Candidate(**c) for c in candidates_data]
     interviewers = [Interviewer(**i) for i in interviewers_data]
     normalized_options, policy = normalize_solver_options(options_data)
@@ -204,6 +211,9 @@ def solve_schedule(
     interviewer_id_by_name = {i.name: i.id for i in interviewers}
     male_iids = frozenset(i.id for i in interviewers if i.gender == "M")
     female_iids = frozenset(i.id for i in interviewers if i.gender == "F")
+    experienced_iids = frozenset(
+        i.id for i in interviewers if i.experience_level == "experienced"
+    )
     # Whether any interviewer has usable gender data. Without it the same-gender
     # constraint is meaningless and must be skipped entirely — otherwise it
     # would force every M/F candidate's slots to 0 and make them all unplaceable.
@@ -269,6 +279,10 @@ def solve_schedule(
                 return locked_conflict(
                     "Locked interview has interest conflict.", assignment
                 )
+            if candidate.user_id and str(candidate.user_id) == interviewer_id:
+                return locked_conflict(
+                    "Locked candidate cannot interview themselves.", assignment
+                )
             if (
                 not options.allow_overtime
                 and locked_time not in avail_set[interviewer_id]
@@ -292,6 +306,12 @@ def solve_schedule(
                 return locked_conflict(
                     "Locked panel violates the gender constraint.", assignment
                 )
+        if options.require_experienced_panel and not any(
+            interviewer_id in experienced_iids for interviewer_id in panel_ids
+        ):
+            return locked_conflict(
+                "Locked panel has no experienced interviewer.", assignment
+            )
 
         locked_by_candidate[candidate_id] = {
             "time": locked_time,
@@ -401,6 +421,8 @@ def solve_schedule(
             for i in interviewers:
                 if c.id in bias_set[i.id]:
                     continue
+                if c.user_id and str(c.user_id) == i.id:
+                    continue
                 if not options.allow_overtime and t not in avail_set[i.id]:
                     continue
 
@@ -458,7 +480,11 @@ def solve_schedule(
             prev_unchanged_row_vars.append(unchanged_row)
 
     def unplaceable_entry(c):
-        unbiased = [i for i in interviewers if c.id not in bias_set[i.id]]
+        unbiased = [
+            i
+            for i in interviewers
+            if c.id not in bias_set[i.id] and not (c.user_id and str(c.user_id) == i.id)
+        ]
         if len(unbiased) < panel_size:
             if len(unbiased) < len(interviewers):
                 reason = "For mange i komiteen har meldt inhabilitet."
@@ -480,6 +506,10 @@ def solve_schedule(
             )
         ):
             reason = "Ingen tilgjengelige intervjuere med samme kjønn."
+        elif options.require_experienced_panel and not any(
+            iid in experienced_iids for t in staffable for iid in valid_for[(c.id, t)]
+        ):
+            reason = "Ingen tilgjengelige paneler har en erfaren intervjuer."
         else:
             reason = "Ikke nok intervjukapasitet i de åpne tidslukene."
         return {"candidate_id": c.id, "candidate": c.name, "reason": reason}
@@ -540,6 +570,14 @@ def solve_schedule(
 
                 if same_gender_vars:
                     model.Add(sum(same_gender_vars) >= 1).OnlyEnforceIf(sv)
+                else:
+                    model.Add(sv == 0)
+            if options.require_experienced_panel:
+                experienced_vars = [
+                    assign[(iid, c.id, t)] for iid in v_ids if iid in experienced_iids
+                ]
+                if experienced_vars:
+                    model.Add(sum(experienced_vars) >= 1).OnlyEnforceIf(sv)
                 else:
                     model.Add(sv == 0)
 
@@ -868,6 +906,31 @@ def solve_schedule(
     # interleaved search keeps the workers but makes the search deterministic.
     solver.parameters.interleave_search = True
     solver.parameters.random_seed = constants.SOLVER_RANDOM_SEED
+    variable_count = len(model.Proto().variables)
+    constraint_count = len(model.Proto().constraints)
+
+    def finish(result):
+        if include_metrics:
+            result["_solver_metrics"] = {
+                "solver_engine_version": "v1",
+                "total_ms": int((time.monotonic() - solve_started) * 1000),
+                "phases": [
+                    {
+                        "name": "dense_optimization",
+                        "status": solver.StatusName(status),
+                        "variables": variable_count,
+                        "constraints": constraint_count,
+                        "candidate_slot_variables": len(schedule),
+                        "interviewer_candidate_slot_variables": len(assign),
+                        "primary_assignment_variables": len(schedule) + len(assign),
+                        "branches": solver.NumBranches(),
+                        "conflicts": solver.NumConflicts(),
+                    }
+                ],
+                "placed_count": len(result.get("schedule") or []),
+                "optimal": bool(result.get("optimal", False)),
+            }
+        return result
 
     try:
         model.Minimize(_build_lexicographic_objective(objective_tiers))
@@ -875,6 +938,7 @@ def solve_schedule(
     except OverflowError:
         status = cp_model.UNKNOWN
         deadline = time.monotonic() + options.max_solver_seconds
+        completed_tiers = 0
         for index, tier in enumerate(objective_tiers):
             remaining = deadline - time.monotonic()
             if remaining <= 0:
@@ -886,8 +950,11 @@ def solve_schedule(
                 break
             if status != cp_model.OPTIMAL:
                 break
+            completed_tiers = index + 1
             if index < len(objective_tiers) - 1:
                 model.Add(tier.expression == int(round(solver.ObjectiveValue())))
+        if status == cp_model.OPTIMAL and completed_tiers < len(objective_tiers):
+            status = cp_model.FEASIBLE
 
     if status in (cp_model.OPTIMAL, cp_model.FEASIBLE):
         results = []
@@ -900,6 +967,7 @@ def solve_schedule(
                             "id": iid,
                             "name": iview_map[iid].name,
                             "is_overtime": t not in avail_set[iid],
+                            "experience_level": iview_map[iid].experience_level,
                         }
                         for iid in valid_for[(c.id, t)]
                         if solver.BooleanValue(assign[(iid, c.id, t)])
@@ -918,33 +986,163 @@ def solve_schedule(
         unplaceable = [
             unplaceable_entry(c) for c in candidates if c.id not in placed_ids
         ]
-        return {
-            "status": "SUCCESS" if not unplaceable else "PARTIAL",
-            "schedule": results,
-            "unplaceable": unplaceable,
-            "locked_conflicts": [],
-            "optimal": status == cp_model.OPTIMAL,
-        }
+        return finish(
+            {
+                "status": "SUCCESS" if not unplaceable else "PARTIAL",
+                "schedule": results,
+                "unplaceable": unplaceable,
+                "locked_conflicts": [],
+                "optimal": status == cp_model.OPTIMAL,
+            }
+        )
 
     if status == cp_model.INFEASIBLE:
-        return {
-            "status": "INFEASIBLE",
-            "schedule": [],
-            "unplaceable": [unplaceable_entry(c) for c in candidates],
-            "locked_conflicts": [],
-        }
+        return finish(
+            {
+                "status": "INFEASIBLE",
+                "schedule": [],
+                "unplaceable": [unplaceable_entry(c) for c in candidates],
+                "locked_conflicts": [],
+            }
+        )
 
     if status == cp_model.MODEL_INVALID:
+        return finish(
+            {
+                "status": "ERROR",
+                "schedule": [],
+                "unplaceable": [],
+                "locked_conflicts": [],
+            }
+        )
+
+    return finish(
+        {
+            "status": "TIMEOUT",
+            "schedule": [],
+            "unplaceable": [],
+            "locked_conflicts": [],
+        }
+    )
+
+
+def solve_schedule(
+    candidates_data: List[dict],
+    interviewers_data: List[dict],
+    panel_size: int,
+    options_data: Dict[str, Any] | None = None,
+    locked_assignments_data: List[dict] | None = None,
+    all_slots_data: List[int] | None = None,
+    blocks_data: List[List[int]] | None = None,
+    block_metadata_data: List[dict] | None = None,
+    previous_schedule_data: List[dict] | None = None,
+    *,
+    include_metrics: bool = False,
+    model_version: str | None = None,
+) -> Dict[str, Any]:
+    """Dispatch to the rollback-safe solver engine selected by configuration."""
+
+    version = model_version or getattr(
+        settings, "ADMISSIONS_SOLVER_ENGINE_VERSION", "v2"
+    )
+    if version not in {"v1", "v2"}:
         return {
             "status": "ERROR",
             "schedule": [],
             "unplaceable": [],
             "locked_conflicts": [],
+            "error": "Ukjent intern solverversjon.",
         }
+    if version == "v1":
+        result = solve_schedule_v1(
+            candidates_data=candidates_data,
+            interviewers_data=interviewers_data,
+            panel_size=panel_size,
+            options_data=options_data,
+            locked_assignments_data=locked_assignments_data,
+            all_slots_data=all_slots_data,
+            blocks_data=blocks_data,
+            block_metadata_data=block_metadata_data,
+            previous_schedule_data=previous_schedule_data,
+            include_metrics=include_metrics,
+        )
+        if result.get("status") not in {"SUCCESS", "PARTIAL"}:
+            return result
+        from admissions.admissions.solve_schedule_v2 import _normalize_problem
+        from admissions.admissions.solver_result import (
+            evaluate_objective_vector,
+            validate_schedule_result,
+        )
 
-    return {
-        "status": "TIMEOUT",
-        "schedule": [],
-        "unplaceable": [],
-        "locked_conflicts": [],
-    }
+        validation_started = time.monotonic()
+        problem, early_result = _normalize_problem(
+            candidates_data=candidates_data,
+            interviewers_data=interviewers_data,
+            panel_size=panel_size,
+            options_data=options_data,
+            locked_assignments_data=locked_assignments_data,
+            all_slots_data=all_slots_data,
+            blocks_data=blocks_data,
+            block_metadata_data=block_metadata_data,
+            previous_schedule_data=previous_schedule_data,
+        )
+        if early_result is not None or problem is None:
+            return result
+        issues = validate_schedule_result(
+            schedule=result.get("schedule") or [],
+            candidates=problem.candidates,
+            interviewers=problem.interviewers,
+            panel_size=problem.panel_size,
+            all_slots=problem.sorted_slots,
+            allow_overtime=problem.options.allow_overtime,
+            enforce_same_gender=problem.options.enforce_same_gender,
+            require_experienced_panel=problem.options.require_experienced_panel,
+            requires_stable_panel=problem.policy.requires_stable_panel,
+            blocks=problem.canonical_blocks,
+            locked_assignments=problem.locked_assignments,
+        )
+        validation_ms = int((time.monotonic() - validation_started) * 1000)
+        if issues:
+            metrics = result.pop("_solver_metrics", None)
+            invalid = {
+                "status": "ERROR",
+                "schedule": [],
+                "unplaceable": [],
+                "locked_conflicts": [],
+                "error": "Rollback-solveren produserte et ugyldig resultat.",
+            }
+            if metrics is not None:
+                metrics["validation_ms"] = validation_ms
+                metrics["validation_issue_codes"] = [issue.code for issue in issues]
+                invalid["_solver_metrics"] = metrics
+            return invalid
+        vector = evaluate_objective_vector(
+            schedule=result.get("schedule") or [],
+            candidates=problem.candidates,
+            interviewers=problem.interviewers,
+            sorted_slots=problem.sorted_slots,
+            blocks=problem.canonical_blocks,
+            previous_schedule=problem.previous_schedule,
+            panel_size=problem.panel_size,
+            require_experienced_panel=problem.options.require_experienced_panel,
+        )
+        result["objective_vector"] = vector.as_dict()
+        if "_solver_metrics" in result:
+            result["_solver_metrics"]["validation_ms"] = validation_ms
+            result["_solver_metrics"]["objective_vector"] = vector.as_dict()
+        return result
+
+    from admissions.admissions.solve_schedule_v2 import solve_schedule_v2
+
+    return solve_schedule_v2(
+        candidates_data=candidates_data,
+        interviewers_data=interviewers_data,
+        panel_size=panel_size,
+        options_data=options_data,
+        locked_assignments_data=locked_assignments_data,
+        all_slots_data=all_slots_data,
+        blocks_data=blocks_data,
+        block_metadata_data=block_metadata_data,
+        previous_schedule_data=previous_schedule_data,
+        include_metrics=include_metrics,
+    )

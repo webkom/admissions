@@ -28,6 +28,8 @@ export interface RepairScenario {
   baselineKey: string;
   strategy: RepairStrategy;
   result: SolveResponse;
+  applicable: boolean;
+  unplacedCandidates: string[];
   metrics: RepairScenarioMetrics;
   changes: RepairScenarioChange[];
 }
@@ -107,29 +109,86 @@ export const buildRepairScenario = ({
   interviewers: Interviewer[];
   sessionDuration: number;
 }): RepairScenario => {
-  const baselineByCandidate = new Map(
-    baseline.map((item) => [candidateKey(item), item]),
-  );
-  const resultByCandidate = new Map(
-    result.schedule.map((item) => [candidateKey(item), item]),
-  );
   const interviewerNameByKey = new Map<string, string>(
     interviewers.flatMap((interviewer) => [
       [`id:${interviewer.id}`, interviewer.name] as const,
       [`name:${interviewer.name}`, interviewer.name] as const,
     ]),
   );
-  const allCandidateKeys = new Set([
-    ...baselineByCandidate.keys(),
-    ...resultByCandidate.keys(),
-  ]);
+  const matchedResultIndexByBaselineIndex = new Map<number, number>();
+  const usedResultIndexes = new Set<number>();
+
+  baseline.forEach((item, baselineIndex) => {
+    if (!item.candidate_id) return;
+    const matchingIndexes = result.schedule.flatMap((candidate, resultIndex) =>
+      candidate.candidate_id === item.candidate_id ? [resultIndex] : [],
+    );
+    if (matchingIndexes.length !== 1) return;
+    matchedResultIndexByBaselineIndex.set(baselineIndex, matchingIndexes[0]);
+    usedResultIndexes.add(matchingIndexes[0]);
+  });
+
+  const legacyBaselineIndexesByName = new Map<string, number[]>();
+  baseline.forEach((item, baselineIndex) => {
+    if (item.candidate_id) return;
+    const indexes = legacyBaselineIndexesByName.get(item.candidate) ?? [];
+    indexes.push(baselineIndex);
+    legacyBaselineIndexesByName.set(item.candidate, indexes);
+  });
+  legacyBaselineIndexesByName.forEach((baselineIndexes, name) => {
+    const matchingResultIndexes = result.schedule.flatMap(
+      (candidate, resultIndex) =>
+        !usedResultIndexes.has(resultIndex) && candidate.candidate === name
+          ? [resultIndex]
+          : [],
+    );
+    if (baselineIndexes.length !== 1 || matchingResultIndexes.length !== 1) {
+      return;
+    }
+    matchedResultIndexByBaselineIndex.set(
+      baselineIndexes[0],
+      matchingResultIndexes[0],
+    );
+    usedResultIndexes.add(matchingResultIndexes[0]);
+  });
+
+  const unplacedCandidateByKey = new Map<string, string>();
+  baseline.forEach((item, baselineIndex) => {
+    if (!matchedResultIndexByBaselineIndex.has(baselineIndex)) {
+      unplacedCandidateByKey.set(
+        `${candidateKey(item)}:${baselineIndex}`,
+        item.candidate,
+      );
+    }
+  });
+  (result.unplaceable ?? []).forEach((candidate) => {
+    const key = candidate.candidate_id
+      ? `id:${candidate.candidate_id}`
+      : `name:${candidate.candidate}`;
+    unplacedCandidateByKey.set(key, candidate.candidate);
+  });
+  const unplacedCandidates = [...new Set(unplacedCandidateByKey.values())].sort(
+    (left, right) => left.localeCompare(right, "nb"),
+  );
   const affectedInterviewerKeys = new Set<string>();
   const changes: RepairScenarioChange[] = [];
   let changedTimes = 0;
 
-  allCandidateKeys.forEach((key) => {
-    const before = baselineByCandidate.get(key);
-    const after = resultByCandidate.get(key);
+  const candidatePairs = [
+    ...baseline.map((before, baselineIndex) => {
+      const resultIndex =
+        matchedResultIndexByBaselineIndex.get(baselineIndex) ?? -1;
+      return {
+        before,
+        after: resultIndex >= 0 ? result.schedule[resultIndex] : undefined,
+      };
+    }),
+    ...result.schedule.flatMap((after, resultIndex) =>
+      usedResultIndexes.has(resultIndex) ? [] : [{ before: undefined, after }],
+    ),
+  ];
+
+  candidatePairs.forEach(({ before, after }) => {
     const beforePanel = panelKeys(before);
     const afterPanel = panelKeys(after);
     const panelDifference = symmetricDifference(beforePanel, afterPanel);
@@ -167,6 +226,9 @@ export const buildRepairScenario = ({
     baselineKey,
     strategy,
     result,
+    applicable:
+      result.status === "SUCCESS" && unplacedCandidateByKey.size === 0,
+    unplacedCandidates,
     changes,
     metrics: {
       changedInterviews: changes.length,

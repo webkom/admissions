@@ -45,6 +45,100 @@ const participant: InterviewAvailabilityParticipant = {
   is_me: true,
 };
 
+const ConflictReviewHarness = () => {
+  const [openRequestKey, setOpenRequestKey] = React.useState(1);
+  return h(
+    React.Fragment,
+    null,
+    h(
+      "button",
+      {
+        type: "button",
+        "data-cy": "reopen-conflict-review",
+        onClick: () => setOpenRequestKey((key) => key + 1),
+      },
+      "Kontroller kandidater igjen",
+    ),
+    h(ConflictReviewView, {
+      candidates,
+      currentParticipant: participant,
+      onSaveReview: () => Promise.resolve(),
+      openRequestKey,
+      showSummary: false,
+      reviewProgress: {
+        complete: 0,
+        total: 2,
+        missingNames: ["Ada Reviewer", "Linnea"],
+      },
+    }),
+  );
+};
+
+const ConflictCorrectionHarness = () => {
+  const [currentParticipant, setCurrentParticipant] = React.useState({
+    ...participant,
+    conflicts: ["candidate-1"],
+    reviewed_candidate_ids: candidates.map((candidate) => candidate.id),
+    conflict_review_complete: true,
+  });
+  const [savedConflicts, setSavedConflicts] = React.useState(
+    currentParticipant.conflicts.join(","),
+  );
+  const [savedReviewedCandidates, setSavedReviewedCandidates] = React.useState(
+    currentParticipant.reviewed_candidate_ids.join(","),
+  );
+
+  return h(
+    React.Fragment,
+    null,
+    h(ConflictReviewView, {
+      candidates,
+      currentParticipant,
+      onSaveReview: (reviewedCandidateIds, conflictIds) => {
+        setCurrentParticipant((current) => ({
+          ...current,
+          reviewed_candidate_ids: reviewedCandidateIds,
+          conflicts: conflictIds,
+          conflict_review_complete: true,
+        }));
+        setSavedConflicts(conflictIds.join(","));
+        setSavedReviewedCandidates(reviewedCandidateIds.join(","));
+        return Promise.resolve();
+      },
+    }),
+    h(
+      "span",
+      {
+        "data-cy": "saved-conflicts",
+      },
+      savedConflicts || "none",
+    ),
+    h(
+      "span",
+      {
+        "data-cy": "saved-reviewed-candidates",
+      },
+      savedReviewedCandidates,
+    ),
+  );
+};
+
+const UnassignedConflictCorrectionHarness = () =>
+  h(ConflictReviewView, {
+    candidates,
+    currentParticipant: {
+      ...participant,
+      conflicts: ["candidate-2"],
+      proposed_candidate_ids: [],
+      reviewed_candidate_ids: ["candidate-2"],
+      conflict_review_complete: true,
+      affected_assignment_count: 0,
+    },
+    onSaveReview: () => Promise.resolve(),
+    openRequestKey: 1,
+    showSummary: false,
+  });
+
 const repairScenario: RepairScenario = {
   baselineKey: "baseline-1",
   strategy: "minimum_change",
@@ -59,6 +153,8 @@ const repairScenario: RepairScenario = {
       },
     ],
   },
+  applicable: true,
+  unplacedCandidates: [],
   metrics: {
     changedInterviews: 1,
     changedTimes: 1,
@@ -78,6 +174,23 @@ const repairScenario: RepairScenario = {
   ],
 };
 
+const incompleteRepairScenario: RepairScenario = {
+  ...repairScenario,
+  strategy: "balanced",
+  result: {
+    status: "PARTIAL",
+    schedule: [],
+    unplaceable: [
+      {
+        candidate_id: "candidate-1",
+        candidate: "Ida Nordmann",
+      },
+    ],
+  },
+  applicable: false,
+  unplacedCandidates: ["Ida Nordmann"],
+};
+
 const RepairHarness = () => {
   const [previewed, setPreviewed] = React.useState(false);
   const [applied, setApplied] = React.useState(false);
@@ -95,7 +208,7 @@ const RepairHarness = () => {
       conflictCount: 1,
       selectedStrategy: "minimum_change",
       onSelectedStrategyChange: () => undefined,
-      scenarios: previewed ? [repairScenario] : [],
+      scenarios: previewed ? [repairScenario, incompleteRepairScenario] : [],
       selectedScenario: previewed ? repairScenario : undefined,
       onSelectScenario: () => undefined,
       onPreview: () => setPreviewed(true),
@@ -174,25 +287,18 @@ const DraftRestoreHarness = () => {
   );
 };
 
-describe("focused Planutkast drawers", () => {
-  it("opens candidate review on the first request even when mounted by navigation", () => {
-    mountInPage(
-      h(ConflictReviewView, {
-        candidates,
-        currentParticipant: participant,
-        onSaveReview: () => Promise.resolve(),
-        openRequestKey: 1,
-        showSummary: false,
-        reviewProgress: {
-          complete: 0,
-          total: 2,
-          missingNames: ["Ada Reviewer", "Linnea"],
-        },
-      }),
-    );
+describe("focused Planutkast interactions", () => {
+  it("opens candidate review inline on the first navigation request", () => {
+    mountInPage(h(ConflictReviewHarness));
 
     cy.get("[data-cy=conflict-review]").should("not.exist");
-    cy.get("[data-cy=conflict-review-drawer]").should("be.visible");
+    cy.get("[data-cy=conflict-review-inline]")
+      .should("be.visible")
+      .and("not.have.attr", "role", "dialog");
+    cy.get("[data-cy=conflict-review-drawer]").should("not.exist");
+    cy.get("[data-cy=conflict-review-heading]").should("be.focused");
+    cy.get("[data-cy=reopen-conflict-review]").click();
+    cy.get("[data-cy=conflict-review-heading]").should("be.focused");
     cy.get("[data-cy=conflict-submit]").should(
       "contain.text",
       "Bekreft ingen inhabiliteter",
@@ -204,12 +310,59 @@ describe("focused Planutkast drawers", () => {
     );
   });
 
+  it("reopens a completed review so a wrongly marked conflict can be removed", () => {
+    mountInPage(h(ConflictCorrectionHarness));
+
+    cy.get("[data-cy=conflict-review-open]")
+      .should("contain.text", "Se eller endre svar")
+      .click();
+    cy.get("[data-cy=conflict-candidate-candidate-1]").should("be.checked");
+    cy.get("[data-cy=conflict-submit]").should("be.disabled");
+    cy.get("[data-cy=conflict-candidate-candidate-1]").uncheck();
+    cy.get("[data-cy=conflict-submit]")
+      .should("contain.text", "Bekreft ingen inhabiliteter")
+      .and("be.enabled")
+      .click();
+
+    cy.get("[data-cy=saved-conflicts]").should("have.text", "none");
+    cy.get("[data-cy=saved-reviewed-candidates]").should(
+      "have.text",
+      "candidate-1,candidate-2",
+    );
+    cy.get("[data-cy=conflict-review-inline]").should("not.exist");
+    cy.get("[data-cy=conflict-review-open]").should(
+      "contain.text",
+      "Se eller endre svar",
+    );
+  });
+
+  it("opens conflict correction even when the interviewer has no assignment", () => {
+    mountInPage(h(UnassignedConflictCorrectionHarness));
+
+    cy.get("[data-cy=conflict-review-inline]").should("be.visible");
+    cy.contains("summary", "Har du en annen kjent inhabilitet?").click();
+    cy.contains("label", "Olav Hansen")
+      .find('input[type="checkbox"]')
+      .should("be.checked")
+      .uncheck();
+    cy.get("[data-cy=conflict-submit]")
+      .should("contain.text", "Bekreft ingen inhabiliteter")
+      .and("be.enabled");
+  });
+
   it("keeps the current draft unchanged until a repair preview is applied", () => {
     mountInPage(h(RepairHarness));
 
+    cy.get("[data-cy=repair-schedule-inline]")
+      .should("be.visible")
+      .and("not.have.attr", "role", "dialog");
+    cy.get("[data-cy=repair-schedule-drawer]").should("not.exist");
     cy.get("[data-cy=draft-state]").should("have.text", "unchanged");
     cy.contains("button", "Forhåndsvis løsning").click();
     cy.get("[data-cy=draft-state]").should("have.text", "unchanged");
+    cy.get("[data-cy=repair-scenario-balanced]")
+      .should("be.disabled")
+      .and("contain.text", "Ida Nordmann står uten intervju");
     cy.contains("button", "Bruk denne løsningen").click();
     cy.get("[data-cy=draft-state]").should("have.text", "applied");
   });

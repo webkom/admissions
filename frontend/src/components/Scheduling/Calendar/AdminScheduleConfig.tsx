@@ -65,6 +65,7 @@ interface AdminScheduleConfigProps {
   hasScheduleDraft?: boolean;
   onSave?: (config: ScheduleConfigInput) => Promise<string>;
   onSaveSuccess?: () => void;
+  onAvailabilityAdditionSaved?: () => void;
   scheduleRevision: string | null;
   sessionDuration: number;
   onDraftStatusChange?: (status: {
@@ -102,6 +103,7 @@ const AdminScheduleConfig: React.FC<AdminScheduleConfigProps> = ({
   hasScheduleDraft = false,
   onSave,
   onSaveSuccess,
+  onAvailabilityAdditionSaved,
   onDraftStatusChange,
   scheduleRevision,
   sessionDuration,
@@ -586,6 +588,7 @@ const AdminScheduleConfig: React.FC<AdminScheduleConfigProps> = ({
       setRemoteRevisionChanged(false);
       setSaveTick((tick) => tick + 1);
       setIsSettingsCollapsed(true);
+      if (availabilityAddition) onAvailabilityAdditionSaved?.();
       onSaveSuccess?.();
     } catch (error) {
       if (isConflictError(error)) setRemoteRevisionChanged(true);

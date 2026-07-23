@@ -2,6 +2,7 @@ export type {
   Candidate,
   AvailabilityFallback,
   EnabledWindow,
+  ExperienceLevel,
   Interviewer,
   InterviewerParticipation,
   InitialPlanningStrategy,

@@ -326,21 +326,26 @@ export const useSolverSession = ({
     () =>
       deriveSolverReadiness({
         candidateCount: candidates.length,
+        candidates,
         interviewers,
         panelSize,
         enabledSlots,
         dates,
         sessionDuration,
         allowOvertime: solverOptions.availability_fallback !== "stop",
+        requireExperiencedPanel: solverOptions.require_experienced_panel,
+        enforceSameGender: solverOptions.enforce_same_gender,
       }),
     [
-      candidates.length,
+      candidates,
       dates,
       enabledSlots,
       interviewers,
       panelSize,
       sessionDuration,
       solverOptions.availability_fallback,
+      solverOptions.enforce_same_gender,
+      solverOptions.require_experienced_panel,
     ],
   );
   const estimatedSeconds = useMemo(
@@ -379,8 +384,15 @@ export const useSolverSession = ({
       } = {},
     ) => {
       if (!readiness.ready) {
+        const blockedCandidate = readiness.conflictBlockedCandidates[0];
+        const capabilityBlockedCandidate =
+          readiness.capabilityBlockedCandidates[0];
         solveJob.setError(
-          "Planleggingen trenger kandidater, et mulig panel og minst én åpen intervjutid.",
+          blockedCandidate
+            ? `${blockedCandidate.candidate.name} har ikke nok habile intervjuere til å danne panelet. Kontroller registrert inhabilitet før du genererer på nytt.`
+            : capabilityBlockedCandidate
+              ? `${capabilityBlockedCandidate.candidate.name} kan ikke få et panel som oppfyller de valgte kravene til erfaring eller kjønn. Juster kravene eller intervjuergruppen før du genererer på nytt.`
+              : "Planleggingen trenger kandidater, et mulig panel og minst én åpen intervjutid.",
         );
         return null;
       }
@@ -427,6 +439,7 @@ export const useSolverSession = ({
               blocks,
               options: runOptions,
               synthetic: true,
+              preview_only: previewOnly,
               ...(lockedAssignments.length > 0
                 ? { locked_assignments: lockedAssignments }
                 : {}),
@@ -443,6 +456,7 @@ export const useSolverSession = ({
               ...(lockedIds.length > 0
                 ? { locked_assignments: lockedIds }
                 : {}),
+              preview_only: previewOnly,
             },
         savedSchedule?.updated_at ?? draftBaseRevisionRef.current,
         {
@@ -452,6 +466,7 @@ export const useSolverSession = ({
             !syntheticInput &&
             !previewOnly &&
             (savedSchedule?.schedule.length ?? 0) === 0,
+          previewOnly,
         },
       );
       if (outcome === "access-failure") {

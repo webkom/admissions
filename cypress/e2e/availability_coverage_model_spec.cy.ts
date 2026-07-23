@@ -3,7 +3,7 @@ import {
   encodeScheduleTime,
   makeSlotKey,
 } from "../../frontend/src/components/Scheduling/scheduleUtils";
-import type { Interviewer } from "../../frontend/src/types";
+import type { Candidate, Interviewer } from "../../frontend/src/types";
 import { deriveSolverReadiness } from "../../frontend/src/components/Scheduling/Solver/solverSelectors";
 
 describe("availability coverage model", () => {
@@ -100,6 +100,98 @@ describe("availability coverage model", () => {
     expect(readiness.ready).to.equal(true);
     expect(readiness.usableSlotCount).to.equal(1);
     expect(readiness.usableSlotCount).to.be.lessThan(2);
+  });
+
+  it("blocks generation when a candidate cannot form an unbiased panel", () => {
+    const minute = chunks[0][0];
+    const blockedCandidate: Candidate = {
+      id: "blocked-candidate",
+      name: "Olav Hansen",
+    };
+    const biasedInterviewer = (id: string): Interviewer => ({
+      ...interviewer(id, [minute]),
+      biased: [blockedCandidate.id],
+    });
+    const readiness = deriveSolverReadiness({
+      candidateCount: 1,
+      candidates: [blockedCandidate],
+      interviewers: [biasedInterviewer("Anna"), biasedInterviewer("Per")],
+      panelSize: 1,
+      enabledSlots: new Set([makeSlotKey(date, minute)]),
+      dates,
+      sessionDuration: 15,
+      allowOvertime: false,
+    });
+
+    expect(readiness.ready).to.equal(false);
+    expect(readiness.conflictBlockedCandidates).to.deep.equal([
+      {
+        candidate: blockedCandidate,
+        eligibleInterviewerCount: 0,
+      },
+    ]);
+  });
+
+  it("treats a candidate interviewing themselves as a hard conflict", () => {
+    const minute = chunks[0][0];
+    const selfCandidate: Candidate = {
+      id: "self-candidate",
+      name: "Ada Applicant",
+      user_id: "ada",
+    };
+    const readiness = deriveSolverReadiness({
+      candidateCount: 1,
+      candidates: [selfCandidate],
+      interviewers: [interviewer("ada", [minute])],
+      panelSize: 1,
+      enabledSlots: new Set([makeSlotKey(date, minute)]),
+      dates,
+      sessionDuration: 15,
+      allowOvertime: false,
+    });
+
+    expect(readiness.ready).to.equal(false);
+    expect(readiness.conflictBlockedCandidates[0]).to.deep.equal({
+      candidate: selfCandidate,
+      eligibleInterviewerCount: 0,
+    });
+  });
+
+  it("blocks when conflicts remove the only experienced interviewer", () => {
+    const minute = chunks[0][0];
+    const candidate: Candidate = {
+      id: "experience-blocked",
+      name: "Emil Applicant",
+    };
+    const readiness = deriveSolverReadiness({
+      candidateCount: 1,
+      candidates: [candidate],
+      interviewers: [
+        {
+          ...interviewer("experienced", [minute]),
+          biased: [candidate.id],
+          experience_level: "experienced",
+        },
+        {
+          ...interviewer("inexperienced", [minute]),
+          experience_level: "inexperienced",
+        },
+      ],
+      panelSize: 1,
+      enabledSlots: new Set([makeSlotKey(date, minute)]),
+      dates,
+      sessionDuration: 15,
+      allowOvertime: false,
+      requireExperiencedPanel: true,
+    });
+
+    expect(readiness.ready).to.equal(false);
+    expect(readiness.capabilityBlockedCandidates).to.deep.equal([
+      {
+        candidate,
+        reasons: ["experience"],
+      },
+    ]);
   });
 
   it("uses minimum per-slot coverage when panels may change", () => {

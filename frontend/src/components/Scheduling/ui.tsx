@@ -1,8 +1,23 @@
 import React, { useEffect, useId, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { AlertTriangle, Check, ChevronDown, Clock3 } from "lucide-react";
+import {
+  AlertTriangle,
+  Check,
+  ChevronDown,
+  Clock3,
+  Eye,
+  Pencil,
+} from "lucide-react";
 import { iconSizes } from "src/styles/designTokens";
 import cn from "src/utils/cn";
+import {
+  SegmentedControl,
+  actionButtonBase,
+  actionButtonDanger,
+  actionButtonGhost,
+  actionButtonNeutral,
+  actionButtonPrimary,
+} from "../ui";
 
 export {
   sectionLabelClass,
@@ -143,6 +158,92 @@ export const SchedulePanelFooter: React.FC<SchedulePanelFooterProps> = ({
   >
     {children}
   </div>
+);
+
+type SchedulingButtonVariant = "primary" | "secondary" | "quiet" | "danger";
+
+interface SchedulingButtonProps
+  extends React.ButtonHTMLAttributes<HTMLButtonElement> {
+  variant?: SchedulingButtonVariant;
+}
+
+export const SchedulingButton = React.forwardRef<
+  HTMLButtonElement,
+  SchedulingButtonProps
+>(({ className, variant = "secondary", type = "button", ...props }, ref) => (
+  <button
+    ref={ref}
+    type={type}
+    className={cn(
+      actionButtonBase,
+      variant === "primary" && actionButtonPrimary,
+      variant === "secondary" && actionButtonNeutral,
+      variant === "quiet" && actionButtonGhost,
+      variant === "danger" && actionButtonDanger,
+      className,
+    )}
+    {...props}
+  />
+));
+SchedulingButton.displayName = "SchedulingButton";
+
+interface SchedulingActionBarProps {
+  status?: React.ReactNode;
+  actions?: React.ReactNode;
+  className?: string;
+  dataCy?: string;
+}
+
+export const SchedulingActionBar: React.FC<SchedulingActionBarProps> = ({
+  status,
+  actions,
+  className,
+  dataCy,
+}) => (
+  <SchedulePanelFooter className={className} dataCy={dataCy}>
+    <div className="min-w-0 text-detail text-text-muted" aria-live="polite">
+      {status}
+    </div>
+    {actions && (
+      <div className="flex flex-wrap items-center gap-3 handheld:w-full">
+        {actions}
+      </div>
+    )}
+  </SchedulePanelFooter>
+);
+
+export type SchedulingWorkspaceMode = "preview" | "editing";
+
+interface SchedulingModeControlProps {
+  mode: SchedulingWorkspaceMode;
+  onChange: (mode: SchedulingWorkspaceMode) => void;
+  disabled?: boolean;
+}
+
+export const SchedulingModeControl: React.FC<SchedulingModeControlProps> = ({
+  mode,
+  onChange,
+  disabled = false,
+}) => (
+  <SegmentedControl<SchedulingWorkspaceMode>
+    value={mode}
+    onChange={onChange}
+    items={[
+      {
+        key: "preview",
+        label: "Forhåndsvisning",
+        icon: <Eye size={iconSizes.small} />,
+        disabled,
+      },
+      {
+        key: "editing",
+        label: "Rediger",
+        icon: <Pencil size={iconSizes.small} />,
+        disabled,
+      },
+    ]}
+    aria-label="Arbeidsmodus for planutkastet"
+  />
 );
 
 interface PanelChipOption {

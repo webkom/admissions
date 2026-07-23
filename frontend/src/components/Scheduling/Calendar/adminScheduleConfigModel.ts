@@ -10,7 +10,7 @@ import {
 } from "../scheduleUtils";
 
 export const MAX_RANGE_DAYS = 21;
-export const DURATION_PRESETS = [15, 20, 30] as const;
+export const DURATION_PRESETS = [20, 25, 30] as const;
 export const PAUSE_PRESETS = [0, 30, 60] as const;
 export const SESSION_DURATION_LIMITS = { min: 5, max: 240, step: 5 } as const;
 export const CHUNK_BREAK_LIMITS = { min: 0, max: 240, step: 1 } as const;

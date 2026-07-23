@@ -17,7 +17,7 @@ import { createSolveJobLifecycle } from "./solveJobLifecycle";
 interface StoredSolveJob {
   jobId: string;
   baseRevision: string | null;
-  mode: "result" | "proposal" | "auto-apply";
+  mode: "result" | "proposal" | "auto-apply" | "preview";
 }
 
 const parseStoredSolveJob = (value: string): StoredSolveJob => {
@@ -29,7 +29,9 @@ const parseStoredSolveJob = (value: string): StoredSolveJob => {
         baseRevision:
           typeof parsed.baseRevision === "string" ? parsed.baseRevision : null,
         mode:
-          parsed.mode === "proposal" || parsed.mode === "auto-apply"
+          parsed.mode === "proposal" ||
+          parsed.mode === "auto-apply" ||
+          parsed.mode === "preview"
             ? parsed.mode
             : "result",
       };
@@ -142,6 +144,7 @@ export function useSolveJob(admissionSlug: string) {
         job.status !== "DONE" ||
         job.applied_at ||
         job.discarded_at ||
+        job.preview_only ||
         !job.result ||
         !hasSchedule(job.result.status)
       ) {
@@ -308,6 +311,10 @@ export function useSolveJob(admissionSlug: string) {
             return;
           }
           initialJob = latestOutcome.job;
+          if (initialJob.preview_only) {
+            void lifecycle.cancel(initialJob.job_id);
+            return;
+          }
           storedJob = {
             jobId: initialJob.job_id,
             baseRevision: initialJob.baseline_updated_at,
@@ -335,6 +342,10 @@ export function useSolveJob(admissionSlug: string) {
         }
         const { job } = readOutcome;
         const restoreFinishedJob = (finishedJob: SolveJob) => {
+          if (restoredJob.mode === "preview" || finishedJob.preview_only) {
+            void lifecycle.cancel(finishedJob.job_id);
+            return;
+          }
           const shouldRemainAProposal =
             restoredJob.mode === "proposal" ||
             (restoredJob.mode === "auto-apply" && !finishedJob.applied_at);
@@ -449,10 +460,12 @@ export function useSolveJob(admissionSlug: string) {
       applyResult = true,
       retainAsProposal = false,
       autoApplyIfEmpty = false,
+      previewOnly = false,
     }: {
       applyResult?: boolean;
       retainAsProposal?: boolean;
       autoApplyIfEmpty?: boolean;
+      previewOnly?: boolean;
     } = {},
   ) => {
     const runId = ++solveRunRef.current;
@@ -481,11 +494,13 @@ export function useSolveJob(admissionSlug: string) {
           JSON.stringify({
             jobId: created.job_id,
             baseRevision,
-            mode: retainAsProposal
-              ? autoApplyIfEmpty
-                ? "auto-apply"
-                : "proposal"
-              : "result",
+            mode: previewOnly
+              ? "preview"
+              : retainAsProposal
+                ? autoApplyIfEmpty
+                  ? "auto-apply"
+                  : "proposal"
+                : "result",
           } satisfies StoredSolveJob),
         );
       } catch {
@@ -504,6 +519,9 @@ export function useSolveJob(admissionSlug: string) {
       );
       if (settleOutcome === "access-failure") return settleOutcome;
       const finishedJob = finishedJobHolder.current;
+      if (previewOnly && finishedJob?.status === "DONE") {
+        void lifecycle.cancel(finishedJob.job_id);
+      }
       if (retainAsProposal && finishedJob) {
         if (
           baseRevision &&

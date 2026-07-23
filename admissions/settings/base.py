@@ -14,6 +14,10 @@ import environ
 
 from .logging import *  # noqa
 
+ADMISSIONS_SOLVER_ENGINE_VERSION = os.environ.get(
+    "ADMISSIONS_SOLVER_ENGINE_VERSION", "v1"
+)
+
 # GENERAL CONFIGURATION ======================================================
 BASE_PROJECT_DIR = environ.Path(__file__) - 3  # manage.py level
 ROOT_DIR = environ.Path(__file__) - 2  # (admissions/settings/base.py - 2 = admissions/)

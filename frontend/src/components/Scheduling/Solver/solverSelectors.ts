@@ -1,4 +1,5 @@
 import type {
+  Candidate,
   Interviewer,
   ScheduleItem,
   SchedulePanelMember,
@@ -75,6 +76,14 @@ export interface SolverReadiness {
   conflictCount: number;
   slotsWithFullPanel: number;
   usableSlotCount: number;
+  conflictBlockedCandidates: {
+    candidate: Candidate;
+    eligibleInterviewerCount: number;
+  }[];
+  capabilityBlockedCandidates: {
+    candidate: Candidate;
+    reasons: ("experience" | "gender")[];
+  }[];
 }
 
 export interface SchedulePresentation {
@@ -377,20 +386,26 @@ const buildOverviewStats = (
 
 export const deriveSolverReadiness = ({
   candidateCount,
+  candidates = [],
   interviewers,
   panelSize,
   enabledSlots,
   dates,
   sessionDuration,
   allowOvertime,
+  requireExperiencedPanel = false,
+  enforceSameGender = false,
 }: {
   candidateCount: number;
+  candidates?: Candidate[];
   interviewers: Interviewer[];
   panelSize: number;
   enabledSlots: Set<string>;
   dates: string[];
   sessionDuration: number;
   allowOvertime: boolean;
+  requireExperiencedPanel?: boolean;
+  enforceSameGender?: boolean;
 }): SolverReadiness => {
   let submittedInterviewers = 0;
   let totalCapacity = 0;
@@ -418,11 +433,89 @@ export const deriveSolverReadiness = ({
     ? enabledTimes.length
     : slotsWithFullPanel;
   const neededCapacity = candidateCount * panelSize;
+  const genderDataAvailable = interviewers.some((interviewer) =>
+    ["M", "F"].includes(interviewer.gender ?? ""),
+  );
+  const eligibilityByCandidate = candidates.map((candidate) => ({
+    candidate,
+    eligibleInterviewers: interviewers.filter(
+      (interviewer) =>
+        !interviewer.biased.includes(candidate.id) &&
+        (!candidate.user_id || candidate.user_id !== interviewer.id),
+    ),
+  }));
+  const conflictBlockedCandidates = eligibilityByCandidate.flatMap(
+    ({ candidate, eligibleInterviewers }) =>
+      eligibleInterviewers.length < panelSize
+        ? [
+            {
+              candidate,
+              eligibleInterviewerCount: eligibleInterviewers.length,
+            },
+          ]
+        : [],
+  );
+  const capabilityBlockedCandidates = eligibilityByCandidate.flatMap(
+    ({ candidate, eligibleInterviewers }) => {
+      if (eligibleInterviewers.length < panelSize) return [];
+      const needsGenderMatch =
+        enforceSameGender &&
+        genderDataAvailable &&
+        ["M", "F"].includes(candidate.gender ?? "");
+      const experiencedInterviewers = requireExperiencedPanel
+        ? eligibleInterviewers.filter(
+            (interviewer) => interviewer.experience_level === "experienced",
+          )
+        : [];
+      const genderMatchedInterviewers = needsGenderMatch
+        ? eligibleInterviewers.filter(
+            (interviewer) => interviewer.gender === candidate.gender,
+          )
+        : [];
+      const hasExperiencedInterviewer =
+        !requireExperiencedPanel || experiencedInterviewers.length > 0;
+      const hasGenderMatchedInterviewer =
+        !needsGenderMatch || genderMatchedInterviewers.length > 0;
+      const requirementsCanSharePanelMember =
+        !requireExperiencedPanel ||
+        !needsGenderMatch ||
+        eligibleInterviewers.some(
+          (interviewer) =>
+            interviewer.experience_level === "experienced" &&
+            interviewer.gender === candidate.gender,
+        );
+      const requirementsFitPanel =
+        requirementsCanSharePanelMember ||
+        (panelSize >= 2 &&
+          hasExperiencedInterviewer &&
+          hasGenderMatchedInterviewer);
+      if (
+        hasExperiencedInterviewer &&
+        hasGenderMatchedInterviewer &&
+        requirementsFitPanel
+      ) {
+        return [];
+      }
+      const reasons: ("experience" | "gender")[] = [];
+      if (!hasExperiencedInterviewer) reasons.push("experience");
+      if (!hasGenderMatchedInterviewer) reasons.push("gender");
+      if (
+        hasExperiencedInterviewer &&
+        hasGenderMatchedInterviewer &&
+        !requirementsFitPanel
+      ) {
+        reasons.push("experience", "gender");
+      }
+      return [{ candidate, reasons }];
+    },
+  );
   return {
     ready:
       candidateCount > 0 &&
       interviewers.length >= panelSize &&
-      enabledTimes.length > 0,
+      enabledTimes.length > 0 &&
+      conflictBlockedCandidates.length === 0 &&
+      capabilityBlockedCandidates.length === 0,
     submittedInterviewers,
     enabledSlotCount: enabledSlots.size,
     totalCapacity,
@@ -430,6 +523,8 @@ export const deriveSolverReadiness = ({
     conflictCount,
     slotsWithFullPanel,
     usableSlotCount,
+    conflictBlockedCandidates,
+    capabilityBlockedCandidates,
   };
 };
 

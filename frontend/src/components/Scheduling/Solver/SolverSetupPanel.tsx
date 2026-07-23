@@ -45,6 +45,7 @@ import type { SolverReadiness } from "./solverSelectors";
 
 interface SolverSetupPanelProps {
   interviewerCount: number;
+  experiencedInterviewerCount: number;
   solverOptions: SolverOptions;
   onSolverOptionsChange: Dispatch<SetStateAction<SolverOptions>>;
   panelSize: number;
@@ -67,13 +68,13 @@ interface SolverSetupPanelProps {
   onCancel: () => void;
   onOpenAvailability: () => void;
   onOpenFramework: () => void;
+  onOpenConflictReview: () => void;
 }
 
 const presetFor = (options: SolverOptions) =>
   INITIAL_STRATEGY_PRESETS.find(
     (preset) =>
       preset.key === options.initial_strategy &&
-      preset.overtimeWeight === options.overtime_weight &&
       preset.loadBalanceWeight === options.load_balance_weight &&
       preset.continuityWeight === options.continuity_weight &&
       preset.prioritizeContinuity === options.prioritize_continuity,
@@ -129,6 +130,7 @@ const AdvancedOptionRow = ({
 
 const SolverSetupPanel = ({
   interviewerCount,
+  experiencedInterviewerCount,
   solverOptions,
   onSolverOptionsChange,
   panelSize,
@@ -151,6 +153,7 @@ const SolverSetupPanel = ({
   onCancel,
   onOpenAvailability,
   onOpenFramework,
+  onOpenConflictReview,
 }: SolverSetupPanelProps) => {
   const [advancedDrawerOpen, setAdvancedDrawerOpen] = useState(false);
   const [regenerationOpen, setRegenerationOpen] = useState(false);
@@ -178,8 +181,12 @@ const SolverSetupPanel = ({
   const generationBlocked =
     !currentDraftReady ||
     panelFormationImpossible ||
+    (solverOptions.require_experienced_panel &&
+      experiencedInterviewerCount === 0) ||
     !availabilityReady ||
     !readiness.ready;
+  const conflictBlockedCandidate = readiness.conflictBlockedCandidates[0];
+  const capabilityBlockedCandidate = readiness.capabilityBlockedCandidates[0];
   const matchedPreset = presetFor(solverOptions);
   const selectedPreset =
     INITIAL_STRATEGY_PRESETS.find(
@@ -211,7 +218,6 @@ const SolverSetupPanel = ({
     onSolverOptionsChange((current) => ({
       ...current,
       initial_strategy: preset.key,
-      overtime_weight: preset.overtimeWeight,
       load_balance_weight: preset.loadBalanceWeight,
       continuity_weight: preset.continuityWeight,
       prioritize_continuity: preset.prioritizeContinuity,
@@ -231,6 +237,8 @@ const SolverSetupPanel = ({
     onSolverOptionsChange((current) => ({
       ...current,
       enforce_same_gender: ADVANCED_SOLVER_DEFAULTS.enforce_same_gender,
+      require_experienced_panel:
+        ADVANCED_SOLVER_DEFAULTS.require_experienced_panel,
       panel_stability: ADVANCED_SOLVER_DEFAULTS.panel_stability,
       same_panel_per_block: ADVANCED_SOLVER_DEFAULTS.same_panel_per_block,
       avoid_consecutive_interviewer_blocks:
@@ -242,14 +250,33 @@ const SolverSetupPanel = ({
     ? "Vent til endringene i utkastet er lagret før du lager et nytt forslag."
     : panelFormationImpossible
       ? `Velg maksimalt ${interviewerCount} per intervju.`
-      : !availabilityReady
-        ? "Vent til alle intervjuere har svart eller meldt at de ikke deltar."
-        : readiness.neededCapacity === 0
-          ? "Ingen aktive kandidater er klare for planlegging."
-          : readiness.usableSlotCount <
-              readiness.neededCapacity / Math.max(panelSize, 1)
-            ? "Det er ikke nok åpne intervjutider med full paneldekning."
-            : "Intervjuerne har ikke nok samlet tilgjengelig kapasitet.";
+      : solverOptions.require_experienced_panel &&
+          experiencedInterviewerCount === 0
+        ? "Klassifiser minst én deltakende intervjuer som erfaren, eller slå av erfaringskravet."
+        : !availabilityReady
+          ? "Vent til alle intervjuere har svart eller meldt at de ikke deltar."
+          : conflictBlockedCandidate
+            ? `${conflictBlockedCandidate.candidate.name} har ${
+                conflictBlockedCandidate.eligibleInterviewerCount === 0
+                  ? "ingen habile intervjuere"
+                  : conflictBlockedCandidate.eligibleInterviewerCount === 1
+                    ? "bare én habil intervjuer"
+                    : `bare ${conflictBlockedCandidate.eligibleInterviewerCount} habile intervjuere`
+              }, mens panelet krever ${panelSize}. Kontroller registrert inhabilitet før du genererer på nytt.`
+            : capabilityBlockedCandidate
+              ? `${capabilityBlockedCandidate.candidate.name} kan ikke få et panel som oppfyller ${
+                  capabilityBlockedCandidate.reasons.length === 2
+                    ? "kravene til erfaring og kjønn"
+                    : capabilityBlockedCandidate.reasons[0] === "experience"
+                      ? "kravet om en erfaren intervjuer"
+                      : "kravet om samme kjønn"
+                }. Juster reglene eller intervjuergruppen før du genererer på nytt.`
+              : readiness.neededCapacity === 0
+                ? "Ingen aktive kandidater er klare for planlegging."
+                : readiness.usableSlotCount <
+                    readiness.neededCapacity / Math.max(panelSize, 1)
+                  ? "Det er ikke nok åpne intervjutider med full paneldekning."
+                  : "Intervjuerne har ikke nok samlet tilgjengelig kapasitet.";
   const blockedAction = !currentDraftReady
     ? null
     : panelFormationImpossible
@@ -261,12 +288,22 @@ const SolverSetupPanel = ({
         : { label: "Se intervjuere", run: onOpenAvailability }
       : !availabilityReady
         ? { label: "Se hvem som mangler", run: onOpenAvailability }
-        : readiness.neededCapacity === 0
-          ? null
-          : readiness.usableSlotCount <
-              readiness.neededCapacity / Math.max(panelSize, 1)
-            ? { label: "Juster tidsoppsettet", run: onOpenFramework }
-            : { label: "Se tilgjengelighet", run: onOpenAvailability };
+        : conflictBlockedCandidate
+          ? {
+              label: "Endre mitt svar",
+              run: onOpenConflictReview,
+            }
+          : capabilityBlockedCandidate
+            ? {
+                label: "Tilpass regler",
+                run: () => setAdvancedDrawerOpen(true),
+              }
+            : readiness.neededCapacity === 0
+              ? null
+              : readiness.usableSlotCount <
+                  readiness.neededCapacity / Math.max(panelSize, 1)
+                ? { label: "Juster tidsoppsettet", run: onOpenFramework }
+                : { label: "Se tilgjengelighet", run: onOpenAvailability };
 
   const showConfiguration = !hasProposal || regenerationOpen;
 
@@ -591,6 +628,17 @@ const SolverSetupPanel = ({
                 }))
               }
               autofocus
+            />
+            <AdvancedOptionRow
+              title="Erfaren intervjuer i hvert panel"
+              description="Krev minst én intervjuer som er klassifisert som erfaren. Ukjent erfaring teller ikke."
+              checked={solverOptions.require_experienced_panel}
+              onToggle={() =>
+                onSolverOptionsChange((current) => ({
+                  ...current,
+                  require_experienced_panel: !current.require_experienced_panel,
+                }))
+              }
             />
             {allInterviewersRequired ? (
               <p className="m-0 py-3 text-detail text-text-muted">

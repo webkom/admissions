@@ -117,6 +117,7 @@ export default function SolverView({
     useState<RepairStrategy>();
   const [repairError, setRepairError] = useState("");
   const [repairOpen, setRepairOpen] = useState(false);
+  const [repairFocusRequest, setRepairFocusRequest] = useState(0);
   const [proposalDetailsOpen, setProposalDetailsOpen] = useState(false);
   const canonicalBlocks = useMemo(
     () =>
@@ -333,7 +334,7 @@ export default function SolverView({
       ...current.filter((item) => item.strategy !== strategy),
       scenario,
     ]);
-    setSelectedScenarioStrategy(strategy);
+    setSelectedScenarioStrategy(scenario.applicable ? strategy : undefined);
     return scenario;
   };
   const compareRepairStrategies = async () => {
@@ -354,13 +355,28 @@ export default function SolverView({
       setRepairError("Planen ble endret. Beregn løsningen på nytt.");
       return;
     }
+    if (!scenario.applicable) {
+      setRepairError(
+        "Løsningen kan ikke brukes fordi én eller flere kandidater står uten intervju.",
+      );
+      return;
+    }
     setRepairOpen(false);
     session.applyRepairPreview(scenario.result, scenario.strategy);
+  };
+  const selectRepairScenario = (strategy: RepairStrategy) => {
+    const scenario = repairScenarios.find(
+      (candidate) => candidate.strategy === strategy,
+    );
+    if (!scenario?.applicable) return;
+    setSelectedScenarioStrategy(strategy);
   };
   const selectRepairStrategy = (strategy: RepairStrategy) => {
     setSelectedRepairStrategy(strategy);
     setSelectedScenarioStrategy(
-      repairScenarios.some((scenario) => scenario.strategy === strategy)
+      repairScenarios.some(
+        (scenario) => scenario.strategy === strategy && scenario.applicable,
+      )
         ? strategy
         : undefined,
     );
@@ -442,13 +458,14 @@ export default function SolverView({
       {repairAvailable && (
         <RepairScenarioPanel
           open={repairOpen}
+          openRequestKey={repairFocusRequest}
           onClose={() => setRepairOpen(false)}
           conflictCount={assignmentConflicts.assignmentCount}
           selectedStrategy={selectedRepairStrategy}
           onSelectedStrategyChange={selectRepairStrategy}
           scenarios={repairScenarios}
           selectedScenario={selectedRepairScenario}
-          onSelectScenario={setSelectedScenarioStrategy}
+          onSelectScenario={selectRepairScenario}
           onPreview={(strategy) => void previewRepairStrategy(strategy)}
           onCompare={() => void compareRepairStrategies()}
           onApply={applyRepairScenario}
@@ -594,6 +611,11 @@ export default function SolverView({
       )}
       <SolverSetupPanel
         interviewerCount={interviewers.length}
+        experiencedInterviewerCount={
+          interviewers.filter(
+            (interviewer) => interviewer.experience_level === "experienced",
+          ).length
+        }
         solverOptions={session.solverOptions}
         onSolverOptionsChange={session.setSolverOptions}
         panelSize={session.panelSize}
@@ -625,6 +647,7 @@ export default function SolverView({
         onCancel={() => void session.cancel()}
         onOpenAvailability={onOpenAvailability}
         onOpenFramework={onOpenFramework}
+        onOpenConflictReview={onOpenConflictReview}
       />
       {hasProposal && (
         <SolverResults
@@ -666,7 +689,10 @@ export default function SolverView({
             setGenerationSettingsRequestKey((key) => key + 1)
           }
           onOpenConflictReview={onOpenConflictReview}
-          onOpenRepair={() => setRepairOpen(true)}
+          onOpenRepair={() => {
+            setRepairOpen(true);
+            setRepairFocusRequest((request) => request + 1);
+          }}
           onRetrySolve={solvePlan}
           onOpenPlan={onOpenPlan}
           onPreviewWithAvailabilityDeviation={retryWithAvailabilityDeviation}

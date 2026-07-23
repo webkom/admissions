@@ -4,6 +4,7 @@ import type { ScheduleConfigInput } from "src/components/Scheduling/Calendar/Adm
 import {
   CONFLICT_MESSAGE,
   isConflictError,
+  scheduleSaveErrorMessage,
 } from "src/components/Scheduling/Solver/solverHelpers";
 import {
   addDays,
@@ -132,7 +133,9 @@ export const useScheduleConfiguration = ({
       return saved.updated_at;
     } catch (error) {
       notify(
-        isConflictError(error) ? CONFLICT_MESSAGE : "Kunne ikke lagre rammer.",
+        isConflictError(error)
+          ? CONFLICT_MESSAGE
+          : scheduleSaveErrorMessage(error, "Kunne ikke lagre rammer."),
         "error",
       );
       throw error;

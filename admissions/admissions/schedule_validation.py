@@ -223,10 +223,21 @@ def canonicalize_solver_payload(admission, saved, data, request_user):
         str(user.pk): user for user in LegoUser.objects.filter(id__in=participant_ids)
     }
     availability_map = {str(item.user_id): item for item in submitted}
+    participant_string_ids = {str(value) for value in participant_ids}
+    if (data.get("options") or {}).get("require_experienced_panel") and not any(
+        str(item.user_id) in participant_string_ids
+        and item.experience_level == InterviewAvailability.EXPERIENCE_EXPERIENCED
+        for item in submitted
+    ):
+        raise ScheduleValidationError(
+            "options",
+            "Minst én deltakende intervjuer må klassifiseres som erfaren.",
+        )
     candidate_ids = set(application_map)
     candidates = [
         {
             "id": candidate_id,
+            "user_id": str(application_map[candidate_id].user_id),
             "name": application_map[candidate_id].user.get_full_name()
             or application_map[candidate_id].user.username,
             "gender": {
@@ -260,6 +271,11 @@ def canonicalize_solver_payload(admission, saved, data, request_user):
                     for value in (availability.conflicts if availability else [])
                     if str(value) in candidate_ids
                 ],
+                "experience_level": (
+                    availability.experience_level
+                    if availability is not None
+                    else InterviewAvailability.EXPERIENCE_UNKNOWN
+                ),
             }
         )
 
@@ -450,6 +466,11 @@ def canonicalize_schedule(
                     "id": interviewer_id,
                     "name": interviewer.get_full_name() or interviewer.username,
                     "is_overtime": is_overtime,
+                    "experience_level": (
+                        saved_availability.experience_level
+                        if saved_availability is not None
+                        else InterviewAvailability.EXPERIENCE_UNKNOWN
+                    ),
                 }
             )
 
@@ -490,6 +511,18 @@ def canonicalize_schedule(
                         "schedule",
                         "Planen mangler en intervjuer med samme kjønn som kandidaten.",
                     )
+
+    if (solver_options or {}).get("require_experienced_panel"):
+        for item in canonical:
+            if not any(
+                member.get("experience_level")
+                == InterviewAvailability.EXPERIENCE_EXPERIENCED
+                for member in item["panel"]
+            ):
+                raise ScheduleValidationError(
+                    "schedule",
+                    "Planen mangler en erfaren intervjuer i panelet.",
+                )
 
     if policy.requires_stable_panel:
         if resolved_blocks:

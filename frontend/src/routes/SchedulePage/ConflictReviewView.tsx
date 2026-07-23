@@ -1,11 +1,18 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { AlertTriangle, Check, ChevronDown, Search } from "lucide-react";
+import {
+  AlertTriangle,
+  ArrowLeft,
+  Check,
+  ChevronDown,
+  Search,
+} from "lucide-react";
 
-import ScheduleDrawer from "src/components/Scheduling/ScheduleDrawer";
 import {
   Chip,
   SchedulePanel,
   SchedulePanelBody,
+  SchedulePanelFooter,
+  SchedulePanelHeader,
   actionButtonBase,
   actionButtonNeutral,
   actionButtonPrimary,
@@ -43,7 +50,8 @@ const ConflictReviewView: React.FC<ConflictReviewViewProps> = ({
   showSummary = true,
 }) => {
   const [query, setQuery] = useState("");
-  const [drawerOpen, setDrawerOpen] = useState(false);
+  const [reviewOpen, setReviewOpen] = useState(false);
+  const [reviewFocusRequest, setReviewFocusRequest] = useState(0);
   const [isSaving, setIsSaving] = useState(false);
   const [selectedConflictIds, setSelectedConflictIds] = useState<Set<string>>(
     () => new Set(currentParticipant?.conflicts ?? []),
@@ -52,8 +60,11 @@ const ConflictReviewView: React.FC<ConflictReviewViewProps> = ({
     serializeIds(currentParticipant?.conflicts ?? []),
   );
   const lastServerStateRef = useRef("");
+  const reviewSectionRef = useRef<HTMLDivElement>(null);
+  const reviewHeadingRef = useRef<HTMLHeadingElement>(null);
+  const openerRef = useRef<HTMLElement | null>(null);
   // A request can navigate here and mount this component in the same render.
-  // Start at zero so that first request still opens the newly mounted drawer.
+  // Start at zero so that first request still opens the newly mounted section.
   const lastOpenRequestRef = useRef(0);
   const serverConflictState = serializeIds(currentParticipant?.conflicts ?? []);
 
@@ -67,8 +78,24 @@ const ConflictReviewView: React.FC<ConflictReviewViewProps> = ({
   useEffect(() => {
     if (openRequestKey === lastOpenRequestRef.current) return;
     lastOpenRequestRef.current = openRequestKey;
-    setDrawerOpen(true);
+    openerRef.current =
+      document.activeElement instanceof HTMLElement
+        ? document.activeElement
+        : null;
+    setReviewOpen(true);
+    setReviewFocusRequest((request) => request + 1);
   }, [openRequestKey]);
+
+  useEffect(() => {
+    if (!reviewOpen) return;
+    window.requestAnimationFrame(() => {
+      reviewSectionRef.current?.scrollIntoView({
+        behavior: "smooth",
+        block: "start",
+      });
+      reviewHeadingRef.current?.focus({ preventScroll: true });
+    });
+  }, [reviewFocusRequest, reviewOpen]);
 
   const candidateById = useMemo(
     () =>
@@ -128,6 +155,24 @@ const ConflictReviewView: React.FC<ConflictReviewViewProps> = ({
     });
   };
 
+  const openReview = () => {
+    openerRef.current =
+      document.activeElement instanceof HTMLElement
+        ? document.activeElement
+        : null;
+    setReviewOpen(true);
+    setReviewFocusRequest((request) => request + 1);
+  };
+
+  const closeReview = () => {
+    setReviewOpen(false);
+    const opener = openerRef.current;
+    openerRef.current = null;
+    window.requestAnimationFrame(() => {
+      if (opener?.isConnected) opener.focus();
+    });
+  };
+
   const submitReview = async (conflictIds = selectedConflictIds) => {
     if (
       isSaving ||
@@ -153,13 +198,16 @@ const ConflictReviewView: React.FC<ConflictReviewViewProps> = ({
       );
       setSelectedConflictIds(new Set(conflictIds));
       setLastSavedConflictState(serializeIds(conflictIds));
-      setDrawerOpen(false);
+      closeReview();
     } finally {
       setIsSaving(false);
     }
   };
 
-  if ((currentParticipant?.proposed_candidate_ids.length ?? 0) === 0) {
+  if (
+    (currentParticipant?.proposed_candidate_ids.length ?? 0) === 0 &&
+    openRequestKey === 0
+  ) {
     return null;
   }
 
@@ -192,7 +240,8 @@ const ConflictReviewView: React.FC<ConflictReviewViewProps> = ({
             </div>
             <button
               type="button"
-              onClick={() => setDrawerOpen(true)}
+              onClick={openReview}
+              data-cy="conflict-review-open"
               className={cn(
                 actionButtonBase,
                 reviewIsCurrent ? actionButtonNeutral : actionButtonPrimary,
@@ -206,150 +255,87 @@ const ConflictReviewView: React.FC<ConflictReviewViewProps> = ({
         </SchedulePanel>
       )}
 
-      <ScheduleDrawer
-        open={drawerOpen}
-        onClose={() => setDrawerOpen(false)}
-        title="Kandidatkontroll"
-        description="Kryss av bare kandidater du kjenner på en måte som gjør deg inhabil. Når du bekrefter, regnes resten som uten konflikt."
-        dataCy="conflict-review-drawer"
-        footer={
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <span
-              className={cn(
-                "text-ui font-semibold",
-                selectedConflictCount > 0 ? "text-danger" : "text-text-muted",
-              )}
-            >
-              {selectedConflictCount === 0
-                ? "Ingen inhabiliteter valgt"
-                : `${selectedConflictCount} inhabilitet${
-                    selectedConflictCount === 1 ? "" : "er"
-                  } valgt`}
-            </span>
-            <button
-              type="button"
-              disabled={
-                proposalNamesLoading ||
-                isSaving ||
-                (reviewIsCurrent && !hasConflictChanges)
+      {reviewOpen && (
+        <div ref={reviewSectionRef} className="scroll-mt-6">
+          <SchedulePanel
+            dataCy="conflict-review-inline"
+            className="animate-fade-in"
+          >
+            <SchedulePanelHeader
+              title="Kandidatkontroll"
+              description="Kryss av bare kandidater du kjenner på en måte som gjør deg inhabil. Når du bekrefter, regnes resten som uten konflikt."
+              chips={<Chip tone="warning">Del av Planutkast</Chip>}
+              actions={
+                <button
+                  type="button"
+                  onClick={closeReview}
+                  className={cn(actionButtonBase, actionButtonNeutral)}
+                >
+                  <ArrowLeft size={iconSizes.small} aria-hidden="true" />
+                  Tilbake til planutkast
+                </button>
               }
-              onClick={() => void submitReview()}
-              data-cy="conflict-submit"
-              className={cn(actionButtonBase, actionButtonPrimary)}
-            >
-              <Check size={iconSizes.small} aria-hidden="true" />
-              {isSaving
-                ? "Lagrer…"
-                : selectedConflictCount === 0
-                  ? "Bekreft ingen inhabiliteter"
-                  : "Bekreft kandidatkontroll"}
-            </button>
-          </div>
-        }
-      >
-        {proposalNamesLoading ? (
-          <p className="m-0 text-ui text-text-muted">
-            Laster foreslåtte kandidater…
-          </p>
-        ) : (
-          <div className="space-y-5">
-            <div>
-              <h3 className="m-0 text-base font-bold text-text-primary">
-                Velg kandidatene du er inhabil for
+            />
+            <SchedulePanelBody>
+              <h3
+                ref={reviewHeadingRef}
+                tabIndex={-1}
+                data-cy="conflict-review-heading"
+                className="sr-only"
+              >
+                Kandidatkontroll i planutkastet
               </h3>
-              <p className="m-0 mt-1 text-ui text-text-muted">
-                Et avkrysset navn betyr inhabil. Uavkryssede navn bekreftes som
-                uten konflikt når du lagrer.
-              </p>
-            </div>
+              <div className="mb-5 rounded-lg border border-border-soft bg-surface-subtle px-4 py-3">
+                <p className="m-0 text-ui font-semibold text-text-primary">
+                  {progressText}
+                </p>
+                {reviewProgress && reviewProgress.missingNames.length > 0 && (
+                  <p className="m-0 mt-1 text-detail text-text-muted">
+                    Venter på {reviewProgress.missingNames.join(", ")}.
+                  </p>
+                )}
+              </div>
+              {proposalNamesLoading ? (
+                <p className="m-0 text-ui text-text-muted">
+                  Laster foreslåtte kandidater…
+                </p>
+              ) : (
+                <div className="space-y-5">
+                  <div>
+                    <h3 className="m-0 text-base font-bold text-text-primary">
+                      Velg kandidatene du er inhabil for
+                    </h3>
+                    <p className="m-0 mt-1 text-ui text-text-muted">
+                      Et avkrysset navn betyr inhabil. Uavkryssede navn
+                      bekreftes som uten konflikt når du lagrer.
+                    </p>
+                  </div>
 
-            <ul className="m-0 divide-y divide-border-faint overflow-hidden rounded-lg border border-border-soft p-0">
-              {proposedCandidates.map((candidate) => {
-                const selected = selectedConflictIds.has(candidate.id);
-                return (
-                  <li key={candidate.id}>
-                    <label
-                      className={cn(
-                        "flex cursor-pointer items-center gap-3 px-4 py-3 transition-colors",
-                        selected
-                          ? "bg-danger-bg"
-                          : "bg-surface-base hover:bg-surface-subtle",
-                      )}
-                    >
-                      <input
-                        type="checkbox"
-                        checked={selected}
-                        onChange={() => toggleConflict(candidate.id)}
-                        data-cy={`conflict-candidate-${candidate.id}`}
-                        className="h-4 w-4 flex-none rounded border-border-muted text-danger focus:ring-danger"
-                      />
-                      <span className="min-w-0 flex-1 truncate text-ui font-semibold text-text-primary">
-                        {candidate.name}
-                      </span>
-                      {selected && (
-                        <span className="text-detail font-semibold text-danger">
-                          Inhabil
-                        </span>
-                      )}
-                    </label>
-                  </li>
-                );
-              })}
-            </ul>
-
-            <details className="group rounded-lg border border-border-soft">
-              <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 text-ui font-semibold text-text-primary hover:bg-surface-subtle [&::-webkit-details-marker]:hidden">
-                <span>Har du en annen kjent inhabilitet?</span>
-                <span className="flex items-center gap-1.5 text-detail text-brand">
-                  Legg til kandidat
-                  <ChevronDown
-                    size={iconSizes.small}
-                    className="transition-transform group-open:rotate-180"
-                  />
-                </span>
-              </summary>
-              <div className="border-t border-border-faint bg-surface-subtle p-4">
-                <label className="relative block">
-                  <Search
-                    size={iconSizes.small}
-                    aria-hidden="true"
-                    className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-text-subtle"
-                  />
-                  <span className="sr-only">Søk etter en annen kandidat</span>
-                  <input
-                    type="search"
-                    value={query}
-                    onChange={(event) => setQuery(event.target.value)}
-                    placeholder="Søk etter kandidat…"
-                    className="h-10 w-full rounded-lg border border-border bg-surface-base pl-9 pr-3 text-ui text-text-primary outline-none focus:border-brand-input focus:ring-3 focus:ring-brand-ringSoft"
-                  />
-                </label>
-                {otherCandidates.length > 0 ? (
-                  <ul className="m-0 mt-3 grid gap-1 p-0">
-                    {otherCandidates.map((candidate) => {
+                  <ul className="m-0 divide-y divide-border-faint overflow-hidden rounded-lg border border-border-soft p-0">
+                    {proposedCandidates.map((candidate) => {
                       const selected = selectedConflictIds.has(candidate.id);
                       return (
                         <li key={candidate.id}>
                           <label
                             className={cn(
-                              "flex cursor-pointer items-center gap-3 rounded-lg px-3 py-2.5",
+                              "flex cursor-pointer items-center gap-3 px-4 py-3 transition-colors",
                               selected
                                 ? "bg-danger-bg"
-                                : "hover:bg-surface-base",
+                                : "bg-surface-base hover:bg-surface-subtle",
                             )}
                           >
                             <input
                               type="checkbox"
                               checked={selected}
                               onChange={() => toggleConflict(candidate.id)}
-                              className="h-4 w-4 rounded border-border-muted text-danger focus:ring-danger"
+                              data-cy={`conflict-candidate-${candidate.id}`}
+                              className="h-4 w-4 flex-none rounded border-border-muted text-danger focus:ring-danger"
                             />
                             <span className="min-w-0 flex-1 truncate text-ui font-semibold text-text-primary">
                               {candidate.name}
                             </span>
                             {selected && (
-                              <span className="flex items-center gap-1 text-detail font-semibold text-danger">
-                                <AlertTriangle size={13} aria-hidden="true" />
+                              <span className="text-detail font-semibold text-danger">
                                 Inhabil
                               </span>
                             )}
@@ -358,18 +344,124 @@ const ConflictReviewView: React.FC<ConflictReviewViewProps> = ({
                       );
                     })}
                   </ul>
-                ) : (
-                  <p className="m-0 mt-3 text-detail text-text-muted">
-                    {normalizedQuery
-                      ? "Ingen andre kandidater matcher søket."
-                      : "Søk bare hvis du allerede kjenner til en annen inhabilitet."}
-                  </p>
+
+                  <details className="group rounded-lg border border-border-soft">
+                    <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 text-ui font-semibold text-text-primary hover:bg-surface-subtle [&::-webkit-details-marker]:hidden">
+                      <span>Har du en annen kjent inhabilitet?</span>
+                      <span className="flex items-center gap-1.5 text-detail text-brand">
+                        Legg til kandidat
+                        <ChevronDown
+                          size={iconSizes.small}
+                          className="transition-transform group-open:rotate-180"
+                        />
+                      </span>
+                    </summary>
+                    <div className="border-t border-border-faint bg-surface-subtle p-4">
+                      <label className="relative block">
+                        <Search
+                          size={iconSizes.small}
+                          aria-hidden="true"
+                          className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-text-subtle"
+                        />
+                        <span className="sr-only">
+                          Søk etter en annen kandidat
+                        </span>
+                        <input
+                          type="search"
+                          value={query}
+                          onChange={(event) => setQuery(event.target.value)}
+                          placeholder="Søk etter kandidat…"
+                          className="h-10 w-full rounded-lg border border-border bg-surface-base pl-9 pr-3 text-ui text-text-primary outline-none focus:border-brand-input focus:ring-3 focus:ring-brand-ringSoft"
+                        />
+                      </label>
+                      {otherCandidates.length > 0 ? (
+                        <ul className="m-0 mt-3 grid gap-1 p-0">
+                          {otherCandidates.map((candidate) => {
+                            const selected = selectedConflictIds.has(
+                              candidate.id,
+                            );
+                            return (
+                              <li key={candidate.id}>
+                                <label
+                                  className={cn(
+                                    "flex cursor-pointer items-center gap-3 rounded-lg px-3 py-2.5",
+                                    selected
+                                      ? "bg-danger-bg"
+                                      : "hover:bg-surface-base",
+                                  )}
+                                >
+                                  <input
+                                    type="checkbox"
+                                    checked={selected}
+                                    onChange={() =>
+                                      toggleConflict(candidate.id)
+                                    }
+                                    className="h-4 w-4 rounded border-border-muted text-danger focus:ring-danger"
+                                  />
+                                  <span className="min-w-0 flex-1 truncate text-ui font-semibold text-text-primary">
+                                    {candidate.name}
+                                  </span>
+                                  {selected && (
+                                    <span className="flex items-center gap-1 text-detail font-semibold text-danger">
+                                      <AlertTriangle
+                                        size={13}
+                                        aria-hidden="true"
+                                      />
+                                      Inhabil
+                                    </span>
+                                  )}
+                                </label>
+                              </li>
+                            );
+                          })}
+                        </ul>
+                      ) : (
+                        <p className="m-0 mt-3 text-detail text-text-muted">
+                          {normalizedQuery
+                            ? "Ingen andre kandidater matcher søket."
+                            : "Søk bare hvis du allerede kjenner til en annen inhabilitet."}
+                        </p>
+                      )}
+                    </div>
+                  </details>
+                </div>
+              )}
+            </SchedulePanelBody>
+            <SchedulePanelFooter className="sticky bottom-0 z-10 bg-surface-base">
+              <span
+                className={cn(
+                  "text-ui font-semibold",
+                  selectedConflictCount > 0 ? "text-danger" : "text-text-muted",
                 )}
-              </div>
-            </details>
-          </div>
-        )}
-      </ScheduleDrawer>
+              >
+                {selectedConflictCount === 0
+                  ? "Ingen inhabiliteter valgt"
+                  : `${selectedConflictCount} inhabilitet${
+                      selectedConflictCount === 1 ? "" : "er"
+                    } valgt`}
+              </span>
+              <button
+                type="button"
+                disabled={
+                  proposalNamesLoading ||
+                  isSaving ||
+                  (reviewIsCurrent && !hasConflictChanges)
+                }
+                onClick={() => void submitReview()}
+                data-cy="conflict-submit"
+                className={cn(actionButtonBase, actionButtonPrimary)}
+              >
+                <Check size={iconSizes.small} aria-hidden="true" />
+                {isSaving
+                  ? "Lagrer…"
+                  : selectedConflictCount === 0
+                    ? "Bekreft ingen inhabiliteter"
+                    : "Bekreft kandidatkontroll"}
+              </button>
+            </SchedulePanelFooter>
+          </SchedulePanel>
+        </div>
+      )}
     </>
   );
 };

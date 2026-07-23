@@ -10,7 +10,6 @@ import {
   Lock,
   LockKeyhole,
   MoreHorizontal,
-  Pencil,
   RotateCcw,
   Unlock,
   Wrench,
@@ -26,8 +25,11 @@ import {
   SegmentedControl,
   SchedulePanel,
   SchedulePanelBody,
-  SchedulePanelFooter,
   SchedulePanelHeader,
+  SchedulingActionBar,
+  SchedulingButton,
+  SchedulingModeControl,
+  type SchedulingWorkspaceMode,
   actionButtonBase,
   actionButtonNeutral,
   actionButtonPrimary,
@@ -136,7 +138,8 @@ const SolverResults = ({
   const [viewType, setViewType] = useState<"list" | "calendar" | "person">(
     "list",
   );
-  const [isEditing, setIsEditing] = useState(false);
+  const [workspaceMode, setWorkspaceMode] =
+    useState<SchedulingWorkspaceMode>("preview");
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [selectedInterviewer, setSelectedInterviewer] = useState("");
   const [selectedListScheduleIndex, setSelectedListScheduleIndex] = useState<
@@ -149,6 +152,7 @@ const SolverResults = ({
     null,
   );
   const { presentation } = draft;
+  const isEditing = workspaceMode === "editing";
   const canEditDraft = isEditing && !savedSchedule?.is_distributed;
   const occupiedTimes = useMemo(
     () => new Set(presentation.sortedSchedule.map((item) => item.time)),
@@ -197,16 +201,38 @@ const SolverResults = ({
     setSelectedListScheduleIndex(null);
     setDraggedListScheduleIndex(null);
     setListDropTargetIndex(null);
-    setIsEditing(false);
+    setWorkspaceMode("preview");
     draft.finishEditSession();
   }, [draft.finishEditSession, solveTick]);
 
   useEffect(() => {
     if (editRequestKey > 0 && !savedSchedule?.is_distributed) {
       draft.beginEditSession();
-      setIsEditing(true);
+      setWorkspaceMode("editing");
     }
   }, [draft.beginEditSession, editRequestKey, savedSchedule?.is_distributed]);
+
+  useEffect(() => {
+    if (
+      workspaceMode !== "preview" ||
+      !persistence.isSaved ||
+      persistence.isSaving ||
+      hasLocalDraft ||
+      persistence.hasConflict ||
+      persistence.state === "error"
+    ) {
+      return;
+    }
+    draft.finishEditSession();
+  }, [
+    draft.finishEditSession,
+    hasLocalDraft,
+    persistence.hasConflict,
+    persistence.isSaved,
+    persistence.isSaving,
+    persistence.state,
+    workspaceMode,
+  ]);
 
   const clearListMove = () => {
     setDraggedListScheduleIndex(null);
@@ -235,11 +261,6 @@ const SolverResults = ({
       : persistence.isSaving || hasLocalDraft
         ? "Lagrer utkast…"
         : "Utkast lagret";
-  const canFinishEditing =
-    persistence.isSaved &&
-    !persistence.isSaving &&
-    !persistence.hasConflict &&
-    persistence.state !== "error";
   const workflowState = derivePlanDraftWorkflowState({
     saveState:
       persistence.hasConflict || persistence.state === "conflict"
@@ -275,13 +296,16 @@ const SolverResults = ({
       : undefined,
   ].filter((value): value is string => Boolean(value));
   const startEditing = () => {
-    draft.beginEditSession();
-    setIsEditing(true);
+    if (workspaceMode === "editing") return;
+    if (!draft.canRestoreEditSession) draft.beginEditSession();
+    setWorkspaceMode("editing");
   };
-  const finishEditing = () => {
-    if (!canFinishEditing) return;
-    draft.finishEditSession();
-    setIsEditing(false);
+  const changeWorkspaceMode = (nextMode: SchedulingWorkspaceMode) => {
+    if (nextMode === "editing") {
+      startEditing();
+      return;
+    }
+    setWorkspaceMode("preview");
   };
   const hasConflictFor = (
     scheduleIndex: number,
@@ -342,15 +366,11 @@ const SolverResults = ({
                     />
                   </div>
                 )}
-                {!isEditing && viewType !== "person" && (
-                  <button
-                    type="button"
-                    onClick={startEditing}
-                    className={cn(actionButtonBase, actionButtonNeutral)}
-                  >
-                    <Pencil size={iconSizes.small} aria-hidden="true" />
-                    Rediger plan
-                  </button>
+                {viewType !== "person" && (
+                  <SchedulingModeControl
+                    mode={workspaceMode}
+                    onChange={changeWorkspaceMode}
+                  />
                 )}
                 {!isEditing && (
                   <details className="group relative">
@@ -523,33 +543,26 @@ const SolverResults = ({
               <div
                 data-cy="manual-schedule-editing"
                 role="status"
-                className="mb-4 flex flex-wrap items-start justify-between gap-3 border-y border-brand-border bg-brand-soft px-4 py-3 text-ui"
+                className="mb-4 flex flex-wrap items-center justify-between gap-3 border-y border-brand-border bg-brand-soft px-4 py-3 text-ui"
               >
-                <div className="flex min-w-0 items-start gap-3">
+                <div className="flex min-w-0 items-center gap-3">
                   <Wrench
-                    size={iconSizes.standard}
-                    className="mt-0.5 flex-none text-brand"
+                    size={iconSizes.small}
+                    className="flex-none text-brand"
                     aria-hidden="true"
                   />
-                  <div>
-                    <p className="m-0 font-semibold text-text-primary">
-                      Redigerer plan
-                    </p>
-                    <p className="m-0 mt-1 text-detail text-text-muted">
-                      Endringer lagres automatisk. Flytt intervjuer, bytt
-                      panelmedlemmer eller lås tildelinger.
-                    </p>
-                  </div>
+                  <p className="m-0 text-detail text-text-muted">
+                    Du redigerer planen. Endringer lagres automatisk.
+                  </p>
                 </div>
                 {draft.canRestoreEditSession && !persistence.hasConflict && (
-                  <button
-                    type="button"
+                  <SchedulingButton
                     onClick={draft.restoreEditSession}
-                    className={cn(actionButtonBase, actionButtonNeutral)}
+                    variant="quiet"
                   >
                     <RotateCcw size={iconSizes.small} aria-hidden="true" />
                     Angre redigeringen
-                  </button>
+                  </SchedulingButton>
                 )}
               </div>
             )}
@@ -1060,102 +1073,101 @@ const SolverResults = ({
               />
             )}
           </SchedulePanelBody>
-          <SchedulePanelFooter className="sticky bottom-0 z-10 bg-surface-base">
-            <div className="flex flex-wrap items-center gap-2 text-detail">
+          <SchedulingActionBar
+            className="sticky bottom-0 z-10 bg-surface-base"
+            status={
               <span
                 className={cn(
                   "font-semibold",
                   persistence.state === "error" || persistence.hasConflict
                     ? "text-danger"
-                    : persistence.isSaving
+                    : persistence.isSaving || hasLocalDraft
                       ? "text-text-muted"
                       : "text-text-faded",
                 )}
-                aria-live="polite"
               >
                 {saveStatusLabel}
               </span>
-            </div>
-            {workflowState.kind === "save_conflict" ? (
-              <button
-                type="button"
-                onClick={() => window.location.reload()}
-                data-cy="proposal-primary-action"
-                className={cn(actionButtonBase, actionButtonPrimary)}
-              >
-                Last inn siste versjon
-              </button>
-            ) : workflowState.kind === "save_error" ? (
-              <button
-                type="button"
-                onClick={persistence.retry}
-                data-cy="proposal-primary-action"
-                className={cn(actionButtonBase, actionButtonPrimary)}
-              >
-                Prøv igjen
-              </button>
-            ) : workflowState.kind === "saving" ? null : isEditing ? (
-              <button
-                type="button"
-                onClick={finishEditing}
-                disabled={!canFinishEditing}
-                data-cy="proposal-primary-action"
-                className={cn(actionButtonBase, actionButtonPrimary)}
-              >
-                <Check size={iconSizes.small} aria-hidden="true" />
-                Avslutt redigering
-              </button>
-            ) : workflowState.kind === "solver_error" ? (
-              <button
-                type="button"
-                onClick={onRetrySolve}
-                data-cy="proposal-primary-action"
-                className={cn(actionButtonBase, actionButtonPrimary)}
-              >
-                Prøv igjen
-              </button>
-            ) : workflowState.kind === "placements_missing" ? (
-              <button
-                type="button"
-                onClick={onOpenSettings}
-                data-cy="proposal-rerun-unplaceable"
-                className={cn(actionButtonBase, actionButtonPrimary)}
-              >
-                Juster og generer på nytt
-                <ArrowRight size={iconSizes.small} aria-hidden="true" />
-              </button>
-            ) : workflowState.kind === "candidate_check_pending" ? (
-              <button
-                type="button"
-                onClick={onOpenConflictReview}
-                data-cy="proposal-primary-action"
-                className={cn(actionButtonBase, actionButtonPrimary)}
-              >
-                Kontroller kandidater
-                <ArrowRight size={iconSizes.small} aria-hidden="true" />
-              </button>
-            ) : workflowState.kind === "repair_required" ? (
-              <button
-                type="button"
-                onClick={onOpenRepair}
-                data-cy="proposal-primary-action"
-                className={cn(actionButtonBase, actionButtonPrimary)}
-              >
-                Finn løsning
-                <ArrowRight size={iconSizes.small} aria-hidden="true" />
-              </button>
-            ) : workflowState.kind === "ready_to_publish" ? (
-              <button
-                type="button"
-                onClick={onOpenPlan}
-                data-cy="proposal-primary-action"
-                className={cn(actionButtonBase, actionButtonPrimary)}
-              >
-                Gå til publisering
-                <ArrowRight size={iconSizes.small} aria-hidden="true" />
-              </button>
-            ) : null}
-          </SchedulePanelFooter>
+            }
+            actions={
+              workflowState.kind === "save_conflict" ? (
+                <SchedulingButton
+                  onClick={() => window.location.reload()}
+                  data-cy="proposal-primary-action"
+                  variant="primary"
+                >
+                  Last inn siste versjon
+                </SchedulingButton>
+              ) : workflowState.kind === "save_error" ? (
+                <SchedulingButton
+                  onClick={persistence.retry}
+                  data-cy="proposal-primary-action"
+                  variant="primary"
+                >
+                  Prøv igjen
+                </SchedulingButton>
+              ) : isEditing ? (
+                <SchedulingButton
+                  onClick={() => changeWorkspaceMode("preview")}
+                  data-cy="proposal-primary-action"
+                  variant="primary"
+                >
+                  <Check size={iconSizes.small} aria-hidden="true" />
+                  Gå til forhåndsvisning
+                </SchedulingButton>
+              ) : workflowState.kind ===
+                "saving" ? null : workflowState.kind === "solver_error" ? (
+                <button
+                  type="button"
+                  onClick={onRetrySolve}
+                  data-cy="proposal-primary-action"
+                  className={cn(actionButtonBase, actionButtonPrimary)}
+                >
+                  Prøv igjen
+                </button>
+              ) : workflowState.kind === "placements_missing" ? (
+                <button
+                  type="button"
+                  onClick={onOpenSettings}
+                  data-cy="proposal-rerun-unplaceable"
+                  className={cn(actionButtonBase, actionButtonPrimary)}
+                >
+                  Juster og generer på nytt
+                  <ArrowRight size={iconSizes.small} aria-hidden="true" />
+                </button>
+              ) : workflowState.kind === "candidate_check_pending" ? (
+                <button
+                  type="button"
+                  onClick={onOpenConflictReview}
+                  data-cy="proposal-primary-action"
+                  className={cn(actionButtonBase, actionButtonPrimary)}
+                >
+                  Kontroller kandidater
+                  <ArrowRight size={iconSizes.small} aria-hidden="true" />
+                </button>
+              ) : workflowState.kind === "repair_required" ? (
+                <button
+                  type="button"
+                  onClick={onOpenRepair}
+                  data-cy="proposal-primary-action"
+                  className={cn(actionButtonBase, actionButtonPrimary)}
+                >
+                  Finn løsning
+                  <ArrowRight size={iconSizes.small} aria-hidden="true" />
+                </button>
+              ) : workflowState.kind === "ready_to_publish" ? (
+                <button
+                  type="button"
+                  onClick={onOpenPlan}
+                  data-cy="proposal-primary-action"
+                  className={cn(actionButtonBase, actionButtonPrimary)}
+                >
+                  Gå til publisering
+                  <ArrowRight size={iconSizes.small} aria-hidden="true" />
+                </button>
+              ) : null
+            }
+          />
         </SchedulePanel>
       )}
     </>

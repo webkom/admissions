@@ -82,12 +82,16 @@ export interface Candidate {
   id: string;
   name: string;
   gender?: string;
+  user_id?: string;
 }
+
+export type ExperienceLevel = "unknown" | "inexperienced" | "experienced";
 
 export interface Interviewer {
   id: string;
   name: string;
   gender?: string;
+  experience_level?: ExperienceLevel;
   availability: number[];
   biased: string[];
   has_submitted: boolean;
@@ -137,6 +141,7 @@ export interface SolverOptions {
   panel_stability: PanelStability;
   availability_fallback: AvailabilityFallback;
   enforce_same_gender: boolean;
+  require_experienced_panel: boolean;
   allow_overtime: boolean;
   prioritize_continuity: boolean;
   same_panel_per_block: boolean;
@@ -154,6 +159,7 @@ export interface SchedulePanelMember {
   id?: string;
   name: string;
   is_overtime: boolean;
+  experience_level?: ExperienceLevel;
 }
 
 export interface ScheduleItem {
@@ -219,6 +225,7 @@ export interface SavedSchedule {
     panel_stability?: PanelStability;
     availability_fallback?: AvailabilityFallback;
     enforce_same_gender?: boolean;
+    require_experienced_panel?: boolean;
     allow_overtime?: boolean;
     prioritize_continuity?: boolean;
     same_panel_per_block?: boolean;
@@ -244,6 +251,7 @@ export interface InterviewAvailabilityParticipant {
   username: string;
   full_name: string;
   gender?: string;
+  experience_level: ExperienceLevel;
   slots: string[];
   conflicts: string[];
   reviewed_candidate_ids: string[];

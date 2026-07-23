@@ -7,7 +7,7 @@ import {
   SlidersHorizontal,
   X,
 } from "lucide-react";
-import type { Interviewer } from "../types";
+import type { ExperienceLevel, Interviewer } from "../types";
 import {
   buildBlockTimeChunks,
   decodeScheduleTime,
@@ -28,7 +28,6 @@ import {
   ScheduleBlockCell,
   ScheduleDayHeader,
   ScheduleGridLegendItem,
-  ScheduleSlotSegments,
   ScheduleTimeLabel,
 } from "./ScheduleGridFrame";
 import ScheduleCalendarGrid from "./ScheduleCalendarGrid";
@@ -52,6 +51,10 @@ interface AvailabilityHeatmapProps {
     userId: string,
     participation: "awaiting_response" | "not_participating",
   ) => Promise<void>;
+  onExperienceLevelChange?: (
+    userId: string,
+    experienceLevel: ExperienceLevel,
+  ) => Promise<void>;
 }
 
 interface AvailabilityBlock {
@@ -60,6 +63,7 @@ interface AvailabilityBlock {
   minutes: number[];
   enabledMinutes: number[];
   coverage: BlockCoverage;
+  heatmapAvailableCount: number;
   allAvailableInterviewers: Interviewer[];
 }
 
@@ -70,6 +74,32 @@ const genderOptions = [
   { value: "male", label: "Menn" },
   { value: "female", label: "Kvinner" },
 ];
+
+const heatmapCellStyle = (
+  availableCount: number,
+  heatmapCapacity: number,
+): React.CSSProperties => {
+  if (heatmapCapacity <= 0) return {};
+
+  const normalizedCapacity = Math.max(heatmapCapacity, 1);
+  const ratio = Math.min(availableCount / normalizedCapacity, 1);
+  const oneSeventh = 1 / 7;
+  const threeSeventh = 3 / 7;
+  const redShare = ratio <= oneSeventh ? 18 : ratio <= threeSeventh ? 42 : 78;
+
+  return {
+    backgroundColor: `color-mix(in srgb, var(--color-red-6) ${redShare}%, var(--color-surface-base))`,
+    borderColor: `color-mix(in srgb, var(--color-red-6) ${Math.min(redShare + 30, 95)}%, var(--color-border-soft))`,
+  };
+};
+
+const formatHeatmapAvailability = (
+  availableCount: number,
+  heatmapCapacity: number,
+): string =>
+  heatmapCapacity > 0
+    ? `${availableCount}/${heatmapCapacity}`
+    : `${availableCount}`;
 
 const AvailabilityHeatmap: React.FC<AvailabilityHeatmapProps> = ({
   interviewers,
@@ -83,6 +113,7 @@ const AvailabilityHeatmap: React.FC<AvailabilityHeatmapProps> = ({
   chunkSize,
   chunkBreakMinutes,
   onParticipationChange,
+  onExperienceLevelChange,
 }) => {
   const [genderFilter, setGenderFilter] = useState<GenderFilter>("all");
   const [highlightedInterviewer, setHighlightedInterviewer] = useState("");
@@ -91,6 +122,7 @@ const AvailabilityHeatmap: React.FC<AvailabilityHeatmapProps> = ({
     useState(false);
   const [selectedBlockKey, setSelectedBlockKey] = useState<string | null>(null);
   const [participationSavingId, setParticipationSavingId] = useState("");
+  const [experienceSavingId, setExperienceSavingId] = useState("");
   const [pendingOptOutId, setPendingOptOutId] = useState("");
   const selectedBlockTriggerRef = useRef<HTMLElement | null>(null);
   const chunks = useMemo(
@@ -181,27 +213,7 @@ const AvailabilityHeatmap: React.FC<AvailabilityHeatmapProps> = ({
       inspectedInterviewers.filter((interviewer) => interviewer.has_submitted),
     [inspectedInterviewers],
   );
-  const globalCoverage = useMemo(
-    () =>
-      buildAvailabilityCoverage({
-        interviewers: submitted,
-        availableSlots,
-        dates,
-        chunks,
-        sessionDuration,
-        panelSize,
-        samePanelPerBlock,
-      }),
-    [
-      availableSlots,
-      chunks,
-      dates,
-      panelSize,
-      samePanelPerBlock,
-      sessionDuration,
-      submitted,
-    ],
-  );
+  const heatmapCapacity = respondentsInScope.length;
   const inspectionCoverage = useMemo(
     () =>
       buildAvailabilityCoverage({
@@ -227,6 +239,13 @@ const AvailabilityHeatmap: React.FC<AvailabilityHeatmapProps> = ({
     () =>
       inspectionCoverage.blocks.map((coverage) => {
         const { date, minutes, enabledMinutes } = coverage;
+        const heatmapAvailableCount = respondentsInScope.filter((interviewer) =>
+          minutes.some((minute) =>
+            interviewerSlots
+              .get(interviewer.id)
+              ?.has(makeSlotKey(date, minute)),
+          ),
+        ).length;
         const allAvailableInterviewers =
           enabledMinutes.length === 0
             ? []
@@ -243,10 +262,16 @@ const AvailabilityHeatmap: React.FC<AvailabilityHeatmapProps> = ({
           minutes,
           enabledMinutes,
           coverage,
+          heatmapAvailableCount,
           allAvailableInterviewers,
         };
       }),
-    [inspectionCoverage.blocks, interviewerSlots, submitted],
+    [
+      inspectionCoverage.blocks,
+      interviewerSlots,
+      respondentsInScope,
+      submitted,
+    ],
   );
   const blocksByKey = useMemo(
     () =>
@@ -333,13 +358,37 @@ const AvailabilityHeatmap: React.FC<AvailabilityHeatmapProps> = ({
       )}
     </div>
   );
+  const experienceControl = (interviewer: Interviewer) =>
+    onExperienceLevelChange ? (
+      <label className="flex items-center gap-2 text-detail text-text-muted">
+        Erfaring
+        <CustomSelect
+          value={interviewer.experience_level ?? "unknown"}
+          disabled={experienceSavingId === interviewer.id}
+          className="min-w-36"
+          aria-label={`Erfaringsnivå for ${interviewer.name}`}
+          onChange={(value) => {
+            setExperienceSavingId(interviewer.id);
+            void onExperienceLevelChange(
+              interviewer.id,
+              value as ExperienceLevel,
+            ).finally(() => setExperienceSavingId(""));
+          }}
+          options={[
+            { value: "unknown", label: "Ikke klassifisert" },
+            { value: "inexperienced", label: "Uerfaren" },
+            { value: "experienced", label: "Erfaren" },
+          ]}
+        />
+      </label>
+    ) : null;
 
   return (
     <SchedulePanel className="min-w-0">
       <SchedulePanelHeader
         icon={BarChart3}
         title="Tilgjengelighetsoversikt"
-        description="Se hvem som deltar, og om dere har nok felles kapasitet til intervjuene."
+        description="Se hvem som deltar, og hvor mange som er tilgjengelige i hver intervjublokk."
         actions={
           <ResponseStatus
             missingResponse={missingResponse}
@@ -371,7 +420,10 @@ const AvailabilityHeatmap: React.FC<AvailabilityHeatmapProps> = ({
                       </strong>
                       <span className="ml-2 text-text-muted">Mangler svar</span>
                     </div>
-                    {onParticipationChange && optOutControl(interviewer)}
+                    <div className="flex flex-wrap items-center justify-end gap-3">
+                      {experienceControl(interviewer)}
+                      {onParticipationChange && optOutControl(interviewer)}
+                    </div>
                   </div>
                 ))}
                 {onParticipationChange &&
@@ -386,7 +438,10 @@ const AvailabilityHeatmap: React.FC<AvailabilityHeatmapProps> = ({
                         </strong>
                         <span className="ml-2 text-text-muted">Deltar</span>
                       </div>
-                      {optOutControl(interviewer)}
+                      <div className="flex flex-wrap items-center justify-end gap-3">
+                        {experienceControl(interviewer)}
+                        {optOutControl(interviewer)}
+                      </div>
                     </div>
                   ))}
                 {optedOut.map((interviewer) => (
@@ -400,21 +455,24 @@ const AvailabilityHeatmap: React.FC<AvailabilityHeatmapProps> = ({
                       </strong>
                       <span className="ml-2 text-text-muted">Deltar ikke</span>
                     </div>
-                    {onParticipationChange && (
-                      <button
-                        type="button"
-                        disabled={participationSavingId === interviewer.id}
-                        onClick={() =>
-                          void changeParticipation(
-                            interviewer,
-                            "awaiting_response",
-                          )
-                        }
-                        className="text-detail font-semibold text-brand hover:underline disabled:opacity-50"
-                      >
-                        Ta med igjen
-                      </button>
-                    )}
+                    <div className="flex flex-wrap items-center justify-end gap-3">
+                      {experienceControl(interviewer)}
+                      {onParticipationChange && (
+                        <button
+                          type="button"
+                          disabled={participationSavingId === interviewer.id}
+                          onClick={() =>
+                            void changeParticipation(
+                              interviewer,
+                              "awaiting_response",
+                            )
+                          }
+                          className="text-detail font-semibold text-brand hover:underline disabled:opacity-50"
+                        >
+                          Ta med igjen
+                        </button>
+                      )}
+                    </div>
                   </div>
                 ))}
               </div>
@@ -429,24 +487,6 @@ const AvailabilityHeatmap: React.FC<AvailabilityHeatmapProps> = ({
               </div>
             </section>
           )}
-
-        <section
-          aria-label="Oppsummering av intervjukapasitet"
-          className="grid gap-px overflow-hidden rounded-md border border-border-soft bg-border-soft sm:grid-cols-3"
-        >
-          <CoverageMetric
-            label="Svar mottatt"
-            value={`${submitted.length}/${participatingInterviewers.length}`}
-          />
-          <CoverageMetric
-            label="Åpne intervjutider"
-            value={globalCoverage.openSlotCount}
-          />
-          <CoverageMetric
-            label={`Intervjutider med fullt panel · panel på ${panelSize}`}
-            value={globalCoverage.completeSlotCount}
-          />
-        </section>
 
         {participatingInterviewers.length < panelSize && (
           <div
@@ -535,12 +575,24 @@ const AvailabilityHeatmap: React.FC<AvailabilityHeatmapProps> = ({
 
         <div className="flex flex-wrap items-center justify-between gap-x-5 gap-y-2 text-detail text-text-muted">
           <span>
-            Tallet viser tilgjengelige intervjuere mot panelstørrelsen. Strekene
-            viser dekningen for hver intervjutid i blokken.
+            Fargen viser hvor mange intervjuere som er tilgjengelige i minst én
+            av blokkens ordinære intervjutider. Den påvirkes ikke av
+            panelstørrelse eller finjusterte åpne tider.
           </span>
           <div className="flex flex-wrap items-center gap-3 font-medium">
-            <SegmentLegend label="Lav dekning" fill={0.33} />
-            <SegmentLegend label="Full dekning" fill={1} />
+            <div
+              className="h-2.5 w-44 rounded-sm border border-border-soft"
+              style={{
+                backgroundImage:
+                  "linear-gradient(90deg, color-mix(in srgb, var(--color-red-6) 18%, var(--color-surface-base)) 0%, color-mix(in srgb, var(--color-red-6) 42%, var(--color-surface-base)) 45%, color-mix(in srgb, var(--color-red-6) 78%, var(--color-surface-base)) 100%)",
+              }}
+              aria-hidden="true"
+            />
+            <div className="flex items-center gap-2 text-label text-text-muted">
+              <span>1 tilgjengelig</span>
+              <span>3 tilgjengelige</span>
+              <span>6+ tilgjengelige</span>
+            </div>
             <ScheduleGridLegendItem
               label="Stengt"
               swatchClassName="border-border-soft bg-surface-neutral [background-image:var(--pattern-unavailable)]"
@@ -581,16 +633,21 @@ const AvailabilityHeatmap: React.FC<AvailabilityHeatmapProps> = ({
             const block = blocksByKey.get(key);
             if (!block) return <div key={key} />;
             const { weekday, dayMonth } = formatDateHeader(date);
-            const count = block.coverage.availableCount;
+            const count = block.heatmapAvailableCount;
             const closed = block.enabledMinutes.length === 0;
             const highlighted = isHighlighted(block);
+            const availabilityText = formatHeatmapAvailability(
+              count,
+              heatmapCapacity,
+            );
             const label = closed
               ? `${weekday} ${dayMonth}: stengt`
-              : `${weekday} ${dayMonth}: ${count} av ${panelSize} i paneldekning`;
+              : `${weekday} ${dayMonth}: ${availabilityText} tilgjengelige intervjuere`;
             return (
               <ScheduleBlockCell
                 key={key}
                 data-coverage-status={block.coverage.status}
+                data-availability-count={count}
                 role="button"
                 tabIndex={closed ? -1 : 0}
                 aria-label={
@@ -614,36 +671,23 @@ const AvailabilityHeatmap: React.FC<AvailabilityHeatmapProps> = ({
                   );
                 }}
                 closed={closed}
+                style={
+                  closed
+                    ? undefined
+                    : heatmapCellStyle(count, Math.max(heatmapCapacity, 1))
+                }
                 className={cn(
                   "text-center text-lg tabular-nums",
                   !closed &&
-                    "cursor-pointer hover:border-brand-border hover:bg-brand-soft",
+                    "cursor-pointer hover:border-danger-border hover:shadow-sm",
                   !closed && count === 0 && "font-semibold text-text-muted",
                   !closed && count > 0 && "font-bold text-text-primary",
-                  block.coverage.status === "complete" &&
-                    "border-success-border bg-success-bg",
-                  block.coverage.status === "partial" && "bg-brand-soft/45",
                   highlighted &&
                     !closed &&
                     "ring-2 ring-inset ring-brand-border",
                 )}
               >
-                <ScheduleSlotSegments
-                  closed={closed}
-                  fills={block.minutes.map((minute) => {
-                    const slot = block.coverage.slotCoverage.find(
-                      (candidate) => candidate.minute === minute,
-                    );
-                    return slot
-                      ? Math.min(1, slot.availableCount / panelSize)
-                      : 0;
-                  })}
-                />
-                {!closed && (
-                  <span>
-                    {count}/{panelSize}
-                  </span>
-                )}
+                {!closed && <span>{availabilityText}</span>}
                 {highlighted && (
                   <span
                     aria-label="Valgt intervjuer er tilgjengelig"
@@ -661,7 +705,6 @@ const AvailabilityHeatmap: React.FC<AvailabilityHeatmapProps> = ({
             interviewers={inspectedInterviewers}
             interviewerSlots={interviewerSlots}
             panelSize={panelSize}
-            samePanelPerBlock={samePanelPerBlock}
             sessionDuration={sessionDuration}
             onClose={closeBlockDetail}
             missingResponse={missingResponse}
@@ -673,39 +716,12 @@ const AvailabilityHeatmap: React.FC<AvailabilityHeatmapProps> = ({
           Klikk på en blokk for å se hvem som er tilgjengelige.
         </span>
         <span className="text-detail font-medium tabular-nums text-text-muted">
-          {globalCoverage.completeBlockCount} av {globalCoverage.openBlockCount}{" "}
-          blokker har full paneldekning
+          Mørkere farge betyr flere tilgjengelige intervjuere
         </span>
       </SchedulePanelFooter>
     </SchedulePanel>
   );
 };
-
-const SegmentLegend: React.FC<{ label: string; fill: number }> = ({
-  label,
-  fill,
-}) => (
-  <span className="inline-flex items-center gap-1.5 text-detail font-medium text-text-muted">
-    <span className="w-7">
-      <ScheduleSlotSegments fills={[fill]} />
-    </span>
-    {label}
-  </span>
-);
-
-const CoverageMetric: React.FC<{
-  label: string;
-  value: string | number;
-}> = ({ label, value }) => (
-  <div className="bg-surface-base px-3 py-2.5">
-    <span className="block text-nano font-semibold uppercase tracking-wide text-text-muted">
-      {label}
-    </span>
-    <strong className="mt-0.5 block text-lg tabular-nums text-text-primary">
-      {value}
-    </strong>
-  </div>
-);
 
 const ResponseStatus: React.FC<{
   missingResponse: Interviewer[];
@@ -738,7 +754,6 @@ const BlockDetail: React.FC<{
   interviewers: Interviewer[];
   interviewerSlots: Map<string, Set<string>>;
   panelSize: number;
-  samePanelPerBlock: boolean;
   sessionDuration: number;
   onClose: () => void;
   missingResponse: Interviewer[];
@@ -747,7 +762,6 @@ const BlockDetail: React.FC<{
   interviewers,
   interviewerSlots,
   panelSize,
-  samePanelPerBlock,
   sessionDuration,
   onClose,
   missingResponse,
@@ -780,9 +794,7 @@ const BlockDetail: React.FC<{
           <p className="m-0 mt-1 text-detail text-text-muted">
             {block.enabledMinutes.length === 0
               ? "Denne blokken er stengt."
-              : samePanelPerBlock
-                ? `${block.coverage.availableCount} av ${panelSize} kan danne samme panel gjennom hele blokken.`
-                : `${block.coverage.availableCount} av ${panelSize} er laveste paneldekning i blokkens intervjutider.`}
+              : `${block.heatmapAvailableCount} intervjuere er tilgjengelige i minst én av blokkens ordinære tider.`}
           </p>
         </div>
         <button

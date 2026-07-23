@@ -3,9 +3,10 @@ const mountSettings = (
   initialIsCustom = false,
   interviewCount = 4,
   interviewDuration = 30,
+  pending = false,
 ) => {
   cy.visit(
-    `http://localhost:5001/static/cypress/fixtures/admin-schedule-settings-popover.html?value=${initialPause}&custom=${initialIsCustom ? "1" : "0"}&count=${interviewCount}&duration=${interviewDuration}`,
+    `http://localhost:5001/static/cypress/fixtures/admin-schedule-settings-popover.html?value=${initialPause}&custom=${initialIsCustom ? "1" : "0"}&count=${interviewCount}&duration=${interviewDuration}&pending=${pending ? "1" : "0"}`,
   );
   cy.get("[data-cy=popover-harness]").should("exist");
 };
@@ -97,6 +98,20 @@ describe("inline schedule settings and standard-block preview", () => {
                     window.getComputedStyle(finalBlockActions).opacity,
                   ),
                 });
+                if (frames.length === 2) {
+                  const startDate =
+                    window.document.querySelector<HTMLInputElement>(
+                      'input[aria-label="Startdato for intervjuperioden"]',
+                    );
+                  const valueSetter = Object.getOwnPropertyDescriptor(
+                    window.HTMLInputElement.prototype,
+                    "value",
+                  )?.set;
+                  valueSetter?.call(startDate, "2026-07-21");
+                  startDate?.dispatchEvent(
+                    new window.Event("change", { bubbles: true }),
+                  );
+                }
                 if (frames.length === 8) resolve(frames);
                 else window.requestAnimationFrame(capture);
               };
@@ -124,6 +139,25 @@ describe("inline schedule settings and standard-block preview", () => {
       "data-motion",
       "expand-contract-down",
     );
+  });
+
+  it("keeps the expanded pause height after resizing it", () => {
+    mountSettings(30, false, 4, 30);
+
+    cy.get("[data-cy=schedule-pause]").then(($pause) => {
+      const initialHeight = $pause[0].getBoundingClientRect().height;
+
+      cy.get('[role="radiogroup"][aria-label="Pause mellom blokker"]')
+        .find('input[type="radio"][value="60"]')
+        .check({ force: true });
+      cy.wait(550);
+
+      cy.get("[data-cy=schedule-pause]").should(($expandedPause) => {
+        const expandedHeight = $expandedPause[0].getBoundingClientRect().height;
+        expect(expandedHeight).to.be.closeTo(44, 1);
+        expect(expandedHeight).to.be.greaterThan(initialHeight);
+      });
+    });
   });
 
   it("snaps a short final block in either direction", () => {
@@ -254,21 +288,27 @@ describe("inline schedule settings and standard-block preview", () => {
     cy.get("[data-cy=committed-mode]").should("have.text", "custom");
   });
 
-  it("shows an actionable desktop summary and a compact mobile summary", () => {
+  it("keeps configuration details optional and avoids generated metric prose", () => {
     cy.viewport(1280, 900);
     mountSettings();
-    cy.contains(
-      "20 hele blokker · 1 kort sluttblokk · 1 delvis åpen · 82 åpne intervjutider",
-    ).should("be.visible");
-    cy.contains(
-      "2 standardtider stengt · 1 standardtid åpnet enkeltvis · 1 ekstratid åpnet",
-    ).should("be.visible");
-
-    cy.viewport(390, 900);
+    cy.contains("20 hele blokker · 1 kort sluttblokk").should("not.exist");
     cy.contains("82 åpne intervjutider · 4 manuelle endringer").should(
+      "not.exist",
+    );
+    cy.contains("summary", "Se oppsettsdetaljer").click();
+    cy.contains("dt", "Åpne intervjutider")
+      .parent()
+      .should("contain.text", "82");
+    cy.contains("dt", "Manuelle justeringer")
+      .parent()
+      .should("contain.text", "4");
+    cy.contains("2 standardtider stengt").should("be.visible");
+
+    mountSettings(30, false, 4, 30, true);
+    cy.contains("Nye intervjutider blir lagt til når du lagrer.").should(
       "be.visible",
     );
-    cy.contains("Vis endringer").should("be.visible");
+    cy.contains("Ulagrede endringer").should("not.exist");
   });
 
   [390, 768, 1024].forEach((width) => {

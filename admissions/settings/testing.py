@@ -5,6 +5,7 @@ from django.core.management.commands.runserver import Command as runserver
 from .base import *
 
 env = environ.Env(DEBUG=(bool, False))
+ADMISSIONS_SOLVER_ENGINE_VERSION = "v2"
 
 # GENERAL CONFIGURATION =======================================================
 DEBUG = True

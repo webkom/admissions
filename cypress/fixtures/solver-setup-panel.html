@@ -71,14 +71,6 @@
         swapTimes: () => {},
         swapPanelMember: () => {},
       };
-      const persistence = {
-        state: "saved",
-        error: "",
-        isSaving: false,
-        hasConflict: false,
-        isSaved: true,
-        retry: () => {},
-      };
       const assignmentConflicts = {
         assignmentCount: 0,
         affectedCandidateIds: new Set(),
@@ -118,10 +110,20 @@
         const [solveCount, setSolveCount] = React.useState(0);
         const [openRequestKey, setOpenRequestKey] = React.useState(0);
         const [navigationAction, setNavigationAction] = React.useState("");
-        const rerun = scenario === "rerun";
+        const rerun = scenario === "rerun" || scenario === "rerun-saving";
+        const saving = scenario === "rerun-saving";
+        const persistence = {
+          state: saving ? "saving" : "saved",
+          error: "",
+          isSaving: saving,
+          hasConflict: false,
+          isSaved: !saving,
+          retry: () => {},
+        };
 
         const setup = h(SolverSetupPanel, {
           interviewerCount: 6,
+          experiencedInterviewerCount: 2,
           solverOptions,
           onSolverOptionsChange: setSolverOptions,
           panelSize,

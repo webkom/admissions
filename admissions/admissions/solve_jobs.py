@@ -34,6 +34,7 @@ def build_solve_request(data, synthetic_input, previous_schedule):
             "previous_schedule": previous_schedule,
             "availability_generation": data.get("availability_generation", 1),
             "layout_version": data.get("layout_version", 1),
+            "preview_only": data.get("preview_only", False),
         }
     return {
         "rehydrate": True,
@@ -59,6 +60,7 @@ def build_solve_request(data, synthetic_input, previous_schedule):
         "block_metadata": data.get("block_metadata", []),
         "availability_generation": data.get("availability_generation", 1),
         "layout_version": data.get("layout_version", 1),
+        "preview_only": data.get("preview_only", False),
     }
 
 

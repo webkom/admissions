@@ -4,7 +4,7 @@ import {
 } from "../../frontend/src/components/Scheduling/Solver/solverHelpers";
 
 const mountSolverSetup = (
-  scenario: "ready" | "blocked" | "rerun" = "ready",
+  scenario: "ready" | "blocked" | "rerun" | "rerun-saving" = "ready",
 ) => {
   cy.visit(
     `http://localhost:5001/static/cypress/fixtures/solver-setup-panel.html?scenario=${scenario}`,
@@ -17,6 +17,7 @@ const solverOptions = () =>
     ($output) =>
       JSON.parse($output.text()) as {
         enforce_same_gender: boolean;
+        require_experienced_panel: boolean;
         panel_stability: string;
         availability_fallback: string;
         same_panel_per_block: boolean;
@@ -38,7 +39,7 @@ describe("advanced settings summary model", () => {
   it("describes the quiet strict default without treating strategy as a rule", () => {
     expect(deriveAdvancedSettingsSummary(DEFAULT_SOLVER_OPTIONS)).to.deep.equal(
       {
-        requirementCount: 0,
+        requirementCount: 1,
         preferenceCount: 1,
         customizationCount: 0,
         availabilityLabel: "stopper ved kapasitetsmangel",
@@ -97,7 +98,7 @@ describe("streamlined solver setup", () => {
       .and("not.contain.text", "Panelstørrelse")
       .and("not.contain.text", "Reparasjonsstrategi")
       .find('[role="switch"]')
-      .should("have.length", 2);
+      .should("have.length", 3);
 
     solverOptions().should((options) => {
       expect(options.initial_strategy).to.equal("balance_workload");
@@ -117,6 +118,7 @@ describe("streamlined solver setup", () => {
 
     solverOptions().should((options) => {
       expect(options.enforce_same_gender).to.equal(false);
+      expect(options.require_experienced_panel).to.equal(true);
       expect(options.panel_stability).to.equal("preferred");
       expect(options.same_panel_per_block).to.equal(false);
       expect(options.avoid_consecutive_interviewer_blocks).to.equal(true);
@@ -176,8 +178,8 @@ describe("solver readiness and regeneration", () => {
     });
   });
 
-  it("keeps the normal plan state quiet and reveals editing controls only on request", () => {
-    mountSolverSetup("rerun");
+  it("keeps preview and edit as reversible plan modes", () => {
+    mountSolverSetup("rerun-saving");
     cy.get("[data-cy=view-switcher]")
       .should("contain.text", "Liste")
       .and("contain.text", "Kalender")
@@ -187,7 +189,11 @@ describe("solver readiness and regeneration", () => {
       .and("not.contain.text", "Ingen planproblemer");
     cy.contains("th", "Behold").should("not.exist");
 
-    cy.contains("button", "Rediger plan").click();
+    cy.get('[role="radiogroup"][aria-label="Arbeidsmodus for planutkastet"]')
+      .should("contain.text", "Forhåndsvisning")
+      .and("contain.text", "Rediger")
+      .contains('[role="radio"]', "Rediger")
+      .click();
     cy.get("[data-cy=manual-schedule-editing]").should(
       "contain.text",
       "Endringer lagres automatisk",
@@ -195,8 +201,13 @@ describe("solver readiness and regeneration", () => {
     cy.contains("th", "Behold").should("be.visible");
     cy.get("[data-cy=proposal-primary-action]").should(
       "contain.text",
-      "Avslutt redigering",
+      "Gå til forhåndsvisning",
     );
+    cy.get('[role="radiogroup"][aria-label="Arbeidsmodus for planutkastet"]')
+      .contains('[role="radio"]', "Forhåndsvisning")
+      .click();
+    cy.get("[data-cy=manual-schedule-editing]").should("not.exist");
+    cy.contains("Lagrer utkast…").should("be.visible");
   });
 
   [390, 768, 1280].forEach((width) => {

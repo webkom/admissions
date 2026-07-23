@@ -12,8 +12,9 @@ import {
   SaveButton,
   SchedulePanel,
   SchedulePanelBody,
-  SchedulePanelFooter,
   SchedulePanelHeader,
+  SchedulingActionBar,
+  SchedulingButton,
   Stepper,
   TimeSegmentInput,
   type TimeValue,
@@ -199,15 +200,8 @@ const FinalBlockSnapFooter: React.FC<{
       typeof window !== "undefined" &&
       window.matchMedia(EXPAND_CONTRACT_MOTION.reducedMotionQuery).matches,
   );
-  const snapKey = snap
-    ? [
-        snap.slotCount,
-        snap.blockSize,
-        snap.trimEndMinute,
-        snap.completeEndMinute,
-      ].join(":")
-    : null;
   const isOpen = snap !== null;
+  const hasRenderedSnap = renderedSnap !== null;
 
   React.useEffect(() => {
     hasMountedRef.current = true;
@@ -223,11 +217,11 @@ const FinalBlockSnapFooter: React.FC<{
 
   React.useLayoutEffect(() => {
     if (snap) setRenderedSnap(snap);
-  }, [snap, snapKey]);
+  }, [snap]);
 
   React.useLayoutEffect(() => {
     const footer = footerRef.current;
-    if (!footer || !renderedSnap) return undefined;
+    if (!footer || !hasRenderedSnap) return undefined;
 
     animationRef.current?.kill();
     animationRef.current = null;
@@ -242,7 +236,7 @@ const FinalBlockSnapFooter: React.FC<{
     if (!hasMountedRef.current || prefersReducedMotion) {
       isOpenRef.current = isOpen;
       if (isOpen) {
-        setExpandedElement(footer, footer.scrollHeight);
+        setExpandedElement(footer, footer.scrollHeight, true);
       } else {
         hasRenderedFooterRef.current = false;
         setRenderedSnap(null);
@@ -252,14 +246,19 @@ const FinalBlockSnapFooter: React.FC<{
 
     let cancelScheduledExpansion: (() => void) | undefined;
     if (isOpen) {
-      const durationSeconds = isOpenRef.current
-        ? 0
-        : EXPAND_CONTRACT_MOTION.durationSeconds;
+      const targetHeight = footer.scrollHeight;
+      const isAlreadyExpanded =
+        currentState.opacity >= 0.999 &&
+        currentState.scaleY >= 0.999 &&
+        Math.abs(currentState.height - targetHeight) < 1;
       cancelScheduledExpansion = animateExpandedElementOnNextFrame({
         resolveElement: () => footerRef.current,
         from: currentState,
-        height: (element) => element.scrollHeight,
-        durationSeconds,
+        height: targetHeight,
+        durationSeconds: isAlreadyExpanded
+          ? 0
+          : EXPAND_CONTRACT_MOTION.durationSeconds,
+        clearHeightOnComplete: true,
         onStart: (animation) => {
           animationRef.current = animation;
         },
@@ -282,7 +281,7 @@ const FinalBlockSnapFooter: React.FC<{
       cancelScheduledExpansion?.();
       animationRef.current?.kill();
     };
-  }, [isOpen, prefersReducedMotion, renderedSnap]);
+  }, [hasRenderedSnap, isOpen, prefersReducedMotion]);
 
   React.useLayoutEffect(
     () => () => {
@@ -480,20 +479,30 @@ const AdminScheduleSettingsPanel: React.FC<AdminScheduleSettingsPanelProps> = ({
   const canTrimFinalBlock =
     trimmedFinalBlockEndMinute !== undefined &&
     trimmedFinalBlockEndMinute > startMinute;
-  const finalBlockSnap =
-    finalBlockSlotCount !== undefined &&
-    (canTrimFinalBlock || canCompleteFinalBlock)
-      ? {
-          slotCount: finalBlockSlotCount,
-          blockSize: block.size,
-          trimEndMinute: canTrimFinalBlock
-            ? trimmedFinalBlockEndMinute
-            : undefined,
-          completeEndMinute: canCompleteFinalBlock
-            ? completedFinalBlockEndMinute
-            : undefined,
-        }
-      : null;
+  const finalBlockSnap = React.useMemo<FinalBlockSnap | null>(
+    () =>
+      finalBlockSlotCount !== undefined &&
+      (canTrimFinalBlock || canCompleteFinalBlock)
+        ? {
+            slotCount: finalBlockSlotCount,
+            blockSize: block.size,
+            trimEndMinute: canTrimFinalBlock
+              ? trimmedFinalBlockEndMinute
+              : undefined,
+            completeEndMinute: canCompleteFinalBlock
+              ? completedFinalBlockEndMinute
+              : undefined,
+          }
+        : null,
+    [
+      block.size,
+      canCompleteFinalBlock,
+      canTrimFinalBlock,
+      completedFinalBlockEndMinute,
+      finalBlockSlotCount,
+      trimmedFinalBlockEndMinute,
+    ],
+  );
 
   const fields = (
     <div
@@ -726,31 +735,10 @@ export const AdminScheduleConfigFooter: React.FC<{
   actionLabel = "Lagre tidsrammer",
   className,
 }) => {
-  const wholeBlockCount = saveStatus.wholeBlockCount ?? 0;
   const closedStandardSlotCount = saveStatus.closedStandardSlotCount ?? 0;
   const openedStandardSlotCount = saveStatus.openedStandardSlotCount ?? 0;
   const openedPauseSlotCount = saveStatus.openedPauseSlotCount ?? 0;
-  const primaryParts = [
-    wholeBlockCount > 0
-      ? wholeBlockCount === 1
-        ? "1 hel blokk"
-        : `${wholeBlockCount} hele blokker`
-      : null,
-    (saveStatus.shortBlockCount ?? 0) > 0
-      ? `${saveStatus.shortBlockCount} ${
-          saveStatus.shortBlockCount === 1
-            ? "kort sluttblokk"
-            : "korte sluttblokker"
-        }`
-      : null,
-    (saveStatus.partialBlockCount ?? 0) > 0
-      ? `${saveStatus.partialBlockCount} ${
-          saveStatus.partialBlockCount === 1 ? "delvis åpen" : "delvis åpne"
-        }`
-      : null,
-    `${saveStatus.openSlotCount ?? 0} åpne intervjutider`,
-  ].filter(Boolean);
-  const deviationParts = [
+  const adjustmentDetails = [
     closedStandardSlotCount > 0
       ? `${closedStandardSlotCount} ${
           closedStandardSlotCount === 1 ? "standardtid" : "standardtider"
@@ -769,116 +757,104 @@ export const AdminScheduleConfigFooter: React.FC<{
   ].filter(Boolean);
   const manualChangeCount =
     saveStatus.manualChangeCount ?? saveStatus.customizationCount ?? 0;
+  const pendingDescription = saveStatus.availabilityAddition
+    ? "Nye intervjutider blir lagt til når du lagrer."
+    : saveStatus.proposalInvalidatingChange && saveStatus.hasScheduleDraft
+      ? "Planutkastet må beregnes på nytt etter lagring."
+      : saveStatus.gridDefiningChange
+        ? "Intervjutidene oppdateres når du lagrer."
+        : "Endringene er klare til å lagres.";
 
   return (
-    <SchedulePanelFooter
+    <SchedulingActionBar
       className={className}
       dataCy="admin-schedule-config-footer"
-    >
-      <div className="flex min-w-0 flex-col gap-2">
-        {showOpenBlockCount && (
-          <div className="min-w-0 tabular-nums text-text-primary">
-            <div className="text-ui font-semibold handheld:hidden">
-              {primaryParts.join(" · ")}
-            </div>
-            {deviationParts.length > 0 && (
-              <div className="mt-0.5 text-detail text-text-muted handheld:hidden">
-                {deviationParts.join(" · ")}
-              </div>
-            )}
-            <div className="hidden text-ui font-semibold handheld:block">
-              {saveStatus.openSlotCount ?? 0} åpne intervjutider ·{" "}
-              {manualChangeCount} manuelle endringer
-            </div>
-            {manualChangeCount > 0 && (
-              <details className="mt-1 hidden text-detail text-text-muted handheld:block">
-                <summary className="cursor-pointer font-semibold text-text-primary">
-                  Vis endringer
-                </summary>
-                <p className="m-0 mt-1">{deviationParts.join(" · ")}</p>
-              </details>
-            )}
-          </div>
-        )}
-        {saveStatus.remoteRevisionChanged && (
-          <div
-            role="alert"
-            className="max-w-md rounded-lg border border-danger-border bg-danger-bg px-3 py-2 text-detail font-semibold text-danger"
-          >
-            <p className="m-0">
-              Tidsrammene er endret av en annen ansvarlig. Last inn den nyeste
-              versjonen før du lagrer.
-            </p>
-            <button
-              type="button"
-              disabled={saveStatus.discardDisabled}
-              className="mt-2 rounded-md border border-danger-border bg-surface-base px-3 py-1.5 text-detail font-bold text-danger transition-colors hover:bg-danger-bg disabled:cursor-wait disabled:border-border-soft disabled:bg-surface-muted disabled:text-text-muted"
-              onClick={saveStatus.onDiscard}
+      status={
+        <div className="flex min-w-0 flex-col gap-2">
+          {showOpenBlockCount && (
+            <details className="min-w-0 text-detail text-text-muted">
+              <summary className="cursor-pointer font-semibold text-text-primary">
+                Se oppsettsdetaljer
+              </summary>
+              <dl className="m-0 mt-2 grid gap-x-5 gap-y-1 sm:grid-cols-2">
+                <div className="flex justify-between gap-3">
+                  <dt>Åpne intervjutider</dt>
+                  <dd className="m-0 font-semibold tabular-nums text-text-primary">
+                    {saveStatus.openSlotCount ?? 0}
+                  </dd>
+                </div>
+                <div className="flex justify-between gap-3">
+                  <dt>Manuelle justeringer</dt>
+                  <dd className="m-0 font-semibold tabular-nums text-text-primary">
+                    {manualChangeCount}
+                  </dd>
+                </div>
+              </dl>
+              {adjustmentDetails.length > 0 && (
+                <ul className="mb-0 mt-2 list-disc space-y-0.5 pl-4">
+                  {adjustmentDetails.map((detail) => (
+                    <li key={detail}>{detail}</li>
+                  ))}
+                </ul>
+              )}
+            </details>
+          )}
+          {saveStatus.remoteRevisionChanged && (
+            <div
+              role="alert"
+              className="max-w-md rounded-lg border border-danger-border bg-danger-bg px-3 py-2 text-detail font-semibold text-danger"
             >
-              {saveStatus.discardDisabled
-                ? "Henter nyeste versjon…"
-                : "Forkast mine endringer og last inn siste"}
-            </button>
-          </div>
-        )}
-        {saveStatus.hasPendingChanges && (
-          <div className="max-w-xs text-detail leading-snug text-text-muted">
+              <p className="m-0">
+                Tidsrammene er endret av en annen ansvarlig. Last inn den nyeste
+                versjonen før du lagrer.
+              </p>
+              <SchedulingButton
+                disabled={saveStatus.discardDisabled}
+                variant="danger"
+                className="mt-2 h-8 px-3 text-detail"
+                onClick={saveStatus.onDiscard}
+              >
+                {saveStatus.discardDisabled
+                  ? "Henter nyeste versjon…"
+                  : "Forkast mine endringer og last inn siste"}
+              </SchedulingButton>
+            </div>
+          )}
+          {saveStatus.hasPendingChanges && (
             <p className="m-0 font-semibold text-text-primary">
-              Ulagrede endringer
+              {pendingDescription}
             </p>
-            <p className="m-0 mt-0.5">
-              {saveStatus.gridDefiningChange &&
-              (saveStatus.reshapedSlotCount ?? 0) > 0
-                ? `Endringen oppdaterte intervjublokkene og fjernet ${saveStatus.reshapedSlotCount} tidligere åpne valg fra utkastet. Kontroller rutenettet før du lagrer.`
-                : saveStatus.gridDefiningChange && saveStatus.hasScheduleDraft
-                  ? "Ny intervjulengde tømmer valgte tider og bekreftelsen, men beholder registrerte inhabiliteter. Intervjuforslaget nullstilles."
-                  : saveStatus.gridDefiningChange
-                    ? "Ny intervjulengde tømmer valgte tider og bekreftelsen, men beholder registrerte inhabiliteter."
-                    : saveStatus.blockStructureChange &&
-                        saveStatus.hasScheduleDraft
-                      ? "Endringen oppdaterer blokkstrukturen og nullstiller intervjuforslaget. Registrert tilgjengelighet beholdes."
-                      : saveStatus.proposalInvalidatingChange &&
-                          saveStatus.hasScheduleDraft
-                        ? "Endringen kan fjerne eller flytte intervjutider og nullstiller intervjuforslaget. Registrert tilgjengelighet beholdes."
-                        : saveStatus.blockStructureChange
-                          ? "Blokkstrukturen har ulagrede endringer."
-                          : saveStatus.availabilityAddition
-                            ? "Nye åpne tider gjør eksisterende tilgjengelighet utdatert til den er bekreftet på nytt."
-                            : saveStatus.availabilityRemoval
-                              ? "Stengte tider fjernes fra svarene uten å gjøre bekreftelsen utdatert."
-                              : saveStatus.visualGroupingChange
-                                ? "Endringen påvirker bare hvordan tidslukene grupperes visuelt."
-                                : "Konfigurasjonen har ulagrede endringer."}
-            </p>
-          </div>
-        )}
-      </div>
-      <div className="flex items-center gap-3 handheld:w-full">
-        {saveStatus.hasPendingChanges && (
-          <button
-            type="button"
-            disabled={
-              saveStatus.remoteRevisionChanged && saveStatus.discardDisabled
-            }
-            onClick={saveStatus.onDiscard}
-            className="text-ui font-semibold text-text-muted hover:text-text-primary focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-focus disabled:cursor-wait disabled:opacity-50 handheld:min-h-control-md handheld:flex-1"
-          >
-            Forkast endringer
-          </button>
-        )}
-        {saveStatus.showSave && (
-          <SaveButton
-            isSaving={saveStatus.isSaving}
-            saveTick={saveStatus.saveTick}
-            onClick={saveStatus.onSave}
-            disabled={saveStatus.saveDisabled}
-            className="handheld:flex-1"
-          >
-            {actionLabel}
-          </SaveButton>
-        )}
-      </div>
-    </SchedulePanelFooter>
+          )}
+        </div>
+      }
+      actions={
+        <>
+          {saveStatus.hasPendingChanges && (
+            <SchedulingButton
+              disabled={
+                saveStatus.remoteRevisionChanged && saveStatus.discardDisabled
+              }
+              onClick={saveStatus.onDiscard}
+              variant="quiet"
+              className="handheld:flex-1"
+            >
+              Forkast endringer
+            </SchedulingButton>
+          )}
+          {saveStatus.showSave && (
+            <SaveButton
+              isSaving={saveStatus.isSaving}
+              saveTick={saveStatus.saveTick}
+              onClick={saveStatus.onSave}
+              disabled={saveStatus.saveDisabled}
+              className="handheld:flex-1"
+            >
+              {actionLabel}
+            </SaveButton>
+          )}
+        </>
+      }
+    />
   );
 };
 

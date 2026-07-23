@@ -13,6 +13,7 @@ import {
   Application,
   Group,
   InterviewAvailabilityParticipant,
+  ExperienceLevel,
   SavedSchedule,
 } from "src/types";
 import { apiClient } from "src/utils/callApi";
@@ -212,6 +213,7 @@ export const useSaveInterviewAvailability = (slug: string) => {
       slots?: string[];
       conflicts?: string[];
       reviewed_candidate_ids?: string[];
+      experience_level?: ExperienceLevel;
       expected_availability_generation?: number;
     }
   >({

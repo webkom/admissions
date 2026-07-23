@@ -211,6 +211,11 @@ class InterviewAvailabilityView(APIView):
                 "gender": (
                     panel_gender_code(person.gender) if is_interview_admin else ""
                 ),
+                "experience_level": (
+                    availability_map[person.id].experience_level
+                    if is_interview_admin and person.id in availability_map
+                    else InterviewAvailability.EXPERIENCE_UNKNOWN
+                ),
                 "slots": (
                     availability_map[person.id].slots
                     if person.id in availability_map
@@ -271,6 +276,8 @@ class InterviewAvailabilityView(APIView):
         serializer = SaveInterviewAvailabilitySerializer(data=request.data)
         if not serializer.is_valid():
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        if "experience_level" in serializer.validated_data and not is_interview_admin:
+            return Response(status=status.HTTP_403_FORBIDDEN)
         admission = Admission.objects.select_for_update().get(pk=admission.pk)
 
         target_user = user
@@ -421,7 +428,12 @@ class InterviewAvailabilityView(APIView):
         )
         defaults = {
             key: serializer.validated_data[key]
-            for key in ("slots", "conflicts", "reviewed_candidate_ids")
+            for key in (
+                "slots",
+                "conflicts",
+                "reviewed_candidate_ids",
+                "experience_level",
+            )
             if key in serializer.validated_data
         }
         requested_participation = serializer.validated_data.get("participation")
@@ -470,8 +482,18 @@ class InterviewAvailabilityView(APIView):
             requested_participation is not None
             and (existing is None or existing.participation != requested_participation)
         )
+        experience_changed = bool(
+            "experience_level" in serializer.validated_data
+            and (
+                existing is None
+                or existing.experience_level
+                != serializer.validated_data["experience_level"]
+            )
+        )
         planning_input_changed = (
-            "slots" in serializer.validated_data or participation_changed
+            "slots" in serializer.validated_data
+            or participation_changed
+            or experience_changed
         )
         if planning_input_changed and saved_schedule is not None:
             saved_schedule.save(update_fields=["updated_at"])
@@ -503,6 +525,11 @@ class InterviewAvailabilityView(APIView):
                 "full_name": target_user.get_full_name() or target_user.username,
                 "gender": (
                     panel_gender_code(target_user.gender) if is_interview_admin else ""
+                ),
+                "experience_level": (
+                    saved.experience_level
+                    if is_interview_admin
+                    else InterviewAvailability.EXPERIENCE_UNKNOWN
                 ),
                 "slots": saved.slots,
                 "conflicts": self._visible_conflicts(

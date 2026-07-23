@@ -944,6 +944,7 @@ class SolveJobSerializer(serializers.ModelSerializer):
     proposal_expires_at = serializers.SerializerMethodField()
     baseline_updated_at = serializers.SerializerMethodField()
     auto_apply_if_empty = serializers.SerializerMethodField()
+    preview_only = serializers.SerializerMethodField()
 
     def get_proposal_expires_at(self, obj):
         if obj.finished_at is None or obj.applied_at or obj.discarded_at:
@@ -955,6 +956,9 @@ class SolveJobSerializer(serializers.ModelSerializer):
 
     def get_auto_apply_if_empty(self, obj):
         return bool((obj.request_data or {}).get("auto_apply_if_empty"))
+
+    def get_preview_only(self, obj):
+        return bool((obj.request_data or {}).get("preview_only"))
 
     class Meta:
         model = SolveJob
@@ -972,6 +976,7 @@ class SolveJobSerializer(serializers.ModelSerializer):
             "proposal_expires_at",
             "baseline_updated_at",
             "auto_apply_if_empty",
+            "preview_only",
         )
         read_only_fields = fields
 
@@ -982,6 +987,7 @@ class ApplySolveJobSerializer(serializers.Serializer):
 
 class SolveOptionsSerializer(serializers.Serializer):
     enforce_same_gender = serializers.BooleanField(default=False)
+    require_experienced_panel = serializers.BooleanField(default=False)
     allow_overtime = serializers.BooleanField(required=False)
     prioritize_continuity = serializers.BooleanField(default=True)
     same_panel_per_block = serializers.BooleanField(required=False)
@@ -1021,7 +1027,7 @@ class SolveOptionsSerializer(serializers.Serializer):
     max_solver_seconds = serializers.FloatField(
         min_value=1.0,
         max_value=constants.MAX_SOLVER_SECONDS,
-        default=constants.MAX_SOLVER_SECONDS,
+        default=constants.DEFAULT_SOLVER_SECONDS,
     )
 
     def validate(self, attrs):
@@ -1116,6 +1122,10 @@ class SchedulePanelMemberSerializer(serializers.Serializer):
     id = serializers.CharField(required=False, allow_null=True)
     name = serializers.CharField()
     is_overtime = serializers.BooleanField(required=False)
+    experience_level = serializers.ChoiceField(
+        choices=InterviewAvailability.EXPERIENCE_LEVEL_CHOICES,
+        required=False,
+    )
 
 
 class ScheduleItemSerializer(serializers.Serializer):
@@ -1245,6 +1255,7 @@ class CandidateSerializer(serializers.Serializer):
     id = serializers.CharField()
     name = serializers.CharField(required=False, allow_blank=True, default="")
     gender = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+    user_id = serializers.CharField(required=False, allow_blank=True, allow_null=True)
 
 
 class InterviewerSerializer(CandidateSerializer):
@@ -1253,6 +1264,10 @@ class InterviewerSerializer(CandidateSerializer):
     )
     biased = serializers.ListField(
         child=serializers.CharField(), default=list, max_length=500
+    )
+    experience_level = serializers.ChoiceField(
+        choices=InterviewAvailability.EXPERIENCE_LEVEL_CHOICES,
+        default=InterviewAvailability.EXPERIENCE_UNKNOWN,
     )
 
 
@@ -1292,6 +1307,7 @@ class ScheduleRequestsSerializer(serializers.Serializer):
         many=True, required=False, max_length=500
     )
     synthetic = serializers.BooleanField(required=False, default=False)
+    preview_only = serializers.BooleanField(required=False, default=False)
 
     def validate(self, attrs):
         for field in ("candidates", "interviewers"):
@@ -1375,6 +1391,10 @@ class ScheduleRequestsSerializer(serializers.Serializer):
 
 class SaveInterviewAvailabilitySerializer(serializers.Serializer):
     user_id = serializers.UUIDField(required=False)
+    experience_level = serializers.ChoiceField(
+        choices=InterviewAvailability.EXPERIENCE_LEVEL_CHOICES,
+        required=False,
+    )
     participation = serializers.ChoiceField(
         choices=[
             InterviewAvailability.PARTICIPATION_AWAITING,
@@ -1418,6 +1438,9 @@ class InterviewAvailabilityParticipantSerializer(serializers.Serializer):
     username = serializers.CharField()
     full_name = serializers.CharField()
     gender = serializers.CharField(required=False, allow_blank=True, default="")
+    experience_level = serializers.ChoiceField(
+        choices=InterviewAvailability.EXPERIENCE_LEVEL_CHOICES
+    )
     slots = serializers.ListField(child=serializers.CharField(), default=list)
     conflicts = serializers.ListField(child=serializers.CharField(), default=list)
     reviewed_candidate_ids = serializers.ListField(

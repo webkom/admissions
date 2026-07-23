@@ -65,13 +65,19 @@ LEGO_GENDER_FEMALE = "female"
 LEGO_GENDER_TO_PANEL_CODE = {LEGO_GENDER_MALE: "M", LEGO_GENDER_FEMALE: "F"}
 
 
-# CP-SAT stops as soon as it proves the best plan, so this is a ceiling rather
-# than a fixed delay. Five minutes gives harder admissions materially more
-# search time while keeping one solve bounded.
+# CP-SAT stops as soon as it proves the best plan, so these are ceilings rather
+# than fixed delays. Normal solves use a short budget; callers can explicitly
+# request the longer ceiling for unusually difficult admissions.
+DEFAULT_SOLVER_SECONDS = 30
 MAX_SOLVER_SECONDS = 5 * 60
 SOLVER_NUM_WORKERS = 4
 SOLVER_RANDOM_SEED = 42
 MAX_SOLVER_MODEL_VARS = 2_000_000
+MAX_SOLVER_MODEL_CONSTRAINTS = 4_000_000
+# A much lower sparse-core guard prevents Python model construction/search from
+# monopolising a worker even when auxiliary variables remain under the absolute
+# protobuf safety limit.
+MAX_SOLVER_SPARSE_BASE_VARS = 100_000
 MAX_SCHEDULE_DAYS = 21
 MAX_SCHEDULE_SLOTS = MAX_SCHEDULE_DAYS * 24 * 12
 MAX_SCHEDULE_WINDOWS = MAX_SCHEDULE_DAYS * 24 * 6

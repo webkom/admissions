@@ -1,7 +1,10 @@
 import { useEffect, useRef, useState } from "react";
 import type { StatusToastState } from "src/components/StatusToast";
 import { useSaveInterviewAvailability } from "src/query/hooks";
-import type { InterviewAvailabilityParticipant } from "src/types";
+import type {
+  ExperienceLevel,
+  InterviewAvailabilityParticipant,
+} from "src/types";
 
 type Notify = (message: string, tone?: StatusToastState["tone"]) => void;
 
@@ -105,6 +108,22 @@ export const useAvailabilityEditor = ({
     }
   };
 
+  const setExperienceLevel = async (
+    userId: string,
+    experienceLevel: ExperienceLevel,
+  ) => {
+    try {
+      await saveInterviewAvailability.mutateAsync({
+        user_id: userId,
+        experience_level: experienceLevel,
+      });
+      notify("Erfaringsnivå oppdatert.");
+    } catch (error) {
+      notify("Kunne ikke oppdatere erfaringsnivå.", "error");
+      throw error;
+    }
+  };
+
   return {
     selectedSlots,
     setSelectedSlots,
@@ -112,5 +131,6 @@ export const useAvailabilityEditor = ({
     saveAvailability,
     saveConflictReview,
     setParticipation,
+    setExperienceLevel,
   };
 };
