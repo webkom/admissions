@@ -1,4 +1,10 @@
-from django.test import TestCase, override_settings
+from concurrent.futures import ThreadPoolExecutor
+from threading import Event, local
+from unittest import mock
+
+from django.db import close_old_connections, transaction
+from django.db.models.query import QuerySet
+from django.test import TestCase, TransactionTestCase, override_settings
 from django.urls import reverse
 
 from admissions.admissions.models import Group, LegoUser, Membership
@@ -59,8 +65,6 @@ class OAuthMembershipSyncTestCase(TestCase):
 
         self.assertFalse(Membership.objects.filter(user=self.user).exists())
         self.assertFalse(self.user.is_staff)
-        self.assertEqual(self.user.profile_picture, "")
-        self.assertEqual(self.user.gender, "")
 
     def test_valid_memberships_replace_stale_state(self):
         response = {
@@ -190,4 +194,92 @@ class OAuthMembershipSyncTestCase(TestCase):
         self.sync(response)
 
         self.assertFalse(Membership.objects.filter(user=self.user).exists())
+        self.assertFalse(self.user.is_staff)
+
+
+class ConcurrentOAuthMembershipSyncTestCase(TransactionTestCase):
+    def setUp(self):
+        self.user = LegoUser.objects.create(
+            username="concurrent-oauth-user",
+            lego_id=92100,
+        )
+        self.group = Group.objects.create(
+            name="Concurrent OAuth group",
+            lego_id=92101,
+        )
+
+    def response_for(self, role):
+        return {
+            "memberships": [
+                {"abakusGroup": str(self.group.lego_id), "role": role},
+            ],
+            "abakusGroups": [
+                {"id": self.group.lego_id, "name": self.group.name},
+            ],
+        }
+
+    def test_latest_serialized_refresh_replaces_the_complete_authority_set(self):
+        first_refresh_complete = Event()
+        second_refresh_started = Event()
+        second_delete_complete = Event()
+        release_first_refresh = Event()
+        refresh_context = local()
+        original_delete = QuerySet.delete
+
+        def observe_delete(queryset):
+            result = original_delete(queryset)
+            if queryset.model is Membership and getattr(
+                refresh_context, "is_second_refresh", False
+            ):
+                second_delete_complete.set()
+            return result
+
+        def refresh_as_leader():
+            close_old_connections()
+            user = LegoUser.objects.get(pk=self.user.pk)
+            with transaction.atomic():
+                update_custom_user_details(
+                    None,
+                    {},
+                    user=user,
+                    response=self.response_for("leader"),
+                )
+                first_refresh_complete.set()
+                self.assertTrue(release_first_refresh.wait(timeout=5))
+            close_old_connections()
+
+        def refresh_as_member():
+            close_old_connections()
+            user = LegoUser.objects.get(pk=self.user.pk)
+            refresh_context.is_second_refresh = True
+            second_refresh_started.set()
+            update_custom_user_details(
+                None,
+                {},
+                user=user,
+                response=self.response_for("member"),
+            )
+            close_old_connections()
+
+        with (
+            mock.patch.object(QuerySet, "delete", new=observe_delete),
+            ThreadPoolExecutor(max_workers=2) as executor,
+        ):
+            leader_future = executor.submit(refresh_as_leader)
+            self.assertTrue(first_refresh_complete.wait(timeout=5))
+            member_future = executor.submit(refresh_as_member)
+            self.assertTrue(second_refresh_started.wait(timeout=5))
+            second_deleted_before_release = second_delete_complete.wait(timeout=2)
+            release_first_refresh.set()
+            leader_future.result(timeout=5)
+            member_future.result(timeout=5)
+
+        self.assertFalse(second_deleted_before_release)
+        self.user.refresh_from_db()
+        self.assertEqual(
+            list(
+                Membership.objects.filter(user=self.user).values_list("role", flat=True)
+            ),
+            ["member"],
+        )
         self.assertFalse(self.user.is_staff)

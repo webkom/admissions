@@ -225,8 +225,8 @@ def update_custom_user_details(strategy, details, user=None, *args, **kwargs):
     )
 
     with transaction.atomic():
-        Membership.objects.filter(user=user).delete()
-        user.is_staff = False
+        locked_user = LegoUser.objects.select_for_update().get(pk=user.pk)
+        Membership.objects.filter(user=locked_user).delete()
         roles_by_group = {}
         ambiguous_groups = set()
         for group, membership in group_data:
@@ -248,7 +248,7 @@ def update_custom_user_details(strategy, details, user=None, *args, **kwargs):
                 roles_by_group[local_group.pk] = (local_group, role)
 
         memberships = []
-        user.is_staff = False
+        locked_user.is_staff = False
         for group_id, (local_group, role) in roles_by_group.items():
             if group_id in ambiguous_groups:
                 continue
@@ -256,21 +256,25 @@ def update_custom_user_details(strategy, details, user=None, *args, **kwargs):
                 local_group.name in constants.STAFF_LEADER_GROUPS
                 and role == constants.LEADER
             ):
-                user.is_staff = True
-            memberships.append(Membership(user=user, group=local_group, role=role))
+                locked_user.is_staff = True
+            memberships.append(
+                Membership(user=locked_user, group=local_group, role=role)
+            )
 
         Membership.objects.bulk_create(memberships)
         profile_picture = response.get("profilePicture")
         gender = response.get("gender")
-        profile_picture_limit = user._meta.get_field("profile_picture").max_length
-        gender_limit = user._meta.get_field("gender").max_length
-        user.profile_picture = (
+        profile_picture_limit = locked_user._meta.get_field(
+            "profile_picture"
+        ).max_length
+        gender_limit = locked_user._meta.get_field("gender").max_length
+        locked_user.profile_picture = (
             profile_picture
             if isinstance(profile_picture, str)
             and len(profile_picture) <= profile_picture_limit
             else ""
         )
-        user.gender = (
+        locked_user.gender = (
             gender if isinstance(gender, str) and len(gender) <= gender_limit else ""
         )
-        user.save(update_fields=["is_staff", "profile_picture", "gender"])
+        locked_user.save(update_fields=["is_staff", "profile_picture", "gender"])
