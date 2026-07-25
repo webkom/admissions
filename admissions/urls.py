@@ -23,10 +23,15 @@ from admissions.admissions.views import (
     AdminApplicationViewSet,
     AdminGroupViewSet,
     AppView,
+    InterviewAvailabilityView,
+    InterviewCandidatesView,
     ManageAdmissionViewSet,
     ManageGroupViewSet,
     PublicAdmissionViewSet,
     PublicApplicationViewSet,
+    SavedScheduleView,
+    SolveJobStatusView,
+    SolveScheduleView,
     logout,
 )
 
@@ -56,6 +61,27 @@ urlpatterns = [
     path("api/manage/", include(manageRouter.urls)),
     path("api-auth/", include("rest_framework.urls", namespace="rest_framework")),
     path("api/", include(publicRouter.urls)),
+    path("api/solve/", SolveScheduleView.as_view(), name="solve-schedule"),
+    path(
+        "api/solve/<uuid:job_id>/",
+        SolveJobStatusView.as_view(),
+        name="solve-job",
+    ),
+    path(
+        "api/admin/admission/<slug:admission_slug>/schedule/",
+        SavedScheduleView.as_view(),
+        name="saved-schedule",
+    ),
+    path(
+        "api/admin/admission/<slug:admission_slug>/availability/",
+        InterviewAvailabilityView.as_view(),
+        name="interview-availability",
+    ),
+    path(
+        "api/admin/admission/<slug:admission_slug>/candidates/",
+        InterviewCandidatesView.as_view(),
+        name="interview-candidates",
+    ),
     re_path("", include("social_django.urls", namespace="social")),
     re_path(r"^$", AppView.as_view(), name="home"),
 ]

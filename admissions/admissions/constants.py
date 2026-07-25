@@ -57,3 +57,20 @@ STAFF_LEADER_GROUPS = ["backup", "Hovedstyret", "RevyStyret"]
 """ Members of this group with role leader should attain the is_staff attribute and be able to manage admissions """
 WEBKOM_GROUPNAME = "Webkom"
 """ Group name of Webkom """
+
+# Gender
+# Only male/female map to a panel code; "other"/unset are ignored by the solver.
+LEGO_GENDER_MALE = "male"
+LEGO_GENDER_FEMALE = "female"
+LEGO_GENDER_TO_PANEL_CODE = {LEGO_GENDER_MALE: "M", LEGO_GENDER_FEMALE: "F"}
+
+
+# Interview-schedule solver bounds
+# Solving runs in run_solver_worker, not the request thread; this is a sanity ceiling.
+MAX_SOLVER_SECONDS = 120.0
+SOLVER_NUM_WORKERS = 4
+SOLVER_RANDOM_SEED = 42
+
+# Async solve-job worker bounds. A job RUNNING past the stale window is failed as abandoned.
+SOLVE_JOB_STALE_SECONDS = 10 * 60
+SOLVE_JOB_RETENTION_DAYS = 7
