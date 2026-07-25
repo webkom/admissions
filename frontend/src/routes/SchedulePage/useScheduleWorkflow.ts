@@ -15,6 +15,10 @@ import {
   derivePublicationReadiness,
   deriveWorkflowPhase,
 } from "./workflowState";
+import {
+  deriveFoundationStage,
+  derivePublicationStage,
+} from "./workflowStages";
 
 interface ScheduleWorkflowParams {
   isAdmin: boolean;
@@ -22,6 +26,7 @@ interface ScheduleWorkflowParams {
   participants: InterviewAvailabilityParticipant[] | undefined;
   candidateIds: string[];
   candidateScopeResolved: boolean;
+  draftPersistenceReady: boolean;
 }
 
 export const useScheduleWorkflow = ({
@@ -30,6 +35,7 @@ export const useScheduleWorkflow = ({
   participants,
   candidateIds,
   candidateScopeResolved,
+  draftPersistenceReady,
 }: ScheduleWorkflowParams) => {
   const initialSection: TabType = isAdmin ? "config" : "my-availability";
   const [activeSection, setActiveSection] = useState<TabType>(initialSection);
@@ -158,6 +164,7 @@ export const useScheduleWorkflow = ({
         schedule: savedSchedule?.schedule ?? [],
         candidateIds,
         candidateScopeResolved,
+        draftPersistenceReady,
         conflictReviewSummary,
         proposalConflictCount,
         reviewParticipants,
@@ -166,6 +173,7 @@ export const useScheduleWorkflow = ({
       candidateIds,
       candidateScopeResolved,
       conflictReviewSummary,
+      draftPersistenceReady,
       proposalConflictCount,
       reviewParticipants,
       savedSchedule?.schedule,
@@ -178,6 +186,39 @@ export const useScheduleWorkflow = ({
         publicationReadiness,
       }),
     [hasDistributedPlan, publicationReadiness],
+  );
+  const foundationStage = useMemo(
+    () =>
+      deriveFoundationStage({
+        hasConfiguredAvailabilityWindows,
+        ownAvailabilityComplete: myAvailabilitySaved,
+        availabilityReady,
+        submittedCount: submittedAvailabilityCount,
+        participantCount: availabilityParticipantCount,
+      }),
+    [
+      availabilityParticipantCount,
+      availabilityReady,
+      hasConfiguredAvailabilityWindows,
+      myAvailabilitySaved,
+      submittedAvailabilityCount,
+    ],
+  );
+  const publicationStage = useMemo(
+    () =>
+      derivePublicationStage({
+        isPublished: hasDistributedPlan,
+        readiness: publicationReadiness,
+        currentReviewRequired:
+          (currentParticipant?.proposed_candidate_ids.length ?? 0) > 0,
+        currentReviewComplete: myConflictReviewComplete,
+      }),
+    [
+      currentParticipant?.proposed_candidate_ids.length,
+      hasDistributedPlan,
+      myConflictReviewComplete,
+      publicationReadiness,
+    ],
   );
 
   const steps = useMemo<WorkflowStepDefinition[]>(
@@ -223,7 +264,12 @@ export const useScheduleWorkflow = ({
       return next;
     });
     setActiveSection(key);
-    window.scrollTo({ top: 0, behavior: "smooth" });
+    window.scrollTo({
+      top: 0,
+      behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches
+        ? "auto"
+        : "smooth",
+    });
   };
 
   return {
@@ -239,8 +285,11 @@ export const useScheduleWorkflow = ({
       (currentParticipant?.proposed_candidate_ids.length ?? 0) > 0,
     currentReviewComplete: myConflictReviewComplete,
     publicationReadiness,
+    foundationStage,
+    publicationStage,
     workflowPhase,
     availabilityReady,
+    myAvailabilitySaved,
     proposalConflictCount,
   };
 };

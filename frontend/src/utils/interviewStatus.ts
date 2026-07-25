@@ -1,6 +1,6 @@
 import type { InterviewStatus } from "src/types";
 
-export type InterviewNextAction = "send_invitation" | "send_reminder" | null;
+type InterviewNextAction = "send_invitation" | "send_reminder" | null;
 
 export type InterviewStatusTone = "neutral" | "info" | "success" | "danger";
 
@@ -11,7 +11,7 @@ type InterviewStatusConfig = {
   nextAction: InterviewNextAction;
 };
 
-export const interviewStatusConfig = {
+const interviewStatusConfig = {
   not_invited: {
     label: "Ikke kalt inn",
     sortOrder: 0,
@@ -73,9 +73,6 @@ export const getInterviewStatusTone = (
 export const getInterviewNextAction = (
   status: InterviewStatus,
 ): InterviewNextAction => interviewStatusConfig[status].nextAction;
-
-export const hasInterviewNextAction = (status: InterviewStatus): boolean =>
-  getInterviewNextAction(status) !== null;
 
 export const interviewNextActionLabels = {
   send_invitation: "Send innkalling",

@@ -11,6 +11,7 @@ import { iconSizes } from "src/styles/designTokens";
 export type CompleteCsvData = {
   group: string;
   groupApplicationText: string;
+  priorityText: string;
   appliedWithinDeadline: string;
   createdAt: string;
   updatedAt: string;

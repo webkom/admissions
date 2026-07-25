@@ -142,6 +142,13 @@ export const useSolverSession = ({
     [resetDraftTracking],
   );
 
+  const markDraftRevisionSaved = useCallback((revision: string) => {
+    syncedRevisionRef.current = revision;
+    draftBaseRevisionRef.current = revision;
+    setDraftBaseRevision(revision);
+    setRemoteRevisionChanged(false);
+  }, []);
+
   const markDraftConflict = useCallback(() => {
     setRemoteRevisionChanged(true);
   }, []);
@@ -294,7 +301,7 @@ export const useSolverSession = ({
     }
 
     if (revisionChanged) {
-      solveJob.reset();
+      if (!solveJob.pendingProposal) solveJob.reset();
       if (savedIsCurrent) revealSavedSchedule();
     } else if (!solveJob.result && savedIsCurrent) {
       revealSavedSchedule();
@@ -305,6 +312,7 @@ export const useSolverSession = ({
     resetDraftTracking,
     revealSavedSchedule,
     savedSchedule,
+    solveJob.pendingProposal,
     solveJob.reset,
     solveJob.result,
     solveJob.setPlanRevealed,
@@ -428,7 +436,7 @@ export const useSolverSession = ({
         panel: assignment.panel.map((member) => ({ id: member.id })),
       }));
 
-      const outcome = await solveJob.solve(
+      const completion = await solveJob.solve(
         syntheticInput
           ? {
               admission_slug: admissionSlug,
@@ -469,16 +477,28 @@ export const useSolverSession = ({
           previewOnly,
         },
       );
-      if (outcome === "access-failure") {
+      if (completion?.kind === "access-failure") {
         syncedRevisionRef.current = null;
         resetDraftTracking(null);
         return null;
       }
+      const outcome = completion?.result ?? null;
       if (outcome && !previewOnly) {
         if (syntheticInput) {
           setProposalSolverOptions(runOptions);
           setSolveTick((tick) => tick + 1);
         } else if ((savedSchedule?.schedule.length ?? 0) === 0) {
+          if (
+            completion?.kind === "completed" &&
+            completion.job.applied_at &&
+            completion.job.auto_apply_if_empty
+          ) {
+            setSolverOptions(runOptions);
+            setProposalSolverOptions(runOptions);
+            setPendingProposalSolverOptions(null);
+            setSolveTick((tick) => tick + 1);
+            return outcome;
+          }
           const applied = await solveJob.applyProposal();
           if (!applied) return null;
           const appliedOptions = normalizeSolverOptions(
@@ -603,6 +623,7 @@ export const useSolverSession = ({
     hasLocalDraft: effectiveHasLocalDraft,
     remoteRevisionChanged: effectiveRemoteRevisionChanged,
     markDraftModified,
+    markDraftRevisionSaved,
     markDraftSaved,
     markDraftConflict,
     restoreSavedProposal,

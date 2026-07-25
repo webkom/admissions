@@ -167,7 +167,7 @@ const InterviewerLoadView = ({
           })}
         </div>
         <p className="m-0 mt-2 text-detail text-text-muted">
-          {totalAssignments} tildelinger · {timeDeviationCount} tidsavvik ·{" "}
+          {totalAssignments} tildelinger, {timeDeviationCount} tidsavvik,{" "}
           {restViolationCount} hvilebrudd. Velg en person for å se tidslinje og
           intervjuer.
         </p>

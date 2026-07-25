@@ -246,7 +246,7 @@ export const CustomSelect: React.FC<CustomSelectProps> = ({
           <div
             ref={menuRef}
             style={menuPosition}
-            className="fixed z-modal origin-top-left overflow-y-auto rounded-lg border border-border bg-surface-base shadow-panel animate-fade-in"
+            className="fixed z-[calc(var(--drawer-layer)+1)] origin-top-left overflow-y-auto rounded-lg border border-border bg-surface-base shadow-panel animate-fade-in"
           >
             <ul
               id={listboxId}

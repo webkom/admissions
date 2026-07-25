@@ -67,7 +67,7 @@ const VariablePalette: React.FC<{
       <button
         key={variable.token}
         type="button"
-        title={`${variable.description} · setter inn ${variable.token}`}
+        title={`${variable.description}, setter inn ${variable.token}`}
         onMouseDown={(event) => event.preventDefault()}
         onClick={() => onInsert(variable.token)}
         className="inline-flex min-h-control-sm items-center rounded-full border border-border-soft bg-surface-base px-2.5 py-1 text-detail font-semibold text-text-primary transition-colors hover:border-brand-strongBorder hover:bg-brand-soft hover:text-brand focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-ring"
@@ -198,7 +198,7 @@ const InterviewOutreachTemplateEditor: React.FC<{
               Meldingsmal
             </span>
             <span className="block text-detail text-text-muted">
-              SMS · {persistenceLabel}
+              SMS, {persistenceLabel}
             </span>
           </span>
           <span className="inline-flex items-center gap-1.5 text-detail font-semibold text-brand">
@@ -276,7 +276,7 @@ const InterviewOutreachTemplateEditor: React.FC<{
                   Forhåndsvisning
                 </p>
                 <p className="m-0 text-tiny text-text-muted">
-                  Eksempeldata · Kari Nordkvinne
+                  Eksempeldata, Kari Nordkvinne
                 </p>
               </div>
               <span className="rounded-full bg-surface-subtle px-2 py-1 text-tiny font-semibold text-text-muted">
@@ -297,7 +297,7 @@ const InterviewOutreachTemplateEditor: React.FC<{
                 )}
               >
                 {renderedSmsBody.length} tegn
-                {renderedSmsBody.length > 320 ? " · vurder å forkorte" : ""}
+                {renderedSmsBody.length > 320 ? ", vurder å forkorte" : ""}
               </p>
             </div>
           </section>

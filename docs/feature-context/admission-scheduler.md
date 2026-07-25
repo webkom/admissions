@@ -8,17 +8,47 @@
 
 The likely change boundary depends on the requested behavior: configuration belongs in `schedule_workflow.py` and `AdminScheduleConfig*`; solving belongs in `solve_schedule.py`, `solve_views.py`, `solve_jobs.py`, and the solver UI; publication and row visibility belong in `schedule_validation.py`, `schedule_workflow.py`, `admission_access.py`, and distributed-plan components. The decisive constraints are revision checks, server-side rehydration/canonicalization, omission of unauthorized rows, locked-row preservation, and the difference between an unpublished draft and a published plan.
 
-**Confirmed gaps/risk:** runtime deployment/worker health is not established by repository inspection; ordinary end-to-end runtime behavior was not started. The checkout also contains an explicitly synthetic solver-input path controlled by settings, so local/demo behavior must not be assumed to match production.
+**Evidence boundary:** Local browser, API, worker, and test evidence can establish release-candidate behavior, but it does not prove a deployed worker, production migrations, observability, or rollback. The checkout also contains an explicitly synthetic solver-input path controlled by settings, so local/demo behavior must not be assumed to match production.
+
+## Scheduler design principles
+
+1. **One canonical object.** `SavedSchedule` is the durable interview plan. Solve jobs, proposals, repair, comparison, manual edits, and publication operate around that object rather than creating parallel plans.
+2. **One visible next decision.** Each state should say what the user is seeing, whether there is a real blocker, and the single next action. At most one action is visually primary.
+3. **Temporary tasks around a permanent canvas.** Once a draft exists, keep it visible while generation, repair, comparison, candidate control, or manual editing becomes a focused temporary task.
+4. **Server authority and least disclosure.** The server decides authorization, candidate scope, validity, proposal applicability, and publication readiness. Sensitive rows must be omitted, not merely hidden.
+5. **Provisional is not committed.** Current draft, pending proposal, stale proposal, and published plan are distinct states in both behavior and copy.
+6. **Hard constraints stay hard.** Conflicts, unavailable time, required rules, and unsupported preferences must never be softened into misleading warnings or optimization language.
+7. **Preserve human intent.** Manual locks survive automation; a solve may work around them but never silently override them.
+8. **Progressive disclosure.** Common actions remain immediate. Advanced rules, diagnostics, fine slot editing, and solver explanations stay contextual without becoming inaccessible.
+9. **Quiet success, explicit blockers.** Healthy state is calm. A blocker appears once, names the affected subject and constraint, and offers a safe correction or recovery path.
+10. **Actionable grids.** Scheduling grids emphasize selectable blocks and assignments. Pauses, healthy diagnostics, and passive metadata receive less visual weight.
+11. **Recovery over silent failure.** Stale, failed, destructive, or incomplete operations state what remains authoritative, what did not change, and what the user can do next.
+12. **Accessibility is a component contract.** Keyboard and touch operation, visible focus, semantic names, reduced motion, 200% zoom, and responsive behavior are enforced by shared components and acceptance tests.
+13. **Reuse before abstraction.** Extend a matching local primitive before adding a generic helper or copying behavior.
+14. **Cohesion before line count.** Split files by responsibility and domain boundary, not to satisfy an arbitrary size target.
+15. **Domain facts and presentation state stay separate.** Persist schedule lifecycle, job state, proposal freshness, review, conflict, and save state independently; derive the dominant message and action through selectors.
 
 ## 2. Requested feature or problem
 
-The request was to “write about the admission scheduler”; no implementation requirement or specific defect was supplied.
+The current request is a production-readiness review and implementation pass for
+the complete admission scheduler. It covers functional correctness, privacy and
+authorization, async and stale-response behavior, draft/proposal/publication
+state, recovery, mobile and 200% zoom behavior, keyboard/focus/reduced-motion
+behavior, maintainability, and release evidence.
 
-**Explicit requirement:** Produce a repository-grounded technical context brief for an external model.
+**Explicit requirement:** Inspect the real working tree, repair material issues,
+exercise the backend and browser paths, and state precisely what local evidence
+does and does not prove before push or deployment.
 
-**Implied requirement:** Explain current behavior, interfaces, ownership boundaries, constraints, tests, and likely change surface without implementing anything.
+**Release requirement:** Preserve one canonical saved schedule, keep a valid
+draft visible behind temporary tasks, allow only one dominant next action,
+retain manual locks, enforce sensitive scope on the server, and make failure or
+stale state recoverable without silently accepting an unsafe transition.
 
-**Plausible interpretations:** “Scheduler” could mean the entire interview scheduling workflow, only the OR-Tools solver, only the admin schedule configuration UI, or the published interview-plan UI. This brief covers the full workflow and calls out those boundaries.
+The review treats the scheduler as the full workflow rather than only the
+OR-Tools model: admission access, configuration, availability, conflict review,
+proposal generation, draft persistence and editing, repair, publication,
+disclosure, export, and interview follow-up are all in scope.
 
 **Distinct subsystems not to conflate:** admission creation/application review; interviewer availability; conflict review; solver proposal generation; manual plan editing; publication/name disclosure; interview follow-up status and outreach. Interview status is stored on the admission-wide application and is adjacent to, but not the same as, schedule placement.
 
@@ -50,7 +80,7 @@ admissions/admissions/tests/test_*schedule*   API, solver, worker, privacy cover
 
 ### Actors and entry
 
-Admission administrators are active members of an admission’s `admin_groups`. Recruiters are active `leader`/`recruiting` members of participating groups. Ordinary active committee members can submit their own availability and, after publication and disclosure, see authorized interviews. Only administrators can configure, solve, inspect solve jobs, edit the complete schedule, publish/unpublish, or export admission-wide scheduling data.
+Admission administrators are active `leader` or `recruiting` members of an admission’s `admin_groups`. Recruiters are active `leader`/`recruiting` members of participating groups. Ordinary active committee members can submit their own availability and, after publication and disclosure, see authorized interviews. Only administrators can configure, solve, inspect solve jobs, edit the complete schedule, publish/unpublish, or export admission-wide scheduling data.
 
 The frontend route is `/:admissionSlug/schedule`; the backend schedule endpoint is `/admin/admission/<admission_slug>/schedule/`. The workflow stepper is role-sensitive: members see availability and plan surfaces; administrators also see configuration, coverage, solver, and publication controls.
 
@@ -131,7 +161,7 @@ sequenceDiagram
 | `frontend/src/components/Scheduling/Calendar/AdminScheduleConfig.tsx` | admin config | UI | Date/grid/block configuration. |
 | `frontend/src/components/Scheduling/Solver/SolverSetupPanel.tsx` | solve setup | UI | Options, rerun, lock continuity, repair entry. |
 | `frontend/src/components/Scheduling/Solver/SolverResults.tsx` | proposal views | UI | List/calendar/person results and partial/error states. |
-| `frontend/src/routes/SchedulePage/ScheduleInterviewWorkflow.tsx` | published plan | UI | Plan actions, outreach and interview follow-up. |
+| `frontend/src/routes/SchedulePage/DistributedPlanView.tsx` | published plan | UI | Scoped plan projections, disclosure, export, outreach and unlock flow. |
 | `frontend/src/routes/SchedulePage/useDistributedPlanActions.ts` | plan mutations | UI/API bridge | Publish, edit, visibility, export and row operations. |
 | `cypress/e2e/interview_plan_workflow_spec.cy.ts` | workflow specs | Acceptance | Confirms visible step separation, coverage and publication controls. |
 | `admissions/admissions/tests/test_schedule_api_hardening.py` | schedule hardening tests | Backend regression | Revision, publication, conflict review and canonicalization behavior. |
@@ -164,7 +194,7 @@ Authority is split deliberately: the browser proposes IDs/names and draft rows; 
 
 ### Saved schedule
 
-`GET /admin/admission/<slug>/schedule/` returns the scoped `SavedSchedule` or `404`; authenticated admission participants may read an authorized projection. `POST` accepts schedule/config fields plus required `expected_updated_at` (null only for first create). Administrators may mutate the full schedule/config; recruiters may use the narrow group name-visibility mutation. Responses include revision metadata, distribution, conflict-review and visibility state, and only authorized rows. Errors include `400` validation, `403` permission, `404` absent schedule/admission, and `409` stale revision.
+`GET /admin/admission/<slug>/schedule/` returns the scoped `SavedSchedule` or `404`; authenticated admission participants may read an authorized projection. `POST` accepts schedule/config fields plus required `expected_updated_at` (null only for first create). Only admission administrators may mutate schedule configuration, rows, publication, or candidate-name visibility; recruiters and committee members receive their server-scoped read projection. Responses include revision metadata, distribution, conflict-review and visibility state, and only authorized rows. Errors include `400` validation, `403` permission, `404` absent schedule/admission, and `409` stale revision.
 
 ### Availability and review
 
@@ -202,18 +232,70 @@ The distributed plan table/calendar and export helpers are the analogous read-sc
 
 ## 11. Testing and validation
 
-Relevant repository coverage includes:
+The release-hardening working tree has outcome coverage across:
 
 - `admissions/admissions/tests/test_schedule_api_hardening.py`: stale revision conflicts, publication/unpublication, empty/incomplete plans, conflict-review readiness, canonicalized names/IDs, gender/panel constraints, and privacy-sensitive schedule behavior.
 - `admissions/admissions/tests/test_api.py`: solve endpoint/job behavior and locked assignment preservation/conflicts.
-- `admissions/admissions/tests/test_solver_quality.py`: solver quality/objective and constraint behavior.
-- `admissions/admissions/tests/test_worker_resilience.py`: worker failure/cancellation resilience.
-- `cypress/e2e/interview_plan_workflow_spec.cy.ts`: workflow navigation, outreach, coverage, publication controls, and separation of proposal vs published-plan editing.
-- `cypress/e2e/admin_schedule_config_model_spec.cy.ts`, `admin_schedule_config_toggle_spec.cy.ts`, and `availability_coverage_model_spec.cy.ts`: frontend configuration and coverage model behavior.
+- `admissions/admissions/tests/test_solver_quality.py` and `test_solver_v2.py`: constraint outcomes, v1/v2 validity and proved-optimum semantic comparison, repair locality, permutations, and size/performance behavior.
+- `admissions/admissions/tests/test_worker_resilience.py`: cancellation, stale-job recovery, failures, delayed worker results, and authority/baseline guards.
+- `admissions/admissions/tests/test_cypress_fixtures.py`: fail-closed fixture enablement, real CSRF login, idempotent seeding, rollback, and administrator verification.
+- `cypress/e2e/interview_plan_workflow_spec.cy.ts`, `workflow_steps_model_spec.cy.ts`, and `solver_setup_panel_spec.cy.ts`: workflow stages, readiness, generation/regeneration, progress, blockers, outreach, and publication separation.
+- `cypress/e2e/solver_async_race_spec.cy.tsx`,
+  `planutkast_drawers_spec.cy.tsx`, and
+  `distributed_plan_transition_spec.cy.tsx`: duplicate/late/unmounted async
+  work, worker-promoted first-draft reconciliation, apply-time proposal
+  conflicts, queue-drained autosave before publication, intermediate-save
+  failure, edit/undo/redo coalescing, revision-scoped fingerprinting,
+  compensating writes after uncertain failures, stale proposal comparison,
+  lost-response reconciliation, focused temporary tasks, and focus
+  restoration.
+- `cypress/e2e/selectable_schedule_grid_spec.cy.tsx`: native table headers,
+  one roving tab stop, row/column navigation, blocked-cell skipping,
+  date-bearing admin control names, assistive-technology click activation,
+  pointer drag/re-entry, secondary/Control-click rejection, touch pan/tap
+  disambiguation, inline opt-out focus on success, cancellation, and failure,
+  and stable block/pause editing.
+- `cypress/e2e/sensitive_access_model_spec.cy.ts` and `scheduler_release_acceptance_spec.cy.ts`: authority epochs, server-confirmed logout ordering, same-page role recovery, fail-closed scope, recruiter disclosure, keyboard focus, reduced motion, responsive layouts, and release screenshots.
 
-Missing or uncertain coverage: full production-shaped browser flow against a real worker/database; runtime authorization with live LEGO membership refresh; queue crash/restart recovery across processes; large-admission performance; all export privacy combinations; and durable publication rollback.
+Release validation on 2026-07-24:
 
-Commands run for this investigation: repository/file inspection with `rg`, `find`, `git status`, `git log`, and `nl`; `git diff --check -- docs/feature-context/admission-scheduler.md` passed; `python manage.py check` was blocked because Django is not installed in the active environment; `yarn types` ran but failed with type errors in `frontend/src/components/Scheduling/Solver/repairScenarios.ts:151,155` and `frontend/src/components/Scheduling/Solver/SolverView.tsx:283`. No application was started. Recommended focused commands, subject to local dependency/database setup: `python manage.py test admissions.admissions.tests.test_schedule_api_hardening admissions.admissions.tests.test_solver_quality admissions.admissions.tests.test_worker_resilience` and the relevant Cypress specs.
+- `DATABASE_PORT=5433 poetry run python manage.py test admissions --keepdb -v 1` — 401 tests passed in 135.497 seconds; no system-check issues.
+- `poetry run flake8 admissions` — passed.
+- `poetry run black --check admissions` — 100 files unchanged.
+- `DATABASE_PORT=5433 poetry run python manage.py makemigrations --check --dry-run` — no changes detected.
+- `poetry run tox -e isort` — isort, flake8, and Black checks passed.
+- `yarn cypress:run --browser electron` — 25/25 specs and 210/210 tests passed
+  in 01:57; no failed, pending, or skipped tests.
+- Focused reruns passed for proposal apply (9/9), autosave/publication
+  transitions (11/11), async races (12/12), selectable-grid accessibility,
+  focus, and gesture behavior (26/26), sensitive access (8/8),
+  landing/logout (4/4), solver setup (18/18), and interview workflow (7/7).
+- `yarn types`, `yarn lint`, `yarn knip`, `yarn build`, and `git diff --check` passed on the final code snapshot; the documentation-only evidence update was followed by another diff check.
+- Cypress allows 15 seconds for a lazy authenticated route to emit its first
+  intercepted request; response and assertion behavior retain their existing
+  limits. This removes a reproduced cold-route harness flake without masking
+  slow or incorrect responses.
+- Sixteen browser screenshots cover foundation fine-tuning, first solve and
+  regeneration settings, manual draft editing, candidate review, repair
+  preview, stale-proposal comparison, publication readiness, the published
+  workflow at 390, 768, and 1280 pixels, a 200-percent CDP page-scale check,
+  and four standard-block/pause configurations. The final set is archived at
+  `/Users/viljen/.codex/visualizations/2026/07/23/019f90eb-7cbd-7852-bbf5-8bbef8afa20f/admissions-scheduler-release-evidence-final-2026-07-24`.
+
+The first full backend run exposed a resource-sensitive differential assertion:
+a one-second v2 feasible incumbent was compared with a v1 optimum as though both
+were proved optima. Direct seed-109 reproduction was optimal and stable across
+30 runs. The test now preserves unconditional validity, placement, and reason
+parity, gives the tiny cases a five-second ceiling, and compares objective keys
+only when v2 explicitly reports `optimal=true`; the focused and full backend
+suites then passed.
+
+Still outside local proof: a deployed production worker and queue restart,
+production migration/rollback execution, live LEGO membership revocation
+without a subsequent request, native assistive-technology traversal, native
+browser zoom rather than the automated page-scale/responsive proxies, and
+production-scale latency/observability. These are deployment or manual
+acceptance boundaries, not claims made by the local suite.
 
 ## 12. Performance, security, and operational considerations
 
@@ -223,7 +305,14 @@ Revision checks protect schedule writes and baseline checks protect repair solve
 
 Authorization is high risk: candidate identity, time, panel, row count, exports, conflict data, and disclosure state are sensitive. Backend scope filtering is mandatory; frontend hiding is not authorization. Session cache invalidation code also blocks sensitive delayed writes after access failures.
 
-Accessibility/responsive risk is concentrated in dense calendar/table/panel controls and mobile workflow navigation. Cypress currently checks visible labels and workflow separation but does not prove keyboard/screen-reader quality. Migration risk is material because the branch adds schedule/disclosure/conflict/status migrations and changes JSON contracts.
+Accessibility and responsive behavior are enforced at the shared scheduling
+primitives and focused task boundaries: semantic grids/tables, roving focus,
+menu navigation, modal trapping, opener restoration, live saving/solver/error
+announcements, colour-independent copy, reduced motion, touch targets, and
+390/768/1280 layouts have automated outcome coverage. Those checks establish
+DOM semantics and keyboard behavior, but not the quality of a complete
+VoiceOver/NVDA traversal. Migration risk remains material because the branch
+adds schedule/disclosure/conflict/status migrations and changes JSON contracts.
 
 ## 13. Likely change surface
 
@@ -249,15 +338,23 @@ Stable contracts to preserve are one `SavedSchedule` per admission, revision-awa
 
 ### Blocking
 
-- Is the intended subject the whole workflow, the CP-SAT solver, configuration, or publication? The implementation surface and acceptance tests differ substantially.
-- Is the current uncommitted `distribute-interviews` working tree the intended baseline, or should the brief compare against `master`? The active behavior differs materially.
-- Must published schedules be editable in place, or should each change create a reviewable release? This determines whether `SavedSchedule` remains sufficient.
+- Before deployment, verify that every active admission has at least one
+  `leader` or `recruiting` member in an explicitly selected admin group. The
+  release deliberately no longer grants admission-wide authority to an
+  ordinary admin-group member.
+- Exercise the production migration, mixed web/worker version window, worker
+  restart, observability, and rollback procedure in the target environment.
+- Perform a native screen-reader and browser-zoom smoke pass over the critical
+  administrator and interviewer journeys. Automated semantics, keyboard,
+  page-scale, and responsive checks do not substitute for that manual evidence.
 
 ### Important
 
-- What worker deployment, retry, timeout, and stale-`RUNNING` recovery guarantees are required? Repository code cannot prove operational behavior.
+- What worker deployment, retry, timeout, and stale-`RUNNING` recovery service-level guarantees are required? Repository code cannot prove operational ownership.
 - What are the target admission sizes and acceptable solve latency? This determines whether the current CP-SAT model and JSON persistence are sufficient.
-- Should conflict review be mandatory for every proposal, and who owns completion? Current code gates publication but the product policy is not explicit in the request.
+- Should a published schedule eventually become an immutable release with
+  explicit revision history, or is unlock-edit-republish the intended durable
+  policy?
 - Should outreach templates be shared and audited, or remain browser-local drafts?
 
 ### Optional
@@ -268,12 +365,20 @@ Stable contracts to preserve are one `SavedSchedule` per admission, revision-awa
 
 ## 16. Recommended next investigation steps
 
-1. Confirm the target baseline by comparing the active worktree with `master` and identifying which uncommitted scheduler files are intended product scope.
-2. Run the focused Django, TypeScript, and Cypress commands in an environment with the required database and worker dependencies.
-3. Exercise a real admission through configure → availability → solve → partial result → edit/lock → conflict review → publish → scoped committee view.
-4. Inspect worker logs and measure solve latency/memory across representative candidate/interviewer/slot sizes.
-5. Ask product owners to decide publication mutability, conflict-review ownership, and whether repair scenarios need durable history.
-6. Verify export payloads and disclosure transitions for admin, recruiter, ordinary member, removed group, and re-added group cases.
+1. Review and intentionally commit the dirty working-tree scope; then run the
+   same backend, Cypress, and static gates in CI.
+2. Audit real admin-group role data before deploying the narrowed authority
+   policy.
+3. Stage the migration and a mixed-version web/worker rollout; prove claim,
+   cancellation, stale-job recovery, logs, metrics, and rollback.
+4. Exercise a production-shaped admission through configure → availability →
+   solve → partial result → edit/lock → conflict review → publish → scoped
+   committee view, including native zoom and assistive technology.
+5. Measure solve latency and memory across representative
+   candidate/interviewer/slot sizes before changing the v2 rollout flag.
+6. Decide whether publication needs immutable release history or whether the
+   current revision-checked unlock-edit-republish lifecycle is the product
+   contract.
 
 ## 17. Evidence appendix
 

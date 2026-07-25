@@ -3,6 +3,7 @@ import { Form, Field, FormikValues } from "formik";
 import FormatTime from "src/components/Time/FormatTime";
 import { Info } from "lucide-react";
 import PhoneNumberField from "./PhoneNumberField";
+import PriorityTextField from "./PriorityTextField";
 import ToggleGroups from "./ToggleGroups";
 import ErrorFocus from "./ErrorFocus";
 import { useMyApplication } from "src/query/hooks";
@@ -136,6 +137,17 @@ const FormStructure: React.FC<FormStructureProps> = ({
             Mobilnummeret vil bli brukt til å kalle deg inn på intervju.
           </HelpText>
           <Field name="phoneNumber" component={PhoneNumberField} />
+          {!isSingleGroupAdmission && (
+            <>
+              <HelpText>
+                <Info aria-hidden="true" />
+                Skriv gjerne rekkefølgen på komiteene du foretrekker. Feltet kan
+                bare ses av deg og sentrale opptaksansvarlige, ikke av de
+                enkelte komiteene.
+              </HelpText>
+              <Field name="priorityText" component={PriorityTextField} />
+            </>
+          )}
         </GeneralInfoSection>
         <SeparatorLine />
         <GroupsSection $isSingleGroupAdmission={isSingleGroupAdmission}>

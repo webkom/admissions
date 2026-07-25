@@ -134,6 +134,7 @@ class AdmissionListPublicSerializer(serializers.HyperlinkedModelSerializer):
 
     def get_userdata(self, obj):
         res = {
+            "actor_id": None,
             "has_application": False,
             "is_privileged": False,
             "is_admin": False,
@@ -143,8 +144,13 @@ class AdmissionListPublicSerializer(serializers.HyperlinkedModelSerializer):
             "represented_groups": [],
         }
         request = self.context.get("request")
-        if not request or not hasattr(request, "user"):
+        if (
+            not request
+            or not hasattr(request, "user")
+            or not request.user.is_authenticated
+        ):
             return res
+        res["actor_id"] = str(request.user.pk)
         res["has_application"] = UserApplication.objects.filter(
             user=request.user.pk, admission=obj.pk
         ).exists()
@@ -364,13 +370,19 @@ class AdminAdmissionSerializer(serializers.ModelSerializer):
 
     def get_userdata(self, obj):
         res = {
+            "actor_id": None,
             "has_application": False,
             "is_privileged": False,
             "is_admin": False,
         }
         request = self.context.get("request")
-        if not request or not hasattr(request, "user"):
+        if (
+            not request
+            or not hasattr(request, "user")
+            or not request.user.is_authenticated
+        ):
             return res
+        res["actor_id"] = str(request.user.pk)
         res["has_application"] = UserApplication.objects.filter(
             user=request.user.pk, admission=obj.pk
         ).exists()
@@ -426,11 +438,24 @@ class ShortUserSerializer(serializers.HyperlinkedModelSerializer):
 
 class UserApplicationSerializer(serializers.ModelSerializer):
     group_applications = serializers.SerializerMethodField()
+    priority_text = serializers.CharField(source="text", read_only=True)
     user = ShortUserSerializer()
 
     def get_group_applications(self, obj):
         qs = getattr(obj, "group_applications_filtered", obj.group_applications)
         return ShortGroupApplicationSerializer(qs, many=True).data
+
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        request = self.context.get("request")
+        is_owner = bool(
+            request
+            and request.user.is_authenticated
+            and request.user.pk == instance.user_id
+        )
+        if not is_owner and not self.context.get("include_priority_text", False):
+            data.pop("priority_text", None)
+        return data
 
     class Meta:
         model = UserApplication
@@ -441,6 +466,7 @@ class UserApplicationSerializer(serializers.ModelSerializer):
             "updated_at",
             "applied_within_deadline",
             "phone_number",
+            "priority_text",
             "group_applications",
         )
 
@@ -522,6 +548,13 @@ class ApplicationCreateUpdateSerializer(serializers.HyperlinkedModelSerializer):
     group_answers = serializers.DictField(
         child=serializers.JSONField(), required=False, default=dict, write_only=True
     )
+    priority_text = serializers.CharField(
+        source="text",
+        required=False,
+        allow_blank=True,
+        max_length=5000,
+        write_only=True,
+    )
 
     def to_internal_value(self, data):
         legacy_fields = set(data.keys()).intersection(self.legacy_general_fields)
@@ -540,6 +573,7 @@ class ApplicationCreateUpdateSerializer(serializers.HyperlinkedModelSerializer):
         fields = (
             "pk",
             "phone_number",
+            "priority_text",
             "applications",
             "group_answers",
         )
@@ -627,6 +661,7 @@ class ApplicationCreateUpdateSerializer(serializers.HyperlinkedModelSerializer):
     def create(self, validated_data):
         user = validated_data.pop("user")
         phone_number = validated_data.pop("phone_number")
+        priority_text = validated_data.pop("text", "")
 
         admission_slug = validated_data.pop("admission_slug")
         applications = validated_data.pop("applications")
@@ -656,6 +691,7 @@ class ApplicationCreateUpdateSerializer(serializers.HyperlinkedModelSerializer):
                 user=user,
                 defaults={
                     "phone_number": phone_number,
+                    "text": priority_text,
                 },
             )
 
@@ -797,6 +833,10 @@ class SavedScheduleSerializer(serializers.ModelSerializer):
             "solver_options",
             "is_distributed",
             "conflict_review_open",
+            "conflict_collection_open",
+            "conflict_collection_revision",
+            "conflict_collection_candidate_ids",
+            "conflict_collection_participant_ids",
             "name_visibility",
             "updated_at",
         ]
@@ -813,11 +853,10 @@ class SavedScheduleSerializer(serializers.ModelSerializer):
         if self.context.get("hide_schedule"):
             data["schedule"] = []
             return data
-        hide_candidate_identity = self.context.get("hide_candidate_identity")
-        visible_candidate_ids = self.context.get("visible_candidate_ids")
-        if hide_candidate_identity:
+        if self.context.get("hide_candidate_identity"):
             data["schedule"] = []
             return data
+        visible_candidate_ids = self.context.get("visible_candidate_ids")
 
         raw_schedule = data.get("schedule")
         if not isinstance(raw_schedule, list):
@@ -846,7 +885,7 @@ class SavedScheduleSerializer(serializers.ModelSerializer):
             for panel_id in [canonical_uuid(member.get("id"))]
             if panel_id is not None
         }
-        include_candidate_contact = self.context.get("include_candidate_contact", False)
+        contact_candidate_ids = self.context.get("contact_candidate_ids", set())
         date_time_field = serializers.DateTimeField()
         authorized_candidate_ids = (
             candidate_ids
@@ -857,7 +896,10 @@ class SavedScheduleSerializer(serializers.ModelSerializer):
             str(application.pk): {
                 "name": application.user.get_full_name() or application.user.username,
                 "phone": (
-                    application.phone_number if include_candidate_contact else None
+                    application.phone_number
+                    if contact_candidate_ids is None
+                    or str(application.pk) in contact_candidate_ids
+                    else None
                 ),
                 "interview_status": application.interview_status,
                 "interview_status_updated_at": date_time_field.to_representation(
@@ -889,11 +931,6 @@ class SavedScheduleSerializer(serializers.ModelSerializer):
                 continue
             candidate_id = canonical_uuid(item.validated_data.get("candidate_id"))
             if candidate_id not in candidate_details:
-                continue
-            if (
-                visible_candidate_ids is not None
-                and candidate_id not in visible_candidate_ids
-            ):
                 continue
 
             safe_entry = dict(item.validated_data)
@@ -1189,6 +1226,7 @@ class SaveScheduleInputSerializer(serializers.Serializer):
     )
     is_distributed = serializers.BooleanField(required=False)
     conflict_review_open = serializers.BooleanField(required=False)
+    conflict_collection_open = serializers.BooleanField(required=False)
     name_visibility = serializers.ChoiceField(
         choices=["hidden", "admin_only", "committee"],
         required=False,
@@ -1413,12 +1451,23 @@ class SaveInterviewAvailabilitySerializer(serializers.Serializer):
     reviewed_candidate_ids = serializers.ListField(
         child=serializers.CharField(), required=False, max_length=500
     )
+    conflict_collection_reviewed_candidate_ids = serializers.ListField(
+        child=serializers.CharField(),
+        required=False,
+        max_length=500,
+    )
+    conflict_collection_revision = serializers.UUIDField(required=False)
     expected_availability_generation = serializers.IntegerField(
         min_value=1, required=False
     )
 
     def validate(self, attrs):
-        for field in ("slots", "conflicts", "reviewed_candidate_ids"):
+        for field in (
+            "slots",
+            "conflicts",
+            "reviewed_candidate_ids",
+            "conflict_collection_reviewed_candidate_ids",
+        ):
             values = attrs.get(field)
             if values is not None and len(values) != len(set(values)):
                 raise serializers.ValidationError({field: ["Verdiene må være unike."]})
@@ -1449,6 +1498,15 @@ class InterviewAvailabilityParticipantSerializer(serializers.Serializer):
     proposed_candidate_ids = serializers.ListField(
         child=serializers.CharField(), default=list
     )
+    conflict_collection_candidate_ids = serializers.ListField(
+        child=serializers.CharField(),
+        default=list,
+    )
+    conflict_collection_revision = serializers.UUIDField(
+        allow_null=True,
+        default=None,
+    )
+    conflict_collection_complete = serializers.BooleanField(default=False)
     conflict_review_complete = serializers.BooleanField(default=False)
     has_submitted = serializers.BooleanField()
     participation = serializers.ChoiceField(

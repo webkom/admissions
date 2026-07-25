@@ -1,14 +1,15 @@
 import React from "react";
-import { Check, Minus } from "lucide-react";
-import cn from "src/utils/cn";
-import { iconSizes, iconStrokeWidths } from "src/styles/designTokens";
 import { makeSlotKey } from "../scheduleUtils";
-import { ScheduleBlockCell, ScheduleSlotSegments } from "./ScheduleGridFrame";
+import { ScheduleSelectableBlockCell } from "./ScheduleGridFrame";
 import ScheduleCalendarGrid from "./ScheduleCalendarGrid";
+import {
+  isScheduleGridToggleKey,
+  useScheduleGridDragToggle,
+  type ScheduleGridToggleMode,
+} from "./useScheduleGridDragToggle";
 
-type UnselectedPresentation = "available" | "closed";
-
-export interface SelectableScheduleGridLabels {
+interface SelectableScheduleGridLabels {
+  grid: string;
   cell: (input: {
     date: string;
     startMinute: number;
@@ -25,13 +26,10 @@ interface SelectableScheduleGridProps {
   activeSlots: ReadonlySet<string>;
   onChangeActiveSlots: (slots: Set<string>) => void;
   labels: SelectableScheduleGridLabels;
-  unselectedPresentation: UnselectedPresentation;
   renderDayHeader?: (date: string) => React.ReactNode;
   emptyState?: React.ReactNode;
   className?: string;
 }
-
-type ToggleMode = "add" | "remove";
 
 /**
  * Controlled interaction and rendering core shared by personal availability
@@ -45,14 +43,12 @@ const SelectableScheduleGrid: React.FC<SelectableScheduleGridProps> = ({
   activeSlots,
   onChangeActiveSlots,
   labels,
-  unselectedPresentation,
   renderDayHeader,
   emptyState,
   className,
 }) => {
-  const isDraggingRef = React.useRef(false);
-  const dragModeRef = React.useRef<ToggleMode>("add");
   const activeSlotsRef = React.useRef(activeSlots);
+  const cellRefs = React.useRef(new Map<string, HTMLDivElement>());
 
   React.useEffect(() => {
     activeSlotsRef.current = activeSlots;
@@ -70,8 +66,30 @@ const SelectableScheduleGrid: React.FC<SelectableScheduleGridProps> = ({
     [isSlotSelectable],
   );
 
+  const selectableCellKeys = React.useMemo(
+    () =>
+      chunks.flatMap((chunk, chunkIndex) =>
+        dates
+          .filter((date) => selectableMinutes(date, chunk).length > 0)
+          .map((date) => `${date}::${chunkIndex}`),
+      ),
+    [chunks, dates, selectableMinutes],
+  );
+  const [activeCellKey, setActiveCellKey] = React.useState(
+    () => selectableCellKeys[0] ?? "",
+  );
+  const rovingCellKey = selectableCellKeys.includes(activeCellKey)
+    ? activeCellKey
+    : (selectableCellKeys[0] ?? "");
+
+  React.useEffect(() => {
+    if (activeCellKey !== rovingCellKey) {
+      setActiveCellKey(rovingCellKey);
+    }
+  }, [activeCellKey, rovingCellKey]);
+
   const applyToggle = React.useCallback(
-    (date: string, chunk: number[], mode: ToggleMode) => {
+    (date: string, chunk: number[], mode: ScheduleGridToggleMode) => {
       const minutes = selectableMinutes(date, chunk);
       if (minutes.length === 0) return;
 
@@ -88,7 +106,7 @@ const SelectableScheduleGrid: React.FC<SelectableScheduleGridProps> = ({
   );
 
   const blockToggleMode = React.useCallback(
-    (date: string, chunk: number[]): ToggleMode =>
+    (date: string, chunk: number[]): ScheduleGridToggleMode =>
       selectableMinutes(date, chunk).some((minute) =>
         activeSlotsRef.current.has(makeSlotKey(date, minute)),
       )
@@ -97,55 +115,90 @@ const SelectableScheduleGrid: React.FC<SelectableScheduleGridProps> = ({
     [selectableMinutes],
   );
 
-  const handlePointerDown = (
-    event: React.PointerEvent<HTMLDivElement>,
-    date: string,
-    chunk: number[],
-  ) => {
-    if (selectableMinutes(date, chunk).length === 0) return;
+  const { onPointerDown, onPointerEnter } = useScheduleGridDragToggle({
+    getMode: ({ date, chunk }: { date: string; chunk: number[] }) =>
+      blockToggleMode(date, chunk),
+    apply: ({ date, chunk }, mode) => applyToggle(date, chunk, mode),
+  });
 
-    // Touch pointers capture implicitly. Releasing lets the cells under a
-    // moving finger receive pointerenter while the drag continues.
-    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
-      event.currentTarget.releasePointerCapture(event.pointerId);
-    }
+  const focusCell = React.useCallback((cellKey: string) => {
+    setActiveCellKey(cellKey);
+    cellRefs.current.get(cellKey)?.focus();
+  }, []);
 
-    const nextMode = blockToggleMode(date, chunk);
-    dragModeRef.current = nextMode;
-    isDraggingRef.current = true;
-    applyToggle(date, chunk, nextMode);
-  };
+  const findNavigationTarget = React.useCallback(
+    (key: string, date: string, chunkIndex: number): string | undefined => {
+      const currentDateIndex = dates.indexOf(date);
+      const rowKeys = dates
+        .map((candidateDate) => `${candidateDate}::${chunkIndex}`)
+        .filter((candidateKey) => selectableCellKeys.includes(candidateKey));
 
-  const handlePointerEnter = (date: string, chunk: number[]) => {
-    if (isDraggingRef.current) applyToggle(date, chunk, dragModeRef.current);
-  };
+      if (key === "Home") {
+        return rowKeys[0];
+      }
+      if (key === "End") {
+        return rowKeys[rowKeys.length - 1];
+      }
+      if (key === "ArrowLeft" || key === "ArrowRight") {
+        const currentRowIndex = rowKeys.indexOf(`${date}::${chunkIndex}`);
+        const offset = key === "ArrowLeft" ? -1 : 1;
+        return rowKeys[currentRowIndex + offset];
+      }
+      if (key === "ArrowUp" || key === "ArrowDown") {
+        const offset = key === "ArrowUp" ? -1 : 1;
+        for (
+          let nextChunkIndex = chunkIndex + offset;
+          nextChunkIndex >= 0 && nextChunkIndex < chunks.length;
+          nextChunkIndex += offset
+        ) {
+          const sameColumnKey = `${dates[currentDateIndex]}::${nextChunkIndex}`;
+          if (selectableCellKeys.includes(sameColumnKey)) {
+            return sameColumnKey;
+          }
+        }
+      }
+      return undefined;
+    },
+    [chunks.length, dates, selectableCellKeys],
+  );
 
   const handleCellKeyDown = (
     event: React.KeyboardEvent<HTMLDivElement>,
     date: string,
     chunk: number[],
+    chunkIndex: number,
   ) => {
-    if (event.key !== "Enter" && event.key !== " ") return;
+    if (
+      [
+        "ArrowLeft",
+        "ArrowRight",
+        "ArrowUp",
+        "ArrowDown",
+        "Home",
+        "End",
+      ].includes(event.key)
+    ) {
+      const target =
+        (event.ctrlKey || event.metaKey) && event.key === "Home"
+          ? selectableCellKeys[0]
+          : (event.ctrlKey || event.metaKey) && event.key === "End"
+            ? selectableCellKeys[selectableCellKeys.length - 1]
+            : findNavigationTarget(event.key, date, chunkIndex);
+      if (target) {
+        event.preventDefault();
+        focusCell(target);
+      }
+      return;
+    }
+    if (!isScheduleGridToggleKey(event.key)) return;
     event.preventDefault();
     if (selectableMinutes(date, chunk).length === 0) return;
     applyToggle(date, chunk, blockToggleMode(date, chunk));
   };
 
-  const finishDrag = React.useCallback(() => {
-    isDraggingRef.current = false;
-  }, []);
-
-  React.useEffect(() => {
-    window.addEventListener("pointerup", finishDrag);
-    window.addEventListener("pointercancel", finishDrag);
-    return () => {
-      window.removeEventListener("pointerup", finishDrag);
-      window.removeEventListener("pointercancel", finishDrag);
-    };
-  }, [finishDrag]);
-
   return (
     <ScheduleCalendarGrid
+      ariaLabel={labels.grid}
       dates={dates}
       chunks={chunks}
       sessionDuration={sessionDuration}
@@ -161,9 +214,7 @@ const SelectableScheduleGrid: React.FC<SelectableScheduleGridProps> = ({
         const isActive =
           isSelectable && activeCount === availableMinutes.length;
         const isPartial = activeCount > 0 && !isActive;
-        const isVisuallyClosed =
-          !isSelectable ||
-          (unselectedPresentation === "closed" && !isActive && !isPartial);
+        const cellKey = `${date}::${chunkIndex}`;
         const cellLabel = labels.cell({
           date,
           startMinute: chunk[0],
@@ -171,10 +222,23 @@ const SelectableScheduleGrid: React.FC<SelectableScheduleGridProps> = ({
         });
 
         return (
-          <ScheduleBlockCell
+          <ScheduleSelectableBlockCell
             key={`${date}-${chunkIndex}`}
+            ref={(element) => {
+              if (element) cellRefs.current.set(cellKey, element);
+              else cellRefs.current.delete(cellKey);
+            }}
+            activeCount={activeCount}
+            totalCount={availableMinutes.length}
+            selectable={isSelectable}
+            fills={chunk.map((minute) =>
+              isSlotSelectable(date, minute) &&
+              activeSlots.has(makeSlotKey(date, minute))
+                ? 1
+                : 0,
+            )}
             role="button"
-            tabIndex={isSelectable ? 0 : -1}
+            tabIndex={isSelectable && cellKey === rovingCellKey ? 0 : -1}
             aria-pressed={isPartial ? "mixed" : isActive}
             aria-disabled={!isSelectable}
             aria-label={
@@ -182,62 +246,24 @@ const SelectableScheduleGrid: React.FC<SelectableScheduleGridProps> = ({
                 ? `${cellLabel}, ${activeCount} av ${availableMinutes.length}`
                 : labels.unavailableCell
             }
-            onPointerDown={(event) => handlePointerDown(event, date, chunk)}
-            onPointerEnter={() => handlePointerEnter(date, chunk)}
-            onKeyDown={(event) => handleCellKeyDown(event, date, chunk)}
-            className={cn(
-              "transition-[background-color,border-color,box-shadow,color] duration-200 ease-out motion-reduce:transition-none",
-              isSelectable ? "cursor-pointer" : "cursor-default",
-              (isActive || isPartial) &&
-                "border-brand-activeBorder bg-brand-tint text-brand ring-1 ring-inset ring-brand-border hover:bg-brand-fill",
-              isSelectable &&
-                !isActive &&
-                unselectedPresentation === "available" &&
-                "border-border bg-surface-base hover:border-brand-strongBorder hover:bg-brand-soft",
-              isVisuallyClosed &&
-                "border-border-soft bg-surface-neutral text-text-disabled",
-              isSelectable && isVisuallyClosed && "hover:border-brand-border",
-            )}
-          >
-            <span
-              aria-hidden="true"
-              className={cn(
-                "pointer-events-none absolute inset-0 transition-[opacity,background-position] duration-300 ease-out motion-reduce:transition-none",
-                "[background-image:var(--pattern-unavailable)]",
-                isVisuallyClosed
-                  ? "opacity-70 [background-position:0_0] group-hover:opacity-100"
-                  : "opacity-0 [background-position:8px_8px]",
-              )}
-            />
-            <ScheduleSlotSegments
-              className="relative z-10 h-schedule-progress"
-              closed={isVisuallyClosed}
-              fills={chunk.map((minute) =>
-                isSlotSelectable(date, minute) &&
-                activeSlots.has(makeSlotKey(date, minute))
-                  ? 1
-                  : 0,
-              )}
-            />
-            {isPartial ? (
-              <Minus
-                size={iconSizes.compact}
-                strokeWidth={iconStrokeWidths.strong}
-                aria-hidden="true"
-                className="relative z-10 text-brand-dark"
-              />
-            ) : (
-              <Check
-                size={iconSizes.compact}
-                strokeWidth={iconStrokeWidths.strong}
-                aria-hidden="true"
-                className={cn(
-                  "relative z-10 text-brand-dark transition-[opacity,transform] duration-200 ease-out motion-reduce:transition-none",
-                  isActive ? "scale-100 opacity-100" : "scale-75 opacity-0",
-                )}
-              />
-            )}
-          </ScheduleBlockCell>
+            onPointerDown={(event) => {
+              if (isSelectable) onPointerDown(event, { date, chunk });
+            }}
+            onPointerEnter={() => {
+              if (isSelectable) onPointerEnter({ date, chunk });
+            }}
+            onClick={(event) => {
+              if (event.detail === 0 && isSelectable) {
+                applyToggle(date, chunk, blockToggleMode(date, chunk));
+              }
+            }}
+            onFocus={() => {
+              if (isSelectable) setActiveCellKey(cellKey);
+            }}
+            onKeyDown={(event) =>
+              handleCellKeyDown(event, date, chunk, chunkIndex)
+            }
+          />
         );
       }}
     />

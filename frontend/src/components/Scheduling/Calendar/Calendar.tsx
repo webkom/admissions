@@ -1,5 +1,6 @@
 import * as React from "react";
 import { CalendarRange, UserMinus } from "lucide-react";
+import { iconSizes } from "src/styles/designTokens";
 import type { InterviewerParticipation } from "src/types";
 import {
   buildBlockTimeChunks,
@@ -16,8 +17,12 @@ import {
   SaveButton,
   actionButtonBase,
   actionButtonNeutral,
+  keyboardFocusRingClass,
 } from "../ui";
-import { ScheduleGridLegendItem } from "./ScheduleGridFrame";
+import {
+  ScheduleGridLegendItem,
+  scheduleOpenLegendStyle,
+} from "./ScheduleGridFrame";
 import SelectableScheduleGrid from "./SelectableScheduleGrid";
 
 interface TimeSchedulerProps {
@@ -36,6 +41,8 @@ interface TimeSchedulerProps {
   affectedAssignmentCount?: number;
   onOptOut?: () => Promise<void>;
   onRejoin?: () => Promise<void>;
+  stage?: string;
+  foundationNav?: React.ReactNode;
 }
 
 const TimeScheduler: React.FC<TimeSchedulerProps> = ({
@@ -54,6 +61,8 @@ const TimeScheduler: React.FC<TimeSchedulerProps> = ({
   affectedAssignmentCount = 0,
   onOptOut,
   onRejoin,
+  stage,
+  foundationNav,
 }) => {
   const [internalSelectedSlots, setInternalSelectedSlots] = React.useState<
     Set<string>
@@ -66,6 +75,30 @@ const TimeScheduler: React.FC<TimeSchedulerProps> = ({
   const [dirtySinceSave, setDirtySinceSave] = React.useState(false);
   const [confirmOptOut, setConfirmOptOut] = React.useState(false);
   const [participationSaving, setParticipationSaving] = React.useState(false);
+  const optOutTriggerRef = React.useRef<HTMLButtonElement>(null);
+  const optOutCancelRef = React.useRef<HTMLButtonElement>(null);
+  const rejoinButtonRef = React.useRef<HTMLButtonElement>(null);
+  const previousParticipationRef = React.useRef(participation);
+  const restoreOptOutFocusRef = React.useRef(false);
+
+  React.useLayoutEffect(() => {
+    if (confirmOptOut) {
+      if (!participationSaving) optOutCancelRef.current?.focus();
+      return;
+    }
+    if (!restoreOptOutFocusRef.current) return;
+    restoreOptOutFocusRef.current = false;
+    (rejoinButtonRef.current ?? optOutTriggerRef.current)?.focus();
+  }, [confirmOptOut, participationSaving]);
+  React.useLayoutEffect(() => {
+    if (
+      participation === "not_participating" &&
+      previousParticipationRef.current !== "not_participating"
+    ) {
+      rejoinButtonRef.current?.focus();
+    }
+    previousParticipationRef.current = participation;
+  }, [participation]);
 
   const chunks = React.useMemo(() => {
     return buildBlockTimeChunks({
@@ -154,7 +187,10 @@ const TimeScheduler: React.FC<TimeSchedulerProps> = ({
     setParticipationSaving(true);
     try {
       await action();
+      restoreOptOutFocusRef.current = true;
       setConfirmOptOut(false);
+    } catch {
+      // The parent mutation owns the visible error state.
     } finally {
       setParticipationSaving(false);
     }
@@ -162,11 +198,15 @@ const TimeScheduler: React.FC<TimeSchedulerProps> = ({
 
   if (participation === "not_participating") {
     return (
-      <SchedulePanel>
+      <SchedulePanel
+        dataCy={stage ? "schedule-stage" : undefined}
+        stage={stage}
+      >
+        {foundationNav}
         <SchedulePanelBody className="flex flex-wrap items-center justify-between gap-4 py-4">
           <div className="flex min-w-0 items-center gap-3">
             <span className="flex h-9 w-9 flex-none items-center justify-center rounded-lg bg-surface-muted text-text-muted">
-              <UserMinus size={18} aria-hidden="true" />
+              <UserMinus size={iconSizes.standard} aria-hidden="true" />
             </span>
             <div>
               <h2 className="m-0 text-sm font-bold text-text-primary">
@@ -178,6 +218,7 @@ const TimeScheduler: React.FC<TimeSchedulerProps> = ({
             </div>
           </div>
           <button
+            ref={rejoinButtonRef}
             type="button"
             disabled={participationSaving || !onRejoin}
             onClick={() => void changeParticipation(onRejoin)}
@@ -190,7 +231,12 @@ const TimeScheduler: React.FC<TimeSchedulerProps> = ({
     );
   }
   return (
-    <SchedulePanel className="select-none !overflow-visible">
+    <SchedulePanel
+      dataCy={stage ? "schedule-stage" : undefined}
+      stage={stage}
+      className="select-none !overflow-visible"
+    >
+      {foundationNav}
       <SchedulePanelHeader
         icon={CalendarRange}
         title="Når kan du intervjue?"
@@ -199,20 +245,20 @@ const TimeScheduler: React.FC<TimeSchedulerProps> = ({
           <div className="flex flex-wrap gap-1.5">
             <ScheduleGridLegendItem
               label="Valgt"
-              swatchClassName="border-brand-activeBorder bg-brand-tint"
-            />
-            <ScheduleGridLegendItem
-              label="Ledig"
               swatchClassName="border-border bg-surface-base"
+              swatchStyle={scheduleOpenLegendStyle}
             />
             <ScheduleGridLegendItem
-              label="Stengt"
+              label="Ikke valgt"
               swatchClassName="border-border-soft bg-surface-neutral [background-image:var(--pattern-unavailable)]"
+            />
+            <ScheduleGridLegendItem
+              label="Utilgjengelig"
+              swatchClassName="border-border-soft bg-surface-neutral opacity-55 [background-image:var(--pattern-unavailable)]"
             />
           </div>
         }
       />
-
       <SchedulePanelBody>
         <SelectableScheduleGrid
           dates={dates}
@@ -221,8 +267,8 @@ const TimeScheduler: React.FC<TimeSchedulerProps> = ({
           selectableSlots={enabledSlots}
           activeSlots={selectedSlots}
           onChangeActiveSlots={handleGridChange}
-          unselectedPresentation="available"
           labels={{
+            grid: "Min tilgjengelighet per intervjublokk",
             unavailableCell: "Stengt",
             cell: ({ date, startMinute, endMinute }) => {
               const { weekday, dayMonth } = formatDateHeader(date);
@@ -242,9 +288,10 @@ const TimeScheduler: React.FC<TimeSchedulerProps> = ({
         <div className="flex items-center gap-3">
           {onOptOut && !confirmOptOut && (
             <button
+              ref={optOutTriggerRef}
               type="button"
               onClick={() => setConfirmOptOut(true)}
-              className="text-detail font-semibold text-text-muted underline-offset-2 hover:text-text-primary hover:underline"
+              className={`${keyboardFocusRingClass} text-detail font-semibold text-text-muted underline-offset-2 hover:text-text-primary hover:underline`}
             >
               Jeg deltar ikke
             </button>
@@ -257,9 +304,13 @@ const TimeScheduler: React.FC<TimeSchedulerProps> = ({
                   : "Du fjernes fra planleggingen."}
               </span>
               <button
+                ref={optOutCancelRef}
                 type="button"
-                onClick={() => setConfirmOptOut(false)}
-                className="font-semibold hover:underline"
+                onClick={() => {
+                  restoreOptOutFocusRef.current = true;
+                  setConfirmOptOut(false);
+                }}
+                className={`${keyboardFocusRingClass} font-semibold hover:underline`}
               >
                 Avbryt
               </button>
@@ -267,7 +318,7 @@ const TimeScheduler: React.FC<TimeSchedulerProps> = ({
                 type="button"
                 disabled={participationSaving}
                 onClick={() => void changeParticipation(onOptOut)}
-                className="font-semibold text-danger hover:underline disabled:opacity-50"
+                className={`${keyboardFocusRingClass} font-semibold text-danger hover:underline disabled:opacity-50`}
               >
                 Bekreft
               </button>

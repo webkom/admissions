@@ -1,9 +1,16 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
-import { ArrowRight, CalendarCheck, ChevronDown, Sparkles } from "lucide-react";
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
+import { ArrowRight, Sparkles } from "lucide-react";
 
 import type {
   Candidate,
   EnabledWindow,
+  ExperienceLevel,
   Interviewer,
   ManualScheduleBlock,
   RepairStrategy,
@@ -12,13 +19,14 @@ import type {
 } from "../types";
 import {
   buildSolveBlocks,
-  formatSlotLabel,
   manualBlocksToSolverBlocks,
   slotsToSolverAvailability,
 } from "../scheduleUtils";
 import {
   SchedulePanel,
   SchedulePanelBody,
+  SchedulePanelFooter,
+  SchedulePanelHeader,
   actionButtonBase,
   actionButtonNeutral,
   actionButtonPrimary,
@@ -28,15 +36,23 @@ import { deriveAssignmentConflictSummary } from "./assignmentConflicts";
 import { hasSchedule } from "./solverHelpers";
 import RepairScenarioPanel from "./RepairScenarioPanel";
 import {
-  buildRepairPreviewOptions,
   buildRepairScenario,
+  buildRepairSolveRequest,
   type RepairScenario,
 } from "./repairScenarios";
 import SolverResults from "./SolverResults";
 import SolverSetupPanel from "./SolverSetupPanel";
 import { useScheduleDraft } from "./useScheduleDraft";
-import { useScheduleDraftPersistence } from "./useScheduleDraftPersistence";
+import {
+  useScheduleDraftPersistence,
+  type DraftPersistenceStatus,
+} from "./useScheduleDraftPersistence";
 import { useSolverSession } from "./useSolverSession";
+import { derivePlanDraftStage } from "src/routes/SchedulePage/workflowStages";
+import { iconSizes } from "src/styles/designTokens";
+import DraftTaskLayout from "./DraftTaskLayout";
+import ProposalDecisionPanel from "./ProposalDecisionPanel";
+import PublishedPlanNotice from "./PublishedPlanNotice";
 
 interface Props {
   candidates: Candidate[];
@@ -67,6 +83,12 @@ interface Props {
   pendingReviewerCount: number;
   missingReviewerNames: string[];
   publicationReady: boolean;
+  backgroundMode?: boolean;
+  onDraftPersistenceChange: (status: DraftPersistenceStatus) => void;
+  onExperienceLevelChange: (
+    userId: string,
+    experienceLevel: ExperienceLevel,
+  ) => Promise<void>;
   onOpenAvailability: () => void;
   onOpenFramework: () => void;
   onOpenConflictReview: () => void;
@@ -101,13 +123,15 @@ export default function SolverView({
   pendingReviewerCount,
   missingReviewerNames,
   publicationReady,
+  backgroundMode = false,
+  onDraftPersistenceChange,
+  onExperienceLevelChange,
   onOpenAvailability,
   onOpenFramework,
   onOpenConflictReview,
   onOpenPlan,
 }: Props) {
-  const [generationSettingsRequestKey, setGenerationSettingsRequestKey] =
-    useState(0);
+  const [regenerationOpen, setRegenerationOpen] = useState(false);
   const [repairScenarios, setRepairScenarios] = useState<RepairScenario[]>([]);
   const [selectedRepairStrategy, setSelectedRepairStrategy] =
     useState<RepairStrategy>("minimum_change");
@@ -118,7 +142,13 @@ export default function SolverView({
   const [repairError, setRepairError] = useState("");
   const [repairOpen, setRepairOpen] = useState(false);
   const [repairFocusRequest, setRepairFocusRequest] = useState(0);
+  const [draftFocusRequestKey, setDraftFocusRequestKey] = useState(0);
+  const [placementStageDismissed, setPlacementStageDismissed] = useState(false);
   const [proposalDetailsOpen, setProposalDetailsOpen] = useState(false);
+  const proposalHeadingRef = useRef<HTMLHeadingElement>(null);
+  const proposalComparisonTriggerRef = useRef<HTMLButtonElement>(null);
+  const proposalComparisonHeadingRef = useRef<HTMLHeadingElement>(null);
+  const placementHeadingRef = useRef<HTMLHeadingElement>(null);
   const canonicalBlocks = useMemo(
     () =>
       blockMode === "manual"
@@ -210,10 +240,29 @@ export default function SolverView({
     remoteRevisionChanged: session.remoteRevisionChanged,
     config: persistenceConfig,
     onConflict: session.markDraftConflict,
+    onRevisionSaved: session.markDraftRevisionSaved,
     onSaved: (revision) => {
       session.markDraftSaved(revision);
     },
   });
+  useEffect(() => {
+    onDraftPersistenceChange({
+      state: persistence.state,
+      error: persistence.error,
+      hasLocalDraft: persistence.hasLocalDraft,
+      isSaving: persistence.isSaving,
+      hasConflict: persistence.hasConflict,
+      isSaved: persistence.isSaved,
+    });
+  }, [
+    onDraftPersistenceChange,
+    persistence.error,
+    persistence.hasConflict,
+    persistence.hasLocalDraft,
+    persistence.isSaved,
+    persistence.isSaving,
+    persistence.state,
+  ]);
 
   useEffect(() => {
     if (
@@ -286,12 +335,6 @@ export default function SolverView({
       availabilityFallback: "propose",
     });
   };
-  const locksWithoutCurrentConflicts = () =>
-    draft.lockedAssignments.filter((assignment) =>
-      assignment.candidate_id
-        ? !assignmentConflicts.affectedCandidateIds.has(assignment.candidate_id)
-        : !assignmentConflicts.affectedCandidateNames.has(assignment.candidate),
-    );
   const previewRepairStrategy = async (strategy: RepairStrategy) => {
     if (!persistence.isSaved || persistence.isSaving) {
       setRepairError(
@@ -309,9 +352,13 @@ export default function SolverView({
     const baseline = repairBaseline;
     setRepairError("");
     setRunningRepairStrategy(strategy);
+    const repairRequest = buildRepairSolveRequest(
+      draft.lockedAssignments,
+      strategy,
+    );
     const outcome = await session.solvePlan(
-      locksWithoutCurrentConflicts(),
-      buildRepairPreviewOptions(strategy),
+      repairRequest.lockedAssignments,
+      repairRequest.options,
     );
     setRunningRepairStrategy(undefined);
     if (repairBaselineKeyRef.current !== baselineKey) {
@@ -407,9 +454,14 @@ export default function SolverView({
       0,
     ) ?? 0;
   const pendingUnplaced = pendingProposal?.result.unplaceable?.length ?? 0;
+  const unplaceableCandidates = draft.presentation.unplaceableCandidates;
+  const currentUnplaced = draft.presentation.unplaceableCandidates.length;
+  const currentOutsideAvailability =
+    draft.presentation.availabilitySummary.outsideAvailabilityAssignments;
   const pendingProposalIsStale = Boolean(
     pendingProposal &&
-      session.savedSchedule?.updated_at !== pendingProposal.baseRevision,
+      (session.savedSchedule?.updated_at !== pendingProposal.baseRevision ||
+        session.pendingProposalRejected),
   );
   const pendingProposalExpiry = pendingProposal?.job.proposal_expires_at
     ? new Intl.DateTimeFormat("nb-NO", {
@@ -421,43 +473,182 @@ export default function SolverView({
     pendingProposal?.job.proposal_expires_at &&
       Date.parse(pendingProposal.job.proposal_expires_at) <= Date.now(),
   );
+  useEffect(() => {
+    if (!pendingProposal) return;
+    window.requestAnimationFrame(() =>
+      proposalHeadingRef.current?.focus({ preventScroll: true }),
+    );
+  }, [pendingProposal?.job.job_id]);
+  useEffect(() => {
+    if (pendingProposal) return;
+    setProposalDetailsOpen(false);
+  }, [pendingProposal]);
+  const closeProposalComparison = useCallback(() => {
+    setProposalDetailsOpen(false);
+    window.requestAnimationFrame(() => {
+      proposalComparisonTriggerRef.current?.focus();
+    });
+  }, []);
+  useEffect(() => {
+    if (!proposalDetailsOpen) return;
+    window.requestAnimationFrame(() => {
+      proposalComparisonHeadingRef.current?.focus({ preventScroll: true });
+    });
+  }, [proposalDetailsOpen]);
+  useEffect(() => {
+    setPlacementStageDismissed(false);
+  }, [session.solveTick]);
+  useEffect(() => {
+    if (unplaceableCandidates.length === 0 || placementStageDismissed) return;
+    window.requestAnimationFrame(() =>
+      placementHeadingRef.current?.focus({ preventScroll: true }),
+    );
+  }, [
+    placementStageDismissed,
+    session.solveTick,
+    unplaceableCandidates.length,
+  ]);
+  const planDraftStage = derivePlanDraftStage({
+    isPublished: Boolean(session.savedSchedule?.is_distributed),
+    currentReviewRequired,
+    currentReviewComplete,
+    hasPendingProposal: Boolean(pendingProposal),
+    repairOpen,
+    regenerationOpen,
+    unplaceableCount: unplaceableCandidates.length,
+    placementStageDismissed,
+    loading: session.loading,
+    hasProposal,
+  });
+  const focusDraftHeading = useCallback(
+    () => setDraftFocusRequestKey((request) => request + 1),
+    [],
+  );
+  const closeRegeneration = () => {
+    setRegenerationOpen(false);
+    focusDraftHeading();
+  };
+  const applyPendingProposal = async () => {
+    await session.applyPendingProposal();
+    setRegenerationOpen(false);
+    focusDraftHeading();
+  };
+  const keepCurrentDraft = async () => {
+    await session.discardPendingProposal();
+    setRegenerationOpen(false);
+    focusDraftHeading();
+  };
+  const adjustPendingProposal = async () => {
+    await session.discardPendingProposal();
+    setRegenerationOpen(true);
+  };
+  const renderDraftCanvas = (backgroundMode = false) => (
+    <SolverResults
+      result={session.scopedResult}
+      planRevealed={session.planRevealed}
+      solveTick={session.solveTick}
+      savedSchedule={session.savedSchedule}
+      draft={draft}
+      persistence={persistence}
+      hasLocalDraft={session.hasLocalDraft}
+      dates={dates}
+      sessionDuration={sessionDuration}
+      dayStartMinute={dayStartMinute}
+      dayEndMinute={dayEndMinute}
+      chunkSize={chunkSize}
+      chunkBreakMinutes={chunkBreakMinutes}
+      enabledSlots={enabledSlots}
+      editRequestKey={editRequestKey}
+      focusRequestKey={draftFocusRequestKey}
+      assignmentConflicts={assignmentConflicts}
+      blockRestPreferenceEnabled={
+        session.proposalSolverOptions?.avoid_consecutive_interviewer_blocks ??
+        null
+      }
+      panelSize={session.panelSize}
+      proposalStrategy={
+        session.proposalSolverOptions?.initial_strategy ??
+        session.solverOptions.initial_strategy
+      }
+      canonicalBlocks={canonicalBlocks}
+      currentReviewRequired={currentReviewRequired}
+      currentReviewComplete={currentReviewComplete}
+      completeReviewerCount={completeReviewerCount}
+      requiredReviewerCount={requiredReviewerCount}
+      pendingReviewerCount={pendingReviewerCount}
+      missingReviewerNames={missingReviewerNames}
+      publicationReady={publicationReady}
+      solverError={session.error}
+      onOpenSettings={() => setRegenerationOpen(true)}
+      onOpenConflictReview={onOpenConflictReview}
+      onOpenRepair={() => {
+        setRepairOpen(true);
+        setRepairFocusRequest((request) => request + 1);
+      }}
+      onRetrySolve={solvePlan}
+      onOpenPlan={onOpenPlan}
+      onPreviewWithAvailabilityDeviation={retryWithAvailabilityDeviation}
+      previewLoading={session.loading}
+      backgroundMode={backgroundMode}
+    />
+  );
 
   if (session.savedSchedule?.is_distributed) {
     return (
-      <SchedulePanel>
-        <SchedulePanelBody className="flex flex-wrap items-center justify-between gap-4 px-6 py-5">
-          <div className="flex items-center gap-3">
-            <span className="flex h-10 w-10 flex-none items-center justify-center rounded-lg bg-success-bg text-success">
-              <CalendarCheck size={20} aria-hidden="true" />
-            </span>
-            <div>
-              <h2 className="m-0 text-sm font-bold text-text-primary">
-                Planen er publisert
-              </h2>
-              <p className="m-0 mt-0.5 text-ui text-text-muted">
-                Planen håndteres i Intervjuplan. Lås den opp der for å gjøre
-                endringer.
-              </p>
-            </div>
-          </div>
-          <button
-            type="button"
-            onClick={onOpenPlan}
-            className={cn(actionButtonBase, actionButtonPrimary)}
-          >
-            Åpne intervjuplan
-            <ArrowRight size={16} aria-hidden="true" />
-          </button>
-        </SchedulePanelBody>
-      </SchedulePanel>
+      <PublishedPlanNotice
+        stage={planDraftStage.kind}
+        title={planDraftStage.title}
+        description={planDraftStage.description}
+        onOpenPlan={onOpenPlan}
+      />
     );
   }
 
-  return (
-    <div className="flex flex-col gap-3">
-      {repairAvailable && (
+  if (backgroundMode) {
+    return hasProposal ? renderDraftCanvas(true) : null;
+  }
+
+  if (pendingProposal) {
+    return (
+      <DraftTaskLayout
+        stage={planDraftStage.kind}
+        draft={renderDraftCanvas(true)}
+      >
+        <ProposalDecisionPanel
+          proposal={pendingProposal}
+          stage={planDraftStage.kind}
+          title={planDraftStage.title}
+          description={planDraftStage.description}
+          dates={dates}
+          sessionDuration={sessionDuration}
+          currentScheduleCount={draft.presentation.sortedSchedule.length}
+          currentUnplacedCount={currentUnplaced}
+          currentOutsideAvailabilityCount={currentOutsideAvailability}
+          proposedUnplacedCount={pendingUnplaced}
+          proposedOutsideAvailabilityCount={pendingOutsideAvailability}
+          expiryLabel={pendingProposalExpiry}
+          isStale={pendingProposalIsStale}
+          hasExpired={pendingProposalHasExpired}
+          detailsOpen={proposalDetailsOpen}
+          actionLoading={session.proposalActionLoading}
+          headingRef={proposalHeadingRef}
+          comparisonTriggerRef={proposalComparisonTriggerRef}
+          comparisonHeadingRef={proposalComparisonHeadingRef}
+          onToggleDetails={() => setProposalDetailsOpen((open) => !open)}
+          onCloseComparison={closeProposalComparison}
+          onKeepCurrent={() => void keepCurrentDraft()}
+          onAdjust={() => void adjustPendingProposal()}
+          onApply={() => void applyPendingProposal()}
+        />
+      </DraftTaskLayout>
+    );
+  }
+
+  if (repairAvailable && repairOpen) {
+    return (
+      <DraftTaskLayout draft={renderDraftCanvas(true)}>
         <RepairScenarioPanel
-          open={repairOpen}
+          open
           openRequestKey={repairFocusRequest}
           onClose={() => setRepairOpen(false)}
           conflictCount={assignmentConflicts.assignmentCount}
@@ -475,140 +666,12 @@ export default function SolverView({
           dates={dates}
           sessionDuration={sessionDuration}
         />
-      )}
-      {pendingProposal && (
-        <SchedulePanel dataCy="candidate-proposal" className="animate-fade-in">
-          <SchedulePanelBody className="space-y-4 px-5 py-5">
-            <div className="flex flex-wrap items-start justify-between gap-4">
-              <div className="flex min-w-0 items-start gap-3">
-                <span className="flex h-9 w-9 flex-none items-center justify-center rounded-lg bg-brand-soft text-brand">
-                  <Sparkles size={18} aria-hidden="true" />
-                </span>
-                <div>
-                  <h2 className="m-0 text-sm font-bold text-text-primary">
-                    Nytt forslag er klart
-                  </h2>
-                  <p className="m-0 mt-1 text-detail text-text-muted">
-                    Det gjeldende utkastet er ikke endret. Se forskjellen og
-                    velg om du vil bruke forslaget.
-                  </p>
-                  {pendingProposalExpiry && !pendingProposalHasExpired && (
-                    <p className="m-0 mt-1 text-label text-text-subtle">
-                      Forslaget lagres til {pendingProposalExpiry}.
-                    </p>
-                  )}
-                </div>
-              </div>
-              <div className="flex flex-wrap gap-4 text-detail tabular-nums text-text-muted">
-                <span>
-                  <strong className="text-text-primary">
-                    {pendingProposal.result.schedule.length}
-                  </strong>{" "}
-                  planlagt
-                </span>
-                <span>
-                  <strong className="text-text-primary">
-                    {pendingUnplaced}
-                  </strong>{" "}
-                  uten plass
-                </span>
-                <span>
-                  <strong className="text-text-primary">
-                    {pendingOutsideAvailability}
-                  </strong>{" "}
-                  utenfor tilgjengelighet
-                </span>
-              </div>
-            </div>
+      </DraftTaskLayout>
+    );
+  }
 
-            <button
-              type="button"
-              aria-expanded={proposalDetailsOpen}
-              onClick={() => setProposalDetailsOpen((open) => !open)}
-              className="flex items-center gap-1 text-detail font-semibold text-brand hover:underline"
-            >
-              {proposalDetailsOpen ? "Skjul forslag" : "Se forslaget"}
-              <ChevronDown
-                size={15}
-                aria-hidden="true"
-                className={cn(
-                  "transition-transform",
-                  proposalDetailsOpen && "rotate-180",
-                )}
-              />
-            </button>
-
-            {proposalDetailsOpen && (
-              <div className="max-h-72 overflow-auto rounded-lg border border-border-soft">
-                <table className="w-full border-collapse text-left text-detail">
-                  <thead className="sticky top-0 bg-surface-subtle text-text-muted">
-                    <tr>
-                      <th className="px-3 py-2 font-semibold">Tid</th>
-                      <th className="px-3 py-2 font-semibold">Søker</th>
-                      <th className="px-3 py-2 font-semibold">Panel</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {[...pendingProposal.result.schedule]
-                      .sort((left, right) => left.time - right.time)
-                      .map((item) => (
-                        <tr
-                          key={`${item.candidate_id ?? item.candidate}-${item.time}`}
-                          className="border-t border-border-faint"
-                        >
-                          <td className="whitespace-nowrap px-3 py-2 font-semibold text-text-muted">
-                            {formatSlotLabel(item.time, dates, sessionDuration)}
-                          </td>
-                          <td className="px-3 py-2 font-semibold text-text-primary">
-                            {item.candidate}
-                          </td>
-                          <td className="px-3 py-2 text-text-muted">
-                            {item.panel.map((member) => member.name).join(", ")}
-                          </td>
-                        </tr>
-                      ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-
-            {pendingProposalIsStale && (
-              <p className="m-0 text-detail font-semibold text-danger">
-                Utkastet er endret etter beregningen. Forkast forslaget og
-                generer et nytt.
-              </p>
-            )}
-            {pendingProposalHasExpired && (
-              <p className="m-0 text-detail font-semibold text-danger">
-                Forslaget har utløpt. Forkast det og generer et nytt.
-              </p>
-            )}
-
-            <div className="flex flex-wrap justify-end gap-2">
-              <button
-                type="button"
-                disabled={session.proposalActionLoading}
-                onClick={() => void session.discardPendingProposal()}
-                className={cn(actionButtonBase, actionButtonNeutral)}
-              >
-                Forkast forslag
-              </button>
-              <button
-                type="button"
-                disabled={
-                  session.proposalActionLoading ||
-                  pendingProposalIsStale ||
-                  pendingProposalHasExpired
-                }
-                onClick={() => void session.applyPendingProposal()}
-                className={cn(actionButtonBase, actionButtonPrimary)}
-              >
-                Bruk dette forslaget
-              </button>
-            </div>
-          </SchedulePanelBody>
-        </SchedulePanel>
-      )}
+  if (!hasProposal || regenerationOpen) {
+    const setupPanel = (
       <SolverSetupPanel
         interviewerCount={interviewers.length}
         experiencedInterviewerCount={
@@ -616,8 +679,10 @@ export default function SolverView({
             (interviewer) => interviewer.experience_level === "experienced",
           ).length
         }
+        interviewers={interviewers}
         solverOptions={session.solverOptions}
         onSolverOptionsChange={session.setSolverOptions}
+        onExperienceLevelChange={onExperienceLevelChange}
         panelSize={session.panelSize}
         onPanelSizeChange={session.setPanelSize}
         openBlockCount={solveBlocks.length}
@@ -642,63 +707,90 @@ export default function SolverView({
             !persistence.isSaving &&
             !persistence.hasConflict)
         }
-        openRequestKey={generationSettingsRequestKey}
+        candidateScopeResolved={candidateScopeResolved}
+        regenerationOpen={regenerationOpen}
+        onCloseRegeneration={closeRegeneration}
         onSolve={solvePlan}
         onCancel={() => void session.cancel()}
         onOpenAvailability={onOpenAvailability}
         onOpenFramework={onOpenFramework}
         onOpenConflictReview={onOpenConflictReview}
       />
-      {hasProposal && (
-        <SolverResults
-          result={session.scopedResult}
-          planRevealed={session.planRevealed}
-          solveTick={session.solveTick}
-          savedSchedule={session.savedSchedule}
-          draft={draft}
-          persistence={persistence}
-          hasLocalDraft={session.hasLocalDraft}
-          dates={dates}
-          sessionDuration={sessionDuration}
-          dayStartMinute={dayStartMinute}
-          dayEndMinute={dayEndMinute}
-          chunkSize={chunkSize}
-          chunkBreakMinutes={chunkBreakMinutes}
-          enabledSlots={enabledSlots}
-          editRequestKey={editRequestKey}
-          assignmentConflicts={assignmentConflicts}
-          blockRestPreferenceEnabled={
-            session.proposalSolverOptions
-              ?.avoid_consecutive_interviewer_blocks ?? null
-          }
-          panelSize={session.panelSize}
-          proposalStrategy={
-            session.proposalSolverOptions?.initial_strategy ??
-            session.solverOptions.initial_strategy
-          }
-          canonicalBlocks={canonicalBlocks}
-          currentReviewRequired={currentReviewRequired}
-          currentReviewComplete={currentReviewComplete}
-          completeReviewerCount={completeReviewerCount}
-          requiredReviewerCount={requiredReviewerCount}
-          pendingReviewerCount={pendingReviewerCount}
-          missingReviewerNames={missingReviewerNames}
-          publicationReady={publicationReady}
-          solverError={session.error}
-          onOpenSettings={() =>
-            setGenerationSettingsRequestKey((key) => key + 1)
-          }
-          onOpenConflictReview={onOpenConflictReview}
-          onOpenRepair={() => {
-            setRepairOpen(true);
-            setRepairFocusRequest((request) => request + 1);
-          }}
-          onRetrySolve={solvePlan}
-          onOpenPlan={onOpenPlan}
-          onPreviewWithAvailabilityDeviation={retryWithAvailabilityDeviation}
-          previewLoading={session.loading}
-        />
-      )}
-    </div>
-  );
+    );
+
+    if (!hasProposal) {
+      return setupPanel;
+    }
+
+    return (
+      <DraftTaskLayout draft={renderDraftCanvas(true)}>
+        {setupPanel}
+      </DraftTaskLayout>
+    );
+  }
+
+  if (unplaceableCandidates.length > 0 && !placementStageDismissed) {
+    return (
+      <DraftTaskLayout
+        stage="missing_placements"
+        draft={renderDraftCanvas(true)}
+      >
+        <SchedulePanel
+          dataCy="missing-placements-stage"
+          stage="missing_placements"
+          className="mx-auto w-full max-w-3xl"
+        >
+          <SchedulePanelHeader
+            icon={Sparkles}
+            headingRef={placementHeadingRef}
+            headingDataCy="schedule-stage-heading"
+            title={planDraftStage.title}
+            description={planDraftStage.description}
+          />
+          <SchedulePanelBody>
+            <ul className="m-0 divide-y divide-border-soft p-0">
+              {unplaceableCandidates.map((candidate) => (
+                <li
+                  key={candidate.candidate_id ?? candidate.candidate}
+                  className="list-none py-3 first:pt-0 last:pb-0"
+                >
+                  <p className="m-0 text-ui font-semibold text-text-primary">
+                    {candidate.candidate}
+                  </p>
+                  <p className="m-0 mt-1 text-detail text-text-muted">
+                    {candidate.reason}
+                  </p>
+                </li>
+              ))}
+            </ul>
+          </SchedulePanelBody>
+          <SchedulePanelFooter className="sticky bottom-0 z-10 bg-surface-base">
+            <span className="text-detail font-semibold text-text-muted">
+              Resten av utkastet er beholdt.
+            </span>
+            <div className="flex flex-wrap items-center justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setPlacementStageDismissed(true)}
+                className={cn(actionButtonBase, actionButtonNeutral)}
+              >
+                Se resten av utkastet
+              </button>
+              <button
+                type="button"
+                onClick={() => setRegenerationOpen(true)}
+                data-cy="schedule-stage-primary-action"
+                className={cn(actionButtonBase, actionButtonPrimary)}
+              >
+                Juster og prøv igjen
+                <ArrowRight size={iconSizes.medium} aria-hidden="true" />
+              </button>
+            </div>
+          </SchedulePanelFooter>
+        </SchedulePanel>
+      </DraftTaskLayout>
+    );
+  }
+
+  return renderDraftCanvas();
 }

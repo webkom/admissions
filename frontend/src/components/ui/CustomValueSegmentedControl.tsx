@@ -1,7 +1,8 @@
 import React from "react";
 import { Check } from "lucide-react";
+import { iconSizes, iconStrokeWidths } from "src/styles/designTokens";
 
-export interface CustomValueSegmentedControlProps {
+interface CustomValueSegmentedControlProps {
   label: string;
   presets: readonly number[];
   value: number;
@@ -217,7 +218,7 @@ export const CustomValueSegmentedControl: React.FC<
                   <span>min</span>
                 </span>
               ) : hasCustomValue ? (
-                `Egendefinert · ${formatValue(value)}`
+                `Egendefinert, ${formatValue(value)}`
               ) : (
                 "Egendefinert"
               )}
@@ -240,7 +241,11 @@ export const CustomValueSegmentedControl: React.FC<
             }`}
             onClick={commit}
           >
-            <Check size={16} strokeWidth={2} aria-hidden="true" />
+            <Check
+              size={iconSizes.medium}
+              strokeWidth={iconStrokeWidths.standard}
+              aria-hidden="true"
+            />
           </button>
         </div>
       </div>

@@ -1,21 +1,40 @@
 describe("admin schedule configuration toggles", () => {
   beforeEach(() => {
     cy.viewport(1440, 900);
+    cy.intercept("GET", "**/api/admin/admission/webkom-open/schedule/").as(
+      "schedule",
+    );
+    cy.intercept("GET", "**/api/admin/admission/webkom-open/candidates/").as(
+      "candidates",
+    );
+    cy.intercept("GET", "**/api/admin/admission/webkom-open/availability/").as(
+      "availability",
+    );
     cy.login("webkom");
     cy.visit("/webkom-open/schedule", {
       onBeforeLoad(window) {
         window.localStorage.setItem("admissions.wizard.admin.v1", "1");
       },
     });
+    ["@schedule", "@candidates", "@availability"].forEach((requestAlias) => {
+      cy.wait(requestAlias).its("response.statusCode").should("eq", 200);
+    });
+    cy.get("[data-cy=foundation-tab-coverage]", { timeout: 10000 }).should(
+      "contain.text",
+      "1/2",
+    );
     cy.get('nav[aria-label="Steg i intervjuplanleggingen"]').within(() => {
       cy.contains("button", "Grunnlag").click();
     });
-    cy.get('[role="tablist"][aria-label="Arbeidsområder i Grunnlag"]').within(
-      () => {
-        cy.contains('[role="tab"]', "Oppsett").click();
-      },
+    cy.get("[data-cy=foundation-tab-framework]").click();
+    cy.get("[data-cy=foundation-tab-framework]").should(
+      "have.attr",
+      "aria-selected",
+      "true",
     );
-    cy.contains("Tidsrammer").should("be.visible");
+    cy.get(
+      '[data-cy="schedule-stage"][data-stage="foundation-framework"]',
+    ).should("be.visible");
     cy.contains("Intervjuvindu").should("not.exist");
     cy.contains("Intervjuperiode").should("be.visible");
     cy.contains("Daglig tidsrom").should("be.visible");
@@ -29,6 +48,13 @@ describe("admin schedule configuration toggles", () => {
       .parents(".sticky")
       .should("have.length", 1);
     cy.contains("button", "Lagre tidsrammer").should("not.exist");
+
+    const decreaseBlockSize = () =>
+      cy
+        .get('[role="group"][aria-label="Antall intervjuer per blokk"]')
+        .find('button[aria-label="Reduser"]');
+    decreaseBlockSize().click();
+    decreaseBlockSize().click();
 
     cy.get('input[aria-label^="Alle standardblokker for "]')
       .should("have.length.greaterThan", 0)

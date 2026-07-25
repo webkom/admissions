@@ -8,7 +8,7 @@ import { encodeSmsAddress } from "src/utils/emailLinks";
 const actionClass =
   "inline-flex min-h-control-sm items-center justify-center gap-1.5 whitespace-nowrap rounded-xl border border-border-muted bg-surface-base px-2 py-1.5 text-xs font-semibold text-text-primary transition-[border-color,box-shadow] duration-150 hover:border-brand-strongBorder focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-brand-ringSoft";
 const shareItemClass =
-  "inline-flex w-full items-center gap-1.5 rounded-md px-3 py-2 text-sm font-semibold text-text-primary transition-colors hover:bg-surface-subtle hover:text-brand";
+  "inline-flex w-full items-center gap-1.5 rounded-md px-3 py-2 text-sm font-semibold text-text-primary transition-colors hover:bg-surface-subtle hover:text-brand focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-ring";
 
 const InterviewOutreachActions: React.FC<{
   candidateName: string;

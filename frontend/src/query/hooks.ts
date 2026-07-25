@@ -20,8 +20,11 @@ import { apiClient } from "src/utils/callApi";
 import {
   areSensitiveAdmissionCacheWritesBlocked,
   areSensitiveCacheWritesBlocked,
+  isSensitiveAuthorityChangedError,
   purgeSensitiveAdmissionAccess,
+  runSensitiveAdmissionMutation,
   sensitiveAdmissionMutationOptions,
+  type SensitiveAdmissionMutationError,
 } from "./sensitiveAccess";
 
 type SaveSchedulePayload = Partial<
@@ -30,6 +33,10 @@ type SaveSchedulePayload = Partial<
   expected_updated_at: string | null;
   deviation_approval_fingerprint?: string;
 };
+
+interface SaveScheduleOptions {
+  onCanonicalScheduleSaved?: (schedule: SavedSchedule) => void;
+}
 
 const accessFailureStatus = (error: unknown) =>
   isAxiosError(error) ? (error.response?.status ?? 0) : 0;
@@ -149,18 +156,28 @@ export const useSavedSchedule = (slug: string) => {
   return hideDataAfterSensitiveQueryFailure(query);
 };
 
-export const useSaveSchedule = (slug: string) => {
+export const useSaveSchedule = (
+  slug: string,
+  options: SaveScheduleOptions = {},
+) => {
   const queryClient = useQueryClient();
   const scheduleQueryKey = [`/admin/admission/${slug}/schedule/`];
   const candidatesQueryKey = [`/admin/admission/${slug}/candidates/`];
-  return useMutation<SavedSchedule, AxiosError, SaveSchedulePayload>({
+  return useMutation<
+    SavedSchedule,
+    SensitiveAdmissionMutationError,
+    SaveSchedulePayload
+  >({
     ...sensitiveAdmissionMutationOptions(slug),
     mutationFn: (payload) =>
-      apiClient
-        .post(`/admin/admission/${slug}/schedule/`, payload)
-        .then((r) => r.data),
+      runSensitiveAdmissionMutation(slug, () =>
+        apiClient
+          .post(`/admin/admission/${slug}/schedule/`, payload)
+          .then((r) => r.data),
+      ),
     onSuccess: (data) => {
       if (areSensitiveAdmissionCacheWritesBlocked(slug)) return;
+      options.onCanonicalScheduleSaved?.(data);
       queryClient.setQueryData(scheduleQueryKey, data);
       queryClient.invalidateQueries({
         queryKey: [`/admin/admission/${slug}/availability/`],
@@ -170,6 +187,7 @@ export const useSaveSchedule = (slug: string) => {
       });
     },
     onError: async (error) => {
+      if (isSensitiveAuthorityChangedError(error)) return;
       const status = error.response?.status ?? 0;
       if ([401, 403].includes(status)) return;
       if (status === 404) {
@@ -206,22 +224,26 @@ export const useSaveInterviewAvailability = (slug: string) => {
   const availabilityQueryKey = [`/admin/admission/${slug}/availability/`];
   return useMutation<
     InterviewAvailabilityParticipant,
-    AxiosError,
+    SensitiveAdmissionMutationError,
     {
       user_id?: string;
       participation?: "awaiting_response" | "not_participating";
       slots?: string[];
       conflicts?: string[];
       reviewed_candidate_ids?: string[];
+      conflict_collection_reviewed_candidate_ids?: string[];
+      conflict_collection_revision?: string;
       experience_level?: ExperienceLevel;
       expected_availability_generation?: number;
     }
   >({
     ...sensitiveAdmissionMutationOptions(slug),
     mutationFn: (payload) =>
-      apiClient
-        .post(`/admin/admission/${slug}/availability/`, payload)
-        .then((r) => r.data),
+      runSensitiveAdmissionMutation(slug, () =>
+        apiClient
+          .post(`/admin/admission/${slug}/availability/`, payload)
+          .then((r) => r.data),
+      ),
     onSuccess: () => {
       if (areSensitiveAdmissionCacheWritesBlocked(slug)) return;
       queryClient.invalidateQueries({
@@ -232,6 +254,7 @@ export const useSaveInterviewAvailability = (slug: string) => {
       });
     },
     onError: (error) => {
+      if (isSensitiveAuthorityChangedError(error)) return;
       const status = error.response?.status ?? 0;
       if (status !== 404) return;
       purgeSensitiveAdmissionAccess(queryClient, slug, error);

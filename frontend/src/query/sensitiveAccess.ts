@@ -1,10 +1,101 @@
 import { type Query, type QueryClient } from "@tanstack/react-query";
 import { isAxiosError, type AxiosError } from "axios";
+import type { Admission } from "src/types";
 import { sanitizeAxiosError } from "src/utils/sanitizeAxiosError";
 
 let sensitiveCacheWritesBlocked = false;
 let sensitiveAccessError: AxiosError | null = null;
 const sensitiveAdmissionAccessErrors = new Map<string, AxiosError>();
+let sensitiveGlobalAuthorityEpoch = 0;
+const sensitiveAdmissionAuthorityEpochs = new Map<string, number>();
+
+export interface SensitiveAdmissionAuthorityEpoch {
+  global: number;
+  admission: number;
+}
+
+export class SensitiveAuthorityChangedError extends Error {
+  readonly admissionSlug: string;
+
+  constructor(admissionSlug: string) {
+    super(
+      "The authenticated admission authority changed while the request was in flight.",
+    );
+    this.name = "SensitiveAuthorityChangedError";
+    this.admissionSlug = admissionSlug;
+  }
+}
+
+export type SensitiveAdmissionMutationError =
+  | AxiosError
+  | SensitiveAuthorityChangedError;
+
+const advanceSensitiveGlobalAuthorityEpoch = () => {
+  sensitiveGlobalAuthorityEpoch += 1;
+};
+
+const advanceSensitiveAdmissionAuthorityEpoch = (admissionSlug: string) => {
+  sensitiveAdmissionAuthorityEpochs.set(
+    admissionSlug,
+    (sensitiveAdmissionAuthorityEpochs.get(admissionSlug) ?? 0) + 1,
+  );
+};
+
+export const captureSensitiveAdmissionAuthorityEpoch = (
+  admissionSlug: string,
+): SensitiveAdmissionAuthorityEpoch => ({
+  global: sensitiveGlobalAuthorityEpoch,
+  admission: sensitiveAdmissionAuthorityEpochs.get(admissionSlug) ?? 0,
+});
+
+export const isSensitiveAdmissionAuthorityEpochCurrent = (
+  admissionSlug: string,
+  epoch: SensitiveAdmissionAuthorityEpoch,
+) =>
+  epoch.global === sensitiveGlobalAuthorityEpoch &&
+  epoch.admission ===
+    (sensitiveAdmissionAuthorityEpochs.get(admissionSlug) ?? 0);
+
+export const isSensitiveAuthorityChangedError = (
+  error: unknown,
+): error is SensitiveAuthorityChangedError =>
+  error instanceof SensitiveAuthorityChangedError ||
+  (error instanceof Error &&
+    error.name === "SensitiveAuthorityChangedError" &&
+    "admissionSlug" in error &&
+    typeof error.admissionSlug === "string");
+
+/**
+ * Capture authority at request dispatch, then turn any response that crosses
+ * an authentication or admission-scope boundary into an inert stale result.
+ * Callers must ignore SensitiveAuthorityChangedError in their error handlers.
+ */
+export const runSensitiveAdmissionMutation = async <T>(
+  admissionSlug: string,
+  request: () => Promise<T>,
+) => {
+  const authorityEpoch = captureSensitiveAdmissionAuthorityEpoch(admissionSlug);
+  if (areSensitiveAdmissionCacheWritesBlocked(admissionSlug)) {
+    throw new SensitiveAuthorityChangedError(admissionSlug);
+  }
+
+  try {
+    const result = await request();
+    if (
+      !isSensitiveAdmissionAuthorityEpochCurrent(admissionSlug, authorityEpoch)
+    ) {
+      throw new SensitiveAuthorityChangedError(admissionSlug);
+    }
+    return result;
+  } catch (error) {
+    if (
+      !isSensitiveAdmissionAuthorityEpochCurrent(admissionSlug, authorityEpoch)
+    ) {
+      throw new SensitiveAuthorityChangedError(admissionSlug);
+    }
+    throw error;
+  }
+};
 
 const blockSensitiveCacheWrites = () => {
   sensitiveCacheWritesBlocked = true;
@@ -23,10 +114,92 @@ export const getSensitiveAccessError = () => sensitiveAccessError;
 export const getSensitiveAdmissionAccessError = (admissionSlug: string) =>
   sensitiveAdmissionAccessErrors.get(admissionSlug) ?? null;
 
+export const buildSensitiveAdmissionScopeKey = ({
+  actorId,
+  isAdmin,
+  committeeRole,
+  representedGroups,
+  committeeGroups,
+}: {
+  actorId: string | null;
+  isAdmin: boolean;
+  committeeRole: string | null;
+  representedGroups: string[];
+  committeeGroups: string[];
+}) =>
+  JSON.stringify({
+    actorId,
+    isAdmin,
+    committeeRole,
+    representedGroups: [...representedGroups].sort(),
+    committeeGroups: [...committeeGroups].sort(),
+  });
+
+export const clearSensitiveAdmissionDataForScopeChange = (
+  queryClient: QueryClient,
+  admissionSlug: string,
+) => {
+  advanceSensitiveAdmissionAuthorityEpoch(admissionSlug);
+  const admissionAdminPrefix = `/admin/admission/${admissionSlug}/`;
+  const personalAdmissionPrefix = `/admission/${admissionSlug}/application/`;
+  const queryCache = queryClient.getQueryCache();
+  queryCache
+    .getAll()
+    .filter((query) =>
+      query.queryKey.some(
+        (part) =>
+          typeof part === "string" &&
+          (part.startsWith(admissionAdminPrefix) ||
+            part.startsWith(personalAdmissionPrefix)),
+      ),
+    )
+    .forEach((query) => {
+      void query.cancel({ silent: true });
+      queryCache.remove(query);
+    });
+  purgeSensitiveMutations(queryClient, admissionSlug);
+};
+
+/**
+ * Re-enable sensitive reads only after the caller has made a fresh request
+ * outside React Query and verified that the server still reports an active
+ * scheduler role. Purge every sensitive cache entry before lifting the global
+ * block so no pre-recovery response can become authoritative.
+ */
+export const restoreSensitiveAccessAfterVerifiedAdmission = (
+  queryClient: QueryClient,
+  admissionSlug: string,
+  verifiedAdmission: Admission,
+) => {
+  const hasSchedulerRole =
+    verifiedAdmission.userdata.is_admin ||
+    verifiedAdmission.userdata.committee_role !== null;
+  if (verifiedAdmission.slug !== admissionSlug || !hasSchedulerRole) {
+    return false;
+  }
+
+  advanceSensitiveGlobalAuthorityEpoch();
+  const queryCache = queryClient.getQueryCache();
+  queryCache
+    .getAll()
+    .filter((query) => query.meta?.sensitive === true)
+    .forEach((query) => {
+      void query.cancel({ silent: true });
+      queryCache.remove(query);
+    });
+  purgeSensitiveMutations(queryClient);
+
+  sensitiveAccessError = null;
+  sensitiveCacheWritesBlocked = false;
+  sensitiveAdmissionAccessErrors.delete(admissionSlug);
+  return true;
+};
+
 export const blockSensitiveAdmissionCacheWrites = (
   admissionSlug: string,
   error: AxiosError,
 ) => {
+  advanceSensitiveAdmissionAuthorityEpoch(admissionSlug);
   const accessError = sanitizeAxiosError(error, true);
   sensitiveAdmissionAccessErrors.set(admissionSlug, accessError);
   return accessError;
@@ -61,6 +234,7 @@ export const purgeSensitiveQueries = <TError>(
 ) => {
   let purgeError = error;
   if (blockWrites && isAxiosError(error)) {
+    advanceSensitiveGlobalAuthorityEpoch();
     const accessError = sanitizeAxiosError(error, true);
     sensitiveAccessError = accessError;
     purgeError = accessError as TError;
@@ -110,6 +284,21 @@ export const purgeSensitiveMutations = (
           mutation.meta?.admissionSlug === admissionSlug),
     )
     .forEach((mutation) => mutationCache.remove(mutation));
+};
+
+export const clearAllSensitiveDataForActorChange = (
+  queryClient: QueryClient,
+) => {
+  advanceSensitiveGlobalAuthorityEpoch();
+  const queryCache = queryClient.getQueryCache();
+  queryCache
+    .getAll()
+    .filter((query) => query.meta?.sensitive === true)
+    .forEach((query) => {
+      void query.cancel({ silent: true });
+      queryCache.remove(query);
+    });
+  purgeSensitiveMutations(queryClient);
 };
 
 export const purgeSensitiveAdmissionAccess = (

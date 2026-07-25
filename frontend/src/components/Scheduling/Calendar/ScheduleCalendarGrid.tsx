@@ -1,10 +1,11 @@
 import React from "react";
+import { calendarGrid } from "src/styles/designTokens";
 import ScheduleGridFrame, {
   ScheduleDayHeader,
   ScheduleTimeLabel,
 } from "./ScheduleGridFrame";
 
-export interface ScheduleCalendarGridCellInput {
+interface ScheduleCalendarGridCellInput {
   date: string;
   chunk: number[];
   chunkIndex: number;
@@ -21,6 +22,7 @@ interface ScheduleCalendarGridProps {
   ) => React.ReactNode;
   emptyState?: React.ReactNode;
   className?: string;
+  ariaLabel: string;
 }
 
 /**
@@ -37,31 +39,63 @@ const ScheduleCalendarGrid: React.FC<ScheduleCalendarGridProps> = ({
   renderTimeLabel,
   emptyState,
   className,
+  ariaLabel,
 }) => (
-  <ScheduleGridFrame dates={dates} className={className}>
-    <div />
-    {dates.map((date) =>
-      renderDayHeader ? (
-        <React.Fragment key={date}>{renderDayHeader(date)}</React.Fragment>
-      ) : (
-        <ScheduleDayHeader key={date} date={date} />
-      ),
-    )}
-
-    {chunks.length === 0 && emptyState
-      ? emptyState
-      : chunks.map((chunk, chunkIndex) => (
-          <React.Fragment key={chunkIndex}>
-            {renderTimeLabel?.({ chunk, chunkIndex }) ?? (
-              <ScheduleTimeLabel
-                startMinute={chunk[0]}
-                endMinute={chunk[chunk.length - 1] + sessionDuration}
-                showEnd={chunk.length > 1}
-              />
-            )}
-            {dates.map((date) => renderCell({ date, chunk, chunkIndex }))}
-          </React.Fragment>
+  <ScheduleGridFrame dates={dates} className={className} layout="table">
+    <table
+      aria-label={ariaLabel}
+      className="w-full table-fixed border-separate border-spacing-2 [&_td]:!bg-transparent [&_td]:!p-0 [&_th]:!rounded-none [&_th]:!bg-transparent [&_th]:!p-0 [&_tr]:!bg-transparent"
+    >
+      <colgroup>
+        <col style={{ width: calendarGrid.timeColumnWidth }} />
+        {dates.map((date) => (
+          <col
+            key={date}
+            style={{ minWidth: calendarGrid.dayColumnMinWidth }}
+          />
         ))}
+      </colgroup>
+      <thead>
+        <tr>
+          <th aria-hidden="true" />
+          {dates.map((date) => (
+            <th key={date} scope="col" className="p-0 font-normal">
+              {renderDayHeader ? (
+                renderDayHeader(date)
+              ) : (
+                <ScheduleDayHeader date={date} />
+              )}
+            </th>
+          ))}
+        </tr>
+      </thead>
+      <tbody>
+        {chunks.length === 0 && emptyState ? (
+          <tr>
+            <td colSpan={dates.length + 1}>{emptyState}</td>
+          </tr>
+        ) : (
+          chunks.map((chunk, chunkIndex) => (
+            <tr key={chunkIndex}>
+              <th scope="row" className="p-0 font-normal">
+                {renderTimeLabel?.({ chunk, chunkIndex }) ?? (
+                  <ScheduleTimeLabel
+                    startMinute={chunk[0]}
+                    endMinute={chunk[chunk.length - 1] + sessionDuration}
+                    showEnd={chunk.length > 1}
+                  />
+                )}
+              </th>
+              {dates.map((date) => (
+                <td key={`${date}-${chunkIndex}`} className="p-0 align-middle">
+                  {renderCell({ date, chunk, chunkIndex })}
+                </td>
+              ))}
+            </tr>
+          ))
+        )}
+      </tbody>
+    </table>
   </ScheduleGridFrame>
 );
 

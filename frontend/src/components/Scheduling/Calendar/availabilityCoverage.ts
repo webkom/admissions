@@ -18,7 +18,7 @@ export interface BlockCoverage {
   status: CoverageStatus;
 }
 
-export interface AvailabilityCoverageModel {
+interface AvailabilityCoverageModel {
   blocks: BlockCoverage[];
   completeBlockCount: number;
   openBlockCount: number;

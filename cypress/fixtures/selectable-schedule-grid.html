@@ -12,8 +12,13 @@
       import { createRoot } from "react-dom/client";
       import SelectableScheduleGrid from "/static/frontend/src/components/Scheduling/Calendar/SelectableScheduleGrid.tsx";
       import AdminAvailabilityGrid from "/static/frontend/src/components/Scheduling/Calendar/AdminAvailabilityGrid.tsx";
+      import AvailabilityHeatmap from "/static/frontend/src/components/Scheduling/Calendar/AvailabilityHeatmap.tsx";
+      import TimeScheduler from "/static/frontend/src/components/Scheduling/Calendar/Calendar.tsx";
       import AdminScheduleConfig from "/static/frontend/src/components/Scheduling/Calendar/AdminScheduleConfig.tsx";
-      import { makeSlotKey } from "/static/frontend/src/components/Scheduling/scheduleUtils.ts";
+      import {
+        encodeScheduleTime,
+        makeSlotKey,
+      } from "/static/frontend/src/components/Scheduling/scheduleUtils.ts";
       import "/static/frontend/src/styles/globals.css";
 
       const dates = ["2026-07-21", "2026-07-22"];
@@ -48,8 +53,8 @@
             selectableSlots: personal ? personalSelectable : undefined,
             activeSlots,
             onChangeActiveSlots: setActiveSlots,
-            unselectedPresentation: personal ? "available" : "closed",
             labels: {
+              grid: `${mode} availability`,
               unavailableCell: `${mode}-blocked`,
               cell: ({ date, startMinute }) => `${mode}-${date}-${startMinute}`,
             },
@@ -133,14 +138,97 @@
             sessionDuration: 30,
             activeSlots,
             onChangeActiveSlots: setActiveSlots,
-            unselectedPresentation: "closed",
             labels: {
+              grid: "partial availability",
               unavailableCell: "blocked",
               cell: () => "partial-block",
             },
           }),
         );
       };
+
+      const AvailabilityOverviewHarness = ({
+        dataCy = "availability-overview",
+        rejectOptOut = false,
+        panelSize = 1,
+      }) => {
+        const overviewSlots = new Set([
+          makeSlotKey(dates[0], 480),
+          makeSlotKey(dates[0], 510),
+          makeSlotKey(dates[0], 600),
+          makeSlotKey(dates[0], 630),
+          makeSlotKey(dates[0], 720),
+          makeSlotKey(dates[0], 750),
+          makeSlotKey(dates[1], 480),
+          makeSlotKey(dates[1], 510),
+        ]);
+        const interviewer = (id, name, dayZeroMinutes, dayOneMinutes = []) => ({
+          id,
+          name,
+          availability: [
+            ...dayZeroMinutes.map((minute) =>
+              encodeScheduleTime(0, minute, 30),
+            ),
+            ...dayOneMinutes.map((minute) => encodeScheduleTime(1, minute, 30)),
+          ],
+          biased: [],
+          has_submitted: true,
+          participation: "participating",
+        });
+
+        return React.createElement(
+          "section",
+          { "data-cy": dataCy },
+          React.createElement(AvailabilityHeatmap, {
+            interviewers: [
+              interviewer(
+                "interviewer-a",
+                "Ane Solberg",
+                [480, 510, 600, 630],
+                [480, 510],
+              ),
+              interviewer("interviewer-b", "Birk Nymo", [480, 510]),
+            ],
+            availableSlots: overviewSlots,
+            panelSize,
+            samePanelPerBlock: true,
+            dates,
+            dayStartMinute: 480,
+            dayEndMinute: 780,
+            sessionDuration: 30,
+            chunkSize: 2,
+            chunkBreakMinutes: 60,
+            onParticipationChange: rejectOptOut
+              ? async () => {
+                  throw new Error("Fixture opt-out failure");
+                }
+              : async () => {},
+          }),
+        );
+      };
+
+      const PersonalOptOutHarness = ({
+        dataCy = "personal-opt-out",
+        rejectOptOut = false,
+      }) =>
+        React.createElement(
+          "section",
+          { "data-cy": dataCy },
+          React.createElement(TimeScheduler, {
+            enabledSlots: personalSelectable,
+            dayStartMinute: 480,
+            dayEndMinute: 660,
+            chunkSize: 2,
+            chunkBreakMinutes: 60,
+            sessionDuration: 30,
+            dates,
+            onOptOut: rejectOptOut
+              ? async () => {
+                  throw new Error("Fixture opt-out failure");
+                }
+              : async () => {},
+          }),
+        );
 
       const LegacyConfigHarness = () => {
         const [savedPayload, setSavedPayload] = React.useState(null);
@@ -288,6 +376,20 @@
             initialView: "fine",
           }),
           React.createElement(PartialGridHarness),
+          React.createElement(AvailabilityOverviewHarness),
+          React.createElement(AvailabilityOverviewHarness, {
+            dataCy: "availability-overview-large-panel",
+            panelSize: 3,
+          }),
+          React.createElement(AvailabilityOverviewHarness, {
+            dataCy: "availability-overview-failure",
+            rejectOptOut: true,
+          }),
+          React.createElement(PersonalOptOutHarness),
+          React.createElement(PersonalOptOutHarness, {
+            dataCy: "personal-opt-out-failure",
+            rejectOptOut: true,
+          }),
           React.createElement(
             "section",
             { "data-cy": "admin-config-harness" },

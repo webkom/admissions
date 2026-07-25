@@ -5,6 +5,7 @@ import type {
   ExperienceLevel,
   InterviewAvailabilityParticipant,
 } from "src/types";
+import { isSensitiveAuthorityChangedError } from "src/query/sensitiveAccess";
 
 type Notify = (message: string, tone?: StatusToastState["tone"]) => void;
 
@@ -57,6 +58,7 @@ export const useAvailabilityEditor = ({
       lastAppliedGenerationRef.current = saved.availability_generation;
       notify("Tilgjengelighet lagret.");
     } catch (error) {
+      if (isSensitiveAuthorityChangedError(error)) throw error;
       const responseStatus = (error as { response?: { status?: number } })
         .response?.status;
       notify(
@@ -79,7 +81,37 @@ export const useAvailabilityEditor = ({
         conflicts: conflictIds,
       });
     } catch (error) {
+      if (isSensitiveAuthorityChangedError(error)) throw error;
       notify("Kunne ikke lagre inhabilitetssjekken.", "error");
+      throw error;
+    }
+  };
+
+  const saveConflictCollectionReview = async (
+    reviewedCandidateIds: string[],
+    conflictIds: string[],
+  ) => {
+    const revision = currentParticipant?.conflict_collection_revision;
+    if (!revision) {
+      notify("Kandidatlisten må lastes inn på nytt.", "error");
+      throw new Error("Missing conflict collection revision");
+    }
+    try {
+      await saveInterviewAvailability.mutateAsync({
+        conflict_collection_reviewed_candidate_ids: reviewedCandidateIds,
+        conflict_collection_revision: revision,
+        conflicts: conflictIds,
+      });
+    } catch (error) {
+      if (isSensitiveAuthorityChangedError(error)) throw error;
+      const responseStatus = (error as { response?: { status?: number } })
+        .response?.status;
+      notify(
+        responseStatus === 409
+          ? "Kandidatlisten er endret. Last inn siden på nytt."
+          : "Kunne ikke lagre inhabilitetssjekken.",
+        "error",
+      );
       throw error;
     }
   };
@@ -103,6 +135,7 @@ export const useAvailabilityEditor = ({
           : "Intervjueren må sende inn tilgjengelighet.",
       );
     } catch (error) {
+      if (isSensitiveAuthorityChangedError(error)) throw error;
       notify("Kunne ikke oppdatere deltakelsen.", "error");
       throw error;
     }
@@ -119,6 +152,7 @@ export const useAvailabilityEditor = ({
       });
       notify("Erfaringsnivå oppdatert.");
     } catch (error) {
+      if (isSensitiveAuthorityChangedError(error)) throw error;
       notify("Kunne ikke oppdatere erfaringsnivå.", "error");
       throw error;
     }
@@ -130,6 +164,7 @@ export const useAvailabilityEditor = ({
     currentParticipant,
     saveAvailability,
     saveConflictReview,
+    saveConflictCollectionReview,
     setParticipation,
     setExperienceLevel,
   };

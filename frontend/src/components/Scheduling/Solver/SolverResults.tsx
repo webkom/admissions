@@ -1,6 +1,5 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
-  AlertTriangle,
   ArrowRight,
   CalendarDays,
   Check,
@@ -18,21 +17,20 @@ import { iconSizes } from "src/styles/designTokens";
 
 import cn from "../../../utils/cn";
 import GridCalendarView from "../Calendar/GridCalendarView";
-import { assignmentAvailabilityLabel } from "../assignmentAvailability";
 import {
   CustomSelect,
-  EditablePanelChip,
   SegmentedControl,
   SchedulePanel,
   SchedulePanelBody,
   SchedulePanelHeader,
   SchedulingActionBar,
   SchedulingButton,
-  SchedulingModeControl,
   type SchedulingWorkspaceMode,
   actionButtonBase,
   actionButtonNeutral,
   actionButtonPrimary,
+  keyboardFocusRingClass,
+  useDetailsMenu,
 } from "../ui";
 import type { InitialPlanningStrategy, SavedSchedule } from "../types";
 import {
@@ -50,6 +48,10 @@ import {
   type AssignmentConflictSummary,
 } from "./assignmentConflicts";
 import { derivePlanDraftWorkflowState } from "./planDraftWorkflow";
+import PanelMemberChips from "./PanelMemberChips";
+import PlanHealthSummary from "./PlanHealthSummary";
+
+const overflowMenuItemClass = `flex w-full rounded-md px-3 py-2 text-left text-ui font-semibold text-text-primary hover:bg-surface-subtle ${keyboardFocusRingClass}`;
 
 interface SolverResultsProps {
   result: SolveResponse | null;
@@ -67,6 +69,7 @@ interface SolverResultsProps {
   chunkBreakMinutes: number;
   enabledSlots: Set<string>;
   editRequestKey: number;
+  focusRequestKey?: number;
   assignmentConflicts: AssignmentConflictSummary;
   blockRestPreferenceEnabled: boolean | null;
   panelSize: number;
@@ -87,6 +90,7 @@ interface SolverResultsProps {
   onOpenPlan: () => void;
   onPreviewWithAvailabilityDeviation: () => void;
   previewLoading: boolean;
+  backgroundMode?: boolean;
 }
 
 const strategyLabel = (strategy: InitialPlanningStrategy) =>
@@ -114,9 +118,9 @@ const SolverResults = ({
   chunkBreakMinutes,
   enabledSlots,
   editRequestKey,
+  focusRequestKey = 0,
   assignmentConflicts,
   blockRestPreferenceEnabled,
-  panelSize,
   proposalStrategy,
   canonicalBlocks,
   currentReviewRequired,
@@ -134,6 +138,7 @@ const SolverResults = ({
   onOpenPlan,
   onPreviewWithAvailabilityDeviation,
   previewLoading,
+  backgroundMode = false,
 }: SolverResultsProps) => {
   const [viewType, setViewType] = useState<"list" | "calendar" | "person">(
     "list",
@@ -151,9 +156,23 @@ const SolverResults = ({
   const [listDropTargetIndex, setListDropTargetIndex] = useState<number | null>(
     null,
   );
+  const draftHeadingRef = useRef<HTMLHeadingElement>(null);
+  const {
+    detailsRef: overflowMenuRef,
+    closeDetails: closeOverflowMenu,
+    handleDetailsToggle: handleOverflowMenuToggle,
+  } = useDetailsMenu();
   const { presentation } = draft;
+  useEffect(() => {
+    if (backgroundMode || focusRequestKey <= 0) return;
+    const frame = window.requestAnimationFrame(() => {
+      draftHeadingRef.current?.focus({ preventScroll: true });
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [backgroundMode, focusRequestKey]);
   const isEditing = workspaceMode === "editing";
-  const canEditDraft = isEditing && !savedSchedule?.is_distributed;
+  const canEditDraft =
+    !backgroundMode && isEditing && !savedSchedule?.is_distributed;
   const occupiedTimes = useMemo(
     () => new Set(presentation.sortedSchedule.map((item) => item.time)),
     [presentation.sortedSchedule],
@@ -187,9 +206,9 @@ const SolverResults = ({
         : `Dag ${dayIndex + 1}`;
       summary.set(
         entries[0].scheduleIndex,
-        `${dateLabel} · Blokk ${formatMinutes(startMinute)}–${formatMinutes(
+        `${dateLabel}, Blokk ${formatMinutes(startMinute)}–${formatMinutes(
           endMinute,
-        )} · ${entries.length} intervju${entries.length === 1 ? "" : "er"}`,
+        )}, ${entries.length} intervju${entries.length === 1 ? "" : "er"}`,
       );
     });
 
@@ -206,11 +225,20 @@ const SolverResults = ({
   }, [draft.finishEditSession, solveTick]);
 
   useEffect(() => {
-    if (editRequestKey > 0 && !savedSchedule?.is_distributed) {
+    if (
+      !backgroundMode &&
+      editRequestKey > 0 &&
+      !savedSchedule?.is_distributed
+    ) {
       draft.beginEditSession();
       setWorkspaceMode("editing");
     }
-  }, [draft.beginEditSession, editRequestKey, savedSchedule?.is_distributed]);
+  }, [
+    backgroundMode,
+    draft.beginEditSession,
+    editRequestKey,
+    savedSchedule?.is_distributed,
+  ]);
 
   useEffect(() => {
     if (
@@ -284,7 +312,9 @@ const SolverResults = ({
     publicationReady,
   });
   const healthExceptions = [
-    unplaceableCount > 0 ? `${unplaceableCount} mangler plass` : undefined,
+    unplaceableCount > 0 && workflowState.kind !== "placements_missing"
+      ? `${unplaceableCount} mangler plass`
+      : undefined,
     presentation.availabilitySummary.outsideAvailabilityAssignments > 0
       ? `${presentation.availabilitySummary.outsideAvailabilityAssignments} utenfor tilgjengelighet`
       : undefined,
@@ -300,6 +330,11 @@ const SolverResults = ({
     if (!draft.canRestoreEditSession) draft.beginEditSession();
     setWorkspaceMode("editing");
   };
+  const focusDraftHeading = () => {
+    window.requestAnimationFrame(() => {
+      draftHeadingRef.current?.focus({ preventScroll: true });
+    });
+  };
   const changeWorkspaceMode = (nextMode: SchedulingWorkspaceMode) => {
     if (nextMode === "editing") {
       startEditing();
@@ -314,7 +349,6 @@ const SolverResults = ({
     assignmentConflicts.affectedPanelMemberKeys.has(
       assignmentPanelMemberKey(scheduleIndex, member),
     );
-
   const lockLabel = (
     item: (typeof presentation.sortedEntries)[number]["item"],
   ) => (item.locked ? "Lås opp intervju" : "Lås intervju");
@@ -327,14 +361,16 @@ const SolverResults = ({
       : "Behold tid og panel når forslaget genereres på nytt.";
 
   return (
-    <>
+    <div data-cy="schedule-stage" data-stage={workflowState.kind}>
       {hasSchedule(result?.status) && planRevealed && (
-        <SchedulePanel dataCy="proposal-review" className="animate-fade-in">
+        <SchedulePanel
+          dataCy="proposal-review"
+          stage={workflowState.kind}
+          className="animate-fade-in motion-reduce:animate-none"
+        >
           <SchedulePanelHeader
+            headingRef={draftHeadingRef}
             title="Planutkast"
-            description={`${presentation.sortedSchedule.length} intervjuer · ${panelSize} per intervju · Generert med ${strategyLabel(
-              proposalStrategy,
-            )}`}
             actions={
               <div className="flex flex-wrap items-center gap-2">
                 {viewType === "person" ? (
@@ -366,15 +402,14 @@ const SolverResults = ({
                     />
                   </div>
                 )}
-                {viewType !== "person" && (
-                  <SchedulingModeControl
-                    mode={workspaceMode}
-                    onChange={changeWorkspaceMode}
-                  />
-                )}
-                {!isEditing && (
-                  <details className="group relative">
+                {!backgroundMode && !isEditing && (
+                  <details
+                    ref={overflowMenuRef}
+                    onToggle={handleOverflowMenuToggle}
+                    className="group relative"
+                  >
                     <summary
+                      aria-haspopup="menu"
                       className={cn(
                         actionButtonBase,
                         actionButtonNeutral,
@@ -385,48 +420,76 @@ const SolverResults = ({
                         size={iconSizes.small}
                         aria-hidden="true"
                       />
-                      Flere
+                      Endre planen
                       <ChevronDown
                         size={iconSizes.small}
                         aria-hidden="true"
                         className="transition-transform group-open:rotate-180"
                       />
                     </summary>
-                    <div className="absolute right-0 top-full z-30 mt-2 min-w-56 overflow-hidden rounded-lg border border-border bg-surface-base p-1 shadow-lg">
+                    <div
+                      role="menu"
+                      aria-label="Handlinger for å endre planen"
+                      className="absolute right-0 top-full z-30 mt-2 min-w-56 overflow-hidden rounded-lg border border-border bg-surface-base p-1 shadow-lg"
+                    >
                       <button
                         type="button"
-                        onClick={(event) => {
-                          setViewType("person");
-                          event.currentTarget
-                            .closest("details")
-                            ?.removeAttribute("open");
+                        role="menuitem"
+                        onClick={() => {
+                          closeOverflowMenu(false);
+                          startEditing();
+                          focusDraftHeading();
                         }}
-                        className="flex w-full rounded-md px-3 py-2 text-left text-ui font-semibold text-text-primary hover:bg-surface-subtle"
+                        className={overflowMenuItemClass}
+                      >
+                        Rediger planutkast
+                      </button>
+                      <button
+                        type="button"
+                        role="menuitem"
+                        onClick={() => {
+                          closeOverflowMenu(false);
+                          setViewType("person");
+                          focusDraftHeading();
+                        }}
+                        className={overflowMenuItemClass}
                       >
                         Vis belastning
                       </button>
                       <button
                         type="button"
-                        onClick={(event) => {
+                        role="menuitem"
+                        onClick={() => {
+                          closeOverflowMenu(true);
                           setDetailsOpen(true);
-                          event.currentTarget
-                            .closest("details")
-                            ?.removeAttribute("open");
                         }}
-                        className="flex w-full rounded-md px-3 py-2 text-left text-ui font-semibold text-text-primary hover:bg-surface-subtle"
+                        className={overflowMenuItemClass}
                       >
                         Vis genereringsdetaljer
                       </button>
+                      {currentReviewRequired && (
+                        <button
+                          type="button"
+                          role="menuitem"
+                          onClick={() => {
+                            closeOverflowMenu(true);
+                            onOpenConflictReview();
+                          }}
+                          data-cy="reopen-candidate-review"
+                          className={overflowMenuItemClass}
+                        >
+                          Se eller endre kandidatkontroll
+                        </button>
+                      )}
                       <button
                         type="button"
-                        onClick={(event) => {
+                        role="menuitem"
+                        onClick={() => {
+                          closeOverflowMenu(true);
                           onOpenSettings();
-                          event.currentTarget
-                            .closest("details")
-                            ?.removeAttribute("open");
                         }}
                         data-cy="proposal-rerun"
-                        className="flex w-full rounded-md px-3 py-2 text-left text-ui font-semibold text-text-primary hover:bg-surface-subtle"
+                        className={overflowMenuItemClass}
                       >
                         Generer nytt forslag
                       </button>
@@ -437,107 +500,46 @@ const SolverResults = ({
             }
           />
           <SchedulePanelBody>
-            {overviewStats && (
+            {!backgroundMode && (
               <section
-                aria-label="Resultat fra planleggingen"
-                data-cy="plan-health-summary"
-                className="mb-4 border-b border-border-soft pb-4"
-              >
-                <div className="flex flex-wrap items-center justify-between gap-3">
-                  <p className="m-0 text-ui text-text-muted">
-                    <strong className="font-semibold tabular-nums text-text-primary">
-                      {overviewStats.totalInterviews} av {totalCandidateCount}{" "}
-                      planlagt
-                    </strong>
-                    {healthExceptions.map((exception) => (
-                      <span key={exception}> · {exception}</span>
-                    ))}
-                  </p>
-                  <button
-                    type="button"
-                    aria-expanded={detailsOpen}
-                    aria-controls="plan-draft-details"
-                    onClick={() => setDetailsOpen((open) => !open)}
-                    className="inline-flex items-center gap-1 text-detail font-semibold text-brand hover:underline"
-                  >
-                    {detailsOpen ? "Skjul detaljer" : "Vis detaljer"}
-                    <ChevronDown
-                      size={15}
-                      aria-hidden="true"
-                      className={cn(
-                        "transition-transform",
-                        detailsOpen && "rotate-180",
-                      )}
-                    />
-                  </button>
-                </div>
-                {detailsOpen && (
-                  <div
-                    id="plan-draft-details"
-                    className="mt-4 grid gap-3 rounded-lg bg-surface-subtle px-4 py-3 text-detail text-text-muted"
-                  >
-                    <dl className="m-0 grid gap-3 sm:grid-cols-3">
-                      <div>
-                        <dt className="font-semibold text-text-subtle">
-                          Fordeling
-                        </dt>
-                        <dd className="m-0 mt-0.5 font-semibold tabular-nums text-text-primary">
-                          {overviewStats.minLoad}–{overviewStats.maxLoad}{" "}
-                          intervjuer
-                        </dd>
-                      </div>
-                      <div>
-                        <dt className="font-semibold text-text-subtle">
-                          Arbeidsblokker
-                        </dt>
-                        <dd className="m-0 mt-0.5 font-semibold tabular-nums text-text-primary">
-                          {usedBlockCount}
-                        </dd>
-                      </div>
-                      <div>
-                        <dt className="font-semibold text-text-subtle">
-                          Generering
-                        </dt>
-                        <dd className="m-0 mt-0.5 font-semibold text-text-primary">
-                          {strategyLabel(proposalStrategy)}
-                        </dd>
-                      </div>
-                    </dl>
-                    <p data-cy="block-rest-summary" className="m-0">
-                      {blockRestPreferenceEnabled === null
-                        ? "Innstillingen for hvile mellom blokker er ukjent for dette utkastet."
-                        : !blockRestPreferenceEnabled
-                          ? "Hvile mellom arbeidsblokker var ikke prioritert."
-                          : presentation.blockRestSummary.honored
-                            ? "Hvile mellom arbeidsblokker er oppfylt."
-                            : `${presentation.blockRestSummary.exceptionCount} unntak fra hvile mellom arbeidsblokker.`}
-                    </p>
-                    {presentation.blockRestSummary.isNonOptimal && (
-                      <p className="m-0 font-semibold text-amber-800">
-                        Søket ble avsluttet før optimalitet var bevist.
-                      </p>
-                    )}
-                    {presentation.blockRestSummary.optimalityUnknown && (
-                      <p className="m-0">
-                        Optimalitet er ikke kjent for dette gjenopprettede
-                        utkastet.
-                      </p>
-                    )}
-                    {unplaceableCount > 0 && (
-                      <button
-                        type="button"
-                        disabled={previewLoading}
-                        onClick={onPreviewWithAvailabilityDeviation}
-                        className="justify-self-start font-semibold text-brand hover:underline disabled:opacity-50"
-                      >
-                        {previewLoading
-                          ? "Beregner forslag…"
-                          : "Forhåndsvis komplett forslag med avvik"}
-                      </button>
-                    )}
-                  </div>
+                data-cy="plan-draft-next-action"
+                role={workflowState.tone === "danger" ? "alert" : "status"}
+                className={cn(
+                  "mb-4 border-b border-border-soft pb-4",
+                  workflowState.tone === "danger"
+                    ? "text-danger"
+                    : workflowState.tone === "warning"
+                      ? "text-amber-900"
+                      : workflowState.tone === "success"
+                        ? "text-success"
+                        : "text-text-primary",
                 )}
+              >
+                <h3 className="m-0 text-base font-bold">
+                  {workflowState.title}
+                </h3>
+                <p className="m-0 mt-1 text-ui text-text-muted">
+                  {workflowState.description}
+                </p>
               </section>
+            )}
+            {overviewStats && (
+              <PlanHealthSummary
+                overviewStats={overviewStats}
+                totalCandidateCount={totalCandidateCount}
+                healthExceptions={healthExceptions}
+                detailsOpen={detailsOpen}
+                onToggleDetails={() => setDetailsOpen((open) => !open)}
+                usedBlockCount={usedBlockCount}
+                strategyLabel={strategyLabel(proposalStrategy)}
+                blockRestPreferenceEnabled={blockRestPreferenceEnabled}
+                blockRestSummary={presentation.blockRestSummary}
+                unplaceableCount={unplaceableCount}
+                previewLoading={previewLoading}
+                onPreviewWithAvailabilityDeviation={
+                  onPreviewWithAvailabilityDeviation
+                }
+              />
             )}
             {canEditDraft && (
               <div
@@ -566,36 +568,6 @@ const SolverResults = ({
                 )}
               </div>
             )}
-            {workflowState.kind !== "ready_to_publish" &&
-              workflowState.kind !== "saving" &&
-              (!isEditing ||
-                workflowState.kind === "save_error" ||
-                workflowState.kind === "save_conflict") && (
-                <div
-                  data-cy="proposal-workflow-notice"
-                  role={workflowState.tone === "danger" ? "alert" : "status"}
-                  className={cn(
-                    "mb-4 flex items-start gap-3 rounded-lg border px-4 py-3 text-ui",
-                    workflowState.tone === "danger"
-                      ? "border-danger-border bg-danger-bg text-danger"
-                      : workflowState.tone === "warning"
-                        ? "border-amber-200 bg-amber-50 text-amber-950"
-                        : "border-border-soft bg-surface-subtle text-text-primary",
-                  )}
-                >
-                  <AlertTriangle
-                    size={iconSizes.small}
-                    className="mt-0.5 flex-none"
-                    aria-hidden="true"
-                  />
-                  <div className="min-w-0">
-                    <p className="m-0 font-semibold">{workflowState.title}</p>
-                    <p className="m-0 mt-1 text-detail leading-relaxed opacity-80">
-                      {workflowState.description}
-                    </p>
-                  </div>
-                </div>
-              )}
             {viewType === "person" ? (
               <InterviewerLoadView
                 entries={presentation.sortedEntries}
@@ -781,88 +753,19 @@ const SolverResults = ({
                                 </td>
                                 <td className="px-4 py-3 text-sm">
                                   <div className="flex flex-wrap gap-1.5">
-                                    {item.panel.map((member, memberIndex) => {
-                                      const availabilityStatus =
-                                        presentation.availabilityStatusFor(
-                                          item,
-                                          member,
-                                        );
-                                      const availabilityLabel =
-                                        assignmentAvailabilityLabel(
-                                          availabilityStatus,
-                                        );
-                                      const hasConflict = hasConflictFor(
-                                        scheduleIndex,
-                                        member,
-                                      );
-                                      const optedOut =
-                                        assignmentConflicts.optedOutPanelMemberKeys.has(
-                                          assignmentPanelMemberKey(
-                                            scheduleIndex,
-                                            member,
-                                          ),
-                                        );
-                                      const statusLabel = hasConflict
-                                        ? optedOut
-                                          ? "Deltar ikke lenger"
-                                          : "Registrert inhabilitet"
-                                        : availabilityLabel;
-                                      return (
-                                        <EditablePanelChip
-                                          key={memberIndex}
-                                          label={member.name}
-                                          tone={
-                                            availabilityStatus !== "verified"
-                                              ? "overtime"
-                                              : "neutral"
-                                          }
-                                          conflict={hasConflict}
-                                          timeIssue={
-                                            !hasConflict &&
-                                            availabilityStatus !== "verified"
-                                          }
-                                          statusLabel={statusLabel ?? undefined}
-                                          options={
-                                            canEditDraft
-                                              ? presentation.interviewerOptions.map(
-                                                  (interviewer) => ({
-                                                    id: interviewer.id,
-                                                    name: interviewer.name,
-                                                    disabled:
-                                                      interviewer.name !==
-                                                        member.name &&
-                                                      item.panel.some(
-                                                        (panelMember) =>
-                                                          panelMember.name ===
-                                                          interviewer.name,
-                                                      ),
-                                                  }),
-                                                )
-                                              : undefined
-                                          }
-                                          onSelect={
-                                            canEditDraft
-                                              ? (newName, newId) =>
-                                                  draft.swapPanelMember(
-                                                    scheduleIndex,
-                                                    memberIndex,
-                                                    newName,
-                                                    newId,
-                                                  )
-                                              : undefined
-                                          }
-                                          title={
-                                            canEditDraft
-                                              ? `Bytt intervjuer${
-                                                  statusLabel
-                                                    ? ` — ${statusLabel.toLowerCase()}`
-                                                    : ""
-                                                }`
-                                              : (statusLabel ?? undefined)
-                                          }
-                                        />
-                                      );
-                                    })}
+                                    <PanelMemberChips
+                                      item={item}
+                                      scheduleIndex={scheduleIndex}
+                                      canEditDraft={canEditDraft}
+                                      interviewerOptions={
+                                        presentation.interviewerOptions
+                                      }
+                                      availabilityStatusFor={
+                                        presentation.availabilityStatusFor
+                                      }
+                                      assignmentConflicts={assignmentConflicts}
+                                      onSwapPanelMember={draft.swapPanelMember}
+                                    />
                                   </div>
                                 </td>
                                 {canEditDraft && (
@@ -999,73 +902,17 @@ const SolverResults = ({
                         </button>
                       ) : null}
                       <div className="flex flex-wrap gap-1">
-                        {item.panel.map((member, memberIndex) => {
-                          const availabilityStatus =
-                            presentation.availabilityStatusFor(item, member);
-                          const availabilityLabel =
-                            assignmentAvailabilityLabel(availabilityStatus);
-                          const hasConflict = hasConflictFor(
-                            scheduleIndex,
-                            member,
-                          );
-                          const statusLabel = hasConflict
-                            ? "Registrert inhabilitet"
-                            : availabilityLabel;
-                          return (
-                            <EditablePanelChip
-                              key={`${member.name}-${memberIndex}`}
-                              label={member.name}
-                              tone={
-                                availabilityStatus !== "verified"
-                                  ? "overtime"
-                                  : "neutral"
-                              }
-                              conflict={hasConflict}
-                              timeIssue={
-                                !hasConflict &&
-                                availabilityStatus !== "verified"
-                              }
-                              statusLabel={statusLabel ?? undefined}
-                              options={
-                                canEditDraft
-                                  ? presentation.interviewerOptions.map(
-                                      (interviewer) => ({
-                                        id: interviewer.id,
-                                        name: interviewer.name,
-                                        disabled:
-                                          interviewer.name !== member.name &&
-                                          item.panel.some(
-                                            (panelMember) =>
-                                              panelMember.name ===
-                                              interviewer.name,
-                                          ),
-                                      }),
-                                    )
-                                  : undefined
-                              }
-                              onSelect={
-                                canEditDraft
-                                  ? (newName, newId) =>
-                                      draft.swapPanelMember(
-                                        scheduleIndex,
-                                        memberIndex,
-                                        newName,
-                                        newId,
-                                      )
-                                  : undefined
-                              }
-                              title={
-                                canEditDraft
-                                  ? `Bytt intervjuer${
-                                      statusLabel
-                                        ? ` — ${statusLabel.toLowerCase()}`
-                                        : ""
-                                    }`
-                                  : (statusLabel ?? undefined)
-                              }
-                            />
-                          );
-                        })}
+                        <PanelMemberChips
+                          item={item}
+                          scheduleIndex={scheduleIndex}
+                          canEditDraft={canEditDraft}
+                          interviewerOptions={presentation.interviewerOptions}
+                          availabilityStatusFor={
+                            presentation.availabilityStatusFor
+                          }
+                          assignmentConflicts={assignmentConflicts}
+                          onSwapPanelMember={draft.swapPanelMember}
+                        />
                       </div>
                     </div>
                   );
@@ -1073,104 +920,106 @@ const SolverResults = ({
               />
             )}
           </SchedulePanelBody>
-          <SchedulingActionBar
-            className="sticky bottom-0 z-10 bg-surface-base"
-            status={
-              <span
-                className={cn(
-                  "font-semibold",
-                  persistence.state === "error" || persistence.hasConflict
-                    ? "text-danger"
-                    : persistence.isSaving || hasLocalDraft
-                      ? "text-text-muted"
-                      : "text-text-faded",
-                )}
-              >
-                {saveStatusLabel}
-              </span>
-            }
-            actions={
-              workflowState.kind === "save_conflict" ? (
-                <SchedulingButton
-                  onClick={() => window.location.reload()}
-                  data-cy="proposal-primary-action"
-                  variant="primary"
+          {!backgroundMode && (
+            <SchedulingActionBar
+              className="sticky bottom-0 z-10 bg-surface-base"
+              status={
+                <span
+                  className={cn(
+                    "font-semibold",
+                    persistence.state === "error" || persistence.hasConflict
+                      ? "text-danger"
+                      : persistence.isSaving || hasLocalDraft
+                        ? "text-text-muted"
+                        : "text-text-faded",
+                  )}
                 >
-                  Last inn siste versjon
-                </SchedulingButton>
-              ) : workflowState.kind === "save_error" ? (
-                <SchedulingButton
-                  onClick={persistence.retry}
-                  data-cy="proposal-primary-action"
-                  variant="primary"
-                >
-                  Prøv igjen
-                </SchedulingButton>
-              ) : isEditing ? (
-                <SchedulingButton
-                  onClick={() => changeWorkspaceMode("preview")}
-                  data-cy="proposal-primary-action"
-                  variant="primary"
-                >
-                  <Check size={iconSizes.small} aria-hidden="true" />
-                  Gå til forhåndsvisning
-                </SchedulingButton>
-              ) : workflowState.kind ===
-                "saving" ? null : workflowState.kind === "solver_error" ? (
-                <button
-                  type="button"
-                  onClick={onRetrySolve}
-                  data-cy="proposal-primary-action"
-                  className={cn(actionButtonBase, actionButtonPrimary)}
-                >
-                  Prøv igjen
-                </button>
-              ) : workflowState.kind === "placements_missing" ? (
-                <button
-                  type="button"
-                  onClick={onOpenSettings}
-                  data-cy="proposal-rerun-unplaceable"
-                  className={cn(actionButtonBase, actionButtonPrimary)}
-                >
-                  Juster og generer på nytt
-                  <ArrowRight size={iconSizes.small} aria-hidden="true" />
-                </button>
-              ) : workflowState.kind === "candidate_check_pending" ? (
-                <button
-                  type="button"
-                  onClick={onOpenConflictReview}
-                  data-cy="proposal-primary-action"
-                  className={cn(actionButtonBase, actionButtonPrimary)}
-                >
-                  Kontroller kandidater
-                  <ArrowRight size={iconSizes.small} aria-hidden="true" />
-                </button>
-              ) : workflowState.kind === "repair_required" ? (
-                <button
-                  type="button"
-                  onClick={onOpenRepair}
-                  data-cy="proposal-primary-action"
-                  className={cn(actionButtonBase, actionButtonPrimary)}
-                >
-                  Finn løsning
-                  <ArrowRight size={iconSizes.small} aria-hidden="true" />
-                </button>
-              ) : workflowState.kind === "ready_to_publish" ? (
-                <button
-                  type="button"
-                  onClick={onOpenPlan}
-                  data-cy="proposal-primary-action"
-                  className={cn(actionButtonBase, actionButtonPrimary)}
-                >
-                  Gå til publisering
-                  <ArrowRight size={iconSizes.small} aria-hidden="true" />
-                </button>
-              ) : null
-            }
-          />
+                  {saveStatusLabel}
+                </span>
+              }
+              actions={
+                workflowState.kind === "save_conflict" ? (
+                  <SchedulingButton
+                    onClick={() => window.location.reload()}
+                    data-cy="proposal-primary-action"
+                    variant="primary"
+                  >
+                    Last inn siste versjon
+                  </SchedulingButton>
+                ) : workflowState.kind === "save_error" ? (
+                  <SchedulingButton
+                    onClick={persistence.retry}
+                    data-cy="proposal-primary-action"
+                    variant="primary"
+                  >
+                    Prøv igjen
+                  </SchedulingButton>
+                ) : isEditing ? (
+                  <SchedulingButton
+                    onClick={() => changeWorkspaceMode("preview")}
+                    data-cy="proposal-primary-action"
+                    variant="primary"
+                  >
+                    <Check size={iconSizes.small} aria-hidden="true" />
+                    Gå til forhåndsvisning
+                  </SchedulingButton>
+                ) : workflowState.kind ===
+                  "saving" ? null : workflowState.kind === "solver_error" ? (
+                  <button
+                    type="button"
+                    onClick={onRetrySolve}
+                    data-cy="proposal-primary-action"
+                    className={cn(actionButtonBase, actionButtonPrimary)}
+                  >
+                    Prøv igjen
+                  </button>
+                ) : workflowState.kind === "placements_missing" ? (
+                  <button
+                    type="button"
+                    onClick={onOpenSettings}
+                    data-cy="proposal-rerun-unplaceable"
+                    className={cn(actionButtonBase, actionButtonPrimary)}
+                  >
+                    Juster og generer på nytt
+                    <ArrowRight size={iconSizes.small} aria-hidden="true" />
+                  </button>
+                ) : workflowState.kind === "candidate_check_pending" ? (
+                  <button
+                    type="button"
+                    onClick={onOpenConflictReview}
+                    data-cy="proposal-primary-action"
+                    className={cn(actionButtonBase, actionButtonPrimary)}
+                  >
+                    Kontroller kandidater
+                    <ArrowRight size={iconSizes.small} aria-hidden="true" />
+                  </button>
+                ) : workflowState.kind === "repair_required" ? (
+                  <button
+                    type="button"
+                    onClick={onOpenRepair}
+                    data-cy="proposal-primary-action"
+                    className={cn(actionButtonBase, actionButtonPrimary)}
+                  >
+                    Lag reparasjonsforslag
+                    <ArrowRight size={iconSizes.small} aria-hidden="true" />
+                  </button>
+                ) : workflowState.kind === "ready_to_publish" ? (
+                  <button
+                    type="button"
+                    onClick={onOpenPlan}
+                    data-cy="proposal-primary-action"
+                    className={cn(actionButtonBase, actionButtonPrimary)}
+                  >
+                    Gå til publisering
+                    <ArrowRight size={iconSizes.small} aria-hidden="true" />
+                  </button>
+                ) : null
+              }
+            />
+          )}
         </SchedulePanel>
       )}
-    </>
+    </div>
   );
 };
 

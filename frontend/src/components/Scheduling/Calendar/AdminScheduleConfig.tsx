@@ -3,7 +3,6 @@ import { LayoutPanelTop } from "lucide-react";
 import cn from "src/utils/cn";
 import {
   buildBlockTimeChunks,
-  buildBlockTimeSlots,
   dateRangeDates,
   enabledWindowsToSlots,
   makeSlotKey,
@@ -19,6 +18,7 @@ import {
 } from "../ui";
 import type { EnabledWindow, SlotOverride } from "../types";
 import { isConflictError } from "../Solver/solverHelpers";
+import { foundationFrameworkPresentation } from "src/routes/SchedulePage/workflowStages";
 import AdminAvailabilityGrid from "./AdminAvailabilityGrid";
 import AdminScheduleSettingsPanel, {
   AdminScheduleConfigFooter,
@@ -52,6 +52,7 @@ import {
 
 interface AdminScheduleConfigProps {
   activeTab: "framework" | "availability" | "coverage";
+  foundationNav?: React.ReactNode;
   startDate: string;
   endDate: string;
   dayStartMinute: number;
@@ -90,6 +91,7 @@ export interface ScheduleConfigInput {
 
 const AdminScheduleConfig: React.FC<AdminScheduleConfigProps> = ({
   activeTab,
+  foundationNav,
   startDate,
   endDate,
   dayStartMinute,
@@ -203,24 +205,6 @@ const AdminScheduleConfig: React.FC<AdminScheduleConfigProps> = ({
     () => dateRangeDates(localStartDate, localEndDate, MAX_RANGE_DAYS),
     [localStartDate, localEndDate],
   );
-
-  const timeSlots = React.useMemo(() => {
-    if (isInvalidRange) return [];
-    return buildBlockTimeSlots({
-      dayStartMinute: startMinute,
-      dayEndMinute: endMinute,
-      sessionDuration: pendingDuration,
-      chunkSize: pendingChunkSize,
-      chunkBreakMinutes: pendingChunkBreak,
-    });
-  }, [
-    startMinute,
-    endMinute,
-    pendingDuration,
-    pendingChunkSize,
-    pendingChunkBreak,
-    isInvalidRange,
-  ]);
 
   const chunks = React.useMemo(() => {
     if (isInvalidRange) return [];
@@ -754,70 +738,81 @@ const AdminScheduleConfig: React.FC<AdminScheduleConfigProps> = ({
       role="tabpanel"
       aria-labelledby="foundation-tab-framework"
       hidden={activeTab !== "framework"}
-      className={
-        activeTab === "framework" ? "flex flex-col gap-3 pb-24" : "hidden"
-      }
+      className={activeTab === "framework" ? "min-w-0 pb-24" : "hidden"}
     >
-      <SchedulePanel className="min-w-0">
+      <SchedulePanel
+        dataCy="schedule-stage"
+        stage="foundation-framework"
+        className="min-w-0"
+      >
+        {foundationNav}
         <SchedulePanelHeader
           icon={LayoutPanelTop}
-          title="Tidsrammer"
-          description="Definer når intervjuer kan gjennomføres og hvordan blokkene bygges."
+          title={foundationFrameworkPresentation.title}
         />
-        <SchedulePanelBody>{settings}</SchedulePanelBody>
+        <SchedulePanelBody className="space-y-6">
+          {settings}
+          <section
+            id="interview-blocks"
+            aria-labelledby="interview-blocks-heading"
+            className="scroll-mt-4 border-t border-border-soft pt-6"
+          >
+            <div className="mb-4">
+              <h3
+                id="interview-blocks-heading"
+                className="m-0 text-base font-bold text-text-primary"
+              >
+                Intervjutider
+              </h3>
+            </div>
+            {layoutVersion < 2 && !layoutResetRequested && (
+              <div className="mb-4 rounded-md border border-warning-border bg-warning-bg px-4 py-3 text-detail text-text-muted">
+                <p className="m-0 font-semibold text-text-primary">
+                  Eldre blokkoppsett
+                </p>
+                <p className="m-0 mt-1">
+                  Oppsettet kan brukes av løseren, men må tilbakestilles før
+                  intervjutidene kan endres.
+                </p>
+                <button
+                  type="button"
+                  className={cn(
+                    actionButtonBase,
+                    actionButtonGhost,
+                    "mt-2 px-0 py-1",
+                  )}
+                  onClick={handleResetLegacyLayout}
+                >
+                  Tilbakestill til dagens blokkmønster
+                </button>
+              </div>
+            )}
+            <AdminAvailabilityGrid
+              dates={dates}
+              chunks={chunks}
+              blockSize={pendingChunkSize}
+              enabledSlots={draftSlots}
+              sessionDuration={pendingDuration}
+              view={editorView}
+              customizationCount={draftOverrides.length}
+              fineTuningDisabled={legacyLayoutLocked}
+              editingDisabled={legacyLayoutLocked}
+              onChangeView={setEditorView}
+              onResetCustomizations={handleResetCustomizations}
+              onSetBlock={handleSetBlock}
+              onToggleSlot={handleToggleSlot}
+              onOpenAllStandardBlocks={handleOpenAllStandardBlocks}
+              onCloseAllCapacity={handleCloseAllCapacity}
+              onToggleDayStandardBlocks={handleToggleDayStandardBlocks}
+            />
+          </section>
+        </SchedulePanelBody>
+        <AdminScheduleConfigFooter
+          saveStatus={saveStatus}
+          actionLabel="Lagre oppsett"
+          className="sticky bottom-0 z-10 bg-surface-base"
+        />
       </SchedulePanel>
-      <SchedulePanel id="interview-blocks" className="min-w-0 scroll-mt-4">
-        <SchedulePanelHeader
-          icon={LayoutPanelTop}
-          title="Intervjutider"
-          description="Velg blokker først, og finjuster bare tidene som trenger et unntak."
-        />
-        {layoutVersion < 2 && !layoutResetRequested && (
-          <div className="mx-5 mt-4 rounded-md border border-warning-border bg-warning-bg px-4 py-3 text-detail text-text-muted">
-            <p className="m-0 font-semibold text-text-primary">
-              Eldre blokkoppsett
-            </p>
-            <p className="m-0 mt-1">
-              Oppsettet kan brukes av løseren, men må tilbakestilles før
-              intervjutidene kan endres.
-            </p>
-            <button
-              type="button"
-              className={cn(
-                actionButtonBase,
-                actionButtonGhost,
-                "mt-2 px-0 py-1",
-              )}
-              onClick={handleResetLegacyLayout}
-            >
-              Tilbakestill til dagens blokkmønster
-            </button>
-          </div>
-        )}
-        <AdminAvailabilityGrid
-          dates={dates}
-          chunks={chunks}
-          blockSize={pendingChunkSize}
-          enabledSlots={draftSlots}
-          sessionDuration={pendingDuration}
-          view={editorView}
-          customizationCount={draftOverrides.length}
-          fineTuningDisabled={legacyLayoutLocked}
-          editingDisabled={legacyLayoutLocked}
-          onChangeView={setEditorView}
-          onResetCustomizations={handleResetCustomizations}
-          onSetBlock={handleSetBlock}
-          onToggleSlot={handleToggleSlot}
-          onOpenAllStandardBlocks={handleOpenAllStandardBlocks}
-          onCloseAllCapacity={handleCloseAllCapacity}
-          onToggleDayStandardBlocks={handleToggleDayStandardBlocks}
-        />
-      </SchedulePanel>
-      <AdminScheduleConfigFooter
-        saveStatus={saveStatus}
-        actionLabel="Lagre oppsett"
-        className="sticky bottom-3 z-10 rounded-panel border border-border bg-surface-base shadow-lg"
-      />
     </div>
   );
 };

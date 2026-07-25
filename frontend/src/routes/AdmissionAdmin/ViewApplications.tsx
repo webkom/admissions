@@ -9,6 +9,7 @@ import AdmissionsContainer from "src/containers/AdmissionsContainer";
 import { escapeCsvCell } from "src/utils/methods";
 import { useAdmission, useAdminApplications } from "src/query/hooks";
 import { useTerminateCommitteeMutation } from "src/query/mutations";
+import { isSensitiveAuthorityChangedError } from "src/query/sensitiveAccess";
 import { useParams, useSearchParams } from "react-router-dom";
 import {
   ChevronDown,
@@ -195,6 +196,9 @@ const ViewApplications = () => {
       { label: "Fullt navn", key: "name" },
       ...(showGroupColumn ? [{ label: "Gruppe", key: "group" }] : []),
       { label: "Søknadstekst", key: "groupApplicationText" },
+      ...(admission?.userdata.is_admin
+        ? [{ label: "Prioriteringer", key: "priorityText" }]
+        : []),
       { label: "E-post", key: "email" },
       { label: "Mobilnummer", key: "phoneNumber" },
       { label: "Brukernavn", key: "username" },
@@ -202,7 +206,7 @@ const ViewApplications = () => {
       { label: "Tid sendt", key: "createdAt" },
       { label: "Tid oppdatert", key: "updatedAt" },
     ],
-    [showGroupColumn],
+    [admission?.userdata.is_admin, showGroupColumn],
   );
   const csvData = useMemo(
     () =>
@@ -211,6 +215,7 @@ const ViewApplications = () => {
           name: application.user.full_name,
           group: groupApplication.group.name,
           groupApplicationText: groupApplication.text,
+          priorityText: application.priority_text ?? "",
           email: application.user.email,
           phoneNumber: application.phone_number,
           username: application.user.username,
@@ -246,10 +251,6 @@ const ViewApplications = () => {
         )
       : "alle-grupper"
   }-${DateTime.now().setZone(CSV_TIME_ZONE).toFormat("yyyy-LL-dd")}.csv`;
-  const visibleApplicationCount = filteredApplications.reduce(
-    (count, application) => count + application.group_applications.length,
-    0,
-  );
   const filtersAreActive =
     searchTerm.trim() !== "" ||
     selectedInterviewStatus !== "" ||
@@ -288,13 +289,15 @@ const ViewApplications = () => {
             `Søknadsdata for ${terminationGroup.name} er slettet permanent.`,
           );
         },
-        onError: (error) =>
+        onError: (error) => {
+          if (isSensitiveAuthorityChangedError(error)) return;
           setTerminationError(
             getApiErrorMessage(
               error,
               "Kunne ikke slette komitédata. Prøv igjen.",
             ),
-          ),
+          );
+        },
       },
     );
   };

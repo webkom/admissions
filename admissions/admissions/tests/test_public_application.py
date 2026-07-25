@@ -79,6 +79,33 @@ class CreateApplicationTestCase(APITestCase):
 
         self.assertEqual(res.status_code, status.HTTP_201_CREATED)
 
+    def test_priority_comment_is_saved_and_returned_to_the_applicant(self):
+        self.client.force_authenticate(user=self.pleb_anna)
+        priority_text = "1. Webkom\n2. Koskom"
+
+        create_response = self.client.post(
+            reverse(
+                "userapplication-list", kwargs={"admission_slug": self.admission_slug}
+            ),
+            {**self.application_data, "priority_text": priority_text},
+            format="json",
+        )
+        mine_response = self.client.get(
+            reverse(
+                "userapplication-mine", kwargs={"admission_slug": self.admission_slug}
+            )
+        )
+
+        self.assertEqual(create_response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(
+            UserApplication.objects.get(
+                user=self.pleb_anna, admission=self.admission
+            ).text,
+            priority_text,
+        )
+        self.assertEqual(mine_response.status_code, status.HTTP_200_OK)
+        self.assertEqual(mine_response.data["priority_text"], priority_text)
+
     def test_my_application_includes_group_receipt_details(self):
         self.client.force_authenticate(user=self.pleb_anna)
         list_url = reverse(

@@ -3,8 +3,11 @@ import { isAxiosError } from "axios";
 
 import {
   areSensitiveAdmissionCacheWritesBlocked,
+  captureSensitiveAdmissionAuthorityEpoch,
+  isSensitiveAdmissionAuthorityEpochCurrent,
   purgeSensitiveAdmissionAccess,
   purgeSensitiveAuthorizationFailure,
+  type SensitiveAdmissionAuthorityEpoch,
 } from "src/query/sensitiveAccess";
 import { apiClient } from "src/utils/callApi";
 
@@ -46,8 +49,15 @@ export const createSolveJobLifecycle = (
 ) => {
   const interruption = (
     isStale: IsStale = neverStale,
+    authorityEpoch?: SensitiveAdmissionAuthorityEpoch,
   ): SolveJobInterruption | null => {
     if (isStale()) return { kind: "stale" };
+    if (
+      authorityEpoch &&
+      !isSensitiveAdmissionAuthorityEpochCurrent(admissionSlug, authorityEpoch)
+    ) {
+      return { kind: "stale" };
+    }
     if (areSensitiveAdmissionCacheWritesBlocked(admissionSlug)) {
       return { kind: "access-failure", purged: false };
     }
@@ -58,12 +68,16 @@ export const createSolveJobLifecycle = (
     payload: unknown,
     isStale: IsStale = neverStale,
   ): Promise<SolveJobRequestOutcome> => {
-    const beforeRequest = interruption(isStale);
+    const authorityEpoch =
+      captureSensitiveAdmissionAuthorityEpoch(admissionSlug);
+    const beforeRequest = interruption(isStale, authorityEpoch);
     if (beforeRequest) return beforeRequest;
 
     try {
       const { data } = await apiClient.post<SolveJob>("/solve/", payload);
-      return interruption(isStale) ?? { kind: "created", job: data };
+      return (
+        interruption(isStale, authorityEpoch) ?? { kind: "created", job: data }
+      );
     } catch (error) {
       const purged = purgeSensitiveAdmissionAccess(
         queryClient,
@@ -72,7 +86,7 @@ export const createSolveJobLifecycle = (
       );
       if (isStale()) return { kind: "stale" };
       if (purged) return { kind: "access-failure", purged };
-      const afterRequest = interruption(isStale);
+      const afterRequest = interruption(isStale, authorityEpoch);
       if (afterRequest) return afterRequest;
       throw error;
     }
@@ -82,20 +96,26 @@ export const createSolveJobLifecycle = (
     jobId: string,
     isStale: IsStale = neverStale,
   ): Promise<SolveJobReadOutcome> => {
-    const beforeRequest = interruption(isStale);
+    const authorityEpoch =
+      captureSensitiveAdmissionAuthorityEpoch(admissionSlug);
+    const beforeRequest = interruption(isStale, authorityEpoch);
     if (beforeRequest) return beforeRequest;
 
     try {
       const { data } = await apiClient.get<SolveJob>(`/solve/${jobId}/`);
-      return interruption(isStale) ?? { kind: "job", job: data };
+      return (
+        interruption(isStale, authorityEpoch) ?? { kind: "job", job: data }
+      );
     } catch (error) {
       if (isAxiosError(error) && error.response?.status === 404) {
-        return isStale() ? { kind: "stale" } : { kind: "missing" };
+        return (
+          interruption(isStale, authorityEpoch) ?? { kind: "missing" as const }
+        );
       }
       const purged = purgeSensitiveAuthorizationFailure(queryClient, error);
       if (isStale()) return { kind: "stale" };
       if (purged) return { kind: "access-failure", purged };
-      const afterRequest = interruption(isStale);
+      const afterRequest = interruption(isStale, authorityEpoch);
       if (afterRequest) return afterRequest;
       throw error;
     }
@@ -104,14 +124,16 @@ export const createSolveJobLifecycle = (
   const latest = async (
     isStale: IsStale = neverStale,
   ): Promise<SolveJobReadOutcome> => {
-    const beforeRequest = interruption(isStale);
+    const authorityEpoch =
+      captureSensitiveAdmissionAuthorityEpoch(admissionSlug);
+    const beforeRequest = interruption(isStale, authorityEpoch);
     if (beforeRequest) return beforeRequest;
 
     try {
       const response = await apiClient.get<SolveJob | "">("/solve/latest/", {
         params: { admission_slug: admissionSlug },
       });
-      const interrupted = interruption(isStale);
+      const interrupted = interruption(isStale, authorityEpoch);
       if (interrupted) return interrupted;
       return response.status === 204 || !response.data
         ? { kind: "missing" }
@@ -120,7 +142,7 @@ export const createSolveJobLifecycle = (
       const purged = purgeSensitiveAuthorizationFailure(queryClient, error);
       if (isStale()) return { kind: "stale" };
       if (purged) return { kind: "access-failure", purged };
-      const afterRequest = interruption(isStale);
+      const afterRequest = interruption(isStale, authorityEpoch);
       if (afterRequest) return afterRequest;
       throw error;
     }
@@ -130,17 +152,24 @@ export const createSolveJobLifecycle = (
     jobId: string,
     isStale: IsStale = neverStale,
   ): Promise<SolveJobCancelOutcome> => {
-    const beforeRequest = interruption(isStale);
+    const authorityEpoch =
+      captureSensitiveAdmissionAuthorityEpoch(admissionSlug);
+    const beforeRequest = interruption(isStale, authorityEpoch);
     if (beforeRequest) return beforeRequest;
 
     try {
       const { data } = await apiClient.delete<SolveJob>(`/solve/${jobId}/`);
-      return interruption(isStale) ?? { kind: "cancelled", job: data };
+      return (
+        interruption(isStale, authorityEpoch) ?? {
+          kind: "cancelled",
+          job: data,
+        }
+      );
     } catch (error) {
       const purged = purgeSensitiveAuthorizationFailure(queryClient, error);
       if (isStale()) return { kind: "stale" };
       if (purged) return { kind: "access-failure", purged };
-      const afterRequest = interruption(isStale);
+      const afterRequest = interruption(isStale, authorityEpoch);
       if (afterRequest) return afterRequest;
       throw error;
     }
@@ -151,7 +180,9 @@ export const createSolveJobLifecycle = (
     expectedUpdatedAt: string,
     isStale: IsStale = neverStale,
   ) => {
-    const beforeRequest = interruption(isStale);
+    const authorityEpoch =
+      captureSensitiveAdmissionAuthorityEpoch(admissionSlug);
+    const beforeRequest = interruption(isStale, authorityEpoch);
     if (beforeRequest) return beforeRequest;
 
     try {
@@ -159,7 +190,7 @@ export const createSolveJobLifecycle = (
         `/solve/${jobId}/apply/`,
         { expected_updated_at: expectedUpdatedAt },
       );
-      const interrupted = interruption(isStale);
+      const interrupted = interruption(isStale, authorityEpoch);
       if (interrupted) return interrupted;
       queryClient.setQueryData(
         [`/admin/admission/${admissionSlug}/schedule/`],
@@ -178,8 +209,11 @@ export const createSolveJobLifecycle = (
       const purged = purgeSensitiveAuthorizationFailure(queryClient, error);
       if (isStale()) return { kind: "stale" as const };
       if (purged) return { kind: "access-failure" as const, purged };
-      const afterRequest = interruption(isStale);
+      const afterRequest = interruption(isStale, authorityEpoch);
       if (afterRequest) return afterRequest;
+      if (isAxiosError(error) && error.response?.status === 409) {
+        return { kind: "conflict" as const, error };
+      }
       throw error;
     }
   };
@@ -190,7 +224,9 @@ export const createSolveJobLifecycle = (
     onJobChange: OnJobChange = () => undefined,
   ): Promise<SolveJobPollOutcome> => {
     let job = created;
-    const beforePoll = interruption(isStale);
+    const authorityEpoch =
+      captureSensitiveAdmissionAuthorityEpoch(admissionSlug);
+    const beforePoll = interruption(isStale, authorityEpoch);
     if (beforePoll) return beforePoll;
     onJobChange(job);
 
@@ -198,16 +234,18 @@ export const createSolveJobLifecycle = (
       await new Promise((resolve) =>
         setTimeout(resolve, SOLVE_POLL_INTERVAL_MS),
       );
-      const beforeRead = interruption(isStale);
+      const beforeRead = interruption(isStale, authorityEpoch);
       if (beforeRead) return beforeRead;
 
       const readOutcome = await read(created.job_id, isStale);
       if (readOutcome.kind !== "job") return readOutcome;
+      const afterRead = interruption(isStale, authorityEpoch);
+      if (afterRead) return afterRead;
       job = readOutcome.job;
       onJobChange(job);
     }
 
-    return interruption(isStale) ?? { kind: "finished", job };
+    return interruption(isStale, authorityEpoch) ?? { kind: "finished", job };
   };
 
   return { request, read, latest, poll, cancel, apply };

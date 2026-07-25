@@ -11,7 +11,6 @@ from admissions.admissions.admission_access import (
     get_user_candidate_visible_groups,
     user_is_admission_admin,
     user_is_committee_member,
-    user_is_interview_admin,
 )
 from admissions.admissions.authentication import SessionAuthentication
 from admissions.admissions.models import (
@@ -29,6 +28,7 @@ from admissions.admissions.scheduling_utils import (
     availability_submission_is_current,
     canonicalize_slot_keys,
     get_eligible_interviewer_ids,
+    get_interviewer_participation,
     get_proposed_candidate_ids_by_interviewer,
     panel_gender_code,
     user_has_interview_availability,
@@ -85,16 +85,77 @@ class InterviewAvailabilityView(APIView):
             and user_has_interview_availability(admission, user.id)
         )
 
+    def _conflict_collection_is_open_for_user(
+        self,
+        admission,
+        saved_schedule,
+        user,
+    ):
+        return bool(
+            saved_schedule is not None
+            and saved_schedule.conflict_collection_open
+            and not saved_schedule.is_distributed
+            and str(user.id) in saved_schedule.conflict_collection_participant_ids
+            and get_interviewer_participation(admission, saved_schedule).get(user.id)
+            == InterviewAvailability.PARTICIPATION_PARTICIPATING
+        )
+
+    def _conflict_collection_candidate_ids(
+        self,
+        admission,
+        saved_schedule,
+        user,
+    ):
+        if saved_schedule is None:
+            return set()
+        own_application_ids = {
+            str(application_id)
+            for application_id in UserApplication.objects.filter(
+                admission=admission,
+                user=user,
+            ).values_list("pk", flat=True)
+        }
+        return {
+            str(candidate_id)
+            for candidate_id in saved_schedule.conflict_collection_candidate_ids
+        } - own_application_ids
+
+    def _conflict_collection_is_current(self, admission, saved_schedule):
+        current_candidate_ids = {
+            str(candidate_id)
+            for candidate_id in UserApplication.objects.filter(
+                admission=admission
+            ).values_list("pk", flat=True)
+        }
+        participation = get_interviewer_participation(admission, saved_schedule)
+        current_participant_ids = {
+            str(user_id)
+            for user_id, state in participation.items()
+            if state == InterviewAvailability.PARTICIPATION_PARTICIPATING
+        }
+        return current_candidate_ids == set(
+            saved_schedule.conflict_collection_candidate_ids
+        ) and current_participant_ids == set(
+            saved_schedule.conflict_collection_participant_ids
+        )
+
     def _visible_candidate_ids(self, admission, saved_schedule, user, is_admin):
         if is_admin:
             return None
+        if self._conflict_collection_is_open_for_user(
+            admission,
+            saved_schedule,
+            user,
+        ):
+            return self._conflict_collection_candidate_ids(
+                admission,
+                saved_schedule,
+                user,
+            )
         if self._conflict_review_is_open_for_user(admission, saved_schedule, user):
-            return {
-                str(pk)
-                for pk in UserApplication.objects.filter(
-                    admission=admission
-                ).values_list("pk", flat=True)
-            }
+            return get_proposed_candidate_ids_by_interviewer(saved_schedule).get(
+                str(user.id), set()
+            )
         visible_groups = get_user_candidate_visible_groups(
             admission,
             saved_schedule,
@@ -133,7 +194,7 @@ class InterviewAvailabilityView(APIView):
         user.__class__ = LegoUser
 
         is_admin = user_is_admission_admin(admission, user)
-        is_interview_admin = user_is_interview_admin(admission, user)
+        is_interview_admin = is_admin
         representing_groups = get_representing_groups(admission, user)
         is_recruiter = representing_groups.exists()
         is_committee_member = user_is_committee_member(admission, user)
@@ -172,6 +233,25 @@ class InterviewAvailabilityView(APIView):
         proposed_candidate_ids_map = get_proposed_candidate_ids_by_interviewer(
             saved_schedule
         )
+        requester_review_scope_open = self._conflict_review_is_open_for_user(
+            admission,
+            saved_schedule,
+            user,
+        )
+        visible_proposed_candidate_ids_map = (
+            proposed_candidate_ids_map
+            if is_admin
+            else (
+                {
+                    str(user.id): proposed_candidate_ids_map.get(
+                        str(user.id),
+                        set(),
+                    )
+                }
+                if requester_review_scope_open
+                else {}
+            )
+        )
         availability_generation = (
             saved_schedule.availability_generation if saved_schedule is not None else 1
         )
@@ -198,10 +278,52 @@ class InterviewAvailabilityView(APIView):
         conflict_review_complete_map = {
             item.user_id: self._conflict_review_complete(
                 item.reviewed_candidate_ids,
-                proposed_candidate_ids_map.get(str(item.user_id), set()),
+                visible_proposed_candidate_ids_map.get(str(item.user_id), set()),
             )
             for item in saved_items
         }
+        collection_candidate_ids_map = {}
+        collection_complete_map = {}
+        collection_scope_visible_map = {}
+        collection_scope_is_current = bool(
+            saved_schedule is not None
+            and saved_schedule.conflict_collection_open
+            and self._conflict_collection_is_current(admission, saved_schedule)
+        )
+        for person in users:
+            can_view_collection_scope = bool(
+                saved_schedule is not None
+                and collection_scope_is_current
+                and str(person.id) in saved_schedule.conflict_collection_participant_ids
+                and (is_admin or person.id == user.id)
+            )
+            collection_scope_visible_map[person.id] = can_view_collection_scope
+            candidate_ids = (
+                self._conflict_collection_candidate_ids(
+                    admission,
+                    saved_schedule,
+                    person,
+                )
+                if can_view_collection_scope
+                else set()
+            )
+            collection_candidate_ids_map[person.id] = candidate_ids
+            availability = availability_map.get(person.id)
+            reviewed_collection_ids = {
+                str(candidate_id)
+                for candidate_id in (
+                    availability.conflict_collection_reviewed_candidate_ids
+                    if availability is not None
+                    else []
+                )
+            }
+            collection_complete_map[person.id] = bool(
+                can_view_collection_scope
+                and availability is not None
+                and availability.conflict_collection_review_revision
+                == saved_schedule.conflict_collection_revision
+                and reviewed_collection_ids == candidate_ids
+            )
 
         payload = [
             {
@@ -224,10 +346,22 @@ class InterviewAvailabilityView(APIView):
                 "conflicts": conflicts_map.get(person.id, []),
                 "reviewed_candidate_ids": reviewed_candidates_map.get(person.id, []),
                 "proposed_candidate_ids": sorted(
-                    proposed_candidate_ids_map.get(str(person.id), set())
+                    visible_proposed_candidate_ids_map.get(str(person.id), set())
                 ),
                 "conflict_review_complete": conflict_review_complete_map.get(
                     person.id, False
+                ),
+                "conflict_collection_candidate_ids": sorted(
+                    collection_candidate_ids_map.get(person.id, set())
+                ),
+                "conflict_collection_revision": (
+                    saved_schedule.conflict_collection_revision
+                    if collection_scope_visible_map.get(person.id, False)
+                    else None
+                ),
+                "conflict_collection_complete": collection_complete_map.get(
+                    person.id,
+                    False,
                 ),
                 "has_submitted": (
                     person.id in availability_map
@@ -248,8 +382,11 @@ class InterviewAvailabilityView(APIView):
                     != availability_generation
                 ),
                 "availability_generation": availability_generation,
-                "affected_assignment_count": self._affected_assignment_count(
-                    saved_schedule, person.id
+                "affected_assignment_count": (
+                    self._affected_assignment_count(saved_schedule, person.id)
+                    if is_admin
+                    or (requester_review_scope_open and person.id == user.id)
+                    else 0
                 ),
                 "is_me": person.id == user.id,
             }
@@ -267,7 +404,7 @@ class InterviewAvailabilityView(APIView):
         user = request.user
         user.__class__ = LegoUser
         is_admin = user_is_admission_admin(admission, user)
-        is_interview_admin = user_is_interview_admin(admission, user)
+        is_interview_admin = is_admin
         representing_groups = get_representing_groups(admission, user)
         is_recruiter = representing_groups.exists()
         if not user_is_committee_member(admission, user) and not is_admin:
@@ -375,19 +512,92 @@ class InterviewAvailabilityView(APIView):
         conflict_review_open = self._conflict_review_is_open_for_user(
             admission, saved_schedule, user
         )
+        conflict_collection_open = self._conflict_collection_is_open_for_user(
+            admission,
+            saved_schedule,
+            target_user,
+        )
         visible_candidate_ids = self._visible_candidate_ids(
             admission,
             saved_schedule,
             user,
-            is_interview_admin,
+            is_admin,
         )
         review_fields_present = any(
             field in serializer.validated_data
-            for field in ("conflicts", "reviewed_candidate_ids")
+            for field in (
+                "conflicts",
+                "reviewed_candidate_ids",
+                "conflict_collection_reviewed_candidate_ids",
+            )
         )
+        collection_review_present = (
+            "conflict_collection_reviewed_candidate_ids" in serializer.validated_data
+        )
+        conflict_replace_scope = None
+        if collection_review_present:
+            if not conflict_collection_open:
+                return Response(
+                    {
+                        "conflict_collection_reviewed_candidate_ids": [
+                            "Navnene er ikke åpne for inhabilitetskontroll."
+                        ]
+                    },
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            if not self._conflict_collection_is_current(
+                admission,
+                saved_schedule,
+            ):
+                return Response(
+                    {
+                        "conflict_collection_revision": [
+                            "Kandidat- eller intervjuerlisten er endret. "
+                            "Opptaksansvarlig må åpne kontrollen på nytt."
+                        ]
+                    },
+                    status=status.HTTP_409_CONFLICT,
+                )
+            submitted_revision = serializer.validated_data.get(
+                "conflict_collection_revision"
+            )
+            if (
+                submitted_revision is None
+                or saved_schedule is None
+                or submitted_revision != saved_schedule.conflict_collection_revision
+            ):
+                return Response(
+                    {
+                        "conflict_collection_revision": [
+                            "Kandidatlisten er endret. Last inn siden på nytt."
+                        ]
+                    },
+                    status=status.HTTP_409_CONFLICT,
+                )
+            collection_candidate_ids = self._conflict_collection_candidate_ids(
+                admission,
+                saved_schedule,
+                target_user,
+            )
+            conflict_replace_scope = collection_candidate_ids
+            reviewed_collection_ids = {
+                str(candidate_id)
+                for candidate_id in serializer.validated_data[
+                    "conflict_collection_reviewed_candidate_ids"
+                ]
+            }
+            if reviewed_collection_ids != collection_candidate_ids:
+                return Response(
+                    {
+                        "conflict_collection_reviewed_candidate_ids": [
+                            "Hele den åpne kandidatlisten må kontrolleres."
+                        ]
+                    },
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
         if review_fields_present:
             if not (is_admin or is_recruiter):
-                if not conflict_review_open:
+                if not conflict_review_open and not conflict_collection_open:
                     return Response(
                         {
                             "conflicts": [
@@ -406,7 +616,11 @@ class InterviewAvailabilityView(APIView):
                         admission=admission
                     ).values_list("pk", flat=True)
                 }
-            for field in ("conflicts", "reviewed_candidate_ids"):
+            for field in (
+                "conflicts",
+                "reviewed_candidate_ids",
+                "conflict_collection_reviewed_candidate_ids",
+            ):
                 unknown = [
                     candidate_id
                     for candidate_id in serializer.validated_data.get(field, [])
@@ -417,6 +631,20 @@ class InterviewAvailabilityView(APIView):
                         {field: [f"Ukjent kandidat: {unknown[0]}"]},
                         status=status.HTTP_400_BAD_REQUEST,
                     )
+            if (
+                conflict_replace_scope is None
+                and "reviewed_candidate_ids" in serializer.validated_data
+                and saved_schedule is not None
+                and saved_schedule.conflict_review_open
+            ):
+                conflict_replace_scope = get_proposed_candidate_ids_by_interviewer(
+                    saved_schedule
+                ).get(
+                    str(target_user.id),
+                    set(),
+                )
+            elif conflict_replace_scope is None and visible_candidate_ids is not None:
+                conflict_replace_scope = set(visible_candidate_ids)
 
         existing = (
             InterviewAvailability.objects.select_for_update()
@@ -432,10 +660,15 @@ class InterviewAvailabilityView(APIView):
                 "slots",
                 "conflicts",
                 "reviewed_candidate_ids",
+                "conflict_collection_reviewed_candidate_ids",
                 "experience_level",
             )
             if key in serializer.validated_data
         }
+        if collection_review_present:
+            defaults["conflict_collection_review_revision"] = (
+                saved_schedule.conflict_collection_revision
+            )
         requested_participation = serializer.validated_data.get("participation")
         if "slots" in serializer.validated_data:
             defaults["participation"] = (
@@ -449,30 +682,35 @@ class InterviewAvailabilityView(APIView):
             defaults["slots"] = []
             defaults["submitted_grid_generation"] = None
         if review_fields_present:
-            next_conflicts = set(
-                defaults.get(
-                    "conflicts",
-                    (
-                        existing.conflicts
-                        if existing and isinstance(existing.conflicts, list)
-                        else []
-                    ),
-                )
+            existing_conflicts = set(
+                existing.conflicts
+                if existing and isinstance(existing.conflicts, list)
+                else []
             )
-            next_reviewed = set(
-                defaults.get(
-                    "reviewed_candidate_ids",
-                    (
-                        existing.reviewed_candidate_ids
-                        if existing
-                        and isinstance(existing.reviewed_candidate_ids, list)
-                        else []
-                    ),
-                )
-            )
-            next_reviewed.update(next_conflicts)
+            submitted_conflicts = set(defaults.get("conflicts", existing_conflicts))
+            next_conflicts = submitted_conflicts
+            if (
+                "conflicts" in serializer.validated_data
+                and conflict_replace_scope is not None
+            ):
+                next_conflicts = (
+                    existing_conflicts - set(conflict_replace_scope)
+                ) | submitted_conflicts
             defaults["conflicts"] = sorted(next_conflicts)
-            defaults["reviewed_candidate_ids"] = sorted(next_reviewed)
+            if "reviewed_candidate_ids" in serializer.validated_data:
+                next_reviewed = set(
+                    defaults.get(
+                        "reviewed_candidate_ids",
+                        (
+                            existing.reviewed_candidate_ids
+                            if existing
+                            and isinstance(existing.reviewed_candidate_ids, list)
+                            else []
+                        ),
+                    )
+                )
+                next_reviewed.update(next_conflicts)
+                defaults["reviewed_candidate_ids"] = sorted(next_reviewed)
         saved, _ = InterviewAvailability.objects.update_or_create(
             admission=admission,
             user=target_user,
@@ -510,10 +748,57 @@ class InterviewAvailabilityView(APIView):
                 reviewed_candidate_ids=saved.reviewed_candidate_ids,
                 conflict_candidate_ids=saved.conflicts,
             )
+        if collection_review_present:
+            ConflictReviewAuditEvent.objects.create(
+                admission=admission,
+                saved_schedule=saved_schedule,
+                actor=user,
+                actor_username=user.username,
+                subject_user=target_user,
+                subject_username=target_user.username,
+                phase=ConflictReviewAuditEvent.PHASE_COLLECTION,
+                collection_revision=saved_schedule.conflict_collection_revision,
+                action=ConflictReviewAuditEvent.ACTION_SUBMITTED,
+                reviewed_candidate_ids=(
+                    saved.conflict_collection_reviewed_candidate_ids
+                ),
+                conflict_candidate_ids=saved.conflicts,
+            )
 
         proposed_candidate_ids = get_proposed_candidate_ids_by_interviewer(
             saved_schedule
         ).get(str(target_user.id), set())
+        can_view_assignment_scope = is_admin or (
+            target_user.id == user.id and conflict_review_open
+        )
+        visible_proposed_candidate_ids = (
+            proposed_candidate_ids if can_view_assignment_scope else set()
+        )
+        can_view_collection_scope = bool(
+            saved_schedule is not None
+            and saved_schedule.conflict_collection_open
+            and self._conflict_collection_is_current(admission, saved_schedule)
+            and (
+                is_admin
+                or (
+                    target_user.id == user.id
+                    and self._conflict_collection_is_open_for_user(
+                        admission,
+                        saved_schedule,
+                        target_user,
+                    )
+                )
+            )
+        )
+        visible_collection_candidate_ids = (
+            self._conflict_collection_candidate_ids(
+                admission,
+                saved_schedule,
+                target_user,
+            )
+            if can_view_collection_scope
+            else set()
+        )
         current_generation = (
             saved_schedule.availability_generation if saved_schedule is not None else 1
         )
@@ -540,10 +825,30 @@ class InterviewAvailabilityView(APIView):
                     saved.reviewed_candidate_ids,
                     visible_candidate_ids,
                 ),
-                "proposed_candidate_ids": sorted(proposed_candidate_ids),
+                "proposed_candidate_ids": sorted(visible_proposed_candidate_ids),
                 "conflict_review_complete": self._conflict_review_complete(
                     saved.reviewed_candidate_ids,
-                    proposed_candidate_ids,
+                    visible_proposed_candidate_ids,
+                ),
+                "conflict_collection_candidate_ids": sorted(
+                    visible_collection_candidate_ids
+                ),
+                "conflict_collection_revision": (
+                    saved_schedule.conflict_collection_revision
+                    if can_view_collection_scope
+                    else None
+                ),
+                "conflict_collection_complete": bool(
+                    can_view_collection_scope
+                    and saved.conflict_collection_review_revision
+                    == saved_schedule.conflict_collection_revision
+                    and {
+                        str(candidate_id)
+                        for candidate_id in (
+                            saved.conflict_collection_reviewed_candidate_ids or []
+                        )
+                    }
+                    == visible_collection_candidate_ids
                 ),
                 "has_submitted": (
                     saved.participation
@@ -556,8 +861,10 @@ class InterviewAvailabilityView(APIView):
                     and saved.submitted_grid_generation != current_generation
                 ),
                 "availability_generation": current_generation,
-                "affected_assignment_count": self._affected_assignment_count(
-                    saved_schedule, target_user.id
+                "affected_assignment_count": (
+                    self._affected_assignment_count(saved_schedule, target_user.id)
+                    if can_view_assignment_scope
+                    else 0
                 ),
                 "is_me": target_user.id == user.id,
             },

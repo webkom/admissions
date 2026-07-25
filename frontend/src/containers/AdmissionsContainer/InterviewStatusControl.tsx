@@ -2,6 +2,7 @@ import React from "react";
 import { DateTime } from "luxon";
 import { CustomSelect } from "src/components/ui";
 import { useAdminUpdateInterviewStatusMutation } from "src/query/mutations";
+import { isSensitiveAuthorityChangedError } from "src/query/sensitiveAccess";
 import type { InterviewStatus } from "src/types";
 import { getApiErrorMessage } from "src/utils/apiErrors";
 import cn from "src/utils/cn";
@@ -58,7 +59,10 @@ const InterviewStatusControl: React.FC<InterviewStatusControlProps> = ({
   let feedback: string | null = null;
   if (mutation.isPending) {
     feedback = "Lagrer status …";
-  } else if (mutation.isError) {
+  } else if (
+    mutation.isError &&
+    !isSensitiveAuthorityChangedError(mutation.error)
+  ) {
     switch (mutation.error.response?.status) {
       case 400:
         feedback =

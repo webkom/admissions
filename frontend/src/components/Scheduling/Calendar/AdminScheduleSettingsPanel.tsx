@@ -6,6 +6,7 @@ import {
   LayoutPanelTop,
   Pencil,
 } from "lucide-react";
+import { iconSizes } from "src/styles/designTokens";
 import { buildBlockTimeChunks } from "../scheduleUtils";
 import {
   CustomValueSegmentedControl,
@@ -67,7 +68,7 @@ interface BlockSettings {
   pause: CustomNumberSettings;
 }
 
-export interface SaveStatus {
+interface SaveStatus {
   hasPendingChanges: boolean;
   gridDefiningChange: boolean;
   proposalInvalidatingChange: boolean;
@@ -127,7 +128,7 @@ const SettingField: React.FC<{
 const rangeControlClass =
   "group grid min-h-control-md overflow-hidden rounded-md border border-border-soft bg-surface-base transition-[border-color,box-shadow] duration-150 hover:border-brand-strongBorder focus-within:border-brand focus-within:ring-3 focus-within:ring-brand-ringSoft";
 
-export const CompactPresetControl: React.FC<{
+const CompactPresetControl: React.FC<{
   label: string;
   presets: readonly number[];
   settings: CustomNumberSettings;
@@ -345,7 +346,7 @@ const FinalBlockSnapFooter: React.FC<{
               className="inline-flex min-h-7 items-center gap-1 rounded px-2 text-detail font-semibold text-text-muted transition-colors hover:bg-brand-soft hover:text-brand focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-brand-focus disabled:pointer-events-none"
               onClick={() => onChangeEnd(timeValueFromMinute(trimEndMinute))}
             >
-              <ArrowLeftToLine size={13} aria-hidden="true" />
+              <ArrowLeftToLine size={iconSizes.detail} aria-hidden="true" />
               {formatTime(timeValueFromMinute(trimEndMinute))}
             </button>
           )}
@@ -369,7 +370,7 @@ const FinalBlockSnapFooter: React.FC<{
               }
             >
               {formatTime(timeValueFromMinute(completeEndMinute))}
-              <ArrowRightToLine size={13} aria-hidden="true" />
+              <ArrowRightToLine size={iconSizes.detail} aria-hidden="true" />
             </button>
           )}
         </div>
@@ -378,7 +379,7 @@ const FinalBlockSnapFooter: React.FC<{
   );
 };
 
-export const AdminScheduleSettingsSummary: React.FC<{
+const AdminScheduleSettingsSummary: React.FC<{
   period: PeriodSettings;
   duration: CustomNumberSettings;
   dailyTime: DailyTimeSettings;
@@ -423,7 +424,7 @@ export const AdminScheduleSettingsSummary: React.FC<{
       onClick={onEdit}
       className="inline-flex min-h-9 flex-none items-center gap-2 rounded-md border border-border-soft bg-surface-base px-3 text-detail font-semibold text-text-muted transition-colors hover:border-brand-strongBorder hover:text-brand focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-focus"
     >
-      <Pencil size={15} aria-hidden="true" />
+      <Pencil size={iconSizes.control} aria-hidden="true" />
       Rediger tidsrammer
     </button>
   </div>
@@ -511,7 +512,7 @@ const AdminScheduleSettingsPanel: React.FC<AdminScheduleSettingsPanelProps> = ({
     >
       <section
         aria-label="Intervjuperiode og daglig tidsrom"
-        className="grid min-w-0 gap-5 tablet:grid-cols-[minmax(21rem,1.15fr)_minmax(18rem,0.85fr)] tablet:items-start"
+        className="grid min-w-0 gap-5 tablet:grid-cols-[minmax(var(--schedule-settings-column-min-width),1.15fr)_minmax(18rem,0.85fr)] tablet:items-start"
       >
         <SettingField label="Intervjuperiode">
           <div>
@@ -643,7 +644,7 @@ const AdminScheduleSettingsPanel: React.FC<AdminScheduleSettingsPanelProps> = ({
         className="border-t border-border-soft pt-6"
         aria-label="Blokkoppsett"
       >
-        <div className="grid min-w-0 gap-7 tablet:grid-cols-[minmax(21rem,0.85fr)_minmax(0,1.15fr)] tablet:items-start">
+        <div className="grid min-w-0 gap-7 tablet:grid-cols-[minmax(var(--schedule-settings-column-min-width),0.85fr)_minmax(0,1.15fr)] tablet:items-start">
           <div data-cy="block-settings-grid" className="grid min-w-0 gap-5">
             <SettingField label="Intervjulengde (inkludert pause mellom intervju for evaluering)">
               <CompactPresetControl
@@ -726,37 +727,9 @@ const AdminScheduleSettingsPanel: React.FC<AdminScheduleSettingsPanelProps> = ({
 
 export const AdminScheduleConfigFooter: React.FC<{
   saveStatus: SaveStatus;
-  showOpenBlockCount?: boolean;
   actionLabel?: string;
   className?: string;
-}> = ({
-  saveStatus,
-  showOpenBlockCount = true,
-  actionLabel = "Lagre tidsrammer",
-  className,
-}) => {
-  const closedStandardSlotCount = saveStatus.closedStandardSlotCount ?? 0;
-  const openedStandardSlotCount = saveStatus.openedStandardSlotCount ?? 0;
-  const openedPauseSlotCount = saveStatus.openedPauseSlotCount ?? 0;
-  const adjustmentDetails = [
-    closedStandardSlotCount > 0
-      ? `${closedStandardSlotCount} ${
-          closedStandardSlotCount === 1 ? "standardtid" : "standardtider"
-        } stengt`
-      : null,
-    openedStandardSlotCount > 0
-      ? `${openedStandardSlotCount} ${
-          openedStandardSlotCount === 1 ? "standardtid" : "standardtider"
-        } åpnet enkeltvis`
-      : null,
-    openedPauseSlotCount > 0
-      ? `${openedPauseSlotCount} ${
-          openedPauseSlotCount === 1 ? "ekstratid" : "ekstratider"
-        } åpnet`
-      : null,
-  ].filter(Boolean);
-  const manualChangeCount =
-    saveStatus.manualChangeCount ?? saveStatus.customizationCount ?? 0;
+}> = ({ saveStatus, actionLabel = "Lagre tidsrammer", className }) => {
   const pendingDescription = saveStatus.availabilityAddition
     ? "Nye intervjutider blir lagt til når du lagrer."
     : saveStatus.proposalInvalidatingChange && saveStatus.hasScheduleDraft
@@ -771,34 +744,6 @@ export const AdminScheduleConfigFooter: React.FC<{
       dataCy="admin-schedule-config-footer"
       status={
         <div className="flex min-w-0 flex-col gap-2">
-          {showOpenBlockCount && (
-            <details className="min-w-0 text-detail text-text-muted">
-              <summary className="cursor-pointer font-semibold text-text-primary">
-                Se oppsettsdetaljer
-              </summary>
-              <dl className="m-0 mt-2 grid gap-x-5 gap-y-1 sm:grid-cols-2">
-                <div className="flex justify-between gap-3">
-                  <dt>Åpne intervjutider</dt>
-                  <dd className="m-0 font-semibold tabular-nums text-text-primary">
-                    {saveStatus.openSlotCount ?? 0}
-                  </dd>
-                </div>
-                <div className="flex justify-between gap-3">
-                  <dt>Manuelle justeringer</dt>
-                  <dd className="m-0 font-semibold tabular-nums text-text-primary">
-                    {manualChangeCount}
-                  </dd>
-                </div>
-              </dl>
-              {adjustmentDetails.length > 0 && (
-                <ul className="mb-0 mt-2 list-disc space-y-0.5 pl-4">
-                  {adjustmentDetails.map((detail) => (
-                    <li key={detail}>{detail}</li>
-                  ))}
-                </ul>
-              )}
-            </details>
-          )}
           {saveStatus.remoteRevisionChanged && (
             <div
               role="alert"

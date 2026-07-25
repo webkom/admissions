@@ -7,6 +7,14 @@ export const buildRepairPreviewOptions = (strategy: RepairStrategy) => ({
   previewOnly: true,
 });
 
+export const buildRepairSolveRequest = <T>(
+  lockedAssignments: T[],
+  strategy: RepairStrategy,
+) => ({
+  lockedAssignments,
+  options: buildRepairPreviewOptions(strategy),
+});
+
 export interface RepairScenarioMetrics {
   changedInterviews: number;
   changedTimes: number;

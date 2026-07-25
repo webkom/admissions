@@ -15,8 +15,8 @@ interface InterviewTriageListProps {
 
 const formatGroupNames = (application: AdminApplication): string => {
   const names = application.group_applications.map(({ group }) => group.name);
-  if (names.length <= 2) return names.join(" · ");
-  return `${names.slice(0, 2).join(" · ")} +${names.length - 2}`;
+  if (names.length <= 2) return names.join(", ");
+  return `${names.slice(0, 2).join(", ")} +${names.length - 2}`;
 };
 
 const InterviewTriageList: React.FC<InterviewTriageListProps> = ({

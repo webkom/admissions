@@ -1,3 +1,6 @@
+import { DURATION_PRESETS } from "../../frontend/src/components/Scheduling/Calendar/adminScheduleConfigModel";
+import { formatClockMinute } from "../../frontend/src/components/Scheduling/Calendar/standardBlockPreviewModel";
+
 const mountSettings = (
   initialPause = 30,
   initialIsCustom = false,
@@ -39,7 +42,7 @@ describe("inline schedule settings and standard-block preview", () => {
       });
     });
     cy.get("[data-cy=standard-block-preview]")
-      .should("contain.text", "Pause · 30 min")
+      .should("contain.text", "Pause, 30 min")
       .and("contain.text", "… neste blokk");
     cy.get("[data-cy=standard-block-preview]")
       .should("not.contain.text", "Slik blir én standardblokk")
@@ -47,13 +50,17 @@ describe("inline schedule settings and standard-block preview", () => {
     cy.get("[data-cy=interview-slot]").should("have.length", 4);
     cy.get("[data-cy=layout-result-preview]").should("not.exist");
     cy.contains("Aktive blokker").should("not.exist");
+    cy.screenshot("scheduler-workflow/01-foundation-block-fine-tune", {
+      capture: "viewport",
+    });
   });
 
   it("updates the block shape immediately when duration, size and pause change", () => {
     mountSettings(30, false, 4, 30);
+    const duration = DURATION_PRESETS[0];
 
     cy.get('[role="radiogroup"][aria-label="Intervjulengde"]')
-      .find('input[type="radio"][value="15"]')
+      .find(`input[type="radio"][value="${duration}"]`)
       .check({ force: true });
     cy.get('[role="group"][aria-label="Antall intervjuer per blokk"]')
       .find('button[aria-label="Øk"]')
@@ -64,7 +71,10 @@ describe("inline schedule settings and standard-block preview", () => {
 
     cy.get("[data-cy=interview-slot]").should("have.length", 5);
     cy.get("[data-cy=schedule-pause]").should("not.exist");
-    cy.get("[data-cy=next-block-time]").should("have.text", "09:15");
+    cy.get("[data-cy=next-block-time]").should(
+      "have.text",
+      formatClockMinute(8 * 60 + 5 * duration),
+    );
   });
 
   it("uses the same expand-contract motion for pauses and final-block actions", () => {
@@ -261,6 +271,9 @@ describe("inline schedule settings and standard-block preview", () => {
   });
 
   it("supports compact presets and a validated custom duration", () => {
+    const presetEnteredAsCustom = DURATION_PRESETS[1];
+    const customDuration = 35;
+    expect(DURATION_PRESETS).not.to.include(customDuration);
     mountSettings();
     cy.get('[role="radiogroup"][aria-label="Intervjulengde"]')
       .find('input[type="radio"]')
@@ -268,8 +281,21 @@ describe("inline schedule settings and standard-block preview", () => {
     chooseCustom("Intervjulengde");
     cy.get('input[aria-label="Intervjulengde i minutter"]')
       .clear()
-      .type("25{enter}");
-    cy.get("[data-cy=duration-value]").should("have.text", "25");
+      .type(`${presetEnteredAsCustom}{enter}`);
+    cy.get("[data-cy=duration-value]").should(
+      "have.text",
+      String(presetEnteredAsCustom),
+    );
+    cy.get("[data-cy=duration-mode]").should("have.text", "preset");
+
+    chooseCustom("Intervjulengde");
+    cy.get('input[aria-label="Intervjulengde i minutter"]')
+      .clear()
+      .type(`${customDuration}{enter}`);
+    cy.get("[data-cy=duration-value]").should(
+      "have.text",
+      String(customDuration),
+    );
     cy.get("[data-cy=duration-mode]").should("have.text", "custom");
   });
 
@@ -288,21 +314,16 @@ describe("inline schedule settings and standard-block preview", () => {
     cy.get("[data-cy=committed-mode]").should("have.text", "custom");
   });
 
-  it("keeps configuration details optional and avoids generated metric prose", () => {
+  it("omits generated configuration metrics", () => {
     cy.viewport(1280, 900);
     mountSettings();
-    cy.contains("20 hele blokker · 1 kort sluttblokk").should("not.exist");
-    cy.contains("82 åpne intervjutider · 4 manuelle endringer").should(
+    cy.contains("20 hele blokker, 1 kort sluttblokk").should("not.exist");
+    cy.contains("82 åpne intervjutider, 4 manuelle endringer").should(
       "not.exist",
     );
-    cy.contains("summary", "Se oppsettsdetaljer").click();
-    cy.contains("dt", "Åpne intervjutider")
-      .parent()
-      .should("contain.text", "82");
-    cy.contains("dt", "Manuelle justeringer")
-      .parent()
-      .should("contain.text", "4");
-    cy.contains("2 standardtider stengt").should("be.visible");
+    cy.contains("Se oppsettsdetaljer").should("not.exist");
+    cy.contains("Åpne intervjutider").should("not.exist");
+    cy.contains("Manuelle justeringer").should("not.exist");
 
     mountSettings(30, false, 4, 30, true);
     cy.contains("Nye intervjutider blir lagt til når du lagrer.").should(

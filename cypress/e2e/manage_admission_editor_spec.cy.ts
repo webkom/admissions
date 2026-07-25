@@ -31,6 +31,7 @@ const existingAdmission = {
   admin_groups: [groups[0]],
   groups: [groups[0]],
   userdata: {
+    actor_id: "webkom-actor",
     has_application: false,
     is_privileged: true,
     is_admin: true,
@@ -82,6 +83,21 @@ describe("manage admission editor", () => {
       .and("contain", "Ansvarlige opptaksgrupper: Velg minst én admin-gruppe");
     cy.get("#admission-error-summary").contains("a", "Søknadsfrist:").click();
     cy.focused().should("have.id", "public_deadline");
+  });
+
+  it("clears the recruiting-group validation error when a group is added", () => {
+    cy.intercept("GET", "**/api/manage/group/", groups);
+    visitEditor();
+
+    cy.get('button[type="submit"]').click();
+    cy.get("#admission-groups-error").should(
+      "contain",
+      "Velg minst én gruppe som har opptak",
+    );
+
+    cy.get("#admission-groups").select(groups[0].pk);
+
+    cy.get("#admission-groups-error").should("not.exist");
   });
 
   it("maps a duplicate slug response to the field and error summary", () => {
@@ -207,6 +223,11 @@ describe("manage admission editor", () => {
     cy.contains(
       "Er du sikker? Alle ulagrede endringer i dette opptaket blir forkastet.",
     ).should("be.visible");
+    cy.get("[role='dialog']")
+      .should("have.attr", "aria-modal", "true")
+      .within(() => {
+        cy.contains("button", "Avbryt").should("be.focused");
+      });
     cy.get("#admission-title").should("have.value", "Ulagret tittel");
     cy.get("#admission-description").should(
       "have.value",
@@ -214,9 +235,12 @@ describe("manage admission editor", () => {
     );
     cy.contains("button", "Avbryt").click();
     cy.contains("Ulagrede endringer").should("be.visible");
+    cy.contains("button", "Forkast endringer").should("be.focused");
 
     cy.contains("button", "Forkast endringer").click();
-    cy.contains("button", "Forkast endringer").click();
+    cy.get("[role='dialog']").within(() => {
+      cy.contains("button", "Forkast endringer").click();
+    });
 
     cy.get("#admission-title").should("have.value", "Sommeropptak 2027");
     cy.get("#admission-description").should("have.value", "");

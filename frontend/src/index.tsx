@@ -25,6 +25,7 @@ import {
   purgeSensitiveQueries,
   purgeSensitiveQuery,
 } from "./query/sensitiveAccess";
+import { installSensitiveActorSynchronization } from "./query/sensitiveActorSync";
 
 import NotFoundPage from "src/routes/NotFoundPage";
 import ErrorBoundary from "src/containers/ErrorBoundary/";
@@ -35,7 +36,7 @@ import * as Sentry from "@sentry/browser";
 import "src/styles/globals.css";
 import "src/styles/linkSlide.css";
 import config from "src/utils/config";
-import { isLoggedIn, isManager } from "src/utils/djangoData";
+import djangoData, { isLoggedIn, isManager } from "src/utils/djangoData";
 import RequireAuth from "src/components/RequireAuth";
 
 const LandingPage = React.lazy(() => import("src/routes/LandingPage/"));
@@ -204,6 +205,8 @@ const queryClient = new QueryClient({
     },
   },
 });
+
+installSensitiveActorSynchronization(queryClient, djangoData.user.id || null);
 
 const container = document.getElementById("root");
 if (!container) {

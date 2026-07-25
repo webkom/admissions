@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { useParams } from "react-router-dom";
-import { HelpCircle, Loader2, RefreshCw } from "lucide-react";
+import { ArrowRight, HelpCircle, Loader2, RefreshCw } from "lucide-react";
 import {
   useAdmission,
   useInterviewCandidates,
@@ -10,6 +11,7 @@ import {
 import StatusToast, { StatusToastState } from "src/components/StatusToast";
 import TimeScheduler from "src/components/Scheduling/Calendar/Calendar";
 import SolverView from "src/components/Scheduling/Solver/SolverView";
+import type { DraftPersistenceStatus } from "src/components/Scheduling/Solver/useScheduleDraftPersistence";
 import { normalizeSolverOptions } from "src/components/Scheduling/Solver/solverHelpers";
 import AvailabilityHeatmap from "src/components/Scheduling/Calendar/AvailabilityHeatmap";
 import AdminScheduleConfig from "src/components/Scheduling/Calendar/AdminScheduleConfig";
@@ -22,6 +24,7 @@ import WorkflowStepper from "./WorkflowStepper";
 import MemberAvailabilityPending from "./MemberAvailabilityPending";
 import DistributedPlanView from "./DistributedPlanView";
 import ConflictReviewView from "./ConflictReviewView";
+import ConflictCollectionPanel from "./ConflictCollectionPanel";
 import PublicationGate from "./PublicationGate";
 import { useAvailabilityEditor } from "./useAvailabilityEditor";
 import { useDistributedPlanActions } from "./useDistributedPlanActions";
@@ -30,6 +33,7 @@ import { useScheduleParticipants } from "./useScheduleParticipants";
 import { useScheduleWorkflow } from "./useScheduleWorkflow";
 import { iconSizes } from "src/styles/designTokens";
 import type {
+  Admission,
   Candidate,
   InterviewAvailabilityParticipant,
   SavedSchedule,
@@ -43,16 +47,115 @@ import {
   type ScheduleDataHealth,
   type ScheduleDataSource,
 } from "./scheduleDataHealth";
-import { SchedulingButton } from "src/components/Scheduling/ui";
+import {
+  SchedulingButton,
+  keyboardFocusRingClass,
+} from "src/components/Scheduling/ui";
+import {
+  buildSensitiveAdmissionScopeKey,
+  clearAllSensitiveDataForActorChange,
+  clearSensitiveAdmissionDataForScopeChange,
+  restoreSensitiveAccessAfterVerifiedAdmission,
+} from "src/query/sensitiveAccess";
+import { publishSensitiveActorIdentity } from "src/query/sensitiveActorSync";
+import { apiClient } from "src/utils/callApi";
+
+const sameIds = (left: string[], right: string[]) => {
+  if (left.length !== right.length) return false;
+  const rightIds = new Set(right);
+  return left.every((value) => rightIds.has(value));
+};
 
 const SchedulePage: React.FC = () => {
   const { admissionSlug } = useParams();
+  const queryClient = useQueryClient();
+  const [isAccessRecoveryLoading, setIsAccessRecoveryLoading] = useState(false);
+  const [accessRecoveryError, setAccessRecoveryError] = useState("");
   const {
     data: admission,
     isError: isAdmissionError,
     error: admissionError,
     refetch: refetchAdmission,
   } = useAdmission(admissionSlug ?? "");
+  const embeddedActorId = djangoData.user.id ?? null;
+  const hasServerActorIdentity = Boolean(
+    admission &&
+      Object.prototype.hasOwnProperty.call(admission.userdata, "actor_id"),
+  );
+  const serverActorId = hasServerActorIdentity
+    ? (admission?.userdata.actor_id ?? null)
+    : embeddedActorId;
+  const actorIdentityMismatch = Boolean(
+    admission && hasServerActorIdentity && serverActorId !== embeddedActorId,
+  );
+  const sensitiveScopeKey = admission
+    ? buildSensitiveAdmissionScopeKey({
+        actorId: serverActorId,
+        isAdmin: admission.userdata.is_admin,
+        committeeRole: admission.userdata.committee_role,
+        representedGroups: admission.userdata.represented_groups,
+        committeeGroups: admission.userdata.committee_groups,
+      })
+    : "";
+  const [activeSensitiveScopeKey, setActiveSensitiveScopeKey] = useState("");
+  const sensitiveScopeChangePending = Boolean(
+    admission && activeSensitiveScopeKey !== sensitiveScopeKey,
+  );
+
+  React.useLayoutEffect(() => {
+    if (!admission || !sensitiveScopeKey) return;
+    if (actorIdentityMismatch) {
+      clearAllSensitiveDataForActorChange(queryClient);
+      publishSensitiveActorIdentity(serverActorId);
+      window.location.reload();
+      return;
+    }
+    publishSensitiveActorIdentity(serverActorId);
+    if (activeSensitiveScopeKey === sensitiveScopeKey) return;
+    clearSensitiveAdmissionDataForScopeChange(queryClient, admissionSlug ?? "");
+    setActiveSensitiveScopeKey(sensitiveScopeKey);
+  }, [
+    activeSensitiveScopeKey,
+    admission,
+    admissionSlug,
+    actorIdentityMismatch,
+    queryClient,
+    serverActorId,
+    sensitiveScopeKey,
+  ]);
+
+  const recoverSensitiveAccess = async () => {
+    if (!admissionSlug || isAccessRecoveryLoading) return;
+    setIsAccessRecoveryLoading(true);
+    setAccessRecoveryError("");
+    try {
+      const freshAdmission = (
+        await apiClient.get<Admission>(`/admission/${admissionSlug}/`)
+      ).data;
+      const restored = restoreSensitiveAccessAfterVerifiedAdmission(
+        queryClient,
+        admissionSlug,
+        freshAdmission,
+      );
+      if (!restored) {
+        setAccessRecoveryError(
+          "Serveren bekreftet ikke en aktiv rolle i intervjuplanleggingen.",
+        );
+        return;
+      }
+
+      queryClient.setQueryData(
+        [`/admission/${admissionSlug}/`],
+        freshAdmission,
+      );
+    } catch {
+      setAccessRecoveryError(
+        "Tilgangen er fortsatt utilgjengelig. Logg inn på nytt hvis økten er utløpt.",
+      );
+    } finally {
+      setIsAccessRecoveryLoading(false);
+    }
+  };
 
   if (isAdmissionError) {
     const accessDenied = [401, 403].includes(
@@ -66,16 +169,57 @@ const SchedulePage: React.FC = () => {
               ? "Tilgangen til intervjuplanleggingen er fjernet. Kandidatdata er tømt fra visningen."
               : "Kunne ikke hente opptaket."}
           </p>
-          {!accessDenied && (
+          {accessDenied ? (
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={() => void recoverSensitiveAccess()}
+                disabled={isAccessRecoveryLoading}
+                className={cn(
+                  "inline-flex items-center gap-2 rounded-lg border border-danger-border bg-surface-base px-3 py-2 text-detail font-bold text-danger disabled:cursor-not-allowed disabled:opacity-60",
+                  keyboardFocusRingClass,
+                )}
+              >
+                {isAccessRecoveryLoading && (
+                  <Loader2
+                    size={iconSizes.detail}
+                    className="animate-spin"
+                    aria-hidden="true"
+                  />
+                )}
+                Kontroller tilgang
+              </button>
+              <a
+                href="/login/lego/"
+                className={cn(
+                  "rounded-lg px-3 py-2 text-detail font-bold text-danger underline decoration-danger/50 underline-offset-4",
+                  keyboardFocusRingClass,
+                )}
+              >
+                Logg inn på nytt
+              </a>
+            </div>
+          ) : (
             <button
               type="button"
               onClick={() => refetchAdmission()}
-              className="rounded-lg border border-danger-border bg-surface-base px-3 py-2 text-detail font-bold text-danger"
+              className={cn(
+                "rounded-lg border border-danger-border bg-surface-base px-3 py-2 text-detail font-bold text-danger",
+                keyboardFocusRingClass,
+              )}
             >
               Prøv igjen
             </button>
           )}
         </div>
+        {accessRecoveryError && (
+          <p
+            role="alert"
+            className="m-0 mt-3 rounded-lg border border-danger-border bg-danger-bg px-4 py-3 text-detail font-semibold text-danger"
+          >
+            {accessRecoveryError}
+          </p>
+        )}
       </div>
     );
   }
@@ -97,6 +241,25 @@ const SchedulePage: React.FC = () => {
     );
   }
 
+  if (sensitiveScopeChangePending) {
+    return (
+      <div className="mx-auto w-full max-w-6xl px-5 pb-20 pt-8 handheld:px-4">
+        <div
+          role="status"
+          className="flex items-center justify-center gap-3 rounded-panel border border-border bg-surface-base px-6 py-16 shadow-sm"
+        >
+          <Loader2
+            size={iconSizes.standard}
+            className="animate-spin text-brand"
+          />
+          <span className="text-ui font-semibold text-text-muted">
+            Oppdaterer tilgang…
+          </span>
+        </div>
+      </div>
+    );
+  }
+
   const { is_admin, committee_role, represented_groups, committee_groups } =
     admission.userdata;
   const committeeName =
@@ -105,21 +268,19 @@ const SchedulePage: React.FC = () => {
     (admission.groups.length === 1
       ? admission.groups[0].name
       : admission.title);
-  const canRevealCandidateNames =
+  const canManageInterviewWorkflow =
     is_admin || committee_role === "leader" || committee_role === "recruiting";
-  const canManageInterviewWorkflow = canRevealCandidateNames;
-  const canManageSchedule = canRevealCandidateNames;
+  const canManageSchedule = is_admin;
 
   return (
     <CommonScheduleView
-      key={admissionSlug}
+      key={`${admissionSlug}:${sensitiveScopeKey}`}
       admissionTitle={admission.title}
       committeeName={committeeName}
       admissionSlug={admissionSlug ?? ""}
       isAdmin={canManageSchedule}
       canManageSchedule={canManageSchedule}
       committeeRole={committee_role}
-      canRevealCandidateNames={canRevealCandidateNames}
       canManageInterviewWorkflow={canManageInterviewWorkflow}
     />
   );
@@ -132,12 +293,15 @@ interface CommonScheduleViewProps {
   isAdmin: boolean;
   canManageSchedule: boolean;
   committeeRole: "leader" | "recruiting" | "member" | null;
-  canRevealCandidateNames: boolean;
   canManageInterviewWorkflow: boolean;
 }
 
 const CommonScheduleView: React.FC<CommonScheduleViewProps> = (props) => {
-  const { admissionSlug } = props;
+  const { admissionSlug, isAdmin } = props;
+  const queryClient = useQueryClient();
+  const previousCollectionOpenRef = React.useRef<boolean | undefined>(
+    undefined,
+  );
   const {
     data: savedSchedule,
     isError: isSavedScheduleError,
@@ -157,6 +321,29 @@ const CommonScheduleView: React.FC<CommonScheduleViewProps> = (props) => {
     error: availabilityError,
     refetch: refetchAvailability,
   } = useInterviewAvailability(admissionSlug);
+
+  useEffect(() => {
+    if (isAdmin || savedSchedule === undefined) return;
+    const collectionOpen = Boolean(savedSchedule.conflict_collection_open);
+    if (previousCollectionOpenRef.current === collectionOpen) return;
+    previousCollectionOpenRef.current = collectionOpen;
+    if (collectionOpen) return;
+
+    const candidatesQueryKey = [
+      `/admin/admission/${admissionSlug}/candidates/`,
+    ];
+    queryClient.setQueryData(candidatesQueryKey, []);
+    void queryClient.invalidateQueries({
+      queryKey: candidatesQueryKey,
+      exact: true,
+      refetchType: "active",
+    });
+  }, [
+    admissionSlug,
+    isAdmin,
+    queryClient,
+    savedSchedule?.conflict_collection_open,
+  ]);
 
   const accessDenied = [
     savedScheduleError,
@@ -186,10 +373,8 @@ const CommonScheduleView: React.FC<CommonScheduleViewProps> = (props) => {
     savedScheduleError,
     isSavedScheduleError,
     availabilityParticipants,
-    availabilityError,
     isAvailabilityError,
     interviewCandidates,
-    candidatesError,
     isCandidatesError,
   });
   const candidateScopeResolved =
@@ -258,7 +443,6 @@ const LoadedScheduleView: React.FC<LoadedScheduleViewProps> = ({
   isAdmin,
   committeeRole,
   canManageSchedule,
-  canRevealCandidateNames,
   canManageInterviewWorkflow,
   savedSchedule,
   interviewCandidates,
@@ -285,10 +469,24 @@ const LoadedScheduleView: React.FC<LoadedScheduleViewProps> = ({
   const [conflictReviewRequestKey, setConflictReviewRequestKey] = useState(0);
   const [foundationWorkspace, setFoundationWorkspace] =
     useState<FoundationWorkspace>("framework");
+  const foundationWorkspaceChosen = React.useRef(false);
   const [frameworkDraftStatus, setFrameworkDraftStatus] = useState({
     hasPendingChanges: false,
     isValid: true,
   });
+  const [draftPersistenceStatus, setDraftPersistenceStatus] =
+    useState<DraftPersistenceStatus | null>(null);
+  const draftPersistenceReady =
+    draftPersistenceStatus === null ||
+    (draftPersistenceStatus.isSaved &&
+      !draftPersistenceStatus.hasLocalDraft &&
+      !draftPersistenceStatus.isSaving &&
+      !draftPersistenceStatus.hasConflict &&
+      !draftPersistenceStatus.error);
+
+  useEffect(() => {
+    setDraftPersistenceStatus(null);
+  }, [admissionSlug]);
 
   const showToast = (
     message: string,
@@ -321,6 +519,7 @@ const LoadedScheduleView: React.FC<LoadedScheduleViewProps> = ({
     participants: availabilityParticipants,
     candidateIds: interviewCandidates?.map((candidate) => candidate.id) ?? [],
     candidateScopeResolved,
+    draftPersistenceReady,
   });
   const participants = useScheduleParticipants({
     isAdmin: canManageSchedule,
@@ -335,6 +534,7 @@ const LoadedScheduleView: React.FC<LoadedScheduleViewProps> = ({
   const planActions = useDistributedPlanActions({
     admissionSlug,
     savedSchedule,
+    draftPersistenceReady,
     notify: showToast,
   });
   const {
@@ -354,6 +554,7 @@ const LoadedScheduleView: React.FC<LoadedScheduleViewProps> = ({
     dates,
     revision: configurationRevision,
     saveConfig,
+    setConflictCollectionOpen,
   } = configuration;
   const {
     selectedSlots: mySelectedSlots,
@@ -361,9 +562,12 @@ const LoadedScheduleView: React.FC<LoadedScheduleViewProps> = ({
     currentParticipant: myAvailabilityParticipant,
     saveAvailability,
     saveConflictReview,
+    saveConflictCollectionReview,
     setParticipation,
     setExperienceLevel,
   } = availability;
+  const [conflictCollectionSaving, setConflictCollectionSaving] =
+    useState(false);
   const {
     activeSection,
     visitedSections,
@@ -374,6 +578,8 @@ const LoadedScheduleView: React.FC<LoadedScheduleViewProps> = ({
     currentReviewRequired,
     currentReviewComplete,
     publicationReadiness,
+    foundationStage,
+    publicationStage,
     workflowPhase,
     availabilityReady,
   } = workflow;
@@ -404,6 +610,14 @@ const LoadedScheduleView: React.FC<LoadedScheduleViewProps> = ({
     setConflictReviewRequestKey((key) => key + 1);
     handleSectionChange(isAdmin ? "solver" : "my-availability");
   };
+  const closeAdminConflictReview = () => {
+    setConflictReviewRequestKey(0);
+    window.requestAnimationFrame(() => {
+      document
+        .querySelector<HTMLElement>('[data-cy="proposal-review"] h2')
+        ?.focus({ preventScroll: true });
+    });
+  };
   const activeAvailabilityParticipants =
     availabilityParticipants?.filter(
       (participant) => participant.participation !== "not_participating",
@@ -411,6 +625,86 @@ const LoadedScheduleView: React.FC<LoadedScheduleViewProps> = ({
   const submittedAvailabilityCount = activeAvailabilityParticipants.filter(
     (participant) => participant.has_submitted,
   ).length;
+  const recommendedFoundationWorkspace: FoundationWorkspace =
+    foundationStage.kind === "framework"
+      ? "framework"
+      : foundationStage.kind === "availability"
+        ? "availability"
+        : "coverage";
+  const openFoundationWorkspace = (workspace: FoundationWorkspace) => {
+    foundationWorkspaceChosen.current = true;
+    setFoundationWorkspace(workspace);
+    window.requestAnimationFrame(() => {
+      document
+        .querySelector<HTMLElement>(
+          `#foundation-panel-${workspace} [data-cy="schedule-stage"] h2`,
+        )
+        ?.focus({ preventScroll: true });
+    });
+  };
+  const showAdminConflictReviewStage = Boolean(
+    savedSchedule?.conflict_review_open &&
+      myAvailabilityParticipant &&
+      conflictReviewRequestKey > 0,
+  );
+  const collectionParticipants = (availabilityParticipants ?? []).filter(
+    (participant) =>
+      savedSchedule?.conflict_collection_participant_ids?.includes(
+        participant.user_id,
+      ),
+  );
+  const collectionParticipantCount =
+    savedSchedule?.conflict_collection_participant_ids?.length ?? 0;
+  const completedCollectionCount = collectionParticipants.filter(
+    (participant) => participant.conflict_collection_complete,
+  ).length;
+  const collectionScopeStale = Boolean(
+    savedSchedule?.conflict_collection_open &&
+      interviewCandidates !== undefined &&
+      availabilityParticipants !== undefined &&
+      (!sameIds(
+        savedSchedule.conflict_collection_candidate_ids ?? [],
+        interviewCandidates.map((candidate) => candidate.id),
+      ) ||
+        !sameIds(
+          savedSchedule.conflict_collection_participant_ids ?? [],
+          availabilityParticipants
+            .filter(
+              (participant) => participant.participation === "participating",
+            )
+            .map((participant) => participant.user_id),
+        )),
+  );
+  const toggleConflictCollection = async (open: boolean) => {
+    if (conflictCollectionSaving) return;
+    setConflictCollectionSaving(true);
+    try {
+      await setConflictCollectionOpen(open);
+    } finally {
+      setConflictCollectionSaving(false);
+    }
+  };
+
+  useEffect(() => {
+    if (foundationWorkspaceChosen.current) return;
+    setFoundationWorkspace(recommendedFoundationWorkspace);
+  }, [recommendedFoundationWorkspace]);
+
+  const foundationNav = (
+    <FoundationWorkspaceNav
+      active={foundationWorkspace}
+      onChange={openFoundationWorkspace}
+      frameworkComplete={hasConfiguredAvailabilityWindows}
+      availabilityComplete={Boolean(
+        myAvailabilityParticipant?.has_submitted ||
+          myAvailabilityParticipant?.participation === "not_participating",
+      )}
+      submittedCount={submittedAvailabilityCount}
+      participantCount={activeAvailabilityParticipants.length}
+      frameworkDraftValid={frameworkDraftStatus.isValid}
+      frameworkHasPendingChanges={frameworkDraftStatus.hasPendingChanges}
+    />
+  );
 
   const currentUserName = djangoData.user?.full_name ?? "";
 
@@ -431,7 +725,10 @@ const LoadedScheduleView: React.FC<LoadedScheduleViewProps> = ({
           <button
             type="button"
             onClick={() => wizard.open()}
-            className="inline-flex h-9 items-center gap-2 rounded-full border border-border bg-surface-subtle px-4 text-sm font-semibold text-text-primary transition-colors hover:bg-surface-neutral"
+            className={cn(
+              "inline-flex h-9 items-center gap-2 rounded-full border border-border bg-surface-subtle px-4 text-sm font-semibold text-text-primary transition-colors hover:bg-surface-neutral",
+              keyboardFocusRingClass,
+            )}
           >
             <HelpCircle size={iconSizes.medium} />
             Hjelp
@@ -469,22 +766,6 @@ const LoadedScheduleView: React.FC<LoadedScheduleViewProps> = ({
           activeKey={activeSection}
           onChange={handleSectionChange}
         />
-        {isAdmin && activeSection === "config" && (
-          <FoundationWorkspaceNav
-            active={foundationWorkspace}
-            onChange={setFoundationWorkspace}
-            frameworkComplete={hasConfiguredAvailabilityWindows}
-            availabilityComplete={Boolean(
-              myAvailabilityParticipant?.has_submitted ||
-                myAvailabilityParticipant?.participation ===
-                  "not_participating",
-            )}
-            submittedCount={submittedAvailabilityCount}
-            participantCount={activeAvailabilityParticipants.length}
-            frameworkDraftValid={frameworkDraftStatus.isValid}
-            frameworkHasPendingChanges={frameworkDraftStatus.hasPendingChanges}
-          />
-        )}
       </div>
 
       <main className="mt-3 flex flex-col gap-3">
@@ -521,6 +802,16 @@ const LoadedScheduleView: React.FC<LoadedScheduleViewProps> = ({
                       openRequestKey={conflictReviewRequestKey}
                     />
                   )}
+                {savedSchedule?.conflict_collection_open &&
+                  myAvailabilityParticipant?.participation ===
+                    "participating" && (
+                    <ConflictReviewView
+                      candidates={interviewCandidates}
+                      currentParticipant={myAvailabilityParticipant}
+                      onSaveReview={saveConflictCollectionReview}
+                      scope="collection"
+                    />
+                  )}
               </div>
             )}
           </div>
@@ -530,6 +821,9 @@ const LoadedScheduleView: React.FC<LoadedScheduleViewProps> = ({
           <div className={activeSection === "config" ? "" : "hidden"}>
             <AdminScheduleConfig
               activeTab={foundationWorkspace}
+              foundationNav={
+                foundationWorkspace === "framework" ? foundationNav : undefined
+              }
               startDate={startDate}
               endDate={endDate}
               dayStartMinute={dayStartMinute}
@@ -545,6 +839,7 @@ const LoadedScheduleView: React.FC<LoadedScheduleViewProps> = ({
               hasScheduleDraft={hasScheduleDraft}
               onDraftStatusChange={setFrameworkDraftStatus}
               onSave={saveConfig}
+              onSaveSuccess={() => openFoundationWorkspace("availability")}
               onAvailabilityAdditionSaved={() =>
                 showToast(
                   "Nye intervjutider er lagt til. Intervjuerne må bekrefte tilgjengelighet på nytt.",
@@ -561,6 +856,7 @@ const LoadedScheduleView: React.FC<LoadedScheduleViewProps> = ({
                 <MemberAvailabilityPending
                   title="Lagre oppsettet først"
                   description="Du kan velge din egen tilgjengelighet så snart tidsrammer og intervjublokker er lagret under Oppsett."
+                  foundationNav={foundationNav}
                 />
               ) : (
                 <TimeScheduler
@@ -574,12 +870,19 @@ const LoadedScheduleView: React.FC<LoadedScheduleViewProps> = ({
                   dayStartMinute={dayStartMinute}
                   dayEndMinute={dayEndMinute}
                   onSave={saveAvailability}
+                  onSaveSuccess={() => openFoundationWorkspace("coverage")}
                   participation={myAvailabilityParticipant?.participation}
                   affectedAssignmentCount={
                     myAvailabilityParticipant?.affected_assignment_count ?? 0
                   }
                   onOptOut={() => setParticipation("not_participating")}
                   onRejoin={() => setParticipation("awaiting_response")}
+                  stage="foundation-availability"
+                  foundationNav={
+                    foundationWorkspace === "availability"
+                      ? foundationNav
+                      : undefined
+                  }
                 />
               )}
             </div>
@@ -598,30 +901,95 @@ const LoadedScheduleView: React.FC<LoadedScheduleViewProps> = ({
                 <MemberAvailabilityPending
                   title="Ingen dekning å vise ennå"
                   description="Når oppsettet er lagret, kan du se intervjuernes svar, manglende svar og samlet kapasitet her."
+                  foundationNav={foundationNav}
                 />
               ) : (
-                <AvailabilityHeatmap
-                  dates={dates}
-                  interviewers={realInterviewers}
-                  availableSlots={enabledSlots}
-                  panelSize={savedSchedule?.panel_size ?? 3}
-                  samePanelPerBlock={
-                    savedSchedule
-                      ? normalizeSolverOptions(
-                          savedSchedule.solver_options ?? {},
-                        ).panel_stability === "required"
-                      : false
-                  }
-                  sessionDuration={sessionDuration}
-                  chunkSize={chunkSize}
-                  chunkBreakMinutes={chunkBreakMinutes}
-                  dayStartMinute={dayStartMinute}
-                  dayEndMinute={dayEndMinute}
-                  onParticipationChange={(userId, participation) =>
-                    setParticipation(participation, userId)
-                  }
-                  onExperienceLevelChange={setExperienceLevel}
-                />
+                <>
+                  <AvailabilityHeatmap
+                    dates={dates}
+                    interviewers={realInterviewers}
+                    availableSlots={enabledSlots}
+                    panelSize={savedSchedule?.panel_size ?? 3}
+                    samePanelPerBlock={
+                      savedSchedule
+                        ? normalizeSolverOptions(
+                            savedSchedule.solver_options ?? {},
+                          ).panel_stability === "required"
+                        : false
+                    }
+                    sessionDuration={sessionDuration}
+                    chunkSize={chunkSize}
+                    chunkBreakMinutes={chunkBreakMinutes}
+                    dayStartMinute={dayStartMinute}
+                    dayEndMinute={dayEndMinute}
+                    onParticipationChange={(userId, participation) =>
+                      setParticipation(participation, userId)
+                    }
+                    onExperienceLevelChange={setExperienceLevel}
+                    stage={
+                      foundationStage.kind === "coverage_ready"
+                        ? "foundation-coverage-ready"
+                        : "foundation-coverage-waiting"
+                    }
+                    foundationNav={
+                      foundationWorkspace === "coverage"
+                        ? foundationNav
+                        : undefined
+                    }
+                    footerStatus={
+                      <span
+                        data-cy="foundation-stage-status"
+                        className={
+                          foundationStage.kind === "coverage_ready"
+                            ? "text-detail font-semibold text-success"
+                            : "text-detail font-semibold text-text-muted"
+                        }
+                      >
+                        {foundationStage.description}
+                      </span>
+                    }
+                    footerAction={
+                      foundationStage.kind === "coverage_ready" ? (
+                        <SchedulingButton
+                          variant="primary"
+                          onClick={() => handleSectionChange("solver")}
+                          data-cy="schedule-stage-primary-action"
+                        >
+                          Lag planutkast
+                          <ArrowRight
+                            size={iconSizes.small}
+                            aria-hidden="true"
+                          />
+                        </SchedulingButton>
+                      ) : (
+                        <span className="text-detail tabular-nums text-text-subtle">
+                          {submittedAvailabilityCount} av{" "}
+                          {activeAvailabilityParticipants.length} har svart
+                        </span>
+                      )
+                    }
+                  />
+                  <ConflictCollectionPanel
+                    open={Boolean(savedSchedule?.conflict_collection_open)}
+                    participantCount={collectionParticipantCount}
+                    completedCount={completedCollectionCount}
+                    candidateCount={interviewCandidates?.length ?? 0}
+                    saving={conflictCollectionSaving}
+                    stale={collectionScopeStale}
+                    onToggle={(open) => void toggleConflictCollection(open)}
+                  >
+                    {myAvailabilityParticipant &&
+                      myAvailabilityParticipant.participation ===
+                        "participating" && (
+                        <ConflictReviewView
+                          candidates={interviewCandidates}
+                          currentParticipant={myAvailabilityParticipant}
+                          onSaveReview={saveConflictCollectionReview}
+                          scope="collection"
+                        />
+                      )}
+                  </ConflictCollectionPanel>
+                </>
               )}
             </div>
           </div>
@@ -634,62 +1002,79 @@ const LoadedScheduleView: React.FC<LoadedScheduleViewProps> = ({
               activeSection !== "solver" && "hidden",
             )}
           >
-            {savedSchedule?.conflict_review_open &&
-              myAvailabilityParticipant && (
-                <ConflictReviewView
-                  candidates={interviewCandidates}
-                  currentParticipant={myAvailabilityParticipant}
-                  onSaveReview={saveConflictReview}
-                  openRequestKey={conflictReviewRequestKey}
-                  reviewProgress={{
-                    complete: publicationReadiness.completeReviewerCount,
-                    total: publicationReadiness.requiredReviewerCount,
-                    missingNames: publicationReadiness.missingReviewerNames,
-                  }}
-                />
-              )}
-            <SolverView
-              candidates={candidates}
-              interviewers={interviewers}
-              dates={dates}
-              sessionDuration={sessionDuration}
-              admissionTitle={admissionTitle}
-              admissionSlug={admissionSlug}
-              startDate={startDate}
-              endDate={endDate}
-              enabledWindows={savedSchedule?.enabled_windows ?? []}
-              enabledSlots={enabledSlots}
-              dayStartMinute={dayStartMinute}
-              dayEndMinute={dayEndMinute}
-              chunkSize={chunkSize}
-              chunkBreakMinutes={chunkBreakMinutes}
-              blockMode={blockMode}
-              manualBlocks={manualBlocks}
-              slotOverrides={slotOverrides}
-              candidateScopeResolved={candidateScopeResolved}
-              availabilityReady={availabilityReady}
-              syntheticInput={syntheticInput}
-              editRequestKey={solverEditRequestKey}
-              currentReviewRequired={currentReviewRequired}
-              currentReviewComplete={currentReviewComplete}
-              completeReviewerCount={publicationReadiness.completeReviewerCount}
-              requiredReviewerCount={publicationReadiness.requiredReviewerCount}
-              pendingReviewerCount={
-                publicationReadiness.incompleteReviewerCount
+            {showAdminConflictReviewStage && myAvailabilityParticipant && (
+              <ConflictReviewView
+                candidates={interviewCandidates}
+                currentParticipant={myAvailabilityParticipant}
+                onSaveReview={saveConflictReview}
+                openRequestKey={Math.max(1, conflictReviewRequestKey)}
+                onCloseStage={closeAdminConflictReview}
+                reviewProgress={{
+                  complete: publicationReadiness.completeReviewerCount,
+                  total: publicationReadiness.requiredReviewerCount,
+                  missingNames: publicationReadiness.missingReviewerNames,
+                }}
+              />
+            )}
+            <section
+              aria-label={
+                showAdminConflictReviewStage && myAvailabilityParticipant
+                  ? "Gjeldende planutkast"
+                  : undefined
               }
-              missingReviewerNames={publicationReadiness.missingReviewerNames}
-              publicationReady={publicationReadiness.ready}
-              onOpenAvailability={() => {
-                setFoundationWorkspace("availability");
-                handleSectionChange("config");
-              }}
-              onOpenFramework={() => {
-                setFoundationWorkspace("framework");
-                handleSectionChange("config");
-              }}
-              onOpenConflictReview={openConflictReview}
-              onOpenPlan={() => handleSectionChange("plan")}
-            />
+            >
+              <SolverView
+                candidates={candidates}
+                interviewers={interviewers}
+                dates={dates}
+                sessionDuration={sessionDuration}
+                admissionTitle={admissionTitle}
+                admissionSlug={admissionSlug}
+                startDate={startDate}
+                endDate={endDate}
+                enabledWindows={savedSchedule?.enabled_windows ?? []}
+                enabledSlots={enabledSlots}
+                dayStartMinute={dayStartMinute}
+                dayEndMinute={dayEndMinute}
+                chunkSize={chunkSize}
+                chunkBreakMinutes={chunkBreakMinutes}
+                blockMode={blockMode}
+                manualBlocks={manualBlocks}
+                slotOverrides={slotOverrides}
+                candidateScopeResolved={candidateScopeResolved}
+                availabilityReady={availabilityReady}
+                syntheticInput={syntheticInput}
+                editRequestKey={solverEditRequestKey}
+                currentReviewRequired={currentReviewRequired}
+                currentReviewComplete={currentReviewComplete}
+                completeReviewerCount={
+                  publicationReadiness.completeReviewerCount
+                }
+                requiredReviewerCount={
+                  publicationReadiness.requiredReviewerCount
+                }
+                pendingReviewerCount={
+                  publicationReadiness.incompleteReviewerCount
+                }
+                missingReviewerNames={publicationReadiness.missingReviewerNames}
+                publicationReady={publicationReadiness.ready}
+                backgroundMode={Boolean(
+                  showAdminConflictReviewStage && myAvailabilityParticipant,
+                )}
+                onDraftPersistenceChange={setDraftPersistenceStatus}
+                onExperienceLevelChange={setExperienceLevel}
+                onOpenAvailability={() => {
+                  setFoundationWorkspace("availability");
+                  handleSectionChange("config");
+                }}
+                onOpenFramework={() => {
+                  setFoundationWorkspace("framework");
+                  handleSectionChange("config");
+                }}
+                onOpenConflictReview={openConflictReview}
+                onOpenPlan={() => handleSectionChange("plan")}
+              />
+            </section>
           </div>
         )}
 
@@ -705,7 +1090,7 @@ const LoadedScheduleView: React.FC<LoadedScheduleViewProps> = ({
               canManageInterviewWorkflow={canManageInterviewWorkflow}
               currentUserName={currentUserName}
               currentUserId={myAvailabilityParticipant?.user_id}
-              canToggleCandidateNames={canRevealCandidateNames}
+              canToggleCandidateNames={isAdmin}
               onSetNameVisibility={handleSetNameVisibility}
               onReplacePanelMember={handleReplacePanelMember}
               onChangeInterviewTime={handleChangeInterviewTime}
@@ -724,8 +1109,7 @@ const LoadedScheduleView: React.FC<LoadedScheduleViewProps> = ({
             <PublicationGate
               savedSchedule={savedSchedule}
               readiness={publicationReadiness}
-              currentReviewRequired={currentReviewRequired}
-              currentReviewComplete={currentReviewComplete}
+              stage={publicationStage}
               planTransition={planTransition}
               planTransitionError={planTransitionError}
               onOpenDraft={() => handleSectionChange("solver")}

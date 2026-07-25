@@ -15,7 +15,7 @@ const expectNoNestedScroll = (selector: string) => {
 };
 
 describe("schedule navigation hierarchy", () => {
-  it("uses progress semantics for workflow and tab semantics locally", () => {
+  it("keeps workflow progress separate from local foundation tabs", () => {
     cy.viewport(1280, 800);
     mountNavigation();
 
@@ -27,7 +27,8 @@ describe("schedule navigation hierarchy", () => {
       .find('button[aria-current="step"]')
       .should("contain.text", "Grunnlag");
 
-    cy.get('[role="tablist"][aria-label="Arbeidsområder i Grunnlag"]')
+    cy.get("[data-cy=schedule-stage]")
+      .find('nav[aria-label="Delsteg i Grunnlag"]')
       .find('[role="tab"]')
       .should("have.length", 3)
       .each(($tab) => {
@@ -35,18 +36,22 @@ describe("schedule navigation hierarchy", () => {
         expect(panelId).to.be.a("string");
         cy.get(`#${panelId}`).should("exist");
       });
-    cy.get('[role="tablist"][aria-label="Arbeidsområder i Grunnlag"]')
+    cy.get('nav[aria-label="Delsteg i Grunnlag"]')
       .should("contain.text", "Oppsett")
       .and("contain.text", "Min tilgjengelighet")
-      .and("contain.text", "Intervjuere og dekning");
-    cy.get('#foundation-tab-framework[aria-selected="true"]')
+      .and("contain.text", "Tilgjengelighet og dekning");
+    cy.get("#foundation-tab-framework")
+      .should("have.attr", "aria-selected", "true")
       .focus()
       .type("{rightarrow}");
-    cy.get('#foundation-tab-availability[aria-selected="true"]').should(
-      "have.focus",
-    );
+    cy.get("#foundation-tab-availability").should("have.focus");
     cy.get("#foundation-panel-framework").should("have.attr", "hidden");
     cy.get("#foundation-panel-availability").should("not.have.attr", "hidden");
+    cy.get("#foundation-tab-availability").should(
+      "have.attr",
+      "aria-selected",
+      "true",
+    );
 
     cy.get("#foundation-tab-framework").click();
     cy.get("#foundation-panel-framework").within(() => {
@@ -75,9 +80,7 @@ describe("schedule navigation hierarchy", () => {
       mountNavigation();
 
       expectNoNestedScroll('nav[aria-label="Steg i intervjuplanleggingen"]');
-      expectNoNestedScroll(
-        '[role="tablist"][aria-label="Arbeidsområder i Grunnlag"]',
-      );
+      expectNoNestedScroll('nav[aria-label="Delsteg i Grunnlag"]');
       cy.document().then((document) => {
         expect(document.documentElement.scrollWidth).to.be.at.most(width);
       });

@@ -227,7 +227,7 @@ export const buildSchedulePatternRows = (
   return rows;
 };
 
-export interface ScheduleDraftSummary {
+interface ScheduleDraftSummary {
   wholeBlockCount: number;
   shortBlockCount: number;
   partialBlockCount: number;

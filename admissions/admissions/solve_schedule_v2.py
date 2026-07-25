@@ -5,6 +5,7 @@ from typing import Any, Dict, List, Sequence
 from ortools.sat.python import cp_model
 
 from admissions.admissions import constants
+from admissions.admissions import solve_schedule as solve_schedule_module
 from admissions.admissions.schedule_policy import normalize_solver_options
 from admissions.admissions.solve_schedule import (
     Candidate,
@@ -14,10 +15,9 @@ from admissions.admissions.solve_schedule import (
     SolveOptions,
     _canonicalize_blocks,
 )
-from admissions.admissions import solve_schedule as solve_schedule_module
 from admissions.admissions.solver_result import (
-    ObjectiveVector,
     REPAIR_PROFILES,
+    ObjectiveVector,
     evaluate_objective_vector,
     objective_key,
     validate_schedule_result,

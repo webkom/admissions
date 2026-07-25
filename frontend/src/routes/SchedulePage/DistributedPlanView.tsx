@@ -7,6 +7,8 @@ import {
   SchedulePanelBody,
   actionButtonBase,
   actionButtonNeutral,
+  keyboardFocusRingClass,
+  useDetailsMenu,
 } from "src/components/Scheduling/ui";
 import ConfirmDialog from "src/components/Scheduling/ConfirmDialog";
 import ExportChooserModal from "src/components/Scheduling/Solver/ExportChooserModal";
@@ -115,6 +117,11 @@ const DistributedPlanView: React.FC<DistributedPlanViewProps> = ({
   const [isChangingTime, setIsChangingTime] = useState(false);
   const [lockBusyIndex, setLockBusyIndex] = useState<number | null>(null);
   const [isUnlockDialogOpen, setIsUnlockDialogOpen] = useState(false);
+  const {
+    detailsRef: actionMenuRef,
+    closeDetails: closeActionMenu,
+    handleDetailsToggle: handleActionMenuToggle,
+  } = useDetailsMenu();
   const [outreachPersistenceState, setOutreachPersistenceState] = useState<
     "saving" | "saved" | "error"
   >("saved");
@@ -315,8 +322,13 @@ const DistributedPlanView: React.FC<DistributedPlanViewProps> = ({
         chips={<Chip tone="success">Publisert</Chip>}
         actions={
           <div className="flex flex-wrap items-center gap-2">
-            <details className="relative">
+            <details
+              ref={actionMenuRef}
+              onToggle={handleActionMenuToggle}
+              className="relative"
+            >
               <summary
+                aria-haspopup="menu"
                 className={cn(
                   actionButtonBase,
                   actionButtonNeutral,
@@ -326,20 +338,38 @@ const DistributedPlanView: React.FC<DistributedPlanViewProps> = ({
                 <MoreHorizontal size={iconSizes.small} aria-hidden="true" />
                 Flere handlinger
               </summary>
-              <div className="absolute right-0 z-30 mt-2 w-full rounded-lg border border-border-soft bg-surface-base p-1.5 shadow-lg">
+              <div
+                role="menu"
+                aria-label="Flere handlinger for intervjuplanen"
+                className="absolute right-0 top-full z-30 mt-2 grid min-w-56 gap-1 overflow-hidden rounded-lg border border-border bg-surface-base p-1 shadow-lg"
+              >
                 <button
                   type="button"
-                  onClick={() => setIsExportChooserOpen(true)}
-                  className="flex w-full items-center rounded-md px-3 py-2 text-left text-ui font-semibold text-text-primary hover:bg-surface-subtle"
+                  role="menuitem"
+                  onClick={() => {
+                    closeActionMenu(true);
+                    setIsExportChooserOpen(true);
+                  }}
+                  className={cn(
+                    "flex items-center rounded-md px-3 py-2 text-left text-ui font-semibold text-text-primary hover:bg-surface-subtle",
+                    keyboardFocusRingClass,
+                  )}
                 >
                   Eksporter plan
                 </button>
                 {isAdmin && (
                   <button
                     type="button"
-                    onClick={() => setIsUnlockDialogOpen(true)}
+                    role="menuitem"
+                    onClick={() => {
+                      closeActionMenu(true);
+                      setIsUnlockDialogOpen(true);
+                    }}
                     disabled={planTransition !== null}
-                    className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-ui font-semibold text-danger hover:bg-danger-bg"
+                    className={cn(
+                      "flex items-center gap-2 rounded-md px-3 py-2 text-left text-ui font-semibold text-danger hover:bg-danger-bg",
+                      keyboardFocusRingClass,
+                    )}
                   >
                     <Unlock size={iconSizes.small} aria-hidden="true" />
                     Lås opp og rediger

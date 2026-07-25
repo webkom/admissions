@@ -164,6 +164,12 @@ const FormStructure: React.FC<FormStructureProps> = ({ toggleIsEditing }) => {
                 {myApplication.phone_number || "Ikke oppgitt"}
               </ReceiptValue>
             </ReceiptField>
+            {myApplication.priority_text && (
+              <ReceiptField>
+                <ReceiptLabel>Prioriteringer og kommentarer</ReceiptLabel>
+                <ReceiptValue>{myApplication.priority_text}</ReceiptValue>
+              </ReceiptField>
+            )}
           </ReceiptFields>
         </GeneralInfoSection>
         <SeparatorLine />

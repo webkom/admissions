@@ -30,7 +30,7 @@ interface SelectedGroups {
 }
 
 const ApplicationPortal = () => {
-  const { admissionSlug } = useParams();
+  const { admissionSlug, "*": portalPath } = useParams();
   const userId = djangoData.user.id ?? "";
   const draftScope = createDraftAdmissionScope(admissionSlug ?? "", userId);
 
@@ -58,6 +58,9 @@ const ApplicationPortal = () => {
   const { groups } = admission ?? {};
   const isMember = (admission?.userdata.committee_groups?.length ?? 0) > 0;
   const isPrivileged = !!admission?.userdata.is_privileged;
+  const isScheduleRoute = portalPath?.replace(/^\/+/, "") === "schedule";
+  const isScheduleAccessFailure =
+    isScheduleRoute && [401, 403].includes(error?.response?.status ?? 0);
 
   const toggleGroup = (name: string) => {
     setSelectedGroups({
@@ -114,6 +117,18 @@ const ApplicationPortal = () => {
   } else if (error) {
     if (error.response?.status === 404) {
       return <NotFoundPage />;
+    }
+    if (isScheduleAccessFailure) {
+      return (
+        <PageWrapper>
+          <NavBar isEditing={false} />
+          <ContentContainer>
+            <Suspense fallback={<LoadingBall />}>
+              <SchedulePage />
+            </Suspense>
+          </ContentContainer>
+        </PageWrapper>
+      );
     }
     return <div>Error: {error.message}</div>;
   } else if (isLoading || activeDraftScope !== draftScope) {

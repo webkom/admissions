@@ -33,10 +33,27 @@ class AdminAdmissionPrivacyTestCase(APITestCase):
         self.candidate = LegoUser.objects.create(username="candidate", lego_id=22)
         self.recruiter = LegoUser.objects.create(username="recruiter", lego_id=23)
         self.admin = LegoUser.objects.create(username="admin", lego_id=24)
+        self.leader_admin = LegoUser.objects.create(username="leader-admin", lego_id=25)
+        self.recruiting_admin = LegoUser.objects.create(
+            username="recruiting-admin", lego_id=26
+        )
+        self.staff_without_admission_role = LegoUser.objects.create(
+            username="staff-without-admission-role",
+            lego_id=29,
+            is_staff=True,
+        )
         Membership.objects.create(
             user=self.recruiter, group=self.committee, role=RECRUITING
         )
         Membership.objects.create(user=self.admin, group=self.admin_group, role=MEMBER)
+        Membership.objects.create(
+            user=self.leader_admin, group=self.admin_group, role=LEADER
+        )
+        Membership.objects.create(
+            user=self.recruiting_admin,
+            group=self.admin_group,
+            role=RECRUITING,
+        )
         UserApplication.objects.create(
             admission=self.admission,
             user=self.candidate,
@@ -57,12 +74,6 @@ class AdminAdmissionPrivacyTestCase(APITestCase):
         response = self.client.get(self.url)
 
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
-        self.client.force_authenticate(user=self.admin)
-        public_response = self.client.get(
-            reverse("admission-detail", kwargs={"slug": self.admission.slug})
-        )
-        self.assertFalse(public_response.data["userdata"]["is_admin"])
-        self.assertFalse(public_response.data["userdata"]["is_privileged"])
 
     def test_recruiter_can_retrieve_admin_admission(self):
         self.client.force_authenticate(user=self.recruiter)
@@ -70,6 +81,7 @@ class AdminAdmissionPrivacyTestCase(APITestCase):
         response = self.client.get(self.url)
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["userdata"]["actor_id"], str(self.recruiter.pk))
         self.assertNotIn("applications", response.data)
         self.assertNotIn(str(self.candidate.pk), str(response.data))
 
@@ -85,6 +97,7 @@ class AdminAdmissionPrivacyTestCase(APITestCase):
 
         self.assertNotIn("text", data)
         self.assertNotIn("header_fields_response", data)
+        self.assertNotIn("priority_text", data)
 
     def test_ordinary_admin_group_member_cannot_retrieve_admin_admission(self):
         self.client.force_authenticate(user=self.admin)
@@ -92,9 +105,64 @@ class AdminAdmissionPrivacyTestCase(APITestCase):
         response = self.client.get(self.url)
 
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        public_response = self.client.get(
+            reverse("admission-detail", kwargs={"slug": self.admission.slug})
+        )
+        self.assertFalse(public_response.data["userdata"]["is_admin"])
+        self.assertFalse(public_response.data["userdata"]["is_privileged"])
+        self.assertEqual(
+            public_response.data["userdata"]["actor_id"], str(self.admin.pk)
+        )
+
+    def test_active_admin_group_roles_are_reported_as_administrators(self):
+        for admin in (self.leader_admin, self.recruiting_admin):
+            with self.subTest(role=admin.username):
+                self.client.force_authenticate(user=admin)
+
+                response = self.client.get(self.url)
+                public_response = self.client.get(
+                    reverse(
+                        "admission-detail",
+                        kwargs={"slug": self.admission.slug},
+                    )
+                )
+
+                self.assertEqual(response.status_code, status.HTTP_200_OK)
+                self.assertEqual(response.data["userdata"]["actor_id"], str(admin.pk))
+                self.assertEqual(
+                    public_response.data["userdata"]["actor_id"], str(admin.pk)
+                )
+                self.assertTrue(response.data["userdata"]["is_admin"])
+                self.assertTrue(response.data["userdata"]["is_privileged"])
+                self.assertTrue(public_response.data["userdata"]["is_admin"])
+                self.assertTrue(public_response.data["userdata"]["is_privileged"])
+
+    def test_staff_without_admin_group_role_is_not_an_admission_admin(self):
+        self.client.force_authenticate(user=self.staff_without_admission_role)
+
+        response = self.client.get(self.url)
+        public_response = self.client.get(
+            reverse("admission-detail", kwargs={"slug": self.admission.slug})
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertFalse(public_response.data["userdata"]["is_admin"])
+        self.assertFalse(public_response.data["userdata"]["is_privileged"])
+        self.assertEqual(
+            public_response.data["userdata"]["actor_id"],
+            str(self.staff_without_admission_role.pk),
+        )
+
+    def test_anonymous_public_userdata_has_no_actor_identity(self):
+        response = self.client.get(
+            reverse("admission-detail", kwargs={"slug": self.admission.slug})
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertIsNone(response.data["userdata"]["actor_id"])
 
     def test_retired_membership_does_not_grant_candidate_access(self):
-        retired = LegoUser.objects.create(username="retired", lego_id=25)
+        retired = LegoUser.objects.create(username="retired", lego_id=27)
         Membership.objects.create(user=retired, group=self.admin_group, role=RETIREE)
         Membership.objects.create(user=retired, group=self.committee, role=RETIREE)
         self.client.force_authenticate(user=retired)
@@ -104,7 +172,7 @@ class AdminAdmissionPrivacyTestCase(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
 
     def test_retired_admin_membership_is_not_reported_for_active_recruiter(self):
-        recruiter = LegoUser.objects.create(username="former-admin", lego_id=26)
+        recruiter = LegoUser.objects.create(username="former-admin", lego_id=28)
         Membership.objects.create(user=recruiter, group=self.admin_group, role=RETIREE)
         Membership.objects.create(user=recruiter, group=self.committee, role=RECRUITING)
         self.client.force_authenticate(user=recruiter)
@@ -147,11 +215,15 @@ class ListApplicationsTestCase(APITestCase):
         self.admission.admin_groups.add(leader_group)
 
         # Abakus leader
-        self.staff_user = LegoUser.objects.create(
-            username="staff_user", lego_id=3, is_staff=True
+        self.admission_admin = LegoUser.objects.create(
+            username="admission_admin", lego_id=3
         )
 
-        Membership.objects.create(user=self.staff_user, role=MEMBER, group=leader_group)
+        Membership.objects.create(
+            user=self.admission_admin,
+            role=LEADER,
+            group=leader_group,
+        )
 
         # Webkom
         self.webkom_leader = LegoUser.objects.create(username="webkomleader", lego_id=4)
@@ -170,6 +242,11 @@ class ListApplicationsTestCase(APITestCase):
         # Bedkom
         self.bedkom_leader = LegoUser.objects.create(username="bedkomleader", lego_id=6)
         self.bedkom_rec = LegoUser.objects.create(username="bedkomrec", lego_id=7)
+        self.staff_without_admission_role = LegoUser.objects.create(
+            username="staff-without-admission-role",
+            lego_id=8,
+            is_staff=True,
+        )
 
         self.bedkom = Group.objects.create(name="Bedkom", lego_id=3)
         self.admission.groups.add(self.bedkom)
@@ -212,6 +289,18 @@ class ListApplicationsTestCase(APITestCase):
     def test_normal_user_cannot_see_other_applications(self):
         """Normal users should not be able to list applications"""
         self.client.force_authenticate(user=self.pleb)
+
+        res = self.client.get(
+            reverse(
+                "admin-userapplication-list",
+                kwargs={"admission_slug": self.admission_slug},
+            )
+        )
+
+        self.assertEqual(res.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_staff_without_admin_group_role_cannot_see_all_applications(self):
+        self.client.force_authenticate(user=self.staff_without_admission_role)
 
         res = self.client.get(
             reverse(
@@ -317,6 +406,31 @@ class ListApplicationsTestCase(APITestCase):
         self.assertEqual(len(json[0]["group_applications"]), 1)
         # This GroupApplication should be to webkom
         self.assertEqual(json[0]["group_applications"][0]["group"]["name"], "Webkom")
+        self.assertNotIn("priority_text", json[0])
+
+    def test_admission_admin_can_see_private_priority_comment(self):
+        application = UserApplication.objects.create(
+            admission=self.admission,
+            user=self.pleb,
+            phone_number="00000000",
+            text="1. Webkom\n2. Koskom",
+        )
+        GroupApplication.objects.create(
+            application=application,
+            group=self.webkom,
+            text="Webkom application",
+        )
+        self.client.force_authenticate(user=self.admission_admin)
+
+        response = self.client.get(
+            reverse(
+                "admin-userapplication-list",
+                kwargs={"admission_slug": self.admission_slug},
+            )
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data[0]["priority_text"], application.text)
 
     def test_group_recruiter_can_update_interview_status(self):
         application = UserApplication.objects.create(
@@ -426,9 +540,7 @@ class ListApplicationsTestCase(APITestCase):
             phone_number="00000000",
         )
         GroupApplication.objects.create(application=application, group=self.webkom)
-        self.staff_user.is_staff = False
-        self.staff_user.save(update_fields=["is_staff"])
-        self.client.force_authenticate(user=self.staff_user)
+        self.client.force_authenticate(user=self.admission_admin)
 
         response = self.client.patch(
             self.interview_status_url(application),
@@ -783,7 +895,7 @@ class ListApplicationsTestCase(APITestCase):
         for group_application in json[0]["group_applications"]:
             self.assertNotEqual(group_application["group"]["name"], "Webkom")
 
-    def test_staff_user_can_see_all_applications(self):
+    def test_admission_admin_can_see_all_applications(self):
         self.client.force_authenticate(user=self.pleb)
         self.client.post(
             reverse(
@@ -793,8 +905,7 @@ class ListApplicationsTestCase(APITestCase):
             format="json",
         )
 
-        # Auth user as AbakusLeader
-        self.client.force_authenticate(user=self.staff_user)
+        self.client.force_authenticate(user=self.admission_admin)
         res = self.client.get(
             reverse(
                 "admin-userapplication-list",
@@ -927,7 +1038,25 @@ class TerminateCommitteeApplicationsTestCase(APITestCase):
 
         self.admin = LegoUser.objects.create(username="admin", lego_id=104)
         self.recruiter = LegoUser.objects.create(username="recruiter", lego_id=105)
-        Membership.objects.create(user=self.admin, group=self.admin_group, role=MEMBER)
+        self.ordinary_admin_group_member = LegoUser.objects.create(
+            username="ordinary-admin-group-member",
+            lego_id=109,
+        )
+        self.staff_without_admission_role = LegoUser.objects.create(
+            username="staff-without-admission-role",
+            lego_id=110,
+            is_staff=True,
+        )
+        Membership.objects.create(
+            user=self.admin,
+            group=self.admin_group,
+            role=LEADER,
+        )
+        Membership.objects.create(
+            user=self.ordinary_admin_group_member,
+            group=self.admin_group,
+            role=MEMBER,
+        )
         Membership.objects.create(
             user=self.recruiter, group=self.committee, role=RECRUITING
         )
@@ -979,6 +1108,18 @@ class TerminateCommitteeApplicationsTestCase(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
 
         self.client.force_authenticate(user=self.recruiter)
+        response = self.client.post(
+            self.url, {"confirmation_name": self.committee.name}, format="json"
+        )
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+        self.client.force_authenticate(user=self.ordinary_admin_group_member)
+        response = self.client.post(
+            self.url, {"confirmation_name": self.committee.name}, format="json"
+        )
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+        self.client.force_authenticate(user=self.staff_without_admission_role)
         response = self.client.post(
             self.url, {"confirmation_name": self.committee.name}, format="json"
         )

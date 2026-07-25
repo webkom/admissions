@@ -6,13 +6,16 @@ import { iconSizes } from "src/styles/designTokens";
 interface MemberAvailabilityPendingProps {
   title?: string;
   description?: string;
+  foundationNav?: React.ReactNode;
 }
 
 const MemberAvailabilityPending: React.FC<MemberAvailabilityPendingProps> = ({
   title = "Venter på oppsett",
   description = "Registrering av tilgjengelighet er ikke åpnet ennå. Kom tilbake når opptaksansvarlig har åpnet registreringen.",
+  foundationNav,
 }) => (
-  <SchedulePanel>
+  <SchedulePanel dataCy={foundationNav ? "schedule-stage" : undefined}>
+    {foundationNav}
     <div className="px-6 py-16 text-center">
       <div className="mx-auto mb-4 flex h-10 w-10 items-center justify-center text-brand">
         <LockKeyhole size={iconSizes.hero} />

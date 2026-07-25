@@ -1,11 +1,11 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
-import {
-  AlertTriangle,
-  ArrowLeft,
-  Check,
-  ChevronDown,
-  Search,
-} from "lucide-react";
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
+import { ArrowLeft, Check } from "lucide-react";
 
 import {
   Chip,
@@ -37,6 +37,8 @@ interface ConflictReviewViewProps {
   openRequestKey?: number;
   reviewProgress?: ReviewProgress;
   showSummary?: boolean;
+  onCloseStage?: () => void;
+  scope?: "draft" | "collection";
 }
 
 const serializeIds = (ids: Iterable<string>) => [...ids].sort().join("\n");
@@ -48,16 +50,42 @@ const ConflictReviewView: React.FC<ConflictReviewViewProps> = ({
   openRequestKey = 0,
   reviewProgress,
   showSummary = true,
+  onCloseStage,
+  scope = "draft",
 }) => {
-  const [query, setQuery] = useState("");
+  const candidateById = useMemo(
+    () =>
+      new Map((candidates ?? []).map((candidate) => [candidate.id, candidate])),
+    [candidates],
+  );
+  const reviewCandidateIds = useMemo(
+    () =>
+      new Set(
+        scope === "collection"
+          ? (currentParticipant?.conflict_collection_candidate_ids ?? [])
+          : (currentParticipant?.proposed_candidate_ids ?? []),
+      ),
+    [
+      currentParticipant?.conflict_collection_candidate_ids,
+      currentParticipant?.proposed_candidate_ids,
+      scope,
+    ],
+  );
+  const scopedServerConflicts = useMemo(
+    () =>
+      (currentParticipant?.conflicts ?? []).filter((candidateId) =>
+        reviewCandidateIds.has(candidateId),
+      ),
+    [currentParticipant?.conflicts, reviewCandidateIds],
+  );
   const [reviewOpen, setReviewOpen] = useState(false);
   const [reviewFocusRequest, setReviewFocusRequest] = useState(0);
   const [isSaving, setIsSaving] = useState(false);
   const [selectedConflictIds, setSelectedConflictIds] = useState<Set<string>>(
-    () => new Set(currentParticipant?.conflicts ?? []),
+    () => new Set(scopedServerConflicts),
   );
   const [lastSavedConflictState, setLastSavedConflictState] = useState(() =>
-    serializeIds(currentParticipant?.conflicts ?? []),
+    serializeIds(scopedServerConflicts),
   );
   const lastServerStateRef = useRef("");
   const reviewSectionRef = useRef<HTMLDivElement>(null);
@@ -66,22 +94,24 @@ const ConflictReviewView: React.FC<ConflictReviewViewProps> = ({
   // A request can navigate here and mount this component in the same render.
   // Start at zero so that first request still opens the newly mounted section.
   const lastOpenRequestRef = useRef(0);
-  const serverConflictState = serializeIds(currentParticipant?.conflicts ?? []);
+  const serverConflictState = serializeIds(scopedServerConflicts);
 
   useEffect(() => {
     if (serverConflictState === lastServerStateRef.current) return;
-    setSelectedConflictIds(new Set(currentParticipant?.conflicts ?? []));
+    setSelectedConflictIds(new Set(scopedServerConflicts));
     setLastSavedConflictState(serverConflictState);
     lastServerStateRef.current = serverConflictState;
-  }, [currentParticipant?.conflicts, serverConflictState]);
+  }, [scopedServerConflicts, serverConflictState]);
 
   useEffect(() => {
     if (openRequestKey === lastOpenRequestRef.current) return;
     lastOpenRequestRef.current = openRequestKey;
+    const ownerDocument = reviewSectionRef.current?.ownerDocument ?? document;
+    const HTMLElementConstructor =
+      ownerDocument.defaultView?.HTMLElement ?? HTMLElement;
+    const activeElement = ownerDocument.activeElement;
     openerRef.current =
-      document.activeElement instanceof HTMLElement
-        ? document.activeElement
-        : null;
+      activeElement instanceof HTMLElementConstructor ? activeElement : null;
     setReviewOpen(true);
     setReviewFocusRequest((request) => request + 1);
   }, [openRequestKey]);
@@ -90,58 +120,31 @@ const ConflictReviewView: React.FC<ConflictReviewViewProps> = ({
     if (!reviewOpen) return;
     window.requestAnimationFrame(() => {
       reviewSectionRef.current?.scrollIntoView({
-        behavior: "smooth",
+        behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches
+          ? "auto"
+          : "smooth",
         block: "start",
       });
       reviewHeadingRef.current?.focus({ preventScroll: true });
     });
   }, [reviewFocusRequest, reviewOpen]);
 
-  const candidateById = useMemo(
+  const reviewCandidates = useMemo(
     () =>
-      new Map((candidates ?? []).map((candidate) => [candidate.id, candidate])),
-    [candidates],
-  );
-  const proposedCandidateIds = useMemo(
-    () => new Set(currentParticipant?.proposed_candidate_ids ?? []),
-    [currentParticipant?.proposed_candidate_ids],
-  );
-  const proposedCandidates = useMemo(
-    () =>
-      [...proposedCandidateIds]
+      [...reviewCandidateIds]
         .map((candidateId) => candidateById.get(candidateId))
         .filter((candidate): candidate is Candidate => Boolean(candidate))
         .sort((left, right) => left.name.localeCompare(right.name, "nb")),
-    [candidateById, proposedCandidateIds],
+    [candidateById, reviewCandidateIds],
   );
-  const normalizedQuery = query.trim().toLocaleLowerCase("nb");
-  const otherCandidates = useMemo(
-    () =>
-      (candidates ?? [])
-        .filter((candidate) => !proposedCandidateIds.has(candidate.id))
-        .filter(
-          (candidate) =>
-            selectedConflictIds.has(candidate.id) ||
-            (normalizedQuery.length > 0 &&
-              candidate.name.toLocaleLowerCase("nb").includes(normalizedQuery)),
-        )
-        .sort((left, right) => {
-          const selectedDifference =
-            Number(selectedConflictIds.has(right.id)) -
-            Number(selectedConflictIds.has(left.id));
-          return (
-            selectedDifference || left.name.localeCompare(right.name, "nb")
-          );
-        })
-        .slice(0, 20),
-    [candidates, normalizedQuery, proposedCandidateIds, selectedConflictIds],
+  const reviewIsCurrent = Boolean(
+    scope === "collection"
+      ? currentParticipant?.conflict_collection_complete
+      : currentParticipant?.conflict_review_complete,
   );
-
-  const reviewIsCurrent = Boolean(currentParticipant?.conflict_review_complete);
   const proposalNamesLoading =
     candidates === undefined ||
-    proposedCandidates.length !==
-      (currentParticipant?.proposed_candidate_ids.length ?? 0);
+    reviewCandidates.length !== reviewCandidateIds.size;
   const hasConflictChanges =
     serializeIds(selectedConflictIds) !== lastSavedConflictState;
   const selectedConflictCount = selectedConflictIds.size;
@@ -155,23 +158,21 @@ const ConflictReviewView: React.FC<ConflictReviewViewProps> = ({
     });
   };
 
-  const openReview = () => {
-    openerRef.current =
-      document.activeElement instanceof HTMLElement
-        ? document.activeElement
-        : null;
+  const openReview = (event: React.MouseEvent<HTMLButtonElement>) => {
+    openerRef.current = event.currentTarget;
     setReviewOpen(true);
     setReviewFocusRequest((request) => request + 1);
   };
 
-  const closeReview = () => {
+  const closeReview = useCallback(() => {
     setReviewOpen(false);
+    onCloseStage?.();
     const opener = openerRef.current;
     openerRef.current = null;
     window.requestAnimationFrame(() => {
       if (opener?.isConnected) opener.focus();
     });
-  };
+  }, [onCloseStage]);
 
   const submitReview = async (conflictIds = selectedConflictIds) => {
     if (
@@ -183,10 +184,11 @@ const ConflictReviewView: React.FC<ConflictReviewViewProps> = ({
     }
     setIsSaving(true);
     try {
-      const reviewedCandidateIds = new Set(
-        currentParticipant.reviewed_candidate_ids,
-      );
-      proposedCandidateIds.forEach((candidateId) =>
+      const reviewedCandidateIds =
+        scope === "collection"
+          ? new Set(reviewCandidateIds)
+          : new Set(currentParticipant.reviewed_candidate_ids);
+      reviewCandidateIds.forEach((candidateId) =>
         reviewedCandidateIds.add(candidateId),
       );
       conflictIds.forEach((candidateId) =>
@@ -205,7 +207,8 @@ const ConflictReviewView: React.FC<ConflictReviewViewProps> = ({
   };
 
   if (
-    (currentParticipant?.proposed_candidate_ids.length ?? 0) === 0 &&
+    scope === "draft" &&
+    reviewCandidateIds.size === 0 &&
     openRequestKey === 0
   ) {
     return null;
@@ -215,11 +218,24 @@ const ConflictReviewView: React.FC<ConflictReviewViewProps> = ({
     ? `${reviewProgress.complete} av ${reviewProgress.total} intervjuere har bekreftet`
     : reviewIsCurrent
       ? "Du har bekreftet kandidatkontrollen"
-      : `${currentParticipant?.proposed_candidate_ids.length ?? 0} kandidater må kontrolleres`;
+      : scope === "collection" && reviewCandidateIds.size === 0
+        ? "Du har ingen andre kandidater å kontrollere"
+        : `${reviewCandidateIds.size} kandidater må kontrolleres`;
 
   return (
-    <>
-      {showSummary && (
+    <div
+      data-cy="schedule-stage"
+      data-stage="candidate-check"
+      onKeyDown={(event) => {
+        if (!reviewOpen || event.key !== "Escape" || event.defaultPrevented) {
+          return;
+        }
+        event.preventDefault();
+        event.stopPropagation();
+        closeReview();
+      }}
+    >
+      {showSummary && !reviewOpen && (
         <SchedulePanel dataCy="conflict-review">
           <SchedulePanelBody className="flex flex-wrap items-center justify-between gap-4 px-5 py-4">
             <div className="min-w-0">
@@ -259,12 +275,11 @@ const ConflictReviewView: React.FC<ConflictReviewViewProps> = ({
         <div ref={reviewSectionRef} className="scroll-mt-6">
           <SchedulePanel
             dataCy="conflict-review-inline"
-            className="animate-fade-in"
+            className="animate-fade-in motion-reduce:animate-none"
           >
             <SchedulePanelHeader
               title="Kandidatkontroll"
               description="Kryss av bare kandidater du kjenner på en måte som gjør deg inhabil. Når du bekrefter, regnes resten som uten konflikt."
-              chips={<Chip tone="warning">Del av Planutkast</Chip>}
               actions={
                 <button
                   type="button"
@@ -305,14 +320,10 @@ const ConflictReviewView: React.FC<ConflictReviewViewProps> = ({
                     <h3 className="m-0 text-base font-bold text-text-primary">
                       Velg kandidatene du er inhabil for
                     </h3>
-                    <p className="m-0 mt-1 text-ui text-text-muted">
-                      Et avkrysset navn betyr inhabil. Uavkryssede navn
-                      bekreftes som uten konflikt når du lagrer.
-                    </p>
                   </div>
 
                   <ul className="m-0 divide-y divide-border-faint overflow-hidden rounded-lg border border-border-soft p-0">
-                    {proposedCandidates.map((candidate) => {
+                    {reviewCandidates.map((candidate) => {
                       const selected = selectedConflictIds.has(candidate.id);
                       return (
                         <li key={candidate.id}>
@@ -344,90 +355,13 @@ const ConflictReviewView: React.FC<ConflictReviewViewProps> = ({
                       );
                     })}
                   </ul>
-
-                  <details className="group rounded-lg border border-border-soft">
-                    <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 text-ui font-semibold text-text-primary hover:bg-surface-subtle [&::-webkit-details-marker]:hidden">
-                      <span>Har du en annen kjent inhabilitet?</span>
-                      <span className="flex items-center gap-1.5 text-detail text-brand">
-                        Legg til kandidat
-                        <ChevronDown
-                          size={iconSizes.small}
-                          className="transition-transform group-open:rotate-180"
-                        />
-                      </span>
-                    </summary>
-                    <div className="border-t border-border-faint bg-surface-subtle p-4">
-                      <label className="relative block">
-                        <Search
-                          size={iconSizes.small}
-                          aria-hidden="true"
-                          className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-text-subtle"
-                        />
-                        <span className="sr-only">
-                          Søk etter en annen kandidat
-                        </span>
-                        <input
-                          type="search"
-                          value={query}
-                          onChange={(event) => setQuery(event.target.value)}
-                          placeholder="Søk etter kandidat…"
-                          className="h-10 w-full rounded-lg border border-border bg-surface-base pl-9 pr-3 text-ui text-text-primary outline-none focus:border-brand-input focus:ring-3 focus:ring-brand-ringSoft"
-                        />
-                      </label>
-                      {otherCandidates.length > 0 ? (
-                        <ul className="m-0 mt-3 grid gap-1 p-0">
-                          {otherCandidates.map((candidate) => {
-                            const selected = selectedConflictIds.has(
-                              candidate.id,
-                            );
-                            return (
-                              <li key={candidate.id}>
-                                <label
-                                  className={cn(
-                                    "flex cursor-pointer items-center gap-3 rounded-lg px-3 py-2.5",
-                                    selected
-                                      ? "bg-danger-bg"
-                                      : "hover:bg-surface-base",
-                                  )}
-                                >
-                                  <input
-                                    type="checkbox"
-                                    checked={selected}
-                                    onChange={() =>
-                                      toggleConflict(candidate.id)
-                                    }
-                                    className="h-4 w-4 rounded border-border-muted text-danger focus:ring-danger"
-                                  />
-                                  <span className="min-w-0 flex-1 truncate text-ui font-semibold text-text-primary">
-                                    {candidate.name}
-                                  </span>
-                                  {selected && (
-                                    <span className="flex items-center gap-1 text-detail font-semibold text-danger">
-                                      <AlertTriangle
-                                        size={13}
-                                        aria-hidden="true"
-                                      />
-                                      Inhabil
-                                    </span>
-                                  )}
-                                </label>
-                              </li>
-                            );
-                          })}
-                        </ul>
-                      ) : (
-                        <p className="m-0 mt-3 text-detail text-text-muted">
-                          {normalizedQuery
-                            ? "Ingen andre kandidater matcher søket."
-                            : "Søk bare hvis du allerede kjenner til en annen inhabilitet."}
-                        </p>
-                      )}
-                    </div>
-                  </details>
                 </div>
               )}
             </SchedulePanelBody>
             <SchedulePanelFooter className="sticky bottom-0 z-10 bg-surface-base">
+              <span className="sr-only" aria-live="polite">
+                {isSaving ? "Lagrer kandidatkontroll" : ""}
+              </span>
               <span
                 className={cn(
                   "text-ui font-semibold",
@@ -462,7 +396,7 @@ const ConflictReviewView: React.FC<ConflictReviewViewProps> = ({
           </SchedulePanel>
         </div>
       )}
-    </>
+    </div>
   );
 };
 

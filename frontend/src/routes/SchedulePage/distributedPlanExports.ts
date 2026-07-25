@@ -29,18 +29,11 @@ export const exportAnonymizedScheduleIcs = ({
   target: CalendarTarget;
   myInterviewsOnly: boolean;
 }) => {
-  const anonymizedSchedule = schedule.map((item, index) => ({
-    ...item,
-    candidate: `Kandidat ${index + 1}`,
-    candidate_id: undefined,
-  }));
-  const icsContent = generateIcs(
-    anonymizedSchedule,
+  const icsContent = buildAnonymizedScheduleIcs({
+    schedule,
     dates,
     sessionDuration,
-    "Intervjuplan",
-    { uidSeed: "intervjuplan" },
-  );
+  });
   const filename =
     target === "google"
       ? myInterviewsOnly
@@ -60,7 +53,48 @@ export const exportAnonymizedScheduleIcs = ({
   }
 };
 
+export const buildAnonymizedScheduleIcs = ({
+  schedule,
+  dates,
+  sessionDuration,
+}: {
+  schedule: ScheduleItem[];
+  dates: string[];
+  sessionDuration: number;
+}) => {
+  const anonymizedSchedule = schedule.map((item, index) => ({
+    ...item,
+    candidate: `Kandidat ${index + 1}`,
+    candidate_id: undefined,
+    candidate_phone: undefined,
+  }));
+  return generateIcs(
+    anonymizedSchedule,
+    dates,
+    sessionDuration,
+    "Intervjuplan",
+    { uidSeed: "intervjuplan" },
+  );
+};
+
 export const exportVisibleScheduleCsv = ({
+  entries,
+  candidateNamesVisible,
+  formatTimeLabel,
+}: {
+  entries: DistributedScheduleEntry[];
+  candidateNamesVisible: boolean;
+  formatTimeLabel: (time: number) => string;
+}) => {
+  const csv = buildVisibleScheduleCsv({
+    entries,
+    candidateNamesVisible,
+    formatTimeLabel,
+  });
+  download(["\ufeff" + csv], "text/csv;charset=utf-8", "intervjuplan.csv");
+};
+
+export const buildVisibleScheduleCsv = ({
   entries,
   candidateNamesVisible,
   formatTimeLabel,
@@ -83,8 +117,7 @@ export const exportVisibleScheduleCsv = ({
       item.booking_source === "manual" ? "Manuell" : "Solver",
     ]);
   });
-  const csv = rows
+  return rows
     .map((row) => row.map((cell) => `"${escapeCsvCell(cell)}"`).join(","))
     .join("\n");
-  download(["\ufeff" + csv], "text/csv;charset=utf-8", "intervjuplan.csv");
 };

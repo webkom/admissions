@@ -33,7 +33,7 @@ to committees only through explicit, audited scope controls.
 | --- | --- |
 | **Admission** | One recruitment period, e.g. a semester's main recruitment. It has dates, shared questions, participating committees, and admission-wide admin committees. |
 | **Group** | An Abakus committee/team imported from LEGO. A group can participate in many admissions. |
-| **Admin group** | A group whose active members administer the whole admission, including all candidates and the full schedule. |
+| **Admin group** | A group whose active `leader` or `recruiting` members administer the whole admission, including all candidates and the full schedule. Ordinary members do not inherit that authority. |
 | **Admission group** | The join between an admission and a participating group. It carries question fields unique to that group. |
 | **User application** | One candidate's application to one admission. Holds identity, phone number, shared text/answers, and the single admission-wide interview status. |
 | **Group application** | The candidate's application material for one participating group. One user application can contain several group applications. |
@@ -57,7 +57,7 @@ roles (`retiree`, `alumni`, `retiree_email`) never grant active access.
 | --- | --- |
 | Applicant | Browse admissions, choose groups, create/update their own application while the admission is open, withdraw it, and view the receipt. |
 | Admission administrator | Full candidate access; create/edit the plan configuration; see all availability and genders; enqueue/cancel/inspect solve jobs; edit all schedule rows; publish/unpublish; export admission-wide data; inspect disclosure audit events. |
-| Recruiter (`leader`/`recruiting`) | Review applicants for represented groups; see candidate identity and contact data for their scope; submit availability for represented-group members; reveal/hide their represented groups after a plan is published; update interview status; use outreach actions. |
+| Recruiter (`leader`/`recruiting`) | Review applicants for represented groups; see candidate identity and contact data for their scope; submit their own availability and inspect represented-group availability; reveal/hide their represented groups after a plan is published; update interview status; use outreach actions. |
 | Ordinary committee member | Submit their own availability; see their own interviews after publication; can see candidate identity only for groups explicitly revealed to them; can record conflicts only after names are visible. |
 | Admission manager | Creates/edits admissions. This is an active Webkom member, or a staff creator under the repository's manager rules. |
 
@@ -74,8 +74,10 @@ Important access rules:
   administrators and recruiters. They are used to prefill `mailto:`/`sms:`
   drafts; the app does not send a message directly.
 - Frontend caches marked as sensitive are purged and blocked after relevant
-  `401`, `403`, or scoped `404` failures. Do not reintroduce stale candidate
-  data through optimistic or delayed writes.
+  `401`, `403`, scoped `404`, role-scope, or authenticated-actor changes.
+  Sensitive requests capture monotonic authority epochs so delayed callbacks
+  from an earlier scope remain inert after purge or verified recovery. Do not
+  reintroduce stale candidate data through optimistic or delayed writes.
 - Membership updates are atomic snapshots at OAuth login. A LEGO role change is
   not instantly reflected in an existing session; urgent revocation also needs
   the admissions session invalidated.
@@ -418,7 +420,7 @@ All APIs use session authentication and CSRF-protected browser requests.
 - The backend is Django, the frontend is React/Vite, and PostgreSQL is supplied
   by Docker or a local service. LEGO and lego-webapp are needed for full local
   OAuth.
-- Use `127.0.0.1:5000`, not `localhost`, for the admissions app; sharing a
+- Use `127.0.0.1:5002`, not `localhost`, for the admissions app; sharing a
   hostname with local LEGO conflicts with session storage.
 - `make dev` is the normal backend development command because it starts Django
   and the solver worker. If using `manage.py runserver`, also run

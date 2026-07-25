@@ -133,7 +133,7 @@ const SchedulePause: React.FC<{
     <div className="flex min-w-0 items-center gap-2 overflow-hidden rounded-md border border-dashed border-border-muted bg-surface-muted px-3 text-text-muted">
       <span className="h-px min-w-3 flex-1 border-t border-dashed border-border-muted" />
       <span className="flex-none whitespace-nowrap text-detail font-bold">
-        Pause{density === "narrow" ? "" : ` · ${visualPauseMinutes} min`}
+        Pause{density === "narrow" ? "" : `, ${visualPauseMinutes} min`}
       </span>
       <span className="h-px min-w-3 flex-1 border-t border-dashed border-border-muted" />
     </div>
@@ -159,9 +159,7 @@ const ScheduleContinuation: React.FC<{
 
 type StandardBlockPreviewProps = StandardBlockPreviewInput;
 
-export const StandardBlockPreview: React.FC<StandardBlockPreviewProps> = (
-  input,
-) => {
+const StandardBlockPreview: React.FC<StandardBlockPreviewProps> = (input) => {
   const previewRef = useRef<HTMLDivElement>(null);
   const layout = React.useMemo(
     () => buildStandardBlockPreviewLayout(input),

@@ -5,7 +5,13 @@ import { AdminApplication, InterviewStatus, SavedSchedule } from "src/types";
 import { apiClient } from "../utils/callApi";
 import {
   areSensitiveAdmissionCacheWritesBlocked,
+  captureSensitiveAdmissionAuthorityEpoch,
+  isSensitiveAdmissionAuthorityEpochCurrent,
+  isSensitiveAuthorityChangedError,
+  runSensitiveAdmissionMutation,
+  SensitiveAuthorityChangedError,
   sensitiveAdmissionMutationOptions,
+  type SensitiveAdmissionMutationError,
 } from "./sensitiveAccess";
 
 // Public mutations
@@ -13,9 +19,12 @@ import {
 export const useDeleteMyApplicationMutation = (slug: string) => {
   const queryClient = useQueryClient();
   const applicationQueryKey = [`/admission/${slug}/application/mine/`];
-  return useMutation<unknown, AxiosError>({
+  return useMutation<unknown, SensitiveAdmissionMutationError>({
     ...sensitiveAdmissionMutationOptions(slug),
-    mutationFn: () => apiClient.delete(`/admission/${slug}/application/mine/`),
+    mutationFn: () =>
+      runSensitiveAdmissionMutation(slug, () =>
+        apiClient.delete(`/admission/${slug}/application/mine/`),
+      ),
     onSuccess: () => {
       if (areSensitiveAdmissionCacheWritesBlocked(slug)) return;
       queryClient.invalidateQueries({
@@ -23,6 +32,7 @@ export const useDeleteMyApplicationMutation = (slug: string) => {
       });
     },
     onError: async (error) => {
+      if (isSensitiveAuthorityChangedError(error)) return;
       const status = error.response?.status ?? 0;
       if (status !== 404) return;
       await queryClient.resetQueries({
@@ -35,6 +45,7 @@ export const useDeleteMyApplicationMutation = (slug: string) => {
 
 export interface MutationApplication {
   phone_number: string;
+  priority_text?: string;
   applications: Record<string, string>;
   group_answers: Record<string, InputResponseModel>;
 }
@@ -46,12 +57,18 @@ interface CreateApplicationProps {
 export const useCreateApplicationMutation = (admissionSlug: string) => {
   const queryClient = useQueryClient();
   const applicationQueryKey = [`/admission/${admissionSlug}/application/mine/`];
-  return useMutation<unknown, AxiosError, CreateApplicationProps>({
+  return useMutation<
+    unknown,
+    SensitiveAdmissionMutationError,
+    CreateApplicationProps
+  >({
     ...sensitiveAdmissionMutationOptions(admissionSlug),
     mutationFn: ({ newApplication }) =>
-      apiClient.post(
-        `/admission/${admissionSlug}/application/`,
-        newApplication,
+      runSensitiveAdmissionMutation(admissionSlug, () =>
+        apiClient.post(
+          `/admission/${admissionSlug}/application/`,
+          newApplication,
+        ),
       ),
     onSuccess: () => {
       if (areSensitiveAdmissionCacheWritesBlocked(admissionSlug)) return;
@@ -60,6 +77,7 @@ export const useCreateApplicationMutation = (admissionSlug: string) => {
       });
     },
     onError: async (error) => {
+      if (isSensitiveAuthorityChangedError(error)) return;
       const status = error.response?.status ?? 0;
       if (status !== 404) return;
       await queryClient.resetQueries({
@@ -104,12 +122,18 @@ interface TerminateCommitteeProps {
 export const useTerminateCommitteeMutation = (admissionSlug: string) => {
   const queryClient = useQueryClient();
 
-  return useMutation<unknown, AxiosError, TerminateCommitteeProps>({
+  return useMutation<
+    unknown,
+    SensitiveAdmissionMutationError,
+    TerminateCommitteeProps
+  >({
     ...sensitiveAdmissionMutationOptions(admissionSlug),
     mutationFn: ({ groupId, confirmationName }) =>
-      apiClient.post(
-        `/admin/admission/${admissionSlug}/group/${groupId}/terminate/`,
-        { confirmation_name: confirmationName },
+      runSensitiveAdmissionMutation(admissionSlug, () =>
+        apiClient.post(
+          `/admin/admission/${admissionSlug}/group/${groupId}/terminate/`,
+          { confirmation_name: confirmationName },
+        ),
       ),
     onSuccess: () => {
       if (areSensitiveAdmissionCacheWritesBlocked(admissionSlug)) return;
@@ -158,32 +182,46 @@ export const useAdminUpdateInterviewStatusMutation = (
 
   return useMutation<
     InterviewStatusUpdateResponse,
-    AxiosError,
+    SensitiveAdmissionMutationError,
     UpdateInterviewStatusProps,
     InterviewStatusMutationContext
   >({
     ...sensitiveAdmissionMutationOptions(admissionSlug),
-    mutationFn: async ({
+    mutationFn: ({
       applicationId,
       interviewStatus,
       expectedInterviewStatusUpdatedAt,
     }) =>
-      (
-        await apiClient.patch<InterviewStatusUpdateResponse>(
-          `/admin/admission/${admissionSlug}/application/${applicationId}/interview-status/`,
-          {
-            interview_status: interviewStatus,
-            expected_interview_status_updated_at:
-              expectedInterviewStatusUpdatedAt,
-          },
-        )
-      ).data,
+      runSensitiveAdmissionMutation(
+        admissionSlug,
+        async () =>
+          (
+            await apiClient.patch<InterviewStatusUpdateResponse>(
+              `/admin/admission/${admissionSlug}/application/${applicationId}/interview-status/`,
+              {
+                interview_status: interviewStatus,
+                expected_interview_status_updated_at:
+                  expectedInterviewStatusUpdatedAt,
+              },
+            )
+          ).data,
+      ),
     onMutate: async ({ applicationId, interviewStatus }) => {
       if (areSensitiveAdmissionCacheWritesBlocked(admissionSlug)) return {};
+      const authorityEpoch =
+        captureSensitiveAdmissionAuthorityEpoch(admissionSlug);
       await Promise.all([
         queryClient.cancelQueries({ queryKey: applicationsQueryKey }),
         queryClient.cancelQueries({ queryKey: scheduleQueryKey }),
       ]);
+      if (
+        !isSensitiveAdmissionAuthorityEpochCurrent(
+          admissionSlug,
+          authorityEpoch,
+        )
+      ) {
+        throw new SensitiveAuthorityChangedError(admissionSlug);
+      }
       const previousApplication = queryClient
         .getQueryData<AdminApplication[]>(applicationsQueryKey)
         ?.find((application) => application.pk === applicationId);
@@ -226,6 +264,7 @@ export const useAdminUpdateInterviewStatusMutation = (
       };
     },
     onError: async (error, { applicationId }, context) => {
+      if (isSensitiveAuthorityChangedError(error)) return;
       const status = error.response?.status ?? 0;
       if (
         [401, 403].includes(status) ||
@@ -299,6 +338,7 @@ export const useAdminUpdateInterviewStatusMutation = (
     },
     onSettled: (_data, error) => {
       if (
+        isSensitiveAuthorityChangedError(error) ||
         areSensitiveAdmissionCacheWritesBlocked(admissionSlug) ||
         [401, 403, 404].includes(error?.response?.status ?? 0)
       ) {
@@ -317,13 +357,19 @@ export const useAdminDeleteApplicationMutation = (admissionSlug: string) => {
   const applicationsQueryKey = [
     `/admin/admission/${admissionSlug}/application/`,
   ];
-  return useMutation<unknown, AxiosError, DeleteGroupApplicationProps>({
+  return useMutation<
+    unknown,
+    SensitiveAdmissionMutationError,
+    DeleteGroupApplicationProps
+  >({
     ...sensitiveAdmissionMutationOptions(admissionSlug),
     mutationFn: ({ applicationId, groupId }) =>
-      apiClient.delete(
-        `/admin/admission/${admissionSlug}/application/${applicationId}/${
-          groupId ? "?groupId=" + groupId : ""
-        }`,
+      runSensitiveAdmissionMutation(admissionSlug, () =>
+        apiClient.delete(
+          `/admin/admission/${admissionSlug}/application/${applicationId}/${
+            groupId ? "?groupId=" + groupId : ""
+          }`,
+        ),
       ),
 
     onSuccess: () => {
@@ -333,6 +379,7 @@ export const useAdminDeleteApplicationMutation = (admissionSlug: string) => {
       });
     },
     onError: async (error) => {
+      if (isSensitiveAuthorityChangedError(error)) return;
       const status = error.response?.status ?? 0;
       if (status !== 404) return;
       await queryClient.resetQueries({

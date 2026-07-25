@@ -60,8 +60,11 @@ const AdmissionDetailsContent = ({
       groups.map((id) => [id, formik.values.group_questions[id] ?? []]),
     );
     void formik.setFieldTouched("groups", true, false);
-    void formik.setFieldValue("groups", groups);
-    void formik.setFieldValue("group_questions", groupQuestions);
+    void formik.setValues({
+      ...formik.values,
+      groups,
+      group_questions: groupQuestions,
+    });
   };
 
   return (

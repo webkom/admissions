@@ -16,13 +16,13 @@ from admissions.admissions.admission_access import (
     get_representing_groups,
     schedule_response_context,
     user_is_admission_admin,
-    user_is_interview_admin,
 )
 from admissions.admissions.authentication import SessionAuthentication
 from admissions.admissions.models import Admission, LegoUser, SavedSchedule, SolveJob
 from admissions.admissions.schedule_validation import (
     ScheduleValidationError,
     canonicalize_solver_payload,
+    ensure_conflict_collection_ready,
 )
 from admissions.admissions.schedule_windows import enabled_windows_to_slots
 from admissions.admissions.schedule_workflow import (
@@ -66,7 +66,7 @@ class SolveScheduleView(APIView):
 
         user = request.user
         user.__class__ = LegoUser
-        if not user_is_interview_admin(admission, user):
+        if not user_is_admission_admin(admission, user):
             return Response(status=status.HTTP_403_FORBIDDEN)
 
         serializer = ScheduleRequestsSerializer(data=request.data)
@@ -121,6 +121,7 @@ class SolveScheduleView(APIView):
                 )
                 data["options"] = options
             try:
+                ensure_conflict_collection_ready(admission, saved_config)
                 data.update(
                     canonicalize_solver_payload(
                         admission, saved_config, data, request.user
@@ -176,7 +177,7 @@ class SolveJobStatusView(APIView):
         job = get_object_or_404(SolveJob, id=job_id)
         user = request.user
         user.__class__ = LegoUser
-        if not user_is_interview_admin(job.admission, user):
+        if not user_is_admission_admin(job.admission, user):
             return None, Response(status=status.HTTP_403_FORBIDDEN)
         return job, None
 
@@ -216,7 +217,7 @@ class LatestSolveJobView(APIView):
         admission = get_object_or_404(Admission, slug=admission_slug)
         user = request.user
         user.__class__ = LegoUser
-        if not user_is_interview_admin(admission, user):
+        if not user_is_admission_admin(admission, user):
             return Response(status=status.HTTP_403_FORBIDDEN)
         job = (
             SolveJob.objects.filter(admission=admission)
@@ -256,7 +257,7 @@ class SolveJobApplyView(APIView):
         admission = Admission.objects.select_for_update().get(pk=job_stub.admission_id)
         user = request.user
         user.__class__ = LegoUser
-        if not user_is_interview_admin(admission, user):
+        if not user_is_admission_admin(admission, user):
             return Response(status=status.HTTP_403_FORBIDDEN)
 
         saved = (
@@ -294,7 +295,7 @@ class SolveJobApplyView(APIView):
                         user,
                         is_admission_admin,
                         is_recruiter,
-                        True,
+                        is_admission_admin,
                     ),
                 ).data
             )
@@ -361,7 +362,9 @@ class SolveJobApplyView(APIView):
                 status=status.HTTP_409_CONFLICT,
             )
         except ScheduleInputError as exc:
-            return Response(exc.errors, status=status.HTTP_400_BAD_REQUEST)
+            job.discarded_at = timezone.now()
+            job.save(update_fields=["discarded_at"])
+            return Response(exc.errors, status=status.HTTP_409_CONFLICT)
 
         job.applied_at = timezone.now()
         job.save(update_fields=["applied_at"])
@@ -374,7 +377,7 @@ class SolveJobApplyView(APIView):
                     user,
                     is_admission_admin,
                     is_recruiter,
-                    True,
+                    is_admission_admin,
                 ),
             ).data
         )

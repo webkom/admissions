@@ -9,10 +9,8 @@ const healthyData = {
   savedScheduleError: requestError(404),
   isSavedScheduleError: true,
   availabilityParticipants: [],
-  availabilityError: null,
   isAvailabilityError: false,
   interviewCandidates: [],
-  candidatesError: null,
   isCandidatesError: false,
 };
 
@@ -21,7 +19,6 @@ describe("schedule data health", () => {
     expect(
       deriveScheduleDataHealth({
         ...healthyData,
-        availabilityError: requestError(500),
         isAvailabilityError: true,
       }),
     ).to.deep.equal({
@@ -35,7 +32,6 @@ describe("schedule data health", () => {
       deriveScheduleDataHealth({
         ...healthyData,
         availabilityParticipants: undefined,
-        availabilityError: requestError(500),
         isAvailabilityError: true,
       }),
     ).to.deep.equal({

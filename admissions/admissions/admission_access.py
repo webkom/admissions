@@ -27,9 +27,10 @@ def user_is_interview_admin(admission, user):
     interview workflow, so they get the same scheduling capabilities without
     being promoted to admission-wide application admins.
     """
-    return user_is_admission_admin(admission, user) or get_representing_groups(
-        admission, user
-    ).exists()
+    return (
+        user_is_admission_admin(admission, user)
+        or get_representing_groups(admission, user).exists()
+    )
 
 
 def get_representing_groups(admission, user):
@@ -191,6 +192,7 @@ def schedule_response_context(
     hide_schedule = not saved_schedule.is_distributed and not is_interview_admin
     hide_identity = False
     visible_candidate_ids = None
+    contact_candidate_ids = None if is_admin else set()
     effective_name_visibility = saved_schedule.name_visibility
     revealed_group_summaries = None
 
@@ -208,6 +210,15 @@ def schedule_response_context(
             admission, saved_schedule, user
         )
         if is_recruiter:
+            contact_candidate_ids = set(
+                str(candidate_id)
+                for candidate_id in UserApplication.objects.filter(
+                    admission=admission,
+                    group_applications__group__in=represented_groups,
+                )
+                .values_list("pk", flat=True)
+                .distinct()
+            )
             revealed_groups = get_name_revealed_groups(
                 admission, saved_schedule
             ).filter(pk__in=represented_groups)
@@ -239,9 +250,9 @@ def schedule_response_context(
         "hide_candidate_identity": hide_identity,
         "hide_schedule": hide_schedule,
         "visible_candidate_ids": visible_candidate_ids,
+        "contact_candidate_ids": contact_candidate_ids,
         "effective_name_visibility": effective_name_visibility,
         "revealed_group_summaries": revealed_group_summaries,
-        "include_candidate_contact": is_admin or is_recruiter,
         "include_deviation_review": is_interview_admin,
     }
 

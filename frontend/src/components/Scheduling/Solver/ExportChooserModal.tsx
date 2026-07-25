@@ -2,6 +2,7 @@ import React, { useEffect, useRef } from "react";
 import { Calendar, CalendarDays, FileSpreadsheet } from "lucide-react";
 import { useFocusTrap } from "../ConfirmDialog";
 import { iconSizes } from "src/styles/designTokens";
+import { keyboardFocusRingClass } from "../ui";
 
 interface ExportChooserModalProps {
   onExportIcs: (target: "apple" | "google") => void;
@@ -119,7 +120,7 @@ const ExportChooserModal = ({
           )}
           <button
             type="button"
-            className="mt-2 text-sm font-semibold text-text-muted hover:text-text-primary"
+            className={`mt-2 text-sm font-semibold text-text-muted hover:text-text-primary ${keyboardFocusRingClass}`}
             onClick={onClose}
           >
             Avbryt

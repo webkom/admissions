@@ -24,7 +24,7 @@ interface ScheduleEntry {
   scheduleIndex: number;
 }
 
-export interface InterviewerBlockState {
+interface InterviewerBlockState {
   blockIndex: number;
   dayIndex: number;
   interviewCount: number;

@@ -19,7 +19,6 @@ from admissions.admissions import constants
 from admissions.admissions.admission_access import (
     get_representing_groups,
     user_is_admission_admin,
-    user_is_interview_admin,
 )
 from admissions.admissions.models import Admission, LegoUser, SavedSchedule, SolveJob
 from admissions.admissions.schedule_policy import (
@@ -169,6 +168,11 @@ class Command(BaseCommand):
         error = ""
         new_status = SolveJob.STATUS_DONE
         try:
+            requested_by = job.requested_by
+            if requested_by is None or not user_is_admission_admin(
+                job.admission, requested_by
+            ):
+                raise SchedulePermissionDenied
             if data.get("rehydrate"):
                 with transaction.atomic():
                     admission = Admission.objects.select_for_update().get(
@@ -225,6 +229,9 @@ class Command(BaseCommand):
                     availability_generation=data.get("availability_generation", 1),
                     layout_version=data.get("layout_version", 1),
                 )
+        except SchedulePermissionDenied:
+            error = "Kun opptaksansvarlige kan kjøre intervjusolveren."
+            new_status = SolveJob.STATUS_ERROR
         except Exception as exc:
             log.exception(
                 "solve_job_failed",
@@ -287,7 +294,7 @@ class Command(BaseCommand):
                 ):
                     return False
                 user.__class__ = LegoUser
-                if not user_is_interview_admin(admission, user):
+                if not user_is_admission_admin(admission, user):
                     return False
                 update_saved_schedule(
                     admission=admission,

@@ -73,6 +73,7 @@ admissions/files
 /assets
 /cypress/screenshots
 /cypress/videos
+/.cypress-fixture-credentials.json
 
 # See https://help.github.com/ignore-files/ for more about ignoring files.
 

@@ -2,9 +2,9 @@ import React from "react";
 import { createPortal } from "react-dom";
 import { Check, ChevronDown } from "lucide-react";
 import cn from "src/utils/cn";
-import { iconSizes } from "src/styles/designTokens";
+import { iconSizes, iconStrokeWidths } from "src/styles/designTokens";
 
-export interface MultiSelectOption {
+interface MultiSelectOption {
   value: string;
   label: string;
   disabled?: boolean;
@@ -307,7 +307,10 @@ export const MultiSelect: React.FC<MultiSelectProps> = ({
                         )}
                       >
                         {isSelected && (
-                          <Check size={iconSizes.micro} strokeWidth={3} />
+                          <Check
+                            size={iconSizes.micro}
+                            strokeWidth={iconStrokeWidths.emphasis}
+                          />
                         )}
                       </span>
                       <span className="truncate">{option.label}</span>

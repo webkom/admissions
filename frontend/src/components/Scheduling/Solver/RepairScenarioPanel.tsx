@@ -5,6 +5,7 @@ import {
   GitCompareArrows,
   LoaderCircle,
 } from "lucide-react";
+import { iconSizes } from "src/styles/designTokens";
 
 import cn from "../../../utils/cn";
 import { decodeScheduleTime } from "../scheduleUtils";
@@ -90,12 +91,38 @@ const RepairScenarioPanel = ({
 }: RepairScenarioPanelProps) => {
   const sectionRef = useRef<HTMLDivElement>(null);
   const headingRef = useRef<HTMLHeadingElement>(null);
+  const openerRef = useRef<HTMLElement | null>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const ownerDocument = sectionRef.current?.ownerDocument ?? document;
+    const HTMLElementConstructor =
+      ownerDocument.defaultView?.HTMLElement ?? HTMLElement;
+    const activeElement = ownerDocument.activeElement;
+    openerRef.current =
+      activeElement instanceof HTMLElementConstructor ? activeElement : null;
+    return () => {
+      const opener = openerRef.current;
+      openerRef.current = null;
+      window.requestAnimationFrame(() => {
+        if (opener?.isConnected) {
+          opener.focus();
+          return;
+        }
+        ownerDocument
+          .querySelector<HTMLElement>('[data-cy="proposal-review"] h2')
+          ?.focus({ preventScroll: true });
+      });
+    };
+  }, [open]);
 
   useEffect(() => {
     if (!open) return;
     window.requestAnimationFrame(() => {
       sectionRef.current?.scrollIntoView({
-        behavior: "smooth",
+        behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches
+          ? "auto"
+          : "smooth",
         block: "start",
       });
       headingRef.current?.focus({ preventScroll: true });
@@ -105,7 +132,18 @@ const RepairScenarioPanel = ({
   if (!open) return null;
 
   return (
-    <div ref={sectionRef} className="scroll-mt-6">
+    <div
+      ref={sectionRef}
+      onKeyDown={(event) => {
+        if (event.key !== "Escape" || event.defaultPrevented) return;
+        event.preventDefault();
+        event.stopPropagation();
+        onClose();
+      }}
+      className="scroll-mt-6"
+      data-cy="schedule-stage"
+      data-stage="repair"
+    >
       <SchedulePanel
         dataCy="repair-schedule-inline"
         className="animate-fade-in"
@@ -113,14 +151,13 @@ const RepairScenarioPanel = ({
         <SchedulePanelHeader
           title="Løs inhabiliteter"
           description={`${conflictCount} tildeling${conflictCount === 1 ? "" : "er"} må endres før planen kan publiseres. Ingen endringer lagres før du bruker en løsning.`}
-          chips={<Chip tone="warning">Del av Planutkast</Chip>}
           actions={
             <button
               type="button"
               className={cn(actionButtonBase, actionButtonNeutral)}
               onClick={onClose}
             >
-              <ArrowLeft size={16} aria-hidden="true" />
+              <ArrowLeft size={iconSizes.medium} aria-hidden="true" />
               Tilbake til planutkast
             </button>
           }
@@ -187,7 +224,10 @@ const RepairScenarioPanel = ({
             </div>
 
             {error && (
-              <div className="rounded-lg border border-danger-border bg-danger-bg px-4 py-3 text-ui font-semibold text-danger">
+              <div
+                role="alert"
+                className="rounded-lg border border-danger-border bg-danger-bg px-4 py-3 text-ui font-semibold text-danger"
+              >
                 {error}
               </div>
             )}
@@ -222,14 +262,14 @@ const RepairScenarioPanel = ({
                         </span>
                         <span className="mt-1 block text-detail text-text-muted">
                           {scenario.metrics.changedInterviews} endrede
-                          intervjuer · {scenario.metrics.changedTimes} nye tider
-                          · {scenario.metrics.affectedInterviewers} berørte
-                          personer ·{" "}
+                          intervjuer, {scenario.metrics.changedTimes} nye tider,{" "}
+                          {scenario.metrics.affectedInterviewers} berørte
+                          personer,{" "}
                           {signedMinutes(scenario.metrics.overtimeDeltaMinutes)}
                         </span>
                         {!scenario.applicable && (
                           <span className="mt-2 block text-detail font-semibold text-danger">
-                            Kan ikke brukes ·{" "}
+                            Kan ikke brukes,{" "}
                             {scenario.unplacedCandidates.length === 1
                               ? `${scenario.unplacedCandidates[0]} står uten intervju`
                               : `${scenario.unplacedCandidates.length} kandidater står uten intervju`}
@@ -245,7 +285,7 @@ const RepairScenarioPanel = ({
                     <div className="flex flex-wrap items-center justify-between gap-2">
                       <div>
                         <p className="m-0 text-ui font-bold text-text-primary">
-                          Forhåndsvisning ·{" "}
+                          Forhåndsvisning,{" "}
                           {strategyLabel(selectedScenario.strategy)}
                         </p>
                         <p className="m-0 mt-1 text-detail text-text-muted">
@@ -308,8 +348,16 @@ const RepairScenarioPanel = ({
             )}
 
             {loading && (
-              <div className="flex items-center gap-2 rounded-lg bg-surface-mutedSoft px-4 py-3 text-ui text-text-muted">
-                <LoaderCircle size={17} className="animate-spin text-brand" />
+              <div
+                role="status"
+                aria-live="polite"
+                className="flex items-center gap-2 rounded-lg bg-surface-mutedSoft px-4 py-3 text-ui text-text-muted"
+              >
+                <LoaderCircle
+                  size={iconSizes.standard}
+                  aria-hidden="true"
+                  className="animate-spin text-brand motion-reduce:animate-none"
+                />
                 Beregner{" "}
                 {runningStrategy
                   ? strategyLabel(runningStrategy).toLowerCase()
@@ -327,7 +375,7 @@ const RepairScenarioPanel = ({
               onClick={onCompare}
               disabled={loading}
             >
-              <GitCompareArrows size={16} aria-hidden="true" />
+              <GitCompareArrows size={iconSizes.medium} aria-hidden="true" />
               Sammenlign alternativer
             </button>
             {selectedScenario?.applicable ? (
@@ -338,7 +386,7 @@ const RepairScenarioPanel = ({
                 disabled={loading}
               >
                 Bruk denne løsningen
-                <ArrowRight size={16} aria-hidden="true" />
+                <ArrowRight size={iconSizes.medium} aria-hidden="true" />
               </button>
             ) : (
               <button
@@ -348,7 +396,7 @@ const RepairScenarioPanel = ({
                 disabled={loading}
               >
                 Forhåndsvis løsning
-                <ArrowRight size={16} aria-hidden="true" />
+                <ArrowRight size={iconSizes.medium} aria-hidden="true" />
               </button>
             )}
           </div>

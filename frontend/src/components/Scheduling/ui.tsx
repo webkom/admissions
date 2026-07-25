@@ -1,17 +1,9 @@
-import React, { useEffect, useId, useRef, useState } from "react";
+import React, { useCallback, useEffect, useId, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import {
-  AlertTriangle,
-  Check,
-  ChevronDown,
-  Clock3,
-  Eye,
-  Pencil,
-} from "lucide-react";
+import { AlertTriangle, Check, ChevronDown, Clock3 } from "lucide-react";
 import { iconSizes } from "src/styles/designTokens";
 import cn from "src/utils/cn";
 import {
-  SegmentedControl,
   actionButtonBase,
   actionButtonDanger,
   actionButtonGhost,
@@ -21,6 +13,7 @@ import {
 
 export {
   sectionLabelClass,
+  keyboardFocusRingClass,
   actionButtonBase,
   actionButtonPrimary,
   actionButtonNeutral,
@@ -31,10 +24,8 @@ export {
   SaveButton,
   MetaValue,
   Stepper,
-  ToggleCard,
   SegmentedControl,
   CustomValueSegmentedControl,
-  StatTile,
   CustomSelect,
 } from "../ui";
 
@@ -43,6 +34,7 @@ interface SchedulePanelProps {
   className?: string;
   id?: string;
   dataCy?: string;
+  stage?: string;
 }
 
 export const SchedulePanel: React.FC<SchedulePanelProps> = ({
@@ -50,10 +42,12 @@ export const SchedulePanel: React.FC<SchedulePanelProps> = ({
   className,
   id,
   dataCy,
+  stage,
 }) => (
   <section
     id={id}
     data-cy={dataCy}
+    data-stage={stage}
     className={cn(
       "overflow-hidden rounded-panel border border-border bg-surface-base shadow-sm",
       className,
@@ -66,21 +60,27 @@ export const SchedulePanel: React.FC<SchedulePanelProps> = ({
 interface SchedulePanelHeaderProps {
   title: string;
   description?: string;
+  eyebrow?: string;
   icon?: React.ComponentType<{ size?: number | string; className?: string }>;
   chips?: React.ReactNode;
   actions?: React.ReactNode;
   className?: string;
   bordered?: boolean;
+  headingRef?: React.Ref<HTMLHeadingElement>;
+  headingDataCy?: string;
 }
 
 export const SchedulePanelHeader: React.FC<SchedulePanelHeaderProps> = ({
   title,
   description,
+  eyebrow,
   icon: Icon,
   chips,
   actions,
   className,
   bordered = true,
+  headingRef,
+  headingDataCy,
 }) => (
   <header
     className={cn(
@@ -96,8 +96,18 @@ export const SchedulePanelHeader: React.FC<SchedulePanelHeaderProps> = ({
         </span>
       )}
       <div className="min-w-0">
+        {eyebrow && (
+          <p className="m-0 mb-1 text-label font-bold uppercase tracking-wide text-text-subtle">
+            {eyebrow}
+          </p>
+        )}
         <div className="flex flex-wrap items-center gap-2">
-          <h2 className="m-0 text-title font-semibold leading-tight text-text-primary">
+          <h2
+            ref={headingRef}
+            tabIndex={-1}
+            data-cy={headingDataCy}
+            className="m-0 rounded-sm text-title font-semibold leading-tight text-text-primary focus:outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-focus"
+          >
             {title}
           </h2>
           {chips}
@@ -212,39 +222,108 @@ export const SchedulingActionBar: React.FC<SchedulingActionBarProps> = ({
   </SchedulePanelFooter>
 );
 
-export type SchedulingWorkspaceMode = "preview" | "editing";
-
-interface SchedulingModeControlProps {
-  mode: SchedulingWorkspaceMode;
-  onChange: (mode: SchedulingWorkspaceMode) => void;
-  disabled?: boolean;
+interface DetailsMenuOptions {
+  focusFirstItemOnOpen?: boolean;
 }
 
-export const SchedulingModeControl: React.FC<SchedulingModeControlProps> = ({
-  mode,
-  onChange,
-  disabled = false,
-}) => (
-  <SegmentedControl<SchedulingWorkspaceMode>
-    value={mode}
-    onChange={onChange}
-    items={[
-      {
-        key: "preview",
-        label: "Forhåndsvisning",
-        icon: <Eye size={iconSizes.small} />,
-        disabled,
-      },
-      {
-        key: "editing",
-        label: "Rediger",
-        icon: <Pencil size={iconSizes.small} />,
-        disabled,
-      },
-    ]}
-    aria-label="Arbeidsmodus for planutkastet"
-  />
-);
+export const useDetailsMenu = ({
+  focusFirstItemOnOpen = true,
+}: DetailsMenuOptions = {}) => {
+  const detailsRef = useRef<HTMLDetailsElement>(null);
+
+  const menuItems = useCallback(
+    () =>
+      Array.from(
+        detailsRef.current?.querySelectorAll<HTMLElement>(
+          '[role="menuitem"]:not([disabled])',
+        ) ?? [],
+      ).filter((item) => item.getAttribute("aria-disabled") !== "true"),
+    [],
+  );
+
+  const closeDetails = useCallback((restoreFocus = false) => {
+    const details = detailsRef.current;
+    if (!details?.open) return;
+    details.open = false;
+    if (restoreFocus) {
+      details.querySelector<HTMLElement>("summary")?.focus();
+    }
+  }, []);
+
+  const handleDetailsToggle = useCallback(() => {
+    if (!focusFirstItemOnOpen || !detailsRef.current?.open) return;
+    window.requestAnimationFrame(() => {
+      if (detailsRef.current?.open) menuItems()[0]?.focus();
+    });
+  }, [focusFirstItemOnOpen, menuItems]);
+
+  useEffect(() => {
+    const handlePointerDown = (event: MouseEvent) => {
+      if (!detailsRef.current?.contains(event.target as Node)) {
+        closeDetails(false);
+      }
+    };
+    const handleFocusIn = (event: FocusEvent) => {
+      if (
+        detailsRef.current?.open &&
+        !detailsRef.current.contains(event.target as Node)
+      ) {
+        closeDetails(false);
+      }
+    };
+    const handleKeyDown = (event: KeyboardEvent) => {
+      const details = detailsRef.current;
+      if (!details?.open) return;
+
+      if (event.key === "Escape") {
+        event.preventDefault();
+        event.stopPropagation();
+        closeDetails(true);
+        return;
+      }
+
+      if (!details.contains(document.activeElement)) return;
+      if (!["ArrowDown", "ArrowUp", "Home", "End"].includes(event.key)) {
+        return;
+      }
+
+      const items = menuItems();
+      if (items.length === 0) return;
+      event.preventDefault();
+      const currentIndex = items.indexOf(document.activeElement as HTMLElement);
+      const nextIndex =
+        event.key === "Home"
+          ? 0
+          : event.key === "End"
+            ? items.length - 1
+            : event.key === "ArrowUp"
+              ? currentIndex <= 0
+                ? items.length - 1
+                : currentIndex - 1
+              : currentIndex < 0 || currentIndex === items.length - 1
+                ? 0
+                : currentIndex + 1;
+      items[nextIndex]?.focus();
+    };
+
+    document.addEventListener("mousedown", handlePointerDown);
+    document.addEventListener("focusin", handleFocusIn);
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("mousedown", handlePointerDown);
+      document.removeEventListener("focusin", handleFocusIn);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [closeDetails, menuItems]);
+
+  return {
+    detailsRef,
+    closeDetails,
+    handleDetailsToggle,
+  };
+};
+
+export type SchedulingWorkspaceMode = "preview" | "editing";
 
 interface PanelChipOption {
   id?: string;
@@ -484,8 +563,8 @@ export const EditablePanelChip: React.FC<EditablePanelChipProps> = ({
                 ref={inputRef}
                 type="search"
                 role="combobox"
-                aria-expanded={filtered.length > 0}
-                aria-controls={filtered.length > 0 ? listboxId : undefined}
+                aria-expanded={open}
+                aria-controls={listboxId}
                 aria-activedescendant={
                   highlightedIndex >= 0 && highlightedIndex < filtered.length
                     ? optionId(highlightedIndex)
@@ -503,13 +582,15 @@ export const EditablePanelChip: React.FC<EditablePanelChipProps> = ({
                 className="w-full rounded-md border border-border-soft bg-surface-base px-2.5 py-1.5 text-sm font-semibold text-text-primary placeholder:font-normal placeholder:text-text-faded focus:border-brand-input focus:outline-none focus:ring-2 focus:ring-brand-ringSoft"
               />
             </div>
-            {filtered.length === 0 ? (
-              <p className="m-0 px-3 py-3 text-detail text-text-muted">
-                {emptyLabel}
-              </p>
-            ) : (
-              <ul id={listboxId} role="listbox" className="m-0 p-1.5">
-                {filtered.map((opt, index) => {
+            <ul id={listboxId} role="listbox" className="m-0 p-1.5">
+              {filtered.length === 0 ? (
+                <li role="none">
+                  <p className="m-0 px-1.5 py-1.5 text-detail text-text-muted">
+                    {emptyLabel}
+                  </p>
+                </li>
+              ) : (
+                filtered.map((opt, index) => {
                   const isCurrent = opt.name === label;
                   const isHighlighted = index === highlightedIndex;
                   return (
@@ -548,9 +629,9 @@ export const EditablePanelChip: React.FC<EditablePanelChipProps> = ({
                       </button>
                     </li>
                   );
-                })}
-              </ul>
-            )}
+                })
+              )}
+            </ul>
           </div>,
           document.body,
         )}

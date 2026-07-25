@@ -9,6 +9,7 @@ import {
   formatMinutes,
   makeSlotKey,
 } from "../scheduleUtils";
+import { keyboardFocusRingClass } from "../ui";
 import cn from "src/utils/cn";
 import { calendarGrid, iconSizes } from "src/styles/designTokens";
 
@@ -173,7 +174,7 @@ const GridCalendarView: React.FC<GridCalendarViewProps> = ({
             <button
               type="button"
               onClick={() => setShowFullPeriod((value) => !value)}
-              className="ml-auto font-semibold text-brand underline-offset-2 hover:underline"
+              className={`${keyboardFocusRingClass} ml-auto font-semibold text-brand underline-offset-2 hover:underline`}
             >
               {showFullPeriod ? "Vis bare intervjuer" : "Vis hele perioden"}
             </button>

@@ -17,6 +17,10 @@ from .logging import *  # noqa
 ADMISSIONS_SOLVER_ENGINE_VERSION = os.environ.get(
     "ADMISSIONS_SOLVER_ENGINE_VERSION", "v1"
 )
+# Cypress fixture preparation installs a temporary password on a seeded local
+# administrator. It must be opted into by an explicitly non-production
+# settings module before the management command will make any database writes.
+ALLOW_CYPRESS_FIXTURES = False
 
 # GENERAL CONFIGURATION ======================================================
 BASE_PROJECT_DIR = environ.Path(__file__) - 3  # manage.py level

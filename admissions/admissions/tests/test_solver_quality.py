@@ -7,9 +7,9 @@ from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APITestCase
 
+import admissions.admissions.solve_schedule as solve_schedule_module
 from admissions.admissions.constants import LEADER
 from admissions.admissions.models import Group, LegoUser, Membership, SolveJob
-import admissions.admissions.solve_schedule as solve_schedule_module
 from admissions.admissions.solve_schedule import solve_schedule
 from admissions.admissions.tests.utils import create_admission
 

@@ -3,7 +3,11 @@ import cn from "src/utils/cn";
 import { SegmentedControl, actionButtonBase, actionButtonGhost } from "../ui";
 import { formatDateHeader, makeSlotKey } from "../scheduleUtils";
 import AdminSchedulePatternGrid from "./AdminSchedulePatternGrid";
-import { ScheduleDayHeader, ScheduleGridLegendItem } from "./ScheduleGridFrame";
+import {
+  ScheduleDayHeader,
+  ScheduleGridLegendItem,
+  scheduleOpenLegendStyle,
+} from "./ScheduleGridFrame";
 import { buildSchedulePatternRows } from "./adminScheduleConfigModel";
 
 type EditorView = "blocks" | "fine";
@@ -50,13 +54,6 @@ const AdminAvailabilityGrid: React.FC<AdminAvailabilityGridProps> = ({
     () => buildSchedulePatternRows(chunks, sessionDuration, blockSize),
     [blockSize, chunks, sessionDuration],
   );
-  const regularPauseMinutes = React.useMemo(() => {
-    const pauseDurations = patternRows
-      .filter((row) => row.kind === "pause")
-      .map((row) => row.endMinute - row.startMinute)
-      .filter((duration) => duration > 0);
-    return pauseDurations.length > 0 ? Math.min(...pauseDurations) : null;
-  }, [patternRows]);
   const openedPauseSlotCount = React.useMemo(
     () =>
       patternRows.reduce(
@@ -96,23 +93,14 @@ const AdminAvailabilityGrid: React.FC<AdminAvailabilityGridProps> = ({
     <section className="border-t border-border-soft">
       <div className="grid gap-3 px-5 py-3 handheld:px-4 tablet:grid-cols-[minmax(0,1fr)_auto] tablet:items-center">
         <div className="min-w-0">
-          {view === "blocks" && (
-            <p
-              data-cy="standard-block-pattern"
-              className="m-0 text-detail font-medium tabular-nums text-text-muted"
-            >
-              {blockSize * sessionDuration} min blokk
-              {regularPauseMinutes !== null &&
-                ` · ${regularPauseMinutes} min pause`}
-            </p>
-          )}
           <div
             data-cy="schedule-grid-legend"
             className="mt-1.5 flex flex-wrap items-center gap-x-4 gap-y-2"
           >
             <ScheduleGridLegendItem
               label="Åpen for intervju"
-              swatchClassName="border-brand-activeBorder bg-surface-base"
+              swatchClassName="border-border bg-surface-base"
+              swatchStyle={scheduleOpenLegendStyle}
             />
             <ScheduleGridLegendItem
               label="Stengt"
@@ -222,6 +210,7 @@ const AdminAvailabilityGrid: React.FC<AdminAvailabilityGridProps> = ({
                   <input
                     type="checkbox"
                     aria-label={`Alle standardblokker for ${weekday} ${dayMonth}`}
+                    className="h-3.5 w-3.5 accent-brand"
                     disabled={editingDisabled || standardMinutes.length === 0}
                     checked={isAllSelected}
                     ref={(input) => {

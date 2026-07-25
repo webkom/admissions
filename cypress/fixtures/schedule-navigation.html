@@ -48,6 +48,14 @@
         const [activeStep, setActiveStep] = React.useState("config");
         const [activeTab, setActiveTab] = React.useState("framework");
         const [setupDraft, setSetupDraft] = React.useState("");
+        const openWorkspace = (workspace) => {
+          setActiveTab(workspace);
+          window.requestAnimationFrame(() => {
+            document
+              .querySelector(`#foundation-panel-${workspace} h2`)
+              ?.focus({ preventScroll: true });
+          });
+        };
 
         return React.createElement(
           "div",
@@ -57,7 +65,11 @@
           },
           React.createElement(
             "div",
-            { className: "border-b border-border bg-surface-base" },
+            {
+              className:
+                "overflow-hidden rounded-panel border border-border bg-surface-base shadow-sm",
+              "data-cy": "schedule-stage",
+            },
             React.createElement(WorkflowStepper, {
               steps,
               activeKey: activeStep,
@@ -65,12 +77,11 @@
             }),
             React.createElement(FoundationWorkspaceNav, {
               active: activeTab,
-              onChange: setActiveTab,
+              onChange: openWorkspace,
               frameworkComplete: true,
-              availabilityComplete: false,
+              availabilityComplete: true,
               submittedCount: 1,
               participantCount: 3,
-              selectedBlockCount: 0,
             }),
             React.createElement("div", {
               id: "foundation-panel-framework",
@@ -78,7 +89,7 @@
               "aria-labelledby": "foundation-tab-framework",
               hidden: activeTab !== "framework",
             },
-              React.createElement("span", null, "Tidsrammer"),
+              React.createElement("h2", { tabIndex: -1 }, "Tidsrammer"),
               React.createElement("span", null, "Intervjublokker"),
               React.createElement("input", {
                 "aria-label": "Ulagret oppsettsendring",
@@ -91,13 +102,13 @@
               role: "tabpanel",
               "aria-labelledby": "foundation-tab-availability",
               hidden: activeTab !== "availability",
-            }, React.createElement("span", null, "Min personlige tilgjengelighet")),
+            }, React.createElement("h2", { tabIndex: -1 }, "Min personlige tilgjengelighet")),
             React.createElement("div", {
               id: "foundation-panel-coverage",
               role: "tabpanel",
               "aria-labelledby": "foundation-tab-coverage",
               hidden: activeTab !== "coverage",
-            }, React.createElement("span", null, "Dekningsoversikt")),
+            }, React.createElement("h2", { tabIndex: -1 }, "Dekningsoversikt")),
           ),
         );
       };

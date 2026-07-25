@@ -41,6 +41,7 @@ const admission = {
   admin_groups: [webkom],
   groups: [webkom, fagkom],
   userdata: {
+    actor_id: "webkom-actor",
     has_application: false,
     is_privileged: true,
     is_admin: true,
@@ -278,7 +279,7 @@ describe("admin applications review", () => {
     cy.get('button[aria-label="Vis søknadsdetaljer"]').first().click();
 
     cy.get(
-      'summary[aria-label="Flere handlinger for søknaden til Webkom"]',
+      'summary[aria-label="Flere handlinger for søknaden fra Ida Nordmann til Webkom"]',
     ).click();
     cy.contains('[role="menuitem"]', "Slett søknad til Webkom").click();
 

@@ -1,5 +1,6 @@
 enum KeyType {
   applicationText,
+  priorityText,
   selectedGroups,
   isEditingApplication,
   phoneNumber,
@@ -107,6 +108,12 @@ export const saveApplicationTextDraft = ([groupName, applicationText]: [
 
 export const getApplictionTextDrafts: () => Record<string, string> = () =>
   getParsedJson(KeyType.applicationText);
+
+export const savePriorityTextDraft = (priorityText: string) =>
+  saveObject(KeyType.priorityText, priorityText);
+
+export const getPriorityTextDraft = () =>
+  getParsedJson(KeyType.priorityText, "");
 
 interface SelectedGroupsDraft {
   [key: string]: boolean;

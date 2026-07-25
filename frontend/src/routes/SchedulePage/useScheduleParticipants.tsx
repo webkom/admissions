@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from "react";
 import { ChevronDown, LayoutPanelTop } from "lucide-react";
 import { slotsToSolverAvailability } from "src/components/Scheduling/scheduleUtils";
+import { keyboardFocusRingClass } from "src/components/Scheduling/ui";
 import { iconSizes } from "src/styles/designTokens";
 import type {
   Candidate,
@@ -43,7 +44,9 @@ const DevelopmentDataPanel: React.FC<DevelopmentDataPanelProps> = ({
   onInterviewerInputChange,
 }) => (
   <details className="group relative">
-    <summary className="flex h-9 cursor-pointer list-none items-center gap-2 rounded-full border border-border bg-surface-subtle px-3 text-detail font-semibold text-text-muted transition-colors hover:bg-surface-neutral hover:text-text-primary [&::-webkit-details-marker]:hidden">
+    <summary
+      className={`flex h-9 cursor-pointer list-none items-center gap-2 rounded-full border border-border bg-surface-subtle px-3 text-detail font-semibold text-text-muted transition-colors hover:bg-surface-neutral hover:text-text-primary [&::-webkit-details-marker]:hidden ${keyboardFocusRingClass}`}
+    >
       <div className="flex items-center gap-2.5">
         <span className="flex h-5 w-5 items-center justify-center rounded-md text-text-faded group-hover:text-brand">
           <LayoutPanelTop size={iconSizes.compact} />

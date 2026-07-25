@@ -8,16 +8,21 @@ describe("submit application spec", () => {
       .parent()
       .contains("Gå til søknad")
       .click();
-    cy.contains("Velg komité").click();
-    cy.contains("Gå videre").click();
+    cy.location("pathname").should("eq", "/webkom-open/min-soknad");
+    cy.contains("Skriv din søknad og send inn!").should("be.visible");
     cy.get("input[name='phoneNumber']").type("12345678");
     cy.contains("Søknadstekst").type("Hei jeg vil gjerne søke");
     cy.contains("Send inn søknad").click();
-    cy.contains("Vi har mottatt søknaden din!").should("exist");
+    cy.contains("h1", "Søknad sendt!").should("be.visible");
     cy.contains("Slett søknad").click();
-    cy.contains("Er du sikker på at du vil slette søknaden din?")
-      .parent()
-      .contains("Ja")
-      .click();
+    cy.get("[role='dialog']")
+      .should("have.attr", "aria-modal", "true")
+      .within(() => {
+        cy.contains("Er du sikker på at du vil slette søknaden din?").should(
+          "be.visible",
+        );
+        cy.contains("button", "Bekreft").click();
+      });
+    cy.contains("Skriv din søknad og send inn!").should("be.visible");
   });
 });

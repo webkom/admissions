@@ -10,10 +10,159 @@ const cell = (mode: "personal" | "setup", date: string, minute: number) =>
     `[data-cy=${mode}-grid] [role="button"][aria-label^="${mode}-${date}-${minute},"]`,
   );
 
+const adminBlock = () =>
+  cy.get(
+    '[data-cy=admin-grid] [data-cy=pattern-block][data-date="2026-07-21"][data-row-id="block-480"]',
+  );
+
 describe("shared selectable schedule grid", () => {
   beforeEach(mountGrids);
 
-  it("keeps selected, available, closed and blocked semantics distinct", () => {
+  it("uses one framed canvas and calm rounded cells in both flows", () => {
+    cy.get("[data-cy=schedule-grid-frame]")
+      .should("have.length.greaterThan", 2)
+      .each(($frame) => {
+        cy.wrap($frame)
+          .should("have.class", "border")
+          .and("have.class", "bg-surface-muted")
+          .and("have.class", "p-3");
+      });
+
+    cell("personal", "2026-07-21", 480)
+      .should("have.class", "rounded-md")
+      .and("have.class", "border-border")
+      .and("have.class", "bg-surface-base")
+      .and(
+        "not.have.class",
+        "shadow-[inset_3px_0_0_var(--color-danger-border)]",
+      )
+      .and("have.class", "active:scale-[0.985]")
+      .and("have.class", "hover:-translate-y-px");
+    adminBlock()
+      .should("have.class", "rounded-md")
+      .and("have.class", "border-border")
+      .and("have.class", "bg-surface-base")
+      .find("[data-schedule-slot-segment] > span")
+      .should("have.class", "bg-brand-activeBorder");
+    adminBlock()
+      .and("have.class", "active:scale-[0.985]")
+      .and("have.class", "hover:-translate-y-px");
+
+    cell("personal", "2026-07-21", 480)
+      .should("have.attr", "data-selection-surface", "schedule-block")
+      .and("have.attr", "data-selection-state", "active");
+    adminBlock()
+      .should("have.attr", "data-selection-surface", "schedule-block")
+      .and("have.attr", "data-selection-state", "active");
+
+    cy.get("[data-cy=admin-grid]")
+      .contains("button", "Finjuster enkelttider")
+      .click();
+    cy.get(
+      '[data-cy=admin-grid] [data-cy=fine-slot][data-date="2026-07-21"][data-minute="480"]',
+    )
+      .should("have.class", "bg-brand-soft")
+      .and("have.class", "motion-reduce:active:scale-100");
+    cy.get(
+      '[data-cy=large-admin-grid] [data-cy=pattern-block][data-row-id="block-720"]',
+    )
+      .should("have.class", "bg-surface-base")
+      .and("have.class", "motion-reduce:active:scale-100");
+  });
+
+  it("uses the same component and mark transition when deselecting", () => {
+    const sharedCells = [() => cell("personal", "2026-07-21", 480), adminBlock];
+
+    sharedCells.forEach((getCell) => {
+      getCell()
+        .find("[data-selection-mark] svg")
+        .should("have.class", "transition-[opacity,transform]")
+        .and("have.class", "scale-100");
+
+      getCell().click();
+      getCell()
+        .find("[data-selection-mark] svg")
+        .should("have.class", "scale-75")
+        .and("have.class", "opacity-0");
+      getCell()
+        .find("[data-schedule-slot-segment] > span")
+        .each(($segment) => {
+          expect($segment.attr("style")).to.include("width: 0%");
+        });
+    });
+
+    cell("personal", "2026-07-21", 480).should(
+      "have.attr",
+      "data-selection-state",
+      "closed",
+    );
+    adminBlock().should("have.attr", "data-selection-state", "closed");
+    cell("personal", "2026-07-21", 480)
+      .should("have.class", "bg-surface-neutral")
+      .find("[data-selection-closed-overlay]")
+      .should("have.class", "opacity-70");
+    adminBlock()
+      .should("have.class", "bg-surface-neutral")
+      .find("[data-selection-closed-overlay]")
+      .should("have.class", "opacity-70");
+  });
+
+  it("uses the same cell system for the read-only availability overview", () => {
+    const overviewCell = (date: string, chunkIndex: number) =>
+      cy.get(
+        `[data-cy=availability-overview] [data-date="${date}"][data-chunk-index="${chunkIndex}"]`,
+      );
+
+    cy.get(
+      '[data-cy=availability-overview] [data-cy="availability-day-header"][data-date="2026-07-21"]',
+    ).then(($header) => {
+      const headerRect = $header[0].getBoundingClientRect();
+      overviewCell("2026-07-21", 0).then(($cell) => {
+        const cellRect = $cell[0].getBoundingClientRect();
+        expect(Math.abs(headerRect.left - cellRect.left)).to.be.lessThan(1);
+        expect(Math.abs(headerRect.right - cellRect.right)).to.be.lessThan(1);
+      });
+    });
+
+    cy.get(
+      '[data-cy=availability-overview] [data-cy="availability-overview-legend"]',
+    ).should("not.exist");
+
+    overviewCell("2026-07-21", 0)
+      .should("contain.text", "2/2")
+      .and("have.class", "border-border")
+      .and("have.class", "bg-brand-soft")
+      .find("[data-schedule-slot-segment] > span")
+      .should("have.class", "motion-reduce:transition-none")
+      .and("have.attr", "style")
+      .and("include", "width: 100%");
+
+    overviewCell("2026-07-21", 1)
+      .should("contain.text", "1/2")
+      .and("have.class", "bg-surface-base")
+      .find("[data-schedule-slot-segment] > span")
+      .should("have.class", "motion-reduce:transition-none")
+      .and("have.attr", "style")
+      .and("include", "width: 50%");
+
+    overviewCell("2026-07-21", 2)
+      .should("contain.text", "0/2")
+      .and("have.class", "bg-surface-base")
+      .and("not.have.class", "bg-surface-neutral");
+
+    overviewCell("2026-07-22", 1)
+      .should("contain.text", "Stengt")
+      .and("have.attr", "aria-label", "Stengt")
+      .and("have.attr", "tabindex", "-1")
+      .and("have.class", "bg-surface-neutral");
+
+    cy.get("[data-cy=availability-overview-large-panel]")
+      .should("be.visible")
+      .and("not.contain.text", "Panel på")
+      .and("not.contain.text", "panelstørrelsen eller ta med flere");
+  });
+
+  it("keeps selected, unselected and blocked semantics distinct", () => {
     cell("personal", "2026-07-21", 480)
       .should("have.attr", "aria-pressed", "true")
       .and("have.attr", "aria-disabled", "false")
@@ -24,7 +173,7 @@ describe("shared selectable schedule grid", () => {
     cell("personal", "2026-07-21", 480)
       .click()
       .should("have.attr", "aria-pressed", "false")
-      .and("have.class", "bg-surface-base");
+      .and("have.class", "bg-surface-neutral");
 
     cell("setup", "2026-07-21", 480)
       .click()
@@ -39,6 +188,74 @@ describe("shared selectable schedule grid", () => {
       .and("have.attr", "tabindex", "-1")
       .trigger("pointerdown", { pointerId: 3, force: true })
       .should("have.attr", "aria-pressed", "false");
+  });
+
+  it("uses native table headers with one roving tab stop", () => {
+    cy.get('[data-cy=personal-grid] table[aria-label="personal availability"]')
+      .should("exist")
+      .within(() => {
+        cy.get('th[scope="col"]').should("have.length", 2);
+        cy.get('th[scope="row"]').should("have.length", 2);
+        cy.get('[role="button"][tabindex="0"]')
+          .should("have.length", 1)
+          .and("have.attr", "aria-label")
+          .and("include", "personal-2026-07-21-480");
+      });
+  });
+
+  it("moves the roving focus by row and column while skipping blocked cells", () => {
+    cell("personal", "2026-07-21", 480).focus();
+    cy.focused().trigger("keydown", { key: "End" });
+    cy.focused().should(
+      "have.attr",
+      "aria-label",
+      "personal-2026-07-21-480, 2 av 2",
+    );
+
+    cy.focused().trigger("keydown", { key: "ArrowDown" });
+    cy.focused().should(
+      "have.attr",
+      "aria-label",
+      "personal-2026-07-21-600, 0 av 2",
+    );
+    cy.focused().trigger("keydown", { key: "ArrowRight" });
+    cy.focused().should(
+      "have.attr",
+      "aria-label",
+      "personal-2026-07-22-600, 0 av 2",
+    );
+    cy.focused().trigger("keydown", { key: "Home" });
+    cy.focused().should(
+      "have.attr",
+      "aria-label",
+      "personal-2026-07-21-600, 0 av 2",
+    );
+    cy.focused().trigger("keydown", { key: "End" });
+    cy.focused().should(
+      "have.attr",
+      "aria-label",
+      "personal-2026-07-22-600, 0 av 2",
+    );
+  });
+
+  it("handles synthesized clicks once without duplicating pointer activation", () => {
+    cell("personal", "2026-07-21", 600)
+      .should("have.attr", "aria-pressed", "false")
+      .then(($cell) => {
+        ($cell[0] as HTMLElement).click();
+      });
+    cell("personal", "2026-07-21", 600).should(
+      "have.attr",
+      "aria-pressed",
+      "true",
+    );
+
+    cell("personal", "2026-07-21", 480)
+      .should("have.attr", "aria-pressed", "true")
+      .trigger("pointerdown", { pointerId: 40 })
+      .trigger("click", { detail: 1 })
+      .should("have.attr", "aria-pressed", "false");
+    cy.window().trigger("pointerup", { pointerId: 40 });
   });
 
   it("keeps day headers focused on the standard-block checkbox", () => {
@@ -57,6 +274,40 @@ describe("shared selectable schedule grid", () => {
       .should("have.length.greaterThan", 0)
       .and("have.attr", "aria-pressed", "false");
     cy.contains("Steng all kapasitet denne dagen").should("not.exist");
+  });
+
+  it("includes the day in every admin grid control name", () => {
+    adminBlock().should("have.attr", "aria-label").and("contain", "Tir 21.07");
+
+    cy.get("[data-cy=admin-grid]")
+      .contains("button", "Finjuster enkelttider")
+      .click();
+    cy.get(
+      '[data-cy=admin-grid] [data-cy=fine-slot][data-date="2026-07-21"][data-minute="480"]',
+    )
+      .should("have.attr", "aria-label")
+      .and("contain", "Tir 21.07");
+    cy.get(
+      '[data-cy=admin-grid] [data-cy=planned-pause][data-date="2026-07-21"]',
+    )
+      .should("have.attr", "aria-label")
+      .and("contain", "Tir 21.07");
+    cy.get(
+      '[data-cy=admin-grid] [data-cy=planned-pause][data-date="2026-07-21"]',
+    ).click();
+    cy.get("[data-cy=schedule-slot-editor]")
+      .should("have.attr", "aria-labelledby")
+      .then((titleId) => {
+        cy.document().then((document) => {
+          cy.wrap(document.getElementById(titleId)).should(
+            "contain.text",
+            "Tir 21.07",
+          );
+        });
+      });
+    cy.focused().should("have.attr", "data-slot");
+    cy.focused().should("have.attr", "aria-label").and("contain", "Tir 21.07");
+    cy.get("body").type("{esc}");
   });
 
   it("uses the same Enter and Space toggle path in both modes", () => {
@@ -197,14 +448,156 @@ describe("shared selectable schedule grid", () => {
     cy.window().trigger("pointerup", { pointerId: 32 });
     cy.get(fineSlot(480)).should("have.attr", "aria-pressed", "true");
     cy.get(fineSlot(510)).should("have.attr", "aria-pressed", "true");
+
+    cy.get(fineSlot(480)).trigger("pointerdown", { pointerId: 33 });
+    cy.get(fineSlot(510)).trigger("pointerover", { pointerId: 33 });
+    cy.get(fineSlot(480)).trigger("pointerover", { pointerId: 33 });
+    cy.window().trigger("pointerup", { pointerId: 33 });
+    cy.get(fineSlot(480)).should("have.attr", "aria-pressed", "false");
+    cy.get(fineSlot(510)).should("have.attr", "aria-pressed", "false");
   });
 
-  it("keeps standard blocks compact and preserves pause extras in fine tuning", () => {
+  it("ignores secondary clicks and touch pans while preserving touch taps", () => {
+    const target =
+      '[data-cy=admin-grid] [data-cy=pattern-block][data-date="2026-07-22"][data-row-id="block-600"]';
+
+    cy.get(target)
+      .should("have.attr", "aria-pressed", "false")
+      .trigger("pointerdown", {
+        pointerId: 70,
+        pointerType: "mouse",
+        button: 2,
+        isPrimary: true,
+      })
+      .should("have.attr", "aria-pressed", "false");
+    cy.window().trigger("pointerup", { pointerId: 70 });
+
+    cy.get(target)
+      .trigger("pointerdown", {
+        pointerId: 73,
+        pointerType: "mouse",
+        button: 0,
+        ctrlKey: true,
+        isPrimary: true,
+      })
+      .should("have.attr", "aria-pressed", "false");
+    cy.window().trigger("pointerup", { pointerId: 73 });
+
+    cy.get(target)
+      .trigger("pointerdown", {
+        pointerId: 74,
+        pointerType: "mouse",
+        button: 0,
+        isPrimary: false,
+      })
+      .should("have.attr", "aria-pressed", "false");
+    cy.window().trigger("pointerup", { pointerId: 74 });
+
+    cy.get(target).trigger("pointerdown", {
+      pointerId: 75,
+      pointerType: "touch",
+      button: 0,
+      isPrimary: true,
+      clientX: 10,
+      clientY: 10,
+    });
+    cy.window().trigger("pointercancel", { pointerId: 75 });
+    cy.get(target).should("have.attr", "aria-pressed", "false");
+
+    cy.get(target).trigger("pointerdown", {
+      pointerId: 71,
+      pointerType: "touch",
+      button: 0,
+      isPrimary: true,
+      clientX: 10,
+      clientY: 10,
+    });
+    cy.window().trigger("pointermove", {
+      pointerId: 71,
+      clientX: 40,
+      clientY: 10,
+    });
+    cy.window().trigger("pointerup", {
+      pointerId: 71,
+      clientX: 40,
+      clientY: 10,
+    });
+    cy.get(target).should("have.attr", "aria-pressed", "false");
+
+    cy.get(target).trigger("pointerdown", {
+      pointerId: 72,
+      pointerType: "touch",
+      button: 0,
+      isPrimary: true,
+      clientX: 10,
+      clientY: 10,
+    });
+    cy.get(target).should("have.attr", "aria-pressed", "false");
+    cy.window().trigger("pointerup", {
+      pointerId: 72,
+      clientX: 10,
+      clientY: 10,
+    });
+    cy.get(target).should("have.attr", "aria-pressed", "true");
+  });
+
+  it("moves focus into opt-out confirmations and restores it on cancel", () => {
+    cy.get("[data-cy=personal-opt-out]")
+      .contains("button", "Jeg deltar ikke")
+      .click();
+    cy.focused().should("contain.text", "Avbryt").click();
+    cy.focused().should("contain.text", "Jeg deltar ikke");
+    cy.focused().click();
+    cy.contains("[data-cy=personal-opt-out] button", "Bekreft").click();
+    cy.focused().should("contain.text", "Jeg deltar ikke");
+
+    cy.get("[data-cy=availability-overview]")
+      .contains("button", "Administrer")
+      .click();
+    cy.get("[data-cy=availability-overview]")
+      .contains("button", "Deltar ikke")
+      .first()
+      .click();
+    cy.focused().should("contain.text", "Avbryt").click();
+    cy.focused().should("contain.text", "Deltar ikke");
+    cy.focused().click();
+    cy.get("[data-cy=availability-overview]")
+      .contains("button", "Bekreft")
+      .click();
+    cy.focused().should("contain.text", "Deltar ikke");
+  });
+
+  it("keeps focus inside opt-out confirmations when requests fail", () => {
+    cy.get("[data-cy=personal-opt-out-failure]")
+      .contains("button", "Jeg deltar ikke")
+      .click();
+    cy.get("[data-cy=personal-opt-out-failure]")
+      .contains("button", "Bekreft")
+      .click();
+    cy.focused().should("contain.text", "Avbryt");
+    cy.get("[data-cy=personal-opt-out-failure]")
+      .contains("button", "Bekreft")
+      .should("be.enabled");
+
+    cy.get("[data-cy=availability-overview-failure]")
+      .contains("button", "Administrer")
+      .click();
+    cy.get("[data-cy=availability-overview-failure]")
+      .contains("button", "Deltar ikke")
+      .first()
+      .click();
+    cy.get("[data-cy=availability-overview-failure]")
+      .contains("button", "Bekreft")
+      .click();
+    cy.focused().should("contain.text", "Avbryt");
+    cy.get("[data-cy=availability-overview-failure]")
+      .contains("button", "Bekreft")
+      .should("be.enabled");
+  });
+
+  it("preserves pause extras in fine tuning", () => {
     cy.get("[data-cy=admin-grid]").within(() => {
-      cy.get("[data-cy=standard-block-pattern]").should(
-        "have.text",
-        "60 min blokk · 60 min pause",
-      );
+      cy.get("[data-cy=standard-block-pattern]").should("not.exist");
       cy.get("[data-cy=planned-pause]").should("not.exist");
       cy.get("[data-cy=schedule-grid-legend]").should(
         "not.contain.text",
@@ -257,7 +650,7 @@ describe("shared selectable schedule grid", () => {
       .click();
     cy.get(
       '[data-cy=admin-grid] [data-cy=planned-pause][data-date="2026-07-21"]',
-    ).should("contain.text", "Ekstratid · 1");
+    ).should("contain.text", "Ekstratid, 1");
   });
 
   it("uses one divider for a longer pause in the compact block matrix", () => {
@@ -265,7 +658,7 @@ describe("shared selectable schedule grid", () => {
       cy.get("[data-cy=planned-pause]").should("not.exist");
       cy.get("[data-cy=long-pause-divider]").should(
         "contain.text",
-        "Lengre pause · 90 min",
+        "Lengre pause, 90 min",
       );
       cy.contains("button", "Finjuster enkelttider").click();
       cy.get("[data-cy=long-pause-divider]").should("not.exist");

@@ -308,7 +308,7 @@ class SolveScheduleViewTestCase(APITestCase):
 
         self.assertEqual(res.status_code, status.HTTP_403_FORBIDDEN)
 
-    def test_committee_recruiter_can_run_global_solver(self):
+    def test_committee_recruiter_cannot_run_global_solver(self):
         committee = Group.objects.create(name="Bedkom", lego_id=996)
         recruiter = LegoUser.objects.create(username="solver-recruiter", lego_id=995)
         Membership.objects.create(user=recruiter, role=RECRUITING, group=committee)
@@ -317,7 +317,7 @@ class SolveScheduleViewTestCase(APITestCase):
 
         res = self._solve({"candidates": [], "interviewers": [], "panel_size": 1})
 
-        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.assertEqual(res.status_code, status.HTTP_403_FORBIDDEN)
 
     def test_invalid_panel_size_is_rejected(self):
         res = self._solve({"candidates": [], "interviewers": [], "panel_size": 0})
@@ -765,7 +765,7 @@ class SavedScheduleViewTestCase(APITestCase):
         )
         self.assertEqual(res.data["enabled_windows"], payload["enabled_windows"])
 
-    def test_duration_change_clears_submitted_availability(self):
+    def test_duration_change_clears_submitted_availability_slots(self):
         interviewer = LegoUser.objects.create(username="available-user", lego_id=304)
         InterviewAvailability.objects.create(
             admission=self.admission,
@@ -800,12 +800,12 @@ class SavedScheduleViewTestCase(APITestCase):
         res = self.client.post(self.url, payload, format="json")
 
         self.assertEqual(res.status_code, status.HTTP_200_OK)
-        self.assertFalse(
-            InterviewAvailability.objects.filter(
-                admission=self.admission,
-                user=interviewer,
-            ).exists()
+        availability = InterviewAvailability.objects.get(
+            admission=self.admission,
+            user=interviewer,
         )
+        self.assertEqual(availability.slots, [])
+        self.assertIsNone(availability.submitted_grid_generation)
 
     def test_block_break_change_clears_existing_plan(self):
         SavedSchedule.objects.create(
@@ -850,7 +850,7 @@ class SavedScheduleViewTestCase(APITestCase):
         self.assertEqual(res.data["schedule"], [])
         self.assertFalse(res.data["is_distributed"])
 
-    def test_recruiter_can_save_global_schedule(self):
+    def test_recruiter_cannot_save_global_schedule(self):
         recruiter_group = Group.objects.create(name="Bedkom", lego_id=302)
         recruiter_user = LegoUser.objects.create(
             username="schedule-recruiter", lego_id=303
@@ -875,7 +875,7 @@ class SavedScheduleViewTestCase(APITestCase):
 
         res = self.client.post(self.url, payload, format="json")
 
-        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.assertEqual(res.status_code, status.HTTP_403_FORBIDDEN)
 
 
 class InterviewAvailabilityViewTestCase(APITestCase):
@@ -894,14 +894,6 @@ class InterviewAvailabilityViewTestCase(APITestCase):
         self.client.force_authenticate(user=self.user)
 
     def test_can_save_conflicts_without_overwriting_slots(self):
-        SavedSchedule.objects.create(
-            admission=self.admission,
-            schedule=[],
-            start_date="2026-04-21",
-            session_duration=60,
-            is_distributed=True,
-            name_visibility="committee",
-        )
         applicant = LegoUser.objects.create(username="eirik-applicant", lego_id=403)
         application = UserApplication.objects.create(
             user=applicant, admission=self.admission
@@ -910,6 +902,27 @@ class InterviewAvailabilityViewTestCase(APITestCase):
             application=application,
             group=self.group,
             text="Komite application",
+        )
+        SavedSchedule.objects.create(
+            admission=self.admission,
+            schedule=[
+                {
+                    "candidate_id": str(application.pk),
+                    "candidate": "Eirik Applicant",
+                    "time": 540,
+                    "panel": [
+                        {
+                            "id": str(self.user.pk),
+                            "name": "Committee Member",
+                        }
+                    ],
+                }
+            ],
+            start_date="2026-04-21",
+            session_duration=60,
+            is_distributed=False,
+            conflict_review_open=True,
+            name_visibility="committee",
         )
         InterviewAvailability.objects.create(
             admission=self.admission,

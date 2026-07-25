@@ -5,11 +5,13 @@ import {
   MutationApplication,
   useCreateApplicationMutation,
 } from "src/query/mutations";
+import { isSensitiveAuthorityChangedError } from "src/query/sensitiveAccess";
 
 import {
   getApplictionTextDrafts,
   clearAllDrafts,
   getPhoneNumberDraft,
+  getPriorityTextDraft,
 } from "src/utils/draftHelper";
 import { Admission, Application, Group } from "src/types";
 import FormContainer from "./FormContainer";
@@ -19,6 +21,7 @@ export type SelectedGroups = { [key: string]: boolean };
 
 export type FormValues = {
   phoneNumber: string;
+  priorityText: string;
   groupAnswers: Record<string, InputResponseModel>;
   groups: { [groupName: string]: string };
 };
@@ -39,11 +42,13 @@ const generateInitialValues: (
 ) => FormValues = (selectedGroups, admission, myApplication) => {
   const {
     phone_number: phoneNumber = getPhoneNumberDraft(),
+    priority_text: priorityText = getPriorityTextDraft(),
     group_applications: groupApplications = getApplictionTextDrafts(),
   } = myApplication || {};
 
   const initialValues: FormValues = {
     phoneNumber,
+    priorityText,
     groupAnswers: {},
     groups: {},
   };
@@ -145,6 +150,10 @@ const validationSchema = (
           "Skriv inn et gyldig norsk telefonnummer",
         )
         .required("Skriv inn et gyldig norsk telefonnummer"),
+      priorityText: Yup.string().max(
+        5000,
+        "Prioriteringer kan ikke være lengre enn 5000 tegn",
+      ),
       groupAnswers: Yup.object().shape(groupAnswersSchema),
       groups: Yup.object().shape(selectedGroupsSchema),
     });
@@ -174,6 +183,7 @@ const ApplicationForm: React.FC<ApplicationFormProps> = ({
     const submission: MutationApplication = {
       applications: {},
       phone_number: values.phoneNumber,
+      priority_text: values.priorityText,
       group_answers: {},
     };
     Object.keys(values.groups)
@@ -196,9 +206,10 @@ const ApplicationForm: React.FC<ApplicationFormProps> = ({
           setSubmitting(false);
           toggleIsEditing();
         },
-        onError: () => {
-          alert("Det skjedde en feil.... ");
+        onError: (error) => {
           setSubmitting(false);
+          if (isSensitiveAuthorityChangedError(error)) return;
+          alert("Det skjedde en feil.... ");
         },
       },
     );

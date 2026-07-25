@@ -1,10 +1,13 @@
 import React, { PropsWithChildren } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import AbakusLogo from "src/components/AbakusLogo";
 import { isLoggedIn, isManager } from "src/utils/djangoData";
 import LinkButton from "src/components/LinkButton";
-import { clearApplicationDraftNamespace } from "src/utils/draftHelper";
+import { handleSensitiveLogoutLink } from "src/query/sensitiveActorSync";
 
 const LandingPageSkeleton: React.FC<PropsWithChildren> = ({ children }) => {
+  const queryClient = useQueryClient();
+
   return (
     <div className="mx-auto flex min-h-viewport w-full max-w-6xl flex-col items-center px-8 py-16 handheld:px-4 handheld:py-8">
       <div className="mb-8 max-w-44 handheld:max-w-36">
@@ -31,7 +34,7 @@ const LandingPageSkeleton: React.FC<PropsWithChildren> = ({ children }) => {
           <a
             className="text-sm font-medium text-text-secondary transition-colors duration-200 hover:text-text-strong"
             href="/logout/"
-            onClick={clearApplicationDraftNamespace}
+            onClick={(event) => handleSensitiveLogoutLink(queryClient, event)}
           >
             Logg ut
           </a>

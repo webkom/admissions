@@ -1,4 +1,5 @@
 from datetime import timedelta
+import uuid
 from unittest import mock
 
 from django.core.management import call_command
@@ -24,7 +25,11 @@ from admissions.admissions.models import (
     SolveJob,
     UserApplication,
 )
-from admissions.admissions.schedule_validation import canonicalize_solver_payload
+from admissions.admissions.schedule_validation import (
+    ScheduleValidationError,
+    canonicalize_solver_payload,
+    ensure_conflict_collection_ready,
+)
 from admissions.admissions.serializers import SolveJobSerializer, SolveOptionsSerializer
 from admissions.admissions.tests.utils import (
     ScheduleRevisionAPIClient,
@@ -120,20 +125,178 @@ class SavedSchedulePublishSemanticsTestCase(APITestCase):
             SavedSchedule.objects.get(admission=self.admission).is_distributed
         )
 
-    def test_conflict_review_does_not_open_without_a_draft(self):
+    def test_admin_can_open_conflict_collection_without_a_draft(self):
         self._create_saved(is_distributed=False, schedule=[])
 
         res = self.client.post(
             self.url,
-            {"conflict_review_open": True},
+            {"conflict_collection_open": True},
             format="json",
         )
 
         self.assertEqual(res.status_code, status.HTTP_200_OK)
         self.assertFalse(res.data["conflict_review_open"])
-        self.assertFalse(
-            ConflictReviewAuditEvent.objects.filter(admission=self.admission).exists()
+        self.assertTrue(res.data["conflict_collection_open"])
+        self.assertEqual(
+            res.data["conflict_collection_candidate_ids"],
+            [str(self.application.pk)],
         )
+        self.assertEqual(
+            res.data["conflict_collection_participant_ids"],
+            [str(self.admin_user.pk)],
+        )
+        self.assertTrue(res.data["conflict_collection_revision"])
+        self.assertTrue(
+            ConflictReviewAuditEvent.objects.filter(
+                admission=self.admission,
+                action=ConflictReviewAuditEvent.ACTION_OPENED,
+                phase=ConflictReviewAuditEvent.PHASE_COLLECTION,
+            ).exists()
+        )
+
+    def test_participating_admin_can_submit_their_own_conflicts(self):
+        revision = uuid.uuid4()
+        self._create_saved(
+            is_distributed=False,
+            schedule=[],
+            conflict_collection_open=True,
+            conflict_collection_revision=revision,
+            conflict_collection_candidate_ids=[str(self.application.pk)],
+            conflict_collection_participant_ids=[str(self.admin_user.pk)],
+        )
+
+        response = self.client.post(
+            reverse(
+                "interview-availability",
+                kwargs={"admission_slug": self.admission.slug},
+            ),
+            {
+                "conflicts": [str(self.application.pk)],
+                "conflict_collection_reviewed_candidate_ids": [
+                    str(self.application.pk)
+                ],
+                "conflict_collection_revision": str(revision),
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertTrue(response.data["conflict_collection_complete"])
+        self.assertEqual(response.data["conflicts"], [str(self.application.pk)])
+        event = ConflictReviewAuditEvent.objects.get(
+            admission=self.admission,
+            phase=ConflictReviewAuditEvent.PHASE_COLLECTION,
+            action=ConflictReviewAuditEvent.ACTION_SUBMITTED,
+        )
+        self.assertEqual(event.actor_id, self.admin_user.pk)
+        self.assertEqual(event.subject_user_id, self.admin_user.pk)
+
+    def test_current_collection_cannot_close_before_every_participant_confirms(self):
+        revision = uuid.uuid4()
+        saved = self._create_saved(
+            is_distributed=False,
+            schedule=[],
+            conflict_collection_open=True,
+            conflict_collection_revision=revision,
+            conflict_collection_candidate_ids=[str(self.application.pk)],
+            conflict_collection_participant_ids=[str(self.admin_user.pk)],
+        )
+
+        response = self.client.post(
+            self.url,
+            {
+                "conflict_collection_open": False,
+                "expected_updated_at": saved.updated_at.isoformat(),
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("conflict_collection_open", response.data)
+        saved.refresh_from_db()
+        self.assertTrue(saved.conflict_collection_open)
+
+    def test_stale_collection_can_close_so_it_can_be_reopened(self):
+        revision = uuid.uuid4()
+        saved = self._create_saved(
+            is_distributed=False,
+            schedule=[],
+            conflict_collection_open=True,
+            conflict_collection_revision=revision,
+            conflict_collection_candidate_ids=[str(self.application.pk)],
+            conflict_collection_participant_ids=[str(self.admin_user.pk)],
+        )
+        late_candidate = LegoUser.objects.create(
+            username="late-close-candidate",
+            lego_id=604,
+        )
+        UserApplication.objects.create(
+            admission=self.admission,
+            user=late_candidate,
+        )
+
+        response = self.client.post(
+            self.url,
+            {
+                "conflict_collection_open": False,
+                "expected_updated_at": saved.updated_at.isoformat(),
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertFalse(response.data["conflict_collection_open"])
+
+    def test_solver_rejects_a_stale_completed_conflict_collection(self):
+        revision = uuid.uuid4()
+        saved = self._create_saved(
+            is_distributed=False,
+            schedule=[],
+            conflict_collection_open=False,
+            conflict_collection_revision=revision,
+            conflict_collection_candidate_ids=[str(self.application.pk)],
+            conflict_collection_participant_ids=[str(self.admin_user.pk)],
+        )
+        InterviewAvailability.objects.filter(
+            admission=self.admission,
+            user=self.admin_user,
+        ).update(
+            conflict_collection_review_revision=revision,
+            conflict_collection_reviewed_candidate_ids=[str(self.application.pk)],
+        )
+        ensure_conflict_collection_ready(self.admission, saved)
+
+        late_candidate = LegoUser.objects.create(
+            username="late-conflict-candidate",
+            lego_id=603,
+        )
+        UserApplication.objects.create(
+            admission=self.admission,
+            user=late_candidate,
+        )
+
+        with self.assertRaises(ScheduleValidationError) as error:
+            ensure_conflict_collection_ready(self.admission, saved)
+
+        self.assertEqual(error.exception.field, "conflict_collection_open")
+        self.assertIn("Kandidatlisten er endret", error.exception.message)
+
+    def test_solver_rejects_an_incomplete_closed_conflict_collection(self):
+        revision = uuid.uuid4()
+        saved = self._create_saved(
+            is_distributed=False,
+            schedule=[],
+            conflict_collection_open=False,
+            conflict_collection_revision=revision,
+            conflict_collection_candidate_ids=[str(self.application.pk)],
+            conflict_collection_participant_ids=[str(self.admin_user.pk)],
+        )
+
+        with self.assertRaises(ScheduleValidationError) as error:
+            ensure_conflict_collection_ready(self.admission, saved)
+
+        self.assertEqual(error.exception.field, "conflict_collection_open")
+        self.assertIn("må fullføre", error.exception.message)
 
     def test_publish_is_blocked_until_open_conflict_review_is_complete(self):
         self._create_saved(is_distributed=False, conflict_review_open=True)
@@ -173,6 +336,55 @@ class SavedSchedulePublishSemanticsTestCase(APITestCase):
                 admission=self.admission,
                 action=ConflictReviewAuditEvent.ACTION_CLOSED,
             ).exists()
+        )
+
+    def test_retry_after_committed_publish_is_one_durable_transition(self):
+        saved = self._create_saved(
+            is_distributed=False,
+            conflict_review_open=True,
+            name_visibility=SavedSchedule.NAME_VISIBILITY_HIDDEN,
+        )
+        self._mark_reviewed(self.application)
+        original_revision = saved.updated_at.isoformat()
+
+        published = self.client.post(
+            self.url,
+            {
+                "is_distributed": True,
+                "name_visibility": SavedSchedule.NAME_VISIBILITY_ADMIN_ONLY,
+                "expected_updated_at": original_revision,
+            },
+            format="json",
+        )
+
+        self.assertEqual(published.status_code, status.HTTP_200_OK, published.data)
+        saved.refresh_from_db()
+        published_revision = saved.updated_at
+        self.assertTrue(saved.is_distributed)
+        self.assertEqual(
+            saved.name_visibility,
+            SavedSchedule.NAME_VISIBILITY_ADMIN_ONLY,
+        )
+
+        retried = self.client.post(
+            self.url,
+            {
+                "is_distributed": True,
+                "name_visibility": SavedSchedule.NAME_VISIBILITY_ADMIN_ONLY,
+                "expected_updated_at": original_revision,
+            },
+            format="json",
+        )
+
+        self.assertEqual(retried.status_code, status.HTTP_409_CONFLICT)
+        saved.refresh_from_db()
+        self.assertEqual(saved.updated_at, published_revision)
+        self.assertEqual(
+            ConflictReviewAuditEvent.objects.filter(
+                admission=self.admission,
+                action=ConflictReviewAuditEvent.ACTION_CLOSED,
+            ).count(),
+            1,
         )
 
     def test_proposed_availability_deviation_requires_exact_publish_approval(self):
@@ -1294,7 +1506,9 @@ class InterviewAvailabilityHardeningTestCase(APITestCase):
         self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertIn("reviewed_candidate_ids", res.data)
 
-    def test_member_can_review_all_candidates_without_seeing_draft_times(self):
+    def test_member_can_review_only_proposed_candidates_without_seeing_draft_times(
+        self,
+    ):
         other_group = Group.objects.create(name="Andre", lego_id=630)
         self.admission.groups.add(other_group)
         other_user = LegoUser.objects.create(username="other-review", lego_id=631)
@@ -1343,36 +1557,322 @@ class InterviewAvailabilityHardeningTestCase(APITestCase):
         candidates_by_id = {item["id"]: item for item in candidates_res.data}
         self.assertEqual(
             set(candidates_by_id),
-            {str(self.application.pk), str(other_application.pk)},
+            {str(self.application.pk)},
         )
         self.assertEqual(schedule_res.status_code, status.HTTP_200_OK)
         self.assertTrue(schedule_res.data["conflict_review_open"])
         self.assertEqual(schedule_res.data["schedule"], [])
-        self.assertEqual(review_res.status_code, status.HTTP_200_OK)
-        self.assertEqual(review_res.data["conflicts"], [str(other_application.pk)])
-        self.assertTrue(review_res.data["conflict_review_complete"])
-        self.assertEqual(
-            set(review_res.data["reviewed_candidate_ids"]),
-            {str(self.application.pk), str(other_application.pk)},
-        )
+        self.assertEqual(review_res.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("conflicts", review_res.data)
         viewed_event = ConflictReviewAuditEvent.objects.get(
             admission=self.admission,
             actor=self.member,
             action=ConflictReviewAuditEvent.ACTION_VIEWED,
         )
-        submitted_event = ConflictReviewAuditEvent.objects.get(
-            admission=self.admission,
-            actor=self.member,
-            action=ConflictReviewAuditEvent.ACTION_SUBMITTED,
-        )
         self.assertEqual(viewed_event.saved_schedule_id, schedule_res.data["id"])
+        self.assertFalse(
+            ConflictReviewAuditEvent.objects.filter(
+                admission=self.admission,
+                actor=self.member,
+                action=ConflictReviewAuditEvent.ACTION_SUBMITTED,
+            ).exists()
+        )
+
+    def test_draft_review_preserves_conflicts_outside_the_proposal_scope(self):
+        other_group = Group.objects.create(name="Andre bevart", lego_id=638)
+        self.admission.groups.add(other_group)
+        other_user = LegoUser.objects.create(
+            username="preserved-conflict-candidate",
+            lego_id=639,
+        )
+        other_application = UserApplication.objects.create(
+            user=other_user,
+            admission=self.admission,
+        )
+        GroupApplication.objects.create(
+            application=other_application,
+            group=other_group,
+            text="Other application",
+        )
+        self._open_conflict_review()
+        availability = InterviewAvailability.objects.create(
+            admission=self.admission,
+            user=self.member,
+            slots=["2026-04-21|540"],
+            conflicts=[str(other_application.pk)],
+        )
+        self.client.force_authenticate(user=self.member)
+
+        response = self.client.post(
+            self.url,
+            {
+                "conflicts": [],
+                "reviewed_candidate_ids": [str(self.application.pk)],
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        availability.refresh_from_db()
+        self.assertEqual(availability.conflicts, [str(other_application.pk)])
+
+    def test_stale_collection_submission_is_rejected_without_changing_conflicts(self):
+        revision = uuid.uuid4()
+        saved = self._create_saved_schedule(
+            enabled_slots=["2026-04-21|540"],
+            conflict_collection_open=True,
+            conflict_collection_revision=revision,
+            conflict_collection_candidate_ids=[str(self.application.pk)],
+            conflict_collection_participant_ids=[str(self.member.pk)],
+        )
+        availability = InterviewAvailability.objects.create(
+            admission=self.admission,
+            user=self.member,
+            slots=["2026-04-21|540"],
+            conflicts=[],
+            participation=InterviewAvailability.PARTICIPATION_PARTICIPATING,
+            submitted_grid_generation=saved.availability_generation,
+        )
+        late_user = LegoUser.objects.create(
+            username="late-collection-candidate",
+            lego_id=640,
+        )
+        UserApplication.objects.create(
+            user=late_user,
+            admission=self.admission,
+        )
+        self.client.force_authenticate(user=self.member)
+
+        candidates_response = self.client.get(
+            reverse(
+                "interview-candidates",
+                kwargs={"admission_slug": self.admission.slug},
+            )
+        )
+        availability_response = self.client.get(self.url)
+        response = self.client.post(
+            self.url,
+            {
+                "conflicts": [str(self.application.pk)],
+                "conflict_collection_reviewed_candidate_ids": [
+                    str(self.application.pk)
+                ],
+                "conflict_collection_revision": str(revision),
+            },
+            format="json",
+        )
+
+        self.assertEqual(candidates_response.status_code, status.HTTP_200_OK)
+        self.assertEqual(candidates_response.data, [])
+        me = next(item for item in availability_response.data if item["is_me"])
+        self.assertEqual(me["conflict_collection_candidate_ids"], [])
+        self.assertEqual(response.status_code, status.HTTP_409_CONFLICT)
+        availability.refresh_from_db()
+        self.assertEqual(availability.conflicts, [])
+        self.assertIsNone(availability.conflict_collection_review_revision)
+
+    def test_participant_with_zero_available_slots_can_complete_collection(self):
+        revision = uuid.uuid4()
+        saved = self._create_saved_schedule(
+            enabled_slots=["2026-04-21|540"],
+            conflict_collection_open=True,
+            conflict_collection_revision=revision,
+            conflict_collection_candidate_ids=[str(self.application.pk)],
+            conflict_collection_participant_ids=[str(self.member.pk)],
+        )
+        InterviewAvailability.objects.create(
+            admission=self.admission,
+            user=self.member,
+            slots=[],
+            participation=InterviewAvailability.PARTICIPATION_PARTICIPATING,
+            submitted_grid_generation=saved.availability_generation,
+        )
+        self.client.force_authenticate(user=self.member)
+
+        candidates_response = self.client.get(
+            reverse(
+                "interview-candidates",
+                kwargs={"admission_slug": self.admission.slug},
+            )
+        )
+        response = self.client.post(
+            self.url,
+            {
+                "conflicts": [],
+                "conflict_collection_reviewed_candidate_ids": [
+                    str(self.application.pk)
+                ],
+                "conflict_collection_revision": str(revision),
+            },
+            format="json",
+        )
+
+        self.assertEqual(candidates_response.status_code, status.HTTP_200_OK)
         self.assertEqual(
-            set(submitted_event.reviewed_candidate_ids),
+            [candidate["id"] for candidate in candidates_response.data],
+            [str(self.application.pk)],
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertTrue(response.data["conflict_collection_complete"])
+
+    def test_self_only_participant_can_confirm_an_empty_collection_scope(self):
+        self.application.delete()
+        own_application = UserApplication.objects.create(
+            user=self.member,
+            admission=self.admission,
+        )
+        revision = uuid.uuid4()
+        saved = self._create_saved_schedule(
+            enabled_slots=["2026-04-21|540"],
+            conflict_collection_open=True,
+            conflict_collection_revision=revision,
+            conflict_collection_candidate_ids=[str(own_application.pk)],
+            conflict_collection_participant_ids=[str(self.member.pk)],
+        )
+        InterviewAvailability.objects.create(
+            admission=self.admission,
+            user=self.member,
+            slots=["2026-04-21|540"],
+            participation=InterviewAvailability.PARTICIPATION_PARTICIPATING,
+            submitted_grid_generation=saved.availability_generation,
+        )
+        self.client.force_authenticate(user=self.member)
+
+        before = self.client.get(self.url)
+        me = next(item for item in before.data if item["is_me"])
+        response = self.client.post(
+            self.url,
+            {
+                "conflicts": [],
+                "conflict_collection_reviewed_candidate_ids": [],
+                "conflict_collection_revision": str(revision),
+            },
+            format="json",
+        )
+
+        self.assertEqual(me["conflict_collection_candidate_ids"], [])
+        self.assertEqual(
+            str(me["conflict_collection_revision"]),
+            str(revision),
+        )
+        self.assertFalse(me["conflict_collection_complete"])
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertTrue(response.data["conflict_collection_complete"])
+
+    def test_member_can_review_snapshot_candidates_during_open_collection(self):
+        other_group = Group.objects.create(name="Andre innsamling", lego_id=636)
+        self.admission.groups.add(other_group)
+        other_user = LegoUser.objects.create(
+            username="other-collection-candidate", lego_id=637
+        )
+        other_application = UserApplication.objects.create(
+            user=other_user,
+            admission=self.admission,
+        )
+        GroupApplication.objects.create(
+            application=other_application,
+            group=other_group,
+            text="Other application",
+        )
+        revision = uuid.uuid4()
+        self._create_saved_schedule(
+            enabled_slots=["2026-04-21|540"],
+            conflict_collection_open=True,
+            conflict_collection_revision=revision,
+            conflict_collection_candidate_ids=[
+                str(self.application.pk),
+                str(other_application.pk),
+            ],
+            conflict_collection_participant_ids=[str(self.member.pk)],
+        )
+        InterviewAvailability.objects.create(
+            admission=self.admission,
+            user=self.member,
+            slots=["2026-04-21|540"],
+            participation=InterviewAvailability.PARTICIPATION_PARTICIPATING,
+            submitted_grid_generation=1,
+        )
+        self.client.force_authenticate(user=self.member)
+
+        candidates_response = self.client.get(
+            reverse(
+                "interview-candidates",
+                kwargs={"admission_slug": self.admission.slug},
+            )
+        )
+        availability_response = self.client.get(self.url)
+        review_response = self.client.post(
+            self.url,
+            {
+                "conflicts": [str(other_application.pk)],
+                "conflict_collection_reviewed_candidate_ids": [
+                    str(self.application.pk),
+                    str(other_application.pk),
+                ],
+                "conflict_collection_revision": str(revision),
+            },
+            format="json",
+        )
+
+        self.assertEqual(candidates_response.status_code, status.HTTP_200_OK)
+        self.assertEqual(
+            {item["id"] for item in candidates_response.data},
             {str(self.application.pk), str(other_application.pk)},
         )
+        me = next(item for item in availability_response.data if item["is_me"])
         self.assertEqual(
-            submitted_event.conflict_candidate_ids,
+            set(me["conflict_collection_candidate_ids"]),
+            {str(self.application.pk), str(other_application.pk)},
+        )
+        self.assertFalse(me["conflict_collection_complete"])
+        self.assertEqual(review_response.status_code, status.HTTP_200_OK)
+        self.assertTrue(review_response.data["conflict_collection_complete"])
+        self.assertEqual(
+            review_response.data["conflicts"],
             [str(other_application.pk)],
+        )
+
+    def test_closed_collection_revokes_member_candidate_scope(self):
+        revision = uuid.uuid4()
+        saved = self._create_saved_schedule(
+            enabled_slots=["2026-04-21|540"],
+            conflict_collection_open=False,
+            conflict_collection_revision=revision,
+            conflict_collection_candidate_ids=[str(self.application.pk)],
+            conflict_collection_participant_ids=[str(self.member.pk)],
+        )
+        InterviewAvailability.objects.create(
+            admission=self.admission,
+            user=self.member,
+            slots=["2026-04-21|540"],
+            participation=InterviewAvailability.PARTICIPATION_PARTICIPATING,
+            submitted_grid_generation=saved.availability_generation,
+        )
+        self.client.force_authenticate(user=self.member)
+
+        candidates_response = self.client.get(
+            reverse(
+                "interview-candidates",
+                kwargs={"admission_slug": self.admission.slug},
+            )
+        )
+        review_response = self.client.post(
+            self.url,
+            {
+                "conflict_collection_reviewed_candidate_ids": [
+                    str(self.application.pk)
+                ],
+                "conflict_collection_revision": str(revision),
+            },
+            format="json",
+        )
+
+        self.assertEqual(candidates_response.status_code, status.HTTP_200_OK)
+        self.assertEqual(candidates_response.data, [])
+        self.assertEqual(review_response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn(
+            "conflict_collection_reviewed_candidate_ids",
+            review_response.data,
         )
 
     def test_review_scope_requires_submitted_interview_availability(self):
@@ -1389,6 +1889,12 @@ class InterviewAvailabilityHardeningTestCase(APITestCase):
             text="Other application",
         )
         self._open_conflict_review()
+        InterviewAvailability.objects.create(
+            admission=self.admission,
+            user=self.member,
+            slots=[],
+            reviewed_candidate_ids=[str(self.application.pk)],
+        )
         self.client.force_authenticate(user=self.member)
 
         candidates_res = self.client.get(
@@ -1397,6 +1903,7 @@ class InterviewAvailabilityHardeningTestCase(APITestCase):
                 kwargs={"admission_slug": self.admission.slug},
             )
         )
+        availability_res = self.client.get(self.url)
         review_res = self.client.post(
             self.url,
             {
@@ -1410,6 +1917,11 @@ class InterviewAvailabilityHardeningTestCase(APITestCase):
 
         self.assertEqual(candidates_res.status_code, status.HTTP_200_OK)
         self.assertEqual(candidates_res.data, [])
+        self.assertEqual(availability_res.status_code, status.HTTP_200_OK)
+        me = next(item for item in availability_res.data if item["is_me"])
+        self.assertEqual(me["proposed_candidate_ids"], [])
+        self.assertEqual(me["affected_assignment_count"], 0)
+        self.assertFalse(me["conflict_review_complete"])
         self.assertEqual(review_res.status_code, status.HTTP_400_BAD_REQUEST)
 
     def test_unassigned_new_candidate_does_not_invalidate_proposal_review(self):
@@ -1502,7 +2014,7 @@ class InterviewAvailabilityHardeningTestCase(APITestCase):
         self.assertEqual(res.status_code, status.HTTP_200_OK)
         self.assertEqual(res.data["conflicts"], [str(self.application.pk)])
 
-    def test_recruiter_can_save_conflict_for_any_candidate(self):
+    def test_recruiter_cannot_save_conflict_for_an_unrepresented_candidate(self):
         other_group = Group.objects.create(name="Annen komite", lego_id=626)
         self.admission.groups.add(other_group)
         other_candidate = LegoUser.objects.create(
@@ -1524,9 +2036,10 @@ class InterviewAvailabilityHardeningTestCase(APITestCase):
             format="json",
         )
 
-        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("conflicts", res.data)
 
-    def test_recruiter_sees_all_committee_availability(self):
+    def test_recruiter_sees_only_represented_group_availability(self):
         other_group = Group.objects.create(name="Annen komite", lego_id=628)
         self.admission.groups.add(other_group)
         other_member = LegoUser.objects.create(username="other-member", lego_id=629)
@@ -1542,8 +2055,10 @@ class InterviewAvailabilityHardeningTestCase(APITestCase):
         res = self.client.get(self.url)
 
         self.assertEqual(res.status_code, status.HTTP_200_OK)
-        self.assertIn("other-member", {row["username"] for row in res.data})
-        self.assertIn("hardening-member", {row["username"] for row in res.data})
+        self.assertEqual(
+            {row["username"] for row in res.data},
+            {"hardening-member", "hardening-recruiter"},
+        )
 
     def test_member_cannot_save_conflicts_before_names_released(self):
         self.client.force_authenticate(user=self.member)
@@ -1647,10 +2162,7 @@ class InterviewAvailabilityHardeningTestCase(APITestCase):
         )
 
         self.assertEqual(res.status_code, status.HTTP_200_OK)
-        self.assertEqual(
-            set(res.data["conflicts"]),
-            {str(self.application.pk), str(other_application.pk)},
-        )
+        self.assertEqual(res.data["conflicts"], [str(self.application.pk)])
 
     def test_non_admin_availability_responses_omit_panel_gender(self):
         self.member.gender = "female"
@@ -2416,8 +2928,7 @@ class SavedScheduleVisibilityTestCase(APITestCase):
             )
         )
         self.assertEqual(
-            [item["candidate"] for item in other_schedule.data["schedule"]],
-            ["Grace"],
+            [item["candidate"] for item in other_schedule.data["schedule"]], ["Grace"]
         )
         self.assertEqual(
             other_candidates.data,
@@ -2516,6 +3027,8 @@ class SavedScheduleVisibilityTestCase(APITestCase):
         saved = self._create_saved(is_distributed=False)
         self.client.force_authenticate(user=recruiter)
 
+        draft = self.client.get(self.url)
+
         res = self.client.post(
             self.url,
             {
@@ -2525,6 +3038,8 @@ class SavedScheduleVisibilityTestCase(APITestCase):
             format="json",
         )
 
+        self.assertEqual(draft.status_code, status.HTTP_200_OK)
+        self.assertEqual(draft.data["schedule"], [])
         self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertFalse(saved.revealed_groups.exists())
 
@@ -2602,6 +3117,8 @@ class SavedScheduleVisibilityTestCase(APITestCase):
                 text=f"{group.name} application",
             )
             applications.append(application)
+        applications[0].phone_number = "+47 411 11 111"
+        applications[0].save(update_fields=["phone_number"])
 
         saved = self._create_saved(
             name_visibility="admin_only",
@@ -2642,9 +3159,17 @@ class SavedScheduleVisibilityTestCase(APITestCase):
             {item["candidate"] for item in schedule.data["schedule"]},
             {"Ada", "Grace"},
         )
+        schedule_by_candidate = {
+            item["candidate"]: item for item in schedule.data["schedule"]
+        }
+        self.assertNotIn("candidate_phone", schedule_by_candidate["Ada"])
+        self.assertEqual(
+            schedule_by_candidate["Grace"]["candidate_phone"],
+            "+47 411 11 111",
+        )
         self.assertEqual(
             {item["name"] for item in candidates.data},
-            {"Ada", "Grace", "Linus"},
+            {"Ada", "Grace"},
         )
 
     def test_admin_sees_names_even_when_hidden(self):
@@ -2853,6 +3378,39 @@ class SolveJobLifecycleTestCase(APITestCase):
         self.assertIsNotNone(res.data["started_at"])
         self.assertEqual(res.data["result"]["status"], "SUCCESS")
 
+    def test_worker_rejects_legacy_committee_recruiter_job(self):
+        job_id = self._enqueue().data["job_id"]
+        saved = SavedSchedule.objects.create(
+            admission=self.admission,
+            schedule=[],
+            start_date="2026-04-20",
+            is_distributed=False,
+        )
+        committee = Group.objects.create(name="LegacySolverRecruiters", lego_id=957)
+        recruiter = LegoUser.objects.create(
+            username="legacy-solver-recruiter", lego_id=958
+        )
+        Membership.objects.create(user=recruiter, group=committee, role=RECRUITING)
+        self.admission.groups.add(committee)
+        job = SolveJob.objects.get(pk=job_id)
+        job.requested_by = recruiter
+        job.request_data = {
+            **job.request_data,
+            "auto_apply_if_empty": True,
+            "baseline_updated_at": saved.updated_at.isoformat(),
+        }
+        job.save(update_fields=["requested_by", "request_data"])
+
+        call_command("run_solver_worker", once=True)
+
+        job = SolveJob.objects.get(pk=job_id)
+        saved.refresh_from_db()
+        self.assertEqual(job.status, SolveJob.STATUS_ERROR)
+        self.assertIsNone(job.result)
+        self.assertIsNone(job.applied_at)
+        self.assertEqual(saved.schedule, [])
+        self.assertFalse(saved.is_distributed)
+
     def test_status_endpoint_is_forbidden_for_outsiders(self):
         job_id = self._enqueue().data["job_id"]
         outsider = LegoUser.objects.create(username="async-outsider", lego_id=952)
@@ -2862,7 +3420,7 @@ class SolveJobLifecycleTestCase(APITestCase):
 
         self.assertEqual(res.status_code, status.HTTP_403_FORBIDDEN)
 
-    def test_status_endpoint_is_allowed_for_committee_recruiters(self):
+    def test_solve_job_operations_are_forbidden_for_committee_recruiters(self):
         job_id = self._enqueue().data["job_id"]
         committee = Group.objects.create(name="AsyncRecruiters", lego_id=953)
         recruiter = LegoUser.objects.create(username="async-recruiter", lego_id=954)
@@ -2870,9 +3428,22 @@ class SolveJobLifecycleTestCase(APITestCase):
         self.admission.groups.add(committee)
         self.client.force_authenticate(user=recruiter)
 
-        res = self.client.get(reverse("solve-job", kwargs={"job_id": job_id}))
+        job_url = reverse("solve-job", kwargs={"job_id": job_id})
+        status_response = self.client.get(job_url)
+        latest_response = self.client.get(
+            reverse("latest-solve-job"), {"admission_slug": self.admission.slug}
+        )
+        cancel_response = self.client.delete(job_url)
+        apply_response = self.client.post(
+            reverse("solve-job-apply", kwargs={"job_id": job_id}),
+            {"expected_updated_at": timezone.now().isoformat()},
+            format="json",
+        )
 
-        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.assertEqual(status_response.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(latest_response.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(cancel_response.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(apply_response.status_code, status.HTTP_403_FORBIDDEN)
 
     def test_latest_endpoint_recovers_an_unfinished_or_unconsumed_job(self):
         job_id = self._enqueue().data["job_id"]
@@ -3145,6 +3716,25 @@ class SolveProposalApplyTestCase(APITestCase):
         SavedSchedule.objects.filter(pk=self.saved.pk).update(is_distributed=True)
         published = self._apply(published_job)
         self.assertEqual(published.status_code, status.HTTP_409_CONFLICT)
+
+    def test_apply_rejects_a_proposal_invalidated_by_a_new_conflict(self):
+        job = self._job()
+        availability = InterviewAvailability.objects.get(
+            admission=self.admission,
+            user=self.user,
+        )
+        availability.conflicts = [str(self.application.pk)]
+        availability.save(update_fields=["conflicts"])
+
+        response = self._apply(job)
+
+        self.assertEqual(response.status_code, status.HTTP_409_CONFLICT)
+        self.assertIn("schedule", response.data)
+        job.refresh_from_db()
+        self.assertIsNone(job.applied_at)
+        self.assertIsNotNone(job.discarded_at)
+        self.saved.refresh_from_db()
+        self.assertEqual(self.saved.schedule, [])
 
     def test_discarded_proposal_cannot_be_applied(self):
         job = self._job()

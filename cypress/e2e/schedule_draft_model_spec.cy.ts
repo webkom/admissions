@@ -1,8 +1,10 @@
 import { toggleScheduleDraftLock } from "../../frontend/src/components/Scheduling/Solver/useScheduleDraft";
 import {
+  buildRepairSolveRequest,
   buildRepairPreviewOptions,
   buildRepairScenario,
 } from "../../frontend/src/components/Scheduling/Solver/repairScenarios";
+import { solveFailureMessage } from "../../frontend/src/components/Scheduling/Solver/solverHelpers";
 import type { ScheduleItem } from "../../frontend/src/types";
 
 const scheduleItem = (overrides: Partial<ScheduleItem> = {}): ScheduleItem => ({
@@ -35,6 +37,39 @@ describe("schedule draft model", () => {
       repairStrategy: "minimum_change",
       previewOnly: true,
     });
+  });
+
+  it("preserves every manual lock when a repair is requested", () => {
+    const lockedAssignments = [
+      {
+        candidate_id: "candidate-1",
+        candidate: "Kandidat 1",
+        time: 480,
+        panel: [{ id: "interviewer-1", name: "Ada" }],
+      },
+    ];
+
+    expect(
+      buildRepairSolveRequest(lockedAssignments, "minimum_change"),
+    ).to.deep.equal({
+      lockedAssignments,
+      options: {
+        mode: "repair",
+        repairStrategy: "minimum_change",
+        previewOnly: true,
+      },
+    });
+  });
+
+  it("tells the administrator to unlock explicitly after a locked conflict", () => {
+    expect(
+      solveFailureMessage({
+        status: "LOCKED_CONFLICT",
+        schedule: [],
+      }),
+    )
+      .to.contain("Forrige plan er beholdt")
+      .and.contain("Lås opp det berørte intervjuet");
   });
 
   it("marks a partial repair that drops a candidate as unusable", () => {

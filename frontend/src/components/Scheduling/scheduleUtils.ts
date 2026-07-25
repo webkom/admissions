@@ -108,10 +108,6 @@ export const buildBlockTimeChunks = ({
   return chunks;
 };
 
-export const buildBlockTimeSlots = (
-  input: Parameters<typeof buildBlockTimeChunks>[0],
-): number[] => buildBlockTimeChunks(input).flat();
-
 export const buildContinuousTimeSlots = ({
   dayStartMinute,
   dayEndMinute,

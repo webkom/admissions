@@ -33,7 +33,6 @@ export const buildWorkflowSteps = ({
   hasDistributedPlan,
   myConflictReviewComplete,
   myProposalCandidateCount,
-  hasSavedConfig,
   hasScheduleDraft,
   myAvailabilitySaved,
   availabilityParticipantCount,
@@ -86,6 +85,11 @@ export const buildWorkflowSteps = ({
   const availabilityComplete =
     availabilityParticipantCount > 0 &&
     submittedAvailabilityCount >= availabilityParticipantCount;
+  const foundationReady =
+    hasConfiguredAvailabilityWindows &&
+    myAvailabilitySaved &&
+    availabilityComplete;
+  const planDraftLocked = !foundationReady && !hasDistributedPlan;
   const draftReadyForPublish = publicationReadiness.ready;
 
   return [
@@ -103,18 +107,18 @@ export const buildWorkflowSteps = ({
       title: "Planutkast",
       description: "Generer, kontroller kandidater og løs avvik.",
       icon: Sparkles,
-      status: !hasSavedConfig
+      status: planDraftLocked
         ? "Låst"
         : hasDistributedPlan || draftReadyForPublish
           ? "Ferdig"
           : "Pågår",
-      tone: !hasSavedConfig
+      tone: planDraftLocked
         ? "locked"
         : hasDistributedPlan || draftReadyForPublish
           ? "success"
           : "muted",
       complete: draftReadyForPublish || hasDistributedPlan,
-      locked: !hasSavedConfig,
+      locked: planDraftLocked,
     },
     {
       key: "plan",

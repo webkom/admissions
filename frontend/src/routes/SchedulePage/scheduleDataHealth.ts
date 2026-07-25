@@ -19,10 +19,8 @@ interface ScheduleDataHealthInput {
   savedScheduleError: AxiosError | null;
   isSavedScheduleError: boolean;
   availabilityParticipants: InterviewAvailabilityParticipant[] | undefined;
-  availabilityError: AxiosError | null;
   isAvailabilityError: boolean;
   interviewCandidates: Candidate[] | undefined;
-  candidatesError: AxiosError | null;
   isCandidatesError: boolean;
 }
 
@@ -33,10 +31,8 @@ export const deriveScheduleDataHealth = ({
   savedScheduleError,
   isSavedScheduleError,
   availabilityParticipants,
-  availabilityError,
   isAvailabilityError,
   interviewCandidates,
-  candidatesError,
   isCandidatesError,
 }: ScheduleDataHealthInput): ScheduleDataHealth => {
   const failedSources: ScheduleDataSource[] = [];

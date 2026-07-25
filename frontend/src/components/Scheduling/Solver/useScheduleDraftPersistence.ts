@@ -16,8 +16,18 @@ import {
   scheduleSaveErrorMessage,
   type SolveResponse,
 } from "./solverHelpers";
+import { isSensitiveAuthorityChangedError } from "src/query/sensitiveAccess";
 
-type DraftSaveState = "idle" | "saving" | "saved" | "error" | "conflict";
+export type DraftSaveState = "idle" | "saving" | "saved" | "error" | "conflict";
+
+export interface DraftPersistenceStatus {
+  state: DraftSaveState;
+  error: string;
+  hasLocalDraft: boolean;
+  isSaving: boolean;
+  hasConflict: boolean;
+  isSaved: boolean;
+}
 
 interface DraftPersistenceConfig {
   admissionSlug: string;
@@ -67,6 +77,7 @@ interface UseScheduleDraftPersistenceParams {
   remoteRevisionChanged: boolean;
   config: DraftPersistenceConfig;
   onConflict: () => void;
+  onRevisionSaved: (revision: string) => void;
   onSaved: (revision: string) => void;
 }
 
@@ -80,9 +91,16 @@ export const useScheduleDraftPersistence = ({
   remoteRevisionChanged,
   config,
   onConflict,
+  onRevisionSaved,
   onSaved,
 }: UseScheduleDraftPersistenceParams) => {
-  const saveSchedule = useSaveSchedule(config.admissionSlug);
+  const onRevisionSavedRef = useRef(onRevisionSaved);
+  const onConflictRef = useRef(onConflict);
+  const onSavedRef = useRef(onSaved);
+  const saveSchedule = useSaveSchedule(config.admissionSlug, {
+    onCanonicalScheduleSaved: (schedule) =>
+      onRevisionSavedRef.current(schedule.updated_at),
+  });
   const mutateAsyncRef = useRef(saveSchedule.mutateAsync);
   const [state, setState] = useState<DraftSaveState>(
     savedSchedule?.schedule.length ? "saved" : "idle",
@@ -90,15 +108,25 @@ export const useScheduleDraftPersistence = ({
   const [error, setError] = useState("");
   const pendingRef = useRef<PendingDraft | null>(null);
   const failedRef = useRef<PendingDraft | null>(null);
+  const writeUncertainRef = useRef(false);
   const inFlightRef = useRef(false);
+  const inFlightFingerprintRef = useRef<string | null>(null);
   const revisionRef = useRef<string | null>(draftBaseRevision);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastSavedFingerprintRef = useRef("");
+  const lastSavedRevisionRef = useRef<string | null>(null);
+  const latestFingerprintRef = useRef("");
   const lastScheduledSolveTickRef = useRef(solveTick);
 
   useEffect(() => {
     mutateAsyncRef.current = saveSchedule.mutateAsync;
   }, [saveSchedule.mutateAsync]);
+
+  useEffect(() => {
+    onRevisionSavedRef.current = onRevisionSaved;
+    onConflictRef.current = onConflict;
+    onSavedRef.current = onSaved;
+  }, [onConflict, onRevisionSaved, onSaved]);
 
   useEffect(() => {
     if (!inFlightRef.current) revisionRef.current = draftBaseRevision;
@@ -118,6 +146,7 @@ export const useScheduleDraftPersistence = ({
     while (pendingRef.current) {
       const pending = pendingRef.current;
       pendingRef.current = null;
+      inFlightFingerprintRef.current = pending.fingerprint;
       setState("saving");
       setError("");
 
@@ -128,18 +157,36 @@ export const useScheduleDraftPersistence = ({
         });
         revisionRef.current = saved.updated_at;
         lastSavedFingerprintRef.current = pending.fingerprint;
+        lastSavedRevisionRef.current = saved.updated_at;
         failedRef.current = null;
-        onSaved(saved.updated_at);
-        if (!pendingRef.current) setState("saved");
+        writeUncertainRef.current = false;
+        if (
+          !pendingRef.current &&
+          pending.fingerprint === latestFingerprintRef.current
+        ) {
+          onSavedRef.current(saved.updated_at);
+          setState("saved");
+        }
       } catch (saveError) {
+        if (isSensitiveAuthorityChangedError(saveError)) {
+          pendingRef.current = null;
+          failedRef.current = null;
+          writeUncertainRef.current = false;
+          setState("idle");
+          setError("");
+          inFlightFingerprintRef.current = null;
+          break;
+        }
         const latestPending = pendingRef.current ?? pending;
         pendingRef.current = null;
         failedRef.current = latestPending;
         if (isConflictError(saveError)) {
+          writeUncertainRef.current = false;
           setState("conflict");
           setError(CONFLICT_MESSAGE);
-          onConflict();
+          onConflictRef.current();
         } else {
+          writeUncertainRef.current = true;
           setState("error");
           setError(
             scheduleSaveErrorMessage(
@@ -148,12 +195,14 @@ export const useScheduleDraftPersistence = ({
             ),
           );
         }
+        inFlightFingerprintRef.current = null;
         break;
       }
+      inFlightFingerprintRef.current = null;
     }
 
     inFlightRef.current = false;
-  }, [onConflict, onSaved]);
+  }, []);
 
   const schedule = hasSchedule(result?.status) ? result.schedule : [];
   const fingerprint = JSON.stringify({
@@ -173,18 +222,52 @@ export const useScheduleDraftPersistence = ({
     panelSize: config.panelSize,
     solverOptions: config.solverOptions,
   });
+  latestFingerprintRef.current = fingerprint;
 
   useEffect(() => {
-    if (
+    const persistenceUnavailable =
       !hasLocalDraft ||
       loading ||
       remoteRevisionChanged ||
       savedSchedule?.is_distributed ||
-      schedule.length === 0 ||
-      fingerprint === lastSavedFingerprintRef.current
-    ) {
+      schedule.length === 0;
+    if (persistenceUnavailable) {
+      pendingRef.current = null;
+      if (timerRef.current) {
+        clearTimeout(timerRef.current);
+        timerRef.current = null;
+      }
       return;
     }
+    if (fingerprint === inFlightFingerprintRef.current) {
+      pendingRef.current = null;
+      if (timerRef.current) {
+        clearTimeout(timerRef.current);
+        timerRef.current = null;
+      }
+      return;
+    }
+    if (
+      fingerprint === lastSavedFingerprintRef.current &&
+      !inFlightRef.current &&
+      !failedRef.current &&
+      !writeUncertainRef.current &&
+      revisionRef.current === lastSavedRevisionRef.current
+    ) {
+      pendingRef.current = null;
+      failedRef.current = null;
+      if (timerRef.current) {
+        clearTimeout(timerRef.current);
+        timerRef.current = null;
+      }
+      setState("saved");
+      setError("");
+      if (revisionRef.current) onSavedRef.current(revisionRef.current);
+      return;
+    }
+    if (fingerprint === failedRef.current?.fingerprint) return;
+    // A saving-state render must not cancel the debounce for the same draft.
+    if (fingerprint === pendingRef.current?.fingerprint) return;
 
     pendingRef.current = {
       fingerprint,
@@ -213,13 +296,12 @@ export const useScheduleDraftPersistence = ({
     const generatedNow = lastScheduledSolveTickRef.current !== solveTick;
     lastScheduledSolveTickRef.current = solveTick;
     timerRef.current = setTimeout(
-      () => void savePendingDrafts(),
+      () => {
+        timerRef.current = null;
+        void savePendingDrafts();
+      },
       generatedNow ? 0 : 400,
     );
-
-    return () => {
-      if (timerRef.current) clearTimeout(timerRef.current);
-    };
   }, [
     config,
     fingerprint,
@@ -232,6 +314,14 @@ export const useScheduleDraftPersistence = ({
     solveTick,
   ]);
 
+  useEffect(
+    () => () => {
+      if (timerRef.current) clearTimeout(timerRef.current);
+      pendingRef.current = null;
+    },
+    [],
+  );
+
   const retry = () => {
     if (!failedRef.current || state === "conflict") return;
     pendingRef.current = failedRef.current;
@@ -239,16 +329,18 @@ export const useScheduleDraftPersistence = ({
     void savePendingDrafts();
   };
 
-  return {
+  const status: DraftPersistenceStatus = {
     state,
     error,
+    hasLocalDraft,
     isSaving: state === "saving",
     hasConflict: state === "conflict" || remoteRevisionChanged,
     isSaved:
       state === "saved" ||
       (!hasLocalDraft && Boolean(savedSchedule?.schedule.length)),
-    retry,
   };
+
+  return { ...status, retry };
 };
 
 export type ScheduleDraftPersistence = ReturnType<

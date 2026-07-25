@@ -1,6 +1,7 @@
 import { useState } from "react";
 import type { StatusToastState } from "src/components/StatusToast";
 import { useQueryClient } from "@tanstack/react-query";
+import { isAxiosError } from "axios";
 import {
   CONFLICT_MESSAGE,
   isConflictError,
@@ -8,8 +9,12 @@ import {
 } from "src/components/Scheduling/Solver/solverHelpers";
 import { useSaveSchedule } from "src/query/hooks";
 import type { NameVisibility, SavedSchedule, ScheduleItem } from "src/types";
+import { apiClient } from "src/utils/callApi";
 import {
   areSensitiveAdmissionCacheWritesBlocked,
+  captureSensitiveAdmissionAuthorityEpoch,
+  isSensitiveAdmissionAuthorityEpochCurrent,
+  isSensitiveAuthorityChangedError,
   purgeSensitiveAuthorizationFailure,
 } from "src/query/sensitiveAccess";
 
@@ -18,16 +23,19 @@ type Notify = (message: string, tone?: StatusToastState["tone"]) => void;
 interface DistributedPlanActionsParams {
   admissionSlug: string;
   savedSchedule: SavedSchedule | undefined;
+  draftPersistenceReady?: boolean;
   notify: Notify;
 }
 
 export const useDistributedPlanActions = ({
   admissionSlug,
   savedSchedule,
+  draftPersistenceReady = true,
   notify,
 }: DistributedPlanActionsParams) => {
   const queryClient = useQueryClient();
   const saveSchedule = useSaveSchedule(admissionSlug);
+  const scheduleQueryKey = [`/admin/admission/${admissionSlug}/schedule/`];
   const [planTransition, setPlanTransition] = useState<
     "publishing" | "unlocking" | null
   >(null);
@@ -43,6 +51,50 @@ export const useDistributedPlanActions = ({
   };
   const handleAuthorizationFailure = (error: unknown) =>
     reportAccessFailure(purgeSensitiveAuthorizationFailure(queryClient, error));
+  const isAmbiguousPublicationFailure = (error: unknown) => {
+    if (!isAxiosError(error)) return true;
+    const status = error.response?.status;
+    return status === undefined || status === 409 || status >= 500;
+  };
+  const reconcilePublishedSchedule = async (visibility: NameVisibility) => {
+    const authorityEpoch =
+      captureSensitiveAdmissionAuthorityEpoch(admissionSlug);
+    try {
+      const { data } = await apiClient.get<SavedSchedule>(
+        `/admin/admission/${admissionSlug}/schedule/`,
+      );
+      if (
+        areSensitiveAdmissionCacheWritesBlocked(admissionSlug) ||
+        !isSensitiveAdmissionAuthorityEpochCurrent(
+          admissionSlug,
+          authorityEpoch,
+        )
+      ) {
+        return "access-lost" as const;
+      }
+      queryClient.setQueryData(scheduleQueryKey, data);
+      const publishedSameDraft =
+        data.is_distributed &&
+        data.name_visibility === visibility &&
+        JSON.stringify(data.schedule) ===
+          JSON.stringify(savedSchedule?.schedule ?? []);
+      return publishedSameDraft
+        ? ("published" as const)
+        : ("different-state" as const);
+    } catch (error) {
+      if (
+        !isSensitiveAdmissionAuthorityEpochCurrent(
+          admissionSlug,
+          authorityEpoch,
+        )
+      ) {
+        return "access-lost" as const;
+      }
+      return handleAuthorizationFailure(error)
+        ? ("access-lost" as const)
+        : ("unknown" as const);
+    }
+  };
 
   const saveScheduleRows = async (
     schedule: ScheduleItem[],
@@ -60,6 +112,7 @@ export const useDistributedPlanActions = ({
       notify(successMessage);
       return true;
     } catch (error) {
+      if (isSensitiveAuthorityChangedError(error)) return false;
       if (handleAuthorizationFailure(error)) return false;
       notify(
         isConflictError(error)
@@ -82,6 +135,7 @@ export const useDistributedPlanActions = ({
       notify("Synlighet oppdatert.");
       return true;
     } catch (error) {
+      if (isSensitiveAuthorityChangedError(error)) return false;
       if (handleAuthorizationFailure(error)) return false;
       notify(
         isConflictError(error)
@@ -98,6 +152,13 @@ export const useDistributedPlanActions = ({
     deviationApprovalFingerprint?: string,
   ) => {
     if (!savedSchedule || savedSchedule.schedule.length === 0) return false;
+    if (!draftPersistenceReady) {
+      notify(
+        "Vent til de siste endringene i planutkastet er lagret før publisering.",
+        "error",
+      );
+      return false;
+    }
     setPlanTransition("publishing");
     setPlanTransitionError("");
     try {
@@ -115,7 +176,24 @@ export const useDistributedPlanActions = ({
       notify("Intervjuplanen er publisert for komiteen.");
       return true;
     } catch (error) {
+      if (isSensitiveAuthorityChangedError(error)) return false;
       if (handleAuthorizationFailure(error)) return false;
+      if (isAmbiguousPublicationFailure(error)) {
+        const reconciliation = await reconcilePublishedSchedule(visibility);
+        if (reconciliation === "published") {
+          setPlanTransitionError("");
+          notify("Intervjuplanen er publisert for komiteen.");
+          return true;
+        }
+        if (reconciliation === "access-lost") return false;
+        if (reconciliation === "unknown") {
+          const message =
+            "Publiseringsstatusen kunne ikke kontrolleres. Oppdater siden før du prøver igjen.";
+          setPlanTransitionError(message);
+          notify(message, "error");
+          return false;
+        }
+      }
       const message = isConflictError(error)
         ? CONFLICT_MESSAGE
         : scheduleSaveErrorMessage(
@@ -143,6 +221,7 @@ export const useDistributedPlanActions = ({
       notify("Intervjuplanen er låst opp for redigering.");
       return true;
     } catch (error) {
+      if (isSensitiveAuthorityChangedError(error)) return false;
       if (handleAuthorizationFailure(error)) return false;
       const message = isConflictError(error)
         ? CONFLICT_MESSAGE

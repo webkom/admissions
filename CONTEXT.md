@@ -3,8 +3,8 @@
 ## Core concepts
 
 - **Admission**: one recruitment period. It defines the participating committees
-  (`groups`) and the committees whose active members administer the whole admission
-  (`admin_groups`).
+  (`groups`) and the committees whose active leaders or recruiting responsibles
+  administer the whole admission (`admin_groups`).
 - **User application**: one candidate's application to an admission. Candidate
   identity, contact details, shared application text, and interview status belong
   here.
@@ -25,8 +25,9 @@
 
 ## Invariants
 
-- Admission-wide administration requires active membership in one of the
-  admission's admin groups.
+- Admission-wide administration requires an active `leader` or `recruiting`
+  membership in one of the admission's admin groups. Ordinary members of an
+  admin group do not receive admission-wide authority.
 - An OAuth membership refresh replaces the local membership snapshot atomically.
   Missing, malformed, or unknown membership data must fail closed rather than
   retaining or creating privileges.

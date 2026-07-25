@@ -7,6 +7,7 @@ import { StyledButton } from "src/components/LinkButton";
 import { getApiErrorMessage } from "src/utils/apiErrors";
 import { Trash2 } from "lucide-react";
 import { iconSizes } from "src/styles/designTokens";
+import { isSensitiveAuthorityChangedError } from "src/query/sensitiveAccess";
 
 const DeleteWrapper = styled.div`
   display: flex;
@@ -36,7 +37,7 @@ const DeleteApplication: React.FC<DeleteApplicationProps> = ({
   const deleteApplicationMutation = useAdminDeleteApplicationMutation(
     admissionSlug ?? "",
   );
-  const deleteLabel = `Slett søknad til ${candidateName}`;
+  const deleteLabel = `Slett søknad til ${groupName}`;
 
   const performDelete = (applicationId: string, groupId: string) => {
     setErrorMessage("");
@@ -44,6 +45,7 @@ const DeleteApplication: React.FC<DeleteApplicationProps> = ({
       { applicationId, groupId },
       {
         onError: (error) => {
+          if (isSensitiveAuthorityChangedError(error)) return;
           setErrorMessage(
             getApiErrorMessage(
               error,

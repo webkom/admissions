@@ -10,6 +10,9 @@ from .base import *  # noqa
 env = environ.Env(DEBUG=(bool, False))
 
 DEBUG = env("DEBUG")
+# Keep the Cypress credential/seeding path impossible to opt into through
+# production environment variables.
+ALLOW_CYPRESS_FIXTURES = False
 DJANGO_VITE_DEV_MODE = False
 SECRET_KEY = env("SECRET_KEY")
 ALLOWED_HOSTS = env("ALLOWED_HOSTS").split(",")

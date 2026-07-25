@@ -1,16 +1,22 @@
 import React from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import styled from "styled-components";
 import { media } from "src/styles/mediaQueries";
 import avatar from "assets/avatar.png";
 import djangoData from "src/utils/djangoData";
-import { clearApplicationDraftNamespace } from "src/utils/draftHelper";
+import { handleSensitiveLogoutLink } from "src/query/sensitiveActorSync";
 
 const UserInfo: React.FC = () => {
+  const queryClient = useQueryClient();
+
   return (
     <Container>
       <NameLogOutWrapper>
         <Name>{djangoData.user.full_name}</Name>
-        <LogoutButton href="/logout/" onClick={clearApplicationDraftNamespace}>
+        <LogoutButton
+          href="/logout/"
+          onClick={(event) => handleSensitiveLogoutLink(queryClient, event)}
+        >
           Logg ut
         </LogoutButton>
       </NameLogOutWrapper>

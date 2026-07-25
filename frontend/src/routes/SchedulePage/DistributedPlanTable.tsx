@@ -490,7 +490,7 @@ const PlanBlockHeader: React.FC<{
         <span className="text-detail font-bold text-text-primary">
           {dateLabel}
           {blockIndex !== null &&
-            ` · ${blockIndex >= 0 ? `Blokk ${blockIndex + 1}` : "Utenfor blokk"}`}
+            `, ${blockIndex >= 0 ? `Blokk ${blockIndex + 1}` : "Utenfor blokk"}`}
         </span>
         {blockIndex !== null && blockIndex >= 0 && (
           <span className="text-tiny font-semibold text-text-faded">

@@ -52,9 +52,3 @@ export const iconStrokeWidths = {
 export const interactionTimings = {
   copiedFeedbackMs: 2500,
 } as const;
-
-export const availabilityHeatmap = {
-  minimumBrandMixPercent: 24,
-  intensityRangePercent: 66,
-  darkTextIntensityThreshold: 0.55,
-} as const;

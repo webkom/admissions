@@ -72,7 +72,7 @@ describe("admin schedule configuration model", () => {
   });
 
   it("uses the compact numeric duration presets", () => {
-    expect(DURATION_PRESETS).to.deep.equal([15, 20, 30]);
+    expect(DURATION_PRESETS).to.deep.equal([20, 25, 30]);
     expect(PAUSE_PRESETS).to.deep.equal([0, 30, 60]);
     expect(isDurationPreset(30)).to.equal(true);
     expect(isDurationPreset(45)).to.equal(false);

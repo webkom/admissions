@@ -21,14 +21,14 @@ export type PhoneInputModel = BaseInputModel & { type: "phoneinput" };
 
 export type CheckboxInputModel = BaseInputModel & { type: "checkbox" };
 
-export type InputFieldType =
+type InputFieldType =
   | TextInputModel["type"]
   | TextAreaModel["type"]
   | NumberInputModel["type"]
   | PhoneInputModel["type"]
   | CheckboxInputModel["type"];
 
-export const DEFAULT_PLACEHOLDERS_BY_TYPE: Record<InputFieldType, string> = {
+const DEFAULT_PLACEHOLDERS_BY_TYPE: Record<InputFieldType, string> = {
   textinput: "Skriv et kort svar",
   textarea: "Skriv et lengre svar",
   numberinput: "Skriv et tall",

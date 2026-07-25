@@ -39,9 +39,6 @@ export const createDefaultInterviewOutreachTemplates = (
   };
 };
 
-export const DEFAULT_INTERVIEW_OUTREACH_TEMPLATES =
-  createDefaultInterviewOutreachTemplates("Abakus");
-
 interface InterviewOutreachValues {
   candidateName?: string;
   candidateFullName: string;

@@ -22,6 +22,7 @@ export const derivePublicationReadiness = ({
   schedule,
   candidateIds,
   candidateScopeResolved,
+  draftPersistenceReady = true,
   conflictReviewSummary,
   proposalConflictCount,
   reviewParticipants,
@@ -29,6 +30,7 @@ export const derivePublicationReadiness = ({
   schedule: ScheduleItem[];
   candidateIds: string[];
   candidateScopeResolved: boolean;
+  draftPersistenceReady?: boolean;
   conflictReviewSummary: ConflictReviewSummary;
   proposalConflictCount: number;
   reviewParticipants: InterviewAvailabilityParticipant[];
@@ -58,6 +60,7 @@ export const derivePublicationReadiness = ({
 
   return {
     draftSaved,
+    draftPersistenceReady,
     candidateScopeResolved,
     scheduledCandidateCount,
     candidateCount,
@@ -70,6 +73,7 @@ export const derivePublicationReadiness = ({
     proposalConflictCount,
     ready:
       draftSaved &&
+      draftPersistenceReady &&
       allCandidatesScheduled &&
       reviewResolved &&
       proposalConflictCount === 0,

@@ -1,12 +1,5 @@
-import React, { useMemo, useRef, useState } from "react";
-import {
-  AlertTriangle,
-  BarChart3,
-  Check,
-  ChevronDown,
-  SlidersHorizontal,
-  X,
-} from "lucide-react";
+import React, { useLayoutEffect, useMemo, useRef, useState } from "react";
+import { BarChart3, Check, X } from "lucide-react";
 import type { ExperienceLevel, Interviewer } from "../types";
 import {
   buildBlockTimeChunks,
@@ -23,18 +16,26 @@ import {
   SchedulePanelBody,
   SchedulePanelFooter,
   SchedulePanelHeader,
+  keyboardFocusRingClass,
 } from "../ui";
 import {
   ScheduleBlockCell,
   ScheduleDayHeader,
-  ScheduleGridLegendItem,
+  ScheduleSlotSegments,
   ScheduleTimeLabel,
+  scheduleAvailableCellClass,
+  scheduleInteractiveCellMotionClass,
 } from "./ScheduleGridFrame";
-import ScheduleCalendarGrid from "./ScheduleCalendarGrid";
+import ScheduleGridFrame from "./ScheduleGridFrame";
 import {
   buildAvailabilityCoverage,
   type BlockCoverage,
 } from "./availabilityCoverage";
+import AvailabilityFilters, {
+  type AvailabilityGenderFilter,
+} from "./AvailabilityFilters";
+
+const responseDisclosureId = "availability-response-status";
 
 interface AvailabilityHeatmapProps {
   interviewers: Interviewer[];
@@ -55,6 +56,10 @@ interface AvailabilityHeatmapProps {
     userId: string,
     experienceLevel: ExperienceLevel,
   ) => Promise<void>;
+  stage?: string;
+  foundationNav?: React.ReactNode;
+  footerStatus?: React.ReactNode;
+  footerAction?: React.ReactNode;
 }
 
 interface AvailabilityBlock {
@@ -67,30 +72,12 @@ interface AvailabilityBlock {
   allAvailableInterviewers: Interviewer[];
 }
 
-type GenderFilter = "all" | "male" | "female";
-
-const genderOptions = [
-  { value: "all", label: "Alle" },
-  { value: "male", label: "Menn" },
-  { value: "female", label: "Kvinner" },
-];
-
-const heatmapCellStyle = (
+const availabilityRatio = (
   availableCount: number,
   heatmapCapacity: number,
-): React.CSSProperties => {
-  if (heatmapCapacity <= 0) return {};
-
-  const normalizedCapacity = Math.max(heatmapCapacity, 1);
-  const ratio = Math.min(availableCount / normalizedCapacity, 1);
-  const oneSeventh = 1 / 7;
-  const threeSeventh = 3 / 7;
-  const redShare = ratio <= oneSeventh ? 18 : ratio <= threeSeventh ? 42 : 78;
-
-  return {
-    backgroundColor: `color-mix(in srgb, var(--color-red-6) ${redShare}%, var(--color-surface-base))`,
-    borderColor: `color-mix(in srgb, var(--color-red-6) ${Math.min(redShare + 30, 95)}%, var(--color-border-soft))`,
-  };
+): number => {
+  if (heatmapCapacity <= 0) return 0;
+  return Math.min(Math.max(availableCount, 0) / heatmapCapacity, 1);
 };
 
 const formatHeatmapAvailability = (
@@ -114,8 +101,13 @@ const AvailabilityHeatmap: React.FC<AvailabilityHeatmapProps> = ({
   chunkBreakMinutes,
   onParticipationChange,
   onExperienceLevelChange,
+  stage,
+  foundationNav,
+  footerStatus,
+  footerAction,
 }) => {
-  const [genderFilter, setGenderFilter] = useState<GenderFilter>("all");
+  const [genderFilter, setGenderFilter] =
+    useState<AvailabilityGenderFilter>("all");
   const [highlightedInterviewer, setHighlightedInterviewer] = useState("");
   const [isFilterOpen, setIsFilterOpen] = useState(false);
   const [isResponseDisclosureOpen, setIsResponseDisclosureOpen] =
@@ -125,6 +117,26 @@ const AvailabilityHeatmap: React.FC<AvailabilityHeatmapProps> = ({
   const [experienceSavingId, setExperienceSavingId] = useState("");
   const [pendingOptOutId, setPendingOptOutId] = useState("");
   const selectedBlockTriggerRef = useRef<HTMLElement | null>(null);
+  const optOutTriggerRefs = useRef(new Map<string, HTMLButtonElement>());
+  const participationReturnRefs = useRef(new Map<string, HTMLButtonElement>());
+  const pendingOptOutCancelRef = useRef<HTMLButtonElement>(null);
+  const restoreOptOutFocusIdRef = useRef("");
+
+  useLayoutEffect(() => {
+    if (pendingOptOutId) {
+      if (participationSavingId !== pendingOptOutId) {
+        pendingOptOutCancelRef.current?.focus();
+      }
+      return;
+    }
+    const interviewerId = restoreOptOutFocusIdRef.current;
+    if (!interviewerId) return;
+    restoreOptOutFocusIdRef.current = "";
+    (
+      participationReturnRefs.current.get(interviewerId) ??
+      optOutTriggerRefs.current.get(interviewerId)
+    )?.focus();
+  }, [pendingOptOutId, participationSavingId]);
   const chunks = useMemo(
     () =>
       buildBlockTimeChunks({
@@ -312,11 +324,18 @@ const AvailabilityHeatmap: React.FC<AvailabilityHeatmapProps> = ({
     try {
       await onParticipationChange(interviewer.id, participation);
       if (participation === "not_participating") {
+        restoreOptOutFocusIdRef.current = interviewer.id;
         setPendingOptOutId("");
       }
+    } catch {
+      // The parent mutation owns the visible error state.
     } finally {
       setParticipationSavingId("");
     }
+  };
+  const cancelOptOut = (interviewerId: string) => {
+    restoreOptOutFocusIdRef.current = interviewerId;
+    setPendingOptOutId("");
   };
   const optOutControl = (interviewer: Interviewer) => (
     <div className="flex flex-wrap items-center justify-end gap-2">
@@ -328,10 +347,14 @@ const AvailabilityHeatmap: React.FC<AvailabilityHeatmapProps> = ({
               : "Intervjueren fjernes fra planleggingen."}
           </span>
           <button
+            ref={pendingOptOutCancelRef}
             type="button"
             disabled={participationSavingId === interviewer.id}
-            onClick={() => setPendingOptOutId("")}
-            className="text-detail font-semibold text-text-muted hover:underline disabled:opacity-50"
+            onClick={() => cancelOptOut(interviewer.id)}
+            className={cn(
+              "text-detail font-semibold text-text-muted hover:underline disabled:opacity-50",
+              keyboardFocusRingClass,
+            )}
           >
             Avbryt
           </button>
@@ -341,17 +364,27 @@ const AvailabilityHeatmap: React.FC<AvailabilityHeatmapProps> = ({
             onClick={() =>
               void changeParticipation(interviewer, "not_participating")
             }
-            className="text-detail font-semibold text-danger hover:underline disabled:opacity-50"
+            className={cn(
+              "text-detail font-semibold text-danger hover:underline disabled:opacity-50",
+              keyboardFocusRingClass,
+            )}
           >
             Bekreft
           </button>
         </>
       ) : (
         <button
+          ref={(node) => {
+            if (node) optOutTriggerRefs.current.set(interviewer.id, node);
+            else optOutTriggerRefs.current.delete(interviewer.id);
+          }}
           type="button"
           disabled={participationSavingId === interviewer.id}
           onClick={() => setPendingOptOutId(interviewer.id)}
-          className="text-detail font-semibold text-brand hover:underline disabled:opacity-50"
+          className={cn(
+            "text-detail font-semibold text-brand hover:underline disabled:opacity-50",
+            keyboardFocusRingClass,
+          )}
         >
           Deltar ikke
         </button>
@@ -384,11 +417,15 @@ const AvailabilityHeatmap: React.FC<AvailabilityHeatmapProps> = ({
     ) : null;
 
   return (
-    <SchedulePanel className="min-w-0">
+    <SchedulePanel
+      dataCy={stage ? "schedule-stage" : undefined}
+      stage={stage}
+      className="min-w-0"
+    >
+      {foundationNav}
       <SchedulePanelHeader
         icon={BarChart3}
         title="Tilgjengelighetsoversikt"
-        description="Se hvem som deltar, og hvor mange som er tilgjengelige i hver intervjublokk."
         actions={
           <ResponseStatus
             missingResponse={missingResponse}
@@ -399,12 +436,13 @@ const AvailabilityHeatmap: React.FC<AvailabilityHeatmapProps> = ({
           />
         }
       />
-      <SchedulePanelBody className="flex flex-col gap-4">
+      <SchedulePanelBody className="flex flex-col gap-3">
         {isResponseDisclosureOpen &&
           (missingResponse.length > 0 ||
             optedOut.length > 0 ||
             Boolean(onParticipationChange)) && (
             <section
+              id={responseDisclosureId}
               className="rounded-md border border-border-soft bg-surface-subtle px-3 py-2"
               aria-label="Deltakelse"
             >
@@ -459,6 +497,17 @@ const AvailabilityHeatmap: React.FC<AvailabilityHeatmapProps> = ({
                       {experienceControl(interviewer)}
                       {onParticipationChange && (
                         <button
+                          ref={(node) => {
+                            if (node)
+                              participationReturnRefs.current.set(
+                                interviewer.id,
+                                node,
+                              );
+                            else
+                              participationReturnRefs.current.delete(
+                                interviewer.id,
+                              );
+                          }}
                           type="button"
                           disabled={participationSavingId === interviewer.id}
                           onClick={() =>
@@ -467,7 +516,10 @@ const AvailabilityHeatmap: React.FC<AvailabilityHeatmapProps> = ({
                               "awaiting_response",
                             )
                           }
-                          className="text-detail font-semibold text-brand hover:underline disabled:opacity-50"
+                          className={cn(
+                            "text-detail font-semibold text-brand hover:underline disabled:opacity-50",
+                            keyboardFocusRingClass,
+                          )}
                         >
                           Ta med igjen
                         </button>
@@ -480,125 +532,26 @@ const AvailabilityHeatmap: React.FC<AvailabilityHeatmapProps> = ({
                 <button
                   type="button"
                   onClick={() => setIsResponseDisclosureOpen(false)}
-                  className="text-detail font-semibold text-brand hover:underline"
+                  className={cn(
+                    "text-detail font-semibold text-brand hover:underline",
+                    keyboardFocusRingClass,
+                  )}
                 >
                   Skjul
                 </button>
               </div>
             </section>
           )}
+        <AvailabilityFilters
+          isOpen={isFilterOpen}
+          onToggle={() => setIsFilterOpen((open) => !open)}
+          genderFilter={genderFilter}
+          onGenderFilterChange={setGenderFilter}
+          highlightedInterviewer={highlightedInterviewer}
+          onHighlightedInterviewerChange={setHighlightedInterviewer}
+          interviewers={participatingInterviewers}
+        />
 
-        {participatingInterviewers.length < panelSize && (
-          <div
-            role="alert"
-            className="flex items-start gap-2 rounded-md bg-amber-50 px-3 py-2 text-ui font-semibold text-amber-900"
-          >
-            <AlertTriangle
-              size={iconSizes.small}
-              className="mt-0.5 flex-none"
-              aria-hidden="true"
-            />
-            Panel på {panelSize} er ikke mulig med bare{" "}
-            {participatingInterviewers.length} deltakende intervjuere. Reduser
-            panelstørrelsen eller ta med flere.
-          </div>
-        )}
-
-        <div className="border-y border-border-soft py-2">
-          <button
-            type="button"
-            aria-expanded={isFilterOpen}
-            aria-controls="availability-filters"
-            onClick={() => setIsFilterOpen((open) => !open)}
-            className="flex w-full items-center justify-between gap-3 text-left text-ui font-semibold text-text-primary focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-focus"
-          >
-            <span className="inline-flex items-center gap-2">
-              <SlidersHorizontal size={iconSizes.small} aria-hidden="true" />
-              Filtrer og fremhev
-              {(genderFilter !== "all" || highlightedInterviewer) && (
-                <span className="rounded bg-brand-soft px-1.5 py-0.5 text-label font-semibold text-brand">
-                  Aktiv
-                </span>
-              )}
-            </span>
-            <ChevronDown
-              size={iconSizes.small}
-              aria-hidden="true"
-              className={cn(
-                "transition-transform",
-                isFilterOpen && "rotate-180",
-              )}
-            />
-          </button>
-          {isFilterOpen && (
-            <fieldset
-              id="availability-filters"
-              className="mt-3 flex flex-wrap items-end gap-x-4 gap-y-3 animate-fade-in"
-            >
-              <legend className="sr-only">Visning</legend>
-              <label
-                className="flex flex-col gap-1 text-detail font-medium text-text-muted"
-                htmlFor="gender-filter"
-              >
-                Kjønn på intervjuere
-                <CustomSelect
-                  id="gender-filter"
-                  value={genderFilter}
-                  className="min-w-36"
-                  onChange={(value) => setGenderFilter(value as GenderFilter)}
-                  options={genderOptions}
-                />
-              </label>
-              <label
-                className="flex flex-col gap-1 text-detail font-medium text-text-muted"
-                htmlFor="interviewer-highlight"
-              >
-                Fremhev intervjuer
-                <CustomSelect
-                  id="interviewer-highlight"
-                  value={highlightedInterviewer}
-                  className="min-w-44"
-                  placeholder="Ingen"
-                  onChange={setHighlightedInterviewer}
-                  options={[
-                    { value: "", label: "Ingen" },
-                    ...participatingInterviewers.map((interviewer) => ({
-                      value: interviewer.id,
-                      label: interviewer.name,
-                    })),
-                  ]}
-                />
-              </label>
-            </fieldset>
-          )}
-        </div>
-
-        <div className="flex flex-wrap items-center justify-between gap-x-5 gap-y-2 text-detail text-text-muted">
-          <span>
-            Fargen viser hvor mange intervjuere som er tilgjengelige i minst én
-            av blokkens ordinære intervjutider. Den påvirkes ikke av
-            panelstørrelse eller finjusterte åpne tider.
-          </span>
-          <div className="flex flex-wrap items-center gap-3 font-medium">
-            <div
-              className="h-2.5 w-44 rounded-sm border border-border-soft"
-              style={{
-                backgroundImage:
-                  "linear-gradient(90deg, color-mix(in srgb, var(--color-red-6) 18%, var(--color-surface-base)) 0%, color-mix(in srgb, var(--color-red-6) 42%, var(--color-surface-base)) 45%, color-mix(in srgb, var(--color-red-6) 78%, var(--color-surface-base)) 100%)",
-              }}
-              aria-hidden="true"
-            />
-            <div className="flex items-center gap-2 text-label text-text-muted">
-              <span>1 tilgjengelig</span>
-              <span>3 tilgjengelige</span>
-              <span>6+ tilgjengelige</span>
-            </div>
-            <ScheduleGridLegendItem
-              label="Stengt"
-              swatchClassName="border-border-soft bg-surface-neutral [background-image:var(--pattern-unavailable)]"
-            />
-          </div>
-        </div>
         {genderFilter !== "all" && (
           <p className="m-0 text-detail text-text-muted">
             Viser {genderFilter === "male" ? "mannlige" : "kvinnelige"}{" "}
@@ -614,97 +567,139 @@ const AvailabilityHeatmap: React.FC<AvailabilityHeatmapProps> = ({
           </p>
         )}
 
-        <ScheduleCalendarGrid
+        <ScheduleGridFrame
           dates={dates}
-          chunks={chunks}
-          sessionDuration={sessionDuration}
-          renderDayHeader={(date) => (
-            <ScheduleDayHeader date={date} className="sticky top-0 z-10" />
-          )}
-          renderTimeLabel={({ chunk }) => (
-            <ScheduleTimeLabel
-              startMinute={chunk[0]}
-              endMinute={chunk[chunk.length - 1] + sessionDuration}
-              className="sticky left-0 z-10"
-            />
-          )}
-          renderCell={({ date, chunkIndex }) => {
-            const key = `${date}|${chunkIndex}`;
-            const block = blocksByKey.get(key);
-            if (!block) return <div key={key} />;
-            const { weekday, dayMonth } = formatDateHeader(date);
-            const count = block.heatmapAvailableCount;
-            const closed = block.enabledMinutes.length === 0;
-            const highlighted = isHighlighted(block);
-            const availabilityText = formatHeatmapAvailability(
-              count,
-              heatmapCapacity,
-            );
-            const label = closed
-              ? `${weekday} ${dayMonth}: stengt`
-              : `${weekday} ${dayMonth}: ${availabilityText} tilgjengelige intervjuere`;
-            return (
-              <ScheduleBlockCell
-                key={key}
-                data-coverage-status={block.coverage.status}
-                data-availability-count={count}
-                role="button"
-                tabIndex={closed ? -1 : 0}
-                aria-label={
-                  closed ? "Stengt" : `${label}. Vis hvem som er tilgjengelige.`
-                }
-                aria-pressed={closed ? undefined : selectedBlockKey === key}
-                onClick={(event) => {
-                  if (closed) return;
-                  selectedBlockTriggerRef.current = event.currentTarget;
-                  setSelectedBlockKey((current) =>
-                    current === key ? null : key,
-                  );
-                }}
-                onKeyDown={(event) => {
-                  if (closed || (event.key !== "Enter" && event.key !== " "))
-                    return;
-                  event.preventDefault();
-                  selectedBlockTriggerRef.current = event.currentTarget;
-                  setSelectedBlockKey((current) =>
-                    current === key ? null : key,
-                  );
-                }}
-                closed={closed}
-                style={
-                  closed
-                    ? undefined
-                    : heatmapCellStyle(count, Math.max(heatmapCapacity, 1))
-                }
-                className={cn(
-                  "text-center text-lg tabular-nums",
-                  !closed &&
-                    "cursor-pointer hover:border-danger-border hover:shadow-sm",
-                  !closed && count === 0 && "font-semibold text-text-muted",
-                  !closed && count > 0 && "font-bold text-text-primary",
-                  highlighted &&
-                    !closed &&
-                    "ring-2 ring-inset ring-brand-border",
-                )}
-              >
-                {!closed && <span>{availabilityText}</span>}
-                {highlighted && (
-                  <span
-                    aria-label="Valgt intervjuer er tilgjengelig"
-                    className="absolute bottom-1.5 right-1.5 h-1.5 w-1.5 rounded-full bg-brand"
-                  />
-                )}
-              </ScheduleBlockCell>
-            );
-          }}
-        />
+          layout="grid"
+          gridClassName="items-stretch"
+        >
+          <div aria-hidden="true" className="min-h-16" />
+          {dates.map((date) => (
+            <div
+              key={`header-${date}`}
+              data-cy="availability-day-header"
+              data-date={date}
+              className="min-w-0"
+            >
+              <ScheduleDayHeader date={date} className="sticky top-0 z-10" />
+            </div>
+          ))}
+
+          {chunks.map((chunk, chunkIndex) => (
+            <React.Fragment key={chunkIndex}>
+              <ScheduleTimeLabel
+                startMinute={chunk[0]}
+                endMinute={chunk[chunk.length - 1] + sessionDuration}
+                className="sticky left-0 z-10"
+              />
+              {dates.map((date) => {
+                const key = `${date}|${chunkIndex}`;
+                const block = blocksByKey.get(key);
+                if (!block) return <div key={key} />;
+                const { weekday, dayMonth } = formatDateHeader(date);
+                const count = block.heatmapAvailableCount;
+                const closed = block.enabledMinutes.length === 0;
+                const highlighted = isHighlighted(block);
+                const selected = selectedBlockKey === key;
+                const ratio = availabilityRatio(count, heatmapCapacity);
+                const availabilityText = formatHeatmapAvailability(
+                  count,
+                  heatmapCapacity,
+                );
+                const label = closed
+                  ? `${weekday} ${dayMonth}: stengt`
+                  : `${weekday} ${dayMonth}: ${availabilityText} tilgjengelige intervjuere`;
+                return (
+                  <ScheduleBlockCell
+                    key={key}
+                    data-coverage-status={block.coverage.status}
+                    data-availability-count={count}
+                    data-date={date}
+                    data-chunk-index={chunkIndex}
+                    role="button"
+                    tabIndex={closed ? -1 : 0}
+                    aria-label={
+                      closed
+                        ? "Stengt"
+                        : `${label}. Vis hvem som er tilgjengelige.`
+                    }
+                    aria-pressed={closed ? undefined : selected}
+                    onClick={(event) => {
+                      if (closed) return;
+                      selectedBlockTriggerRef.current = event.currentTarget;
+                      setSelectedBlockKey((current) =>
+                        current === key ? null : key,
+                      );
+                    }}
+                    onKeyDown={(event) => {
+                      if (
+                        closed ||
+                        (event.key !== "Enter" && event.key !== " ")
+                      )
+                        return;
+                      event.preventDefault();
+                      selectedBlockTriggerRef.current = event.currentTarget;
+                      setSelectedBlockKey((current) =>
+                        current === key ? null : key,
+                      );
+                    }}
+                    closed={closed}
+                    className={cn(
+                      scheduleInteractiveCellMotionClass,
+                      "text-center tabular-nums",
+                      !closed && scheduleAvailableCellClass,
+                      !closed && "cursor-pointer",
+                      !closed &&
+                        heatmapCapacity > 0 &&
+                        count === heatmapCapacity &&
+                        "bg-brand-soft",
+                      selected &&
+                        !closed &&
+                        "border-brand-activeBorder ring-1 ring-inset ring-brand-border",
+                      highlighted &&
+                        !closed &&
+                        "ring-2 ring-inset ring-brand-border",
+                    )}
+                  >
+                    {closed ? (
+                      <span className="text-label font-semibold text-text-disabled">
+                        Stengt
+                      </span>
+                    ) : (
+                      <>
+                        <span
+                          className={cn(
+                            "text-ui font-semibold",
+                            count === 0
+                              ? "text-text-muted"
+                              : "text-text-primary",
+                          )}
+                        >
+                          {availabilityText}
+                        </span>
+                        <ScheduleSlotSegments
+                          className="h-schedule-progress"
+                          fills={block.enabledMinutes.map(() => ratio)}
+                        />
+                      </>
+                    )}
+                    {highlighted && (
+                      <span
+                        aria-label="Valgt intervjuer er tilgjengelig"
+                        className="absolute bottom-1.5 right-1.5 h-1.5 w-1.5 rounded-full bg-brand"
+                      />
+                    )}
+                  </ScheduleBlockCell>
+                );
+              })}
+            </React.Fragment>
+          ))}
+        </ScheduleGridFrame>
 
         {selectedBlock && (
           <BlockDetail
             block={selectedBlock}
             interviewers={inspectedInterviewers}
             interviewerSlots={interviewerSlots}
-            panelSize={panelSize}
             sessionDuration={sessionDuration}
             onClose={closeBlockDetail}
             missingResponse={missingResponse}
@@ -712,12 +707,12 @@ const AvailabilityHeatmap: React.FC<AvailabilityHeatmapProps> = ({
         )}
       </SchedulePanelBody>
       <SchedulePanelFooter>
-        <span className="text-detail text-text-muted">
-          Klikk på en blokk for å se hvem som er tilgjengelige.
-        </span>
-        <span className="text-detail font-medium tabular-nums text-text-muted">
-          Mørkere farge betyr flere tilgjengelige intervjuere
-        </span>
+        {footerStatus ?? (
+          <span className="text-detail text-text-muted">
+            Klikk på en blokk for å se hvem som er tilgjengelige.
+          </span>
+        )}
+        {footerAction}
       </SchedulePanelFooter>
     </SchedulePanel>
   );
@@ -738,14 +733,14 @@ const ResponseStatus: React.FC<{
     <button
       type="button"
       aria-expanded={isOpen}
-      className="text-detail font-semibold text-brand hover:text-brand-dark hover:underline"
+      aria-controls={responseDisclosureId}
+      className={cn(
+        "text-detail font-semibold text-brand hover:text-brand-dark hover:underline",
+        keyboardFocusRingClass,
+      )}
       onClick={onToggle}
     >
-      {missingResponse.length > 0
-        ? `${missingResponse.length} mangler svar ›`
-        : optedOut.length > 0
-          ? `${optedOut.length} deltar ikke ›`
-          : "Alle er avklart · administrer ›"}
+      {canManage ? "Administrer" : "Vis status"}
     </button>
   );
 
@@ -753,7 +748,6 @@ const BlockDetail: React.FC<{
   block: AvailabilityBlock;
   interviewers: Interviewer[];
   interviewerSlots: Map<string, Set<string>>;
-  panelSize: number;
   sessionDuration: number;
   onClose: () => void;
   missingResponse: Interviewer[];
@@ -761,7 +755,6 @@ const BlockDetail: React.FC<{
   block,
   interviewers,
   interviewerSlots,
-  panelSize,
   sessionDuration,
   onClose,
   missingResponse,
@@ -786,21 +779,19 @@ const BlockDetail: React.FC<{
       <div className="flex items-start justify-between gap-3">
         <div>
           <h3 className="m-0 text-ui font-bold text-text-primary">
-            {weekday} {dayMonth} · {formatMinutes(block.minutes[0])}–
+            {weekday} {dayMonth}, {formatMinutes(block.minutes[0])}–
             {formatMinutes(
               block.minutes[block.minutes.length - 1] + sessionDuration,
             )}
           </h3>
-          <p className="m-0 mt-1 text-detail text-text-muted">
-            {block.enabledMinutes.length === 0
-              ? "Denne blokken er stengt."
-              : `${block.heatmapAvailableCount} intervjuere er tilgjengelige i minst én av blokkens ordinære tider.`}
-          </p>
         </div>
         <button
           type="button"
           onClick={onClose}
-          className="rounded p-1 text-text-muted hover:bg-surface-neutral hover:text-text-primary"
+          className={cn(
+            "rounded p-1 text-text-muted hover:bg-surface-neutral hover:text-text-primary",
+            keyboardFocusRingClass,
+          )}
           aria-label="Lukk detaljer"
         >
           <X size={iconSizes.small} aria-hidden="true" />
@@ -820,19 +811,16 @@ const BlockDetail: React.FC<{
               return (
                 <div
                   key={minute}
-                  className="grid gap-1 py-2 text-detail sm:grid-cols-[5rem_5rem_1fr] sm:items-baseline"
+                  className="grid gap-1 py-2 text-detail sm:grid-cols-[5rem_1fr] sm:items-baseline"
                 >
                   <strong className="tabular-nums text-text-primary">
                     {formatMinutes(minute)}
                   </strong>
-                  <span className="font-semibold tabular-nums text-text-muted">
-                    {availableAtTime.length}/{panelSize}
-                  </span>
                   <span className="text-text-muted">
                     {availableAtTime.length > 0
                       ? availableAtTime
                           .map((interviewer) => interviewer.name)
-                          .join(" · ")
+                          .join(", ")
                       : "Ingen tilgjengelige"}
                   </span>
                 </div>

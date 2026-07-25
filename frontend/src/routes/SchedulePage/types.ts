@@ -39,6 +39,7 @@ export type CandidateReviewState = "unreviewed" | "no-conflict" | "conflict";
 
 export interface PublicationReadiness {
   draftSaved: boolean;
+  draftPersistenceReady: boolean;
   candidateScopeResolved: boolean;
   scheduledCandidateCount: number;
   candidateCount: number;

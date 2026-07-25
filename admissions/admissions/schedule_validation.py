@@ -168,6 +168,80 @@ def _solver_blocks(saved, open_slots):
     return build_solver_block_metadata(configured_blocks, open_slots)
 
 
+def ensure_conflict_collection_ready(admission, saved):
+    revision = saved.conflict_collection_revision
+    if revision is None:
+        return
+    if saved.conflict_collection_open:
+        raise ScheduleValidationError(
+            "conflict_collection_open",
+            "Fullfør og lukk inhabilitetskontrollen før planutkastet lages.",
+        )
+
+    current_candidate_ids = {
+        str(candidate_id)
+        for candidate_id in UserApplication.objects.filter(
+            admission=admission
+        ).values_list("pk", flat=True)
+    }
+    participation = get_interviewer_participation(admission, saved)
+    current_participant_ids = {
+        str(user_id)
+        for user_id, state in participation.items()
+        if state == InterviewAvailability.PARTICIPATION_PARTICIPATING
+    }
+    if current_candidate_ids != set(saved.conflict_collection_candidate_ids):
+        raise ScheduleValidationError(
+            "conflict_collection_open",
+            "Kandidatlisten er endret. Åpne inhabilitetskontrollen på nytt.",
+        )
+    if current_participant_ids != set(saved.conflict_collection_participant_ids):
+        raise ScheduleValidationError(
+            "conflict_collection_open",
+            "Intervjuergruppen er endret. Åpne inhabilitetskontrollen på nytt.",
+        )
+
+    applications_by_user = {
+        str(user_id): str(application_id)
+        for application_id, user_id in UserApplication.objects.filter(
+            admission=admission
+        ).values_list("pk", "user_id")
+    }
+    availability_by_user = {
+        str(item.user_id): item
+        for item in InterviewAvailability.objects.filter(
+            admission=admission,
+            user_id__in=current_participant_ids,
+        )
+    }
+    incomplete = []
+    for participant_id in current_participant_ids:
+        expected_ids = set(current_candidate_ids)
+        own_candidate_id = applications_by_user.get(participant_id)
+        if own_candidate_id is not None:
+            expected_ids.discard(own_candidate_id)
+        availability = availability_by_user.get(participant_id)
+        reviewed_ids = {
+            str(candidate_id)
+            for candidate_id in (
+                availability.conflict_collection_reviewed_candidate_ids
+                if availability is not None
+                else []
+            )
+        }
+        if (
+            availability is None
+            or availability.conflict_collection_review_revision != revision
+            or reviewed_ids != expected_ids
+        ):
+            incomplete.append(participant_id)
+    if incomplete:
+        raise ScheduleValidationError(
+            "conflict_collection_open",
+            f"{len(incomplete)} intervjuere må fullføre inhabilitetskontrollen.",
+        )
+
+
 def canonicalize_solver_payload(admission, saved, data, request_user):
     saved_slot_keys = saved.enabled_slots or enabled_windows_to_slots(
         saved.enabled_windows, saved.session_duration

@@ -201,7 +201,9 @@ const validationSchema = Yup.object({
     (groupQuestions) =>
       (Object.values(groupQuestions ?? {}) as FieldModel[][]).every((fields) =>
         fields.every(
-          (field) => field.type === "text" || field.title.trim().length >= 5,
+          (field) =>
+            field.type === "text" ||
+            (typeof field.title === "string" && field.title.trim().length >= 5),
         ),
       ),
   ),

@@ -10,7 +10,7 @@ export const EXPAND_CONTRACT_MOTION = {
   autoHeightEnterClearProps: "height,opacity,visibility,transform",
 } as const;
 
-export interface ExpandContractState {
+interface ExpandContractState {
   height: number;
   opacity: number;
   scaleY: number;
@@ -45,7 +45,7 @@ export const setExpandedElement = (
   });
 };
 
-export const animateExpandedElement = ({
+const animateExpandedElement = ({
   element,
   from,
   height,

@@ -7,7 +7,7 @@ import type { Admission, AdminApplication } from "src/types";
 import type { InputFieldModel } from "src/utils/jsonFields";
 import { iconSizes } from "src/styles/designTokens";
 
-export interface ApplicationDetailsProps {
+interface ApplicationDetailsProps {
   admission: Admission;
   application: AdminApplication;
 }
@@ -24,6 +24,12 @@ const ApplicationDetails: React.FC<ApplicationDetailsProps> = ({
   const candidateName = application.user.full_name;
   return (
     <DetailsContent>
+      {application.priority_text && (
+        <DetailSection>
+          <SectionHeading>Prioriteringer og kommentarer</SectionHeading>
+          <ApplicationText>{application.priority_text}</ApplicationText>
+        </DetailSection>
+      )}
       {application.group_applications.map((groupApplication) => {
         const groupFields = (
           admission.groups.find(
@@ -41,7 +47,7 @@ const ApplicationDetails: React.FC<ApplicationDetailsProps> = ({
                 <details>
                   <summary
                     aria-label={`Flere handlinger for søknaden fra ${candidateName} til ${groupApplication.group.name}`}
-                    title={`Flere handlinger for ${candidateName} · ${groupApplication.group.name}`}
+                    title={`Flere handlinger for ${candidateName}, ${groupApplication.group.name}`}
                   >
                     <MoreHorizontal
                       size={iconSizes.standard}

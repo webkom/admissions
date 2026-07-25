@@ -10,7 +10,6 @@ from admissions.admissions.admission_access import (
     schedule_response_context,
     user_is_admission_admin,
     user_is_committee_member,
-    user_is_interview_admin,
 )
 from admissions.admissions.authentication import SessionAuthentication
 from admissions.admissions.models import Admission, LegoUser, SavedSchedule
@@ -47,14 +46,14 @@ class SavedScheduleView(APIView):
         representing_groups = get_representing_groups(admission, user)
         is_recruiter = representing_groups.exists()
 
-        is_interview_admin = user_is_interview_admin(admission, user)
+        is_interview_admin = is_admin
 
         if require_admin and not is_interview_admin:
             return (
                 None,
                 is_admin,
                 is_recruiter,
-                is_interview_admin,
+                is_admin,
                 Response(status=status.HTTP_403_FORBIDDEN),
             )
 
@@ -86,14 +85,14 @@ class SavedScheduleView(APIView):
                     user,
                     is_admin,
                     is_recruiter,
-                    is_interview_admin,
+                    is_admin,
                 ),
             ).data
         )
 
     def get(self, request, admission_slug):
-        admission, is_admin, is_recruiter, is_interview_admin, err = self._get_admission_and_check(
-            request, admission_slug
+        admission, is_admin, is_recruiter, is_interview_admin, err = (
+            self._get_admission_and_check(request, admission_slug)
         )
         if err:
             return err
@@ -113,8 +112,8 @@ class SavedScheduleView(APIView):
 
     @transaction.atomic
     def post(self, request, admission_slug):
-        admission, is_admin, is_recruiter, is_interview_admin, err = self._get_admission_and_check(
-            request, admission_slug
+        admission, is_admin, is_recruiter, is_interview_admin, err = (
+            self._get_admission_and_check(request, admission_slug)
         )
         if err:
             return err
@@ -150,5 +149,5 @@ class SavedScheduleView(APIView):
             request.user,
             is_admin,
             is_recruiter,
-            is_interview_admin,
+            is_admin,
         )

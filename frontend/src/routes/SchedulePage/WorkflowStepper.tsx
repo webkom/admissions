@@ -1,6 +1,6 @@
 import React from "react";
 import { Check, Lock } from "lucide-react";
-import { iconSizes } from "src/styles/designTokens";
+import { iconSizes, iconStrokeWidths } from "src/styles/designTokens";
 import cn from "src/utils/cn";
 import type { TabType, WorkflowStepDefinition } from "./types";
 
@@ -57,7 +57,7 @@ const WorkflowStepper: React.FC<WorkflowStepperProps> = ({
                 {step.tone === "success" ? (
                   <Check
                     size={iconSizes.compact}
-                    strokeWidth={3}
+                    strokeWidth={iconStrokeWidths.emphasis}
                     aria-hidden="true"
                   />
                 ) : step.locked ? (

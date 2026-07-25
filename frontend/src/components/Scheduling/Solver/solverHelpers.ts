@@ -64,7 +64,8 @@ export const solveFailureMessage = (result: SolveResponse): string => {
     case "LOCKED_CONFLICT":
       return (
         "Låste endringer er i konflikt med inhabiliteter eller harde " +
-        "begrensninger. Forrige plan er beholdt."
+        "begrensninger. Forrige plan er beholdt. Lås opp det berørte " +
+        "intervjuet i «Rediger intervjuer» før du lager et nytt reparasjonsforslag."
       );
     default:
       return result.error || "Solveren feilet under kjøring.";
@@ -117,7 +118,7 @@ export interface AppliedSolveProposal {
   result: SolveResponse;
 }
 
-export const DEFAULT_MAX_SOLVER_SECONDS = 30;
+const DEFAULT_MAX_SOLVER_SECONDS = 30;
 const LEGACY_DEFAULT_MAX_SOLVER_SECONDS = new Set([120, 5 * 60]);
 
 export const DEFAULT_SOLVER_OPTIONS: SolverOptions = {
@@ -139,14 +140,13 @@ export const DEFAULT_SOLVER_OPTIONS: SolverOptions = {
   max_solver_seconds: DEFAULT_MAX_SOLVER_SECONDS,
 };
 
-export const ADVANCED_SOLVER_OPTION_KEYS = [
+const ADVANCED_SOLVER_OPTION_KEYS = [
   "enforce_same_gender",
   "require_experienced_panel",
   "avoid_consecutive_interviewer_blocks",
 ] as const;
 
-export type AdvancedSolverOptionKey =
-  (typeof ADVANCED_SOLVER_OPTION_KEYS)[number];
+type AdvancedSolverOptionKey = (typeof ADVANCED_SOLVER_OPTION_KEYS)[number];
 
 export const ADVANCED_SOLVER_DEFAULTS: Pick<
   SolverOptions,
@@ -160,7 +160,7 @@ export const ADVANCED_SOLVER_DEFAULTS: Pick<
     DEFAULT_SOLVER_OPTIONS.avoid_consecutive_interviewer_blocks,
 };
 
-export interface AdvancedSettingsSummary {
+interface AdvancedSettingsSummary {
   requirementCount: number;
   preferenceCount: number;
   customizationCount: number;
@@ -325,9 +325,6 @@ export const REPAIR_STRATEGY_PRESETS: ReadonlyArray<{
       "Eksempel: tillat et lite panelavvik når det sparer flere endringer.",
   },
 ];
-
-export const PANEL_SIZE_MIN = 1;
-export const PANEL_SIZE_MAX = 10;
 
 const PROGRESS_MESSAGES = [
   "Bygger modell…",

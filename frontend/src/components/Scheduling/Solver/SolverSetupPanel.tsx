@@ -8,26 +8,25 @@ import React, {
 import {
   AlertTriangle,
   Check,
-  ChevronDown,
-  RotateCcw,
   SlidersHorizontal,
   Sparkles,
 } from "lucide-react";
 
-import ScheduleDrawer from "../ScheduleDrawer";
 import {
-  CustomSelect,
   SchedulePanel,
   SchedulePanelBody,
   SchedulePanelFooter,
   SchedulePanelHeader,
-  Stepper,
+  SegmentedControl,
   actionButtonBase,
   actionButtonNeutral,
   actionButtonPrimary,
+  keyboardFocusRingClass,
   sectionLabelClass,
 } from "../ui";
 import type {
+  ExperienceLevel,
+  Interviewer,
   InitialPlanningStrategy,
   PanelStability,
   SolverOptions,
@@ -37,17 +36,22 @@ import cn from "src/utils/cn";
 import {
   ADVANCED_SOLVER_DEFAULTS,
   INITIAL_STRATEGY_PRESETS,
-  deriveAdvancedSettingsSummary,
-  progressMessageFor,
   type SolveJob,
 } from "./solverHelpers";
 import type { SolverReadiness } from "./solverSelectors";
+import AdvancedSolverSettings from "./AdvancedSolverSettings";
+import SolveProgress from "./SolveProgress";
 
 interface SolverSetupPanelProps {
   interviewerCount: number;
   experiencedInterviewerCount: number;
+  interviewers: Interviewer[];
   solverOptions: SolverOptions;
   onSolverOptionsChange: Dispatch<SetStateAction<SolverOptions>>;
+  onExperienceLevelChange: (
+    userId: string,
+    experienceLevel: ExperienceLevel,
+  ) => Promise<void>;
   panelSize: number;
   onPanelSizeChange: (value: number) => void;
   openBlockCount: number;
@@ -63,13 +67,104 @@ interface SolverSetupPanelProps {
   hasProposal: boolean;
   changeableInterviewCount: number;
   currentDraftReady: boolean;
-  openRequestKey: number;
+  candidateScopeResolved: boolean;
+  regenerationOpen: boolean;
+  onCloseRegeneration: () => void;
   onSolve: () => void;
   onCancel: () => void;
   onOpenAvailability: () => void;
   onOpenFramework: () => void;
   onOpenConflictReview: () => void;
 }
+
+const ExperienceEditor = ({
+  interviewers,
+  savingId,
+  headingRef,
+  onChange,
+  onClose,
+}: {
+  interviewers: Interviewer[];
+  savingId: string;
+  headingRef: React.RefObject<HTMLHeadingElement>;
+  onChange: (userId: string, experienceLevel: ExperienceLevel) => void;
+  onClose: () => void;
+}) => (
+  <section
+    data-cy="inline-experience-editor"
+    className="rounded-lg border border-border-soft bg-surface-subtle px-4 py-3"
+    aria-labelledby="inline-experience-editor-heading"
+  >
+    <div className="flex flex-wrap items-start justify-between gap-3">
+      <div className="min-w-0">
+        <h3
+          ref={headingRef}
+          id="inline-experience-editor-heading"
+          tabIndex={-1}
+          className="m-0 text-ui font-semibold text-text-primary focus:outline-none"
+        >
+          Erfarne intervjuere
+        </h3>
+        <p className="m-0 mt-1 text-detail text-text-muted">
+          Velg hvem som kan dekke erfaringskravet. Bare intervjuere som deltar
+          teller i planutkastet.
+        </p>
+      </div>
+      <button
+        type="button"
+        onClick={onClose}
+        className={cn(
+          "text-detail font-semibold text-brand hover:underline",
+          keyboardFocusRingClass,
+        )}
+      >
+        Skjul
+      </button>
+    </div>
+
+    <div className="mt-3 grid gap-3">
+      {interviewers.map((interviewer) => (
+        <div
+          key={interviewer.id}
+          className="flex flex-wrap items-center justify-between gap-3"
+        >
+          <div className="min-w-0">
+            <p className="m-0 font-semibold text-text-primary">
+              {interviewer.name}
+            </p>
+            <p className="m-0 mt-0.5 text-detail text-text-muted">
+              {interviewer.participation === "awaiting_response"
+                ? "Mangler svar"
+                : "Deltar"}
+            </p>
+          </div>
+          <SegmentedControl<ExperienceLevel>
+            value={interviewer.experience_level ?? "unknown"}
+            aria-label={`Erfaringsnivå for ${interviewer.name} i planutkast`}
+            onChange={(value) => onChange(interviewer.id, value)}
+            items={[
+              {
+                key: "unknown",
+                label: "Ukjent",
+                disabled: savingId === interviewer.id,
+              },
+              {
+                key: "inexperienced",
+                label: "Uerfaren",
+                disabled: savingId === interviewer.id,
+              },
+              {
+                key: "experienced",
+                label: "Erfaren",
+                disabled: savingId === interviewer.id,
+              },
+            ]}
+          />
+        </div>
+      ))}
+    </div>
+  </section>
+);
 
 const presetFor = (options: SolverOptions) =>
   INITIAL_STRATEGY_PRESETS.find(
@@ -80,63 +175,322 @@ const presetFor = (options: SolverOptions) =>
       preset.prioritizeContinuity === options.prioritize_continuity,
   );
 
-const AdvancedOptionRow = ({
-  title,
-  description,
-  checked,
-  onToggle,
-  autofocus = false,
-}: {
-  title: string;
-  description: string;
-  checked: boolean;
-  onToggle: () => void;
-  autofocus?: boolean;
-}) => (
-  <button
-    type="button"
-    role="switch"
-    aria-checked={checked}
-    onClick={onToggle}
-    data-autofocus={autofocus || undefined}
-    className="flex w-full items-center justify-between gap-4 border-b border-border-soft py-3 text-left last:border-b-0 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-focus"
-  >
-    <span className="min-w-0">
-      <span className="block text-ui font-semibold text-text-primary">
-        {title}
-      </span>
-      <span className="mt-0.5 block text-detail leading-snug text-text-muted">
-        {description}
-      </span>
-    </span>
-    <span
-      aria-hidden="true"
-      className={cn(
-        "relative inline-flex h-6 w-10 flex-none rounded-full border transition-colors",
-        checked
-          ? "border-brand bg-brand"
-          : "border-border-muted bg-surface-muted",
-      )}
+interface SamplePlanPreviewProps {
+  interviewerCount: number;
+  panelSize: number;
+  strategy: (typeof INITIAL_STRATEGY_PRESETS)[number];
+  solverOptions: SolverOptions;
+  allInterviewersRequired: boolean;
+}
+
+const panelMemberLabel = (
+  panelSize: number,
+  interviewerCount: number,
+  offset: number,
+) => {
+  const poolSize = Math.max(interviewerCount, panelSize, 1);
+  const visibleCount = Math.min(panelSize, 3);
+  const members = Array.from({ length: visibleCount }, (_, index) => {
+    const memberIndex = (offset + index) % poolSize;
+    return `Intervjuer ${String.fromCharCode(65 + (memberIndex % 26))}`;
+  });
+  const remainingCount = Math.max(0, panelSize - visibleCount);
+  return remainingCount > 0
+    ? `${members.join(", ")} + ${remainingCount}`
+    : members.join(", ");
+};
+
+const SamplePlanPreview = ({
+  interviewerCount,
+  panelSize,
+  strategy,
+  solverOptions,
+  allInterviewersRequired,
+}: SamplePlanPreviewProps) => {
+  const rotateWithinBlock =
+    !allInterviewersRequired && solverOptions.panel_stability === "flexible";
+  const rotateBetweenBlocks =
+    !allInterviewersRequired &&
+    solverOptions.avoid_consecutive_interviewer_blocks;
+  const sampleRowsByStrategy = {
+    balanced: [
+      {
+        block: "Man morgen",
+        interview: "08:00 intervju 1",
+        blockIndex: 0,
+        withinBlockIndex: 0,
+      },
+      {
+        block: "Man morgen",
+        interview: "08:30 intervju 2",
+        blockIndex: 0,
+        withinBlockIndex: 1,
+      },
+      {
+        block: "Tir morgen",
+        interview: "08:00 intervju 3",
+        blockIndex: 1,
+        withinBlockIndex: 0,
+      },
+      {
+        block: "Tir morgen",
+        interview: "08:30 intervju 4",
+        blockIndex: 1,
+        withinBlockIndex: 1,
+      },
+    ],
+    compact_days: [
+      {
+        block: "Man morgen",
+        interview: "08:00 intervju 1",
+        blockIndex: 0,
+        withinBlockIndex: 0,
+      },
+      {
+        block: "Man morgen",
+        interview: "08:30 intervju 2",
+        blockIndex: 0,
+        withinBlockIndex: 1,
+      },
+      {
+        block: "Man morgen",
+        interview: "09:00 intervju 3",
+        blockIndex: 0,
+        withinBlockIndex: 2,
+      },
+      {
+        block: "Man morgen",
+        interview: "09:30 intervju 4",
+        blockIndex: 0,
+        withinBlockIndex: 3,
+      },
+    ],
+    balance_workload: [
+      {
+        block: "Man morgen",
+        interview: "08:00 intervju 1",
+        blockIndex: 0,
+        withinBlockIndex: 0,
+      },
+      {
+        block: "Man ettermiddag",
+        interview: "13:00 intervju 2",
+        blockIndex: 1,
+        withinBlockIndex: 0,
+      },
+      {
+        block: "Tir morgen",
+        interview: "08:00 intervju 3",
+        blockIndex: 2,
+        withinBlockIndex: 0,
+      },
+      {
+        block: "Tir ettermiddag",
+        interview: "13:00 intervju 4",
+        blockIndex: 3,
+        withinBlockIndex: 0,
+      },
+    ],
+    minimize_overtime: [
+      {
+        block: "Man dagtid",
+        interview: "09:00 intervju 1",
+        blockIndex: 0,
+        withinBlockIndex: 0,
+      },
+      {
+        block: "Man dagtid",
+        interview: "09:30 intervju 2",
+        blockIndex: 0,
+        withinBlockIndex: 1,
+      },
+      {
+        block: "Tir dagtid",
+        interview: "09:00 intervju 3",
+        blockIndex: 1,
+        withinBlockIndex: 0,
+      },
+      {
+        block: "Tir dagtid",
+        interview: "09:30 intervju 4",
+        blockIndex: 1,
+        withinBlockIndex: 1,
+      },
+    ],
+  } satisfies Record<
+    InitialPlanningStrategy,
+    Array<{
+      block: string;
+      interview: string;
+      blockIndex: number;
+      withinBlockIndex: number;
+    }>
+  >;
+  const rows = sampleRowsByStrategy[strategy.key].map((row) => {
+    const betweenBlockRotation =
+      strategy.key === "balance_workload" || rotateBetweenBlocks
+        ? row.blockIndex * panelSize
+        : 0;
+    return {
+      ...row,
+      offset:
+        betweenBlockRotation + (rotateWithinBlock ? row.withinBlockIndex : 0),
+    };
+  });
+  const stabilityLabel = allInterviewersRequired
+    ? "Alle intervjuere brukes"
+    : solverOptions.panel_stability === "required"
+      ? "Samme panel er påkrevd"
+      : solverOptions.panel_stability === "preferred"
+        ? "Samme panel foretrekkes"
+        : "Panelet kan variere";
+  const activeRequirements = [
+    solverOptions.enforce_same_gender ? "Samme kjønn" : null,
+    solverOptions.require_experienced_panel ? "Erfaren intervjuer" : null,
+  ].filter(Boolean);
+
+  return (
+    <aside
+      data-cy="generation-sample-preview"
+      data-panel-size={panelSize}
+      data-strategy={strategy.key}
+      className="min-w-0 border-t border-border-soft pt-6 tablet:sticky tablet:top-4 tablet:border-l tablet:border-t-0 tablet:pl-7 tablet:pt-0"
+      aria-labelledby="generation-preview-heading"
     >
-      <span
-        className={cn(
-          "absolute top-0.5 h-4 w-4 rounded-full bg-white shadow-sm transition-transform",
-          checked ? "translate-x-5" : "translate-x-0.5",
+      <p className={sectionLabelClass}>Eksempel</p>
+      <h4
+        id="generation-preview-heading"
+        className="m-0 text-base font-semibold text-text-primary"
+      >
+        Slik kan oppsettet slå ut
+      </h4>
+      <p className="m-0 mt-1 text-detail leading-relaxed text-text-muted">
+        Illustrasjon med eksempeldata — ikke et beregnet planforslag.
+      </p>
+
+      <div className="mt-4 overflow-hidden rounded-md border border-border-soft bg-surface-base">
+        <table
+          data-cy="generation-sample-table"
+          className="w-full border-collapse text-left text-detail"
+        >
+          <thead className="bg-surface-muted text-text-muted">
+            <tr>
+              <th className="!rounded-none !bg-transparent px-3 py-2 font-semibold">
+                Blokk
+              </th>
+              <th className="!rounded-none !bg-transparent px-3 py-2 font-semibold">
+                Eksempel
+              </th>
+              <th className="!rounded-none !bg-transparent px-3 py-2 font-semibold">
+                Panel
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((row, index) => (
+              <tr
+                key={row.interview}
+                data-cy="generation-sample-row"
+                className={cn(
+                  "border-t border-border-faint",
+                  index > 0 &&
+                    rows[index - 1].block !== row.block &&
+                    "border-t-2 border-border-soft",
+                )}
+              >
+                <td
+                  data-cy="generation-sample-period"
+                  className="px-3 py-2 font-semibold text-text-muted"
+                >
+                  {row.block}
+                </td>
+                <td className="px-3 py-2 font-semibold text-text-primary">
+                  {row.interview}
+                </td>
+                <td
+                  data-cy="generation-sample-panel"
+                  className="px-3 py-2 text-text-muted"
+                >
+                  {panelMemberLabel(panelSize, interviewerCount, row.offset)}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      <dl className="m-0 mt-4 divide-y divide-border-soft border-y border-border-soft text-detail">
+        <div className="grid grid-cols-[var(--schedule-preview-label-width)_minmax(0,1fr)] gap-3 py-2.5">
+          <dt className="font-semibold text-text-subtle">Fordeling</dt>
+          <dd
+            data-cy="generation-preview-strategy"
+            className="m-0 font-semibold text-text-primary"
+          >
+            {strategy.label}
+          </dd>
+        </div>
+        <div className="grid grid-cols-[var(--schedule-preview-label-width)_minmax(0,1fr)] gap-3 py-2.5">
+          <dt className="font-semibold text-text-subtle">Panel i blokk</dt>
+          <dd
+            data-cy="generation-preview-stability"
+            className="m-0 text-text-primary"
+          >
+            {stabilityLabel}
+          </dd>
+        </div>
+        <div className="grid grid-cols-[var(--schedule-preview-label-width)_minmax(0,1fr)] gap-3 py-2.5">
+          <dt className="font-semibold text-text-subtle">Mellom blokker</dt>
+          <dd
+            data-cy="generation-preview-rest"
+            className="m-0 text-text-primary"
+          >
+            {solverOptions.avoid_consecutive_interviewer_blocks
+              ? "Panelet roteres for å gi hvile"
+              : "Samme intervjuere kan fortsette"}
+          </dd>
+        </div>
+      </dl>
+
+      <div className="mt-4">
+        <p className="m-0 text-label font-bold uppercase tracking-wide text-text-subtle">
+          Krav i eksemplet
+        </p>
+        {activeRequirements.length > 0 ? (
+          <div
+            data-cy="generation-preview-requirements"
+            className="mt-1 flex flex-wrap gap-2"
+          >
+            {activeRequirements.map((requirement) => (
+              <span
+                key={requirement}
+                className="rounded-full border border-border-soft bg-surface-muted px-2.5 py-1 text-detail text-text-muted"
+              >
+                {requirement}
+              </span>
+            ))}
+          </div>
+        ) : (
+          <p
+            data-cy="generation-preview-requirements"
+            className="m-0 mt-1 text-detail text-text-muted"
+          >
+            Ingen ekstra panelkrav
+          </p>
         )}
-      />
-    </span>
-  </button>
-);
+      </div>
+    </aside>
+  );
+};
 
 const SolverSetupPanel = ({
   interviewerCount,
   experiencedInterviewerCount,
+  interviewers,
   solverOptions,
   onSolverOptionsChange,
+  onExperienceLevelChange,
   panelSize,
   onPanelSizeChange,
-  openBlockCount,
-  interviewSlotCount,
   readiness,
   availabilityReady,
   loading,
@@ -148,38 +502,60 @@ const SolverSetupPanel = ({
   hasProposal,
   changeableInterviewCount,
   currentDraftReady,
-  openRequestKey,
+  candidateScopeResolved,
+  regenerationOpen,
+  onCloseRegeneration,
   onSolve,
   onCancel,
   onOpenAvailability,
   onOpenFramework,
   onOpenConflictReview,
 }: SolverSetupPanelProps) => {
-  const [advancedDrawerOpen, setAdvancedDrawerOpen] = useState(false);
-  const [regenerationOpen, setRegenerationOpen] = useState(false);
-  const [strategyComparisonOpen, setStrategyComparisonOpen] = useState(false);
-  const lastOpenRequestRef = useRef(openRequestKey);
+  const [advancedSettingsOpen, setAdvancedSettingsOpen] = useState(false);
+  const [experienceEditorOpen, setExperienceEditorOpen] = useState(false);
+  const [experienceSavingId, setExperienceSavingId] = useState("");
   const configurationRef = useRef<HTMLDivElement>(null);
+  const headingRef = useRef<HTMLHeadingElement>(null);
+  const advancedSettingsButtonRef = useRef<HTMLButtonElement>(null);
+  const advancedSettingsHeadingRef = useRef<HTMLHeadingElement>(null);
+  const experienceEditorHeadingRef = useRef<HTMLHeadingElement>(null);
+  const participatingInterviewers = interviewers.filter(
+    (interviewer) => interviewer.participation !== "not_participating",
+  );
 
   useEffect(() => {
-    if (openRequestKey === lastOpenRequestRef.current) return;
-    lastOpenRequestRef.current = openRequestKey;
-    setRegenerationOpen(true);
-    window.requestAnimationFrame(() =>
+    if (!regenerationOpen) return;
+    window.requestAnimationFrame(() => {
       configurationRef.current?.scrollIntoView({
         behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches
           ? "auto"
           : "smooth",
         block: "start",
-      }),
+      });
+      headingRef.current?.focus({ preventScroll: true });
+    });
+  }, [regenerationOpen]);
+
+  useEffect(() => {
+    if (!experienceEditorOpen) return;
+    window.requestAnimationFrame(() =>
+      experienceEditorHeadingRef.current?.focus({ preventScroll: true }),
     );
-  }, [openRequestKey]);
+  }, [experienceEditorOpen]);
+
+  useEffect(() => {
+    if (!advancedSettingsOpen) return;
+    window.requestAnimationFrame(() =>
+      advancedSettingsHeadingRef.current?.focus({ preventScroll: true }),
+    );
+  }, [advancedSettingsOpen]);
 
   const panelFormationImpossible = interviewerCount < panelSize;
   const allInterviewersRequired =
     interviewerCount > 0 && interviewerCount === panelSize;
   const generationBlocked =
     !currentDraftReady ||
+    !candidateScopeResolved ||
     panelFormationImpossible ||
     (solverOptions.require_experienced_panel &&
       experiencedInterviewerCount === 0) ||
@@ -192,25 +568,6 @@ const SolverSetupPanel = ({
     INITIAL_STRATEGY_PRESETS.find(
       (preset) => preset.key === solverOptions.initial_strategy,
     ) ?? INITIAL_STRATEGY_PRESETS[0];
-  const advancedSummary = deriveAdvancedSettingsSummary(solverOptions);
-  const waitingForWorker = jobStatus === "PENDING";
-  const estimatedMs = estimatedSeconds * 1000;
-  const progressTargetMs = estimatedMs * 1.35;
-  const progressPercent = waitingForWorker
-    ? 12
-    : Math.min(
-        97,
-        elapsedMs <= progressTargetMs
-          ? (elapsedMs / Math.max(progressTargetMs, 1)) * 92
-          : 92 + Math.min(5, ((elapsedMs - progressTargetMs) / 1000) * 0.08),
-      );
-  const progressMessage = waitingForWorker
-    ? elapsedMs >= 8000
-      ? import.meta.env.DEV
-        ? "Planleggingstjenesten har ikke hentet jobben — start utviklingsmiljøet med «make dev»."
-        : "Planleggingstjenesten har ikke hentet jobben — kontroller bakgrunnstjenesten."
-      : "Venter på ledig planleggingstjeneste…"
-    : progressMessageFor(elapsedMs, estimatedMs);
 
   const choosePreset = (key: InitialPlanningStrategy) => {
     const preset = INITIAL_STRATEGY_PRESETS.find((item) => item.key === key);
@@ -246,6 +603,27 @@ const SolverSetupPanel = ({
     }));
   };
 
+  const openAdvancedSettings = () => setAdvancedSettingsOpen(true);
+  const openExperienceSetup = () => {
+    setAdvancedSettingsOpen(false);
+    setExperienceEditorOpen(true);
+  };
+  const closeAdvancedSettings = () => {
+    setAdvancedSettingsOpen(false);
+    window.requestAnimationFrame(() =>
+      advancedSettingsButtonRef.current?.focus({ preventScroll: true }),
+    );
+  };
+  const updateExperienceLevel = (
+    userId: string,
+    experienceLevel: ExperienceLevel,
+  ) => {
+    setExperienceSavingId(userId);
+    void onExperienceLevelChange(userId, experienceLevel).finally(() =>
+      setExperienceSavingId(""),
+    );
+  };
+
   const blockedDescription = !currentDraftReady
     ? "Vent til endringene i utkastet er lagret før du lager et nytt forslag."
     : panelFormationImpossible
@@ -272,38 +650,52 @@ const SolverSetupPanel = ({
                       : "kravet om samme kjønn"
                 }. Juster reglene eller intervjuergruppen før du genererer på nytt.`
               : readiness.neededCapacity === 0
-                ? "Ingen aktive kandidater er klare for planlegging."
+                ? "Ingen kandidater er lagt til i dette opptaket ennå."
                 : readiness.usableSlotCount <
                     readiness.neededCapacity / Math.max(panelSize, 1)
                   ? "Det er ikke nok åpne intervjutider med full paneldekning."
                   : "Intervjuerne har ikke nok samlet tilgjengelig kapasitet.";
   const blockedAction = !currentDraftReady
     ? null
-    : panelFormationImpossible
-      ? interviewerCount > 0
-        ? {
-            label: `Bruk ${interviewerCount} per intervju`,
-            run: () => onPanelSizeChange(interviewerCount),
-          }
-        : { label: "Se intervjuere", run: onOpenAvailability }
-      : !availabilityReady
-        ? { label: "Se hvem som mangler", run: onOpenAvailability }
-        : conflictBlockedCandidate
+    : !candidateScopeResolved
+      ? null
+      : panelFormationImpossible
+        ? interviewerCount > 0
           ? {
-              label: "Endre mitt svar",
-              run: onOpenConflictReview,
+              label: `Bruk ${interviewerCount} per intervju`,
+              run: () => onPanelSizeChange(interviewerCount),
             }
-          : capabilityBlockedCandidate
-            ? {
-                label: "Tilpass regler",
-                run: () => setAdvancedDrawerOpen(true),
-              }
-            : readiness.neededCapacity === 0
-              ? null
-              : readiness.usableSlotCount <
-                  readiness.neededCapacity / Math.max(panelSize, 1)
-                ? { label: "Juster tidsoppsettet", run: onOpenFramework }
-                : { label: "Se tilgjengelighet", run: onOpenAvailability };
+          : { label: "Se intervjuere", run: onOpenAvailability }
+        : solverOptions.require_experienced_panel &&
+            experiencedInterviewerCount === 0
+          ? {
+              label: "Velg erfarne intervjuere",
+              run: openExperienceSetup,
+            }
+          : !availabilityReady
+            ? { label: "Se hvem som mangler", run: onOpenAvailability }
+            : conflictBlockedCandidate
+              ? {
+                  label: "Endre mitt svar",
+                  run: onOpenConflictReview,
+                }
+              : capabilityBlockedCandidate
+                ? capabilityBlockedCandidate.reasons.length === 1 &&
+                  capabilityBlockedCandidate.reasons[0] === "experience"
+                  ? {
+                      label: "Velg erfarne intervjuere",
+                      run: openExperienceSetup,
+                    }
+                  : {
+                      label: "Tilpass regler",
+                      run: openAdvancedSettings,
+                    }
+                : readiness.neededCapacity === 0
+                  ? null
+                  : readiness.usableSlotCount <
+                      readiness.neededCapacity / Math.max(panelSize, 1)
+                    ? { label: "Juster tidsoppsettet", run: onOpenFramework }
+                    : { label: "Se tilgjengelighet", run: onOpenAvailability };
 
   const showConfiguration = !hasProposal || regenerationOpen;
 
@@ -315,36 +707,41 @@ const SolverSetupPanel = ({
           data-cy={
             hasProposal ? "regeneration-settings" : "generation-settings"
           }
-          className="mx-auto w-full max-w-3xl scroll-mt-4"
+          className="mx-auto w-full max-w-6xl scroll-mt-4"
         >
-          <SchedulePanel dataCy="generation-status">
+          <SchedulePanel
+            dataCy="generation-status"
+            stage={
+              hasProposal
+                ? "regeneration_setup"
+                : loading
+                  ? "generating"
+                  : "recommended_setup"
+            }
+          >
             <SchedulePanelHeader
               icon={Sparkles}
+              headingRef={headingRef}
+              headingDataCy="schedule-stage-heading"
               title={hasProposal ? "Lag et nytt forslag" : "Lag planutkast"}
               description={
                 hasProposal
                   ? "Det gjeldende utkastet beholdes til du eventuelt velger det nye forslaget."
-                  : "Start med det anbefalte oppsettet. Flere valg er tilgjengelige når du trenger dem."
+                  : undefined
               }
               actions={
                 hasProposal ? (
                   <button
                     type="button"
-                    onClick={() => setRegenerationOpen(false)}
+                    onClick={onCloseRegeneration}
                     className={cn(actionButtonBase, actionButtonNeutral)}
                   >
-                    Skjul
+                    Tilbake til planutkast
                   </button>
                 ) : undefined
               }
             />
             <SchedulePanelBody className="space-y-5 px-5 py-5">
-              <p className="m-0 text-detail text-text-muted tabular-nums">
-                {readiness.submittedInterviewers} intervjuere klare ·{" "}
-                {openBlockCount} åpne blokker · {interviewSlotCount}{" "}
-                intervjutider
-              </p>
-
               {hasProposal && lockedCount > 0 && (
                 <p className="m-0 rounded-md bg-surface-subtle px-3 py-2 text-detail text-text-muted">
                   {lockedCount} låste intervjuer beholdes;{" "}
@@ -352,134 +749,75 @@ const SolverSetupPanel = ({
                 </p>
               )}
 
-              <section
-                aria-labelledby="panel-size-heading"
-                className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center"
-              >
-                <div>
-                  <h3
-                    id="panel-size-heading"
-                    className="m-0 text-ui font-semibold text-text-primary"
-                  >
-                    Intervjuere per intervju
-                  </h3>
-                  <p className="m-0 mt-1 text-detail text-text-muted">
-                    Hvert intervju får dette antallet personer i panelet.
-                  </p>
-                </div>
-                <div data-cy="panel-size">
-                  <Stepper
-                    value={panelSize}
-                    min={1}
-                    max={Math.max(1, interviewerCount)}
-                    onStep={onPanelSizeChange}
-                    aria-label="Panelstørrelse"
-                  />
-                </div>
-              </section>
-
-              <section aria-labelledby="strategy-heading">
-                <h3
-                  id="strategy-heading"
-                  className="m-0 text-ui font-semibold text-text-primary"
-                >
-                  Fordeling
-                </h3>
-                {allInterviewersRequired ? (
-                  <p className="m-0 mt-1 text-detail text-text-muted">
-                    Alle intervjuere må delta i hvert intervju, så en
-                    fordelingsstrategi vil ikke endre resultatet.
-                  </p>
-                ) : (
-                  <>
-                    <CustomSelect
-                      value={solverOptions.initial_strategy}
-                      onChange={(value) =>
-                        choosePreset(value as InitialPlanningStrategy)
-                      }
-                      options={INITIAL_STRATEGY_PRESETS.map((preset) => ({
-                        value: preset.key,
-                        label: `${preset.label}${
-                          preset.key === "balanced" ? " — anbefalt" : ""
-                        }`,
-                      }))}
-                      aria-label="Planleggingsstrategi"
-                      className="mt-2 w-full sm:max-w-md"
-                    />
-                    <p className="m-0 mt-2 text-detail leading-relaxed text-text-muted">
-                      {matchedPreset
-                        ? matchedPreset.description
-                        : `Tilpasset · basert på ${selectedPreset.label}.`}
-                    </p>
-                    <button
-                      type="button"
-                      aria-expanded={strategyComparisonOpen}
-                      onClick={() => setStrategyComparisonOpen((open) => !open)}
-                      className="mt-2 inline-flex items-center gap-1 text-detail font-semibold text-brand hover:underline"
-                    >
-                      Sammenlign strategier
-                      <ChevronDown
-                        size={15}
-                        aria-hidden="true"
-                        className={cn(
-                          "transition-transform",
-                          strategyComparisonOpen && "rotate-180",
-                        )}
-                      />
-                    </button>
-                    {strategyComparisonOpen && (
-                      <div className="mt-3 grid gap-2 sm:grid-cols-3">
-                        {INITIAL_STRATEGY_PRESETS.map((preset) => (
-                          <button
-                            key={preset.key}
-                            type="button"
-                            onClick={() => choosePreset(preset.key)}
-                            className={cn(
-                              "rounded-lg border px-3 py-3 text-left",
-                              solverOptions.initial_strategy === preset.key
-                                ? "border-brand-border bg-brand-soft"
-                                : "border-border-soft bg-surface-base hover:bg-surface-subtle",
-                            )}
-                          >
-                            <strong className="block text-detail text-text-primary">
-                              {preset.label}
-                            </strong>
-                            <span className="mt-1 block text-detail leading-snug text-text-muted">
-                              {preset.description}
-                            </span>
-                          </button>
-                        ))}
-                      </div>
-                    )}
-                  </>
-                )}
-              </section>
-
-              <section className="flex flex-wrap items-center justify-between gap-3 border-y border-border-soft py-3">
+              <section className="flex flex-wrap items-center justify-between gap-4 border-y border-border-soft py-4">
                 <div className="min-w-0">
-                  <h3 className="m-0 text-ui font-semibold text-text-primary">
-                    Regler
-                  </h3>
-                  <p
-                    data-cy="advanced-settings-summary"
-                    className="m-0 mt-1 text-detail text-text-muted"
-                  >
-                    {advancedSummary.text}
+                  <p className="m-0 text-label font-bold uppercase tracking-wide text-text-subtle">
+                    {matchedPreset ? "Valgt oppsett" : "Tilpasset oppsett"}
                   </p>
+                  <h3 className="m-0 mt-1 text-base font-semibold text-text-primary">
+                    {panelSize} intervjuer{panelSize === 1 ? "" : "e"} per
+                    intervju, {selectedPreset.label}
+                  </h3>
                 </div>
                 <button
+                  ref={advancedSettingsButtonRef}
                   type="button"
-                  onClick={() => setAdvancedDrawerOpen(true)}
+                  onClick={
+                    advancedSettingsOpen
+                      ? closeAdvancedSettings
+                      : openAdvancedSettings
+                  }
                   data-cy="open-advanced-generation-settings"
+                  aria-expanded={advancedSettingsOpen}
+                  aria-controls="advanced-generation-settings"
                   className={cn(actionButtonBase, actionButtonNeutral)}
                 >
                   <SlidersHorizontal
                     size={iconSizes.small}
                     aria-hidden="true"
                   />
-                  Tilpass regler
+                  {advancedSettingsOpen ? "Skjul oppsett" : "Tilpass oppsett"}
                 </button>
               </section>
+
+              {advancedSettingsOpen && (
+                <AdvancedSolverSettings
+                  headingRef={advancedSettingsHeadingRef}
+                  interviewerCount={interviewerCount}
+                  experiencedInterviewerCount={experiencedInterviewerCount}
+                  panelSize={panelSize}
+                  onPanelSizeChange={onPanelSizeChange}
+                  solverOptions={solverOptions}
+                  onSolverOptionsChange={onSolverOptionsChange}
+                  allInterviewersRequired={allInterviewersRequired}
+                  matchedPreset={matchedPreset}
+                  selectedPreset={selectedPreset}
+                  onChoosePreset={choosePreset}
+                  onChoosePanelStability={choosePanelStability}
+                  onOpenExperienceEditor={openExperienceSetup}
+                  onReset={resetAdvancedOptions}
+                  onClose={closeAdvancedSettings}
+                  preview={
+                    <SamplePlanPreview
+                      interviewerCount={interviewerCount}
+                      panelSize={panelSize}
+                      strategy={selectedPreset}
+                      solverOptions={solverOptions}
+                      allInterviewersRequired={allInterviewersRequired}
+                    />
+                  }
+                />
+              )}
+
+              {experienceEditorOpen && participatingInterviewers.length > 0 && (
+                <ExperienceEditor
+                  interviewers={participatingInterviewers}
+                  savingId={experienceSavingId}
+                  headingRef={experienceEditorHeadingRef}
+                  onChange={updateExperienceLevel}
+                  onClose={() => setExperienceEditorOpen(false)}
+                />
+              )}
 
               {error && !hasProposal && (
                 <div
@@ -491,7 +829,14 @@ const SolverSetupPanel = ({
               )}
 
               {!error &&
-                (generationBlocked ? (
+                (!candidateScopeResolved ? (
+                  <p
+                    role="status"
+                    className="m-0 text-detail font-semibold text-text-muted"
+                  >
+                    Henter kandidater…
+                  </p>
+                ) : generationBlocked ? (
                   <div
                     role="alert"
                     className="flex flex-wrap items-center justify-between gap-3 rounded-lg bg-amber-50 px-4 py-3"
@@ -508,7 +853,10 @@ const SolverSetupPanel = ({
                       <button
                         type="button"
                         onClick={blockedAction.run}
-                        className="text-ui font-semibold text-brand hover:underline"
+                        className={cn(
+                          "text-ui font-semibold text-brand hover:underline",
+                          keyboardFocusRingClass,
+                        )}
                       >
                         {blockedAction.label}
                       </button>
@@ -523,29 +871,11 @@ const SolverSetupPanel = ({
             </SchedulePanelBody>
 
             {loading && (
-              <div className="border-t border-border-soft bg-surface-mutedSoft px-5 py-3">
-                <div
-                  role="progressbar"
-                  aria-label="Genererer plan"
-                  aria-valuenow={
-                    waitingForWorker ? undefined : Math.round(progressPercent)
-                  }
-                  aria-valuemin={0}
-                  aria-valuemax={100}
-                  className="h-1.5 w-full overflow-hidden rounded-full bg-surface-muted"
-                >
-                  <div
-                    className="h-full rounded-full bg-brand transition-[width] duration-500 ease-out solver-barberpole-progress"
-                    style={{ width: `${progressPercent}%` }}
-                  />
-                </div>
-                <div className="mt-2 flex justify-between gap-2 text-detail text-text-muted">
-                  <span aria-live="polite">{progressMessage}</span>
-                  <strong className="tabular-nums text-text-primary">
-                    {(elapsedMs / 1000).toFixed(1)}s
-                  </strong>
-                </div>
-              </div>
+              <SolveProgress
+                elapsedMs={elapsedMs}
+                estimatedSeconds={estimatedSeconds}
+                jobStatus={jobStatus}
+              />
             )}
 
             <SchedulePanelFooter className="justify-end">
@@ -563,165 +893,28 @@ const SolverSetupPanel = ({
                     Avbryt
                   </button>
                 )}
-                <button
-                  type="button"
-                  onClick={onSolve}
-                  disabled={loading || generationBlocked}
-                  data-cy="generate-proposal"
-                  className={cn(
-                    actionButtonBase,
-                    actionButtonPrimary,
-                    "handheld:flex-1",
-                  )}
-                >
-                  <Sparkles size={iconSizes.small} aria-hidden="true" />
-                  {loading
-                    ? "Genererer…"
-                    : hasProposal
-                      ? "Lag nytt forslag"
-                      : "Lag planutkast"}
-                </button>
+                {!loading && (
+                  <button
+                    type="button"
+                    onClick={onSolve}
+                    disabled={generationBlocked}
+                    data-cy="generate-proposal"
+                    data-stage-primary="true"
+                    className={cn(
+                      actionButtonBase,
+                      actionButtonPrimary,
+                      "handheld:flex-1",
+                    )}
+                  >
+                    <Sparkles size={iconSizes.small} aria-hidden="true" />
+                    {hasProposal ? "Lag nytt forslag" : "Lag planutkast"}
+                  </button>
+                )}
               </div>
             </SchedulePanelFooter>
           </SchedulePanel>
         </div>
       )}
-
-      <ScheduleDrawer
-        open={advancedDrawerOpen}
-        onClose={() => setAdvancedDrawerOpen(false)}
-        title="Tilpass regler"
-        description="Krav må alltid oppfylles. Prioriteringer brukes når flere gyldige planer finnes."
-        dataCy="generation-drawer"
-        footer={
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <button
-              type="button"
-              onClick={resetAdvancedOptions}
-              data-cy="reset-advanced-generation-settings"
-              className={cn(actionButtonBase, actionButtonNeutral)}
-            >
-              <RotateCcw size={iconSizes.small} aria-hidden="true" />
-              Tilbakestill
-            </button>
-            <button
-              type="button"
-              onClick={() => setAdvancedDrawerOpen(false)}
-              className={cn(actionButtonBase, actionButtonPrimary)}
-            >
-              Ferdig
-            </button>
-          </div>
-        }
-      >
-        <div className="space-y-6" data-cy="advanced-settings">
-          <section>
-            <p className={sectionLabelClass}>Krav</p>
-            <AdvancedOptionRow
-              title="Samme kjønn i panel"
-              description="Krev minst én intervjuer med samme kjønn der kjønn er registrert."
-              checked={solverOptions.enforce_same_gender}
-              onToggle={() =>
-                onSolverOptionsChange((current) => ({
-                  ...current,
-                  enforce_same_gender: !current.enforce_same_gender,
-                }))
-              }
-              autofocus
-            />
-            <AdvancedOptionRow
-              title="Erfaren intervjuer i hvert panel"
-              description="Krev minst én intervjuer som er klassifisert som erfaren. Ukjent erfaring teller ikke."
-              checked={solverOptions.require_experienced_panel}
-              onToggle={() =>
-                onSolverOptionsChange((current) => ({
-                  ...current,
-                  require_experienced_panel: !current.require_experienced_panel,
-                }))
-              }
-            />
-            {allInterviewersRequired ? (
-              <p className="m-0 py-3 text-detail text-text-muted">
-                Panelstabilitet har ingen effekt når alle må delta i hvert
-                intervju.
-              </p>
-            ) : (
-              <div className="py-3">
-                <p className="m-0 text-ui font-semibold text-text-primary">
-                  Panel i samme blokk
-                </p>
-                <div
-                  role="radiogroup"
-                  aria-label="Panelstabilitet"
-                  className="mt-2 grid gap-2"
-                >
-                  {(
-                    [
-                      {
-                        key: "preferred",
-                        label: "Foretrekk samme panel — anbefalt",
-                        description:
-                          "Bevar panelet når det er mulig, men tillat nødvendige bytter.",
-                      },
-                      {
-                        key: "required",
-                        label: "Krev samme panel",
-                        description:
-                          "Avvis planer som bytter panel i en blokk.",
-                      },
-                      {
-                        key: "flexible",
-                        label: "La panelet variere",
-                        description:
-                          "Ikke prioriter samme panel gjennom blokken.",
-                      },
-                    ] as const
-                  ).map((option) => (
-                    <button
-                      key={option.key}
-                      type="button"
-                      role="radio"
-                      aria-checked={
-                        solverOptions.panel_stability === option.key
-                      }
-                      onClick={() => choosePanelStability(option.key)}
-                      className={cn(
-                        "rounded-md border px-3 py-2 text-left",
-                        solverOptions.panel_stability === option.key
-                          ? "border-brand bg-brand-soft"
-                          : "border-border-soft bg-surface-base",
-                      )}
-                    >
-                      <span className="block text-detail font-semibold text-text-primary">
-                        {option.label}
-                      </span>
-                      <span className="mt-0.5 block text-detail text-text-muted">
-                        {option.description}
-                      </span>
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
-          </section>
-
-          <section>
-            <p className={sectionLabelClass}>Prioritering</p>
-            <AdvancedOptionRow
-              title="Hvile mellom arbeidsblokker"
-              description="Prøv å la en intervjuer stå over neste blokk. Strategien styrer hvor kompakt dagen ellers blir."
-              checked={solverOptions.avoid_consecutive_interviewer_blocks}
-              onToggle={() =>
-                onSolverOptionsChange((current) => ({
-                  ...current,
-                  avoid_consecutive_interviewer_blocks:
-                    !current.avoid_consecutive_interviewer_blocks,
-                }))
-              }
-            />
-          </section>
-        </div>
-      </ScheduleDrawer>
     </>
   );
 };

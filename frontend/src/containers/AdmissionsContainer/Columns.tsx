@@ -21,8 +21,8 @@ import { encodeSmsAddress } from "src/utils/emailLinks";
 const columnHelper = createColumnHelper<ApplicationTableRow>();
 
 const formatGroupNames = (groupNames: string[]): string => {
-  if (groupNames.length <= 2) return groupNames.join(" · ");
-  return `${groupNames.slice(0, 2).join(" · ")} +${groupNames.length - 2}`;
+  if (groupNames.length <= 2) return groupNames.join(", ");
+  return `${groupNames.slice(0, 2).join(", ")} +${groupNames.length - 2}`;
 };
 
 export const columns = [

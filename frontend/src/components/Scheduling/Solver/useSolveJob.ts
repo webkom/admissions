@@ -13,34 +13,13 @@ import {
 } from "./solverHelpers";
 import djangoData from "src/utils/djangoData";
 import { createSolveJobLifecycle } from "./solveJobLifecycle";
+import { createSolveJobStorage, type StoredSolveJob } from "./solveJobStorage";
 
-interface StoredSolveJob {
-  jobId: string;
-  baseRevision: string | null;
-  mode: "result" | "proposal" | "auto-apply" | "preview";
+interface SolveJobCompletion {
+  kind: "completed";
+  job: SolveJob;
+  result: SolveResponse | null;
 }
-
-const parseStoredSolveJob = (value: string): StoredSolveJob => {
-  try {
-    const parsed = JSON.parse(value) as Partial<StoredSolveJob>;
-    if (typeof parsed.jobId === "string") {
-      return {
-        jobId: parsed.jobId,
-        baseRevision:
-          typeof parsed.baseRevision === "string" ? parsed.baseRevision : null,
-        mode:
-          parsed.mode === "proposal" ||
-          parsed.mode === "auto-apply" ||
-          parsed.mode === "preview"
-            ? parsed.mode
-            : "result",
-      };
-    }
-  } catch {
-    return { jobId: value, baseRevision: null, mode: "result" };
-  }
-  return { jobId: value, baseRevision: null, mode: "result" };
-};
 
 export function useSolveJob(admissionSlug: string) {
   const queryClient = useQueryClient();
@@ -48,9 +27,10 @@ export function useSolveJob(admissionSlug: string) {
     () => createSolveJobLifecycle(admissionSlug, queryClient),
     [admissionSlug, queryClient],
   );
-  const solveJobKey = `admissions.solveJob.${djangoData.user.id ?? "unknown"}.${admissionSlug}`;
-  const solveProposalKey = `admissions.solveProposal.${djangoData.user.id ?? "unknown"}.${admissionSlug}`;
-  const legacySolveJobKey = `admissions.solveJob.${admissionSlug}`;
+  const storage = useMemo(
+    () => createSolveJobStorage(admissionSlug, djangoData.user.id),
+    [admissionSlug],
+  );
 
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<SolveResponse | null>(null);
@@ -61,6 +41,9 @@ export function useSolveJob(admissionSlug: string) {
   const [activeJob, setActiveJob] = useState<SolveJob | null>(null);
   const [pendingProposal, setPendingProposal] =
     useState<PendingSolveProposal | null>(null);
+  const [rejectedProposalJobId, setRejectedProposalJobId] = useState<
+    string | null
+  >(null);
   const [proposalActionLoading, setProposalActionLoading] = useState(false);
   const [elapsedMs, setElapsedMs] = useState(0);
   const [restoredDraftBaseRevision, setRestoredDraftBaseRevision] = useState<
@@ -68,6 +51,7 @@ export function useSolveJob(admissionSlug: string) {
   >(undefined);
 
   const solveRunRef = useRef(0);
+  const proposalActionRunRef = useRef(0);
   const solveJobIdRef = useRef<string | null>(null);
   const pendingProposalRef = useRef<PendingSolveProposal | null>(null);
   const completedProposalRef = useRef<PendingSolveProposal | null>(null);
@@ -76,16 +60,13 @@ export function useSolveJob(admissionSlug: string) {
   );
 
   useEffect(() => {
-    try {
-      window.sessionStorage.removeItem(legacySolveJobKey);
-    } catch {
-      return;
-    }
-  }, [legacySolveJobKey]);
+    storage.removeLegacyJob();
+  }, [storage]);
 
   useEffect(() => {
     return () => {
       solveRunRef.current += 1;
+      proposalActionRunRef.current += 1;
     };
   }, []);
 
@@ -124,19 +105,11 @@ export function useSolveJob(admissionSlug: string) {
 
   const clearStoredJob = useCallback(() => {
     setRestoredDraftBaseRevision(undefined);
-    try {
-      window.sessionStorage.removeItem(solveJobKey);
-    } catch {
-      return;
-    }
-  }, [solveJobKey]);
+    storage.removeJob();
+  }, [storage]);
   const clearStoredProposal = useCallback(() => {
-    try {
-      window.sessionStorage.removeItem(solveProposalKey);
-    } catch {
-      return;
-    }
-  }, [solveProposalKey]);
+    storage.removeProposal();
+  }, [storage]);
   const rememberProposal = useCallback(
     (job: SolveJob, baseRevision: string | null) => {
       if (
@@ -161,16 +134,13 @@ export function useSolveJob(admissionSlug: string) {
       const proposal = { job, result: job.result, baseRevision };
       pendingProposalRef.current = proposal;
       setPendingProposal(proposal);
-      try {
-        window.sessionStorage.setItem(
-          solveProposalKey,
-          JSON.stringify({ jobId: job.job_id, baseRevision }),
-        );
-      } catch {
-        return;
-      }
+      storage.writeProposal({
+        jobId: job.job_id,
+        baseRevision,
+        mode: "proposal",
+      });
     },
-    [clearStoredProposal, solveProposalKey],
+    [clearStoredProposal, storage],
   );
   const consumeRestoredDraft = useCallback(
     () => setRestoredDraftBaseRevision(undefined),
@@ -187,6 +157,7 @@ export function useSolveJob(admissionSlug: string) {
       pendingProposalRef.current = null;
       completedProposalRef.current = null;
       setPendingProposal(null);
+      setRejectedProposalJobId(null);
       setError(
         showError ? "Tilgangen til intervjuplanleggingen er fjernet." : "",
       );
@@ -199,6 +170,7 @@ export function useSolveJob(admissionSlug: string) {
   const reset = useCallback(() => {
     const jobId = solveJobIdRef.current;
     solveRunRef.current += 1;
+    proposalActionRunRef.current += 1;
     solveJobIdRef.current = null;
     lastGoodResultRef.current = null;
     setActiveJob(null);
@@ -208,6 +180,7 @@ export function useSolveJob(admissionSlug: string) {
     setPlanRevealed(false);
     clearStoredJob();
     setPendingProposal(null);
+    setRejectedProposalJobId(null);
     pendingProposalRef.current = null;
     completedProposalRef.current = null;
     clearStoredProposal();
@@ -284,17 +257,11 @@ export function useSolveJob(admissionSlug: string) {
   };
 
   useEffect(() => {
-    let storedJob: StoredSolveJob | null = null;
-    let hasStoredProposal = false;
-    try {
-      const storedValue = window.sessionStorage.getItem(solveJobKey);
-      if (storedValue) storedJob = parseStoredSolveJob(storedValue);
-      hasStoredProposal = Boolean(
-        window.sessionStorage.getItem(solveProposalKey),
-      );
-    } catch {
-      return;
-    }
+    const storedJobRead = storage.readJob();
+    const storedProposalRead = storage.readProposal();
+    if (!storedJobRead.available || !storedProposalRead.available) return;
+    let storedJob: StoredSolveJob | null = storedJobRead.value;
+    const hasStoredProposal = storedProposalRead.value !== null;
     if (!storedJob && hasStoredProposal) return;
     const runId = ++solveRunRef.current;
     (async () => {
@@ -393,18 +360,13 @@ export function useSolveJob(admissionSlug: string) {
     lifecycle,
     queryClient,
     rememberProposal,
-    solveJobKey,
-    solveProposalKey,
+    storage,
   ]);
 
   useEffect(() => {
-    let storedProposal: StoredSolveJob | null = null;
-    try {
-      const storedValue = window.sessionStorage.getItem(solveProposalKey);
-      if (storedValue) storedProposal = parseStoredSolveJob(storedValue);
-    } catch {
-      return;
-    }
+    const storedProposalRead = storage.readProposal();
+    if (!storedProposalRead.available) return;
+    const storedProposal = storedProposalRead.value;
     if (!storedProposal?.baseRevision) return;
     const runId = solveRunRef.current;
     void (async () => {
@@ -425,24 +387,27 @@ export function useSolveJob(admissionSlug: string) {
     clearStoredProposal,
     lifecycle,
     rememberProposal,
-    solveProposalKey,
+    storage,
   ]);
 
   const cancel = async () => {
     const jobId = solveJobIdRef.current;
-    solveRunRef.current += 1;
+    const cancelRunId = ++solveRunRef.current;
+    const isStale = () => solveRunRef.current !== cancelRunId;
     solveJobIdRef.current = null;
     setActiveJob(null);
     setLoading(false);
     if (jobId) {
       try {
-        const outcome = await lifecycle.cancel(jobId);
+        const outcome = await lifecycle.cancel(jobId, isStale);
+        if (outcome.kind === "stale") return;
         if (outcome.kind === "access-failure") {
           clearAfterAccessFailure();
           return;
         }
         if (outcome.kind === "cancelled") clearStoredJob();
       } catch {
+        if (isStale()) return;
         setError(
           "Kunne ikke avbryte beregningen. Last siden på nytt for å følge den videre.",
         );
@@ -450,6 +415,7 @@ export function useSolveJob(admissionSlug: string) {
     } else {
       clearStoredJob();
     }
+    if (isStale()) return;
     restorePreviousResult();
   };
 
@@ -469,6 +435,8 @@ export function useSolveJob(admissionSlug: string) {
     } = {},
   ) => {
     const runId = ++solveRunRef.current;
+    proposalActionRunRef.current += 1;
+    setRejectedProposalJobId(null);
     setRestoredDraftBaseRevision(undefined);
     setActiveJob(null);
     setLoading(true);
@@ -483,27 +451,23 @@ export function useSolveJob(admissionSlug: string) {
       if (requestOutcome.kind === "stale") return;
       if (requestOutcome.kind === "access-failure") {
         clearAfterAccessFailure();
-        return "access-failure" as const;
+        return { kind: "access-failure" as const };
       }
       const { job: created } = requestOutcome;
       setActiveJob(created);
       solveJobIdRef.current = created.job_id;
-      try {
-        window.sessionStorage.setItem(
-          solveJobKey,
-          JSON.stringify({
-            jobId: created.job_id,
-            baseRevision,
-            mode: previewOnly
-              ? "preview"
-              : retainAsProposal
-                ? autoApplyIfEmpty
-                  ? "auto-apply"
-                  : "proposal"
-                : "result",
-          } satisfies StoredSolveJob),
-        );
-      } catch {
+      const jobStored = storage.writeJob({
+        jobId: created.job_id,
+        baseRevision,
+        mode: previewOnly
+          ? "preview"
+          : retainAsProposal
+            ? autoApplyIfEmpty
+              ? "auto-apply"
+              : "proposal"
+            : "result",
+      });
+      if (!jobStored) {
         clearStoredJob();
       }
       const finishedJobHolder: { current: SolveJob | null } = {
@@ -517,12 +481,34 @@ export function useSolveJob(admissionSlug: string) {
         },
         applyResult,
       );
-      if (settleOutcome === "access-failure") return settleOutcome;
+      if (settleOutcome === "access-failure") {
+        return { kind: "access-failure" as const };
+      }
       const finishedJob = finishedJobHolder.current;
+      if (!finishedJob) return null;
       if (previewOnly && finishedJob?.status === "DONE") {
         void lifecycle.cancel(finishedJob.job_id);
       }
-      if (retainAsProposal && finishedJob) {
+      const workerAppliedFirstDraft = Boolean(
+        retainAsProposal &&
+          autoApplyIfEmpty &&
+          finishedJob.applied_at &&
+          finishedJob.auto_apply_if_empty &&
+          finishedJob.result &&
+          hasSchedule(finishedJob.result.status),
+      );
+      if (workerAppliedFirstDraft) {
+        applyFinishedJob(finishedJob);
+        pendingProposalRef.current = null;
+        completedProposalRef.current = null;
+        setPendingProposal(null);
+        clearStoredProposal();
+        await queryClient.invalidateQueries({
+          queryKey: [`/admin/admission/${admissionSlug}/schedule/`],
+          exact: true,
+          refetchType: "active",
+        });
+      } else if (retainAsProposal) {
         if (
           baseRevision &&
           finishedJob.result &&
@@ -536,7 +522,11 @@ export function useSolveJob(admissionSlug: string) {
         }
         rememberProposal(finishedJob, baseRevision);
       }
-      return settleOutcome;
+      return {
+        kind: "completed",
+        job: finishedJob,
+        result: settleOutcome,
+      } satisfies SolveJobCompletion;
     } catch (err) {
       if (solveRunRef.current !== runId) return;
       if (applyResult) restorePreviousResult();
@@ -560,15 +550,44 @@ export function useSolveJob(admissionSlug: string) {
       pendingProposalRef.current ??
       completedProposalRef.current;
     if (!proposal) return null;
+    const runId = solveRunRef.current;
+    const actionRunId = ++proposalActionRunRef.current;
+    const isStale = () =>
+      solveRunRef.current !== runId ||
+      proposalActionRunRef.current !== actionRunId;
     setProposalActionLoading(true);
     setError("");
     try {
       const outcome = await lifecycle.apply(
         proposal.job.job_id,
         proposal.baseRevision,
+        isStale,
       );
+      if (outcome.kind === "stale") return null;
       if (outcome.kind === "access-failure") {
         clearAfterAccessFailure();
+        return null;
+      }
+      if (outcome.kind === "conflict") {
+        setRejectedProposalJobId(proposal.job.job_id);
+        setError(formatApiError(outcome.error.response?.data));
+        await Promise.all([
+          queryClient.invalidateQueries({
+            queryKey: [`/admin/admission/${admissionSlug}/schedule/`],
+            exact: true,
+            refetchType: "active",
+          }),
+          queryClient.invalidateQueries({
+            queryKey: [`/admin/admission/${admissionSlug}/availability/`],
+            exact: true,
+            refetchType: "active",
+          }),
+          queryClient.invalidateQueries({
+            queryKey: [`/admin/admission/${admissionSlug}/candidates/`],
+            exact: true,
+            refetchType: "active",
+          }),
+        ]);
         return null;
       }
       if (outcome.kind !== "applied") return null;
@@ -582,9 +601,11 @@ export function useSolveJob(admissionSlug: string) {
       pendingProposalRef.current = null;
       completedProposalRef.current = null;
       setPendingProposal(null);
+      setRejectedProposalJobId(null);
       clearStoredProposal();
       return applied;
     } catch (err) {
+      if (isStale()) return null;
       setError(
         isAxiosError(err) && err.response
           ? formatApiError(err.response.data)
@@ -592,16 +613,22 @@ export function useSolveJob(admissionSlug: string) {
       );
       return null;
     } finally {
-      setProposalActionLoading(false);
+      if (!isStale()) setProposalActionLoading(false);
     }
   };
 
   const discardProposal = async () => {
     const proposal = pendingProposal ?? pendingProposalRef.current;
     if (!proposal) return;
+    const runId = solveRunRef.current;
+    const actionRunId = ++proposalActionRunRef.current;
+    const isStale = () =>
+      solveRunRef.current !== runId ||
+      proposalActionRunRef.current !== actionRunId;
     setProposalActionLoading(true);
     try {
-      const outcome = await lifecycle.cancel(proposal.job.job_id);
+      const outcome = await lifecycle.cancel(proposal.job.job_id, isStale);
+      if (outcome.kind === "stale") return;
       if (outcome.kind === "access-failure") {
         clearAfterAccessFailure();
         return;
@@ -613,15 +640,17 @@ export function useSolveJob(admissionSlug: string) {
       pendingProposalRef.current = null;
       completedProposalRef.current = null;
       setPendingProposal(null);
+      setRejectedProposalJobId(null);
       clearStoredProposal();
     } catch (err) {
+      if (isStale()) return;
       setError(
         isAxiosError(err) && err.response
           ? formatApiError(err.response.data)
           : "Kunne ikke forkaste forslaget. Prøv igjen.",
       );
     } finally {
-      setProposalActionLoading(false);
+      if (!isStale()) setProposalActionLoading(false);
     }
   };
 
@@ -636,6 +665,9 @@ export function useSolveJob(admissionSlug: string) {
     elapsedMs,
     jobStatus: activeJob?.status ?? null,
     pendingProposal,
+    pendingProposalRejected:
+      pendingProposal !== null &&
+      rejectedProposalJobId === pendingProposal.job.job_id,
     proposalActionLoading,
     restoredDraftBaseRevision,
     consumeRestoredDraft,

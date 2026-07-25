@@ -31,6 +31,7 @@ export interface Application {
   updated_at: string;
   applied_within_deadline: boolean;
   phone_number: string;
+  priority_text?: string;
   group_applications: GroupApplication[];
 }
 
@@ -49,6 +50,7 @@ export interface AdminApplication extends Application {
 }
 
 interface AdmissionUserData {
+  actor_id: string | null;
   has_application: boolean;
   is_privileged: boolean;
   is_admin: boolean;
@@ -114,7 +116,7 @@ export type RepairStrategy = "minimum_change" | "preserve_panels" | "balanced";
 export type PanelStability = "required" | "preferred" | "flexible";
 export type AvailabilityFallback = "stop" | "propose" | "automatic";
 
-export interface ScheduleDeviation {
+interface ScheduleDeviation {
   kind: "availability";
   candidate_id: string;
   interviewer_id: string;
@@ -241,6 +243,10 @@ export interface SavedSchedule {
   deviation_review?: ScheduleDeviationReview | null;
   is_distributed: boolean;
   conflict_review_open: boolean;
+  conflict_collection_open?: boolean;
+  conflict_collection_revision?: string | null;
+  conflict_collection_candidate_ids?: string[];
+  conflict_collection_participant_ids?: string[];
   name_visibility: NameVisibility;
   revealed_groups?: Array<{ id: string; name: string }>;
   updated_at: string;
@@ -257,6 +263,9 @@ export interface InterviewAvailabilityParticipant {
   reviewed_candidate_ids: string[];
   proposed_candidate_ids: string[];
   conflict_review_complete: boolean;
+  conflict_collection_candidate_ids?: string[];
+  conflict_collection_revision?: string | null;
+  conflict_collection_complete?: boolean;
   has_submitted: boolean;
   participation: InterviewerParticipation;
   needs_review: boolean;

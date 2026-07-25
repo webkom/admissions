@@ -3,17 +3,26 @@ import { createPortal } from "react-dom";
 import { Check, X } from "lucide-react";
 import { iconSizes, iconStrokeWidths } from "src/styles/designTokens";
 import cn from "src/utils/cn";
-import { formatMinutes, makeSlotKey } from "../scheduleUtils";
+import { formatDateHeader, formatMinutes, makeSlotKey } from "../scheduleUtils";
 import {
   ScheduleBlockCell,
+  ScheduleSelectableBlockCell,
   ScheduleSlotSegments,
   ScheduleTimeLabel,
+  scheduleAvailableCellClass,
+  scheduleInteractiveCellMotionClass,
+  scheduleSelectedCellClass,
+  scheduleSelectionMarkClass,
 } from "./ScheduleGridFrame";
 import ScheduleGridFrame from "./ScheduleGridFrame";
 import type { SchedulePatternRow } from "./adminScheduleConfigModel";
+import {
+  isScheduleGridToggleKey,
+  useScheduleGridDragToggle,
+  type ScheduleGridToggleMode,
+} from "./useScheduleGridDragToggle";
 
 type EditorView = "blocks" | "fine";
-type ToggleMode = "add" | "remove";
 
 interface SlotEditorState {
   date: string;
@@ -39,8 +48,13 @@ const pointerToggleMode = (
   activeSlots: ReadonlySet<string>,
   date: string,
   minute: number,
-): ToggleMode =>
+): ScheduleGridToggleMode =>
   activeSlots.has(makeSlotKey(date, minute)) ? "remove" : "add";
+
+const accessibleDateLabel = (date: string) => {
+  const { weekday, dayMonth } = formatDateHeader(date);
+  return `${weekday} ${dayMonth}`;
+};
 
 const SlotEditorPopover: React.FC<{
   state: SlotEditorState;
@@ -130,7 +144,9 @@ const SlotEditorPopover: React.FC<{
   const isPause = state.row.kind === "pause";
   const firstMinute = state.row.minutes[0];
   const lastMinute = state.row.minutes[state.row.minutes.length - 1];
-  const title = isPause ? "Planlagt pause" : "Finjuster intervjuer";
+  const title = `${
+    isPause ? "Planlagt pause" : "Finjuster intervjuer"
+  }, ${accessibleDateLabel(state.date)}`;
 
   if (typeof document === "undefined") return null;
   return createPortal(
@@ -178,6 +194,11 @@ const SlotEditorPopover: React.FC<{
               data-slot=""
               type="button"
               aria-pressed={active}
+              aria-label={`${accessibleDateLabel(state.date)}, ${formatMinutes(
+                minute,
+              )}–${formatMinutes(minute + sessionDuration)}, ${
+                active ? (isPause ? "ekstratid" : "åpen") : "stengt"
+              }`}
               className={cn(
                 "flex min-h-10 items-center justify-between rounded-md border px-3 text-detail font-semibold tabular-nums transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-brand-focus",
                 active
@@ -218,24 +239,11 @@ const AdminSchedulePatternGrid: React.FC<AdminSchedulePatternGridProps> = ({
   const [slotEditor, setSlotEditor] = React.useState<SlotEditorState | null>(
     null,
   );
-  const blockDragModeRef = React.useRef<ToggleMode>("add");
-  const slotDragModeRef = React.useRef<ToggleMode>("add");
-  const isBlockDraggingRef = React.useRef(false);
-  const isSlotDraggingRef = React.useRef(false);
+  const activeSlotsRef = React.useRef(activeSlots);
 
   React.useEffect(() => {
-    const finishDrag = () => {
-      isBlockDraggingRef.current = false;
-      isSlotDraggingRef.current = false;
-    };
-    window.addEventListener("pointerup", finishDrag);
-    window.addEventListener("pointercancel", finishDrag);
-    return () => {
-      window.removeEventListener("pointerup", finishDrag);
-      window.removeEventListener("pointercancel", finishDrag);
-    };
-  }, []);
-
+    activeSlotsRef.current = activeSlots;
+  }, [activeSlots]);
   React.useEffect(() => {
     setSlotEditor(null);
   }, [view]);
@@ -258,13 +266,31 @@ const AdminSchedulePatternGrid: React.FC<AdminSchedulePatternGridProps> = ({
   }, [regularPauseMinutes, rows, view]);
 
   const setSlot = React.useCallback(
-    (date: string, minute: number, mode: ToggleMode) => {
-      const isActive = activeSlots.has(makeSlotKey(date, minute));
+    (date: string, minute: number, mode: ScheduleGridToggleMode) => {
+      const key = makeSlotKey(date, minute);
+      const isActive = activeSlotsRef.current.has(key);
       if ((mode === "add") === isActive) return;
+      const nextSlots = new Set(activeSlotsRef.current);
+      if (mode === "add") nextSlots.add(key);
+      else nextSlots.delete(key);
+      activeSlotsRef.current = nextSlots;
       onToggleSlot(date, minute);
     },
-    [activeSlots, onToggleSlot],
+    [onToggleSlot],
   );
+  const blockDrag = useScheduleGridDragToggle({
+    getMode: ({ date, minutes }: { date: string; minutes: number[] }) =>
+      minutes.some((minute) => activeSlots.has(makeSlotKey(date, minute)))
+        ? "remove"
+        : "add",
+    apply: ({ date, minutes }, mode) =>
+      onSetBlock(date, minutes, mode === "add"),
+  });
+  const slotDrag = useScheduleGridDragToggle({
+    getMode: ({ date, minute }: { date: string; minute: number }) =>
+      pointerToggleMode(activeSlotsRef.current, date, minute),
+    apply: ({ date, minute }, mode) => setSlot(date, minute, mode),
+  });
 
   const renderBlockCell = (
     date: string,
@@ -286,15 +312,78 @@ const AdminSchedulePatternGrid: React.FC<AdminSchedulePatternGridProps> = ({
       ? isPartial
         ? `${activeCount}/${row.minutes.length} åpne`
         : isActive
+          ? "Åpen"
+          : "Stengt"
       : isPartial
         ? `${activeCount}/${row.minutes.length}`
         : isActive
           ? "Åpen"
           : "Stengt";
-    const cellLabel = `${formatMinutes(startMinute)}–${formatMinutes(
-      endMinute,
-    )}, ${statusLabel}`;
+    const cellLabel = `${accessibleDateLabel(date)}, ${formatMinutes(
+      startMinute,
+    )}–${formatMinutes(endMinute)}, ${statusLabel}`;
     const canEditInline = row.minutes.length <= 4;
+
+    if (view === "blocks") {
+      return (
+        <ScheduleSelectableBlockCell
+          key={`${date}-${row.id}`}
+          data-cy="pattern-block"
+          data-date={date}
+          data-row-id={row.id}
+          data-boundary-short={row.boundaryShort || undefined}
+          activeCount={activeCount}
+          totalCount={row.minutes.length}
+          fills={row.minutes.map((minute) =>
+            activeSlots.has(makeSlotKey(date, minute)) ? 1 : 0,
+          )}
+          selectable
+          trackStyle={{ width }}
+          trackDataCy="block-footprint"
+          statusText={row.boundaryShort || isPartial ? statusLabel : undefined}
+          role="button"
+          tabIndex={disabled ? -1 : 0}
+          aria-disabled={disabled}
+          aria-pressed={isPartial ? "mixed" : isActive}
+          aria-label={cellLabel}
+          className={disabled ? "cursor-not-allowed opacity-70" : undefined}
+          onPointerDown={
+            disabled
+              ? undefined
+              : (event) => {
+                  blockDrag.onPointerDown(event, {
+                    date,
+                    minutes: row.minutes,
+                  });
+                }
+          }
+          onPointerEnter={
+            disabled
+              ? undefined
+              : () => {
+                  blockDrag.onPointerEnter({ date, minutes: row.minutes });
+                }
+          }
+          onClick={
+            disabled
+              ? undefined
+              : (event) => {
+                  if (event.detail === 0)
+                    onSetBlock(date, row.minutes, activeCount === 0);
+                }
+          }
+          onKeyDown={
+            disabled
+              ? undefined
+              : (event) => {
+                  if (!isScheduleGridToggleKey(event.key)) return;
+                  event.preventDefault();
+                  onSetBlock(date, row.minutes, activeCount === 0);
+                }
+          }
+        />
+      );
+    }
 
     const content = (
       <div className="flex w-full min-w-0 items-center gap-2">
@@ -303,10 +392,8 @@ const AdminSchedulePatternGrid: React.FC<AdminSchedulePatternGridProps> = ({
             data-cy="block-footprint"
             style={{ width }}
             className={cn(
-              "min-w-0 rounded border p-1 transition-[background-color,border-color] duration-150",
-              activeCount > 0
-                ? "border-brand-border bg-surface-base"
-                : "border-border-soft bg-surface-neutral [background-image:var(--pattern-unavailable)]",
+              "min-w-0 rounded-sm p-1 transition-colors duration-200 motion-reduce:transition-none",
+              view === "fine" && "bg-surface-base/75",
             )}
           >
             {view === "fine" && canEditInline ? (
@@ -323,37 +410,27 @@ const AdminSchedulePatternGrid: React.FC<AdminSchedulePatternGridProps> = ({
                       type="button"
                       disabled={disabled}
                       aria-pressed={active}
-                      aria-label={`${formatMinutes(minute)}–${formatMinutes(
+                      aria-label={`${accessibleDateLabel(
+                        date,
+                      )}, ${formatMinutes(minute)}–${formatMinutes(
                         minute + sessionDuration,
                       )}, ${active ? "åpen" : "stengt"}`}
                       title={`${formatMinutes(minute)}–${formatMinutes(
                         minute + sessionDuration,
                       )}`}
                       className={cn(
-                        "min-h-7 min-w-0 flex-1 rounded-sm border transition-[background-color,border-color,transform] duration-150 active:scale-[0.97] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-brand-focus",
+                        "min-h-7 min-w-0 flex-1 rounded-sm border focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-brand-focus",
+                        scheduleInteractiveCellMotionClass,
                         active
-                          ? "border-brand-border bg-brand-soft"
-                          : "border-border-soft bg-surface-neutral hover:border-brand-border hover:bg-surface-base",
+                          ? "border-brand-activeBorder bg-brand-soft"
+                          : scheduleAvailableCellClass,
+                        disabled && "cursor-not-allowed opacity-70",
                       )}
                       onPointerDown={(event) => {
-                        if (
-                          event.currentTarget.hasPointerCapture(event.pointerId)
-                        )
-                          event.currentTarget.releasePointerCapture(
-                            event.pointerId,
-                          );
-                        const mode = pointerToggleMode(
-                          activeSlots,
-                          date,
-                          minute,
-                        );
-                        slotDragModeRef.current = mode;
-                        isSlotDraggingRef.current = true;
-                        setSlot(date, minute, mode);
+                        slotDrag.onPointerDown(event, { date, minute });
                       }}
                       onPointerEnter={() => {
-                        if (isSlotDraggingRef.current)
-                          setSlot(date, minute, slotDragModeRef.current);
+                        slotDrag.onPointerEnter({ date, minute });
                       }}
                       onClick={(event) => {
                         if (event.detail === 0) onToggleSlot(date, minute);
@@ -373,20 +450,25 @@ const AdminSchedulePatternGrid: React.FC<AdminSchedulePatternGridProps> = ({
             )}
           </div>
         </div>
-        <span
-          className={cn(
-            "ml-auto flex-none text-label font-bold tabular-nums",
-            activeCount > 0 ? "text-brand-dark" : "text-text-disabled",
-          )}
-        >
-          {isActive && !row.boundaryShort ? (
+        <span className="ml-auto flex-none text-label font-bold tabular-nums">
+          {!row.boundaryShort && !isPartial ? (
             <Check
               size={iconSizes.compact}
               strokeWidth={iconStrokeWidths.strong}
               aria-hidden="true"
+              className={cn(
+                scheduleSelectionMarkClass,
+                isActive ? "scale-100 opacity-60" : "scale-75 opacity-0",
+              )}
             />
           ) : (
-            statusLabel
+            <span
+              className={
+                activeCount > 0 ? "text-brand-dark" : "text-text-disabled"
+              }
+            >
+              {statusLabel}
+            </span>
           )}
         </span>
       </div>
@@ -408,15 +490,18 @@ const AdminSchedulePatternGrid: React.FC<AdminSchedulePatternGridProps> = ({
             slotEditor?.date === date && slotEditor.row.id === row.id
           }
           className={cn(
-            "cursor-pointer bg-surface-base hover:border-brand-activeBorder",
-            (isActive || isPartial) && "border-brand-border",
+            scheduleInteractiveCellMotionClass,
+            disabled ? "cursor-not-allowed opacity-70" : "cursor-pointer",
+            isActive || isPartial
+              ? scheduleSelectedCellClass
+              : scheduleAvailableCellClass,
           )}
           onClick={(event) => {
             if (!disabled)
               setSlotEditor({ date, row, anchor: event.currentTarget });
           }}
           onKeyDown={(event) => {
-            if (event.key !== "Enter" && event.key !== " ") return;
+            if (!isScheduleGridToggleKey(event.key)) return;
             if (disabled) return;
             event.preventDefault();
             setSlotEditor({ date, row, anchor: event.currentTarget });
@@ -434,62 +519,15 @@ const AdminSchedulePatternGrid: React.FC<AdminSchedulePatternGridProps> = ({
         data-date={date}
         data-row-id={row.id}
         data-boundary-short={row.boundaryShort || undefined}
-        role={view === "blocks" ? "button" : undefined}
-        tabIndex={view === "blocks" ? (disabled ? -1 : 0) : undefined}
-        aria-disabled={view === "blocks" ? disabled : undefined}
-        aria-pressed={
-          view === "blocks" ? (isPartial ? "mixed" : isActive) : undefined
-        }
-        aria-label={view === "blocks" ? cellLabel : undefined}
+        role={undefined}
+        tabIndex={undefined}
+        aria-disabled={undefined}
+        aria-pressed={undefined}
+        aria-label={undefined}
         className={cn(
-          "transition-[background-color,border-color,box-shadow] duration-200",
-          view === "blocks" &&
-            (disabled ? "cursor-not-allowed opacity-70" : "cursor-pointer"),
-          activeCount > 0
-            ? "border-brand-border bg-surface-base hover:border-brand-activeBorder"
-            : "border-border-soft bg-surface-base hover:border-brand-activeBorder",
+          scheduleInteractiveCellMotionClass,
+          scheduleAvailableCellClass,
         )}
-        onPointerDown={
-          view === "blocks" && !disabled
-            ? (event) => {
-                if (event.currentTarget.hasPointerCapture(event.pointerId))
-                  event.currentTarget.releasePointerCapture(event.pointerId);
-                const mode = activeCount > 0 ? "remove" : "add";
-                blockDragModeRef.current = mode;
-                isBlockDraggingRef.current = true;
-                onSetBlock(date, row.minutes, mode === "add");
-              }
-            : undefined
-        }
-        onPointerEnter={
-          view === "blocks" && !disabled
-            ? () => {
-                if (isBlockDraggingRef.current)
-                  onSetBlock(
-                    date,
-                    row.minutes,
-                    blockDragModeRef.current === "add",
-                  );
-              }
-            : undefined
-        }
-        onClick={
-          view === "blocks" && !disabled
-            ? (event) => {
-                if (event.detail === 0)
-                  onSetBlock(date, row.minutes, activeCount === 0);
-              }
-            : undefined
-        }
-        onKeyDown={
-          view === "blocks" && !disabled
-            ? (event) => {
-                if (event.key !== "Enter" && event.key !== " ") return;
-                event.preventDefault();
-                onSetBlock(date, row.minutes, activeCount === 0);
-              }
-            : undefined
-        }
       >
         {content}
       </ScheduleBlockCell>
@@ -503,7 +541,7 @@ const AdminSchedulePatternGrid: React.FC<AdminSchedulePatternGridProps> = ({
     const activeCount = row.minutes.filter((minute) =>
       activeSlots.has(makeSlotKey(date, minute)),
     ).length;
-    const label = activeCount > 0 ? `Ekstratid · ${activeCount}` : "Pause";
+    const label = activeCount > 0 ? `Ekstratid, ${activeCount}` : "Pause";
     const baseClass = cn(
       "flex min-h-8 w-full items-center justify-center rounded border border-dashed px-2 text-label font-semibold transition-colors",
       activeCount > 0
@@ -517,9 +555,11 @@ const AdminSchedulePatternGrid: React.FC<AdminSchedulePatternGridProps> = ({
           key={`${date}-${row.id}`}
           type="button"
           disabled={disabled}
-          aria-label={`Planlagt pause ${formatMinutes(
-            row.startMinute,
-          )}–${formatMinutes(row.endMinute)}. ${label}.`}
+          aria-label={`Planlagt pause ${accessibleDateLabel(
+            date,
+          )} ${formatMinutes(row.startMinute)}–${formatMinutes(
+            row.endMinute,
+          )}. ${label}.`}
           aria-expanded={
             slotEditor?.date === date && slotEditor.row.id === row.id
           }
@@ -557,7 +597,6 @@ const AdminSchedulePatternGrid: React.FC<AdminSchedulePatternGridProps> = ({
       <ScheduleGridFrame
         dates={dates}
         gridClassName={cn("items-stretch", view === "blocks" && "gap-y-2")}
-        className="bg-surface-muted"
       >
         <div />
         {dates.map((date) => (
@@ -576,7 +615,7 @@ const AdminSchedulePatternGrid: React.FC<AdminSchedulePatternGridProps> = ({
                   >
                     <span className="h-px flex-1 bg-border-soft" />
                     <span className="text-detail font-medium tabular-nums">
-                      Lengre pause · {duration} min
+                      Lengre pause, {duration} min
                     </span>
                     <span className="h-px flex-1 bg-border-soft" />
                   </div>

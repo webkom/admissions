@@ -13,10 +13,11 @@ import {
   nextMonday,
 } from "src/components/Scheduling/scheduleUtils";
 import { useSaveSchedule } from "src/query/hooks";
+import { isSensitiveAuthorityChangedError } from "src/query/sensitiveAccess";
 import type { SavedSchedule } from "src/types";
 
-const DEFAULT_DAY_START_MINUTE = 8 * 60;
-const DEFAULT_DAY_END_MINUTE = 18 * 60;
+const DEFAULT_DAY_START_MINUTE = 9 * 60;
+const DEFAULT_DAY_END_MINUTE = 16 * 60;
 const DEFAULT_SESSION_DURATION = 20;
 
 type Notify = (message: string, tone?: StatusToastState["tone"]) => void;
@@ -132,6 +133,7 @@ export const useScheduleConfiguration = ({
       notify("Rammer lagret.");
       return saved.updated_at;
     } catch (error) {
+      if (isSensitiveAuthorityChangedError(error)) throw error;
       notify(
         isConflictError(error)
           ? CONFLICT_MESSAGE
@@ -139,6 +141,37 @@ export const useScheduleConfiguration = ({
         "error",
       );
       throw error;
+    }
+  };
+
+  const setConflictCollectionOpen = async (open: boolean) => {
+    if (!savedSchedule) {
+      notify("Lagre tidsoppsettet før kandidatnavn åpnes.", "error");
+      return false;
+    }
+    try {
+      await saveSchedule.mutateAsync({
+        conflict_collection_open: open,
+        expected_updated_at: savedSchedule.updated_at,
+      });
+      notify(
+        open
+          ? "Kandidatnavn er åpnet for inhabilitetskontroll."
+          : "Inhabilitetskontrollen er fullført og kandidatnavnene er lukket.",
+      );
+      return true;
+    } catch (error) {
+      if (isSensitiveAuthorityChangedError(error)) throw error;
+      notify(
+        isConflictError(error)
+          ? CONFLICT_MESSAGE
+          : scheduleSaveErrorMessage(
+              error,
+              "Kunne ikke oppdatere inhabilitetskontrollen.",
+            ),
+        "error",
+      );
+      return false;
     }
   };
 
@@ -159,5 +192,6 @@ export const useScheduleConfiguration = ({
     revision,
     dates,
     saveConfig,
+    setConflictCollectionOpen,
   };
 };

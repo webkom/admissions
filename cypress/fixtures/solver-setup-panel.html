@@ -20,8 +20,9 @@
       const scenario =
         new URLSearchParams(window.location.search).get("scenario") ?? "ready";
       const ready = scenario !== "blocked";
+      const waiting = scenario === "rerun-waiting";
       const result = {
-        status: "PARTIAL",
+        status: waiting ? "SUCCESS" : "PARTIAL",
         optimal: true,
         schedule: [
           {
@@ -38,13 +39,15 @@
             ],
           },
         ],
-        unplaceable: [
-          {
-            candidate_id: "candidate-2",
-            candidate: "Kandidat 2",
-            reason: "Ikke nok intervjukapasitet i de åpne tidslukene.",
-          },
-        ],
+        unplaceable: waiting
+          ? []
+          : [
+              {
+                candidate_id: "candidate-2",
+                candidate: "Kandidat 2",
+                reason: "Ikke nok intervjukapasitet i de åpne tidslukene.",
+              },
+            ],
       };
       const interviewers = [
         {
@@ -88,6 +91,8 @@
             totalCapacity: 120,
             neededCapacity: 12,
             conflictCount: 0,
+            conflictBlockedCandidates: [],
+            capabilityBlockedCandidates: [],
             slotsWithFullPanel: 40,
             usableSlotCount: 40,
           }
@@ -98,6 +103,8 @@
             totalCapacity: 80,
             neededCapacity: 12,
             conflictCount: 0,
+            conflictBlockedCandidates: [],
+            capabilityBlockedCandidates: [],
             slotsWithFullPanel: 40,
             usableSlotCount: 40,
           };
@@ -108,9 +115,41 @@
         });
         const [panelSize, setPanelSize] = React.useState(1);
         const [solveCount, setSolveCount] = React.useState(0);
-        const [openRequestKey, setOpenRequestKey] = React.useState(0);
+        const [regenerationOpen, setRegenerationOpen] = React.useState(false);
         const [navigationAction, setNavigationAction] = React.useState("");
-        const rerun = scenario === "rerun" || scenario === "rerun-saving";
+        const [solverInterviewers, setSolverInterviewers] = React.useState([
+          {
+            id: "interviewer-1",
+            name: "Ada",
+            availability: [480],
+            biased: [],
+            has_submitted: true,
+            participation: "participating",
+            experience_level: "experienced",
+          },
+          {
+            id: "interviewer-2",
+            name: "Grace",
+            availability: [480],
+            biased: [],
+            has_submitted: true,
+            participation: "participating",
+            experience_level: "experienced",
+          },
+          {
+            id: "interviewer-3",
+            name: "Linus",
+            availability: [480],
+            biased: [],
+            has_submitted: false,
+            participation: "awaiting_response",
+            experience_level: "unknown",
+          },
+        ]);
+        const rerun =
+          scenario === "rerun" ||
+          scenario === "rerun-saving" ||
+          scenario === "rerun-waiting";
         const saving = scenario === "rerun-saving";
         const persistence = {
           state: saving ? "saving" : "saved",
@@ -123,9 +162,25 @@
 
         const setup = h(SolverSetupPanel, {
           interviewerCount: 6,
-          experiencedInterviewerCount: 2,
+          experiencedInterviewerCount: solverInterviewers.filter(
+            (interviewer) => interviewer.experience_level === "experienced",
+          ).length,
+          interviewers: solverInterviewers,
           solverOptions,
           onSolverOptionsChange: setSolverOptions,
+          onExperienceLevelChange: (userId, experienceLevel) => {
+            setSolverInterviewers((current) =>
+              current.map((interviewer) =>
+                interviewer.id === userId
+                  ? {
+                      ...interviewer,
+                      experience_level: experienceLevel,
+                    }
+                  : interviewer,
+              ),
+            );
+            return Promise.resolve();
+          },
           panelSize,
           onPanelSizeChange: setPanelSize,
           openBlockCount: 10,
@@ -141,7 +196,9 @@
           hasProposal: rerun,
           changeableInterviewCount: rerun ? 10 : 0,
           currentDraftReady: true,
-          openRequestKey,
+          candidateScopeResolved: scenario !== "candidates-loading",
+          regenerationOpen,
+          onCloseRegeneration: () => setRegenerationOpen(false),
           onSolve: () => setSolveCount((count) => count + 1),
           onCancel: () => {},
           onOpenAvailability: () => setNavigationAction("availability"),
@@ -171,16 +228,16 @@
             panelSize: 1,
             proposalStrategy: "balanced",
             canonicalBlocks: [[480]],
-            currentReviewRequired: false,
-            currentReviewComplete: false,
-            completeReviewerCount: 0,
-            requiredReviewerCount: 0,
-            pendingReviewerCount: 0,
-            missingReviewerNames: [],
+            currentReviewRequired: waiting,
+            currentReviewComplete: waiting,
+            completeReviewerCount: waiting ? 1 : 0,
+            requiredReviewerCount: waiting ? 2 : 0,
+            pendingReviewerCount: waiting ? 1 : 0,
+            missingReviewerNames: waiting ? ["Grace"] : [],
             publicationReady: false,
             solverError: "",
-            onOpenSettings: () => setOpenRequestKey((key) => key + 1),
-            onOpenConflictReview: () => {},
+            onOpenSettings: () => setRegenerationOpen(true),
+            onOpenConflictReview: () => setNavigationAction("review"),
             onOpenRepair: () => {},
             onRetrySolve: () => {},
             onOpenPlan: () => {},
@@ -204,14 +261,31 @@
             { "data-cy": "panel-size-value", hidden: true },
             panelSize,
           ),
+          h(
+            "output",
+            { "data-cy": "solver-interviewers", hidden: true },
+            JSON.stringify(solverInterviewers),
+          ),
           h("output", { "data-cy": "solve-count", hidden: true }, solveCount),
           h(
             "output",
             { "data-cy": "navigation-action", hidden: true },
             navigationAction,
           ),
-          setup,
-          results,
+          !rerun
+            ? setup
+            : regenerationOpen
+              ? h(
+                  React.Fragment,
+                  null,
+                  setup,
+                  h(
+                    "section",
+                    { "aria-label": "Gjeldende planutkast" },
+                    React.cloneElement(results, { backgroundMode: true }),
+                  ),
+                )
+              : results,
         );
       };
 

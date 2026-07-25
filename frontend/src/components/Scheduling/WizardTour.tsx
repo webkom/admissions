@@ -14,6 +14,7 @@ import cn from "src/utils/cn";
 import { useFocusTrap } from "./ConfirmDialog";
 import {
   actionButtonBase,
+  keyboardFocusRingClass,
   actionButtonPrimary,
   actionButtonNeutral,
 } from "./ui";
@@ -201,6 +202,9 @@ export default function WizardTour({
         tabIndex={-1}
         className="relative z-10 flex w-full max-w-lg flex-col overflow-hidden rounded-panel border border-border bg-surface-base shadow-modal focus:outline-none"
       >
+        <p className="sr-only" aria-live="polite" aria-atomic="true">
+          Steg {step + 1} av {steps.length}: {current.title}
+        </p>
         <div className="flex items-center justify-between border-b border-border-soft px-5 py-3">
           <div className="flex min-w-0 items-center gap-2">
             <span className="text-detail font-medium text-text-muted">
@@ -222,7 +226,8 @@ export default function WizardTour({
                   aria-label={`Steg ${i + 1}`}
                   aria-current={i === step ? "step" : undefined}
                   className={cn(
-                    "rounded-full transition-[width,background] duration-200",
+                    "rounded-full transition-[width,background] duration-200 motion-reduce:transition-none",
+                    keyboardFocusRingClass,
                     i === step
                       ? "h-2 w-5 bg-brand"
                       : i < step
@@ -235,7 +240,10 @@ export default function WizardTour({
             <button
               type="button"
               onClick={handleClose}
-              className="inline-flex h-7 w-7 items-center justify-center rounded-md text-text-muted transition-colors hover:bg-surface-subtle hover:text-text-primary"
+              className={cn(
+                "inline-flex h-7 w-7 items-center justify-center rounded-md text-text-muted transition-colors hover:bg-surface-subtle hover:text-text-primary",
+                keyboardFocusRingClass,
+              )}
               aria-label="Lukk"
             >
               <X size={iconSizes.control} />
@@ -245,7 +253,7 @@ export default function WizardTour({
 
         <div
           key={step}
-          className="flex flex-col gap-5 px-6 py-7 animate-fade-in"
+          className="flex flex-col gap-5 px-6 py-7 animate-fade-in motion-reduce:animate-none"
         >
           <div className="flex items-start gap-3.5">
             <span className="mt-0.5 inline-flex h-11 w-11 flex-none items-center justify-center rounded-xl bg-brand-fill text-brand">
@@ -293,6 +301,7 @@ export default function WizardTour({
                   aria-current={isActive ? "step" : undefined}
                   className={cn(
                     "flex min-w-20 flex-1 flex-col items-center gap-1.5 border-r border-border-faint px-3 py-3 text-center transition-colors last:border-r-0",
+                    keyboardFocusRingClass,
                     isActive ? "bg-brand-soft" : "hover:bg-surface-subtle",
                   )}
                 >

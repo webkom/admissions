@@ -95,6 +95,8 @@
   --admin-sidebar-width: 17.5rem;
   --schedule-page-max-width: 90rem;
   --schedule-sidebar-width: 20.5rem;
+  --schedule-settings-column-min-width: 21rem;
+  --schedule-preview-label-width: 7rem;
   --management-sidebar-width: 16rem;
   --group-editor-min-height: 10rem;
   --application-table-min-width: 73.75rem;
@@ -382,11 +384,11 @@ body {
 .solver-barberpole-progress {
   background-image: linear-gradient(
     45deg,
-    rgba(255, 255, 255, 0.35) 25%,
+    rgb(255 255 255 / 35%) 25%,
     transparent 25%,
     transparent 50%,
-    rgba(255, 255, 255, 0.35) 50%,
-    rgba(255, 255, 255, 0.35) 75%,
+    rgb(255 255 255 / 35%) 50%,
+    rgb(255 255 255 / 35%) 75%,
     transparent 75%,
     transparent
   );

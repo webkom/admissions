@@ -1,4 +1,4 @@
-export type PlanDraftWorkflowKind =
+type PlanDraftWorkflowKind =
   | "published"
   | "saving"
   | "save_conflict"
@@ -10,7 +10,7 @@ export type PlanDraftWorkflowKind =
   | "repair_required"
   | "ready_to_publish";
 
-export interface PlanDraftWorkflowState {
+interface PlanDraftWorkflowState {
   kind: PlanDraftWorkflowKind;
   tone: "danger" | "warning" | "neutral" | "success";
   title: string;
@@ -110,7 +110,7 @@ export const derivePlanDraftWorkflowState = ({
     return {
       kind: "candidate_check_pending",
       tone: "warning",
-      title: `Kandidatkontroll · ${completeReviewerCount} av ${requiredReviewerCount} har svart`,
+      title: `Kandidatkontroll, ${completeReviewerCount} av ${requiredReviewerCount} har svart`,
       description:
         "Kontroller kandidatene du foreløpig er foreslått til å intervjue.",
     };
@@ -119,7 +119,7 @@ export const derivePlanDraftWorkflowState = ({
     return {
       kind: "waiting_for_reviews",
       tone: "neutral",
-      title: `Kandidatkontroll · ${completeReviewerCount} av ${requiredReviewerCount} har svart`,
+      title: `Kandidatkontroll, ${completeReviewerCount} av ${requiredReviewerCount} har svart`,
       description:
         missingReviewerNames.length > 0
           ? `Venter på ${missingReviewerNames.join(", ")}.`
