@@ -152,8 +152,7 @@ steps:
       CYPRESS_RECORD_KEY:
         from_secret: cypress_record_key
     commands:
-      - ./wait-for-it.sh -t 420 cypress-backend:5000
-      - yarn cypress:run --record
+      - ./scripts/run-cypress-ci.sh --record
 
   - name: cypress-push
     image: cypress/browsers:node-20.9.0-chrome-118.0.5993.88-1-ff-118.0.2-edge-118.0.2088.46-1
@@ -169,27 +168,7 @@ steps:
       CYPRESS_BASE_URL: http://cypress-backend:5000
       CYPRESS_CACHE_FOLDER: /drone/src/.cypress_cache
     commands:
-      - |
-        set -eu
-        ./node_modules/.bin/vite --host 0.0.0.0 >/tmp/cypress-fixture-vite.log 2>&1 &
-        vite_pid=$!
-        cleanup() {
-          exit_status=$?
-          trap - EXIT INT TERM HUP
-          kill "$vite_pid" 2>/dev/null || true
-          wait "$vite_pid" 2>/dev/null || true
-          rm -f .cypress-fixture-credentials.json
-          exit "$exit_status"
-        }
-        trap cleanup EXIT
-        trap 'exit 130' INT
-        trap 'exit 143' TERM HUP
-        ./wait-for-it.sh -t 420 cypress-backend:5000
-        if ! ./wait-for-it.sh -t 60 localhost:5001; then
-          cat /tmp/cypress-fixture-vite.log
-          exit 1
-        fi
-        yarn cypress:run
+      - ./scripts/run-cypress-ci.sh
 
   - name: cypress-pr
     image: cypress/browsers:node-20.9.0-chrome-118.0.5993.88-1-ff-118.0.2-edge-118.0.2088.46-1
@@ -201,8 +180,7 @@ steps:
       CYPRESS_BASE_URL: http://cypress-backend:5000
       CYPRESS_CACHE_FOLDER: /drone/src/.cypress_cache
     commands:
-      - ./wait-for-it.sh -t 420 cypress-backend:5000
-      - yarn cypress:run
+      - ./scripts/run-cypress-ci.sh
   
   - name: docker
     image: plugins/docker
