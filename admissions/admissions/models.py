@@ -452,6 +452,15 @@ class ScheduleDeviationApproval(models.Model):
 
 
 class InterviewAvailability(models.Model):
+    EXPERIENCE_UNKNOWN = "unknown"
+    EXPERIENCE_INEXPERIENCED = "inexperienced"
+    EXPERIENCE_EXPERIENCED = "experienced"
+    EXPERIENCE_LEVEL_CHOICES = [
+        (EXPERIENCE_UNKNOWN, "Unknown"),
+        (EXPERIENCE_INEXPERIENCED, "Inexperienced"),
+        (EXPERIENCE_EXPERIENCED, "Experienced"),
+    ]
+
     PARTICIPATION_AWAITING = "awaiting_response"
     PARTICIPATION_PARTICIPATING = "participating"
     PARTICIPATION_NOT_PARTICIPATING = "not_participating"
@@ -476,6 +485,11 @@ class InterviewAvailability(models.Model):
         max_length=24,
         choices=PARTICIPATION_CHOICES,
         default=PARTICIPATION_AWAITING,
+    )
+    experience_level = models.CharField(
+        max_length=16,
+        choices=EXPERIENCE_LEVEL_CHOICES,
+        default=EXPERIENCE_UNKNOWN,
     )
     submitted_grid_generation = models.PositiveIntegerField(null=True, blank=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -524,6 +538,7 @@ class SolveJob(models.Model):
     request_data = models.JSONField()
     request_fingerprint = models.CharField(max_length=64, blank=True, default="")
     result = models.JSONField(null=True, blank=True)
+    solver_metrics = models.JSONField(default=dict, blank=True)
     error = models.TextField(blank=True, default="")
 
     created_at = models.DateTimeField(auto_now_add=True)

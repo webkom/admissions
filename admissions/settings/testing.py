@@ -5,10 +5,10 @@ from django.core.management.commands.runserver import Command as runserver
 from .base import *
 
 env = environ.Env(DEBUG=(bool, False))
+ADMISSIONS_SOLVER_ENGINE_VERSION = "v2"
 
 # GENERAL CONFIGURATION =======================================================
 DEBUG = True
-ALLOW_CYPRESS_FIXTURES = env.bool("ALLOW_CYPRESS_FIXTURES", default=False)
 ALLOW_SYNTHETIC_SOLVER_INPUT = True
 ALLOW_UNMARKED_SYNTHETIC_SOLVER_INPUT = True
 REST_FRAMEWORK["DEFAULT_THROTTLE_RATES"] = {

@@ -28,7 +28,7 @@ from admissions.admissions.schedule_invalidation import (
     publication_is_invalidated_by_availability,
 )
 from admissions.admissions.schedule_validation import canonicalize_solver_payload
-from admissions.admissions.serializers import SolveOptionsSerializer
+from admissions.admissions.serializers import SolveJobSerializer, SolveOptionsSerializer
 from admissions.admissions.tests.utils import (
     ScheduleRevisionAPIClient,
     create_admission,
@@ -305,6 +305,81 @@ class SavedSchedulePublishSemanticsTestCase(APITestCase):
         self.assertEqual(res.status_code, status.HTTP_200_OK)
         self.assertTrue(res.data["is_distributed"])
 
+    def test_framework_save_preserves_unpublished_overtime_draft(self):
+        self._create_saved(
+            schedule=self._schedule(time=660),
+            is_distributed=False,
+            enabled_slots=[
+                "2026-04-20|540",
+                "2026-04-20|600",
+                "2026-04-20|660",
+            ],
+            solver_options={
+                "policy_version": 2,
+                "panel_stability": "preferred",
+                "availability_fallback": "stop",
+                "allow_overtime": False,
+            },
+        )
+        InterviewAvailability.objects.filter(
+            admission=self.admission,
+            user=self.admin_user,
+        ).update(
+            participation=InterviewAvailability.PARTICIPATION_PARTICIPATING,
+            submitted_grid_generation=1,
+        )
+
+        res = self.client.post(
+            self.url,
+            {
+                "schedule": self._schedule(time=660),
+                "start_date": "2026-04-20",
+                "end_date": "2026-04-24",
+                "session_duration": 60,
+                "day_start_minute": 480,
+                "day_end_minute": 1080,
+                "chunk_size": 4,
+                "chunk_break_minutes": 0,
+                "enabled_slots": [
+                    "2026-04-20|540",
+                    "2026-04-20|600",
+                    "2026-04-20|660",
+                ],
+            },
+            format="json",
+        )
+
+        self.assertEqual(res.status_code, status.HTTP_200_OK, res.data)
+        self.assertFalse(res.data["is_distributed"])
+        self.assertEqual(res.data["schedule"][0]["time"], 660)
+
+        validation_cases = {
+            "schedule edit": {"schedule": self._schedule(time=660, locked=True)},
+            "panel-size change": {
+                "schedule": self._schedule(time=660),
+                "panel_size": 1,
+            },
+            "policy change": {
+                "schedule": self._schedule(time=660),
+                "solver_options": {
+                    "policy_version": 2,
+                    "panel_stability": "preferred",
+                    "availability_fallback": "stop",
+                    "allow_overtime": False,
+                },
+            },
+            "publish": {
+                "schedule": self._schedule(time=660),
+                "is_distributed": True,
+            },
+        }
+        for label, payload in validation_cases.items():
+            with self.subTest(label):
+                invalid = self.client.post(self.url, payload, format="json")
+
+                self.assertEqual(invalid.status_code, status.HTTP_400_BAD_REQUEST)
+                self.assertIn("overtid", str(invalid.data))
+
     def test_explicit_true_keeps_changed_schedule_published(self):
         self._create_saved()
         self._mark_reviewed(self.application)
@@ -492,6 +567,11 @@ class SavedSchedulePublishSemanticsTestCase(APITestCase):
             format="json",
         )
         self.assertEqual(created.status_code, status.HTTP_200_OK)
+        self.assertTrue(
+            SavedSchedule.objects.get(admission=self.admission).solver_options[
+                "require_experienced_panel"
+            ]
+        )
 
         update_without_revision = client.post(
             self.url,
@@ -578,6 +658,7 @@ class SavedSchedulePublishSemanticsTestCase(APITestCase):
                             "id": str(self.admin_user.pk),
                             "name": self.admin_user.username,
                             "is_overtime": False,
+                            "experience_level": "unknown",
                         }
                     ],
                 }
@@ -1118,6 +1199,98 @@ class InterviewAvailabilityHardeningTestCase(APITestCase):
 
         self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertIn("slots", res.data)
+
+    def test_only_interview_admin_can_classify_experience(self):
+        self.client.force_authenticate(user=self.member)
+
+        forbidden = self.client.post(
+            self.url,
+            {"experience_level": InterviewAvailability.EXPERIENCE_EXPERIENCED},
+            format="json",
+        )
+
+        self.assertEqual(forbidden.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertFalse(
+            InterviewAvailability.objects.filter(
+                admission=self.admission,
+                user=self.member,
+            ).exists()
+        )
+
+        self.client.force_authenticate(user=self.admin_user)
+        allowed = self.client.post(
+            self.url,
+            {
+                "user_id": str(self.member.pk),
+                "experience_level": InterviewAvailability.EXPERIENCE_EXPERIENCED,
+            },
+            format="json",
+        )
+
+        self.assertEqual(allowed.status_code, status.HTTP_200_OK)
+        self.assertEqual(allowed.data["experience_level"], "experienced")
+        self.assertEqual(
+            InterviewAvailability.objects.get(
+                admission=self.admission,
+                user=self.member,
+            ).experience_level,
+            InterviewAvailability.EXPERIENCE_EXPERIENCED,
+        )
+
+    def test_non_admin_reads_unknown_experience_but_admin_reads_classification(self):
+        InterviewAvailability.objects.create(
+            admission=self.admission,
+            user=self.member,
+            experience_level=InterviewAvailability.EXPERIENCE_EXPERIENCED,
+        )
+        self.client.force_authenticate(user=self.member)
+
+        member_response = self.client.get(self.url)
+
+        self.assertEqual(member_response.status_code, status.HTTP_200_OK)
+        self.assertEqual(member_response.data[0]["experience_level"], "unknown")
+
+        self.client.force_authenticate(user=self.admin_user)
+        admin_response = self.client.get(self.url)
+
+        self.assertEqual(admin_response.status_code, status.HTTP_200_OK)
+        by_user = {str(item["user_id"]): item for item in admin_response.data}
+        self.assertEqual(
+            by_user[str(self.member.pk)]["experience_level"],
+            "experienced",
+        )
+
+    def test_experience_change_advances_revision_and_invalidates_approvals(self):
+        saved_schedule = self._create_saved_schedule()
+        approval = ScheduleDeviationApproval.objects.create(
+            admission=self.admission,
+            saved_schedule=saved_schedule,
+            actor=self.admin_user,
+            actor_username=self.admin_user.username,
+            schedule_fingerprint="a" * 64,
+            deviation_fingerprint="b" * 64,
+            policy_snapshot={},
+            availability_generation=saved_schedule.availability_generation,
+            layout_version=saved_schedule.layout_version,
+        )
+        previous_revision = saved_schedule.updated_at
+        self.client.force_authenticate(user=self.admin_user)
+
+        response = self.client.post(
+            self.url,
+            {
+                "user_id": str(self.member.pk),
+                "experience_level": InterviewAvailability.EXPERIENCE_INEXPERIENCED,
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        saved_schedule.refresh_from_db()
+        self.assertGreater(saved_schedule.updated_at, previous_revision)
+        self.assertFalse(
+            ScheduleDeviationApproval.objects.filter(pk=approval.pk).exists()
+        )
 
     def test_slot_with_out_of_range_minute_is_rejected(self):
         self.client.force_authenticate(user=self.member)
@@ -3056,6 +3229,26 @@ class SolveJobLifecycleTestCase(APITestCase):
         self.assertEqual(completed.data["job_id"], job_id)
         self.assertEqual(completed.data["status"], SolveJob.STATUS_DONE)
 
+    def test_latest_endpoint_does_not_recover_a_repair_preview(self):
+        self.payload["options"] = {"repair_mode": True}
+        job_id = self._enqueue().data["job_id"]
+
+        pending = self.client.get(
+            reverse("latest-solve-job"),
+            {"admission_slug": self.admission.slug},
+        )
+        call_command("run_solver_worker", once=True)
+        completed = self.client.get(
+            reverse("latest-solve-job"),
+            {"admission_slug": self.admission.slug},
+        )
+
+        self.assertEqual(pending.status_code, status.HTTP_204_NO_CONTENT)
+        self.assertEqual(completed.status_code, status.HTTP_204_NO_CONTENT)
+        job = SolveJob.objects.get(id=job_id)
+        self.assertTrue(job.request_data["preview_only"])
+        self.assertFalse(job.request_data.get("auto_apply_if_empty", False))
+
     def test_other_admission_admin_cannot_read_or_cancel_job(self):
         job_id = self._enqueue().data["job_id"]
         other_group = Group.objects.create(name="OtherAsyncKom", lego_id=955)
@@ -3299,6 +3492,21 @@ class SolveProposalApplyTestCase(APITestCase):
         self.assertIsNotNone(discard.data["discarded_at"])
         self.assertEqual(applied.status_code, status.HTTP_409_CONFLICT)
 
+    def test_repair_preview_cannot_be_applied(self):
+        job = self._job()
+        job.request_data["preview_only"] = True
+        job.request_data["options"]["repair_mode"] = True
+        job.save(update_fields=["request_data"])
+
+        applied = self._apply(job)
+
+        self.assertEqual(applied.status_code, status.HTTP_409_CONFLICT)
+        self.assertIn("Forhåndsvisninger", applied.data["detail"])
+        job.refresh_from_db()
+        self.assertIsNone(job.applied_at)
+        self.saved.refresh_from_db()
+        self.assertEqual(self.saved.schedule, [])
+
     def test_applied_proposal_cannot_also_be_discarded(self):
         job = self._job()
         applied = self._apply(job)
@@ -3421,6 +3629,28 @@ class CanonicalSolverInputTestCase(APITestCase):
         self.assertEqual(request_data["interviewers"], [{"id": str(self.admin.pk)}])
         self.assertNotIn(self.candidate.username, str(request_data))
         self.assertNotIn(self.admin.username, str(request_data))
+
+    def test_experience_policy_requires_a_classified_participant_before_enqueue(self):
+        payload = self._payload()
+        payload["options"] = {
+            "policy_version": 2,
+            "panel_stability": "flexible",
+            "availability_fallback": "stop",
+            "require_experienced_panel": True,
+        }
+
+        blocked = self.client.post(self.url, payload, format="json")
+
+        self.assertEqual(blocked.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("options", blocked.data)
+
+        InterviewAvailability.objects.filter(
+            admission=self.admission,
+            user=self.admin,
+        ).update(experience_level=InterviewAvailability.EXPERIENCE_EXPERIENCED)
+        accepted = self.client.post(self.url, payload, format="json")
+
+        self.assertEqual(accepted.status_code, status.HTTP_202_ACCEPTED)
 
     def test_solve_waits_for_unresolved_roster_and_excludes_opted_out_member(self):
         optional = LegoUser.objects.create(
@@ -3549,6 +3779,14 @@ class CanonicalSolverInputTestCase(APITestCase):
 
         self.assertEqual(payload["all_slots"], [540])
         self.assertEqual(payload["blocks"], [[540]])
+        self.assertEqual(
+            payload["candidates"][0]["user_id"],
+            str(self.candidate.pk),
+        )
+        self.assertEqual(
+            payload["interviewers"][0]["experience_level"],
+            InterviewAvailability.EXPERIENCE_UNKNOWN,
+        )
 
     def test_cross_admission_candidate_is_rejected(self):
         other = create_admission(
@@ -3580,6 +3818,10 @@ class CanonicalSolverInputTestCase(APITestCase):
         self.assertEqual(
             job.result["schedule"][0]["panel"][0]["name"], self.admin.username
         )
+        self.assertNotIn("_solver_metrics", job.result)
+        self.assertEqual(job.solver_metrics["solver_engine_version"], "v2")
+        self.assertEqual(job.solver_metrics["placed_count"], 1)
+        self.assertNotIn("solver_metrics", SolveJobSerializer(job).data)
         self.assertIsNotNone(job.applied_at)
         self.assertEqual(
             len(SavedSchedule.objects.get(admission=self.admission).schedule),

@@ -166,6 +166,7 @@ class Command(BaseCommand):
     def _run(self, job):
         data = job.request_data or {}
         result = None
+        solver_metrics = {}
         error = ""
         new_status = SolveJob.STATUS_DONE
         try:
@@ -218,7 +219,9 @@ class Command(BaseCommand):
                     blocks_data=data.get("blocks", []),
                     block_metadata_data=data.get("block_metadata", []),
                     previous_schedule_data=data.get("previous_schedule", []),
+                    include_metrics=True,
                 )
+                solver_metrics = result.pop("_solver_metrics", {})
                 policy = normalize_schedule_policy(data.get("options", {}))
                 result["request_fingerprint"] = job.request_fingerprint
                 result["policy_snapshot"] = policy.snapshot()
@@ -244,7 +247,9 @@ class Command(BaseCommand):
         # idle; reconnect if it went stale so the write-back doesn't fail.
         _refresh_db_connection()
 
-        updated = self._write_back(job, result, new_status, error)
+        updated = self._write_back(
+            job, result, new_status, error, solver_metrics=solver_metrics
+        )
         if updated and new_status == SolveJob.STATUS_DONE:
             self._auto_apply_empty_draft(job.id)
         log.info(
@@ -279,7 +284,10 @@ class Command(BaseCommand):
                     or job.status != SolveJob.STATUS_DONE
                     or job.applied_at is not None
                     or job.discarded_at is not None
-                    or solve_result.get("status") not in ("SUCCESS", "PARTIAL")
+                    # A deadline-limited partial plan must remain an explicit
+                    # proposal. Only a complete, validated plan may be promoted
+                    # automatically into an empty draft.
+                    or solve_result.get("status") != "SUCCESS"
                     or baseline is None
                     or baseline != saved.updated_at
                     or saved.schedule
@@ -320,7 +328,7 @@ class Command(BaseCommand):
             log.exception("solve_job_auto_apply_failed", job_id=str(job_id))
             return False
 
-    def _write_back(self, job, result, new_status, error):
+    def _write_back(self, job, result, new_status, error, solver_metrics=None):
         """Persist the finished result, retrying briefly on transient DB
         errors so a completed solve is not lost; raises after the final
         attempt (the job is then reaped as stale). Only writes if the job is
@@ -332,6 +340,7 @@ class Command(BaseCommand):
                     id=job.id, status=SolveJob.STATUS_RUNNING
                 ).update(
                     result=result,
+                    solver_metrics=solver_metrics or {},
                     status=new_status,
                     error=error,
                     finished_at=timezone.now(),

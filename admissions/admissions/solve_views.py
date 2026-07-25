@@ -72,6 +72,9 @@ class SolveScheduleView(APIView):
         if not serializer.is_valid():
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
         data = serializer.validated_data
+        data["preview_only"] = bool(
+            data.get("preview_only") or (data.get("options") or {}).get("repair_mode")
+        )
         admission = Admission.objects.select_for_update().get(pk=admission.pk)
 
         synthetic_input = getattr(settings, "ALLOW_SYNTHETIC_SOLVER_INPUT", False) and (
@@ -103,6 +106,19 @@ class SolveScheduleView(APIView):
                 saved_config.enabled_slots = enabled_windows_to_slots(
                     saved_config.enabled_windows, saved_config.session_duration
                 )
+            submitted_options = request.data.get("options")
+            if (
+                not isinstance(submitted_options, dict)
+                or "require_experienced_panel" not in submitted_options
+            ):
+                options = dict(data.get("options") or {})
+                options["require_experienced_panel"] = bool(
+                    (saved_config.solver_options or {}).get(
+                        "require_experienced_panel",
+                        False,
+                    )
+                )
+                data["options"] = options
             try:
                 data.update(
                     canonicalize_solver_payload(
@@ -125,7 +141,9 @@ class SolveScheduleView(APIView):
             data["layout_version"] = saved_config.layout_version
             data["baseline_updated_at"] = saved_config.updated_at
             data["auto_apply_if_empty"] = bool(
-                not saved_config.schedule and not saved_config.is_distributed
+                not data["preview_only"]
+                and not saved_config.schedule
+                and not saved_config.is_distributed
             )
         request_data = build_solve_request(data, synthetic_input, previous_schedule)
         try:
@@ -209,6 +227,10 @@ class LatestSolveJobView(APIView):
                     discarded_at__isnull=True,
                 )
             )
+            .filter(
+                Q(request_data__preview_only=False)
+                | Q(request_data__preview_only__isnull=True)
+            )
             .order_by("-created_at")
             .first()
         )
@@ -244,6 +266,11 @@ class SolveJobApplyView(APIView):
         if saved is None:
             return Response(status=status.HTTP_404_NOT_FOUND)
         job = SolveJob.objects.select_for_update().get(pk=job_id)
+        if (job.request_data or {}).get("preview_only"):
+            return Response(
+                {"detail": "Forhåndsvisninger kan ikke brukes direkte."},
+                status=status.HTTP_409_CONFLICT,
+            )
         if job.status != SolveJob.STATUS_DONE or not isinstance(job.result, dict):
             return Response(
                 {"detail": "Forslaget er ikke ferdig beregnet."},

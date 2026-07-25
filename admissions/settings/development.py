@@ -9,13 +9,18 @@ SETTINGS_DIR = environ.Path(__file__) - 1
 env = environ.Env()
 env_file = str(SETTINGS_DIR.path(".env"))
 env.read_env(env_file)
+ADMISSIONS_SOLVER_ENGINE_VERSION = env(
+    "ADMISSIONS_SOLVER_ENGINE_VERSION",
+    default="v2",
+)
 
 # GENERAL CONFIGURATION =======================================================
 DEBUG = env("DEBUG", default=True)
-ALLOW_CYPRESS_FIXTURES = env.bool("ALLOW_CYPRESS_FIXTURES", default=False)
 ALLOW_SYNTHETIC_SOLVER_INPUT = True
 SECRET_KEY = "secretkeythatisnotsosecret"
-runserver.default_port = "5000"
+# Port 5000 is commonly claimed by macOS AirPlay Receiver (ControlCenter).
+# Keep the local OAuth redirect and the default server on one stable port.
+runserver.default_port = "5002"
 
 DJANGO_VITE_DEV_MODE = env("VITE_DEV", default=True)
 DJANGO_VITE_DEV_SERVER_PORT = "5001"
@@ -36,6 +41,8 @@ DATABASES = {
 }
 
 API_URL = "/api"
+SESSION_COOKIE_NAME = "admissions_sessionid"
+CSRF_COOKIE_NAME = "admissions_csrftoken"
 
 # E-mail in console
 EMAIL_BACKEND = "django.core.mail.backends.console.EmailBackend"
@@ -77,7 +84,7 @@ SOCIAL_AUTH_LEGO_API_URL = env("AUTH_LEGO_API_URL", None)
 CORS_ALLOW_CREDENTIALS = True
 CORS_ORIGIN_WHITELIST = [
     "http://127.0.0.1:3000",
-    "http://127.0.0.1:5000",
     "http://127.0.0.1:5001",
+    "http://127.0.0.1:5002",
     "http://127.0.0.1:8000",
 ]

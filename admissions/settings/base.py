@@ -14,10 +14,9 @@ import environ
 
 from .logging import *  # noqa
 
-# Cypress fixture preparation installs a temporary password on a seeded local
-# administrator. It must be explicitly enabled by a non-production settings
-# module before the management command performs any writes.
-ALLOW_CYPRESS_FIXTURES = False
+ADMISSIONS_SOLVER_ENGINE_VERSION = os.environ.get(
+    "ADMISSIONS_SOLVER_ENGINE_VERSION", "v1"
+)
 
 # GENERAL CONFIGURATION ======================================================
 BASE_PROJECT_DIR = environ.Path(__file__) - 3  # manage.py level
@@ -56,6 +55,7 @@ MIDDLEWARE = [
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
+    "admissions.utils.middleware.StaleSessionRecoveryMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
     "admissions.utils.middleware.LoggingMiddleware",
@@ -162,6 +162,7 @@ SOCIAL_AUTH_PIPELINE = (
     "social_core.pipeline.social_auth.social_uid",
     "social_core.pipeline.social_auth.auth_allowed",
     "social_core.pipeline.social_auth.social_user",
+    "admissions.oauth.use_existing_lego_user",
     "social_core.pipeline.user.get_username",
     "social_core.pipeline.user.create_user",
     "social_core.pipeline.social_auth.associate_user",

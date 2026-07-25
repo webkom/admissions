@@ -25,6 +25,7 @@ from admissions.admissions.schedule_layout import (
 from admissions.admissions.schedule_policy import (
     SchedulePolicyError,
     build_deviation_review,
+    new_admission_solver_options,
     normalize_schedule_policy,
     solver_options_for_storage,
 )
@@ -714,14 +715,44 @@ def _canonicalize_schedule(
     )
     solver_options = data.get(
         "solver_options",
-        existing.solver_options if existing is not None else None,
+        (
+            existing.solver_options
+            if existing is not None
+            else new_admission_solver_options()
+        ),
     )
     if "solver_options" in data and solver_options is not None:
         try:
             solver_options = solver_options_for_storage(solver_options)
         except SchedulePolicyError as exc:
             raise ScheduleInputError({"solver_options": [str(exc)]}) from exc
-    if schedule and ("schedule" in data or state["is_distributed"]):
+    framework_fields = {
+        "start_date",
+        "end_date",
+        "session_duration",
+        "day_start_minute",
+        "day_end_minute",
+        "chunk_size",
+        "chunk_break_minutes",
+        "enabled_slots",
+        "enabled_windows",
+        "block_mode",
+        "manual_blocks",
+        "slot_overrides",
+    }
+    preserves_unpublished_draft = (
+        existing is not None
+        and not state["is_distributed"]
+        and "schedule" in data
+        and data["schedule"] == existing.schedule
+        and bool(framework_fields.intersection(data))
+        and not {"solver_options", "panel_size", "is_distributed"}.intersection(data)
+    )
+    if (
+        schedule
+        and ("schedule" in data or state["is_distributed"])
+        and not preserves_unpublished_draft
+    ):
         try:
             schedule = canonicalize_schedule(
                 admission=admission,
