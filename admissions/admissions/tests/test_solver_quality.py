@@ -1,4 +1,5 @@
 from types import SimpleNamespace
+from unittest import mock
 
 from django.core.management import call_command
 from django.urls import reverse
@@ -7,6 +8,7 @@ from rest_framework.test import APITestCase
 
 from admissions.admissions.constants import MEMBER
 from admissions.admissions.models import Group, LegoUser, Membership, SolveJob
+import admissions.admissions.solve_schedule as solve_schedule_module
 from admissions.admissions.solve_schedule import solve_schedule
 from admissions.admissions.tests.utils import create_admission
 
@@ -43,6 +45,65 @@ class SolverQualityTestCase(APITestCase):
         for key in ENVELOPE_KEYS:
             self.assertIn(key, data)
             self.assertIsInstance(data[key], list)
+
+    def _block_times(self, block):
+        if isinstance(block, dict):
+            return set(block.get("usable_slots") or block.get("canonical_slots") or [])
+        return set(block)
+
+    def _worked_blocks(self, schedule, blocks):
+        worked = {}
+        for block_index, block in enumerate(blocks):
+            block_times = self._block_times(block)
+            if isinstance(block, dict):
+                block_index = block["index"]
+            for item in schedule:
+                if item["time"] not in block_times:
+                    continue
+                for member in item["panel"]:
+                    worked.setdefault(member["id"], set()).add(block_index)
+        return worked
+
+    def _day_block_groups(self, blocks):
+        groups = []
+        current_day = None
+        current_group = []
+        canonical_blocks = []
+        for block_index, block in enumerate(blocks):
+            if isinstance(block, dict):
+                canonical_blocks.append(
+                    (
+                        block.get("day", 0),
+                        block.get("start_time", 0),
+                        block.get("index", block_index),
+                        block_index,
+                    )
+                )
+            elif block:
+                canonical_blocks.append((block[0] // (24 * 60), block[0], block_index, block_index))
+
+        for block_day, _start_time, _canonical_index, block_index in sorted(
+            canonical_blocks
+        ):
+            if current_day is None or block_day != current_day:
+                if current_group:
+                    groups.append(current_group)
+                current_day = block_day
+                current_group = []
+            current_group.append(_canonical_index)
+        if current_group:
+            groups.append(current_group)
+        return groups
+
+    def _consecutive_block_penalties(self, schedule, blocks):
+        worked = self._worked_blocks(schedule, blocks)
+        penalty = 0
+        for block_group in self._day_block_groups(blocks):
+            for block_set in worked.values():
+                for left, right in zip(block_group, block_group[1:]):
+                    if left in block_set and right in block_set:
+                        penalty += 1
+        return penalty
 
     def test_fully_biased_candidate_is_unplaceable_without_empty_panel(self):
         payload = {
@@ -366,6 +427,541 @@ class SolverQualityTestCase(APITestCase):
         }
         self.assertEqual(len(panels), 1)
 
+    def test_avoid_consecutive_interviewer_blocks_prefers_work_rest_work_when_rotation_is_possible(self):
+        blocks = [[0, 1], [2, 3], [4, 5]]
+        result = solve_schedule(
+            candidates_data=[
+                {"id": f"candidate-{index}", "name": f"Candidate {index}", "gender": ""}
+                for index in range(6)
+            ],
+            interviewers_data=[
+                {
+                    "id": "interviewer-1",
+                    "name": "Ola",
+                    "gender": "",
+                    "availability": [0, 1, 2, 3, 4, 5],
+                },
+                {
+                    "id": "interviewer-2",
+                    "name": "Ida",
+                    "gender": "",
+                    "availability": [0, 1, 2, 3, 4, 5],
+                },
+            ],
+            panel_size=1,
+            options_data={
+                "allow_overtime": False,
+                "prioritize_continuity": False,
+                "same_panel_per_block": False,
+            },
+            all_slots_data=[0, 1, 2, 3, 4, 5],
+            blocks_data=blocks,
+        )
+
+        self.assertEqual(result["status"], "SUCCESS")
+        self.assertEqual(len(result["schedule"]), 6)
+        self.assertEqual(self._consecutive_block_penalties(result["schedule"], blocks), 0)
+
+    def test_avoid_consecutive_interviewer_blocks_allows_consecutive_blocks_when_capacity_is_tight(self):
+        blocks = [[0], [1]]
+        result = solve_schedule(
+            candidates_data=[
+                {"id": "candidate-1", "name": "Ada", "gender": ""},
+                {"id": "candidate-2", "name": "Eirik", "gender": ""},
+            ],
+            interviewers_data=[
+                {
+                    "id": "interviewer-1",
+                    "name": "Ola",
+                    "gender": "",
+                    "availability": [0, 1],
+                },
+            ],
+            panel_size=1,
+            options_data={
+                "allow_overtime": False,
+                "prioritize_continuity": False,
+                "same_panel_per_block": False,
+            },
+            all_slots_data=[0, 1],
+            blocks_data=blocks,
+        )
+
+        self.assertEqual(result["status"], "SUCCESS")
+        self.assertEqual(len(result["schedule"]), 2)
+        self.assertEqual(self._consecutive_block_penalties(result["schedule"], blocks), 1)
+        self.assertEqual(self._worked_blocks(result["schedule"], blocks)["interviewer-1"], {0, 1})
+
+    def test_avoid_consecutive_interviewer_blocks_yields_to_candidate_placement(self):
+        blocks = [[0], [1], [2]]
+        result = solve_schedule(
+            candidates_data=[
+                {"id": "c1", "name": "Ada", "gender": ""},
+                {"id": "c2", "name": "Eirik", "gender": ""},
+                {"id": "c3", "name": "Liv", "gender": ""},
+            ],
+            interviewers_data=[
+                {
+                    "id": "interviewer-1",
+                    "name": "Ola",
+                    "gender": "",
+                    "availability": [0, 1],
+                    "biased": ["c3"],
+                },
+                {
+                    "id": "interviewer-2",
+                    "name": "Ida",
+                    "gender": "",
+                    "availability": [2],
+                    "biased": ["c1", "c2"],
+                },
+            ],
+            panel_size=1,
+            options_data={
+                "allow_overtime": False,
+                "prioritize_continuity": False,
+                "same_panel_per_block": False,
+            },
+            locked_assignments_data=[
+                {
+                    "candidate_id": "c1",
+                    "candidate": "Ada",
+                    "time": 0,
+                    "panel": [{"id": "interviewer-1", "name": "Ola"}],
+                }
+            ],
+            all_slots_data=[0, 1, 2],
+            blocks_data=blocks,
+        )
+
+        self.assertEqual(result["status"], "SUCCESS")
+        self.assertEqual(
+            [item["candidate_id"] for item in result["schedule"]],
+            ["c1", "c2", "c3"],
+        )
+        worked = self._worked_blocks(result["schedule"], blocks)
+        self.assertEqual(worked["interviewer-1"], {0, 1})
+        self.assertEqual(worked["interviewer-2"], {2})
+        self.assertTrue(next(item for item in result["schedule"] if item["candidate_id"] == "c1")["locked"])
+        self.assertEqual(self._consecutive_block_penalties(result["schedule"], blocks), 1)
+
+    def test_three_block_run_counts_two_adjacent_pair_penalties(self):
+        blocks = [[0], [1], [2]]
+        result = solve_schedule(
+            candidates_data=[
+                {"id": "c1", "name": "Ada", "gender": ""},
+                {"id": "c2", "name": "Eirik", "gender": ""},
+                {"id": "c3", "name": "Liv", "gender": ""},
+            ],
+            interviewers_data=[
+                {
+                    "id": "interviewer-1",
+                    "name": "Ola",
+                    "gender": "",
+                    "availability": [0, 1, 2],
+                },
+            ],
+            panel_size=1,
+            options_data={
+                "allow_overtime": False,
+                "prioritize_continuity": False,
+                "same_panel_per_block": False,
+            },
+            all_slots_data=[0, 1, 2],
+            blocks_data=blocks,
+        )
+
+        self.assertEqual(result["status"], "SUCCESS")
+        self.assertEqual(self._worked_blocks(result["schedule"], blocks)["interviewer-1"], {0, 1, 2})
+        self.assertEqual(self._consecutive_block_penalties(result["schedule"], blocks), 2)
+
+    def test_avoid_consecutive_interviewer_blocks_ignores_day_boundaries(self):
+        blocks = [[0], [24 * 60]]
+        result = solve_schedule(
+            candidates_data=[
+                {"id": "c1", "name": "Ada", "gender": ""},
+                {"id": "c2", "name": "Eirik", "gender": ""},
+            ],
+            interviewers_data=[
+                {
+                    "id": "interviewer-1",
+                    "name": "Ola",
+                    "gender": "",
+                    "availability": [0, 24 * 60],
+                },
+            ],
+            panel_size=1,
+            options_data={
+                "allow_overtime": False,
+                "prioritize_continuity": False,
+                "same_panel_per_block": False,
+            },
+            all_slots_data=[0, 24 * 60],
+            blocks_data=blocks,
+        )
+
+        self.assertEqual(result["status"], "SUCCESS")
+        self.assertEqual(self._consecutive_block_penalties(result["schedule"], blocks), 0)
+
+    def test_intervening_block_breaks_consecutiveness(self):
+        blocks = [[0], [1], [2]]
+        result = solve_schedule(
+            candidates_data=[
+                {"id": "c1", "name": "Ada", "gender": ""},
+                {"id": "c2", "name": "Eirik", "gender": ""},
+                {"id": "c3", "name": "Liv", "gender": ""},
+            ],
+            interviewers_data=[
+                {
+                    "id": "interviewer-1",
+                    "name": "Ola",
+                    "gender": "",
+                    "availability": [0, 1, 2],
+                    "biased": ["c2"],
+                },
+                {
+                    "id": "interviewer-2",
+                    "name": "Ida",
+                    "gender": "",
+                    "availability": [0, 1, 2],
+                    "biased": ["c1", "c3"],
+                },
+            ],
+            panel_size=1,
+            options_data={
+                "allow_overtime": False,
+                "prioritize_continuity": False,
+                "same_panel_per_block": False,
+            },
+            all_slots_data=[0, 1, 2],
+            blocks_data=blocks,
+        )
+
+        self.assertEqual(result["status"], "SUCCESS")
+        worked = self._worked_blocks(result["schedule"], blocks)
+        self.assertEqual(worked["interviewer-1"], {0, 2})
+        self.assertEqual(worked["interviewer-2"], {1})
+        self.assertEqual(self._consecutive_block_penalties(result["schedule"], blocks), 0)
+
+    def test_partial_block_occupancy_still_counts_as_consecutive_work(self):
+        blocks = [[0, 1], [2, 3]]
+        result = solve_schedule(
+            candidates_data=[
+                {"id": "c1", "name": "Ada", "gender": ""},
+                {"id": "c2", "name": "Eirik", "gender": ""},
+            ],
+            interviewers_data=[
+                {
+                    "id": "interviewer-1",
+                    "name": "Ola",
+                    "gender": "",
+                    "availability": [0, 2],
+                },
+            ],
+            panel_size=1,
+            options_data={
+                "allow_overtime": False,
+                "prioritize_continuity": False,
+                "same_panel_per_block": False,
+            },
+            all_slots_data=[0, 1, 2, 3],
+            blocks_data=blocks,
+        )
+
+        self.assertEqual(result["status"], "SUCCESS")
+        self.assertEqual(self._worked_blocks(result["schedule"], blocks)["interviewer-1"], {0, 1})
+        self.assertEqual(self._consecutive_block_penalties(result["schedule"], blocks), 1)
+
+    def test_same_panel_per_block_can_rotate_panels_between_adjacent_blocks(self):
+        blocks = [[0, 1], [2, 3]]
+        result = solve_schedule(
+            candidates_data=[
+                {"id": f"c{index}", "name": f"Candidate {index}", "gender": ""}
+                for index in range(4)
+            ],
+            interviewers_data=[
+                {
+                    "id": "i1",
+                    "name": "Ola",
+                    "gender": "",
+                    "availability": [0, 1, 2, 3],
+                },
+                {
+                    "id": "i2",
+                    "name": "Ida",
+                    "gender": "",
+                    "availability": [0, 1, 2, 3],
+                },
+                {
+                    "id": "i3",
+                    "name": "Liv",
+                    "gender": "",
+                    "availability": [0, 1, 2, 3],
+                },
+                {
+                    "id": "i4",
+                    "name": "Mia",
+                    "gender": "",
+                    "availability": [0, 1, 2, 3],
+                },
+            ],
+            panel_size=2,
+            options_data={
+                "allow_overtime": False,
+                "prioritize_continuity": False,
+                "same_panel_per_block": True,
+            },
+            all_slots_data=[0, 1, 2, 3],
+            blocks_data=blocks,
+        )
+
+        self.assertEqual(result["status"], "SUCCESS")
+        panels_by_block = []
+        for block in blocks:
+            block_times = set(block)
+            block_panels = {
+                frozenset(member["id"] for member in item["panel"])
+                for item in result["schedule"]
+                if item["time"] in block_times
+            }
+            self.assertEqual(len(block_panels), 1)
+            panels_by_block.append(next(iter(block_panels)))
+        self.assertTrue(panels_by_block[0].isdisjoint(panels_by_block[1]))
+
+    def test_empty_middle_block_does_not_create_a_false_consecutive_penalty(self):
+        blocks = [
+            {
+                "index": 0,
+                "day": 0,
+                "start_time": 0,
+                "canonical_slots": [0],
+                "usable_slots": [0],
+                "has_zero_usable_slots": False,
+            },
+            {
+                "index": 2,
+                "day": 0,
+                "start_time": 2,
+                "canonical_slots": [2],
+                "usable_slots": [2],
+                "has_zero_usable_slots": False,
+            },
+            {
+                "index": 1,
+                "day": 0,
+                "start_time": 1,
+                "canonical_slots": [1],
+                "usable_slots": [],
+                "has_zero_usable_slots": True,
+            },
+        ]
+        result = solve_schedule(
+            candidates_data=[
+                {"id": "c1", "name": "Ada", "gender": ""},
+                {"id": "c2", "name": "Eirik", "gender": ""},
+            ],
+            interviewers_data=[
+                {
+                    "id": "interviewer-1",
+                    "name": "Ola",
+                    "gender": "",
+                    "availability": [0, 2],
+                }
+            ],
+            panel_size=1,
+            options_data={
+                "allow_overtime": False,
+                "prioritize_continuity": False,
+                "same_panel_per_block": False,
+            },
+            all_slots_data=[0, 1, 2],
+            blocks_data=[[0], [2], []],
+            block_metadata_data=blocks,
+        )
+
+        self.assertEqual(result["status"], "SUCCESS")
+        self.assertEqual(sorted(item["time"] for item in result["schedule"]), [0, 2])
+        self.assertEqual(self._consecutive_block_penalties(result["schedule"], blocks), 0)
+
+    def test_compact_days_does_not_override_block_rest_preference(self):
+        blocks = [[0, 1], [2, 3], [4, 5]]
+        result = solve_schedule(
+            candidates_data=[
+                {"id": f"candidate-{index}", "name": f"Candidate {index}", "gender": ""}
+                for index in range(6)
+            ],
+            interviewers_data=[
+                {
+                    "id": "interviewer-1",
+                    "name": "Ola",
+                    "gender": "",
+                    "availability": [0, 1, 2, 3, 4, 5],
+                },
+                {
+                    "id": "interviewer-2",
+                    "name": "Ida",
+                    "gender": "",
+                    "availability": [0, 1, 2, 3, 4, 5],
+                },
+            ],
+            panel_size=1,
+            options_data={
+                "allow_overtime": False,
+                "prioritize_continuity": True,
+                "same_panel_per_block": False,
+            },
+            all_slots_data=[0, 1, 2, 3, 4, 5],
+            blocks_data=blocks,
+        )
+
+        self.assertEqual(result["status"], "SUCCESS")
+        self.assertEqual(self._consecutive_block_penalties(result["schedule"], blocks), 0)
+
+    def test_locked_adjacent_block_assignments_survive_and_unlockeds_still_prefer_rest(self):
+        blocks = [[0], [1], [2]]
+        result = solve_schedule(
+            candidates_data=[
+                {"id": "c1", "name": "Ada", "gender": ""},
+                {"id": "c2", "name": "Eirik", "gender": ""},
+                {"id": "c3", "name": "Liv", "gender": ""},
+            ],
+            interviewers_data=[
+                {
+                    "id": "interviewer-1",
+                    "name": "Ola",
+                    "gender": "",
+                    "availability": [0, 1, 2],
+                },
+                {
+                    "id": "interviewer-2",
+                    "name": "Ida",
+                    "gender": "",
+                    "availability": [0, 1, 2],
+                },
+            ],
+            panel_size=1,
+            options_data={
+                "allow_overtime": False,
+                "prioritize_continuity": False,
+                "same_panel_per_block": False,
+            },
+            locked_assignments_data=[
+                {
+                    "candidate_id": "c1",
+                    "candidate": "Ada",
+                    "time": 0,
+                    "panel": [{"id": "interviewer-1", "name": "Ola"}],
+                },
+                {
+                    "candidate_id": "c2",
+                    "candidate": "Eirik",
+                    "time": 1,
+                    "panel": [{"id": "interviewer-1", "name": "Ola"}],
+                },
+            ],
+            all_slots_data=[0, 1, 2],
+            blocks_data=blocks,
+        )
+
+        self.assertEqual(result["status"], "SUCCESS")
+        schedule_by_candidate = {item["candidate_id"]: item for item in result["schedule"]}
+        self.assertTrue(schedule_by_candidate["c1"]["locked"])
+        self.assertTrue(schedule_by_candidate["c2"]["locked"])
+        self.assertEqual(schedule_by_candidate["c3"]["panel"][0]["id"], "interviewer-2")
+        self.assertEqual(self._consecutive_block_penalties(result["schedule"], blocks), 1)
+
+    def test_continuity_keeps_new_interview_adjacent_to_locked_slot(self):
+        result = solve_schedule(
+            candidates_data=[
+                {"id": "c1", "name": "Ada", "gender": ""},
+                {"id": "c2", "name": "Eirik", "gender": ""},
+            ],
+            interviewers_data=[
+                {
+                    "id": "i1",
+                    "name": "Ola",
+                    "gender": "",
+                    "availability": [0, 1, 2, 3],
+                }
+            ],
+            panel_size=1,
+            options_data={
+                "allow_overtime": False,
+                "prioritize_continuity": True,
+                "same_panel_per_block": True,
+            },
+            locked_assignments_data=[
+                {
+                    "candidate_id": "c1",
+                    "candidate": "Ada",
+                    "time": 2,
+                    "panel": [{"id": "i1", "name": "Ola"}],
+                }
+            ],
+            all_slots_data=[0, 1, 2, 3],
+            blocks_data=[[0, 1, 2, 3]],
+        )
+
+        self.assertEqual(result["status"], "SUCCESS")
+        placed = {item["candidate_id"]: item["time"] for item in result["schedule"]}
+        self.assertEqual(placed["c1"], 2)
+        self.assertEqual(placed["c2"], 1)
+
+    def test_continuity_keeps_earliness_in_its_own_tier(self):
+        captured = {}
+        original_builder = solve_schedule_module._build_lexicographic_objective
+
+        def capture_objective_tiers(tiers):
+            captured["tiers"] = tiers
+            return original_builder(tiers)
+
+        with mock.patch.object(
+            solve_schedule_module,
+            "_build_lexicographic_objective",
+            side_effect=capture_objective_tiers,
+        ):
+            res = solve_schedule(
+                candidates_data=[
+                    {"id": "c1", "name": "Ada", "gender": ""},
+                    {"id": "c2", "name": "Eirik", "gender": ""},
+                ],
+                interviewers_data=[
+                    {
+                        "id": "interviewer-1",
+                        "name": "Ola",
+                        "gender": "",
+                        "availability": [0, 1],
+                    }
+                ],
+                panel_size=1,
+                options_data={
+                    "allow_overtime": False,
+                    "prioritize_continuity": True,
+                    "same_panel_per_block": False,
+                },
+                all_slots_data=[0, 1],
+                blocks_data=[[0, 1]],
+            )
+
+        self.assertEqual(res["status"], "SUCCESS")
+        tier_names = [tier.name for tier in captured["tiers"]]
+        self.assertEqual(
+            tier_names,
+            [
+                "unplaced_candidates",
+                "availability",
+                "adjacent_block_rest",
+                "load_and_continuity",
+                "earliness",
+                "stability_tie_breaker",
+            ],
+        )
+        continuity_tier = next(
+            tier for tier in captured["tiers"] if tier.name == "load_and_continuity"
+        )
+        self.assertEqual(continuity_tier.maximum, 88)
+        self.assertEqual(tier_names.count("earliness"), 1)
+
     def test_enforce_same_gender_matches_panel_to_candidate(self):
         payload = {
             "candidates": [
@@ -571,3 +1167,118 @@ class SolverQualityTestCase(APITestCase):
         placed = {item["candidate_id"]: item["time"] for item in result["schedule"]}
         self.assertEqual(placed["c2"], 0)
         self.assertEqual(placed["c1"], 1)
+
+    def test_repair_preserves_unaffected_row_before_rebalancing_load(self):
+        result = solve_schedule(
+            candidates_data=[
+                {"id": "c1", "name": "Ada", "gender": ""},
+                {"id": "c2", "name": "Eirik", "gender": ""},
+            ],
+            interviewers_data=[
+                {
+                    "id": "i1",
+                    "name": "Ola",
+                    "gender": "",
+                    "availability": [0, 1],
+                    "biased": ["c1"],
+                },
+                {
+                    "id": "i2",
+                    "name": "Ida",
+                    "gender": "",
+                    "availability": [0, 1],
+                    "biased": [],
+                },
+                {
+                    "id": "i3",
+                    "name": "Emil",
+                    "gender": "",
+                    "availability": [0, 1],
+                    "biased": [],
+                },
+            ],
+            panel_size=1,
+            all_slots_data=[0, 1],
+            options_data={
+                "prioritize_continuity": False,
+                "repair_mode": True,
+                "repair_strategy": "minimum_change",
+            },
+            previous_schedule_data=[
+                {"candidate_id": "c1", "time": 0, "panel": [{"id": "i1"}]},
+                {"candidate_id": "c2", "time": 1, "panel": [{"id": "i2"}]},
+            ],
+        )
+
+        self.assertEqual(result["status"], "SUCCESS")
+        repaired = {item["candidate_id"]: item for item in result["schedule"]}
+        self.assertEqual(repaired["c1"]["time"], 0)
+        self.assertNotEqual(repaired["c1"]["panel"][0]["id"], "i1")
+        self.assertEqual(repaired["c2"]["time"], 1)
+        self.assertEqual(repaired["c2"]["panel"][0]["id"], "i2")
+
+    def test_repair_strategies_choose_substitute_or_whole_block(self):
+        candidates = [
+            {"id": f"c{index}", "name": f"Candidate {index}", "gender": ""}
+            for index in range(4)
+        ]
+        interviewers = [
+            {
+                "id": "i1",
+                "name": "Anna",
+                "gender": "",
+                "availability": [0, 1, 2, 3],
+                "biased": ["c1"],
+            },
+            {
+                "id": "i2",
+                "name": "Nora",
+                "gender": "",
+                "availability": [0, 1, 2, 3],
+                "biased": [],
+            },
+        ]
+        previous = [
+            {
+                "candidate_id": f"c{index}",
+                "candidate": f"Candidate {index}",
+                "time": index,
+                "panel": [{"id": "i1", "name": "Anna"}],
+            }
+            for index in range(4)
+        ]
+
+        def repair(strategy):
+            return solve_schedule(
+                candidates_data=candidates,
+                interviewers_data=interviewers,
+                panel_size=1,
+                all_slots_data=[0, 1, 2, 3],
+                blocks_data=[[0, 1, 2, 3]],
+                options_data={
+                    "allow_overtime": False,
+                    "prioritize_continuity": False,
+                    "same_panel_per_block": True,
+                    "repair_mode": True,
+                    "repair_strategy": strategy,
+                },
+                previous_schedule_data=previous,
+            )
+
+        minimum_change = repair("minimum_change")
+        preserve_panels = repair("preserve_panels")
+
+        self.assertEqual(minimum_change["status"], "SUCCESS")
+        self.assertEqual(preserve_panels["status"], "SUCCESS")
+        self.assertEqual(
+            [row["panel"][0]["id"] for row in minimum_change["schedule"]],
+            ["i1", "i2", "i1", "i1"],
+        )
+        self.assertEqual(
+            [row["panel"][0]["id"] for row in preserve_panels["schedule"]],
+            ["i2", "i2", "i2", "i2"],
+        )
+        self.assertEqual(
+            [row["time"] for row in preserve_panels["schedule"]],
+            [0, 1, 2, 3],
+        )

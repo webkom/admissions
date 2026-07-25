@@ -2,8 +2,16 @@ import time
 from datetime import timedelta
 
 from django.core.management.base import BaseCommand
-from django.db import close_old_connections, connection, models, transaction
+from django.db import (
+    InterfaceError,
+    OperationalError,
+    close_old_connections,
+    connection,
+    models,
+    transaction,
+)
 from django.utils import timezone
+from django.utils.dateparse import parse_datetime
 
 from structlog import get_logger
 
@@ -22,9 +30,8 @@ def _refresh_db_connection():
     """Drop a stale or broken DB connection so the next query reconnects.
 
     Django only refreshes connections on request signals, which a long-lived
-    management command never receives. Skipped inside an atomic block —
-    closing mid-transaction is unrecoverable, and the worker only runs inside
-    one under the test suite (TestCase wraps every test in a transaction)."""
+    management command never receives. Closing inside an atomic block is
+    unrecoverable, so refresh is skipped while one is active."""
     if not connection.in_atomic_block:
         close_old_connections()
 
@@ -58,7 +65,7 @@ class Command(BaseCommand):
                     return
                 if not processed:
                     time.sleep(poll_interval)
-            except Exception:
+            except (InterfaceError, OperationalError):
                 # A transient DB error (restart, failover, idle-timeout) must
                 # not kill the worker: drop the broken connection so the next
                 # cycle reconnects, wait, and keep polling. In --once mode the
@@ -135,24 +142,45 @@ class Command(BaseCommand):
                         pk=job.admission_id
                     )
                     saved = SavedSchedule.objects.get(admission=admission)
-                    canonical = canonicalize_solver_payload(
-                        admission, saved, data, job.requested_by
+                    baseline_updated_at = parse_datetime(
+                        data.get("baseline_updated_at") or ""
                     )
-                    data = {
-                        **data,
-                        **canonical,
-                        "previous_schedule": saved.schedule or [],
-                    }
-            result = solve_schedule(
-                candidates_data=data.get("candidates", []),
-                interviewers_data=data.get("interviewers", []),
-                panel_size=data["panel_size"],
-                options_data=data.get("options", {}),
-                locked_assignments_data=data.get("locked_assignments", []),
-                all_slots_data=data.get("all_slots"),
-                blocks_data=data.get("blocks", []),
-                previous_schedule_data=data.get("previous_schedule", []),
-            )
+                    if (
+                        baseline_updated_at is not None
+                        and saved.updated_at != baseline_updated_at
+                    ):
+                        result = {
+                            "status": "ERROR",
+                            "schedule": [],
+                            "unplaceable": [],
+                            "locked_conflicts": [],
+                            "error": (
+                                "Planen ble endret mens løsningen ble beregnet. "
+                                "Beregn løsningene på nytt."
+                            ),
+                        }
+                        data = None
+                    else:
+                        canonical = canonicalize_solver_payload(
+                            admission, saved, data, job.requested_by
+                        )
+                        data = {
+                            **data,
+                            **canonical,
+                            "previous_schedule": saved.schedule or [],
+                        }
+            if data is not None:
+                result = solve_schedule(
+                    candidates_data=data.get("candidates", []),
+                    interviewers_data=data.get("interviewers", []),
+                    panel_size=data["panel_size"],
+                    options_data=data.get("options", {}),
+                    locked_assignments_data=data.get("locked_assignments", []),
+                    all_slots_data=data.get("all_slots"),
+                    blocks_data=data.get("blocks", []),
+                    block_metadata_data=data.get("block_metadata", []),
+                    previous_schedule_data=data.get("previous_schedule", []),
+                )
         except Exception as exc:
             log.exception(
                 "solve_job_failed",
@@ -189,7 +217,7 @@ class Command(BaseCommand):
                     error=error,
                     finished_at=timezone.now(),
                 )
-            except Exception:
+            except (InterfaceError, OperationalError):
                 log.exception(
                     "solve_job_write_back_failed",
                     job_id=str(job.id),

@@ -4,13 +4,13 @@ from admissions.admissions import constants
 from admissions.admissions.models import (
     InterviewAvailability,
     LegoUser,
-    Membership,
     UserApplication,
 )
 from admissions.admissions.schedule_windows import (
     enabled_windows_to_slots,
     parse_slot_key,
 )
+from admissions.admissions.scheduling_utils import get_eligible_interviewer_ids
 
 MINUTES_PER_DAY = 24 * 60
 
@@ -67,9 +67,36 @@ def build_solver_blocks(
     return blocks
 
 
-def _solver_blocks(saved):
+def filter_solver_blocks(blocks, open_slots):
+    open_slot_set = set(open_slots)
+    return [
+        [slot for slot in block if slot in open_slot_set]
+        for block in blocks
+        if any(slot in open_slot_set for slot in block)
+    ]
+
+
+def build_solver_block_metadata(blocks, open_slots):
+    open_slot_set = set(open_slots)
+    metadata = []
+    for block_index, block in enumerate(blocks):
+        usable_slots = [slot for slot in block if slot in open_slot_set]
+        metadata.append(
+            {
+                "index": block_index,
+                "day": block[0] // MINUTES_PER_DAY,
+                "start_time": block[0],
+                "canonical_slots": list(block),
+                "usable_slots": usable_slots,
+                "has_zero_usable_slots": not usable_slots,
+            }
+        )
+    return metadata
+
+
+def _solver_blocks(saved, open_slots):
     end_date = saved.end_date or saved.start_date
-    return build_solver_blocks(
+    configured_blocks = build_solver_blocks(
         day_count=(end_date - saved.start_date).days + 1,
         day_start_minute=saved.day_start_minute,
         day_end_minute=saved.day_end_minute,
@@ -77,6 +104,7 @@ def _solver_blocks(saved):
         chunk_size=saved.chunk_size,
         chunk_break_minutes=saved.chunk_break_minutes,
     )
+    return build_solver_block_metadata(configured_blocks, open_slots)
 
 
 def canonicalize_solver_payload(admission, saved, data, request_user):
@@ -88,6 +116,7 @@ def canonicalize_solver_payload(admission, saved, data, request_user):
         raise ScheduleValidationError(
             "all_slots", "Tidsoppsettet må ha minst én åpen tidsluke."
         )
+    solver_blocks = _solver_blocks(saved, all_slots)
 
     applications = list(
         UserApplication.objects.filter(admission=admission).select_related("user")
@@ -99,21 +128,10 @@ def canonicalize_solver_payload(admission, saved, data, request_user):
             "candidates", "Kandidatlisten samsvarer ikke med det aktive opptaket."
         )
 
-    committee_ids = set(
-        Membership.objects.filter(group__in=admission.groups.all())
-        .exclude(role__in=constants.INACTIVE_MEMBERSHIP_ROLES)
-        .values_list("user_id", flat=True)
-    )
-    admin_ids = set(
-        Membership.objects.filter(group__in=admission.admin_groups.all())
-        .exclude(role__in=constants.INACTIVE_MEMBERSHIP_ROLES)
-        .values_list("user_id", flat=True)
-    )
     submitted = list(
         InterviewAvailability.objects.filter(admission=admission).select_related("user")
     )
-    submitted_ids = {item.user_id for item in submitted}
-    participant_ids = committee_ids | (submitted_ids & admin_ids)
+    participant_ids = get_eligible_interviewer_ids(admission)
     requested_interviewer_ids = [str(item["id"]) for item in data["interviewers"]]
     if set(requested_interviewer_ids) != {str(value) for value in participant_ids}:
         raise ScheduleValidationError(
@@ -198,7 +216,12 @@ def canonicalize_solver_payload(admission, saved, data, request_user):
         "candidates": candidates,
         "interviewers": interviewers,
         "all_slots": all_slots,
-        "blocks": _solver_blocks(saved),
+        "blocks": [
+            block["usable_slots"]
+            for block in solver_blocks
+            if block["usable_slots"]
+        ],
+        "block_metadata": solver_blocks,
         "locked_assignments": locked_assignments,
     }
 
@@ -233,22 +256,7 @@ def canonicalize_schedule(
             "schedule", "Tidsoppsettet må ha minst én åpen tidsluke."
         )
 
-    committee_ids = set(
-        Membership.objects.filter(group__in=admission.groups.all())
-        .exclude(role__in=constants.INACTIVE_MEMBERSHIP_ROLES)
-        .values_list("user_id", flat=True)
-    )
-    admin_ids = set(
-        Membership.objects.filter(group__in=admission.admin_groups.all())
-        .exclude(role__in=constants.INACTIVE_MEMBERSHIP_ROLES)
-        .values_list("user_id", flat=True)
-    )
-    submitted_ids = set(
-        InterviewAvailability.objects.filter(admission=admission).values_list(
-            "user_id", flat=True
-        )
-    )
-    allowed_user_ids = committee_ids | (submitted_ids & admin_ids)
+    allowed_user_ids = get_eligible_interviewer_ids(admission)
     user_map = {
         str(user.pk): user for user in LegoUser.objects.filter(id__in=allowed_user_ids)
     }
@@ -343,6 +351,8 @@ def canonicalize_schedule(
         }
         if "locked" in item:
             canonical_item["locked"] = item["locked"]
+        if "booking_source" in item:
+            canonical_item["booking_source"] = item["booking_source"]
         canonical.append(canonical_item)
         seen_candidates.add(candidate_id)
         seen_times.add(interview_time)
@@ -371,9 +381,11 @@ def canonicalize_schedule(
                         "Planen mangler en intervjuer med samme kjønn som kandidaten.",
                     )
 
-    if (solver_options or {}).get("same_panel_per_block"):
+    if (solver_options or {}).get("same_panel_per_block") and not (
+        solver_options or {}
+    ).get("repair_mode"):
         effective_end_date = end_date or start_date
-        blocks = build_solver_blocks(
+        configured_blocks = build_solver_blocks(
             day_count=(effective_end_date - start_date).days + 1,
             day_start_minute=day_start_minute,
             day_end_minute=day_end_minute,
@@ -381,10 +393,11 @@ def canonicalize_schedule(
             chunk_size=chunk_size,
             chunk_break_minutes=chunk_break_minutes,
         )
+        blocks = build_solver_block_metadata(configured_blocks, enabled_times)
         block_by_time = {
-            interview_time: block_index
-            for block_index, block in enumerate(blocks)
-            for interview_time in block
+            interview_time: block["index"]
+            for block in blocks
+            for interview_time in block["usable_slots"]
         }
         panel_by_block = {}
         for item in canonical:

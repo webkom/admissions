@@ -1,9 +1,10 @@
 from datetime import timedelta
+from types import SimpleNamespace
 from unittest import mock
 
 from django.core.management import call_command
-from django.db import OperationalError
-from django.test import TestCase
+from django.db import InterfaceError, OperationalError
+from django.test import SimpleTestCase, TestCase
 from django.utils import timezone
 
 from admissions.admissions import constants
@@ -20,11 +21,13 @@ class WorkerStopped(BaseException):
     own transient-error handling cannot swallow it."""
 
 
-class WorkerLoopResilienceTestCase(TestCase):
+class WorkerLoopResilienceTestCase(SimpleTestCase):
     """A transient DB error must not kill the long-lived worker loop."""
 
     def test_loop_survives_a_transient_db_error_while_claiming(self):
-        with mock.patch.object(
+        with mock.patch.object(Command, "_reap_stale_jobs"), mock.patch.object(
+            Command, "_cleanup_old_jobs"
+        ), mock.patch.object(
             Command,
             "_claim_and_run",
             side_effect=[OperationalError("connection lost"), WorkerStopped()],
@@ -44,8 +47,21 @@ class WorkerLoopResilienceTestCase(TestCase):
             Command,
             "_reap_stale_jobs",
             side_effect=[OperationalError("server closed the connection"), None],
-        ), mock.patch.object(
+        ), mock.patch.object(Command, "_cleanup_old_jobs"), mock.patch.object(
             Command, "_claim_and_run", side_effect=WorkerStopped()
+        ), mock.patch.object(
+            run_solver_worker.time, "sleep"
+        ):
+            with self.assertRaises(WorkerStopped):
+                call_command("run_solver_worker")
+
+    def test_loop_survives_a_closed_database_connection(self):
+        with mock.patch.object(Command, "_reap_stale_jobs"), mock.patch.object(
+            Command, "_cleanup_old_jobs"
+        ), mock.patch.object(
+            Command,
+            "_claim_and_run",
+            side_effect=[InterfaceError("connection closed"), WorkerStopped()],
         ), mock.patch.object(
             run_solver_worker.time, "sleep"
         ):
@@ -54,11 +70,61 @@ class WorkerLoopResilienceTestCase(TestCase):
 
     def test_once_mode_propagates_errors(self):
         """--once is for tests, which must fail loudly instead of retrying."""
-        with mock.patch.object(
+        with mock.patch.object(Command, "_reap_stale_jobs"), mock.patch.object(
+            Command, "_cleanup_old_jobs"
+        ), mock.patch.object(
             Command, "_claim_and_run", side_effect=OperationalError("boom")
         ):
             with self.assertRaises(OperationalError):
                 call_command("run_solver_worker", once=True)
+
+
+class WorkerFailureHandlingTestCase(SimpleTestCase):
+    def test_loop_propagates_unexpected_errors(self):
+        with mock.patch.object(Command, "_reap_stale_jobs"), mock.patch.object(
+            Command, "_cleanup_old_jobs"
+        ), mock.patch.object(
+            Command, "_claim_and_run", side_effect=RuntimeError("worker bug")
+        ), mock.patch.object(
+            run_solver_worker.time, "sleep", side_effect=WorkerStopped()
+        ):
+            with self.assertRaisesRegex(RuntimeError, "worker bug"):
+                call_command("run_solver_worker")
+
+    def test_write_back_propagates_unexpected_errors_without_retrying(self):
+        with mock.patch.object(
+            SolveJob.objects, "filter", side_effect=RuntimeError("worker bug")
+        ), mock.patch.object(
+            run_solver_worker.time, "sleep", side_effect=WorkerStopped()
+        ):
+            with self.assertRaisesRegex(RuntimeError, "worker bug"):
+                Command()._write_back(
+                    SimpleNamespace(id="job-id"),
+                    result=None,
+                    new_status=SolveJob.STATUS_DONE,
+                    error="",
+                )
+
+    def test_write_back_retries_a_closed_database_connection(self):
+        update_query = mock.Mock()
+        update_query.update.return_value = 1
+        with mock.patch.object(
+            SolveJob.objects,
+            "filter",
+            side_effect=[InterfaceError("connection closed"), update_query],
+        ), mock.patch.object(
+            run_solver_worker, "_refresh_db_connection"
+        ), mock.patch.object(
+            run_solver_worker.time, "sleep"
+        ):
+            updated = Command()._write_back(
+                SimpleNamespace(id="job-id"),
+                result=None,
+                new_status=SolveJob.STATUS_DONE,
+                error="",
+            )
+
+        self.assertEqual(updated, 1)
 
 
 class WriteBackResilienceTestCase(TestCase):
