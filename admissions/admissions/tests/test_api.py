@@ -765,7 +765,7 @@ class SavedScheduleViewTestCase(APITestCase):
         )
         self.assertEqual(res.data["enabled_windows"], payload["enabled_windows"])
 
-    def test_duration_change_clears_submitted_availability(self):
+    def test_duration_change_clears_submitted_availability_slots(self):
         interviewer = LegoUser.objects.create(username="available-user", lego_id=304)
         InterviewAvailability.objects.create(
             admission=self.admission,
@@ -800,12 +800,12 @@ class SavedScheduleViewTestCase(APITestCase):
         res = self.client.post(self.url, payload, format="json")
 
         self.assertEqual(res.status_code, status.HTTP_200_OK)
-        self.assertFalse(
-            InterviewAvailability.objects.filter(
-                admission=self.admission,
-                user=interviewer,
-            ).exists()
+        availability = InterviewAvailability.objects.get(
+            admission=self.admission,
+            user=interviewer,
         )
+        self.assertEqual(availability.slots, [])
+        self.assertIsNone(availability.submitted_grid_generation)
 
     def test_block_break_change_clears_existing_plan(self):
         SavedSchedule.objects.create(

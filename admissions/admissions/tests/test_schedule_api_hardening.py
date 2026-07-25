@@ -1329,7 +1329,7 @@ class InterviewAvailabilityHardeningTestCase(APITestCase):
         self.assertEqual(res.status_code, status.HTTP_200_OK)
         self.assertEqual(res.data["conflicts"], [str(self.application.pk)])
 
-    def test_recruiter_can_save_conflict_for_any_candidate(self):
+    def test_recruiter_cannot_save_conflict_for_other_committee_candidate(self):
         other_group = Group.objects.create(name="Annen komite", lego_id=626)
         self.admission.groups.add(other_group)
         other_candidate = LegoUser.objects.create(
@@ -1351,9 +1351,10 @@ class InterviewAvailabilityHardeningTestCase(APITestCase):
             format="json",
         )
 
-        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("conflicts", res.data)
 
-    def test_recruiter_sees_all_committee_availability(self):
+    def test_recruiter_sees_only_represented_committee_availability(self):
         other_group = Group.objects.create(name="Annen komite", lego_id=628)
         self.admission.groups.add(other_group)
         other_member = LegoUser.objects.create(username="other-member", lego_id=629)
@@ -1369,8 +1370,10 @@ class InterviewAvailabilityHardeningTestCase(APITestCase):
         res = self.client.get(self.url)
 
         self.assertEqual(res.status_code, status.HTTP_200_OK)
-        self.assertIn("other-member", {row["username"] for row in res.data})
-        self.assertIn("hardening-member", {row["username"] for row in res.data})
+        usernames = {row["username"] for row in res.data}
+        self.assertNotIn("other-member", usernames)
+        self.assertIn("hardening-member", usernames)
+        self.assertIn("hardening-recruiter", usernames)
 
     def test_member_cannot_save_conflicts_before_names_released(self):
         self.client.force_authenticate(user=self.member)
@@ -1474,10 +1477,7 @@ class InterviewAvailabilityHardeningTestCase(APITestCase):
         )
 
         self.assertEqual(res.status_code, status.HTTP_200_OK)
-        self.assertEqual(
-            set(res.data["conflicts"]),
-            {str(self.application.pk), str(other_application.pk)},
-        )
+        self.assertEqual(res.data["conflicts"], [str(self.application.pk)])
 
     def test_non_admin_availability_responses_omit_panel_gender(self):
         self.member.gender = "female"
