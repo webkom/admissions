@@ -15,8 +15,6 @@ class LegoUser(AbstractUser):
     lego_id = models.IntegerField(unique=True, null=False, editable=False)
 
     profile_picture = models.URLField(null=True, blank=True)
-    # Mirrored from LEGO on login ("male"/"female"/"other"/""). Used only to
-    # let the interview solver match panel gender; never shown to applicants.
     gender = models.CharField(max_length=50, blank=True, default="")
 
     @property
@@ -26,6 +24,7 @@ class LegoUser(AbstractUser):
         """
         membership = (
             Membership.objects.filter(user=self)
+            .exclude(role__in=constants.INACTIVE_MEMBERSHIP_ROLES)
             .filter(Q(role=constants.LEADER) | Q(role=constants.RECRUITING))
             .first()
         )
@@ -35,7 +34,11 @@ class LegoUser(AbstractUser):
 
     @property
     def member_of_group(self):
-        membership = Membership.objects.filter(user=self).first()
+        membership = (
+            Membership.objects.filter(user=self)
+            .exclude(role__in=constants.INACTIVE_MEMBERSHIP_ROLES)
+            .first()
+        )
         if not membership:
             return None
         return membership.group
@@ -51,7 +54,11 @@ class LegoUser(AbstractUser):
         """
         Return whether the user is a member of the given group or not
         """
-        return Membership.objects.filter(user=self, group__name=group_name).exists()
+        return (
+            Membership.objects.filter(user=self, group__name=group_name)
+            .exclude(role__in=constants.INACTIVE_MEMBERSHIP_ROLES)
+            .exists()
+        )
 
 
 class Group(models.Model):
@@ -204,11 +211,62 @@ class SavedSchedule(models.Model):
         choices=NAME_VISIBILITY_CHOICES,
         default=NAME_VISIBILITY_HIDDEN,
     )
+    revealed_groups = models.ManyToManyField(
+        Group,
+        blank=True,
+        related_name="revealed_interview_schedules",
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     def __str__(self):
         return f"Schedule for {self.admission} (distributed={self.is_distributed})"
+
+
+class NameVisibilityAuditEvent(models.Model):
+    ACTION_REVEALED = "revealed"
+    ACTION_HIDDEN = "hidden"
+    ACTION_CHOICES = [
+        (ACTION_REVEALED, "Revealed"),
+        (ACTION_HIDDEN, "Hidden"),
+    ]
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    admission = models.ForeignKey(
+        Admission,
+        on_delete=models.CASCADE,
+        related_name="name_visibility_events",
+    )
+    saved_schedule = models.ForeignKey(
+        SavedSchedule,
+        null=True,
+        on_delete=models.SET_NULL,
+        related_name="name_visibility_events",
+    )
+    group = models.ForeignKey(Group, null=True, on_delete=models.SET_NULL)
+    group_name = models.CharField(max_length=80)
+    actor = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        on_delete=models.SET_NULL,
+        related_name="name_visibility_events",
+    )
+    actor_username = models.CharField(max_length=150)
+    action = models.CharField(max_length=16, choices=ACTION_CHOICES)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        indexes = [
+            models.Index(
+                fields=["admission", "-created_at"],
+                name="name_vis_admission_time_idx",
+            ),
+            models.Index(
+                fields=["group", "-created_at"],
+                name="name_vis_group_time_idx",
+            ),
+        ]
 
 
 class InterviewAvailability(models.Model):
@@ -236,10 +294,7 @@ class InterviewAvailability(models.Model):
 
 
 class SolveJob(models.Model):
-    """A queued interview-schedule solve. Solving runs in a separate worker
-    process (manage.py run_solver_worker) instead of the request thread, so a
-    heavy solve can take as long as it needs without hitting the request
-    timeout — the client enqueues a job and polls for the result."""
+    """A queued interview-schedule solve processed by run_solver_worker."""
 
     STATUS_PENDING = "PENDING"
     STATUS_RUNNING = "RUNNING"
@@ -268,8 +323,6 @@ class SolveJob(models.Model):
         default=STATUS_PENDING,
         db_index=True,
     )
-    # The full solver input (candidates, interviewers, panel_size, options, …)
-    # and, once finished, the solver result envelope.
     request_data = models.JSONField()
     result = models.JSONField(null=True, blank=True)
     error = models.TextField(blank=True, default="")
@@ -280,6 +333,17 @@ class SolveJob(models.Model):
 
     class Meta:
         ordering = ["created_at"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["admission"],
+                condition=models.Q(status__in=("PENDING", "RUNNING")),
+                name="unique_active_solve_job_per_admission",
+            )
+        ]
+        indexes = [
+            models.Index(fields=["status", "created_at"]),
+            models.Index(fields=["admission", "status"]),
+        ]
 
     def __str__(self):
         return f"SolveJob {self.id} for {self.admission} ({self.status})"

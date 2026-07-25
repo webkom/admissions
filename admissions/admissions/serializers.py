@@ -1,3 +1,6 @@
+import json
+from datetime import date, datetime
+
 from django.core.validators import MinLengthValidator
 from django.db import transaction
 from django.db.models import Q
@@ -19,6 +22,7 @@ from admissions.admissions.models import (
     InterviewAvailability,
     LegoUser,
     Membership,
+    NameVisibilityAuditEvent,
     SavedSchedule,
     SolveJob,
     UserApplication,
@@ -102,20 +106,28 @@ class AdmissionListPublicSerializer(serializers.HyperlinkedModelSerializer):
         res["has_application"] = UserApplication.objects.filter(
             user=request.user.pk, admission=obj.pk
         ).exists()
+        committee_groups = list(obj.groups.all())
+        roles_by_group = {}
+        for group_pk, role in (
+            Membership.objects.filter(user=request.user.pk, group__in=committee_groups)
+            .exclude(role__in=constants.INACTIVE_MEMBERSHIP_ROLES)
+            .values_list("group", "role")
+        ):
+            roles_by_group.setdefault(group_pk, set()).add(role)
+
         is_leader = False
         is_recruiting = False
         is_committee_member = False
-        for group in obj.groups.all():
-            memberships = Membership.objects.filter(
-                user=request.user.pk, group=group.pk
-            )
-            if memberships.exists():
-                res["committee_groups"].append(group.name)
-                is_committee_member = True
-            if memberships.filter(role=constants.LEADER).exists():
+        for group in committee_groups:
+            roles = roles_by_group.get(group.pk)
+            if not roles:
+                continue
+            res["committee_groups"].append(group.name)
+            is_committee_member = True
+            if constants.LEADER in roles:
                 is_leader = True
                 res["is_privileged"] = True
-            if memberships.filter(role=constants.RECRUITING).exists():
+            if constants.RECRUITING in roles:
                 is_recruiting = True
                 res["is_privileged"] = True
 
@@ -127,10 +139,15 @@ class AdmissionListPublicSerializer(serializers.HyperlinkedModelSerializer):
         elif is_committee_member:
             res["committee_role"] = constants.MEMBER
 
-        for group in obj.admin_groups.all():
-            if Membership.objects.filter(user=request.user.pk, group=group.pk).exists():
-                res["is_privileged"] = True
-                res["is_admin"] = True
+        if (
+            Membership.objects.filter(
+                user=request.user.pk, group__in=obj.admin_groups.all()
+            )
+            .exclude(role__in=constants.INACTIVE_MEMBERSHIP_ROLES)
+            .exists()
+        ):
+            res["is_privileged"] = True
+            res["is_admin"] = True
         return res
 
 
@@ -204,7 +221,6 @@ class AdminCreateUpdateAdmissionSerializer(serializers.HyperlinkedModelSerialize
 
 
 class AdminAdmissionSerializer(serializers.ModelSerializer):
-    applications = UserApplication.objects.all()
     admin_groups = GroupSerializer(many=True)
     groups = GroupSerializer(many=True)
     userdata = serializers.SerializerMethodField()
@@ -221,7 +237,6 @@ class AdminAdmissionSerializer(serializers.ModelSerializer):
             "open_from",
             "public_deadline",
             "closed_from",
-            "applications",
             "is_open",
             "is_closed",
             "is_appliable",
@@ -289,14 +304,14 @@ class UserApplicationSerializer(serializers.ModelSerializer):
 
     def get_text(self, obj):
         # Hide value from non-admission-admins
-        is_filtered = getattr(obj, "group_applications_filtered", False)
+        is_filtered = hasattr(obj, "group_applications_filtered")
         if is_filtered:
             return None
         return obj.text
 
     def get_header_fields_response(self, obj):
         # Hide value from non-admission-admins
-        is_filtered = getattr(obj, "group_applications_filtered", False)
+        is_filtered = hasattr(obj, "group_applications_filtered")
         if is_filtered:
             return {}
         return obj.header_fields_response
@@ -337,12 +352,26 @@ class UserSerializer(serializers.HyperlinkedModelSerializer):
 class ApplicationCreateUpdateSerializer(serializers.HyperlinkedModelSerializer):
     question_json_schema = InputModelList
     response_json_schema = InputResponseModel
+    applications = serializers.DictField(
+        child=serializers.CharField(allow_blank=True, max_length=10000),
+        allow_empty=False,
+        write_only=True,
+    )
+    text = serializers.CharField(allow_blank=True, max_length=10000)
 
     class Meta:
         model = UserApplication
-        fields = ("text", "pk", "phone_number", "header_fields_response")
+        fields = (
+            "text",
+            "pk",
+            "phone_number",
+            "header_fields_response",
+            "applications",
+        )
 
     def validate_header_fields_response(self, value):
+        if len(json.dumps(value, ensure_ascii=False).encode("utf-8")) > 100000:
+            raise serializers.ValidationError("Svarene er for store.")
         try:
             self.response_json_schema(value)
         except Exception as errors:
@@ -377,32 +406,28 @@ class ApplicationCreateUpdateSerializer(serializers.HyperlinkedModelSerializer):
             validated_data.pop("header_fields_response")
         ).model_dump()
 
-        admission = Admission.objects.get(
-            slug=validated_data.get("admission_slug"),
-            closed_from__gte=timezone.now(),
-            open_from__lte=timezone.now(),
-        )
-
-        # Only groups that belong to this admission may be applied to. Resolve
-        # every applied-for group from the admission's own group set (by name,
-        # case-insensitively); anything outside it is a 400, not a global lookup
-        # that pollutes unrelated committees (and 500s on an unknown name).
-        applications = self.initial_data.pop("applications")
-        admission_groups = {
-            group.name.lower(): group for group in admission.groups.all()
-        }
-        resolved_groups = {}
-        for group_name in applications:
-            group = admission_groups.get(group_name.lower())
-            if group is None:
-                raise serializers.ValidationError(
-                    {
-                        "applications": f"'{group_name}' is not a group in this admission."
-                    }
-                )
-            resolved_groups[group_name] = group
-
+        admission_slug = validated_data.pop("admission_slug")
+        applications = validated_data.pop("applications")
         with transaction.atomic():
+            admission = Admission.objects.select_for_update().get(
+                slug=admission_slug,
+                closed_from__gte=timezone.now(),
+                open_from__lte=timezone.now(),
+            )
+            admission_groups = {
+                group.name.lower(): group for group in admission.groups.all()
+            }
+            resolved_groups = {}
+            for group_name in applications:
+                group = admission_groups.get(group_name.lower())
+                if group is None:
+                    raise serializers.ValidationError(
+                        {
+                            "applications": f"'{group_name}' is not a group in this admission."
+                        }
+                    )
+                resolved_groups[group_name] = group
+
             user_application, _ = UserApplication.objects.update_or_create(
                 admission=admission,
                 user=user,
@@ -468,18 +493,42 @@ class SavedScheduleSerializer(serializers.ModelSerializer):
 
     def to_representation(self, instance):
         data = super().to_representation(instance)
-        if self.context.get("hide_candidate_identity"):
-            redacted = []
+        effective_name_visibility = self.context.get("effective_name_visibility")
+        if effective_name_visibility is not None:
+            data["name_visibility"] = effective_name_visibility
+        if self.context.get("hide_schedule"):
+            data["schedule"] = []
+            return data
+        hide_candidate_identity = self.context.get("hide_candidate_identity")
+        visible_candidate_ids = self.context.get("visible_candidate_ids")
+        if hide_candidate_identity or visible_candidate_ids is not None:
+            visible_schedule = []
             for entry in data.get("schedule") or []:
-                sanitized = {
-                    key: value
-                    for key, value in entry.items()
-                    if key not in ("candidate", "candidate_id")
-                }
-                sanitized["candidate"] = ""
-                redacted.append(sanitized)
-            data["schedule"] = redacted
+                candidate_id = entry.get("candidate_id")
+                can_see_candidate = (
+                    not hide_candidate_identity
+                    and candidate_id is not None
+                    and str(candidate_id) in visible_candidate_ids
+                )
+                if can_see_candidate:
+                    visible_schedule.append(entry)
+            data["schedule"] = visible_schedule
         return data
+
+
+class NameVisibilityAuditEventSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = NameVisibilityAuditEvent
+        fields = (
+            "id",
+            "group",
+            "group_name",
+            "actor",
+            "actor_username",
+            "action",
+            "created_at",
+        )
+        read_only_fields = fields
 
 
 class SolveJobSerializer(serializers.ModelSerializer):
@@ -533,9 +582,15 @@ class SaveScheduleInputSerializer(serializers.Serializer):
     session_duration = serializers.IntegerField(
         min_value=5, max_value=240, required=False
     )
-    enabled_slots = serializers.ListField(child=serializers.CharField(), required=False)
+    enabled_slots = serializers.ListField(
+        child=serializers.CharField(),
+        required=False,
+        max_length=constants.MAX_SCHEDULE_SLOTS,
+    )
     enabled_windows = serializers.ListField(
-        child=serializers.DictField(), required=False
+        child=serializers.DictField(),
+        required=False,
+        max_length=constants.MAX_SCHEDULE_WINDOWS,
     )
     day_start_minute = serializers.IntegerField(
         min_value=0, max_value=1439, required=False
@@ -557,6 +612,31 @@ class SaveScheduleInputSerializer(serializers.Serializer):
         required=False,
     )
     expected_updated_at = serializers.DateTimeField(required=False)
+
+    def validate_enabled_windows(self, windows):
+        for window in windows:
+            window_date = window.get("date")
+            if not isinstance(window_date, date):
+                try:
+                    datetime.strptime(str(window_date), "%Y-%m-%d")
+                except ValueError:
+                    raise serializers.ValidationError(
+                        [f"Ugyldig dato i tidsvindu: {window_date}"]
+                    )
+            try:
+                start_minute = int(
+                    window.get("start_minute", window.get("startMinute"))
+                )
+                end_minute = int(window.get("end_minute", window.get("endMinute")))
+            except (TypeError, ValueError):
+                raise serializers.ValidationError(
+                    ["Tidsvinduets minutter må være heltall."]
+                )
+            if not 0 <= start_minute < end_minute <= 24 * 60:
+                raise serializers.ValidationError(
+                    ["Tidsvinduet må slutte etter starten og ligge innenfor døgnet."]
+                )
+        return windows
 
     def validate(self, attrs):
         start_date = attrs.get("start_date")
@@ -582,7 +662,7 @@ class SaveScheduleInputSerializer(serializers.Serializer):
 
 class CandidateSerializer(serializers.Serializer):
     id = serializers.CharField()
-    name = serializers.CharField()
+    name = serializers.CharField(required=False, allow_blank=True, default="")
     gender = serializers.CharField(required=False, allow_blank=True, allow_null=True)
 
 
@@ -590,7 +670,9 @@ class InterviewerSerializer(CandidateSerializer):
     availability = serializers.ListField(
         child=serializers.IntegerField(), default=list, max_length=5000
     )
-    biased = serializers.ListField(child=serializers.CharField(), default=list)
+    biased = serializers.ListField(
+        child=serializers.CharField(), default=list, max_length=500
+    )
 
 
 class LockedPanelMemberSerializer(serializers.Serializer):
@@ -601,8 +683,8 @@ class LockedPanelMemberSerializer(serializers.Serializer):
 class LockedAssignmentSerializer(serializers.Serializer):
     candidate_id = serializers.CharField(required=False)
     candidate = serializers.CharField(required=False)
-    time = serializers.IntegerField()
-    panel = LockedPanelMemberSerializer(many=True)
+    time = serializers.IntegerField(min_value=0)
+    panel = LockedPanelMemberSerializer(many=True, max_length=10)
 
 
 class ScheduleRequestsSerializer(serializers.Serializer):
@@ -621,19 +703,110 @@ class ScheduleRequestsSerializer(serializers.Serializer):
             max_length=100,
         ),
         required=False,
-        max_length=1000,
+        max_length=constants.MAX_SCHEDULE_SLOTS,
     )
     options = SolveOptionsSerializer(required=False)
-    locked_assignments = LockedAssignmentSerializer(many=True, required=False)
+    locked_assignments = LockedAssignmentSerializer(
+        many=True, required=False, max_length=500
+    )
+    synthetic = serializers.BooleanField(required=False, default=False)
+
+    def validate(self, attrs):
+        for field in ("candidates", "interviewers"):
+            ids = [item["id"] for item in attrs.get(field, [])]
+            if len(ids) != len(set(ids)):
+                raise serializers.ValidationError(
+                    {field: ["Identifikatorene må være unike."]}
+                )
+
+        all_slots = attrs.get("all_slots")
+        if all_slots is not None and len(all_slots) != len(set(all_slots)):
+            raise serializers.ValidationError(
+                {"all_slots": ["Tidslukene må være unike."]}
+            )
+
+        allowed_slots = set(all_slots) if all_slots is not None else None
+        seen_block_slots = set()
+        membership_count = 0
+        for block in attrs.get("blocks", []):
+            block_slots = set(block)
+            if len(block) != len(block_slots):
+                raise serializers.ValidationError(
+                    {"blocks": ["En blokk kan ikke gjenta en tidsluke."]}
+                )
+            if seen_block_slots.intersection(block_slots):
+                raise serializers.ValidationError(
+                    {"blocks": ["Tidsluker kan ikke finnes i flere blokker."]}
+                )
+            if allowed_slots is not None and not block_slots.issubset(allowed_slots):
+                raise serializers.ValidationError(
+                    {"blocks": ["Blokker kan bare inneholde åpne tidsluker."]}
+                )
+            seen_block_slots.update(block_slots)
+            membership_count += len(block)
+
+        if membership_count > constants.MAX_SOLVER_BLOCK_MEMBERSHIPS:
+            raise serializers.ValidationError(
+                {"blocks": ["Tidsblokkene er for store."]}
+            )
+
+        candidate_ids = {item["id"] for item in attrs.get("candidates", [])}
+        interviewer_ids = {item["id"] for item in attrs.get("interviewers", [])}
+        seen_candidates = set()
+        seen_times = set()
+        panel_size = attrs.get("panel_size", 4)
+        for assignment in attrs.get("locked_assignments", []):
+            candidate_id = assignment.get("candidate_id")
+            if candidate_id not in candidate_ids or candidate_id in seen_candidates:
+                raise serializers.ValidationError(
+                    {
+                        "locked_assignments": [
+                            "Låste kandidater må være unike og aktive."
+                        ]
+                    }
+                )
+            if assignment["time"] in seen_times or (
+                allowed_slots is not None and assignment["time"] not in allowed_slots
+            ):
+                raise serializers.ValidationError(
+                    {"locked_assignments": ["Låste tidspunkt må være unike og åpne."]}
+                )
+            panel_ids = [member.get("id") for member in assignment.get("panel", [])]
+            if (
+                len(panel_ids) != panel_size
+                or None in panel_ids
+                or len(panel_ids) != len(set(panel_ids))
+                or not set(panel_ids).issubset(interviewer_ids)
+            ):
+                raise serializers.ValidationError(
+                    {
+                        "locked_assignments": [
+                            "Låste paneler må ha unike, aktive intervjuere."
+                        ]
+                    }
+                )
+            seen_candidates.add(candidate_id)
+            seen_times.add(assignment["time"])
+
+        return attrs
 
 
 class SaveInterviewAvailabilitySerializer(serializers.Serializer):
     slots = serializers.ListField(
-        child=serializers.CharField(), required=False, max_length=10000
+        child=serializers.CharField(),
+        required=False,
+        max_length=constants.MAX_SCHEDULE_SLOTS,
     )
     conflicts = serializers.ListField(
         child=serializers.CharField(), required=False, max_length=500
     )
+
+    def validate(self, attrs):
+        for field in ("slots", "conflicts"):
+            values = attrs.get(field)
+            if values is not None and len(values) != len(set(values)):
+                raise serializers.ValidationError({field: ["Verdiene må være unike."]})
+        return attrs
 
 
 class InterviewAvailabilityParticipantSerializer(serializers.Serializer):

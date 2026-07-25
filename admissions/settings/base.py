@@ -30,7 +30,6 @@ DJANGO_APPS = [
 ]
 
 THIRD_PARTY_APPS = [
-    "django_extensions",
     "rest_framework",
     "rest_framework.authtoken",
     "social_django",
@@ -66,6 +65,15 @@ REST_FRAMEWORK = {
         "rest_framework.authentication.TokenAuthentication",
     ],
     "DEFAULT_PERMISSION_CLASSES": ["rest_framework.permissions.IsAuthenticated"],
+    "DEFAULT_THROTTLE_RATES": {
+        "application_write": "120/hour",
+        "application_read": "120/minute",
+        "solve_schedule": "12/hour",
+        "solve_status": "120/minute",
+        "schedule": "120/minute",
+        "availability": "120/minute",
+        "candidate_read": "120/minute",
+    },
 }
 
 # TEMPLATE CONFIGURATION =======================================================

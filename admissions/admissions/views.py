@@ -2,16 +2,19 @@ from datetime import datetime
 
 from django.conf import settings
 from django.contrib.auth import logout as auth_logout
-from django.db import transaction
+from django.db import IntegrityError, transaction
 from django.db.models import Prefetch, Q
 from django.http import HttpResponse
 from django.shortcuts import get_object_or_404, redirect
 from django.utils import timezone
+from django.utils.decorators import method_decorator
+from django.views.decorators.csrf import ensure_csrf_cookie
 from django.views.generic.base import TemplateView
 from rest_framework import mixins, permissions, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
+from rest_framework.throttling import ScopedRateThrottle
 from rest_framework.views import APIView
 
 from structlog import get_logger
@@ -24,6 +27,7 @@ from admissions.admissions.models import (
     InterviewAvailability,
     LegoUser,
     Membership,
+    NameVisibilityAuditEvent,
     SavedSchedule,
     SolveJob,
     UserApplication,
@@ -36,6 +40,7 @@ from admissions.admissions.serializers import (
     ApplicationCreateUpdateSerializer,
     GroupSerializer,
     InterviewAvailabilityParticipantSerializer,
+    NameVisibilityAuditEventSerializer,
     SavedScheduleSerializer,
     SaveInterviewAvailabilitySerializer,
     SaveScheduleInputSerializer,
@@ -47,12 +52,18 @@ from admissions.utils.email import send_message
 
 from .authentication import SessionAuthentication
 from .permissions import (
+    AdminAdmissionPermissions,
     AdmissionPermissions,
     ApplicationPermissions,
     GroupPermissions,
     IsCreatorOfObject,
     IsStaff,
     IsWebkom,
+)
+from .schedule_validation import (
+    ScheduleValidationError,
+    canonicalize_schedule,
+    canonicalize_solver_payload,
 )
 from .schedule_windows import (
     enabled_windows_to_slots,
@@ -73,27 +84,103 @@ def panel_gender_code(lego_gender):
 
 
 def user_is_admission_admin(admission, user):
-    for group in admission.admin_groups.all():
-        if Membership.objects.filter(user=user.pk, group=group.pk).exists():
-            return True
-    return False
+    return (
+        Membership.objects.filter(user=user.pk, group__in=admission.admin_groups.all())
+        .exclude(role__in=constants.INACTIVE_MEMBERSHIP_ROLES)
+        .exists()
+    )
 
 
 def get_representing_group(admission, user):
-    for group in admission.groups.all():
-        if (
-            Membership.objects.filter(user=user.pk, group=group.pk)
-            .filter(Q(role=constants.LEADER) | Q(role=constants.RECRUITING))
-            .exists()
-        ):
-            return group
-    return None
+    return get_representing_groups(admission, user).first()
+
+
+def get_representing_groups(admission, user):
+    representing = Membership.objects.filter(
+        user=user.pk, group__in=admission.groups.all()
+    ).filter(Q(role=constants.LEADER) | Q(role=constants.RECRUITING))
+    return admission.groups.filter(pk__in=representing.values_list("group", flat=True))
+
+
+def get_user_admission_groups(admission, user):
+    memberships = (
+        Membership.objects.filter(user=user.pk, group__in=admission.groups.all())
+        .exclude(role__in=constants.INACTIVE_MEMBERSHIP_ROLES)
+        .values_list("group", flat=True)
+    )
+    return admission.groups.filter(pk__in=memberships)
+
+
+def get_name_revealed_groups(admission, saved_schedule):
+    if (
+        saved_schedule.is_distributed
+        and saved_schedule.name_visibility == SavedSchedule.NAME_VISIBILITY_COMMITTEE
+    ):
+        return admission.groups.all()
+    if not saved_schedule.is_distributed:
+        return admission.groups.none()
+    return saved_schedule.revealed_groups.all()
+
+
+def get_user_name_revealed_groups(admission, saved_schedule, user):
+    return get_user_admission_groups(admission, user).filter(
+        pk__in=get_name_revealed_groups(admission, saved_schedule)
+    )
+
+
+def get_user_candidate_visible_groups(admission, saved_schedule, user):
+    represented_groups = get_representing_groups(admission, user)
+    if saved_schedule is None:
+        return represented_groups
+    revealed_groups = get_user_name_revealed_groups(admission, saved_schedule, user)
+    return admission.groups.filter(
+        Q(pk__in=represented_groups) | Q(pk__in=revealed_groups)
+    ).distinct()
+
+
+def set_group_name_visibility(saved_schedule, groups, visible, actor):
+    groups = list(groups)
+    if not groups:
+        return
+    group_ids = {group.pk for group in groups}
+    revealed_ids = set(
+        saved_schedule.revealed_groups.filter(pk__in=group_ids).values_list(
+            "pk", flat=True
+        )
+    )
+    changed_groups = [
+        group for group in groups if (group.pk in revealed_ids) != visible
+    ]
+    if not changed_groups:
+        return
+    if visible:
+        saved_schedule.revealed_groups.add(*changed_groups)
+        action = NameVisibilityAuditEvent.ACTION_REVEALED
+    else:
+        saved_schedule.revealed_groups.remove(*changed_groups)
+        action = NameVisibilityAuditEvent.ACTION_HIDDEN
+    NameVisibilityAuditEvent.objects.bulk_create(
+        [
+            NameVisibilityAuditEvent(
+                admission=saved_schedule.admission,
+                saved_schedule=saved_schedule,
+                group=group,
+                group_name=group.name,
+                actor=actor,
+                actor_username=actor.username,
+                action=action,
+            )
+            for group in changed_groups
+        ]
+    )
 
 
 def user_is_committee_member(admission, user):
-    return Membership.objects.filter(
-        user=user.pk, group__in=admission.groups.all()
-    ).exists()
+    return (
+        Membership.objects.filter(user=user.pk, group__in=admission.groups.all())
+        .exclude(role__in=constants.INACTIVE_MEMBERSHIP_ROLES)
+        .exists()
+    )
 
 
 def canonicalize_slot_keys(keys):
@@ -118,16 +205,41 @@ def canonicalize_slot_keys(keys):
     return canonical, None
 
 
+@method_decorator(ensure_csrf_cookie, name="dispatch")
 class AppView(TemplateView):
     template_name = "index.html"
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context["settings"] = settings
-        # :rip:
-        # beacuse of proxy model
+        user_data = {
+            "id": "",
+            "profile_picture": "",
+            "full_name": "",
+            "representative_of_group": "",
+            "is_staff": False,
+            "is_member_of_webkom": False,
+        }
         if self.request.user.is_authenticated:
             self.request.user.__class__ = LegoUser
+            representative = self.request.user.representative_of_group
+            user_data = {
+                "id": str(self.request.user.pk),
+                "profile_picture": self.request.user.profile_picture or "",
+                "full_name": self.request.user.get_full_name(),
+                "representative_of_group": (
+                    representative.name if representative else ""
+                ),
+                "is_staff": self.request.user.is_staff,
+                "is_member_of_webkom": self.request.user.is_member_of_webkom,
+            }
+        context["django_data"] = {"user": user_data}
+        context["frontend_config"] = {
+            "SENTRY_DSN": getattr(settings, "SENTRY_DSN", ""),
+            "RELEASE": getattr(settings, "RELEASE", ""),
+            "ENVIRONMENT": getattr(settings, "ENVIRONMENT_NAME", ""),
+            "API_URL": settings.API_URL,
+        }
         return context
 
 
@@ -176,6 +288,8 @@ class PublicApplicationViewSet(mixins.CreateModelMixin, viewsets.GenericViewSet)
     queryset = UserApplication.objects.none()
     authentication_classes = [SessionAuthentication]
     permission_classes = [permissions.IsAuthenticated]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = "application_write"
 
     def get_serializer_class(self):
         if self.action in ("create"):
@@ -238,7 +352,7 @@ class PublicApplicationViewSet(mixins.CreateModelMixin, viewsets.GenericViewSet)
 class AdminAdmissionViewSet(mixins.RetrieveModelMixin, viewsets.GenericViewSet):
     queryset = Admission.objects.all().order_by("title")
     authentication_classes = [SessionAuthentication]
-    permission_classes = [AdmissionPermissions]
+    permission_classes = [permissions.IsAuthenticated, AdminAdmissionPermissions]
     serializer_class = AdminAdmissionSerializer
     lookup_field = "slug"
 
@@ -250,6 +364,8 @@ class AdminApplicationViewSet(
     authentication_classes = [SessionAuthentication]
     serializer_class = UserApplicationSerializer
     permission_classes = [permissions.IsAuthenticated]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = "application_read"
 
     def get_permissions(self):
         """Instantiate the permissions for this request.
@@ -277,19 +393,20 @@ class AdminApplicationViewSet(
                 .prefetch_related("group_applications", "group_applications__group")
             )
         # Check membership in admission groups
-        representing_group = get_representing_group(admission, user)
-        if representing_group is not None:
+        representing_groups = get_representing_groups(admission, user)
+        if representing_groups.exists():
             qs = GroupApplication.objects.filter(
-                group=representing_group
+                group__in=representing_groups
             ).select_related("group")
 
             return (
                 super()
                 .get_queryset()
                 .filter(
-                    group_applications__group=representing_group,
+                    group_applications__group__in=representing_groups,
                     admission__slug=admission_slug,
                 )
+                .distinct()
                 .prefetch_related(
                     Prefetch(
                         "group_applications",
@@ -317,10 +434,8 @@ class AdminApplicationViewSet(
                 return Response(status=status.HTTP_400_BAD_REQUEST)
 
         # Verify that the user is permitted to delete the group application
-        representing_group = get_representing_group(admission, self.request.user)
-        if not user_is_admin and (
-            representing_group is None or str(representing_group.pk) != group_id
-        ):
+        representing_groups = get_representing_groups(admission, self.request.user)
+        if not user_is_admin and (not representing_groups.filter(pk=group_id).exists()):
             return Response(
                 status=status.HTTP_403_FORBIDDEN,
                 data="You are not permitted to delete applications for this group",
@@ -402,27 +517,62 @@ class ManageGroupViewSet(mixins.ListModelMixin, viewsets.GenericViewSet):
 class SolveScheduleView(APIView):
     authentication_classes = [SessionAuthentication]
     permission_classes = [permissions.IsAuthenticated]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = "solve_schedule"
 
+    @transaction.atomic
     def post(self, request):
         """Enqueue a solve. The actual solving runs in run_solver_worker, so a
         heavy solve never blocks (or times out) the request — the client gets a
         job id back and polls SolveJobStatusView for the result."""
-        serializer = ScheduleRequestsSerializer(data=request.data)
-        if not serializer.is_valid():
-            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-
-        data = serializer.validated_data
-        admission = get_object_or_404(Admission, slug=data["admission_slug"])
+        admission_slug = request.data.get("admission_slug")
+        if not isinstance(admission_slug, str) or not admission_slug:
+            return Response(
+                {"admission_slug": ["This field is required."]},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        admission = get_object_or_404(Admission, slug=admission_slug)
 
         user = request.user
         user.__class__ = LegoUser
         is_admin = user_is_admission_admin(admission, user)
-        is_recruiter = get_representing_group(admission, user) is not None
-        if not (is_admin or is_recruiter):
+        if not is_admin:
             return Response(status=status.HTTP_403_FORBIDDEN)
 
-        # One active job per admission: enqueueing again while a solve is still
-        # pending/running returns the in-flight job instead of stacking work.
+        serializer = ScheduleRequestsSerializer(data=request.data)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        data = serializer.validated_data
+        admission = Admission.objects.select_for_update().get(pk=admission.pk)
+
+        synthetic_input = getattr(settings, "ALLOW_SYNTHETIC_SOLVER_INPUT", False) and (
+            data.get("synthetic")
+            or getattr(settings, "ALLOW_UNMARKED_SYNTHETIC_SOLVER_INPUT", False)
+        )
+        if not synthetic_input:
+            try:
+                saved_config = admission.saved_schedule
+            except SavedSchedule.DoesNotExist:
+                return Response(
+                    {"all_slots": ["Tidsoppsettet må lagres før planlegging."]},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            if not saved_config.enabled_slots and saved_config.enabled_windows:
+                saved_config.enabled_slots = enabled_windows_to_slots(
+                    saved_config.enabled_windows, saved_config.session_duration
+                )
+            try:
+                data.update(
+                    canonicalize_solver_payload(
+                        admission, saved_config, data, request.user
+                    )
+                )
+            except ScheduleValidationError as exc:
+                return Response(
+                    {exc.field: [exc.message]},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
         existing = (
             SolveJob.objects.filter(
                 admission=admission, status__in=SolveJob.ACTIVE_STATUSES
@@ -435,43 +585,77 @@ class SolveScheduleView(APIView):
                 SolveJobSerializer(existing).data, status=status.HTTP_202_ACCEPTED
             )
 
-        # Warm-start the solver from the currently saved plan so a re-solve
-        # converges faster and stays close to what the committee already saw.
         try:
             previous_schedule = admission.saved_schedule.schedule or []
         except SavedSchedule.DoesNotExist:
             previous_schedule = []
 
-        job = SolveJob.objects.create(
-            admission=admission,
-            requested_by=user,
-            request_data={
-                "candidates": data["candidates"],
-                "interviewers": data["interviewers"],
-                "panel_size": data["panel_size"],
-                "options": data.get("options", {}),
-                "locked_assignments": data.get("locked_assignments", []),
-                "all_slots": data.get("all_slots", []),
-                "blocks": data.get("blocks", []),
-                "previous_schedule": previous_schedule,
-            },
-        )
+        try:
+            if synthetic_input:
+                request_data = {
+                    "candidates": data["candidates"],
+                    "interviewers": data["interviewers"],
+                    "panel_size": data["panel_size"],
+                    "options": data.get("options", {}),
+                    "locked_assignments": data.get("locked_assignments", []),
+                    "all_slots": data.get("all_slots"),
+                    "blocks": data.get("blocks", []),
+                    "previous_schedule": previous_schedule,
+                }
+            else:
+                request_data = {
+                    "rehydrate": True,
+                    "candidates": [{"id": item["id"]} for item in data["candidates"]],
+                    "interviewers": [
+                        {"id": item["id"]} for item in data["interviewers"]
+                    ],
+                    "panel_size": data["panel_size"],
+                    "options": data.get("options", {}),
+                    "locked_assignments": [
+                        {
+                            "candidate_id": item.get("candidate_id"),
+                            "time": item["time"],
+                            "panel": [
+                                {"id": member.get("id")}
+                                for member in item.get("panel", [])
+                            ],
+                        }
+                        for item in data.get("locked_assignments", [])
+                    ],
+                }
+            with transaction.atomic():
+                job = SolveJob.objects.create(
+                    admission=admission,
+                    requested_by=user,
+                    request_data=request_data,
+                )
+        except IntegrityError:
+            existing = (
+                SolveJob.objects.filter(
+                    admission=admission, status__in=SolveJob.ACTIVE_STATUSES
+                )
+                .order_by("created_at")
+                .first()
+            )
+            if existing is None:
+                raise
+            return Response(
+                SolveJobSerializer(existing).data, status=status.HTTP_202_ACCEPTED
+            )
         return Response(SolveJobSerializer(job).data, status=status.HTTP_202_ACCEPTED)
 
 
 class SolveJobStatusView(APIView):
     authentication_classes = [SessionAuthentication]
     permission_classes = [permissions.IsAuthenticated]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = "solve_status"
 
     def _get_authorized_job(self, request, job_id):
         job = get_object_or_404(SolveJob, id=job_id)
         user = request.user
         user.__class__ = LegoUser
-        is_privileged = (
-            user_is_admission_admin(job.admission, user)
-            or get_representing_group(job.admission, user) is not None
-        )
-        if not is_privileged:
+        if not user_is_admission_admin(job.admission, user):
             return None, Response(status=status.HTTP_403_FORBIDDEN)
         return job, None
 
@@ -482,29 +666,31 @@ class SolveJobStatusView(APIView):
         return Response(SolveJobSerializer(job).data)
 
     def delete(self, request, job_id):
-        """Cancel a pending/running solve so a fresh one can be enqueued."""
         job, err = self._get_authorized_job(request, job_id)
         if err:
             return err
-        if job.status in SolveJob.ACTIVE_STATUSES:
-            job.status = SolveJob.STATUS_CANCELLED
-            job.finished_at = timezone.now()
-            job.save(update_fields=["status", "finished_at"])
+        SolveJob.objects.filter(id=job.id, status__in=SolveJob.ACTIVE_STATUSES).update(
+            status=SolveJob.STATUS_CANCELLED,
+            result=None,
+            request_data={},
+            finished_at=timezone.now(),
+        )
+        job.refresh_from_db()
         return Response(SolveJobSerializer(job).data)
 
 
 class SavedScheduleView(APIView):
     authentication_classes = [SessionAuthentication]
     permission_classes = [IsAuthenticated]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = "schedule"
 
     def _ensure_window_fields(self, saved):
-        changed_fields = []
         if not saved.enabled_windows and saved.enabled_slots:
             saved.enabled_windows = slots_to_enabled_windows(
                 saved.enabled_slots,
                 saved.session_duration,
             )
-            changed_fields.append("enabled_windows")
 
         if saved.enabled_windows:
             derived_slots = enabled_windows_to_slots(
@@ -513,10 +699,6 @@ class SavedScheduleView(APIView):
             )
             if saved.enabled_slots != derived_slots:
                 saved.enabled_slots = derived_slots
-                changed_fields.append("enabled_slots")
-
-        if changed_fields:
-            saved.save(update_fields=changed_fields)
 
         return saved
 
@@ -530,9 +712,10 @@ class SavedScheduleView(APIView):
         user.__class__ = LegoUser
 
         is_admin = user_is_admission_admin(admission, user)
-        is_recruiter = get_representing_group(admission, user) is not None
+        representing_groups = get_representing_groups(admission, user)
+        is_recruiter = representing_groups.exists()
 
-        if require_admin and not (is_admin or is_recruiter):
+        if require_admin and not is_admin:
             return (
                 None,
                 is_admin,
@@ -540,32 +723,69 @@ class SavedScheduleView(APIView):
                 Response(status=status.HTTP_403_FORBIDDEN),
             )
 
-        if not is_admin and not is_recruiter:
-            if not user_is_committee_member(admission, user):
-                return (
-                    None,
-                    is_admin,
-                    is_recruiter,
-                    Response(status=status.HTTP_403_FORBIDDEN),
-                )
-            try:
-                saved = admission.saved_schedule
-                if not saved.is_distributed:
-                    return (
-                        None,
-                        is_admin,
-                        is_recruiter,
-                        Response(status=status.HTTP_403_FORBIDDEN),
-                    )
-            except SavedSchedule.DoesNotExist:
-                return (
-                    None,
-                    is_admin,
-                    is_recruiter,
-                    Response(status=status.HTTP_403_FORBIDDEN),
-                )
+        if (
+            not is_admin
+            and not is_recruiter
+            and not user_is_committee_member(admission, user)
+        ):
+            return (
+                None,
+                is_admin,
+                is_recruiter,
+                Response(status=status.HTTP_403_FORBIDDEN),
+            )
 
         return admission, is_admin, is_recruiter, None
+
+    def _schedule_response(self, saved, admission, user, is_admin, is_recruiter):
+        self._ensure_window_fields(saved)
+        hide_schedule = not saved.is_distributed and not is_admin
+        hide_identity = False
+        visible_candidate_ids = None
+        effective_name_visibility = saved.name_visibility
+
+        if not is_admin:
+            represented_groups = get_representing_groups(admission, user)
+            visible_groups = get_user_candidate_visible_groups(admission, saved, user)
+            if is_recruiter:
+                revealed_groups = get_name_revealed_groups(admission, saved).filter(
+                    pk__in=represented_groups
+                )
+                effective_name_visibility = (
+                    SavedSchedule.NAME_VISIBILITY_COMMITTEE
+                    if represented_groups.exists()
+                    and not represented_groups.exclude(pk__in=revealed_groups).exists()
+                    else SavedSchedule.NAME_VISIBILITY_ADMIN_ONLY
+                )
+            else:
+                hide_identity = not visible_groups.exists()
+                effective_name_visibility = (
+                    SavedSchedule.NAME_VISIBILITY_COMMITTEE
+                    if not hide_identity
+                    else SavedSchedule.NAME_VISIBILITY_HIDDEN
+                )
+
+            visible_candidate_ids = set(
+                str(candidate_id)
+                for candidate_id in UserApplication.objects.filter(
+                    admission=admission,
+                    group_applications__group__in=visible_groups,
+                )
+                .values_list("pk", flat=True)
+                .distinct()
+            )
+
+        return Response(
+            SavedScheduleSerializer(
+                saved,
+                context={
+                    "hide_candidate_identity": hide_identity,
+                    "hide_schedule": hide_schedule,
+                    "visible_candidate_ids": visible_candidate_ids,
+                    "effective_name_visibility": effective_name_visibility,
+                },
+            ).data
+        )
 
     def get(self, request, admission_slug):
         admission, is_admin, is_recruiter, err = self._get_admission_and_check(
@@ -576,34 +796,65 @@ class SavedScheduleView(APIView):
 
         try:
             saved = admission.saved_schedule
-            self._ensure_window_fields(saved)
-            hide_identity = saved.name_visibility != "committee" and not (
-                is_admin or is_recruiter
-            )
-            return Response(
-                SavedScheduleSerializer(
-                    saved, context={"hide_candidate_identity": hide_identity}
-                ).data
+            return self._schedule_response(
+                saved, admission, request.user, is_admin, is_recruiter
             )
         except SavedSchedule.DoesNotExist:
             return Response(status=status.HTTP_404_NOT_FOUND)
 
+    @transaction.atomic
     def post(self, request, admission_slug):
-        admission, _is_admin, _is_recruiter, err = self._get_admission_and_check(
-            request, admission_slug, require_admin=True
+        admission, is_admin, is_recruiter, err = self._get_admission_and_check(
+            request, admission_slug
         )
         if err:
             return err
-
         serializer = SaveScheduleInputSerializer(data=request.data)
         if not serializer.is_valid():
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        admission = Admission.objects.select_for_update().get(pk=admission.pk)
 
         data = serializer.validated_data
         existing = SavedSchedule.objects.filter(admission=admission).first()
 
-        # Optimistic concurrency: a client may pin the revision it loaded and
-        # get a conflict instead of silently overwriting someone else's save.
+        if not is_admin:
+            mutable_fields = set(data) - {"expected_updated_at"}
+            if not is_recruiter or mutable_fields != {"name_visibility"}:
+                return Response(status=status.HTTP_403_FORBIDDEN)
+            if existing is None:
+                return Response(status=status.HTTP_404_NOT_FOUND)
+            expected_updated_at = data.get("expected_updated_at")
+            if (
+                expected_updated_at is not None
+                and existing.updated_at != expected_updated_at
+            ):
+                return Response(
+                    {
+                        "detail": "Planen ble endret av noen andre. Last inn siden på nytt."
+                    },
+                    status=status.HTTP_409_CONFLICT,
+                )
+            visibility = data["name_visibility"]
+            if (
+                visibility == SavedSchedule.NAME_VISIBILITY_COMMITTEE
+                and not existing.is_distributed
+            ):
+                return Response(
+                    {"name_visibility": ["Planen må publiseres før navn kan vises."]},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            represented_groups = get_representing_groups(admission, request.user)
+            set_group_name_visibility(
+                existing,
+                represented_groups,
+                visibility == SavedSchedule.NAME_VISIBILITY_COMMITTEE,
+                request.user,
+            )
+            existing.save(update_fields=["updated_at"])
+            return self._schedule_response(
+                existing, admission, request.user, is_admin, is_recruiter
+            )
+
         expected_updated_at = data.get("expected_updated_at")
         if (
             expected_updated_at is not None
@@ -642,12 +893,50 @@ class SavedScheduleView(APIView):
             "session_duration",
             existing.session_duration if existing is not None else 60,
         )
+        day_start_minute = data.get(
+            "day_start_minute",
+            existing.day_start_minute if existing is not None else 8 * 60,
+        )
+        day_end_minute = data.get(
+            "day_end_minute",
+            existing.day_end_minute if existing is not None else 18 * 60,
+        )
+
+        # The serializer can only order-check fields sent in the same request,
+        # so re-check the merged (request + existing) values — a partial update
+        # must not be able to persist an inverted range.
+        if end_date is not None and end_date < start_date:
+            return Response(
+                {"end_date": ["Sluttdato kan ikke være før startdato."]},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        effective_end_date = end_date or start_date
+        if (effective_end_date - start_date).days >= constants.MAX_SCHEDULE_DAYS:
+            return Response(
+                {
+                    "end_date": [
+                        f"Intervjuperioden kan være maksimalt {constants.MAX_SCHEDULE_DAYS} dager."
+                    ]
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if day_end_minute <= day_start_minute:
+            return Response(
+                {"day_end_minute": ["Slutten på dagen må være etter starten."]},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
         if "enabled_windows" in data:
             enabled_windows = normalize_enabled_windows(data["enabled_windows"])
         elif "enabled_slots" in data:
+            canonical_slots, invalid_key = canonicalize_slot_keys(data["enabled_slots"])
+            if canonical_slots is None:
+                return Response(
+                    {"enabled_slots": [f"Ugyldig tidsluke: {invalid_key}"]},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
             enabled_windows = slots_to_enabled_windows(
-                data["enabled_slots"],
+                canonical_slots,
                 session_duration,
             )
         elif existing is not None:
@@ -655,6 +944,31 @@ class SavedScheduleView(APIView):
         else:
             enabled_windows = []
 
+        slot_count = 0
+        for window in enabled_windows:
+            window_date = datetime.strptime(window["date"], "%Y-%m-%d").date()
+            if (
+                window_date < start_date
+                or window_date > effective_end_date
+                or window["start_minute"] < day_start_minute
+                or window["end_minute"] > day_end_minute
+            ):
+                return Response(
+                    {
+                        "enabled_windows": [
+                            "Tidsvinduer må ligge innenfor intervjuperioden og dagen."
+                        ]
+                    },
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            slot_count += (
+                window["end_minute"] - window["start_minute"]
+            ) // session_duration
+            if slot_count > constants.MAX_SCHEDULE_SLOTS:
+                return Response(
+                    {"enabled_windows": ["Tidsoppsettet inneholder for mange luker."]},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
         enabled_slots = enabled_windows_to_slots(enabled_windows, session_duration)
 
         grid_changed = False
@@ -673,16 +987,13 @@ class SavedScheduleView(APIView):
                     and existing.chunk_size != next_chunk_size
                 )
             )
-            # A structural change shifts where slots land, so old availability no longer aligns.
             structure_changed = (
                 existing.start_date != start_date
                 or existing.end_date != end_date
                 or existing.session_duration != session_duration
                 or block_shape_changed
-                or existing.day_start_minute
-                != data.get("day_start_minute", existing.day_start_minute)
-                or existing.day_end_minute
-                != data.get("day_end_minute", existing.day_end_minute)
+                or existing.day_start_minute != day_start_minute
+                or existing.day_end_minute != day_end_minute
             )
             grid_changed = structure_changed or old_windows != enabled_windows
             incoming_schedule = data.get("schedule")
@@ -700,8 +1011,14 @@ class SavedScheduleView(APIView):
                 existing.schedule if existing is not None else [],
             )
 
-        # Publishing an empty plan makes no sense — reject it explicitly
-        # instead of silently distributing nothing to the committee.
+        panel_size = data.get(
+            "panel_size", existing.panel_size if existing is not None else None
+        )
+        solver_options = data.get(
+            "solver_options",
+            existing.solver_options if existing is not None else None,
+        )
+
         if data.get("is_distributed") is True and not schedule:
             return Response(
                 {"is_distributed": ["Kan ikke publisere en tom intervjuplan."]},
@@ -719,10 +1036,38 @@ class SavedScheduleView(APIView):
         elif "is_distributed" in data:
             is_distributed = data["is_distributed"]
         elif schedule_changed:
-            # A changed plan must be re-published; otherwise it falls back to draft.
             is_distributed = False
         else:
             is_distributed = existing.is_distributed if existing is not None else False
+
+        if schedule and ("schedule" in data or is_distributed):
+            try:
+                schedule = canonicalize_schedule(
+                    admission=admission,
+                    schedule=schedule,
+                    start_date=start_date,
+                    enabled_slots=enabled_slots,
+                    panel_size=panel_size,
+                    solver_options=solver_options,
+                    request_user_id=request.user.id,
+                    require_all_candidates=is_distributed,
+                    end_date=end_date,
+                    session_duration=session_duration,
+                    day_start_minute=day_start_minute,
+                    day_end_minute=day_end_minute,
+                    chunk_size=data.get(
+                        "chunk_size", existing.chunk_size if existing is not None else 4
+                    ),
+                    chunk_break_minutes=data.get(
+                        "chunk_break_minutes",
+                        existing.chunk_break_minutes if existing is not None else 0,
+                    ),
+                )
+            except ScheduleValidationError as exc:
+                return Response(
+                    {exc.field: [exc.message]},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
 
         with transaction.atomic():
             saved, _ = SavedSchedule.objects.update_or_create(
@@ -734,14 +1079,8 @@ class SavedScheduleView(APIView):
                     "session_duration": session_duration,
                     "enabled_windows": enabled_windows,
                     "enabled_slots": enabled_slots,
-                    "day_start_minute": data.get(
-                        "day_start_minute",
-                        existing.day_start_minute if existing is not None else 8 * 60,
-                    ),
-                    "day_end_minute": data.get(
-                        "day_end_minute",
-                        existing.day_end_minute if existing is not None else 18 * 60,
-                    ),
+                    "day_start_minute": day_start_minute,
+                    "day_end_minute": day_end_minute,
                     "chunk_size": data.get(
                         "chunk_size",
                         existing.chunk_size if existing is not None else 4,
@@ -750,14 +1089,8 @@ class SavedScheduleView(APIView):
                         "chunk_break_minutes",
                         existing.chunk_break_minutes if existing is not None else 0,
                     ),
-                    "panel_size": data.get(
-                        "panel_size",
-                        existing.panel_size if existing is not None else None,
-                    ),
-                    "solver_options": data.get(
-                        "solver_options",
-                        existing.solver_options if existing is not None else None,
-                    ),
+                    "panel_size": panel_size,
+                    "solver_options": solver_options,
                     "is_distributed": is_distributed,
                     "name_visibility": data.get(
                         "name_visibility",
@@ -766,16 +1099,53 @@ class SavedScheduleView(APIView):
                 },
             )
 
-            if structure_changed and existing is not None:
-                # The grid shape changed — wipe submitted availability so it's re-registered.
+            if not saved.is_distributed:
+                set_group_name_visibility(
+                    saved,
+                    saved.revealed_groups.all(),
+                    False,
+                    request.user,
+                )
+            elif "name_visibility" in data:
+                show_names = (
+                    data["name_visibility"] == SavedSchedule.NAME_VISIBILITY_COMMITTEE
+                )
+                if not show_names:
+                    set_group_name_visibility(
+                        saved,
+                        saved.revealed_groups.all(),
+                        False,
+                        request.user,
+                    )
+                else:
+                    set_group_name_visibility(
+                        saved,
+                        saved.revealed_groups.exclude(pk__in=admission.groups.all()),
+                        False,
+                        request.user,
+                    )
+                    set_group_name_visibility(
+                        saved,
+                        admission.groups.all(),
+                        True,
+                        request.user,
+                    )
+
+            if grid_changed and existing is not None:
                 admission.interview_availabilities.all().delete()
 
-        return Response(SavedScheduleSerializer(saved).data, status=status.HTTP_200_OK)
+            SolveJob.objects.filter(admission=admission).delete()
+
+        return self._schedule_response(
+            saved, admission, request.user, is_admin, is_recruiter
+        )
 
 
 class InterviewAvailabilityView(APIView):
     authentication_classes = [SessionAuthentication]
     permission_classes = [IsAuthenticated]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = "availability"
 
     def _get_admission(self, admission_slug):
         try:
@@ -792,28 +1162,43 @@ class InterviewAvailabilityView(APIView):
         user.__class__ = LegoUser
 
         is_admin = user_is_admission_admin(admission, user)
-        is_recruiter = get_representing_group(admission, user) is not None
+        representing_groups = get_representing_groups(admission, user)
+        is_recruiter = representing_groups.exists()
         is_committee_member = user_is_committee_member(admission, user)
 
         if not is_committee_member and not is_admin:
             return Response(status=status.HTTP_403_FORBIDDEN)
 
-        if is_admin or is_recruiter:
+        if is_admin:
             member_ids = set(
                 Membership.objects.filter(group__in=admission.groups.all())
+                .exclude(role__in=constants.INACTIVE_MEMBERSHIP_ROLES)
                 .values_list("user_id", flat=True)
                 .distinct()
             )
-            # Always include the current user and anyone who has already
-            # submitted, so availability shows up even for users who aren't
-            # part of the committee groups (e.g. an admin entering their own).
+            admin_ids = set(
+                Membership.objects.filter(group__in=admission.admin_groups.all())
+                .exclude(role__in=constants.INACTIVE_MEMBERSHIP_ROLES)
+                .values_list("user_id", flat=True)
+                .distinct()
+            )
             submitted_ids = set(
                 InterviewAvailability.objects.filter(admission=admission).values_list(
                     "user_id", flat=True
                 )
             )
-            all_ids = member_ids | submitted_ids | {user.id}
+            all_ids = member_ids | (submitted_ids & admin_ids)
             users = LegoUser.objects.filter(id__in=all_ids).order_by(
+                "first_name", "last_name", "username"
+            )
+        elif is_recruiter:
+            member_ids = (
+                Membership.objects.filter(group__in=representing_groups)
+                .exclude(role__in=constants.INACTIVE_MEMBERSHIP_ROLES)
+                .values_list("user_id", flat=True)
+                .distinct()
+            )
+            users = LegoUser.objects.filter(id__in=member_ids).order_by(
                 "first_name", "last_name", "username"
             )
         else:
@@ -824,7 +1209,40 @@ class InterviewAvailabilityView(APIView):
             user_id__in=users.values_list("id", flat=True),
         )
         availability_map = {item.user_id: item.slots for item in saved_items}
-        conflicts_map = {item.user_id: item.conflicts for item in saved_items}
+        saved_schedule = None
+        try:
+            saved_schedule = admission.saved_schedule
+        except SavedSchedule.DoesNotExist:
+            pass
+        visible_candidate_ids = None
+        if not is_admin:
+            user_groups = get_user_candidate_visible_groups(
+                admission,
+                saved_schedule,
+                user,
+            )
+            visible_candidate_ids = {
+                str(pk)
+                for pk in UserApplication.objects.filter(
+                    admission=admission,
+                    group_applications__group__in=user_groups,
+                )
+                .values_list("pk", flat=True)
+                .distinct()
+            }
+        conflicts_map = {
+            item.user_id: (
+                [
+                    conflict
+                    for conflict in item.conflicts
+                    if visible_candidate_ids is None
+                    or conflict in visible_candidate_ids
+                ]
+                if is_admin or is_recruiter or visible_candidate_ids
+                else []
+            )
+            for item in saved_items
+        }
 
         payload = [
             {
@@ -842,29 +1260,30 @@ class InterviewAvailabilityView(APIView):
         serializer = InterviewAvailabilityParticipantSerializer(payload, many=True)
         return Response(serializer.data)
 
+    @transaction.atomic
     def post(self, request, admission_slug):
-        admission = self._get_admission(admission_slug)
+        admission = Admission.objects.filter(slug=admission_slug).first()
         if admission is None:
             return Response(status=status.HTTP_404_NOT_FOUND)
 
         user = request.user
         user.__class__ = LegoUser
-        if not user_is_committee_member(
-            admission, user
-        ) and not user_is_admission_admin(admission, user):
+        is_admin = user_is_admission_admin(admission, user)
+        representing_groups = get_representing_groups(admission, user)
+        is_recruiter = representing_groups.exists()
+        if not user_is_committee_member(admission, user) and not is_admin:
             return Response(status=status.HTTP_403_FORBIDDEN)
 
         serializer = SaveInterviewAvailabilitySerializer(data=request.data)
         if not serializer.is_valid():
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        admission = Admission.objects.select_for_update().get(pk=admission.pk)
 
         try:
             saved_schedule = admission.saved_schedule
         except SavedSchedule.DoesNotExist:
             saved_schedule = None
 
-        # Canonicalize incoming slot keys (legacy ":" separators included) so
-        # only "<YYYY-MM-DD>|<minute>" keys are ever persisted.
         if "slots" in serializer.validated_data:
             canonical_slots, invalid_key = canonicalize_slot_keys(
                 serializer.validated_data["slots"]
@@ -876,8 +1295,6 @@ class InterviewAvailabilityView(APIView):
                 )
             serializer.validated_data["slots"] = canonical_slots
 
-            # When the admin has configured a time grid, availability may only
-            # be registered on slots that are actually part of it.
             enabled_slots = []
             if saved_schedule is not None:
                 enabled_slots = list(saved_schedule.enabled_slots or [])
@@ -886,38 +1303,35 @@ class InterviewAvailabilityView(APIView):
                         saved_schedule.enabled_windows,
                         saved_schedule.session_duration,
                     )
-            if enabled_slots:
-                canonical_enabled, _unused = canonicalize_slot_keys(enabled_slots)
-                enabled_set = set(
-                    canonical_enabled
-                    if canonical_enabled is not None
-                    else enabled_slots
+            if not enabled_slots:
+                return Response(
+                    {"slots": ["Opptaksansvarlig må åpne tidsluker først."]},
+                    status=status.HTTP_400_BAD_REQUEST,
                 )
-                outside = [key for key in canonical_slots if key not in enabled_set]
-                if outside:
-                    return Response(
-                        {
-                            "slots": [
-                                f"Tidspunktet {outside[0]} er ikke en del av "
-                                "intervjuplanens tidsoppsett."
-                            ]
-                        },
-                        status=status.HTTP_400_BAD_REQUEST,
-                    )
+            canonical_enabled, _unused = canonicalize_slot_keys(enabled_slots)
+            enabled_set = set(
+                canonical_enabled if canonical_enabled is not None else enabled_slots
+            )
+            outside = [key for key in canonical_slots if key not in enabled_set]
+            if outside:
+                return Response(
+                    {
+                        "slots": [
+                            f"Tidspunktet {outside[0]} er ikke en del av "
+                            "intervjuplanens tidsoppsett."
+                        ]
+                    },
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
 
-        # Only guard when actual conflicts are being registered — an empty
-        # list is a no-op and must not block a plain availability save.
-        if serializer.validated_data.get("conflicts"):
-            is_admin = user_is_admission_admin(admission, user)
-            is_recruiter = get_representing_group(admission, user) is not None
-
-            # Admins and recruiters always see candidate names, so they may
-            # register conflicts before names are released to the committee.
+        revealed_groups = (
+            get_user_name_revealed_groups(admission, saved_schedule, user)
+            if saved_schedule is not None
+            else admission.groups.none()
+        )
+        names_are_visible = revealed_groups.exists()
+        if "conflicts" in serializer.validated_data:
             if not (is_admin or is_recruiter):
-                names_are_visible = (
-                    saved_schedule is not None
-                    and saved_schedule.name_visibility == "committee"
-                )
                 if not names_are_visible:
                     return Response(
                         {
@@ -928,11 +1342,22 @@ class InterviewAvailabilityView(APIView):
                         status=status.HTTP_400_BAD_REQUEST,
                     )
 
+            visible_groups = (
+                admission.groups.all()
+                if is_admin
+                else get_user_candidate_visible_groups(
+                    admission,
+                    saved_schedule,
+                    user,
+                )
+            )
+            applications = UserApplication.objects.filter(admission=admission)
+            if not is_admin:
+                applications = applications.filter(
+                    group_applications__group__in=visible_groups
+                )
             valid_candidate_ids = {
-                str(pk)
-                for pk in UserApplication.objects.filter(
-                    admission=admission
-                ).values_list("pk", flat=True)
+                str(pk) for pk in applications.values_list("pk", flat=True).distinct()
             }
             unknown = [
                 conflict
@@ -945,9 +1370,6 @@ class InterviewAvailabilityView(APIView):
                     status=status.HTTP_400_BAD_REQUEST,
                 )
 
-        # Build defaults only from the keys actually present in the request so
-        # a partial update never overwrites the other field with a stale value
-        # read moments earlier (read-then-write race).
         defaults = {
             key: serializer.validated_data[key]
             for key in ("slots", "conflicts")
@@ -966,7 +1388,11 @@ class InterviewAvailabilityView(APIView):
                 "full_name": user.get_full_name() or user.username,
                 "gender": panel_gender_code(user.gender),
                 "slots": saved.slots,
-                "conflicts": saved.conflicts,
+                "conflicts": (
+                    saved.conflicts
+                    if is_admin or is_recruiter or names_are_visible
+                    else []
+                ),
                 "has_submitted": True,
                 "is_me": True,
             },
@@ -977,6 +1403,8 @@ class InterviewAvailabilityView(APIView):
 class InterviewCandidatesView(APIView):
     authentication_classes = [SessionAuthentication]
     permission_classes = [IsAuthenticated]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = "candidate_read"
 
     def get(self, request, admission_slug):
         try:
@@ -988,53 +1416,58 @@ class InterviewCandidatesView(APIView):
         user.__class__ = LegoUser
 
         is_admin = user_is_admission_admin(admission, user)
-        is_recruiter = get_representing_group(admission, user) is not None
+        representing_groups = get_representing_groups(admission, user)
+        is_recruiter = representing_groups.exists()
         is_committee_member = user_is_committee_member(admission, user)
 
         if not is_committee_member and not is_admin and not is_recruiter:
             return Response(status=status.HTTP_403_FORBIDDEN)
 
-        # Admins and recruiters are privileged: they may see candidate
-        # identities, and gender (which feeds the solver). Plain committee
-        # members only see names once they are released, and never see gender.
-        is_privileged = is_admin or is_recruiter
+        saved = None
+        try:
+            saved = admission.saved_schedule
+        except SavedSchedule.DoesNotExist:
+            pass
 
-        # Candidate identities follow the same visibility rule as the schedule:
-        # only privileged users, or everyone once names are released to the
-        # committee, may see them. Otherwise return anonymous placeholders so
-        # the username embedded in the id does not leak either.
-        hide_identity = not is_privileged
-        if hide_identity:
-            try:
-                hide_identity = admission.saved_schedule.name_visibility != "committee"
-            except SavedSchedule.DoesNotExist:
-                hide_identity = True
+        visible_groups = get_user_candidate_visible_groups(admission, saved, user)
+        hide_identity = not is_admin and not visible_groups.exists()
 
-        expose_gender = is_privileged
-
-        applications = (
-            UserApplication.objects.filter(admission=admission)
-            .select_related("user")
-            .order_by("user__first_name", "user__last_name", "user__username")
+        applications = UserApplication.objects.filter(admission=admission)
+        if not is_admin:
+            applications = applications.filter(
+                group_applications__group__in=visible_groups
+            ).distinct()
+        applications = applications.select_related("user").order_by(
+            "user__first_name", "user__last_name", "user__username"
         )
         if hide_identity:
-            payload = [
-                {"id": f"candidate-{index}", "name": "", "gender": ""}
-                for index, _ in enumerate(applications)
-            ]
+            payload = []
         else:
             payload = [
                 {
                     "id": str(application.pk),
                     "name": application.user.get_full_name()
                     or application.user.username,
-                    "gender": (
-                        panel_gender_code(application.user.gender)
-                        if expose_gender
-                        else ""
-                    ),
                 }
                 for application in applications
             ]
 
         return Response(payload, status=status.HTTP_200_OK)
+
+
+class NameVisibilityAuditView(APIView):
+    authentication_classes = [SessionAuthentication]
+    permission_classes = [IsAuthenticated]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = "schedule"
+
+    def get(self, request, admission_slug):
+        admission = get_object_or_404(Admission, slug=admission_slug)
+        request.user.__class__ = LegoUser
+        if not user_is_admission_admin(admission, request.user):
+            return Response(status=status.HTTP_403_FORBIDDEN)
+        events = NameVisibilityAuditEvent.objects.filter(
+            admission=admission
+        ).select_related("group", "actor")[: constants.MAX_NAME_VISIBILITY_AUDIT_EVENTS]
+        serializer = NameVisibilityAuditEventSerializer(events, many=True)
+        return Response(serializer.data)

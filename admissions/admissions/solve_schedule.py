@@ -45,6 +45,7 @@ def solve_schedule(
     interviewers = [Interviewer(**i) for i in interviewers_data]
     options = SolveOptions(**(options_data or {}))
     locked_assignments_data = locked_assignments_data or []
+    restrict_to_grid = all_slots_data is not None
     all_slots_data = all_slots_data or []
     blocks_data = blocks_data or []
     previous_schedule_data = previous_schedule_data or []
@@ -64,6 +65,8 @@ def solve_schedule(
     # would force every M/F candidate's slots to 0 and make them all unplaceable.
     gender_data_available = bool(male_iids or female_iids)
     all_slots_set = set(all_slots_data)
+    if restrict_to_grid:
+        avail_set = {iid: slots & all_slots_set for iid, slots in avail_set.items()}
 
     def locked_conflict(message: str, assignment: dict | None = None):
         return {
@@ -92,7 +95,7 @@ def solve_schedule(
             )
 
         locked_time = int(assignment["time"])
-        if locked_time < 0 or (all_slots_set and locked_time not in all_slots_set):
+        if locked_time < 0 or (restrict_to_grid and locked_time not in all_slots_set):
             return locked_conflict(
                 f"Locked time {locked_time} for "
                 f"{candidate_map[candidate_id].name} is not an open slot.",
@@ -131,7 +134,13 @@ def solve_schedule(
                     assignment,
                 )
 
-        if options.enforce_same_gender and candidate.gender in {"M", "F"}:
+        # Gated on gender_data_available like the model constraint below, so a
+        # lock produced by a solve without gender data is never rejected here.
+        if (
+            options.enforce_same_gender
+            and gender_data_available
+            and candidate.gender in {"M", "F"}
+        ):
             same_gender_ids = male_iids if candidate.gender == "M" else female_iids
             if not any(
                 interviewer_id in same_gender_ids for interviewer_id in panel_ids
@@ -165,9 +174,9 @@ def solve_schedule(
                         "with different panels."
                     )
 
-    all_available = set().union(*(i.availability for i in interviewers))
+    all_available = set().union(*(avail_set[i.id] for i in interviewers))
     all_available.update(locked_times)
-    if options.allow_overtime and all_slots_data:
+    if options.allow_overtime and restrict_to_grid:
         all_available.update(all_slots_data)
 
     sorted_slots = sorted(all_available)
@@ -184,6 +193,26 @@ def solve_schedule(
                 for c in candidates
             ],
             "locked_conflicts": [],
+        }
+
+    # Fail fast when the model would be too large to even build: the solver's
+    # time limit only covers the search, not variable creation, so an oversized
+    # instance would OOM/hang the worker instead of timing out.
+    model_var_bound = len(candidates) * len(sorted_slots) * (len(interviewers) + 1)
+    block_constraint_bound = sum(len(set(block)) for block in blocks_data) * len(
+        interviewers
+    )
+    if model_var_bound + block_constraint_bound > constants.MAX_SOLVER_MODEL_VARS:
+        return {
+            "status": "ERROR",
+            "schedule": [],
+            "unplaceable": [],
+            "locked_conflicts": [],
+            "error": (
+                "Probleminstansen er for stor til å løses: "
+                f"{len(candidates)} kandidater × {len(sorted_slots)} tidsluker × "
+                f"{len(interviewers)} intervjuere. Åpne færre tidsluker."
+            ),
         }
 
     schedule = {}
@@ -223,6 +252,7 @@ def solve_schedule(
     # and stay close to what the committee already saw. Hints are advisory — the
     # solver repairs or ignores any that no longer fit.
     prev_time_by_candidate = {}
+    prev_panel_vars = []
     slot_set_for_hint = set(sorted_slots)
     for entry in previous_schedule_data:
         cid = entry.get("candidate_id") or candidate_id_by_name.get(
@@ -238,6 +268,7 @@ def solve_schedule(
         for member in entry.get("panel", []):
             if (member.get("id"), cid, t) in assign:
                 model.AddHint(assign[(member["id"], cid, t)], 1)
+                prev_panel_vars.append(assign[(member["id"], cid, t)])
 
     def unplaceable_entry(c):
         unbiased = [i for i in interviewers if c.id not in bias_set[i.id]]
@@ -253,6 +284,7 @@ def solve_schedule(
             reason = "Ingen ledige tidsluker igjen."
         elif (
             options.enforce_same_gender
+            and gender_data_available
             and c.gender in {"M", "F"}
             and not any(
                 iid in (male_iids if c.gender == "M" else female_iids)
@@ -265,8 +297,6 @@ def solve_schedule(
             reason = "Ikke nok intervjukapasitet i de åpne tidslukene."
         return {"candidate_id": c.id, "candidate": c.name, "reason": reason}
 
-    # Constraints
-
     # Each candidate gets at most one interview. Placement is maximized in the
     # objective instead of forced here, so an over-constrained run yields a
     # partial schedule plus a list of unplaceable candidates rather than no
@@ -278,7 +308,6 @@ def solve_schedule(
             for t in sorted_slots:
                 model.Add(schedule[(c.id, t)] == (1 if t == locked["time"] else 0))
 
-    # Each timeslot can at most have 1 interview
     for t in sorted_slots:
         model.AddAtMostOne(schedule[(c.id, t)] for c in candidates)
 
@@ -308,7 +337,6 @@ def solve_schedule(
                         == (1 if iid in locked["panel_ids"] else 0)
                     )
 
-            # Gender parameter
             if (
                 options.enforce_same_gender
                 and gender_data_available
@@ -353,12 +381,9 @@ def solve_schedule(
             for i in interviewers:
                 works = model.NewBoolVar(f"works_{b_index}_{i.id}")
                 for t in block_slots:
-                    # 1 when interviewer i is interviewing at slot t, else 0.
                     busy = iview_time_vars.get((i.id, t), [])
-                    # When the slot is filled, i works it iff i staffs the block.
                     model.Add(sum(busy) == works).OnlyEnforceIf(occupied_var(t))
 
-    # Objective function
     max_load = model.NewIntVar(0, len(candidates), "max_load")
     loads = []
     available_loads = []
@@ -431,18 +456,26 @@ def solve_schedule(
     )
 
     # Lowest-priority tie-breaker: scaled below every real objective so it only
-    # nudges otherwise-equal plans toward the previous one, never trading off
-    # placement, overtime, load or continuity to do it.
-    stability_reward = [schedule[(cid, t)] for cid, t in prev_time_by_candidate.items()]
+    # nudges otherwise-equal plans toward the previous one — same times and, at
+    # a kept time, the same panel members — never trading off placement,
+    # overtime, load or continuity to do it.
+    stability_reward = [
+        schedule[(cid, t)] for cid, t in prev_time_by_candidate.items()
+    ] + prev_panel_vars
     if stability_reward:
-        model.Minimize(base_objective * (len(candidates) + 1) - sum(stability_reward))
+        model.Minimize(
+            base_objective * (len(stability_reward) + 1) - sum(stability_reward)
+        )
     else:
         model.Minimize(base_objective)
 
-    # Solve
     solver = cp_model.CpSolver()
     solver.parameters.max_time_in_seconds = options.max_solver_seconds
     solver.parameters.num_search_workers = constants.SOLVER_NUM_WORKERS
+    # Parallel portfolio search returns whichever tied optimum a worker reached
+    # first, so the fixed seed alone does not make re-solves reproducible;
+    # interleaved search keeps the workers but makes the search deterministic.
+    solver.parameters.interleave_search = True
     solver.parameters.random_seed = constants.SOLVER_RANDOM_SEED
     status = solver.Solve(model)
 

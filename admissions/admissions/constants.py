@@ -42,6 +42,8 @@ ROLES = (
     (SOCIAL_ADMIN, SOCIAL_ADMIN),
 )
 
+INACTIVE_MEMBERSHIP_ROLES = (RETIREE, ALUMNI, RETIREE_EMAIL)
+
 DATA = "data"
 KOMTEK = "komtek"
 
@@ -58,19 +60,20 @@ STAFF_LEADER_GROUPS = ["backup", "Hovedstyret", "RevyStyret"]
 WEBKOM_GROUPNAME = "Webkom"
 """ Group name of Webkom """
 
-# Gender
-# Only male/female map to a panel code; "other"/unset are ignored by the solver.
 LEGO_GENDER_MALE = "male"
 LEGO_GENDER_FEMALE = "female"
 LEGO_GENDER_TO_PANEL_CODE = {LEGO_GENDER_MALE: "M", LEGO_GENDER_FEMALE: "F"}
 
 
-# Interview-schedule solver bounds
-# Solving runs in run_solver_worker, not the request thread; this is a sanity ceiling.
 MAX_SOLVER_SECONDS = 120.0
 SOLVER_NUM_WORKERS = 4
 SOLVER_RANDOM_SEED = 42
+MAX_SOLVER_MODEL_VARS = 2_000_000
+MAX_SCHEDULE_DAYS = 21
+MAX_SCHEDULE_SLOTS = MAX_SCHEDULE_DAYS * 24 * 12
+MAX_SCHEDULE_WINDOWS = MAX_SCHEDULE_DAYS * 24 * 6
+MAX_SOLVER_BLOCK_MEMBERSHIPS = MAX_SCHEDULE_SLOTS
+MAX_NAME_VISIBILITY_AUDIT_EVENTS = 500
 
-# Async solve-job worker bounds. A job RUNNING past the stale window is failed as abandoned.
 SOLVE_JOB_STALE_SECONDS = 10 * 60
-SOLVE_JOB_RETENTION_DAYS = 7
+SOLVE_JOB_RETENTION_DAYS = 1

@@ -17,6 +17,9 @@ FRONTEND_URL = env("FRONTEND_URL")
 API_URL = env("API_URL")
 ENVIRONMENT_NAME = env("ENVIRONMENT_NAME", default="production")
 RELEASE = env("RELEASE")
+DATA_UPLOAD_MAX_MEMORY_SIZE = env.int(
+    "DATA_UPLOAD_MAX_MEMORY_SIZE", default=2 * 1024 * 1024
+)
 
 # Database
 DATABASES = {"default": env.db()}
@@ -47,28 +50,53 @@ sentry_sdk.init(
     environment=ENVIRONMENT_NAME,
     integrations=[DjangoIntegration()],
     before_send=remove_sensitive_data,
+    include_local_variables=False,
+    max_request_body_size="never",
+    send_default_pii=False,
+)
+
+connect_origins = {"'self'"}
+for external_url in (SENTRY_DSN, API_URL):
+    parsed_external_url = urlparse(external_url)
+    if parsed_external_url.scheme in ("http", "https") and parsed_external_url.netloc:
+        connect_origins.add(
+            f"{parsed_external_url.scheme}://{parsed_external_url.netloc}"
+        )
+CONTENT_SECURITY_POLICY = "; ".join(
+    (
+        "default-src 'self'",
+        "base-uri 'self'",
+        "object-src 'none'",
+        "frame-ancestors 'none'",
+        "form-action 'self'",
+        "script-src 'self'",
+        "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+        "font-src 'self' https://fonts.gstatic.com",
+        "img-src 'self' data: https:",
+        f"connect-src {' '.join(sorted(connect_origins))}",
+        "manifest-src 'self'",
+        "upgrade-insecure-requests",
+    )
 )
 
 
-CORS_FRONTEND_URL = urlparse(FRONTEND_URL).netloc
-CORS_ALLOWED_ORIGINS = list(
-    {
-        f"https://{CORS_FRONTEND_URL}",
-        f"https://www.{CORS_FRONTEND_URL}",
-        "http://127.0.0.1:8000",
-        "http://localhost:8000",
-        "http://localhost:3000",
-        "http://127.0.0.1:3000",
-    }
+parsed_frontend_url = urlparse(
+    FRONTEND_URL if "://" in FRONTEND_URL else f"https://{FRONTEND_URL}"
 )
+if parsed_frontend_url.scheme != "https" or not parsed_frontend_url.netloc:
+    raise ValueError("FRONTEND_URL must be an HTTPS URL or hostname")
+FRONTEND_ORIGIN = f"https://{parsed_frontend_url.netloc}"
+CORS_ALLOWED_ORIGINS = [FRONTEND_ORIGIN]
+CSRF_TRUSTED_ORIGINS = [FRONTEND_ORIGIN]
 
-# Security: HTTPS, cookies, HSTS. TLS terminates at the proxy (X-Forwarded-Proto).
 SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 SECURE_SSL_REDIRECT = env.bool("SECURE_SSL_REDIRECT", default=True)
 SESSION_COOKIE_SECURE = True
 CSRF_COOKIE_SECURE = True
 SESSION_COOKIE_HTTPONLY = True
 SESSION_COOKIE_SAMESITE = "Lax"
+SESSION_COOKIE_AGE = env.int("SESSION_COOKIE_AGE", default=60 * 60)
+SESSION_EXPIRE_AT_BROWSER_CLOSE = True
 CSRF_COOKIE_SAMESITE = "Lax"
 SECURE_CONTENT_TYPE_NOSNIFF = True
 SECURE_HSTS_SECONDS = env.int("SECURE_HSTS_SECONDS", default=60 * 60 * 24 * 365)

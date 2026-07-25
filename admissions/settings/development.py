@@ -2,6 +2,8 @@ from django.core.management.commands.runserver import Command as runserver
 
 from .base import *
 
+INSTALLED_APPS += ["django_extensions"]
+
 SETTINGS_DIR = environ.Path(__file__) - 1
 
 env = environ.Env()
@@ -10,6 +12,7 @@ env.read_env(env_file)
 
 # GENERAL CONFIGURATION =======================================================
 DEBUG = env("DEBUG", default=True)
+ALLOW_SYNTHETIC_SOLVER_INPUT = True
 SECRET_KEY = "secretkeythatisnotsosecret"
 runserver.default_port = "5000"
 

@@ -1,5 +1,5 @@
 from collections import defaultdict
-from datetime import date
+from datetime import date, datetime
 
 
 def _date_string(value):
@@ -35,6 +35,7 @@ def normalize_enabled_windows(windows):
     for window in windows or []:
         try:
             slot_date = _date_string(window["date"])
+            datetime.strptime(slot_date, "%Y-%m-%d")
             start_minute = int(window.get("start_minute", window.get("startMinute")))
             end_minute = int(window.get("end_minute", window.get("endMinute")))
         except (TypeError, ValueError, KeyError):

@@ -12,27 +12,28 @@ def cast_as_lego_user(user_obj) -> LegoUser:
     return user_obj
 
 
+def _is_recruiter_in(admission, user):
+    return (
+        Membership.objects.filter(user=user.pk, group__in=admission.groups.all())
+        .filter(Q(role=constants.LEADER) | Q(role=constants.RECRUITING))
+        .exists()
+    )
+
+
 def user_is_privileged(admission_slug, user):
-    # Return true if the user has some sort of privileges in the admission
     admission = get_object_or_404(Admission, slug=admission_slug)
-    for group in admission.admin_groups.all():
-        if Membership.objects.filter(user=user.pk, group=group.pk).exists():
-            return True
-    return user_is_recruiter(admission_slug, user)
+    if (
+        Membership.objects.filter(user=user.pk, group__in=admission.admin_groups.all())
+        .exclude(role__in=constants.INACTIVE_MEMBERSHIP_ROLES)
+        .exists()
+    ):
+        return True
+    return _is_recruiter_in(admission, user)
 
 
 def user_is_recruiter(admission_slug, user):
-    # Return true only if the user is leader or recruiting in one of the
-    # admission's committee groups. Members of admin_groups do not qualify.
     admission = get_object_or_404(Admission, slug=admission_slug)
-    for group in admission.groups.all():
-        if (
-            Membership.objects.filter(user=user.pk, group=group.pk)
-            .filter(Q(role=constants.LEADER) | Q(role=constants.RECRUITING))
-            .exists()
-        ):
-            return True
-    return False
+    return _is_recruiter_in(admission, user)
 
 
 class IsOwnerOrReadOnly(permissions.BasePermission):
@@ -72,16 +73,18 @@ class GroupPermissions(permissions.BasePermission):
         if request.method in permissions.SAFE_METHODS:
             return True
 
-        # Allow a user to edit a group if it is the admin in an admission it is used
-        admissions = Admission.objects.filter(groups__pk__contains=obj.pk)
+        admissions = Admission.objects.filter(groups=obj)
         for admission in admissions:
             for admin_group in admission.admin_groups.all():
-                if Membership.objects.filter(
-                    user=request.user.pk, group=admin_group.pk
-                ).exists():
+                if (
+                    Membership.objects.filter(
+                        user=request.user.pk, group=admin_group.pk
+                    )
+                    .exclude(role__in=constants.INACTIVE_MEMBERSHIP_ROLES)
+                    .exists()
+                ):
                     return True
 
-        # Allow a user to edit a group if it is a leader or recruiter in that group
         return (
             Membership.objects.filter(user=request.user.pk, group=obj.pk)
             .filter(Q(role=constants.LEADER) | Q(role=constants.RECRUITING))
@@ -96,6 +99,11 @@ class AdmissionPermissions(permissions.BasePermission):
 
         # If the user is staff (can edit admissions)
         return request.user.is_staff
+
+
+class AdminAdmissionPermissions(permissions.BasePermission):
+    def has_object_permission(self, request, view, obj):
+        return user_is_privileged(obj.slug, request.user)
 
     def has_permission(self, request, view):
         if request.method in permissions.SAFE_METHODS:
