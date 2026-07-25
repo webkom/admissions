@@ -14,6 +14,7 @@ import "@webkom/lego-bricks/dist/style.css";
 import ScrollToTop from "./scrollToTop";
 import * as Sentry from "@sentry/browser";
 import "src/styles/globals.css";
+import "src/styles/linkSlide.css";
 import config from "src/utils/config";
 import djangoData, { isLoggedIn, isManager } from "src/utils/djangoData";
 import "@babel/polyfill";

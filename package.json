@@ -29,6 +29,7 @@
     "axios": "^1.7.2",
     "formik": "^2.4.6",
     "js-cookie": "^3.0.5",
+    "lucide-react": "^1.8.0",
     "luxon": "^3.4.4",
     "react": "^18.3.1",
     "react-csv": "^2.2.2",
@@ -48,13 +49,16 @@
     "@typescript-eslint/eslint-plugin": "^5.62.0",
     "@typescript-eslint/parser": "^5.62.0",
     "@vitejs/plugin-react": "^4.3.1",
+    "autoprefixer": "^10.4.20",
     "cypress": "^13.13.3",
     "eslint": "^8.57.0",
     "eslint-plugin-react": "^7.35.0",
     "knip": "^5.27.3",
+    "postcss": "^8.4.49",
     "prettier": "3.3.3",
     "stylelint": "^16.8.2",
     "stylelint-config-standard": "^36.0.1",
+    "tailwindcss": "^3.4.17",
     "typescript": "^5.5.4",
     "vite": "^4.5.3",
     "yup": "^1.4.0"
@@ -65,6 +69,19 @@
   "stylelint": {
     "extends": "stylelint-config-standard",
     "rules": {
+      "at-rule-no-unknown": [
+        true,
+        {
+          "ignoreAtRules": [
+            "tailwind",
+            "apply",
+            "layer",
+            "variants",
+            "responsive",
+            "screen"
+          ]
+        }
+      ],
       "custom-property-empty-line-before": null,
       "property-no-unknown": null,
       "selector-pseudo-class-no-unknown": [

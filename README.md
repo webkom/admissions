@@ -7,6 +7,7 @@ Recruitment for [Abakus](https://abakus.no/).
 - [Environments](#environments)
 - [Local development](#local-development)
 - [Creating admissions](#creating-admissions)
+- [Interview scheduling worker](#interview-scheduling-worker)
 - [Permissions](#permissions)
 - [Run tests](#run-tests)
 - [Code style](#code-style)
@@ -78,7 +79,7 @@ $ docker-compose up -d
 
 The `.env` file with secret keys is not included, but an [`example.env`](./admissions/settings/example.env) file has been provided in `./admissions/settings`, so that you can simply rename the file and fill in the values.
 
-`example.env` is setup to connect to an Oauth2 application already configured in LEGO, so if you don't need anything special you are good to go with that one.
+Create a local OAuth2 application in LEGO and put its client ID and secret in your copied `.env` file. Never commit real OAuth credentials.
 
 If you want to configure another one, go to the OAuth2 tab in the user settings [menu](http://localhost:3000/users/me/settings/oauth2) in the running dev version of lego-webapp. Open or create an application, and enter the values you find into your .env file. If you are creating a new OAuth2 application, enter `http://127.0.0.1:5000/complete/lego/` as the redirect url.
 
@@ -154,6 +155,27 @@ $ poetry run python manage.py shell_plus
 > admission = Admission.objects.get(slug="opptak")
 > admission.groups.add(new_group)
 ```
+
+&nbsp;
+
+## Interview scheduling worker
+
+Interview schedules are produced by a constraint solver that can take a while on
+large admissions, so solving runs in a **separate worker process** instead of
+the web request. The frontend enqueues a `SolveJob`, the worker picks up pending
+jobs and runs them, and the frontend polls for the result.
+
+You must run the worker for the interview-distribution ("Fordel intervjuer")
+feature to produce results — without it, solve jobs stay `PENDING` forever.
+
+```sh
+# Run alongside the Django server (a 5th terminal in development)
+$ poetry run python manage.py run_solver_worker
+```
+
+In production, run this as a long-lived process/container next to the web server.
+A single instance is enough; jobs are claimed with row locks, so you can run more
+than one safely.
 
 &nbsp;
 

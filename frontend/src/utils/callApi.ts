@@ -17,9 +17,10 @@ export const apiClient = axios.create({
 });
 
 /**
- * Report errors to sentry
+ * Report errors to sentry. Registered on the apiClient instance (not the
+ * global axios default) so that real API/network errors are actually captured.
  */
-axios.interceptors.response.use(
+apiClient.interceptors.response.use(
   (response: AxiosResponse) => response,
   (error: AxiosError) => {
     Sentry.setContext("response", {
