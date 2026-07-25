@@ -3017,9 +3017,7 @@ class SolveProposalApplyTestCase(APITestCase):
         job = self._job()
         applied = self._apply(job)
 
-        discarded = self.client.delete(
-            reverse("solve-job", kwargs={"job_id": job.id})
-        )
+        discarded = self.client.delete(reverse("solve-job", kwargs={"job_id": job.id}))
 
         self.assertEqual(applied.status_code, status.HTTP_200_OK, applied.data)
         self.assertEqual(discarded.status_code, status.HTTP_409_CONFLICT)
