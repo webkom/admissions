@@ -590,7 +590,10 @@ class FactorizedSolverV2TestCase(SimpleTestCase):
             "panel_stability": "preferred",
             "availability_fallback": "stop",
             "require_experienced_panel": False,
-            "max_solver_seconds": 1,
+            # The assertion measures model-shape reduction, not timeout
+            # behavior. Leave enough headroom for preprocessing on loaded CI
+            # workers so both engines always emit at least one phase.
+            "max_solver_seconds": 5,
         }
         arguments = {
             "candidates_data": candidates,
