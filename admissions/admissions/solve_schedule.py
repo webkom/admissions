@@ -3,6 +3,7 @@ from dataclasses import dataclass, field
 from typing import Any, Dict, List, Sequence
 
 from django.conf import settings
+
 from ortools.sat.python import cp_model
 
 from admissions.admissions import constants

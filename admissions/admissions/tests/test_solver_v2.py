@@ -1,9 +1,10 @@
+import random
 from copy import deepcopy
 from itertools import combinations
-import random
 from unittest import mock
 
 from django.test import SimpleTestCase, override_settings
+
 from ortools.sat.python import cp_model
 
 from admissions.admissions import solve_schedule_v2 as solver_v2_module

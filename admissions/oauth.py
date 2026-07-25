@@ -30,9 +30,7 @@ def use_existing_lego_user(details, response, uid=None, user=None, **kwargs):
     )
     if lego_id is None:
         lego_id = (
-            _parse_lego_id(response.get("id"))
-            if isinstance(response, dict)
-            else None
+            _parse_lego_id(response.get("id")) if isinstance(response, dict) else None
         )
     if lego_id is None:
         lego_id = _parse_lego_id(uid)
