@@ -23,8 +23,8 @@ from admissions.admissions.models import (
     SolveJob,
     UserApplication,
 )
-from admissions.admissions.serializers import SolveOptionsSerializer
 from admissions.admissions.schedule_validation import canonicalize_solver_payload
+from admissions.admissions.serializers import SolveOptionsSerializer
 from admissions.admissions.tests.utils import (
     ScheduleRevisionAPIClient,
     create_admission,

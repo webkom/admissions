@@ -22,11 +22,11 @@ from admissions.admissions.models import (
     SavedSchedule,
     UserApplication,
 )
-from admissions.admissions.serializers import NameVisibilityAuditEventSerializer
 from admissions.admissions.scheduling_utils import (
     get_eligible_interviewer_ids,
     user_has_interview_availability,
 )
+from admissions.admissions.serializers import NameVisibilityAuditEventSerializer
 
 
 class InterviewCandidatesView(APIView):

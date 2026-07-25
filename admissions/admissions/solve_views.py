@@ -8,12 +8,7 @@ from rest_framework.views import APIView
 
 from admissions.admissions.admission_access import user_is_interview_admin
 from admissions.admissions.authentication import SessionAuthentication
-from admissions.admissions.models import (
-    Admission,
-    LegoUser,
-    SavedSchedule,
-    SolveJob,
-)
+from admissions.admissions.models import Admission, LegoUser, SavedSchedule, SolveJob
 from admissions.admissions.schedule_validation import (
     ScheduleValidationError,
     canonicalize_solver_payload,

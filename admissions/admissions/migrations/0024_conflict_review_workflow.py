@@ -1,7 +1,8 @@
+import uuid
+
+import django.db.models.deletion
 from django.conf import settings
 from django.db import migrations, models
-import django.db.models.deletion
-import uuid
 
 
 def mark_existing_conflicts_reviewed(apps, schema_editor):

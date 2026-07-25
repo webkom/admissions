@@ -69,9 +69,7 @@ def _canonicalize_blocks(
             if not canonical_slots and index < len(blocks_data or []):
                 canonical_slots = tuple(int(t) for t in (blocks_data or [])[index])
             usable_slots = tuple(
-                int(t)
-                for t in block.get("usable_slots", [])
-                if int(t) in slot_set
+                int(t) for t in block.get("usable_slots", []) if int(t) in slot_set
             )
             if not usable_slots and canonical_slots:
                 usable_slots = tuple(t for t in canonical_slots if t in slot_set)
@@ -337,9 +335,9 @@ def solve_schedule(
     # time limit only covers the search, not variable creation, so an oversized
     # instance would OOM/hang the worker instead of timing out.
     model_var_bound = len(candidates) * len(sorted_slots) * (len(interviewers) + 1)
-    block_constraint_bound = (
-        sum(len(block.usable_slots) for block in canonical_blocks) * len(interviewers)
-    )
+    block_constraint_bound = sum(
+        len(block.usable_slots) for block in canonical_blocks
+    ) * len(interviewers)
     continuity_var_bound = len(sorted_slots) if options.prioritize_continuity else 0
     consecutive_block_var_bound = (
         2 * len(interviewers) * len(canonical_blocks)
@@ -605,7 +603,9 @@ def solve_schedule(
             for position, (left, right) in enumerate(
                 zip(block.usable_slots, block.usable_slots[1:])
             ):
-                both_occupied = model.NewBoolVar(f"both_occupied_{block.index}_{position}")
+                both_occupied = model.NewBoolVar(
+                    f"both_occupied_{block.index}_{position}"
+                )
                 left_occupied = occupied_var(left)
                 right_occupied = occupied_var(right)
                 model.Add(both_occupied <= left_occupied)
@@ -674,7 +674,9 @@ def solve_schedule(
         # so a closed block still counts as explicit rest instead of vanishing
         # during solver setup.
         continuity_sequences = [list(block.usable_slots) for block in canonical_blocks]
-        continuity_sequences = [sequence for sequence in continuity_sequences if sequence]
+        continuity_sequences = [
+            sequence for sequence in continuity_sequences if sequence
+        ]
         covered_slots = {t for sequence in continuity_sequences for t in sequence}
         if not continuity_sequences:
             continuity_sequences = [sorted_slots]
@@ -702,8 +704,7 @@ def solve_schedule(
                 previous_occupied = current_occupied
         continuity_run_count = sum(run_starts)
         continuity_cost = options.continuity_weight * (
-            len(candidates) * latest_rank
-            + len(candidates) * continuity_run_count
+            len(candidates) * latest_rank + len(candidates) * continuity_run_count
         )
         max_continuity_cost = options.continuity_weight * (
             len(candidates) * max(0, len(sorted_slots) - 1)

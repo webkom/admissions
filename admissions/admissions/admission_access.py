@@ -27,9 +27,10 @@ def user_is_interview_admin(admission, user):
     interview workflow, so they get the same scheduling capabilities without
     being promoted to admission-wide application admins.
     """
-    return user_is_admission_admin(admission, user) or get_representing_groups(
-        admission, user
-    ).exists()
+    return (
+        user_is_admission_admin(admission, user)
+        or get_representing_groups(admission, user).exists()
+    )
 
 
 def get_representing_groups(admission, user):

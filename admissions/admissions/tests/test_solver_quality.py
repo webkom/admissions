@@ -6,9 +6,9 @@ from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APITestCase
 
+import admissions.admissions.solve_schedule as solve_schedule_module
 from admissions.admissions.constants import MEMBER
 from admissions.admissions.models import Group, LegoUser, Membership, SolveJob
-import admissions.admissions.solve_schedule as solve_schedule_module
 from admissions.admissions.solve_schedule import solve_schedule
 from admissions.admissions.tests.utils import create_admission
 
@@ -80,7 +80,9 @@ class SolverQualityTestCase(APITestCase):
                     )
                 )
             elif block:
-                canonical_blocks.append((block[0] // (24 * 60), block[0], block_index, block_index))
+                canonical_blocks.append(
+                    (block[0] // (24 * 60), block[0], block_index, block_index)
+                )
 
         for block_day, _start_time, _canonical_index, block_index in sorted(
             canonical_blocks
@@ -427,7 +429,9 @@ class SolverQualityTestCase(APITestCase):
         }
         self.assertEqual(len(panels), 1)
 
-    def test_avoid_consecutive_interviewer_blocks_prefers_work_rest_work_when_rotation_is_possible(self):
+    def test_avoid_consecutive_interviewer_blocks_prefers_work_rest_work_when_rotation_is_possible(
+        self,
+    ):
         blocks = [[0, 1], [2, 3], [4, 5]]
         result = solve_schedule(
             candidates_data=[
@@ -460,9 +464,13 @@ class SolverQualityTestCase(APITestCase):
 
         self.assertEqual(result["status"], "SUCCESS")
         self.assertEqual(len(result["schedule"]), 6)
-        self.assertEqual(self._consecutive_block_penalties(result["schedule"], blocks), 0)
+        self.assertEqual(
+            self._consecutive_block_penalties(result["schedule"], blocks), 0
+        )
 
-    def test_avoid_consecutive_interviewer_blocks_allows_consecutive_blocks_when_capacity_is_tight(self):
+    def test_avoid_consecutive_interviewer_blocks_allows_consecutive_blocks_when_capacity_is_tight(
+        self,
+    ):
         blocks = [[0], [1]]
         result = solve_schedule(
             candidates_data=[
@@ -489,8 +497,12 @@ class SolverQualityTestCase(APITestCase):
 
         self.assertEqual(result["status"], "SUCCESS")
         self.assertEqual(len(result["schedule"]), 2)
-        self.assertEqual(self._consecutive_block_penalties(result["schedule"], blocks), 1)
-        self.assertEqual(self._worked_blocks(result["schedule"], blocks)["interviewer-1"], {0, 1})
+        self.assertEqual(
+            self._consecutive_block_penalties(result["schedule"], blocks), 1
+        )
+        self.assertEqual(
+            self._worked_blocks(result["schedule"], blocks)["interviewer-1"], {0, 1}
+        )
 
     def test_avoid_consecutive_interviewer_blocks_yields_to_candidate_placement(self):
         blocks = [[0], [1], [2]]
@@ -542,8 +554,14 @@ class SolverQualityTestCase(APITestCase):
         worked = self._worked_blocks(result["schedule"], blocks)
         self.assertEqual(worked["interviewer-1"], {0, 1})
         self.assertEqual(worked["interviewer-2"], {2})
-        self.assertTrue(next(item for item in result["schedule"] if item["candidate_id"] == "c1")["locked"])
-        self.assertEqual(self._consecutive_block_penalties(result["schedule"], blocks), 1)
+        self.assertTrue(
+            next(item for item in result["schedule"] if item["candidate_id"] == "c1")[
+                "locked"
+            ]
+        )
+        self.assertEqual(
+            self._consecutive_block_penalties(result["schedule"], blocks), 1
+        )
 
     def test_three_block_run_counts_two_adjacent_pair_penalties(self):
         blocks = [[0], [1], [2]]
@@ -572,8 +590,12 @@ class SolverQualityTestCase(APITestCase):
         )
 
         self.assertEqual(result["status"], "SUCCESS")
-        self.assertEqual(self._worked_blocks(result["schedule"], blocks)["interviewer-1"], {0, 1, 2})
-        self.assertEqual(self._consecutive_block_penalties(result["schedule"], blocks), 2)
+        self.assertEqual(
+            self._worked_blocks(result["schedule"], blocks)["interviewer-1"], {0, 1, 2}
+        )
+        self.assertEqual(
+            self._consecutive_block_penalties(result["schedule"], blocks), 2
+        )
 
     def test_avoid_consecutive_interviewer_blocks_ignores_day_boundaries(self):
         blocks = [[0], [24 * 60]]
@@ -601,7 +623,9 @@ class SolverQualityTestCase(APITestCase):
         )
 
         self.assertEqual(result["status"], "SUCCESS")
-        self.assertEqual(self._consecutive_block_penalties(result["schedule"], blocks), 0)
+        self.assertEqual(
+            self._consecutive_block_penalties(result["schedule"], blocks), 0
+        )
 
     def test_intervening_block_breaks_consecutiveness(self):
         blocks = [[0], [1], [2]]
@@ -641,7 +665,9 @@ class SolverQualityTestCase(APITestCase):
         worked = self._worked_blocks(result["schedule"], blocks)
         self.assertEqual(worked["interviewer-1"], {0, 2})
         self.assertEqual(worked["interviewer-2"], {1})
-        self.assertEqual(self._consecutive_block_penalties(result["schedule"], blocks), 0)
+        self.assertEqual(
+            self._consecutive_block_penalties(result["schedule"], blocks), 0
+        )
 
     def test_partial_block_occupancy_still_counts_as_consecutive_work(self):
         blocks = [[0, 1], [2, 3]]
@@ -669,8 +695,12 @@ class SolverQualityTestCase(APITestCase):
         )
 
         self.assertEqual(result["status"], "SUCCESS")
-        self.assertEqual(self._worked_blocks(result["schedule"], blocks)["interviewer-1"], {0, 1})
-        self.assertEqual(self._consecutive_block_penalties(result["schedule"], blocks), 1)
+        self.assertEqual(
+            self._worked_blocks(result["schedule"], blocks)["interviewer-1"], {0, 1}
+        )
+        self.assertEqual(
+            self._consecutive_block_penalties(result["schedule"], blocks), 1
+        )
 
     def test_same_panel_per_block_can_rotate_panels_between_adjacent_blocks(self):
         blocks = [[0, 1], [2, 3]]
@@ -781,7 +811,9 @@ class SolverQualityTestCase(APITestCase):
 
         self.assertEqual(result["status"], "SUCCESS")
         self.assertEqual(sorted(item["time"] for item in result["schedule"]), [0, 2])
-        self.assertEqual(self._consecutive_block_penalties(result["schedule"], blocks), 0)
+        self.assertEqual(
+            self._consecutive_block_penalties(result["schedule"], blocks), 0
+        )
 
     def test_compact_days_does_not_override_block_rest_preference(self):
         blocks = [[0, 1], [2, 3], [4, 5]]
@@ -815,9 +847,13 @@ class SolverQualityTestCase(APITestCase):
         )
 
         self.assertEqual(result["status"], "SUCCESS")
-        self.assertEqual(self._consecutive_block_penalties(result["schedule"], blocks), 0)
+        self.assertEqual(
+            self._consecutive_block_penalties(result["schedule"], blocks), 0
+        )
 
-    def test_locked_adjacent_block_assignments_survive_and_unlockeds_still_prefer_rest(self):
+    def test_locked_adjacent_block_assignments_survive_and_unlockeds_still_prefer_rest(
+        self,
+    ):
         blocks = [[0], [1], [2]]
         result = solve_schedule(
             candidates_data=[
@@ -864,11 +900,15 @@ class SolverQualityTestCase(APITestCase):
         )
 
         self.assertEqual(result["status"], "SUCCESS")
-        schedule_by_candidate = {item["candidate_id"]: item for item in result["schedule"]}
+        schedule_by_candidate = {
+            item["candidate_id"]: item for item in result["schedule"]
+        }
         self.assertTrue(schedule_by_candidate["c1"]["locked"])
         self.assertTrue(schedule_by_candidate["c2"]["locked"])
         self.assertEqual(schedule_by_candidate["c3"]["panel"][0]["id"], "interviewer-2")
-        self.assertEqual(self._consecutive_block_penalties(result["schedule"], blocks), 1)
+        self.assertEqual(
+            self._consecutive_block_penalties(result["schedule"], blocks), 1
+        )
 
     def test_continuity_keeps_new_interview_adjacent_to_locked_slot(self):
         result = solve_schedule(

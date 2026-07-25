@@ -92,8 +92,8 @@ class SavedScheduleView(APIView):
         )
 
     def get(self, request, admission_slug):
-        admission, is_admin, is_recruiter, is_interview_admin, err = self._get_admission_and_check(
-            request, admission_slug
+        admission, is_admin, is_recruiter, is_interview_admin, err = (
+            self._get_admission_and_check(request, admission_slug)
         )
         if err:
             return err
@@ -113,8 +113,8 @@ class SavedScheduleView(APIView):
 
     @transaction.atomic
     def post(self, request, admission_slug):
-        admission, is_admin, is_recruiter, is_interview_admin, err = self._get_admission_and_check(
-            request, admission_slug
+        admission, is_admin, is_recruiter, is_interview_admin, err = (
+            self._get_admission_and_check(request, admission_slug)
         )
         if err:
             return err

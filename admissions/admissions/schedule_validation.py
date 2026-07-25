@@ -217,9 +217,7 @@ def canonicalize_solver_payload(admission, saved, data, request_user):
         "interviewers": interviewers,
         "all_slots": all_slots,
         "blocks": [
-            block["usable_slots"]
-            for block in solver_blocks
-            if block["usable_slots"]
+            block["usable_slots"] for block in solver_blocks if block["usable_slots"]
         ],
         "block_metadata": solver_blocks,
         "locked_assignments": locked_assignments,

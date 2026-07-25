@@ -178,7 +178,9 @@ class InterviewAvailabilityView(APIView):
                 "user_id": person.id,
                 "username": person.username,
                 "full_name": person.get_full_name() or person.username,
-                "gender": panel_gender_code(person.gender) if is_interview_admin else "",
+                "gender": (
+                    panel_gender_code(person.gender) if is_interview_admin else ""
+                ),
                 "slots": availability_map.get(person.id, []),
                 "conflicts": conflicts_map.get(person.id, []),
                 "reviewed_candidate_ids": reviewed_candidates_map.get(person.id, []),

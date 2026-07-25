@@ -17,9 +17,9 @@ from admissions.admissions.admission_access import (
     synchronize_admission_group_disclosures,
 )
 from admissions.admissions.json_models import (
+    DataType,
     InputModelList,
     InputResponseModel,
-    DataType,
     validators,
 )
 from admissions.admissions.models import (
