@@ -12,6 +12,7 @@ env.read_env(env_file)
 
 # GENERAL CONFIGURATION =======================================================
 DEBUG = env("DEBUG", default=True)
+ALLOW_CYPRESS_FIXTURES = env.bool("ALLOW_CYPRESS_FIXTURES", default=False)
 ALLOW_SYNTHETIC_SOLVER_INPUT = True
 SECRET_KEY = "secretkeythatisnotsosecret"
 runserver.default_port = "5000"

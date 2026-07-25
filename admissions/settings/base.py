@@ -14,6 +14,11 @@ import environ
 
 from .logging import *  # noqa
 
+# Cypress fixture preparation installs a temporary password on a seeded local
+# administrator. It must be explicitly enabled by a non-production settings
+# module before the management command performs any writes.
+ALLOW_CYPRESS_FIXTURES = False
+
 # GENERAL CONFIGURATION ======================================================
 BASE_PROJECT_DIR = environ.Path(__file__) - 3  # manage.py level
 ROOT_DIR = environ.Path(__file__) - 2  # (admissions/settings/base.py - 2 = admissions/)

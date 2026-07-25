@@ -8,6 +8,7 @@ env = environ.Env(DEBUG=(bool, False))
 
 # GENERAL CONFIGURATION =======================================================
 DEBUG = True
+ALLOW_CYPRESS_FIXTURES = env.bool("ALLOW_CYPRESS_FIXTURES", default=False)
 ALLOW_SYNTHETIC_SOLVER_INPUT = True
 ALLOW_UNMARKED_SYNTHETIC_SOLVER_INPUT = True
 REST_FRAMEWORK["DEFAULT_THROTTLE_RATES"] = {

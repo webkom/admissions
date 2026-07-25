@@ -92,6 +92,7 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 admissions/settings/local.py
+.cypress-fixture-credentials.json
 package-lock.json
 .vscode
 

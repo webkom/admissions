@@ -10,6 +10,9 @@ from .base import *  # noqa
 env = environ.Env(DEBUG=(bool, False))
 
 DEBUG = env("DEBUG")
+# This path creates a temporary local credential and must never be enabled in
+# production, even through an environment variable.
+ALLOW_CYPRESS_FIXTURES = False
 DJANGO_VITE_DEV_MODE = False
 SECRET_KEY = env("SECRET_KEY")
 ALLOWED_HOSTS = env("ALLOWED_HOSTS").split(",")

@@ -32,27 +32,52 @@
 //   }
 // }
 
-type UserData = {
-  sessionid: string;
-  csrftoken: string;
+type FixtureCredentials = {
+  username: string;
+  password: string;
 };
 
-const sessions: Record<string, UserData> = {
-  webkom: {
-    sessionid: "rm4i3g0ok3phcy0moqyk09c0ljjnvftd",
-    csrftoken: "D9FJfTguk1zQGiZhgXSURh9q3VlAxK4K",
-  },
-};
+const credentialsFile = ".cypress-fixture-credentials.json";
+const csrfInputPattern =
+  /name=["']csrfmiddlewaretoken["'][^>]*value=["']([^"']+)["']/;
 
 Cypress.Commands.add("login", (username) => {
-  if (username in sessions) {
-    cy.setCookie("sessionid", sessions[username].sessionid);
-    cy.setCookie("csrftoken", sessions[username].csrftoken);
-  } else {
-    throw new Error("Unknown user");
-  }
+  cy.readFile<FixtureCredentials>(credentialsFile, { log: false }).then(
+    (credentials) => {
+      if (username !== credentials.username) {
+        throw new Error(`Unknown Cypress fixture user: ${username}`);
+      }
+      cy.request({ url: "/api-auth/login/", log: false }).then((response) => {
+        const csrfToken = csrfInputPattern.exec(String(response.body))?.[1];
+        if (!csrfToken) {
+          throw new Error("Cypress login could not read Django's CSRF token.");
+        }
+        cy.request({
+          method: "POST",
+          url: "/api-auth/login/",
+          form: true,
+          followRedirect: false,
+          log: false,
+          body: {
+            csrfmiddlewaretoken: csrfToken,
+            username: credentials.username,
+            password: credentials.password,
+            next: "/",
+          },
+        }).then((loginResponse) => {
+          expect(loginResponse.status).to.eq(302);
+        });
+      });
+    },
+  );
 });
 
 Cypress.Commands.add("logout", () => {
-  cy.clearCookie("sessionid");
+  cy.request({
+    url: "/logout/",
+    followRedirect: false,
+    failOnStatusCode: false,
+    log: false,
+  });
+  cy.clearCookies({ log: false });
 });
