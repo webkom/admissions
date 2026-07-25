@@ -2,6 +2,7 @@ from types import SimpleNamespace
 from unittest import mock
 
 from django.core.management import call_command
+from django.test import override_settings
 from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APITestCase
@@ -15,6 +16,7 @@ from admissions.admissions.tests.utils import create_admission
 ENVELOPE_KEYS = ("schedule", "unplaceable", "locked_conflicts")
 
 
+@override_settings(ALLOW_SYNTHETIC_SOLVER_INPUT=True)
 class SolverQualityTestCase(APITestCase):
     def setUp(self):
         self.group = Group.objects.create(name="Kvalitetskom", lego_id=996)
@@ -32,7 +34,11 @@ class SolverQualityTestCase(APITestCase):
         """
         res = self.client.post(
             self.url,
-            {**payload, "admission_slug": self.admission.slug},
+            {
+                **payload,
+                "admission_slug": self.admission.slug,
+                "synthetic": True,
+            },
             format="json",
         )
         if res.status_code != status.HTTP_202_ACCEPTED:
@@ -468,6 +474,44 @@ class SolverQualityTestCase(APITestCase):
             self._consecutive_block_penalties(result["schedule"], blocks), 0
         )
 
+    def test_avoid_consecutive_interviewer_blocks_can_be_disabled(self):
+        blocks = [[0, 1], [2, 3], [4, 5]]
+        result = solve_schedule(
+            candidates_data=[
+                {"id": f"candidate-{index}", "name": f"Candidate {index}", "gender": ""}
+                for index in range(6)
+            ],
+            interviewers_data=[
+                {
+                    "id": "interviewer-1",
+                    "name": "Ola",
+                    "gender": "",
+                    "availability": [0, 1, 2, 3, 4, 5],
+                },
+                {
+                    "id": "interviewer-2",
+                    "name": "Ida",
+                    "gender": "",
+                    "availability": [0, 1, 2, 3, 4, 5],
+                },
+            ],
+            panel_size=1,
+            options_data={
+                "allow_overtime": False,
+                "prioritize_continuity": True,
+                "same_panel_per_block": False,
+                "avoid_consecutive_interviewer_blocks": False,
+            },
+            all_slots_data=[0, 1, 2, 3, 4, 5],
+            blocks_data=blocks,
+        )
+
+        self.assertEqual(result["status"], "SUCCESS")
+        self.assertGreater(
+            self._consecutive_block_penalties(result["schedule"], blocks),
+            0,
+        )
+
     def test_avoid_consecutive_interviewer_blocks_allows_consecutive_blocks_when_capacity_is_tight(
         self,
     ):
@@ -849,6 +893,69 @@ class SolverQualityTestCase(APITestCase):
         self.assertEqual(result["status"], "SUCCESS")
         self.assertEqual(
             self._consecutive_block_penalties(result["schedule"], blocks), 0
+        )
+
+    def test_strategy_presets_have_observable_compact_and_workload_outcomes(self):
+        candidates = [
+            {"id": "c1", "name": "Ada", "gender": ""},
+            {"id": "c2", "name": "Eirik", "gender": ""},
+        ]
+        interviewers = [
+            {
+                "id": "early",
+                "name": "Early",
+                "gender": "",
+                "availability": [0, 1],
+            },
+            {
+                "id": "late",
+                "name": "Late",
+                "gender": "",
+                "availability": [4, 5],
+            },
+        ]
+
+        def run(strategy):
+            return solve_schedule(
+                candidates_data=candidates,
+                interviewers_data=interviewers,
+                panel_size=1,
+                options_data={
+                    "initial_strategy": strategy,
+                    "allow_overtime": False,
+                    "same_panel_per_block": False,
+                    "avoid_consecutive_interviewer_blocks": False,
+                },
+                all_slots_data=[0, 1, 2, 3, 4, 5],
+                blocks_data=[[0, 1, 2, 3, 4, 5]],
+            )
+
+        balanced = run("balanced")
+        compact = run("compact_days")
+        workload = run("balance_workload")
+
+        self.assertEqual(compact["status"], "SUCCESS")
+        compact_times = sorted(item["time"] for item in compact["schedule"])
+        balanced_times = sorted(item["time"] for item in balanced["schedule"])
+        self.assertLess(
+            compact_times[-1] - compact_times[0],
+            balanced_times[-1] - balanced_times[0],
+        )
+
+        workload_counts = {}
+        compact_counts = {}
+        for result, counts in (
+            (workload, workload_counts),
+            (compact, compact_counts),
+        ):
+            for item in result["schedule"]:
+                interviewer_id = item["panel"][0]["id"]
+                counts[interviewer_id] = counts.get(interviewer_id, 0) + 1
+            for interviewer in interviewers:
+                counts.setdefault(interviewer["id"], 0)
+        self.assertLess(
+            max(workload_counts.values()) - min(workload_counts.values()),
+            max(compact_counts.values()) - min(compact_counts.values()),
         )
 
     def test_locked_adjacent_block_assignments_survive_and_unlockeds_still_prefer_rest(

@@ -290,6 +290,7 @@ def schedule_response_context(
         "contact_candidate_ids": contact_candidate_ids,
         "effective_name_visibility": effective_name_visibility,
         "revealed_group_summaries": revealed_group_summaries,
+        "include_deviation_review": is_interview_admin,
     }
 
 

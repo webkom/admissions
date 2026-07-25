@@ -11,26 +11,6 @@ class SchedulePolicyError(ValueError):
     pass
 
 
-def new_admission_solver_options():
-    """Defaults persisted for schedules first configured after solver v2."""
-
-    return {
-        "policy_version": POLICY_VERSION,
-        "panel_stability": "preferred",
-        "availability_fallback": "stop",
-        "enforce_same_gender": False,
-        "require_experienced_panel": True,
-        "prioritize_continuity": True,
-        "avoid_consecutive_interviewer_blocks": True,
-        "initial_strategy": "balanced",
-        "repair_strategy": "minimum_change",
-        "repair_mode": False,
-        # Compatibility shadows retained for one release.
-        "same_panel_per_block": False,
-        "allow_overtime": False,
-    }
-
-
 @dataclass(frozen=True)
 class SchedulePolicy:
     policy_version: int | None

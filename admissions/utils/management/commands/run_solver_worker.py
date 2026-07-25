@@ -16,9 +16,22 @@ from django.utils.dateparse import parse_datetime
 from structlog import get_logger
 
 from admissions.admissions import constants
-from admissions.admissions.admission_access import user_is_admission_admin
-from admissions.admissions.models import Admission, SavedSchedule, SolveJob
+from admissions.admissions.admission_access import (
+    get_representing_groups,
+    user_is_admission_admin,
+)
+from admissions.admissions.models import Admission, LegoUser, SavedSchedule, SolveJob
+from admissions.admissions.schedule_policy import (
+    build_deviation_review,
+    normalize_schedule_policy,
+)
 from admissions.admissions.schedule_validation import canonicalize_solver_payload
+from admissions.admissions.schedule_workflow import (
+    ScheduleInputError,
+    SchedulePermissionDenied,
+    ScheduleRevisionConflict,
+    update_saved_schedule,
+)
 from admissions.admissions.solve_schedule import solve_schedule
 
 log = get_logger()
@@ -98,13 +111,30 @@ class Command(BaseCommand):
     def _cleanup_old_jobs(self):
         """Prune finished jobs so the table doesn't grow without bound."""
         cutoff = timezone.now() - timedelta(days=constants.SOLVE_JOB_RETENTION_DAYS)
+        proposal_cutoff = timezone.now() - timedelta(
+            days=constants.SOLVE_PROPOSAL_RETENTION_DAYS
+        )
         deleted, _ = SolveJob.objects.filter(
-            status__in=(
-                SolveJob.STATUS_DONE,
-                SolveJob.STATUS_ERROR,
-                SolveJob.STATUS_CANCELLED,
-            ),
-            finished_at__lt=cutoff,
+            models.Q(
+                status__in=(SolveJob.STATUS_ERROR, SolveJob.STATUS_CANCELLED),
+                finished_at__lt=cutoff,
+            )
+            | (
+                models.Q(
+                    status=SolveJob.STATUS_DONE,
+                    finished_at__lt=cutoff,
+                )
+                & (
+                    models.Q(applied_at__isnull=False)
+                    | models.Q(discarded_at__isnull=False)
+                )
+            )
+            | models.Q(
+                status=SolveJob.STATUS_DONE,
+                applied_at__isnull=True,
+                discarded_at__isnull=True,
+                finished_at__lt=proposal_cutoff,
+            )
         ).delete()
         if deleted:
             log.info("solve_jobs_cleaned", count=deleted)
@@ -189,6 +219,15 @@ class Command(BaseCommand):
                     block_metadata_data=data.get("block_metadata", []),
                     previous_schedule_data=data.get("previous_schedule", []),
                 )
+                policy = normalize_schedule_policy(data.get("options", {}))
+                result["request_fingerprint"] = job.request_fingerprint
+                result["policy_snapshot"] = policy.snapshot()
+                result["deviation_review"] = build_deviation_review(
+                    schedule=result.get("schedule", []),
+                    policy=policy,
+                    availability_generation=data.get("availability_generation", 1),
+                    layout_version=data.get("layout_version", 1),
+                )
         except PermissionError:
             error = "Kun opptaksansvarlige kan kjøre intervjusolveren."
             new_status = SolveJob.STATUS_ERROR
@@ -206,11 +245,80 @@ class Command(BaseCommand):
         _refresh_db_connection()
 
         updated = self._write_back(job, result, new_status, error)
+        if updated and new_status == SolveJob.STATUS_DONE:
+            self._auto_apply_empty_draft(job.id)
         log.info(
             "solve_job_finished",
             job_id=str(job.id),
             status=new_status if updated else SolveJob.STATUS_CANCELLED,
         )
+
+    def _auto_apply_empty_draft(self, job_id):
+        """Promote a first solve even if the browser that started it closes.
+
+        The baseline, empty-draft check, publication check, and job lifecycle
+        are all rechecked under locks. A failed check leaves a normal proposal
+        that an administrator can inspect or discard later.
+        """
+        try:
+            with transaction.atomic():
+                job_stub = SolveJob.objects.only("admission_id").get(pk=job_id)
+                admission = Admission.objects.select_for_update().get(
+                    pk=job_stub.admission_id
+                )
+                saved = SavedSchedule.objects.select_for_update().get(
+                    admission=admission
+                )
+                job = SolveJob.objects.select_for_update().get(pk=job_id)
+                request_data = job.request_data or {}
+                solve_result = job.result if isinstance(job.result, dict) else {}
+                baseline = parse_datetime(request_data.get("baseline_updated_at") or "")
+                user = job.requested_by
+                if (
+                    not request_data.get("auto_apply_if_empty")
+                    or job.status != SolveJob.STATUS_DONE
+                    or job.applied_at is not None
+                    or job.discarded_at is not None
+                    or solve_result.get("status") not in ("SUCCESS", "PARTIAL")
+                    or baseline is None
+                    or baseline != saved.updated_at
+                    or saved.schedule
+                    or saved.is_distributed
+                    or user is None
+                ):
+                    return False
+                user.__class__ = LegoUser
+                if not user_is_admission_admin(admission, user):
+                    return False
+                update_saved_schedule(
+                    admission=admission,
+                    user=user,
+                    data={
+                        "expected_updated_at": saved.updated_at,
+                        "schedule": solve_result.get("schedule") or [],
+                        "panel_size": request_data.get("panel_size"),
+                        "solver_options": request_data.get("options") or {},
+                        "is_distributed": False,
+                    },
+                    is_admin=True,
+                    is_admission_admin=user_is_admission_admin(admission, user),
+                    is_recruiter=get_representing_groups(admission, user).exists(),
+                )
+                job.applied_at = timezone.now()
+                job.save(update_fields=["applied_at"])
+                log.info("solve_job_auto_applied", job_id=str(job.id))
+                return True
+        except (
+            SavedSchedule.DoesNotExist,
+            ScheduleInputError,
+            SchedulePermissionDenied,
+            ScheduleRevisionConflict,
+        ):
+            log.info("solve_job_auto_apply_skipped", job_id=str(job_id))
+            return False
+        except Exception:
+            log.exception("solve_job_auto_apply_failed", job_id=str(job_id))
+            return False
 
     def _write_back(self, job, result, new_status, error):
         """Persist the finished result, retrying briefly on transient DB

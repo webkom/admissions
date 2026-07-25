@@ -268,6 +268,21 @@ class SavedSchedule(models.Model):
     day_end_minute = models.PositiveIntegerField(default=18 * 60)
     chunk_size = models.PositiveIntegerField(default=4)
     chunk_break_minutes = models.PositiveIntegerField(default=0)
+    BLOCK_MODE_STANDARD = "standard"
+    BLOCK_MODE_MANUAL = "manual"
+    BLOCK_MODE_CHOICES = [
+        (BLOCK_MODE_STANDARD, "Standard blocks"),
+        (BLOCK_MODE_MANUAL, "Manual blocks"),
+    ]
+    block_mode = models.CharField(
+        max_length=16,
+        choices=BLOCK_MODE_CHOICES,
+        default=BLOCK_MODE_STANDARD,
+    )
+    resolved_blocks = models.JSONField(default=list, blank=True)
+    layout_version = models.PositiveSmallIntegerField(default=2)
+    slot_overrides = models.JSONField(default=list, blank=True)
+    availability_generation = models.PositiveIntegerField(default=1)
     panel_size = models.PositiveSmallIntegerField(null=True, blank=True)
     solver_options = models.JSONField(null=True, blank=True)
     is_distributed = models.BooleanField(default=False)
@@ -296,6 +311,14 @@ class SavedSchedule(models.Model):
 
     def __str__(self):
         return f"Schedule for {self.admission} (distributed={self.is_distributed})"
+
+    @property
+    def manual_blocks(self):
+        return self.resolved_blocks
+
+    @manual_blocks.setter
+    def manual_blocks(self, value):
+        self.resolved_blocks = value
 
 
 class NameVisibilityAuditEvent(models.Model):
@@ -392,7 +415,52 @@ class ConflictReviewAuditEvent(models.Model):
         ]
 
 
+class ScheduleDeviationApproval(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    admission = models.ForeignKey(
+        Admission,
+        on_delete=models.CASCADE,
+        related_name="schedule_deviation_approvals",
+    )
+    saved_schedule = models.ForeignKey(
+        SavedSchedule,
+        on_delete=models.CASCADE,
+        related_name="deviation_approvals",
+    )
+    actor = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        on_delete=models.SET_NULL,
+        related_name="schedule_deviation_approvals",
+    )
+    actor_username = models.CharField(max_length=150)
+    schedule_fingerprint = models.CharField(max_length=64)
+    deviation_fingerprint = models.CharField(max_length=64)
+    policy_snapshot = models.JSONField(default=dict)
+    availability_generation = models.PositiveIntegerField()
+    layout_version = models.PositiveSmallIntegerField()
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        indexes = [
+            models.Index(
+                fields=["saved_schedule", "deviation_fingerprint"],
+                name="sched_dev_fingerprint_idx",
+            )
+        ]
+
+
 class InterviewAvailability(models.Model):
+    PARTICIPATION_AWAITING = "awaiting_response"
+    PARTICIPATION_PARTICIPATING = "participating"
+    PARTICIPATION_NOT_PARTICIPATING = "not_participating"
+    PARTICIPATION_CHOICES = [
+        (PARTICIPATION_AWAITING, "Awaiting response"),
+        (PARTICIPATION_PARTICIPATING, "Participating"),
+        (PARTICIPATION_NOT_PARTICIPATING, "Not participating"),
+    ]
+
     admission = models.ForeignKey(
         Admission, on_delete=models.CASCADE, related_name="interview_availabilities"
     )
@@ -404,6 +472,12 @@ class InterviewAvailability(models.Model):
     slots = models.JSONField(default=list, blank=True)
     conflicts = models.JSONField(default=list, blank=True)
     reviewed_candidate_ids = models.JSONField(default=list, blank=True)
+    participation = models.CharField(
+        max_length=24,
+        choices=PARTICIPATION_CHOICES,
+        default=PARTICIPATION_AWAITING,
+    )
+    submitted_grid_generation = models.PositiveIntegerField(null=True, blank=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
@@ -448,12 +522,15 @@ class SolveJob(models.Model):
         db_index=True,
     )
     request_data = models.JSONField()
+    request_fingerprint = models.CharField(max_length=64, blank=True, default="")
     result = models.JSONField(null=True, blank=True)
     error = models.TextField(blank=True, default="")
 
     created_at = models.DateTimeField(auto_now_add=True)
     started_at = models.DateTimeField(null=True, blank=True)
     finished_at = models.DateTimeField(null=True, blank=True)
+    applied_at = models.DateTimeField(null=True, blank=True)
+    discarded_at = models.DateTimeField(null=True, blank=True)
 
     class Meta:
         ordering = ["created_at"]
@@ -462,7 +539,12 @@ class SolveJob(models.Model):
                 fields=["admission"],
                 condition=models.Q(status__in=("PENDING", "RUNNING")),
                 name="unique_active_solve_job_per_admission",
-            )
+            ),
+            models.CheckConstraint(
+                condition=models.Q(applied_at__isnull=True)
+                | models.Q(discarded_at__isnull=True),
+                name="solve_job_not_applied_and_discarded",
+            ),
         ]
         indexes = [
             models.Index(fields=["status", "created_at"]),
