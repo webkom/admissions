@@ -225,7 +225,7 @@ def update_custom_user_details(strategy, details, user=None, *args, **kwargs):
     )
 
     with transaction.atomic():
-        locked_user = LegoUser.objects.select_for_update().get(pk=user.pk)
+        locked_user = LegoUser.objects.select_for_update(no_key=True).get(pk=user.pk)
         Membership.objects.filter(user=locked_user).delete()
         roles_by_group = {}
         ambiguous_groups = set()

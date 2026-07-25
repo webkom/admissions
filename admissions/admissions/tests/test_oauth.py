@@ -7,7 +7,16 @@ from django.db.models.query import QuerySet
 from django.test import TestCase, TransactionTestCase, override_settings
 from django.urls import reverse
 
-from admissions.admissions.models import Group, LegoUser, Membership
+from admissions.admissions.constants import RECRUITING
+from admissions.admissions.interview_workflow import update_interview_status
+from admissions.admissions.models import (
+    Group,
+    GroupApplication,
+    LegoUser,
+    Membership,
+    UserApplication,
+)
+from admissions.admissions.tests.utils import create_admission
 from admissions.oauth import update_custom_user_details, use_existing_lego_user
 
 
@@ -283,3 +292,100 @@ class ConcurrentOAuthMembershipSyncTestCase(TransactionTestCase):
             ["member"],
         )
         self.assertFalse(self.user.is_staff)
+
+    def test_oauth_refresh_does_not_deadlock_authority_write_with_actor_fk(self):
+        admission = create_admission(
+            created_by=self.user,
+            slug="oauth-authority-deadlock",
+        )
+        admission.groups.add(self.group)
+        Membership.objects.create(
+            user=self.user,
+            group=self.group,
+            role=RECRUITING,
+        )
+        candidate = LegoUser.objects.create(
+            username="oauth-deadlock-candidate",
+            lego_id=92102,
+        )
+        application = UserApplication.objects.create(
+            admission=admission,
+            user=candidate,
+            phone_number="12345678",
+        )
+        GroupApplication.objects.create(
+            application=application,
+            group=self.group,
+        )
+
+        authority_write_ready = Event()
+        oauth_delete_starting = Event()
+        release_authority_write = Event()
+        thread_context = local()
+        original_delete = QuerySet.delete
+
+        def observe_delete(queryset):
+            if queryset.model is Membership and getattr(
+                thread_context, "oauth_refresh", False
+            ):
+                oauth_delete_starting.set()
+            return original_delete(queryset)
+
+        def write_interview_status():
+            close_old_connections()
+            try:
+                actor = LegoUser.objects.get(pk=self.user.pk)
+                current = UserApplication.objects.get(pk=application.pk)
+                with transaction.atomic():
+                    update_interview_status(
+                        current,
+                        UserApplication.INTERVIEW_STATUS_CONFIRMED,
+                        current.interview_status_updated_at,
+                        actor,
+                    )
+                    authority_write_ready.set()
+                    self.assertTrue(release_authority_write.wait(timeout=5))
+            finally:
+                close_old_connections()
+
+        def refresh_oauth_membership():
+            close_old_connections()
+            try:
+                thread_context.oauth_refresh = True
+                actor = LegoUser.objects.get(pk=self.user.pk)
+                update_custom_user_details(
+                    None,
+                    {},
+                    user=actor,
+                    response=self.response_for("member"),
+                )
+            finally:
+                close_old_connections()
+
+        with (
+            mock.patch.object(QuerySet, "delete", new=observe_delete),
+            ThreadPoolExecutor(max_workers=2) as executor,
+        ):
+            write_future = executor.submit(write_interview_status)
+            self.assertTrue(authority_write_ready.wait(timeout=5))
+            oauth_future = executor.submit(refresh_oauth_membership)
+            self.assertTrue(oauth_delete_starting.wait(timeout=5))
+
+            try:
+                release_authority_write.set()
+                write_future.result(timeout=8)
+                oauth_future.result(timeout=8)
+            finally:
+                release_authority_write.set()
+
+        application.refresh_from_db()
+        self.assertEqual(
+            application.interview_status,
+            UserApplication.INTERVIEW_STATUS_CONFIRMED,
+        )
+        self.assertEqual(
+            list(
+                Membership.objects.filter(user=self.user).values_list("role", flat=True)
+            ),
+            ["member"],
+        )
