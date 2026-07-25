@@ -2,6 +2,8 @@ import uuid
 from datetime import date, timedelta
 from unittest import mock
 
+from django.db import connection
+from django.test.utils import CaptureQueriesContext
 from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APITestCase
@@ -1322,3 +1324,140 @@ class TerminateCommitteeApplicationsTestCase(APITestCase):
                 "group_id": self.committee.pk,
             },
         )
+
+    def test_rejects_non_admins_and_invalid_confirmation_without_mutating(self):
+        response = self.client.post(
+            self.url, {"confirmation_name": self.committee.name}, format="json"
+        )
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+
+        self.client.force_authenticate(user=self.recruiter)
+        response = self.client.post(
+            self.url, {"confirmation_name": self.committee.name}, format="json"
+        )
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+        self.client.force_authenticate(user=self.ordinary_admin_group_member)
+        response = self.client.post(
+            self.url, {"confirmation_name": self.committee.name}, format="json"
+        )
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+        self.client.force_authenticate(user=self.staff_without_admission_role)
+        response = self.client.post(
+            self.url, {"confirmation_name": self.committee.name}, format="json"
+        )
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+        self.client.force_authenticate(user=self.admin)
+        response = self.client.post(
+            self.url, {"confirmation_name": "ikke-webkom"}, format="json"
+        )
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertTrue(
+            GroupApplication.objects.filter(
+                application=self.only_committee_application, group=self.committee
+            ).exists()
+        )
+
+    def test_terminates_only_the_selected_committee_data(self):
+        self.client.force_authenticate(user=self.admin)
+        saved_schedule = SavedSchedule.objects.create(
+            admission=self.admission,
+            schedule=[{"candidate_id": str(self.only_committee_application.pk)}],
+            start_date=date.today(),
+            is_distributed=True,
+            name_visibility=SavedSchedule.NAME_VISIBILITY_COMMITTEE,
+        )
+        saved_schedule.revealed_groups.add(self.committee, self.other_committee)
+        availability = InterviewAvailability.objects.create(
+            admission=self.admission,
+            user=self.admin,
+            conflicts=[str(self.only_committee_application.pk)],
+        )
+        SolveJob.objects.create(
+            admission=self.admission,
+            requested_by=self.admin,
+            request_data={},
+        )
+
+        response = self.client.post(
+            self.url,
+            {"confirmation_name": self.committee.name.lower()},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
+        self.assertFalse(
+            UserApplication.objects.filter(
+                pk=self.only_committee_application.pk
+            ).exists()
+        )
+        self.assertTrue(
+            UserApplication.objects.filter(pk=self.shared_application.pk).exists()
+        )
+        self.assertTrue(
+            UserApplication.objects.filter(pk=self.other_application.pk).exists()
+        )
+        self.assertFalse(GroupApplication.objects.filter(group=self.committee).exists())
+        self.assertTrue(
+            GroupApplication.objects.filter(
+                application=self.shared_application, group=self.other_committee
+            ).exists()
+        )
+        self.assertTrue(
+            GroupApplication.objects.filter(
+                application=self.other_application, group=self.other_committee
+            ).exists()
+        )
+        self.assertTrue(Group.objects.filter(pk=self.committee.pk).exists())
+        self.assertTrue(
+            Membership.objects.filter(
+                user=self.recruiter, group=self.committee
+            ).exists()
+        )
+        saved_schedule.refresh_from_db()
+        availability.refresh_from_db()
+        self.assertEqual(saved_schedule.schedule, [])
+        self.assertFalse(saved_schedule.is_distributed)
+        self.assertEqual(
+            saved_schedule.name_visibility, SavedSchedule.NAME_VISIBILITY_HIDDEN
+        )
+        self.assertEqual(saved_schedule.revealed_groups.count(), 0)
+        self.assertEqual(availability.conflicts, [])
+        self.assertFalse(SolveJob.objects.filter(admission=self.admission).exists())
+
+    def test_locks_admission_before_application_rows(self):
+        self.client.force_authenticate(user=self.admin)
+
+        with CaptureQueriesContext(connection) as queries:
+            response = self.client.post(
+                self.url,
+                {"confirmation_name": self.committee.name},
+                format="json",
+            )
+
+        self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
+        locking_queries = [
+            query["sql"].lower()
+            for query in queries.captured_queries
+            if "for update" in query["sql"].lower()
+        ]
+        admission_lock = next(
+            index
+            for index, query in enumerate(locking_queries)
+            if '"admissions_admission"' in query
+        )
+        group_application_lock = next(
+            index
+            for index, query in enumerate(locking_queries)
+            if '"admissions_groupapplication"' in query
+        )
+        user_application_lock = next(
+            index
+            for index, query in enumerate(locking_queries)
+            if '"admissions_userapplication"' in query
+        )
+
+        self.assertLess(admission_lock, group_application_lock)
+        self.assertLess(admission_lock, user_application_lock)

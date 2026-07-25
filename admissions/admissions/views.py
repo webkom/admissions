@@ -422,6 +422,11 @@ class TerminateCommitteeApplicationsView(APIView):
             )
 
         with transaction.atomic():
+            # Application writes lock Admission before UserApplication. Keep
+            # destructive committee cleanup on the same order so concurrent
+            # edits cannot deadlock when the UserApplication pre-delete signal
+            # locks the admission row.
+            admission = Admission.objects.select_for_update().get(pk=admission.pk)
             application_ids = list(
                 GroupApplication.objects.select_for_update()
                 .filter(application__admission=admission, group=group)
