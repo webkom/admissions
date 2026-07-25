@@ -29,7 +29,6 @@ import {
 } from "./FormStructureStyle";
 import { Admission, Group } from "src/types";
 import { SelectedGroups } from ".";
-import JsonFieldEditor from "src/components/JsonFieldEditor";
 import { Button } from "@webkom/lego-bricks";
 import LinkButton from "src/components/LinkButton";
 import PriorityTextField from "./PriorityTextField";
@@ -164,10 +163,6 @@ const FormStructure: React.FC<FormStructureProps> = ({
               />
             </>
           )}
-          <JsonFieldEditor
-            sectionName="headerFields"
-            fields={admission?.header_fields}
-          />
         </GeneralInfoSection>
         <SeparatorLine />
         <GroupsSection $isSingleGroupAdmission={isSingleGroupAdmission}>

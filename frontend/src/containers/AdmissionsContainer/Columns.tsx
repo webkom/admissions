@@ -85,7 +85,28 @@ export const innerColumns = [
   }),
   innerColumnHelper.accessor("text", {
     header: "Søknadstekst",
-    size: 800,
+    size: 500,
+  }),
+  innerColumnHelper.accessor("answers", {
+    header: "Komitéspørsmål",
+    size: 300,
+    cell: ({ getValue }) => {
+      const answers = getValue();
+      if (answers.length === 0) return null;
+
+      return (
+        <dl>
+          {answers.map((answer) => (
+            <div key={answer.id}>
+              <dt>
+                <strong>{answer.title}</strong>
+              </dt>
+              <dd>{answer.value}</dd>
+            </div>
+          ))}
+        </dl>
+      );
+    },
   }),
   innerColumnHelper.display({
     id: "actions",

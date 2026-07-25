@@ -18,10 +18,10 @@ export const useDeleteMyApplicationMutation = (slug: string) => {
 };
 
 export interface MutationApplication {
-  text: string;
   phone_number: string;
+  priority_text?: string;
   applications: Record<string, string>;
-  header_fields_response: InputResponseModel;
+  group_answers: Record<string, InputResponseModel>;
 }
 
 interface CreateApplicationProps {

@@ -18,7 +18,7 @@ import { useState } from "react";
 import styled from "styled-components";
 import Icon from "src/components/Icon";
 import { TableWrapper } from "src/routes/AdmissionAdmin/components/StyledElements";
-import { InputResponseModel } from "src/utils/jsonFields";
+import { InputFieldModel } from "src/utils/jsonFields";
 import DeleteApplication from "src/components/DeleteApplication";
 
 interface AdmissionsContainerProps {
@@ -35,8 +35,7 @@ export interface ApplicationTableRow {
   updatedAt: string;
   appliedWithinDeadline: boolean;
   phoneNumber: string;
-  text?: string;
-  headerFieldsResponse: InputResponseModel;
+  priorityText?: string;
   groupApplications: InnerTableValues[];
   numApplications: number;
 }
@@ -59,18 +58,38 @@ const AdmissionsContainer: React.FC<AdmissionsContainerProps> = ({
         numApplications: application.group_applications.length,
         createdAt: application.created_at,
         updatedAt: application.updated_at,
-        text: application.text,
-        headerFieldsResponse: application.header_fields_response,
+        priorityText: application.priority_text,
         groupApplications: application.group_applications.map(
-          (groupApplication) => ({
-            applicationId: application.pk,
-            groupId: groupApplication.group.pk,
-            groupName: groupApplication.group.name,
-            text: groupApplication.text,
-          }),
+          (groupApplication) => {
+            const groupFields = (
+              admission.groups.find(
+                (group) => group.pk === groupApplication.group.pk,
+              )?.header_fields ?? []
+            ).filter((field): field is InputFieldModel => "id" in field);
+            return {
+              applicationId: application.pk,
+              groupId: groupApplication.group.pk,
+              groupName: groupApplication.group.name,
+              text: groupApplication.text,
+              answers: groupFields.map((field) => {
+                const response =
+                  groupApplication.header_fields_response?.[field.id];
+                return {
+                  id: field.id,
+                  title: field.title,
+                  value:
+                    typeof response === "boolean"
+                      ? response
+                        ? "Ja"
+                        : "Nei"
+                      : response?.trim() || "Ikke besvart",
+                };
+              }),
+            };
+          },
         ),
       })),
-    [applications],
+    [admission.groups, applications],
   );
 
   const table = useReactTable({
@@ -93,18 +112,14 @@ const AdmissionsContainer: React.FC<AdmissionsContainerProps> = ({
         <SubComponentWrapper>
           {admission.userdata.is_admin && (
             <>
-              {(!!row.original.text || admission.header_fields.length > 0) && (
-                <SubComponentHeader>Generelt</SubComponentHeader>
+              {row.original.priorityText && (
+                <>
+                  <SubComponentHeader>
+                    Prioriteringer og kommentarer
+                  </SubComponentHeader>
+                  <p>{row.original.priorityText}</p>
+                </>
               )}
-              {(admission.header_fields as InputResponseModel[])
-                .filter((headerField) => "id" in headerField)
-                .map((headerField) => (
-                  <p key={headerField.id}>
-                    {headerField.title}:{" "}
-                    {row.original.headerFieldsResponse[headerField.id]}
-                  </p>
-                ))}
-              <p>{row.original.text}</p>
             </>
           )}
           <SubComponentHeader>Gruppesøknader</SubComponentHeader>
@@ -117,7 +132,7 @@ const AdmissionsContainer: React.FC<AdmissionsContainerProps> = ({
         </SubComponentWrapper>
       </>
     ),
-    [applications],
+    [admission.userdata.is_admin],
   );
 
   return (

@@ -1,6 +1,7 @@
 import React from "react";
 import { FormikTouched, FormikErrors, Field } from "formik";
 import GroupApplication from "src/containers/GroupApplication";
+import JsonFieldEditor from "src/components/JsonFieldEditor";
 import { Group } from "src/types";
 import { FormValues, SharedApplicationProps } from ".";
 import FormStructure from "./FormStructure";
@@ -35,21 +36,29 @@ const FormContainer: React.FC<FormContainerProps> = ({
       .length >= 1;
   const SelectedGroupItems = groups
     .filter((group: Group) => selectedGroups[group.name.toLowerCase()])
-    .map((group: Group, index: number) => (
-      <Field
-        component={GroupApplication}
-        group={group}
-        name={"groups." + group.name.toLowerCase()}
-        responseLabel={group.response_label}
-        error={
-          touched.groups &&
-          touched.groups[group.name.toLowerCase()] &&
-          errors.groups &&
-          errors.groups[group.name.toLowerCase()]
-        }
-        key={`${group.name.toLowerCase()} ${index}`}
-      />
-    ));
+    .map((group: Group, index: number) => {
+      const groupName = group.name.toLowerCase();
+      return (
+        <React.Fragment key={`${groupName} ${index}`}>
+          <Field
+            component={GroupApplication}
+            group={group}
+            name={"groups." + groupName}
+            responseLabel={group.response_label}
+            error={
+              touched.groups &&
+              touched.groups[groupName] &&
+              errors.groups &&
+              errors.groups[groupName]
+            }
+          />
+          <JsonFieldEditor
+            sectionName={`groupAnswers.${groupName}`}
+            fields={group.header_fields}
+          />
+        </React.Fragment>
+      );
+    });
 
   return (
     <FormStructure

@@ -20,7 +20,7 @@ export type SelectedGroups = { [key: string]: boolean };
 export type FormValues = {
   priorityText: string;
   phoneNumber: string;
-  headerFields: InputResponseModel;
+  groupAnswers: Record<string, InputResponseModel>;
   groups: { [groupName: string]: string };
 };
 
@@ -39,15 +39,15 @@ const generateInitialValues: (
   myApplication?: Application,
 ) => FormValues = (selectedGroups, admission, myApplication) => {
   const {
-    text = getPriorityTextDraft(),
+    priority_text: priorityText = getPriorityTextDraft(),
     phone_number: phoneNumber = getPhoneNumberDraft(),
     group_applications: groupApplications = getApplictionTextDrafts(),
   } = myApplication || {};
 
   const initialValues: FormValues = {
-    priorityText: text,
+    priorityText,
     phoneNumber,
-    headerFields: {},
+    groupAnswers: {},
     groups: {},
   };
 
@@ -56,19 +56,21 @@ const generateInitialValues: (
     formattedGroupApplications[group] = "";
   });
 
-  const blankHeaderFields = (admission?.header_fields as InputFieldModel[])
-    .filter((field) => "id" in field)
-    .reduce(
-      (obj, field) => ({
-        ...obj,
-        [field.id]:
-          (myApplication?.header_fields_response &&
-            myApplication?.header_fields_response[field.id]) ??
-          "",
-      }),
-      {},
-    );
-  initialValues.headerFields = blankHeaderFields;
+  const blankGroupAnswers = (group: Group): InputResponseModel =>
+    (group.header_fields ?? [])
+      .filter((field): field is InputFieldModel => "id" in field)
+      .reduce(
+        (answers, field) => ({
+          ...answers,
+          [field.id]: field.type === "checkbox" ? false : "",
+        }),
+        {},
+      );
+  initialValues.groupAnswers = Object.fromEntries(
+    (admission?.groups ?? [])
+      .filter((group) => selectedGroups[group.name.toLowerCase()])
+      .map((group) => [group.name.toLowerCase(), blankGroupAnswers(group)]),
+  );
 
   // The group applications are already formatted in the object form Formik likes
   if (!Array.isArray(groupApplications)) {
@@ -81,8 +83,10 @@ const generateInitialValues: (
 
   // The group applications are formatted in the array that Django/Postgres likes
   groupApplications.forEach((application) => {
-    formattedGroupApplications[application.group.name.toLowerCase()] =
-      application.text;
+    const groupName = application.group.name.toLowerCase();
+    formattedGroupApplications[groupName] = application.text;
+    initialValues.groupAnswers[groupName] =
+      application.header_fields_response ?? {};
   });
 
   initialValues.groups = formattedGroupApplications;
@@ -111,15 +115,31 @@ const validationSchema = (
           )),
       );
 
-    const headerFieldsSchema = (admission?.header_fields as InputFieldModel[])
-      .filter((field) => "id" in field && field.required)
-      .reduce(
-        (obj, field) => ({
-          ...obj,
-          [field.id]: Yup.string().required(`${field.title} må fylles ut`),
+    const groupAnswersSchema = Object.fromEntries(
+      (admission?.groups ?? [])
+        .filter((group) => selectedGroups[group.name.toLowerCase()])
+        .map((group) => {
+          const requiredFields = (group.header_fields ?? [])
+            .filter(
+              (field): field is InputFieldModel =>
+                "id" in field && field.required,
+            )
+            .reduce(
+              (fields, field) => {
+                fields[field.id] =
+                  field.type === "checkbox"
+                    ? Yup.boolean().oneOf(
+                        [true],
+                        `${field.title} må krysses av`,
+                      )
+                    : Yup.string().required(`${field.title} må fylles ut`);
+                return fields;
+              },
+              {} as Record<string, Yup.BooleanSchema | Yup.StringSchema>,
+            );
+          return [group.name.toLowerCase(), Yup.object().shape(requiredFields)];
         }),
-        {},
-      );
+    );
 
     return Yup.object().shape({
       phoneNumber: Yup.string()
@@ -128,8 +148,11 @@ const validationSchema = (
           "Skriv inn et gyldig norsk telefonnummer",
         )
         .required("Skriv inn et gyldig norsk telefonnummer"),
-      priorityText: Yup.string().optional(),
-      headerFields: Yup.object().shape(headerFieldsSchema),
+      priorityText: Yup.string().max(
+        5000,
+        "Prioriteringer kan ikke være lengre enn 5000 tegn",
+      ),
+      groupAnswers: Yup.object().shape(groupAnswersSchema),
       groups: Yup.object().shape(selectedGroupsSchema),
     });
   });
@@ -156,10 +179,10 @@ const ApplicationForm: React.FC<ApplicationFormProps> = ({
     formikHelpers: FormikHelpers<FormValues>,
   ) => void = (values, { setSubmitting }) => {
     const submission: MutationApplication = {
-      text: values.priorityText,
       applications: {},
       phone_number: values.phoneNumber,
-      header_fields_response: values.headerFields,
+      priority_text: values.priorityText,
+      group_answers: {},
     };
     Object.keys(values.groups)
       .filter(
@@ -171,6 +194,7 @@ const ApplicationForm: React.FC<ApplicationFormProps> = ({
       )
       .forEach((name) => {
         submission.applications[name] = values.groups[name];
+        submission.group_answers[name] = values.groupAnswers[name] ?? {};
       });
     createApplicationMutation.mutate(
       { newApplication: submission },

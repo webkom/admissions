@@ -24,7 +24,8 @@ const ApplicationForm: React.FC<FormProps> = ({ toggleIsEditing }) => {
     return <p>Feil: klarte ikke hente søknaden din.</p>;
   }
 
-  const { phone_number, text, group_applications } = myApplication ?? {};
+  const { phone_number, priority_text, group_applications } =
+    myApplication ?? {};
 
   const groupApplications = group_applications?.reduce(
     (obj, application) => ({
@@ -35,9 +36,14 @@ const ApplicationForm: React.FC<FormProps> = ({ toggleIsEditing }) => {
   );
 
   const initialValues: FormValues = {
-    priorityText: text ?? "",
+    priorityText: priority_text ?? "",
     phoneNumber: phone_number,
-    headerFields: myApplication?.header_fields_response,
+    groupAnswers: Object.fromEntries(
+      (group_applications ?? []).map((application) => [
+        application.group.name.toLowerCase(),
+        application.header_fields_response ?? {},
+      ]),
+    ),
     groups: groupApplications,
   };
 

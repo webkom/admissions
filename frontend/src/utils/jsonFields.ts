@@ -19,12 +19,17 @@ export type NumberInputModel = BaseInputModel & { type: "numberinput" };
 
 export type PhoneInputModel = BaseInputModel & { type: "phoneinput" };
 
+export type CheckboxInputModel = BaseInputModel & { type: "checkbox" };
+
 export type InputFieldModel =
   | TextInputModel
   | TextAreaModel
   | NumberInputModel
-  | PhoneInputModel;
+  | PhoneInputModel
+  | CheckboxInputModel;
 
 export type FieldModel = TextModel | InputFieldModel;
 
-export type InputResponseModel = { [input_id: string]: string };
+export type InputResponseModel = {
+  [input_id: string]: string | boolean;
+};

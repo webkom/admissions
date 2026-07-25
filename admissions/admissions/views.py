@@ -289,6 +289,21 @@ class AdminApplicationViewSet(
         # No permissions
         return UserApplication.objects.none()
 
+    def get_serializer_context(self):
+        context = super().get_serializer_context()
+        admission_slug = self.kwargs.get("admission_slug")
+        if not admission_slug or self.request.user.is_anonymous:
+            return context
+        admission = Admission.objects.filter(slug=admission_slug).first()
+        if admission is None:
+            return context
+        self.request.user.__class__ = LegoUser
+        context["include_priority_text"] = user_is_admission_admin(
+            admission,
+            self.request.user,
+        )
+        return context
+
     @action(detail=True, methods=["patch"], url_path="interview-status")
     def interview_status(self, request, *args, **kwargs):
         serializer = InterviewStatusUpdateSerializer(data=request.data)

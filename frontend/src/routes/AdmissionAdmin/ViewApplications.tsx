@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import styled from "styled-components";
 import FormatTime from "src/components/Time/FormatTime";
 
@@ -27,10 +27,6 @@ const ViewApplications = () => {
     [],
   );
   const [selectedGroups, setSelectedGroups] = useState<string[]>([]);
-  const [filteredApplications, setFilteredApplications] = useState<
-    Application[]
-  >([]);
-  const [csvData, setCsvData] = useState<CompleteCsvData[]>([]);
 
   const {
     data: applications,
@@ -43,18 +39,28 @@ const ViewApplications = () => {
     isFetching: admissionIsFetching,
   } = useAdmission(admissionSlug ?? "");
   const { groups } = admission ?? {};
+  const availableGroups = (groups ?? []).filter(
+    (group) =>
+      admission?.userdata.is_admin ||
+      group.name === djangoData.user.representative_of_group,
+  );
+  const groupQuestionFields = availableGroups.flatMap((group) =>
+    (group.header_fields ?? [])
+      .filter((field): field is InputFieldModel => "id" in field)
+      .map((field) => ({
+        groupId: String(group.pk),
+        groupName: group.name,
+        field,
+      })),
+  );
 
   const csvHeaders = [
     { label: "Fullt Navn", key: "name" },
     { label: "Prioriteringer", key: "priorityText" },
-    ...(admission?.userdata.is_admin
-      ? (admission?.header_fields as InputFieldModel[])
-          .filter((headerField) => "id" in headerField)
-          .map((headerField) => ({
-            label: headerField.title,
-            key: headerField.id,
-          }))
-      : []),
+    ...groupQuestionFields.map(({ groupId, groupName, field }) => ({
+      label: `${groupName}: ${field.title}`,
+      key: `groupAnswer.${groupId}.${field.id}`,
+    })),
     { label: "Gruppe", key: "group" },
     { label: "Søknadstekst", key: "groupApplicationText" },
     { label: "E-post", key: "email" },
@@ -74,8 +80,8 @@ const ViewApplications = () => {
     );
   }, [applications]);
 
-  useEffect(() => {
-    setFilteredApplications(
+  const filteredApplications = useMemo(
+    () =>
       sortedApplications.filter(
         (application) =>
           selectedGroups.length === 0 ||
@@ -83,21 +89,38 @@ const ViewApplications = () => {
             selectedGroups.includes(groupApplication.group.name),
           ),
       ),
-    );
-  }, [sortedApplications, selectedGroups]);
+    [selectedGroups, sortedApplications],
+  );
 
-  useEffect(() => {
+  const csvData = useMemo(() => {
     // Push all the individual applications into csvData with the right format
     const updatedCsvData: CompleteCsvData[] = [];
     filteredApplications.forEach((application) => {
       application.group_applications.forEach((groupApplication) => {
+        const groupId = String(groupApplication.group.pk);
+        const groupAnswerCsvValues = Object.fromEntries(
+          groupQuestionFields
+            .filter((entry) => entry.groupId === groupId)
+            .map(({ field }) => {
+              const response =
+                groupApplication.header_fields_response?.[field.id];
+              return [
+                `groupAnswer.${groupId}.${field.id}`,
+                typeof response === "boolean"
+                  ? response
+                    ? "Ja"
+                    : "Nei"
+                  : (response ?? ""),
+              ];
+            }),
+        );
         updatedCsvData.push({
           name: application.user.full_name,
           priorityText:
-            application.text !== ""
-              ? replaceQuotationMarks(application.text ?? "")
+            application.priority_text !== ""
+              ? replaceQuotationMarks(application.priority_text ?? "")
               : "Ingen prioriteringer",
-          ...application.header_fields_response,
+          ...groupAnswerCsvValues,
           group: groupApplication.group.name,
           groupApplicationText: replaceQuotationMarks(groupApplication.text),
           email: application.user.email,
@@ -109,13 +132,13 @@ const ViewApplications = () => {
         });
       });
     });
-    setCsvData(updatedCsvData);
-  }, [filteredApplications]);
+    return updatedCsvData;
+  }, [filteredApplications, groupQuestionFields]);
 
-  const numApplicants = sortedApplications.length;
+  const numApplicants = filteredApplications.length;
 
   let numApplications = 0;
-  sortedApplications.forEach((application) => {
+  filteredApplications.forEach((application) => {
     numApplications += application.group_applications.length;
   });
 
@@ -164,12 +187,7 @@ const ViewApplications = () => {
           </StatisticsWrapper>
 
           <Statistics>
-            {(groups !== undefined ? [...groups] : [])
-              .filter(
-                (group) =>
-                  admission.userdata.is_admin ||
-                  group.name === djangoData.user.representative_of_group,
-              )
+            {[...availableGroups]
               .sort((a, b) => a.name.localeCompare(b.name))
               .map((group) => (
                 <GroupStatistics

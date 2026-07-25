@@ -12,6 +12,11 @@ export interface InnerTableValues {
   groupId: string;
   groupName: string;
   text: string;
+  answers: Array<{
+    id: string;
+    title: string;
+    value: string;
+  }>;
 }
 
 interface AdmissionsInnerTableProps {

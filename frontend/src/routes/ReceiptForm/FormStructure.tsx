@@ -24,7 +24,6 @@ import {
   Notice,
   PageWrapper,
   RecieptInfo,
-  RecievedApplicationBanner,
   SectionHeader,
   SeparatorLine,
   Sidebar,
@@ -70,11 +69,7 @@ const FormStructure: React.FC<FormStructureProps> = ({ toggleIsEditing }) => {
   return (
     <PageWrapper>
       <RecieptInfo>
-        <Title>Kvittering for sendt søknad</Title>
-        <RecievedApplicationBanner>
-          <span>Vi har mottatt søknaden din!</span>
-          <Icon name="checkmark" size="1.8rem" />
-        </RecievedApplicationBanner>
+        <Title>Søknad sendt!</Title>
         <TimeStamp>
           <Icon name="time" />
           Søknaden ble sist registrert{" "}
@@ -218,11 +213,6 @@ const FormStructure: React.FC<FormStructureProps> = ({ toggleIsEditing }) => {
               />
             </>
           )}
-          <JsonFieldEditor
-            sectionName="headerFields"
-            fields={admission.header_fields}
-            disabled={true}
-          />
         </GeneralInfoSection>
         <SeparatorLine />
         <GroupsSection $isSingleGroupAdmission={isSingleGroupAdmission}>
@@ -260,15 +250,22 @@ const FormStructure: React.FC<FormStructureProps> = ({ toggleIsEditing }) => {
                 );
                 if (!group) return null;
 
+                const groupName = group.name.toLowerCase();
                 return (
-                  <Field
-                    component={Application}
-                    group={group}
-                    name={"groups." + group.name.toLowerCase()}
-                    responseLabel={group.response_label}
-                    key={group.pk}
-                    disabled={true}
-                  />
+                  <React.Fragment key={group.pk}>
+                    <Field
+                      component={Application}
+                      group={group}
+                      name={"groups." + groupName}
+                      responseLabel={group.response_label}
+                      disabled={true}
+                    />
+                    <JsonFieldEditor
+                      sectionName={`groupAnswers.${groupName}`}
+                      fields={group.header_fields}
+                      disabled={true}
+                    />
+                  </React.Fragment>
                 );
               })}
             </Applications>

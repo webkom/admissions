@@ -414,11 +414,24 @@ class ShortUserSerializer(serializers.HyperlinkedModelSerializer):
 
 class UserApplicationSerializer(serializers.ModelSerializer):
     group_applications = serializers.SerializerMethodField()
+    priority_text = serializers.CharField(source="text", read_only=True)
     user = ShortUserSerializer()
 
     def get_group_applications(self, obj):
         qs = getattr(obj, "group_applications_filtered", obj.group_applications)
         return ShortGroupApplicationSerializer(qs, many=True).data
+
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        request = self.context.get("request")
+        is_owner = bool(
+            request
+            and request.user.is_authenticated
+            and request.user.pk == instance.user_id
+        )
+        if not is_owner and not self.context.get("include_priority_text", False):
+            data.pop("priority_text", None)
+        return data
 
     class Meta:
         model = UserApplication
@@ -429,6 +442,7 @@ class UserApplicationSerializer(serializers.ModelSerializer):
             "updated_at",
             "applied_within_deadline",
             "phone_number",
+            "priority_text",
             "group_applications",
         )
 
@@ -510,6 +524,13 @@ class ApplicationCreateUpdateSerializer(serializers.HyperlinkedModelSerializer):
     group_answers = serializers.DictField(
         child=serializers.JSONField(), required=False, default=dict, write_only=True
     )
+    priority_text = serializers.CharField(
+        source="text",
+        required=False,
+        allow_blank=True,
+        max_length=5000,
+        write_only=True,
+    )
 
     def to_internal_value(self, data):
         legacy_fields = set(data.keys()).intersection(self.legacy_general_fields)
@@ -528,6 +549,7 @@ class ApplicationCreateUpdateSerializer(serializers.HyperlinkedModelSerializer):
         fields = (
             "pk",
             "phone_number",
+            "priority_text",
             "applications",
             "group_answers",
         )
@@ -615,6 +637,7 @@ class ApplicationCreateUpdateSerializer(serializers.HyperlinkedModelSerializer):
     def create(self, validated_data):
         user = validated_data.pop("user")
         phone_number = validated_data.pop("phone_number")
+        priority_text = validated_data.pop("text", "")
 
         admission_slug = validated_data.pop("admission_slug")
         applications = validated_data.pop("applications")
@@ -644,6 +667,7 @@ class ApplicationCreateUpdateSerializer(serializers.HyperlinkedModelSerializer):
                 user=user,
                 defaults={
                     "phone_number": phone_number,
+                    "text": priority_text,
                 },
             )
 

@@ -1,4 +1,4 @@
-import { FieldModel, InputResponseModel } from "src/utils/jsonFields";
+import { InputFieldModel, InputResponseModel } from "src/utils/jsonFields";
 
 export interface Group {
   pk: string;
@@ -7,6 +7,7 @@ export interface Group {
   logo: string;
   response_label: string;
   detail_link: string;
+  header_fields?: InputFieldModel[];
 }
 
 export interface User {
@@ -20,6 +21,7 @@ export interface User {
 export interface GroupApplication {
   group: Group;
   text: string;
+  header_fields_response?: InputResponseModel;
 }
 
 export interface Application {
@@ -28,9 +30,8 @@ export interface Application {
   created_at: string;
   updated_at: string;
   applied_within_deadline: boolean;
-  text?: string;
   phone_number: string;
-  header_fields_response: InputResponseModel;
+  priority_text?: string;
   group_applications: GroupApplication[];
 }
 
@@ -53,6 +54,5 @@ export interface Admission {
   closed_from: string;
   admin_groups?: Group[];
   groups: Group[];
-  header_fields: FieldModel[];
   userdata: AdmissionUserData;
 }

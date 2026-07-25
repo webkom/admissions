@@ -319,28 +319,6 @@ export const RecieptInfo = styled.div`
   flex-direction: column;
 `;
 
-export const RecievedApplicationBanner = styled.div`
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  align-items: space-between;
-  background: var(--color-green-6);
-  border: 1px solid #809e33;
-  border-radius: 13px;
-  padding: 0.8rem 2rem;
-  color: var(--color-white);
-  font-weight: 600;
-  font-size: 1.1rem;
-
-  > span {
-    margin-right: 1rem;
-  }
-
-  ${media.handheld`
-  font-size: 1rem;
-  `};
-`;
-
 export const EditWrapper = styled.div`
   display: flex;
   flex-direction: row;
