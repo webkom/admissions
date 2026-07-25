@@ -6,7 +6,7 @@ from rest_framework.response import Response
 from rest_framework.throttling import ScopedRateThrottle
 from rest_framework.views import APIView
 
-from admissions.admissions.admission_access import user_is_interview_admin
+from admissions.admissions.admission_access import user_is_admission_admin
 from admissions.admissions.authentication import SessionAuthentication
 from admissions.admissions.models import Admission, LegoUser, SavedSchedule, SolveJob
 from admissions.admissions.schedule_validation import (
@@ -47,7 +47,7 @@ class SolveScheduleView(APIView):
 
         user = request.user
         user.__class__ = LegoUser
-        if not user_is_interview_admin(admission, user):
+        if not user_is_admission_admin(admission, user):
             return Response(status=status.HTTP_403_FORBIDDEN)
 
         serializer = ScheduleRequestsSerializer(data=request.data)
@@ -123,7 +123,7 @@ class SolveJobStatusView(APIView):
         job = get_object_or_404(SolveJob, id=job_id)
         user = request.user
         user.__class__ = LegoUser
-        if not user_is_interview_admin(job.admission, user):
+        if not user_is_admission_admin(job.admission, user):
             return None, Response(status=status.HTTP_403_FORBIDDEN)
         return job, None
 

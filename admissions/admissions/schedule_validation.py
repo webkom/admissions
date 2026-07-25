@@ -1,6 +1,10 @@
 from datetime import date
 
 from admissions.admissions import constants
+from admissions.admissions.admission_access import (
+    candidate_identity_is_revealed,
+    get_candidate_pseudonyms,
+)
 from admissions.admissions.models import (
     InterviewAvailability,
     LegoUser,
@@ -143,11 +147,23 @@ def canonicalize_solver_payload(admission, saved, data, request_user):
     }
     availability_map = {str(item.user_id): item for item in submitted}
     candidate_ids = set(application_map)
+    candidate_pseudonyms = (
+        {}
+        if candidate_identity_is_revealed(saved)
+        else get_candidate_pseudonyms(admission)
+    )
+
+    def candidate_display_name(candidate_id):
+        application = application_map[candidate_id]
+        return candidate_pseudonyms.get(
+            candidate_id,
+            application.user.get_full_name() or application.user.username,
+        )
+
     candidates = [
         {
             "id": candidate_id,
-            "name": application_map[candidate_id].user.get_full_name()
-            or application_map[candidate_id].user.username,
+            "name": candidate_display_name(candidate_id),
             "gender": {
                 "male": "M",
                 "female": "F",
@@ -205,8 +221,7 @@ def canonicalize_solver_payload(admission, saved, data, request_user):
         locked_assignments.append(
             {
                 "candidate_id": candidate_id,
-                "candidate": application_map[candidate_id].user.get_full_name()
-                or application_map[candidate_id].user.username,
+                "candidate": candidate_display_name(candidate_id),
                 "time": assignment["time"],
                 "panel": panel,
             }

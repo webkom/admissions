@@ -27,9 +27,7 @@ class CreateApplicationTestCase(APITestCase):
         self.pleb_anna = LegoUser.objects.create(username="Anna", lego_id=2)
 
         self.application_data = {
-            "text": "Ønsker Webkom mest",
             "phone_number": "12345678",
-            "header_fields_response": {},
             "applications": {
                 "webkom": "Hohohohohohohohohohooho webbis",
                 "koskom": "Hahahahahahahahahahaha arris",
@@ -141,9 +139,7 @@ class CreateApplicationTestCase(APITestCase):
         )
 
         self.application_data = {
-            "text": "Ønsker Webkom mest",
             "phone_number": "12345678",
-            "header_fields_response": {},
             "applications": {"webkom": "Hohohohohohohohohohooho webbis"},
         }
 
@@ -166,9 +162,7 @@ class CreateApplicationTestCase(APITestCase):
         self.client.force_authenticate(user=self.pleb_anna)
 
         data = {
-            "text": "x",
             "phone_number": "12345678",
-            "header_fields_response": {},
             "applications": {"bedkom": "should be rejected"},
         }
         res = self.client.post(
@@ -185,9 +179,7 @@ class CreateApplicationTestCase(APITestCase):
     def test_unknown_group_name_returns_400_not_500(self):
         self.client.force_authenticate(user=self.pleb_anna)
         data = {
-            "text": "x",
             "phone_number": "12345678",
-            "header_fields_response": {},
             "applications": {"this-group-does-not-exist": "x"},
         }
         res = self.client.post(
@@ -200,7 +192,7 @@ class CreateApplicationTestCase(APITestCase):
 
         self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
 
-    def test_missing_required_header_field_is_rejected(self):
+    def test_legacy_general_questions_do_not_block_submission(self):
         self.admission.header_fields = [
             {
                 "id": "q1",
@@ -215,9 +207,7 @@ class CreateApplicationTestCase(APITestCase):
         self.client.force_authenticate(user=self.pleb_anna)
 
         data = {
-            "text": "x",
             "phone_number": "12345678",
-            "header_fields_response": {},  # required q1 omitted
             "applications": {"webkom": "x"},
         }
         res = self.client.post(
@@ -228,8 +218,8 @@ class CreateApplicationTestCase(APITestCase):
             format="json",
         )
 
-        self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertFalse(UserApplication.objects.filter(user=self.pleb_anna).exists())
+        self.assertEqual(res.status_code, status.HTTP_201_CREATED)
+        self.assertTrue(UserApplication.objects.filter(user=self.pleb_anna).exists())
 
     def test_email_failure_does_not_block_application_edit(self):
         self.client.force_authenticate(user=self.pleb_anna)
@@ -247,9 +237,7 @@ class CreateApplicationTestCase(APITestCase):
         )
 
         edit = {
-            "text": "x",
             "phone_number": "12345678",
-            "header_fields_response": {},
             "applications": {"webkom": "still want webkom"},
         }
         with patch(

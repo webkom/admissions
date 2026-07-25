@@ -27,7 +27,7 @@ class AdminAdmissionPrivacyTestCase(APITestCase):
         Membership.objects.create(
             user=self.recruiter, group=self.committee, role=RECRUITING
         )
-        Membership.objects.create(user=self.admin, group=self.admin_group, role=MEMBER)
+        Membership.objects.create(user=self.admin, group=self.admin_group, role=LEADER)
         UserApplication.objects.create(
             admission=self.admission,
             user=self.candidate,
@@ -68,10 +68,10 @@ class AdminAdmissionPrivacyTestCase(APITestCase):
 
         data = UserApplicationSerializer(application).data
 
-        self.assertIsNone(data["text"])
-        self.assertEqual(data["header_fields_response"], {})
+        self.assertNotIn("text", data)
+        self.assertNotIn("header_fields_response", data)
 
-    def test_admin_group_member_can_retrieve_admin_admission(self):
+    def test_admin_group_representative_can_retrieve_admin_admission(self):
         self.client.force_authenticate(user=self.admin)
 
         response = self.client.get(self.url)
@@ -105,7 +105,7 @@ class ListApplicationsTestCase(APITestCase):
             username="staff_user", lego_id=3, is_staff=True
         )
 
-        Membership.objects.create(user=self.staff_user, role=MEMBER, group=leader_group)
+        Membership.objects.create(user=self.staff_user, role=LEADER, group=leader_group)
 
         # Webkom
         self.webkom_leader = LegoUser.objects.create(username="webkomleader", lego_id=4)
@@ -137,9 +137,7 @@ class ListApplicationsTestCase(APITestCase):
 
         # Sample application data
         self.application_data = {
-            "text": "testtest",
             "phone_number": "00000000",
-            "header_fields_response": {},
             "applications": {
                 "webkom": "Webkom application",
                 "bedkom": "Bedkom application",
@@ -195,9 +193,7 @@ class ListApplicationsTestCase(APITestCase):
     def test_group_leader_can_see_applications_for_own_group(self):
         self.client.force_authenticate(user=self.pleb)
         application_data = {
-            "text": "testtest",
             "phone_number": "00000000",
-            "header_fields_response": {},
             "applications": {"webkom": "Webkom application"},
         }
         self.client.post(

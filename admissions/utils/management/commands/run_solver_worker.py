@@ -16,6 +16,7 @@ from django.utils.dateparse import parse_datetime
 from structlog import get_logger
 
 from admissions.admissions import constants
+from admissions.admissions.admission_access import user_is_admission_admin
 from admissions.admissions.models import Admission, SavedSchedule, SolveJob
 from admissions.admissions.schedule_validation import canonicalize_solver_payload
 from admissions.admissions.solve_schedule import solve_schedule
@@ -136,6 +137,11 @@ class Command(BaseCommand):
         error = ""
         new_status = SolveJob.STATUS_DONE
         try:
+            requested_by = job.requested_by
+            if requested_by is None or not user_is_admission_admin(
+                job.admission, requested_by
+            ):
+                raise PermissionError
             if data.get("rehydrate"):
                 with transaction.atomic():
                     admission = Admission.objects.select_for_update().get(
@@ -181,6 +187,9 @@ class Command(BaseCommand):
                     block_metadata_data=data.get("block_metadata", []),
                     previous_schedule_data=data.get("previous_schedule", []),
                 )
+        except PermissionError:
+            error = "Kun opptaksansvarlige kan kjøre intervjusolveren."
+            new_status = SolveJob.STATUS_ERROR
         except Exception as exc:
             log.exception(
                 "solve_job_failed",

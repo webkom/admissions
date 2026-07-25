@@ -750,7 +750,8 @@ class SavedScheduleSerializer(serializers.ModelSerializer):
             for panel_id in [canonical_uuid(member.get("id"))]
             if panel_id is not None
         }
-        include_candidate_contact = self.context.get("include_candidate_contact", False)
+        contact_candidate_ids = self.context.get("contact_candidate_ids", set())
+        candidate_pseudonyms = self.context.get("candidate_pseudonyms", {})
         date_time_field = serializers.DateTimeField()
         authorized_candidate_ids = (
             candidate_ids
@@ -759,9 +760,15 @@ class SavedScheduleSerializer(serializers.ModelSerializer):
         )
         candidate_details = {
             str(application.pk): {
-                "name": application.user.get_full_name() or application.user.username,
+                "name": candidate_pseudonyms.get(
+                    str(application.pk),
+                    application.user.get_full_name() or application.user.username,
+                ),
                 "phone": (
-                    application.phone_number if include_candidate_contact else None
+                    application.phone_number
+                    if contact_candidate_ids is None
+                    or str(application.pk) in contact_candidate_ids
+                    else None
                 ),
                 "interview_status": application.interview_status,
                 "interview_status_updated_at": date_time_field.to_representation(

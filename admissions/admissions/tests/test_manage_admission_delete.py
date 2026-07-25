@@ -20,8 +20,11 @@ class DeleteAdmissionAuthorizationTestCase(APITestCase):
     """
 
     def setUp(self) -> None:
-        yesterday = fake_timedelta(-1)
-        self.admission = create_admission(closed_from=yesterday)
+        self.admission = create_admission(
+            open_from=fake_timedelta(-3),
+            public_deadline=fake_timedelta(-2),
+            closed_from=fake_timedelta(-1),
+        )
 
     def test_webkom_can_delete_admission(self):
         webkom_user = LegoUser.objects.create(username="webkom_member", lego_id=2)
@@ -125,8 +128,11 @@ class DeleteAdmissionValidityTestCase(APITestCase):
     """
 
     def setUp(self) -> None:
-        tomorrow = fake_timedelta(1)
-        self.admission = create_admission(closed_from=tomorrow)
+        self.admission = create_admission(
+            open_from=fake_timedelta(-1),
+            public_deadline=fake_timedelta(),
+            closed_from=fake_timedelta(1),
+        )
         self.admission.created_by.is_staff = True
         self.admission.created_by.save()
 
@@ -154,8 +160,11 @@ class DeleteAdmissionCompleteTestCase(APITestCase):
 
     def setUp(self) -> None:
         # Create an admission and user that should be possible to delete
-        yesterday = fake_timedelta(-1)
-        self.admission = create_admission(closed_from=yesterday)
+        self.admission = create_admission(
+            open_from=fake_timedelta(-3),
+            public_deadline=fake_timedelta(-2),
+            closed_from=fake_timedelta(-1),
+        )
         self.admission.created_by.is_staff = True
         self.admission.created_by.save()
 

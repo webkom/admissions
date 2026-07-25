@@ -1,8 +1,12 @@
 from django.db.models import Q
-from django.shortcuts import get_object_or_404
 from rest_framework import permissions
 
 from admissions.admissions import constants
+from admissions.admissions.admission_access import (
+    user_is_admission_admin,
+    user_is_privileged,
+    user_is_recruiter,
+)
 
 from .models import Admission, LegoUser, Membership
 
@@ -10,30 +14,6 @@ from .models import Admission, LegoUser, Membership
 def cast_as_lego_user(user_obj) -> LegoUser:
     user_obj.__class__ = LegoUser
     return user_obj
-
-
-def _is_recruiter_in(admission, user):
-    return (
-        Membership.objects.filter(user=user.pk, group__in=admission.groups.all())
-        .filter(Q(role=constants.LEADER) | Q(role=constants.RECRUITING))
-        .exists()
-    )
-
-
-def user_is_privileged(admission_slug, user):
-    admission = get_object_or_404(Admission, slug=admission_slug)
-    if (
-        Membership.objects.filter(user=user.pk, group__in=admission.admin_groups.all())
-        .exclude(role__in=constants.INACTIVE_MEMBERSHIP_ROLES)
-        .exists()
-    ):
-        return True
-    return _is_recruiter_in(admission, user)
-
-
-def user_is_recruiter(admission_slug, user):
-    admission = get_object_or_404(Admission, slug=admission_slug)
-    return _is_recruiter_in(admission, user)
 
 
 class IsOwnerOrReadOnly(permissions.BasePermission):
@@ -75,15 +55,8 @@ class GroupPermissions(permissions.BasePermission):
 
         admissions = Admission.objects.filter(groups=obj)
         for admission in admissions:
-            for admin_group in admission.admin_groups.all():
-                if (
-                    Membership.objects.filter(
-                        user=request.user.pk, group=admin_group.pk
-                    )
-                    .exclude(role__in=constants.INACTIVE_MEMBERSHIP_ROLES)
-                    .exists()
-                ):
-                    return True
+            if user_is_admission_admin(admission, request.user):
+                return True
 
         return (
             Membership.objects.filter(user=request.user.pk, group=obj.pk)

@@ -7,7 +7,8 @@ from rest_framework.views import APIView
 
 from admissions.admissions import constants
 from admissions.admissions.admission_access import (
-    get_representing_groups,
+    candidate_identity_is_revealed,
+    get_candidate_pseudonyms,
     get_user_candidate_visible_groups,
     user_is_admission_admin,
     user_is_committee_member,
@@ -67,8 +68,6 @@ class InterviewCandidatesView(APIView):
 
         is_admin = user_is_admission_admin(admission, user)
         is_interview_admin = user_is_interview_admin(admission, user)
-        representing_groups = get_representing_groups(admission, user)
-        is_recruiter = representing_groups.exists()
         is_committee_member = user_is_committee_member(admission, user)
 
         if not is_committee_member and not is_interview_admin:
@@ -79,37 +78,52 @@ class InterviewCandidatesView(APIView):
             saved = admission.saved_schedule
         except SavedSchedule.DoesNotExist:
             pass
+        candidate_identity_revealed = candidate_identity_is_revealed(saved)
 
         conflict_review_open = bool(
             saved is not None
             and saved.conflict_review_open
+            and candidate_identity_revealed
             and not saved.is_distributed
             and user.id in get_eligible_interviewer_ids(admission)
             and user_has_interview_availability(admission, user.id)
         )
         visible_groups = get_user_candidate_visible_groups(admission, saved, user)
-        hide_identity = (
-            not is_admin and not conflict_review_open and not visible_groups.exists()
+        pseudonymize_identity = is_admin and not candidate_identity_revealed
+        hide_identity = not is_admin and (
+            not candidate_identity_revealed
+            or (not conflict_review_open and not visible_groups.exists())
         )
 
         applications = UserApplication.objects.filter(admission=admission)
-        if not is_interview_admin and not conflict_review_open:
+        if not is_admin and not conflict_review_open:
             applications = applications.filter(
                 group_applications__group__in=visible_groups
             ).distinct()
-        applications = applications.select_related("user").order_by(
-            "user__first_name", "user__last_name", "user__username"
-        )
+        applications = applications.select_related("user")
+        if pseudonymize_identity:
+            applications = applications.order_by("created_at", "pk")
+        else:
+            applications = applications.order_by(
+                "user__first_name", "user__last_name", "user__username"
+            )
         if hide_identity:
             payload = []
         else:
             if conflict_review_open and not is_admin:
                 self._audit_conflict_review_access(admission, saved, user)
+            pseudonyms = (
+                get_candidate_pseudonyms(admission) if pseudonymize_identity else {}
+            )
             payload = [
                 {
                     "id": str(application.pk),
-                    "name": application.user.get_full_name()
-                    or application.user.username,
+                    "name": (
+                        pseudonyms[str(application.pk)]
+                        if pseudonymize_identity
+                        else application.user.get_full_name()
+                        or application.user.username
+                    ),
                 }
                 for application in applications
             ]

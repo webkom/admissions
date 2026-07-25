@@ -2311,7 +2311,7 @@ class SavedScheduleVisibilityTestCase(APITestCase):
         )
         self.assertEqual(
             {item["name"] for item in candidates.data},
-            {"Ada", "Grace", "Linus"},
+            {"Ada", "Grace"},
         )
 
     def test_admin_sees_names_even_when_hidden(self):
@@ -2322,6 +2322,45 @@ class SavedScheduleVisibilityTestCase(APITestCase):
 
         self.assertEqual(res.status_code, status.HTTP_200_OK)
         self.assertEqual(res.data["schedule"][0]["candidate"], "Ada")
+
+    def test_admin_sees_stable_pseudonyms_until_conflict_review_opens(self):
+        saved = self._create_saved(
+            is_distributed=False,
+            name_visibility="hidden",
+            conflict_review_open=False,
+        )
+        self.client.force_authenticate(user=self.admin_user)
+
+        schedule = self.client.get(self.url)
+        candidates = self.client.get(
+            reverse(
+                "interview-candidates",
+                kwargs={"admission_slug": self.admission.slug},
+            )
+        )
+
+        self.assertEqual(schedule.status_code, status.HTTP_200_OK)
+        self.assertEqual(schedule.data["schedule"][0]["candidate"], "Kandidat 1")
+        self.assertNotIn("candidate_phone", schedule.data["schedule"][0])
+        self.assertEqual(
+            candidates.data,
+            [{"id": str(self.application.pk), "name": "Kandidat 1"}],
+        )
+        self.assertNotIn("Ada", str(schedule.data))
+        self.assertNotIn("Ada", str(candidates.data))
+
+        saved.conflict_review_open = True
+        saved.save(update_fields=["conflict_review_open"])
+
+        revealed_schedule = self.client.get(self.url)
+        revealed_candidates = self.client.get(
+            reverse(
+                "interview-candidates",
+                kwargs={"admission_slug": self.admission.slug},
+            )
+        )
+        self.assertEqual(revealed_schedule.data["schedule"][0]["candidate"], "Ada")
+        self.assertEqual(revealed_candidates.data[0]["name"], "Ada")
 
     def test_legacy_schedule_derives_enabled_windows_without_writing_on_get(self):
         saved = self._create_saved(
@@ -2529,7 +2568,7 @@ class SolveJobLifecycleTestCase(APITestCase):
 
         self.assertEqual(res.status_code, status.HTTP_403_FORBIDDEN)
 
-    def test_status_endpoint_is_allowed_for_committee_recruiters(self):
+    def test_status_endpoint_is_forbidden_for_committee_recruiters(self):
         job_id = self._enqueue().data["job_id"]
         committee = Group.objects.create(name="AsyncRecruiters", lego_id=953)
         recruiter = LegoUser.objects.create(username="async-recruiter", lego_id=954)
@@ -2539,7 +2578,18 @@ class SolveJobLifecycleTestCase(APITestCase):
 
         res = self.client.get(reverse("solve-job", kwargs={"job_id": job_id}))
 
-        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.assertEqual(res.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_worker_rechecks_authority_before_running(self):
+        job_id = self._enqueue().data["job_id"]
+        Membership.objects.filter(user=self.user, group=self.group).update(role=MEMBER)
+
+        call_command("run_solver_worker", once=True)
+
+        job = SolveJob.objects.get(id=job_id)
+        self.assertEqual(job.status, SolveJob.STATUS_ERROR)
+        self.assertEqual(job.error, "Kun opptaksansvarlige kan kjøre intervjusolveren.")
+        self.assertIsNone(job.result)
 
     def test_other_admission_admin_cannot_read_or_cancel_job(self):
         job_id = self._enqueue().data["job_id"]
@@ -2670,7 +2720,9 @@ class CanonicalSolverInputTestCase(APITestCase):
         self.admin = LegoUser.objects.create(
             username="canonical-admin", lego_id=961, gender="female"
         )
-        Membership.objects.create(user=self.admin, group=self.admin_group, role=MEMBER)
+        Membership.objects.create(
+            user=self.admin, group=self.admin_group, role=RECRUITING
+        )
         self.admission = create_admission(
             created_by=self.admin, slug="canonical-opptak"
         )
@@ -2849,9 +2901,7 @@ class CanonicalSolverInputTestCase(APITestCase):
 
         job.refresh_from_db()
         self.assertEqual(job.status, SolveJob.STATUS_DONE)
-        self.assertEqual(
-            job.result["schedule"][0]["candidate"], self.candidate.username
-        )
+        self.assertEqual(job.result["schedule"][0]["candidate"], "Kandidat 1")
         self.assertEqual(
             job.result["schedule"][0]["panel"][0]["name"], self.admin.username
         )

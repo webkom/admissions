@@ -7,7 +7,7 @@ from rest_framework import status
 from rest_framework.test import APITestCase
 
 import admissions.admissions.solve_schedule as solve_schedule_module
-from admissions.admissions.constants import MEMBER
+from admissions.admissions.constants import RECRUITING
 from admissions.admissions.models import Group, LegoUser, Membership, SolveJob
 from admissions.admissions.solve_schedule import solve_schedule
 from admissions.admissions.tests.utils import create_admission
@@ -19,7 +19,7 @@ class SolverQualityTestCase(APITestCase):
     def setUp(self):
         self.group = Group.objects.create(name="Kvalitetskom", lego_id=996)
         self.user = LegoUser.objects.create(username="quality-user", lego_id=995)
-        Membership.objects.create(user=self.user, role=MEMBER, group=self.group)
+        Membership.objects.create(user=self.user, role=RECRUITING, group=self.group)
         self.admission = create_admission(created_by=self.user, slug="quality-opptak")
         self.admission.admin_groups.add(self.group)
         self.client.force_authenticate(user=self.user)

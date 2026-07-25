@@ -4,17 +4,20 @@ from django.shortcuts import get_object_or_404
 from admissions.admissions import constants
 from admissions.admissions.models import (
     Admission,
+    ConflictReviewAuditEvent,
     Membership,
     NameVisibilityAuditEvent,
     SavedSchedule,
     UserApplication,
 )
 
+_REPRESENTATIVE_ROLES = (constants.LEADER, constants.RECRUITING)
+
 
 def user_is_admission_admin(admission, user):
     return (
         Membership.objects.filter(user=user.pk, group__in=admission.admin_groups.all())
-        .exclude(role__in=constants.INACTIVE_MEMBERSHIP_ROLES)
+        .filter(role__in=_REPRESENTATIVE_ROLES)
         .exists()
     )
 
@@ -37,7 +40,7 @@ def get_representing_groups(admission, user):
     representing = Membership.objects.filter(
         user=user.pk,
         group__in=admission.groups.all(),
-        role__in=(constants.LEADER, constants.RECRUITING),
+        role__in=_REPRESENTATIVE_ROLES,
     )
     return admission.groups.filter(pk__in=representing.values_list("group", flat=True))
 
@@ -76,6 +79,34 @@ def get_user_candidate_visible_groups(admission, saved_schedule, user):
     return admission.groups.filter(
         Q(pk__in=represented_groups) | Q(pk__in=revealed_groups)
     ).distinct()
+
+
+def candidate_identity_is_revealed(saved_schedule):
+    """Whether the legacy review workflow has crossed the identity boundary."""
+
+    return bool(
+        saved_schedule is not None
+        and (
+            saved_schedule.is_distributed
+            or saved_schedule.conflict_review_open
+            or ConflictReviewAuditEvent.objects.filter(
+                admission=saved_schedule.admission,
+                action=ConflictReviewAuditEvent.ACTION_OPENED,
+            ).exists()
+        )
+    )
+
+
+def get_candidate_pseudonyms(admission):
+    candidate_ids = (
+        UserApplication.objects.filter(admission=admission)
+        .order_by("created_at", "pk")
+        .values_list("pk", flat=True)
+    )
+    return {
+        str(candidate_id): f"Kandidat {index}"
+        for index, candidate_id in enumerate(candidate_ids, start=1)
+    }
 
 
 def set_group_name_visibility(saved_schedule, groups, visible, actor):
@@ -191,7 +222,11 @@ def schedule_response_context(
 ):
     hide_schedule = not saved_schedule.is_distributed and not is_interview_admin
     hide_identity = False
+    pseudonymize_identity = is_admin and not candidate_identity_is_revealed(
+        saved_schedule
+    )
     visible_candidate_ids = None
+    contact_candidate_ids = None if is_admin and not pseudonymize_identity else set()
     effective_name_visibility = saved_schedule.name_visibility
     revealed_group_summaries = None
 
@@ -209,6 +244,15 @@ def schedule_response_context(
             admission, saved_schedule, user
         )
         if is_recruiter:
+            contact_candidate_ids = set(
+                str(candidate_id)
+                for candidate_id in UserApplication.objects.filter(
+                    admission=admission,
+                    group_applications__group__in=represented_groups,
+                )
+                .values_list("pk", flat=True)
+                .distinct()
+            )
             revealed_groups = get_name_revealed_groups(
                 admission, saved_schedule
             ).filter(pk__in=represented_groups)
@@ -238,11 +282,14 @@ def schedule_response_context(
 
     return {
         "hide_candidate_identity": hide_identity,
+        "candidate_pseudonyms": (
+            get_candidate_pseudonyms(admission) if pseudonymize_identity else {}
+        ),
         "hide_schedule": hide_schedule,
         "visible_candidate_ids": visible_candidate_ids,
+        "contact_candidate_ids": contact_candidate_ids,
         "effective_name_visibility": effective_name_visibility,
         "revealed_group_summaries": revealed_group_summaries,
-        "include_candidate_contact": is_admin or is_recruiter,
     }
 
 

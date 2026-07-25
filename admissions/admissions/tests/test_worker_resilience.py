@@ -8,7 +8,7 @@ from django.test import SimpleTestCase, TestCase
 from django.utils import timezone
 
 from admissions.admissions import constants
-from admissions.admissions.models import LegoUser, SolveJob
+from admissions.admissions.models import Group, LegoUser, Membership, SolveJob
 from admissions.admissions.tests.utils import create_admission
 from admissions.utils.management.commands import run_solver_worker
 from admissions.utils.management.commands.run_solver_worker import Command
@@ -133,9 +133,16 @@ class WriteBackResilienceTestCase(TestCase):
 
     def setUp(self):
         self.user = LegoUser.objects.create(username="resilience-admin", lego_id=970)
+        self.admin_group = Group.objects.create(name="Resilience admins", lego_id=971)
+        Membership.objects.create(
+            user=self.user,
+            group=self.admin_group,
+            role=constants.RECRUITING,
+        )
         self.admission = create_admission(
             created_by=self.user, slug="resilience-opptak"
         )
+        self.admission.admin_groups.add(self.admin_group)
 
     def _create_job(self, **overrides):
         defaults = {

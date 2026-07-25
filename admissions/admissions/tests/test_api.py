@@ -17,7 +17,11 @@ from admissions.admissions.models import (
     SolveJob,
     UserApplication,
 )
-from admissions.admissions.tests.utils import create_admission, fake_timedelta
+from admissions.admissions.tests.utils import (
+    ScheduleRevisionAPIClient,
+    create_admission,
+    fake_timedelta,
+)
 
 
 class EditGroupTestCase(APITestCase):
@@ -136,12 +140,17 @@ class EditAdmissionTestCase(APITestCase):
             username="bigsupremeleader", lego_id=1, is_staff=True
         )
         self.admission = create_admission(created_by=self.staff_user)
+        self.admin_group = Group.objects.create(name="Admission admins", lego_id=15)
+        self.committee = Group.objects.create(name="Committee", lego_id=16)
+        self.admission.admin_groups.add(self.admin_group)
+        self.admission.groups.add(self.committee)
         self.edit_admission_data = {
             "title": "Plebkom opptak 2020",
             "open_from": fake_timedelta(days=10),
-            "header_fields": [],
-            "admin_groups": [],
-            "groups": [],
+            "public_deadline": fake_timedelta(days=11),
+            "closed_from": fake_timedelta(days=12),
+            "admin_groups": [str(self.admin_group.pk)],
+            "groups": [str(self.committee.pk)],
         }
 
     def test_pleb_cannot_edit_admission(self):
@@ -261,7 +270,7 @@ class SolveScheduleViewTestCase(APITestCase):
     def setUp(self):
         self.group = Group.objects.create(name="Solverkom", lego_id=998)
         self.user = LegoUser.objects.create(username="solver-user", lego_id=999)
-        Membership.objects.create(user=self.user, role=MEMBER, group=self.group)
+        Membership.objects.create(user=self.user, role=RECRUITING, group=self.group)
         self.admission = create_admission(created_by=self.user, slug="solve-opptak")
         self.admission.admin_groups.add(self.group)
         self.client.force_authenticate(user=self.user)
@@ -647,13 +656,15 @@ class SolveScheduleViewTestCase(APITestCase):
 
 
 class SavedScheduleViewTestCase(APITestCase):
+    client_class = ScheduleRevisionAPIClient
+
     def setUp(self):
         self.admin_group = Group.objects.create(name="Webkom", lego_id=300)
         self.admin_user = LegoUser.objects.create(
             username="schedule-admin", lego_id=301
         )
         Membership.objects.create(
-            user=self.admin_user, role=MEMBER, group=self.admin_group
+            user=self.admin_user, role=RECRUITING, group=self.admin_group
         )
         self.admission = create_admission(
             created_by=self.admin_user, slug="schedule-opptak"
@@ -884,14 +895,6 @@ class InterviewAvailabilityViewTestCase(APITestCase):
         self.client.force_authenticate(user=self.user)
 
     def test_can_save_conflicts_without_overwriting_slots(self):
-        SavedSchedule.objects.create(
-            admission=self.admission,
-            schedule=[],
-            start_date="2026-04-21",
-            session_duration=60,
-            is_distributed=True,
-            name_visibility="committee",
-        )
         applicant = LegoUser.objects.create(username="eirik-applicant", lego_id=403)
         application = UserApplication.objects.create(
             user=applicant, admission=self.admission
@@ -900,6 +903,27 @@ class InterviewAvailabilityViewTestCase(APITestCase):
             application=application,
             group=self.group,
             text="Komite application",
+        )
+        SavedSchedule.objects.create(
+            admission=self.admission,
+            schedule=[
+                {
+                    "candidate_id": str(application.pk),
+                    "candidate": "Eirik Applicant",
+                    "time": 540,
+                    "panel": [
+                        {
+                            "id": str(self.user.pk),
+                            "name": "Committee Member",
+                        }
+                    ],
+                }
+            ],
+            start_date="2026-04-21",
+            session_duration=60,
+            is_distributed=False,
+            conflict_review_open=True,
+            name_visibility="committee",
         )
         InterviewAvailability.objects.create(
             admission=self.admission,
@@ -1041,6 +1065,14 @@ class InterviewCandidatesViewTestCase(APITestCase):
             group=recruiter_group,
             text="Bedkom application",
         )
+        SavedSchedule.objects.create(
+            admission=self.admission,
+            schedule=[],
+            start_date="2026-04-21",
+            session_duration=60,
+            is_distributed=True,
+            name_visibility="committee",
+        )
         self.client.force_authenticate(user=recruiter_user)
 
         res = self.client.get(self.url)
@@ -1065,6 +1097,14 @@ class InterviewCandidatesViewTestCase(APITestCase):
             application=self.application,
             group=other_group,
             text="Bedkom application",
+        )
+        SavedSchedule.objects.create(
+            admission=self.admission,
+            schedule=[],
+            start_date="2026-04-21",
+            session_duration=60,
+            is_distributed=True,
+            name_visibility="committee",
         )
         self.client.force_authenticate(user=recruiter)
 

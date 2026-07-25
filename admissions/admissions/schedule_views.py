@@ -10,7 +10,6 @@ from admissions.admissions.admission_access import (
     schedule_response_context,
     user_is_admission_admin,
     user_is_committee_member,
-    user_is_interview_admin,
 )
 from admissions.admissions.authentication import SessionAuthentication
 from admissions.admissions.models import Admission, LegoUser, SavedSchedule
@@ -47,7 +46,7 @@ class SavedScheduleView(APIView):
         representing_groups = get_representing_groups(admission, user)
         is_recruiter = representing_groups.exists()
 
-        is_interview_admin = user_is_interview_admin(admission, user)
+        is_interview_admin = is_admin
 
         if require_admin and not is_interview_admin:
             return (
@@ -128,7 +127,7 @@ class SavedScheduleView(APIView):
                 admission=admission,
                 user=request.user,
                 data=serializer.validated_data,
-                is_admin=is_interview_admin,
+                is_admin=is_admin,
                 is_admission_admin=is_admin,
                 is_recruiter=is_recruiter,
             )
