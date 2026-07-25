@@ -19,6 +19,7 @@ from admissions.admissions.models import (
     Group,
     GroupApplication,
     InterviewAvailability,
+    InterviewStatusAuditEvent,
     LegoUser,
     Membership,
     NameVisibilityAuditEvent,
@@ -181,6 +182,122 @@ class ConcurrentScheduleAuthorityRevocationTestCase(TransactionTestCase):
         self.assertEqual(response_status, status.HTTP_403_FORBIDDEN)
         self.assertFalse(
             SavedSchedule.objects.filter(admission=self.admission).exists()
+        )
+
+
+class ConcurrentInterviewStatusAuthorityRevocationTestCase(TransactionTestCase):
+    def setUp(self):
+        self.admission = create_admission(slug="concurrent-interview-status")
+        self.committee = Group.objects.create(
+            name="Concurrent status committee",
+            lego_id=1121,
+        )
+        self.admission.groups.add(self.committee)
+        self.recruiter = LegoUser.objects.create(
+            username="concurrent-status-recruiter",
+            lego_id=1122,
+        )
+        Membership.objects.create(
+            user=self.recruiter,
+            role=RECRUITING,
+            group=self.committee,
+        )
+        candidate = LegoUser.objects.create(
+            username="concurrent-status-candidate",
+            lego_id=1123,
+        )
+        self.application = UserApplication.objects.create(
+            admission=self.admission,
+            user=candidate,
+            phone_number="12345678",
+        )
+        GroupApplication.objects.create(
+            application=self.application,
+            group=self.committee,
+        )
+        self.url = reverse(
+            "admin-userapplication-interview-status",
+            kwargs={
+                "admission_slug": self.admission.slug,
+                "pk": self.application.pk,
+            },
+        )
+
+    def test_demotion_while_request_waits_for_lock_blocks_status_write(self):
+        admission_lock_held = Event()
+        release_admission_lock = Event()
+        pre_lock_authority_checked = Event()
+
+        def hold_admission_lock():
+            close_old_connections()
+            with transaction.atomic():
+                self.admission.__class__.objects.select_for_update().get(
+                    pk=self.admission.pk
+                )
+                admission_lock_held.set()
+                self.assertTrue(release_admission_lock.wait(timeout=5))
+            close_old_connections()
+
+        def update_status():
+            close_old_connections()
+            client = APIClient()
+            recruiter = LegoUser.objects.get(pk=self.recruiter.pk)
+            client.force_authenticate(user=recruiter)
+            response = client.patch(
+                self.url,
+                {
+                    "interview_status": "confirmed",
+                    "expected_interview_status_updated_at": (
+                        self.application.interview_status_updated_at.isoformat()
+                    ),
+                },
+                format="json",
+            )
+            close_old_connections()
+            return response.status_code
+
+        from admissions.admissions import views
+
+        initial_get_object = views.AdminApplicationViewSet.get_object
+
+        def record_initial_scope_check(view):
+            application = initial_get_object(view)
+            pre_lock_authority_checked.set()
+            return application
+
+        with (
+            mock.patch.object(
+                views.AdminApplicationViewSet,
+                "get_object",
+                autospec=True,
+                side_effect=record_initial_scope_check,
+            ),
+            ThreadPoolExecutor(max_workers=2) as executor,
+        ):
+            lock_future = executor.submit(hold_admission_lock)
+            self.assertTrue(admission_lock_held.wait(timeout=5))
+            update_future = executor.submit(update_status)
+            self.assertTrue(pre_lock_authority_checked.wait(timeout=5))
+
+            Membership.objects.filter(
+                user=self.recruiter,
+                group=self.committee,
+            ).delete()
+            release_admission_lock.set()
+
+            lock_future.result(timeout=5)
+            response_status = update_future.result(timeout=5)
+
+        self.assertEqual(response_status, status.HTTP_403_FORBIDDEN)
+        self.application.refresh_from_db()
+        self.assertEqual(
+            self.application.interview_status,
+            UserApplication.INTERVIEW_STATUS_NOT_INVITED,
+        )
+        self.assertFalse(
+            InterviewStatusAuditEvent.objects.filter(
+                application=self.application
+            ).exists()
         )
 
 
