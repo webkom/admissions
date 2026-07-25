@@ -8,7 +8,9 @@ from django.utils import timezone
 from admissions.admissions import constants
 from admissions.admissions.admission_access import (
     get_representing_groups,
+    lock_user_admission_memberships,
     set_group_name_visibility,
+    user_is_admission_admin,
 )
 from admissions.admissions.models import (
     Admission,
@@ -1200,11 +1202,14 @@ def update_saved_schedule(
     admission,
     user,
     data,
-    is_admin,
-    is_recruiter,
-    is_admission_admin=False,
 ):
     admission = Admission.objects.select_for_update().get(pk=admission.pk)
+    lock_user_admission_memberships(admission, user)
+    # Authority is intentionally recomputed after the admission lock. A
+    # membership can be revoked while a request waits for this lock, and a
+    # pre-lock boolean must never authorize a canonical write.
+    is_admission_admin = user_is_admission_admin(admission, user)
+    is_recruiter = get_representing_groups(admission, user).exists()
     existing = SavedSchedule.objects.filter(admission=admission).first()
 
     mutable_fields = set(data) - {"expected_updated_at"}
@@ -1221,7 +1226,7 @@ def update_saved_schedule(
     if not is_admission_admin and "name_visibility" in mutable_fields:
         raise SchedulePermissionDenied
 
-    if not is_admin:
+    if not is_admission_admin:
         raise SchedulePermissionDenied
 
     _ensure_revision_matches(data, existing)

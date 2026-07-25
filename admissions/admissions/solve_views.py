@@ -14,6 +14,7 @@ from rest_framework.views import APIView
 from admissions.admissions import constants
 from admissions.admissions.admission_access import (
     get_representing_groups,
+    lock_user_admission_memberships,
     schedule_response_context,
     user_is_admission_admin,
 )
@@ -79,6 +80,9 @@ class SolveScheduleView(SchedulerFeatureGateMixin, APIView):
             data.get("preview_only") or (data.get("options") or {}).get("repair_mode")
         )
         admission = Admission.objects.select_for_update().get(pk=admission.pk)
+        lock_user_admission_memberships(admission, user)
+        if not user_is_admission_admin(admission, user):
+            return Response(status=status.HTTP_403_FORBIDDEN)
 
         synthetic_input = getattr(settings, "ALLOW_SYNTHETIC_SOLVER_INPUT", False) and (
             data.get("synthetic")
@@ -196,9 +200,13 @@ class SolveJobStatusView(SchedulerFeatureGateMixin, APIView):
 
     @transaction.atomic
     def delete(self, request, job_id):
-        job_stub, err = self._get_authorized_job(request, job_id)
-        if err:
-            return err
+        job_stub = get_object_or_404(SolveJob, id=job_id)
+        admission = Admission.objects.select_for_update().get(pk=job_stub.admission_id)
+        user = request.user
+        user.__class__ = LegoUser
+        lock_user_admission_memberships(admission, user)
+        if not user_is_admission_admin(admission, user):
+            return Response(status=status.HTTP_403_FORBIDDEN)
         job = SolveJob.objects.select_for_update().get(pk=job_stub.pk)
         if job.status in SolveJob.ACTIVE_STATUSES:
             job = cancel_solve_job(job)
@@ -264,6 +272,7 @@ class SolveJobApplyView(SchedulerFeatureGateMixin, APIView):
         admission = Admission.objects.select_for_update().get(pk=job_stub.admission_id)
         user = request.user
         user.__class__ = LegoUser
+        lock_user_admission_memberships(admission, user)
         if not user_is_admission_admin(admission, user):
             return Response(status=status.HTTP_403_FORBIDDEN)
 
@@ -406,9 +415,6 @@ class SolveJobApplyView(SchedulerFeatureGateMixin, APIView):
                     "solver_options": request_data.get("options") or {},
                     "is_distributed": False,
                 },
-                is_admin=True,
-                is_admission_admin=is_admission_admin,
-                is_recruiter=is_recruiter,
             )
         except ScheduleRevisionConflict:
             return Response(

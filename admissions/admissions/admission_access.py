@@ -26,6 +26,23 @@ def user_is_admission_admin(admission, user):
     )
 
 
+def lock_user_admission_memberships(admission, user):
+    """Lock the actor's admission-relevant authority rows for a write.
+
+    Callers must lock the Admission first. OAuth refreshes delete Membership
+    rows in a transaction, so holding these rows prevents a qualifying role
+    from disappearing between the post-lock authority check and commit.
+    """
+
+    group_ids = set(admission.groups.values_list("pk", flat=True))
+    group_ids.update(admission.admin_groups.values_list("pk", flat=True))
+    return list(
+        Membership.objects.select_for_update()
+        .filter(user=user.pk, group_id__in=group_ids)
+        .order_by("pk")
+    )
+
+
 def user_is_interview_admin(admission, user):
     """Whether the user may operate the admission interview workflow.
 

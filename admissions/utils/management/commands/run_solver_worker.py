@@ -17,10 +17,7 @@ from django.utils.dateparse import parse_datetime
 from structlog import get_logger
 
 from admissions.admissions import constants
-from admissions.admissions.admission_access import (
-    get_representing_groups,
-    user_is_admission_admin,
-)
+from admissions.admissions.admission_access import user_is_admission_admin
 from admissions.admissions.models import Admission, LegoUser, SavedSchedule, SolveJob
 from admissions.admissions.schedule_policy import (
     build_deviation_review,
@@ -363,9 +360,6 @@ class Command(BaseCommand):
                         "solver_options": request_data.get("options") or {},
                         "is_distributed": False,
                     },
-                    is_admin=True,
-                    is_admission_admin=user_is_admission_admin(admission, user),
-                    is_recruiter=get_representing_groups(admission, user).exists(),
                 )
                 job.applied_at = timezone.now()
                 job.applied_schedule_updated_at = result.saved_schedule.updated_at

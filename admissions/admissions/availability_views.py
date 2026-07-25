@@ -9,6 +9,7 @@ from admissions.admissions import constants
 from admissions.admissions.admission_access import (
     get_representing_groups,
     get_user_candidate_visible_groups,
+    lock_user_admission_memberships,
     user_is_admission_admin,
     user_is_committee_member,
 )
@@ -448,9 +449,16 @@ class InterviewAvailabilityView(SchedulerFeatureGateMixin, APIView):
         serializer = SaveInterviewAvailabilitySerializer(data=request.data)
         if not serializer.is_valid():
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        admission = Admission.objects.select_for_update().get(pk=admission.pk)
+        lock_user_admission_memberships(admission, user)
+        # Re-evaluate membership after acquiring the admission lock so a
+        # demotion that happened while waiting cannot authorize this write.
+        is_admin = user_is_admission_admin(admission, user)
+        is_interview_admin = is_admin
+        if not user_is_committee_member(admission, user) and not is_admin:
+            return Response(status=status.HTTP_403_FORBIDDEN)
         if "experience_level" in serializer.validated_data and not is_interview_admin:
             return Response(status=status.HTTP_403_FORBIDDEN)
-        admission = Admission.objects.select_for_update().get(pk=admission.pk)
 
         target_user = user
         target_user_id = serializer.validated_data.get("user_id")

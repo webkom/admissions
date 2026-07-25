@@ -1,10 +1,12 @@
 import uuid
+from concurrent.futures import ThreadPoolExecutor
 from datetime import timedelta
+from threading import Event
 from unittest import mock
 
 from django.core.management import call_command
-from django.db import IntegrityError, transaction
-from django.test import TestCase, override_settings
+from django.db import IntegrityError, close_old_connections, transaction
+from django.test import TestCase, TransactionTestCase, override_settings
 from django.urls import reverse
 from django.utils import timezone
 from rest_framework import status
@@ -87,6 +89,99 @@ class SchedulerFeatureGateTestCase(APITestCase):
                     "Intervjuplanleggeren er ikke tilgjengelig ennå. "
                     "Prøv igjen senere.",
                 )
+
+
+class ConcurrentScheduleAuthorityRevocationTestCase(TransactionTestCase):
+    def setUp(self):
+        self.admin_group = Group.objects.create(
+            name="Concurrent authority admins",
+            lego_id=599,
+        )
+        self.admin_user = LegoUser.objects.create(
+            username="concurrent-authority-admin",
+            lego_id=598,
+        )
+        Membership.objects.create(
+            user=self.admin_user,
+            role=RECRUITING,
+            group=self.admin_group,
+        )
+        self.admission = create_admission(
+            created_by=self.admin_user,
+            slug="concurrent-authority-revocation",
+        )
+        self.admission.admin_groups.add(self.admin_group)
+        self.url = reverse(
+            "saved-schedule",
+            kwargs={"admission_slug": self.admission.slug},
+        )
+
+    def test_demotion_while_request_waits_for_lock_blocks_schedule_write(self):
+        admission_lock_held = Event()
+        release_admission_lock = Event()
+        pre_lock_authority_checked = Event()
+
+        def hold_admission_lock():
+            close_old_connections()
+            with transaction.atomic():
+                self.admission.__class__.objects.select_for_update().get(
+                    pk=self.admission.pk
+                )
+                admission_lock_held.set()
+                self.assertTrue(release_admission_lock.wait(timeout=5))
+            close_old_connections()
+
+        def save_schedule():
+            close_old_connections()
+            client = APIClient()
+            user = LegoUser.objects.get(pk=self.admin_user.pk)
+            client.force_authenticate(user=user)
+            response = client.post(
+                self.url,
+                {
+                    "expected_updated_at": None,
+                    "start_date": "2026-04-21",
+                    "session_duration": 60,
+                },
+                format="json",
+            )
+            close_old_connections()
+            return response.status_code
+
+        from admissions.admissions import schedule_views
+
+        initial_authority_check = schedule_views.user_is_admission_admin
+
+        def record_initial_authority_check(*args, **kwargs):
+            authorized = initial_authority_check(*args, **kwargs)
+            pre_lock_authority_checked.set()
+            return authorized
+
+        with (
+            mock.patch(
+                "admissions.admissions.schedule_views.user_is_admission_admin",
+                side_effect=record_initial_authority_check,
+            ),
+            ThreadPoolExecutor(max_workers=2) as executor,
+        ):
+            lock_future = executor.submit(hold_admission_lock)
+            self.assertTrue(admission_lock_held.wait(timeout=5))
+            save_future = executor.submit(save_schedule)
+            self.assertTrue(pre_lock_authority_checked.wait(timeout=5))
+
+            Membership.objects.filter(
+                user=self.admin_user,
+                group=self.admin_group,
+            ).delete()
+            release_admission_lock.set()
+
+            lock_future.result(timeout=5)
+            response_status = save_future.result(timeout=5)
+
+        self.assertEqual(response_status, status.HTTP_403_FORBIDDEN)
+        self.assertFalse(
+            SavedSchedule.objects.filter(admission=self.admission).exists()
+        )
 
 
 class SavedSchedulePublishSemanticsTestCase(APITestCase):
@@ -1101,6 +1196,25 @@ class SavedSchedulePublishSemanticsTestCase(APITestCase):
             60,
         )
 
+    @mock.patch(
+        "admissions.admissions.schedule_workflow.user_is_admission_admin",
+        return_value=False,
+    )
+    def test_schedule_write_rechecks_admin_authority_after_lock(self, _is_admin):
+        response = self.client.post(
+            self.url,
+            {
+                "start_date": "2026-04-21",
+                "session_duration": 60,
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertFalse(
+            SavedSchedule.objects.filter(admission=self.admission).exists()
+        )
+
     def test_non_null_revision_cannot_create_schedule(self):
         res = self.client.post(
             self.url,
@@ -1750,6 +1864,30 @@ class InterviewAvailabilityHardeningTestCase(APITestCase):
                 user=self.member,
             ).experience_level,
             InterviewAvailability.EXPERIENCE_EXPERIENCED,
+        )
+
+    def test_availability_write_rechecks_admin_authority_after_lock(self):
+        self.client.force_authenticate(user=self.admin_user)
+
+        with mock.patch(
+            "admissions.admissions.availability_views.user_is_admission_admin",
+            side_effect=[True, False],
+        ):
+            response = self.client.post(
+                self.url,
+                {
+                    "user_id": str(self.member.pk),
+                    "experience_level": (InterviewAvailability.EXPERIENCE_EXPERIENCED),
+                },
+                format="json",
+            )
+
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertFalse(
+            InterviewAvailability.objects.filter(
+                admission=self.admission,
+                user=self.member,
+            ).exists()
         )
 
     def test_recruiter_cannot_see_peer_conflict_relationships(self):

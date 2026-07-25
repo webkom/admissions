@@ -128,9 +128,6 @@ class SavedScheduleView(SchedulerFeatureGateMixin, APIView):
                 admission=admission,
                 user=request.user,
                 data=serializer.validated_data,
-                is_admin=is_admin,
-                is_admission_admin=is_admin,
-                is_recruiter=is_recruiter,
             )
         except SchedulePermissionDenied:
             return Response(status=status.HTTP_403_FORBIDDEN)
