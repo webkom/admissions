@@ -94,7 +94,7 @@ export interface MutationAdmission {
   title: string;
   slug?: string;
   description: string;
-  header_fields: FieldModel[];
+  group_questions?: Record<string, FieldModel[]>;
   open_from: string;
   public_deadline: string;
   closed_from: string;
