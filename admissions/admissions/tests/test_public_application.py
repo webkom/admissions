@@ -14,6 +14,7 @@ class CreateApplicationTestCase(APITestCase):
         self.admission = create_admission()
         self.webkom = Group.objects.create(name="Webkom", lego_id=13)
         self.koskom = Group.objects.create(name="Koskom", lego_id=9)
+        self.admission.groups.add(self.webkom, self.koskom)
 
         # Setup Anna
         self.pleb_anna = LegoUser.objects.create(username="Anna", lego_id=2)
