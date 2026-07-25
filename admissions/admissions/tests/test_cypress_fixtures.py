@@ -14,6 +14,7 @@ from admissions.admissions.models import (
     Admission,
     InterviewAvailability,
     LegoUser,
+    Membership,
     SavedSchedule,
     UserApplication,
 )
@@ -118,6 +119,18 @@ class CypressFixturePreparationTestCase(TestCase):
             ]
             admin = LegoUser.objects.get(pk=Command.cypress_admin_id)
             admission = Admission.objects.get(pk=Command.cypress_admission_id)
+            stale_user = LegoUser.objects.create(
+                username="stale-cypress-member",
+                lego_id=987654,
+            )
+            Membership.objects.create(
+                user=stale_user,
+                group=admission.groups.get(),
+                role="member",
+            )
+            stale_session = Client().session
+            stale_session["fixture"] = "stale"
+            stale_session.save()
             UserApplication.objects.create(
                 admission=admission,
                 user=admin,
@@ -139,6 +152,8 @@ class CypressFixturePreparationTestCase(TestCase):
                     user=admin,
                 ).exists()
             )
+            self.assertFalse(Membership.objects.filter(user=stale_user).exists())
+            self.assertEqual(Session.objects.count(), 0)
             self.assertEqual(
                 SavedSchedule.objects.filter(admission=admission).count(),
                 1,

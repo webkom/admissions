@@ -5,6 +5,7 @@ from datetime import timedelta
 from pathlib import Path
 
 from django.conf import settings
+from django.contrib.sessions.models import Session
 from django.core import serializers
 from django.core.management import call_command
 from django.core.management.base import BaseCommand, CommandError
@@ -150,6 +151,15 @@ class Command(BaseCommand):
             raise CommandError(
                 "The Cypress fixture user is not an administrator for webkom-open."
             )
+
+        # The static fixture loader updates known rows but does not remove
+        # unrelated memberships left in the same committee by an earlier local
+        # run. Those rows change the scheduler participant count and make the
+        # Cypress baseline nondeterministic.
+        Membership.objects.filter(group__in=admission.groups.all()).exclude(
+            user_id__in=self.seeded_user_ids
+        ).delete()
+        Session.objects.all().delete()
 
         # A failed or interrupted public-application spec can leave the fixture
         # administrator with an application whose generated primary key is not
