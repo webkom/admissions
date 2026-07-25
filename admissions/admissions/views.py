@@ -26,6 +26,7 @@ from admissions.admissions.admission_access import (
 from admissions.admissions.interview_workflow import (
     InterviewStatusConflict,
     InterviewStatusNotFound,
+    InterviewStatusPermissionDenied,
     update_interview_status,
 )
 from admissions.admissions.models import (
@@ -324,6 +325,8 @@ class AdminApplicationViewSet(
                 {"detail": "Statusen ble endret av noen andre. Last inn på nytt."},
                 status=status.HTTP_409_CONFLICT,
             )
+        except InterviewStatusPermissionDenied:
+            return Response(status=status.HTTP_403_FORBIDDEN)
         except InterviewStatusNotFound:
             raise NotFound() from None
         return Response(InterviewStatusSerializer(updated).data)
