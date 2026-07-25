@@ -19,27 +19,33 @@ import { TableWrapper } from "src/routes/AdmissionAdmin/components/StyledElement
 import { ArrowDown, ArrowUp } from "lucide-react";
 import { breakpoints, iconSizes } from "src/styles/designTokens";
 import InterviewTriageList from "src/routes/AdmissionAdmin/components/InterviewTriageList";
+import {
+  ApplicationWithDetails,
+  hasApplicationDetails,
+  isFullAdminApplication,
+} from "src/utils/applicationAccess";
 
 interface AdmissionsContainerProps {
   admission: Admission;
   applications: AdminApplication[];
   showGroupColumn: boolean;
+  applicationScopeKey: string;
 }
 
 export interface ApplicationTableRow {
   id: string;
-  application: AdminApplication;
+  application?: ApplicationWithDetails;
   admissionSlug: string;
-  username: string;
+  applicationScopeKey: string;
+  username?: string;
   fullname: string;
-  createdAt: string;
-  updatedAt: string;
-  appliedWithinDeadline: boolean;
+  createdAt?: string;
+  appliedWithinDeadline?: boolean;
   phoneNumber: string;
   groupNames: string[];
   interviewStatus: InterviewStatus;
   interviewStatusUpdatedAt: string;
-  interviewStatusUpdatedBy: string;
+  interviewStatusUpdatedBy?: string;
   canUpdateInterviewStatus: boolean;
 }
 
@@ -47,43 +53,53 @@ const AdmissionsContainer: React.FC<AdmissionsContainerProps> = ({
   admission,
   applications,
   showGroupColumn,
+  applicationScopeKey,
 }) => {
   const [expanded, setExpanded] = useState<ExpandedState>({});
   const [sorting, setSorting] = useState<SortingState>([]);
   const data = useMemo<ApplicationTableRow[]>(
     () =>
-      applications.map((application) => ({
-        id: application.pk,
-        application,
-        admissionSlug: admission.slug,
-        username: application.user.username,
-        fullname: application.user.full_name,
-        phoneNumber: application.phone_number,
-        appliedWithinDeadline: application.applied_within_deadline,
-        interviewStatus: application.interview_status,
-        interviewStatusUpdatedAt: application.interview_status_updated_at,
-        interviewStatusUpdatedBy: application.interview_status_updated_by,
-        canUpdateInterviewStatus:
-          admission.userdata.is_admin || admission.userdata.is_recruiter,
-        createdAt: application.created_at,
-        updatedAt: application.updated_at,
-        groupNames: application.group_applications.map(
-          (groupApplication) => groupApplication.group.name,
-        ),
-      })),
+      applications.map((application) => {
+        const fullApplication = isFullAdminApplication(application)
+          ? application
+          : undefined;
+        const applicationWithDetails = hasApplicationDetails(application)
+          ? application
+          : undefined;
+        return {
+          id: application.pk,
+          application: applicationWithDetails,
+          admissionSlug: admission.slug,
+          applicationScopeKey,
+          username: fullApplication?.user.username,
+          fullname: application.user.full_name,
+          phoneNumber: application.phone_number,
+          appliedWithinDeadline:
+            applicationWithDetails?.applied_within_deadline,
+          interviewStatus: application.interview_status,
+          interviewStatusUpdatedAt: application.interview_status_updated_at,
+          interviewStatusUpdatedBy:
+            fullApplication?.interview_status_updated_by,
+          canUpdateInterviewStatus:
+            admission.userdata.is_admin || admission.userdata.is_recruiter,
+          createdAt: applicationWithDetails?.created_at,
+          groupNames: application.group_applications.map(
+            (groupApplication) => groupApplication.group.name,
+          ),
+        };
+      }),
     [
       admission.slug,
       admission.userdata.is_admin,
       admission.userdata.is_recruiter,
+      applicationScopeKey,
       applications,
     ],
   );
 
   const visibleColumns = useMemo(
     () =>
-      showGroupColumn
-        ? columns
-        : columns.filter((column) => column.id !== "groupNames"),
+      columns.filter((column) => showGroupColumn || column.id !== "groupNames"),
     [showGroupColumn],
   );
 
@@ -103,14 +119,18 @@ const AdmissionsContainer: React.FC<AdmissionsContainerProps> = ({
   });
 
   const subComponent = React.useCallback(
-    ({ row }: { row: Row<ApplicationTableRow> }) => (
-      <SubComponentWrapper>
-        <ApplicationDetails
-          admission={admission}
-          application={row.original.application}
-        />
-      </SubComponentWrapper>
-    ),
+    ({ row }: { row: Row<ApplicationTableRow> }) =>
+      row.original.application ? (
+        <SubComponentWrapper>
+          <ApplicationDetails
+            admission={admission}
+            application={row.original.application}
+            allowGroupDeletion={isFullAdminApplication(
+              row.original.application,
+            )}
+          />
+        </SubComponentWrapper>
+      ) : null,
     [admission],
   );
 
@@ -192,7 +212,11 @@ const AdmissionsContainer: React.FC<AdmissionsContainerProps> = ({
           </tbody>
         </StyledTable>
       </DesktopTableWrapper>
-      <InterviewTriageList admission={admission} applications={applications} />
+      <InterviewTriageList
+        admission={admission}
+        applications={applications}
+        applicationScopeKey={applicationScopeKey}
+      />
     </>
   );
 };

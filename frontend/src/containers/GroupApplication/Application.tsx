@@ -19,6 +19,7 @@ type FieldValue = string;
 
 export interface ApplicationProps {
   responseLabel: string;
+  interviewDescription?: string | null;
   group: Group;
   field: FieldInputProps<FieldValue>;
   form: FormikProps<FormValues>;
@@ -28,6 +29,7 @@ export interface ApplicationProps {
 
 const Application: React.FC<ApplicationProps> = ({
   responseLabel,
+  interviewDescription,
   group,
   field: { name, onChange, value },
   form: { touched, errors, handleBlur },
@@ -48,7 +50,13 @@ const Application: React.FC<ApplicationProps> = ({
   return (
     <Container>
       <LogoNameWrapper>
-        <Logo src={group.logo} />
+        {group.logo ? (
+          <Logo src={group.logo} alt="" aria-hidden="true" />
+        ) : (
+          <LogoFallback aria-hidden="true">
+            {getGroupInitials(group.name)}
+          </LogoFallback>
+        )}
         <Name>{readmeIfy(group.name)}</Name>
       </LogoNameWrapper>
       {responseLabel && (
@@ -81,6 +89,12 @@ const Application: React.FC<ApplicationProps> = ({
           fields={questionFields}
           disabled={disabled}
         />
+        {interviewDescription && (
+          <InterviewDescription>
+            <strong>Om intervjuet</strong>
+            <span>{readmeIfy(interviewDescription, true)}</span>
+          </InterviewDescription>
+        )}
       </InputWrapper>
     </Container>
   );
@@ -140,6 +154,31 @@ const Logo = styled.img`
   margin-right: var(--spacing-md);
 `;
 
+const LogoFallback = styled.span`
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  width: var(--application-logo-size);
+  height: var(--application-logo-size);
+  margin-right: var(--spacing-md);
+  border-radius: var(--border-radius-pill);
+  background: var(--color-brand-soft);
+  color: var(--color-brand);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-bold);
+`;
+
+const getGroupInitials = (name: string) => {
+  const initials = name
+    .trim()
+    .split(/\s+/)
+    .map((part) => part[0])
+    .join("")
+    .slice(0, 2);
+  return initials || "?";
+};
+
 const ResponseLabel = styled.div`
   grid-area: responselabel;
   background: linear-gradient(
@@ -163,4 +202,18 @@ const InputWrapper = styled.div`
 
 const InputArea = styled(StyledTextAreaField)`
   min-height: var(--group-editor-min-height);
+`;
+
+const InterviewDescription = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-xs);
+  margin-top: var(--spacing-lg);
+  color: var(--color-text-muted);
+  font-size: var(--font-size-detail);
+  line-height: var(--line-height-copy);
+
+  strong {
+    color: var(--color-text-primary);
+  }
 `;

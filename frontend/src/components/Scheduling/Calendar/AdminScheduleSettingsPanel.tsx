@@ -91,8 +91,8 @@ interface SaveStatus {
   wholeBlockCount?: number;
   shortBlockCount?: number;
   partialBlockCount?: number;
-  closedStandardSlotCount?: number;
-  openedStandardSlotCount?: number;
+  closedInterviewSlotCount?: number;
+  openedInterviewSlotCount?: number;
   openedPauseSlotCount?: number;
   manualChangeCount?: number;
   reshapedSlotCount?: number;
@@ -686,7 +686,7 @@ const AdminScheduleSettingsPanel: React.FC<AdminScheduleSettingsPanelProps> = ({
           <aside
             data-cy="standard-block-preview-region"
             className="min-w-0 border-t border-border-soft pt-6 tablet:border-l tablet:border-t-0 tablet:pl-7 tablet:pt-0"
-            aria-label="Forhåndsvisning av standardblokk"
+            aria-label="Forhåndsvisning av intervjublokk"
           >
             <StandardBlockPreview
               startMinute={startMinute}

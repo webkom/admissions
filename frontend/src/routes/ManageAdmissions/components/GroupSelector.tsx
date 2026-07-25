@@ -1,4 +1,5 @@
 import React from "react";
+import { MultiSelect } from "src/components/ui";
 import { useManageGroups } from "src/query/hooks";
 import { Group } from "src/types";
 import styled from "styled-components";
@@ -6,25 +7,21 @@ import styled from "styled-components";
 interface GroupSelectorProps {
   id: string;
   value: Group["pk"][];
-  toggleGroup: (groupId: string) => void;
+  setGroups: (groupIds: Group["pk"][]) => void;
   addLabel?: string;
   emptyLabel?: string;
   selectedLabel?: string;
-  describedBy?: string;
   invalid?: boolean;
-  admissionField?: "admin_groups" | "groups";
 }
 
 const GroupSelector: React.FC<GroupSelectorProps> = ({
   id,
   value: selectedGroups,
-  toggleGroup,
+  setGroups,
   addLabel = "Legg til gruppe",
   emptyLabel = "Ingen grupper er valgt.",
   selectedLabel = "Valgte grupper",
-  describedBy,
   invalid = false,
-  admissionField,
 }) => {
   const {
     data: groups,
@@ -34,33 +31,45 @@ const GroupSelector: React.FC<GroupSelectorProps> = ({
     refetch,
   } = useManageGroups();
 
-  const toggleSelectedGroup = (groupId: string) => {
-    const group = groups?.find((candidate) => candidate.pk === groupId);
-    if (group) toggleGroup(group.pk);
-  };
+  const availableOptions =
+    groups?.map((groupSuggestion) => ({
+      value: groupSuggestion.pk,
+      label: groupSuggestion.name,
+    })) ?? [];
+  const allGroupsSelected = groups
+    ? groups.length > 0 && selectedGroups.length >= groups.length
+    : false;
+  const selectPlaceholder = isLoading
+    ? "Laster grupper…"
+    : availableOptions.length === 0
+      ? "Ingen grupper å velge"
+      : allGroupsSelected
+        ? "Alle grupper er valgt"
+        : addLabel;
 
   return (
     <Wrapper>
-      <Select
-        id={id}
-        value=""
-        disabled={isLoading || Boolean(error)}
-        aria-describedby={describedBy}
-        aria-invalid={invalid}
-        data-admission-field={admissionField}
-        onChange={(event) => toggleSelectedGroup(event.target.value)}
-      >
-        <option value="" disabled>
-          {isLoading ? "Laster grupper…" : addLabel}
-        </option>
-        {groups
-          ?.filter((group) => !selectedGroups.includes(group.pk))
-          .map((groupSuggestion) => (
-            <option key={groupSuggestion.pk} value={groupSuggestion.pk}>
-              {groupSuggestion.name}
-            </option>
-          ))}
-      </Select>
+      <SelectWrapper>
+        <MultiSelect
+          id={id}
+          values={selectedGroups}
+          onChange={setGroups}
+          options={availableOptions}
+          placeholder={selectPlaceholder}
+          getSelectionLabel={(selected) =>
+            selected.length > 0 ? `${selected.length} valgt` : selectPlaceholder
+          }
+          selectAllLabel="Velg alle"
+          clearAllLabel="Fjern alle"
+          disabled={
+            isLoading || Boolean(error) || availableOptions.length === 0
+          }
+          aria-label={addLabel}
+          className={
+            invalid ? "group-selector-multi-invalid" : "group-selector-multi"
+          }
+        />
+      </SelectWrapper>
 
       {error && (
         <SelectorError role="alert">
@@ -87,7 +96,9 @@ const GroupSelector: React.FC<GroupSelectorProps> = ({
               <li key={group.pk}>
                 <SelectedGroupButton
                   type="button"
-                  onClick={() => toggleSelectedGroup(group.pk)}
+                  onClick={() =>
+                    setGroups(selectedGroups.filter((id) => id !== group.pk))
+                  }
                   aria-label={`Fjern ${group.name}`}
                 >
                   {group.logo ? (
@@ -118,18 +129,17 @@ const Wrapper = styled.div`
   gap: var(--spacing-md);
 `;
 
-const Select = styled.select`
+const SelectWrapper = styled.div`
   width: min(100%, var(--form-control-width));
-  min-height: var(--control-height-md);
-  padding: 0 var(--spacing-md);
-  border: var(--border-width-default) solid var(--color-border-muted);
-  border-radius: var(--border-radius-md);
-  background: var(--color-surface-base);
-  color: var(--color-text-primary);
-  font-size: var(--font-size-md);
 
-  &[aria-invalid="true"] {
+  .group-selector-multi > button {
+    border-width: 2px;
+    background: var(--color-surface-base);
+  }
+
+  .group-selector-multi-invalid > button {
     border-color: var(--color-danger-border);
+    box-shadow: 0 0 0 3px var(--color-danger-soft);
   }
 `;
 

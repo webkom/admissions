@@ -82,7 +82,7 @@ describe("standard block preview model", () => {
     });
 
     expect(layout.accessibleDescription)
-      .to.contain("Standardblokk fra 08:00 til 12:00")
+      .to.contain("Intervjublokk fra 08:00 til 12:00")
       .and.contain("intervju 1 går fra 08:00 til 09:00")
       .and.contain("intervju 4 går fra 11:00 til 12:00")
       .and.contain("pause på 30 minutter")

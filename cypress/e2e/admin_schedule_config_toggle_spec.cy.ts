@@ -38,7 +38,7 @@ describe("admin schedule configuration toggles", () => {
     cy.contains("Intervjuvindu").should("not.exist");
     cy.contains("Intervjuperiode").should("be.visible");
     cy.contains("Daglig tidsrom").should("be.visible");
-    cy.contains("Slik blir én standardblokk").should("not.exist");
+    cy.contains("Slik blir én intervjublokk").should("not.exist");
     cy.contains("Intervjutider").should("be.visible");
   });
 
@@ -56,7 +56,7 @@ describe("admin schedule configuration toggles", () => {
     decreaseBlockSize().click();
     decreaseBlockSize().click();
 
-    cy.get('input[aria-label^="Alle standardblokker for "]')
+    cy.get('input[aria-label^="Alle blokker for "]')
       .should("have.length.greaterThan", 0)
       .then(($checkboxes) => {
         cy.wrap($checkboxes.eq(0)).check({ force: true });
@@ -89,8 +89,8 @@ describe("admin schedule configuration toggles", () => {
   });
 
   it("preserves an internal closed interview across grid-mode switches", () => {
-    cy.contains("button", "Åpne alle standardblokker").click();
-    cy.contains("button", "Finjuster enkelttider").click();
+    cy.contains("button", "Åpne alle blokker").click();
+    cy.contains("button", "Enkelttider").click();
 
     cy.get('[data-cy="fine-slot"][aria-pressed="true"]:visible')
       .eq(1)
@@ -100,8 +100,8 @@ describe("admin schedule configuration toggles", () => {
         const targetSelector = `[data-cy="fine-slot"][data-date="${date}"][data-minute="${minute}"]`;
         cy.wrap($cell).click().should("have.attr", "aria-pressed", "false");
 
-        cy.contains("button", "Standardblokker").click();
-        cy.contains("button", "Finjuster enkelttider").click();
+        cy.contains("button", "Hele blokker").click();
+        cy.contains("button", "Enkelttider").click();
         cy.get(targetSelector).should("have.attr", "aria-pressed", "false");
       });
   });

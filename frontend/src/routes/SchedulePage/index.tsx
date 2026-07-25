@@ -95,6 +95,7 @@ const SchedulePage: React.FC = () => {
         committeeRole: admission.userdata.committee_role,
         representedGroups: admission.userdata.represented_groups,
         committeeGroups: admission.userdata.committee_groups,
+        applicationViewMode: admission.userdata.application_view_mode,
       })
     : "";
   const [activeSensitiveScopeKey, setActiveSensitiveScopeKey] = useState("");

@@ -141,11 +141,13 @@ const FormStructure: React.FC<FormStructureProps> = ({
             <>
               <HelpText>
                 <Info aria-hidden="true" />
-                Skriv gjerne rekkefølgen på komiteene du foretrekker. Feltet kan
-                bare ses av deg og sentrale opptaksansvarlige, ikke av de
-                enkelte komiteene.
+                Ranger komiteene du har valgt med pilene under, og legg gjerne
+                ved kommentarer til de sentrale opptaksansvarlige.
               </HelpText>
-              <Field name="priorityText" component={PriorityTextField} />
+              <PriorityTextField
+                groups={groups}
+                selectedGroups={selectedGroups}
+              />
             </>
           )}
         </GeneralInfoSection>

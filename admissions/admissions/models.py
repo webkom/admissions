@@ -125,6 +125,24 @@ class AdmissionGroup(models.Model):
     admission = models.ForeignKey(Admission, on_delete=models.CASCADE)
     group = models.ForeignKey(Group, on_delete=models.CASCADE)
     header_fields = models.JSONField(default=list, null=True)
+    committee_info = models.TextField(
+        blank=True,
+        null=True,
+        default=None,
+        max_length=600,
+    )
+    application_guidance = models.TextField(
+        blank=True,
+        null=True,
+        default=None,
+        max_length=600,
+    )
+    interview_description = models.TextField(
+        blank=True,
+        null=True,
+        default=None,
+        max_length=600,
+    )
 
     class Meta:
         constraints = [

@@ -74,7 +74,7 @@ export const buildStandardBlockPreviewLayout = ({
     blockDuration,
     nextBlockStartMinute,
     totalPatternDuration: blockDuration + pauseMinutes,
-    accessibleDescription: `Standardblokk fra ${formatClockMinute(
+    accessibleDescription: `Intervjublokk fra ${formatClockMinute(
       startMinute,
     )} til ${formatClockMinute(
       blockEndMinute,

@@ -4,10 +4,13 @@ export interface Group {
   pk: string;
   name: string;
   description: string;
-  logo: string;
+  logo: string | null;
   response_label: string;
   detail_link: string;
   header_fields?: FieldModel[];
+  committee_info?: string | null;
+  application_guidance?: string | null;
+  interview_description?: string | null;
 }
 
 export interface User {
@@ -43,11 +46,40 @@ export type InterviewStatus =
   | "completed"
   | "cancelled";
 
-export interface AdminApplication extends Application {
+export type ApplicationViewMode =
+  | "none"
+  | "admin_full"
+  | "committee_full"
+  | "committee_minimal";
+
+export interface FullAdminApplication extends Application {
+  application_view_mode: "admin_full" | "committee_full";
   interview_status: InterviewStatus;
   interview_status_updated_at: string;
   interview_status_updated_by: string;
 }
+
+export interface CommitteeMinimalAdminApplication {
+  pk: string;
+  application_view_mode: "committee_minimal";
+  user: Pick<User, "full_name">;
+  created_at: string;
+  applied_within_deadline: boolean;
+  phone_number: string;
+  group_applications: CommitteeGroupApplication[];
+  interview_status: InterviewStatus;
+  interview_status_updated_at: string;
+}
+
+export interface CommitteeGroupApplication {
+  group: Pick<Group, "pk" | "name" | "logo" | "response_label">;
+  text: string;
+  header_fields_response: InputResponseModel;
+}
+
+export type AdminApplication =
+  | FullAdminApplication
+  | CommitteeMinimalAdminApplication;
 
 interface AdmissionUserData {
   actor_id: string | null;
@@ -58,6 +90,7 @@ interface AdmissionUserData {
   committee_role: "leader" | "recruiting" | "member" | null;
   committee_groups: string[];
   represented_groups: string[];
+  application_view_mode: ApplicationViewMode;
 }
 
 export interface Admission {

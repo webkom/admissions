@@ -8,6 +8,7 @@ import {
   captureSensitiveAdmissionAuthorityEpoch,
   isSensitiveAdmissionAuthorityEpochCurrent,
   isSensitiveAuthorityChangedError,
+  resetAdminApplicationQueriesAfterNotFound,
   runSensitiveAdmissionMutation,
   SensitiveAuthorityChangedError,
   sensitiveAdmissionMutationOptions,
@@ -158,25 +159,26 @@ interface UpdateInterviewStatusProps {
 interface InterviewStatusUpdateResponse {
   interview_status: InterviewStatus;
   interview_status_updated_at: string;
-  interview_status_updated_by: string;
+  interview_status_updated_by?: string;
 }
 
 interface InterviewStatusMutationContext {
-  previousStatus?: Pick<
-    AdminApplication,
-    | "interview_status"
-    | "interview_status_updated_at"
-    | "interview_status_updated_by"
-  >;
+  previousStatus?: {
+    interview_status: InterviewStatus;
+    interview_status_updated_at: string;
+    interview_status_updated_by?: string;
+  };
   previousSchedule?: SavedSchedule;
 }
 
 export const useAdminUpdateInterviewStatusMutation = (
   admissionSlug: string,
+  applicationScopeKey: string,
 ) => {
   const queryClient = useQueryClient();
   const applicationsQueryKey = [
     `/admin/admission/${admissionSlug}/application/`,
+    applicationScopeKey,
   ];
   const scheduleQueryKey = [`/admin/admission/${admissionSlug}/schedule/`];
 
@@ -257,7 +259,9 @@ export const useAdminUpdateInterviewStatusMutation = (
               interview_status_updated_at:
                 previousApplication.interview_status_updated_at,
               interview_status_updated_by:
-                previousApplication.interview_status_updated_by,
+                "interview_status_updated_by" in previousApplication
+                  ? previousApplication.interview_status_updated_by
+                  : undefined,
             }
           : undefined,
         previousSchedule,
@@ -310,8 +314,13 @@ export const useAdminUpdateInterviewStatusMutation = (
                   interview_status: updatedStatus.interview_status,
                   interview_status_updated_at:
                     updatedStatus.interview_status_updated_at,
-                  interview_status_updated_by:
-                    updatedStatus.interview_status_updated_by,
+                  ...("interview_status_updated_by" in application &&
+                  updatedStatus.interview_status_updated_by !== undefined
+                    ? {
+                        interview_status_updated_by:
+                          updatedStatus.interview_status_updated_by,
+                      }
+                    : {}),
                 }
               : application,
           ),
@@ -345,7 +354,7 @@ export const useAdminUpdateInterviewStatusMutation = (
         return;
       }
       void queryClient.invalidateQueries({
-        queryKey: applicationsQueryKey,
+        queryKey: [`/admin/admission/${admissionSlug}/application/`],
       });
       void queryClient.invalidateQueries({ queryKey: scheduleQueryKey });
     },
@@ -382,21 +391,28 @@ export const useAdminDeleteApplicationMutation = (admissionSlug: string) => {
       if (isSensitiveAuthorityChangedError(error)) return;
       const status = error.response?.status ?? 0;
       if (status !== 404) return;
-      await queryClient.resetQueries({
-        queryKey: applicationsQueryKey,
-        exact: true,
-      });
+      await resetAdminApplicationQueriesAfterNotFound(
+        queryClient,
+        admissionSlug,
+      );
     },
   });
 };
 
 // Manage mutations
 
+export interface CommitteeContent {
+  committee_info: string | null;
+  application_guidance: string | null;
+  interview_description: string | null;
+}
+
 export interface MutationAdmission {
   title: string;
   slug?: string;
   description: string;
   group_questions: Record<string, FieldModel[]>;
+  group_content: Record<string, CommitteeContent>;
   open_from: string;
   public_deadline: string;
   closed_from: string;

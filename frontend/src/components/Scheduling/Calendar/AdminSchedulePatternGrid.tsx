@@ -22,7 +22,7 @@ import {
   type ScheduleGridToggleMode,
 } from "./useScheduleGridDragToggle";
 
-type EditorView = "blocks" | "fine";
+type EditingMode = "blocks" | "slots";
 
 interface SlotEditorState {
   date: string;
@@ -36,7 +36,7 @@ interface AdminSchedulePatternGridProps {
   blockSize: number;
   sessionDuration: number;
   activeSlots: ReadonlySet<string>;
-  view: EditorView;
+  view: EditingMode;
   disabled?: boolean;
   renderDayHeader: (date: string) => React.ReactNode;
   onSetBlock: (date: string, minutes: number[], open: boolean) => void;
@@ -145,7 +145,7 @@ const SlotEditorPopover: React.FC<{
   const firstMinute = state.row.minutes[0];
   const lastMinute = state.row.minutes[state.row.minutes.length - 1];
   const title = `${
-    isPause ? "Planlagt pause" : "Finjuster intervjuer"
+    isPause ? "Planlagt pause" : "Enkelttider"
   }, ${accessibleDateLabel(state.date)}`;
 
   if (typeof document === "undefined") return null;
@@ -256,7 +256,7 @@ const AdminSchedulePatternGrid: React.FC<AdminSchedulePatternGridProps> = ({
     return pauseDurations.length > 0 ? Math.min(...pauseDurations) : null;
   }, [rows]);
   const visibleRows = React.useMemo(() => {
-    if (view === "fine") return rows;
+    if (view === "slots") return rows;
     return rows.filter(
       (row) =>
         row.kind === "block" ||
@@ -308,20 +308,9 @@ const AdminSchedulePatternGrid: React.FC<AdminSchedulePatternGridProps> = ({
       Math.min(100, (row.minutes.length / Math.max(1, blockSize)) * 100),
     );
     const width = row.boundaryShort ? `max(2.5rem, ${widthPercent}%)` : "100%";
-    const statusLabel = row.boundaryShort
-      ? isPartial
-        ? `${activeCount}/${row.minutes.length} åpne`
-        : isActive
-          ? "Åpen"
-          : "Stengt"
-      : isPartial
-        ? `${activeCount}/${row.minutes.length}`
-        : isActive
-          ? "Åpen"
-          : "Stengt";
-    const cellLabel = `${accessibleDateLabel(date)}, ${formatMinutes(
-      startMinute,
-    )}–${formatMinutes(endMinute)}, ${statusLabel}`;
+    const cellLabel = `${accessibleDateLabel(date)}, ${formatMinutes(startMinute)}–${formatMinutes(
+      endMinute,
+    )}`;
     const canEditInline = row.minutes.length <= 4;
 
     if (view === "blocks") {
@@ -340,7 +329,7 @@ const AdminSchedulePatternGrid: React.FC<AdminSchedulePatternGridProps> = ({
           selectable
           trackStyle={{ width }}
           trackDataCy="block-footprint"
-          statusText={row.boundaryShort || isPartial ? statusLabel : undefined}
+          statusText={undefined}
           role="button"
           tabIndex={disabled ? -1 : 0}
           aria-disabled={disabled}
@@ -393,10 +382,10 @@ const AdminSchedulePatternGrid: React.FC<AdminSchedulePatternGridProps> = ({
             style={{ width }}
             className={cn(
               "min-w-0 rounded-sm p-1 transition-colors duration-200 motion-reduce:transition-none",
-              view === "fine" && "bg-surface-base/75",
+              view === "slots" && "bg-surface-base/75",
             )}
           >
-            {view === "fine" && canEditInline ? (
+            {view === "slots" && canEditInline ? (
               <div className="flex min-h-7 w-full gap-1" role="group">
                 {row.minutes.map((minute) => {
                   const key = makeSlotKey(date, minute);
@@ -461,20 +450,12 @@ const AdminSchedulePatternGrid: React.FC<AdminSchedulePatternGridProps> = ({
                 isActive ? "scale-100 opacity-60" : "scale-75 opacity-0",
               )}
             />
-          ) : (
-            <span
-              className={
-                activeCount > 0 ? "text-brand-dark" : "text-text-disabled"
-              }
-            >
-              {statusLabel}
-            </span>
-          )}
+          ) : null}
         </span>
       </div>
     );
 
-    if (view === "fine" && !canEditInline) {
+    if (view === "slots" && !canEditInline) {
       return (
         <ScheduleBlockCell
           key={`${date}-${row.id}`}
@@ -485,7 +466,7 @@ const AdminSchedulePatternGrid: React.FC<AdminSchedulePatternGridProps> = ({
           role="button"
           tabIndex={disabled ? -1 : 0}
           aria-disabled={disabled}
-          aria-label={`${cellLabel}. Åpne for å finjustere.`}
+          aria-label={`${cellLabel}. Åpne for å justere enkeltider.`}
           aria-expanded={
             slotEditor?.date === date && slotEditor.row.id === row.id
           }
@@ -549,7 +530,7 @@ const AdminSchedulePatternGrid: React.FC<AdminSchedulePatternGridProps> = ({
         : "border-border-muted bg-surface-muted text-text-subtle",
     );
 
-    if (view === "fine" && row.minutes.length > 0) {
+    if (view === "slots" && row.minutes.length > 0) {
       return (
         <button
           key={`${date}-${row.id}`}

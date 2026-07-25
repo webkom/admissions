@@ -1,4 +1,4 @@
-import React, { FocusEvent } from "react";
+import React, { ChangeEvent, FocusEvent } from "react";
 import {
   FieldLabel,
   InputValidationFeedback,
@@ -12,7 +12,7 @@ import { FormikValues } from "formik";
 type PhoneNumberFieldProps = FormikValues;
 
 const PhoneNumberField: React.FC<PhoneNumberFieldProps> = ({
-  field: { name },
+  field: { name, onChange, value },
   form: { touched, errors, handleBlur },
   disabled,
   placeholder = "Fyll inn mobilnummer...",
@@ -34,8 +34,13 @@ const PhoneNumberField: React.FC<PhoneNumberFieldProps> = ({
       <StyledField
         type="tel"
         name={name}
+        value={value}
         disabled={disabled}
         id={name}
+        onChange={(e: ChangeEvent<HTMLInputElement>) => {
+          savePhoneNumberDraft(e.target.value);
+          onChange(e);
+        }}
         onBlur={(e: FocusEvent<HTMLInputElement>) => {
           savePhoneNumberDraft(e.target.value);
           handleBlur(e);

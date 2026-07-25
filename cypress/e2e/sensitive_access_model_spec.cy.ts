@@ -6,6 +6,7 @@ import {
   buildSensitiveAdmissionScopeKey,
   clearSensitiveAdmissionDataForScopeChange,
   isSensitiveAuthorityChangedError,
+  resetAdminApplicationQueriesAfterNotFound,
   restoreSensitiveAccessAfterVerifiedAdmission,
   runSensitiveAdmissionMutation,
 } from "../../frontend/src/query/sensitiveAccess";
@@ -25,6 +26,7 @@ describe("sensitive admission cache scope", () => {
       committeeRole: "leader",
       representedGroups: ["Webkom"],
       committeeGroups: ["Webkom"],
+      applicationViewMode: "admin_full",
     });
     const memberScope = buildSensitiveAdmissionScopeKey({
       actorId: "actor-a",
@@ -32,6 +34,7 @@ describe("sensitive admission cache scope", () => {
       committeeRole: "member",
       representedGroups: [],
       committeeGroups: ["Webkom"],
+      applicationViewMode: "none",
     });
 
     expect(memberScope).not.to.equal(adminScope);
@@ -45,9 +48,52 @@ describe("sensitive admission cache scope", () => {
         committeeRole: "member",
         representedGroups: [],
         committeeGroups: ["Webkom"],
+        applicationViewMode: "none",
       });
 
     expect(scopeFor("actor-b")).not.to.equal(scopeFor("actor-a"));
+  });
+
+  it("changes when the server narrows application disclosure", () => {
+    const scopeFor = (
+      applicationViewMode: Admission["userdata"]["application_view_mode"],
+    ) =>
+      buildSensitiveAdmissionScopeKey({
+        actorId: "actor-a",
+        isAdmin: true,
+        committeeRole: "recruiting",
+        representedGroups: ["Webkom"],
+        committeeGroups: ["Webkom"],
+        applicationViewMode,
+      });
+
+    expect(scopeFor("committee_minimal")).not.to.equal(scopeFor("admin_full"));
+  });
+
+  it("clears every scoped application cache variant after a concurrent 404", () => {
+    const queryClient = new QueryClient();
+    const slug = "webkom-open";
+    const path = `/admin/admission/${slug}/application/`;
+    const adminKey = [path, '["admin_full"]'];
+    const committeeKey = [path, '["committee_minimal","Webkom"]'];
+    const otherAdmissionKey = [
+      "/admin/admission/other-admission/application/",
+      '["admin_full"]',
+    ];
+
+    queryClient.setQueryData(adminKey, [{ pk: "private-admin-row" }]);
+    queryClient.setQueryData(committeeKey, [{ pk: "private-committee-row" }]);
+    queryClient.setQueryData(otherAdmissionKey, [{ pk: "other-row" }]);
+
+    return resetAdminApplicationQueriesAfterNotFound(queryClient, slug).then(
+      () => {
+        expect(queryClient.getQueryData(adminKey)).to.equal(undefined);
+        expect(queryClient.getQueryData(committeeKey)).to.equal(undefined);
+        expect(queryClient.getQueryData(otherAdmissionKey)).to.deep.equal([
+          { pk: "other-row" },
+        ]);
+      },
+    );
   });
 
   it("drops downstream admission data without dropping the fresh role descriptor", () => {

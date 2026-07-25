@@ -120,12 +120,14 @@ export const buildSensitiveAdmissionScopeKey = ({
   committeeRole,
   representedGroups,
   committeeGroups,
+  applicationViewMode,
 }: {
   actorId: string | null;
   isAdmin: boolean;
   committeeRole: string | null;
   representedGroups: string[];
   committeeGroups: string[];
+  applicationViewMode: Admission["userdata"]["application_view_mode"];
 }) =>
   JSON.stringify({
     actorId,
@@ -133,6 +135,7 @@ export const buildSensitiveAdmissionScopeKey = ({
     committeeRole,
     representedGroups: [...representedGroups].sort(),
     committeeGroups: [...committeeGroups].sort(),
+    applicationViewMode,
   });
 
 export const clearSensitiveAdmissionDataForScopeChange = (
@@ -159,6 +162,14 @@ export const clearSensitiveAdmissionDataForScopeChange = (
     });
   purgeSensitiveMutations(queryClient, admissionSlug);
 };
+
+export const resetAdminApplicationQueriesAfterNotFound = (
+  queryClient: QueryClient,
+  admissionSlug: string,
+) =>
+  queryClient.resetQueries({
+    queryKey: [`/admin/admission/${admissionSlug}/application/`],
+  });
 
 /**
  * Re-enable sensitive reads only after the caller has made a fresh request

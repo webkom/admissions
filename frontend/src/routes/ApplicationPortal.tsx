@@ -7,6 +7,7 @@ import {
   getIsEditingDraft,
   getSelectedGroupsDraft,
   saveIsEditingDraft,
+  saveSubmittedPhoneNumber,
   saveSelectedGroupsDraft,
   setDraftAdmissionScope,
 } from "src/utils/draftHelper";
@@ -82,6 +83,11 @@ const ApplicationPortal = () => {
       setIsEditingApplication(!myApplication);
     }
   }, [isEditingApplication, myApplication]);
+
+  useEffect(() => {
+    if (!myApplication?.phone_number) return;
+    saveSubmittedPhoneNumber(userId, myApplication.phone_number);
+  }, [myApplication?.phone_number, userId]);
 
   useEffect(() => {
     if (isLoading) return;

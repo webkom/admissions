@@ -41,7 +41,7 @@ const ToggleGroups: React.FC<ToggleGroupsProps> = ({
     <Wrapper>
       <Title>Endre dine valg</Title>
       <Tooltip>
-        Klikk på logoene til {isRevy ? "gruppene" : "komiteene"} for å legge
+        Klikk på symbolene til {isRevy ? "gruppene" : "komiteene"} for å legge
         til/fjerne dem fra søknaden.
       </Tooltip>
       <IconsWrapper>{ChooseGroupsItems}</IconsWrapper>

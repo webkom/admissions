@@ -26,6 +26,7 @@ import {
   sensitiveAdmissionMutationOptions,
   type SensitiveAdmissionMutationError,
 } from "./sensitiveAccess";
+import type { ApplicationViewMode } from "src/types";
 
 type SaveSchedulePayload = Partial<
   Omit<SavedSchedule, "id" | "updated_at" | "revealed_groups">
@@ -124,12 +125,50 @@ export const useMyApplication = (slug: string) => {
   return hideDataAfterSensitiveQueryFailure(query);
 };
 
-export const useAdminApplications = (admissionSlug: string) => {
+const selectAdminApplicationsForScope = (
+  applications: AdminApplication[],
+  expectedMode: ApplicationViewMode | undefined,
+  representedGroups: string[],
+): AdminApplication[] => {
+  if (!expectedMode) return [];
+  if (expectedMode !== "committee_minimal") {
+    return applications.filter(
+      (application) => application.application_view_mode === expectedMode,
+    );
+  }
+
+  const allowedGroups = new Set(representedGroups);
+  return applications.flatMap((application) => {
+    if (application.application_view_mode !== "committee_minimal") return [];
+    const groupApplications = application.group_applications.filter(
+      ({ group }) => allowedGroups.has(group.name),
+    );
+    return groupApplications.length > 0
+      ? [{ ...application, group_applications: groupApplications }]
+      : [];
+  });
+};
+
+export const useAdminApplications = (
+  admissionSlug: string,
+  scopeKey: string,
+  expectedMode: ApplicationViewMode | undefined,
+  representedGroups: string[],
+) => {
+  const path = `/admin/admission/${admissionSlug}/application/`;
   const query = useQuery<AdminApplication[], AxiosError>({
-    queryKey: [`/admin/admission/${admissionSlug}/application/`],
+    queryKey: [path, scopeKey],
+    queryFn: async () => (await apiClient.get(path)).data,
     enabled:
       Boolean(admissionSlug) &&
+      Boolean(scopeKey) &&
       !areSensitiveAdmissionCacheWritesBlocked(admissionSlug),
+    select: (applications) =>
+      selectAdminApplicationsForScope(
+        applications,
+        expectedMode,
+        representedGroups,
+      ),
     ...sensitiveQueryOptions(admissionSlug),
     meta: admissionSensitiveQueryMeta(admissionSlug, true),
   });

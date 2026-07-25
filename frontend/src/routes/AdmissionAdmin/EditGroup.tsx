@@ -47,7 +47,13 @@ const EditGroup = () => {
       <PageWrapper>
         <HeaderCard>
           <GroupLogoWrapper>
-            <GroupLogo src={group.logo} />
+            {group.logo ? (
+              <GroupLogo src={group.logo} alt="" aria-hidden="true" />
+            ) : (
+              <GroupLogoFallback aria-hidden="true">
+                {group.name.slice(0, 1)}
+              </GroupLogoFallback>
+            )}
             <div>
               <SectionEyebrow>Gruppeinnstillinger</SectionEyebrow>
               <GroupTitle>{group.name}</GroupTitle>
@@ -105,4 +111,18 @@ const GroupDescription = styled.p`
   margin: var(--spacing-md) 0 0;
   color: var(--color-text-muted);
   line-height: var(--line-height-base);
+`;
+
+const GroupLogoFallback = styled.span`
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  width: var(--avatar-size-lg);
+  height: var(--avatar-size-lg);
+  border-radius: var(--border-radius-pill);
+  background: var(--color-brand-soft);
+  color: var(--color-brand);
+  font-size: var(--font-size-md);
+  font-weight: var(--font-weight-bold);
 `;

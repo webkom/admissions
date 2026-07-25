@@ -2,17 +2,20 @@ const groups = [
   {
     pk: "11111111-1111-4111-8111-111111111111",
     name: "Webkom",
-    description: "",
+    description:
+      "Webkom utvikler og drifter de digitale tjenestene til Abakus.",
     logo: "",
-    response_label: "Søknadstekst",
+    response_label: "Fortell hva du ønsker å lære og lage sammen med Webkom.",
     detail_link: "",
   },
   {
     pk: "22222222-2222-4222-8222-222222222222",
     name: "Fagkom",
-    description: "",
+    description:
+      "Fagkom arrangerer kurs og skaper faglige møteplasser for studentene.",
     logo: "",
-    response_label: "Søknadstekst",
+    response_label:
+      "Fortell hvilke faglige aktiviteter du har lyst til å bidra til.",
     detail_link: "",
   },
 ];
@@ -39,6 +42,7 @@ const existingAdmission = {
     committee_role: "leader",
     committee_groups: ["Webkom"],
     represented_groups: ["Webkom"],
+    application_view_mode: "admin_full",
   },
 };
 
@@ -49,17 +53,24 @@ const visitEditor = () => {
   cy.wait("@admissions");
 };
 
-const visitExistingEditor = () => {
+const visitExistingEditor = (admission = existingAdmission) => {
   cy.intercept("GET", "**/api/manage/admission/", []).as("admissions");
-  cy.intercept(
-    "GET",
-    "**/api/manage/admission/webkom-test/",
-    existingAdmission,
-  ).as("admission");
+  cy.intercept("GET", "**/api/manage/admission/webkom-test/", admission).as(
+    "admission",
+  );
   cy.intercept("GET", "**/api/manage/group/", groups).as("groups");
   cy.login("webkom");
   cy.visit("/manage/webkom-test");
   cy.wait(["@admissions", "@admission", "@groups"]);
+};
+
+const selectGroup = (fieldId: string, groupName: string) => {
+  cy.get(`#${fieldId}`).then(($trigger) => {
+    if ($trigger.attr("aria-expanded") !== "true") {
+      cy.wrap($trigger).click();
+    }
+  });
+  cy.get(`#${fieldId}-listbox`).contains('[role="option"]', groupName).click();
 };
 
 const fillRequiredFields = () => {
@@ -67,8 +78,8 @@ const fillRequiredFields = () => {
   cy.get("#open_from").type("2027-03-01T10:00");
   cy.get("#public_deadline").type("2027-03-08T10:00");
   cy.get("#closed_from").type("2027-03-09T10:00");
-  cy.get("#admin-groups").select(groups[0].pk);
-  cy.get("#admission-groups").select(groups[1].pk);
+  selectGroup("admin-groups", groups[0].name);
+  selectGroup("admission-groups", groups[1].name);
 };
 
 describe("manage admission editor", () => {
@@ -76,28 +87,30 @@ describe("manage admission editor", () => {
     cy.intercept("GET", "**/api/manage/group/", groups);
     visitEditor();
 
+    cy.get('button[type="submit"]').should("be.disabled");
+    selectGroup("admission-groups", groups[0].name);
     cy.get('button[type="submit"]').click();
 
     cy.get("#admission-error-summary")
       .should("contain", "Tittel: Tittel er påkrevd")
-      .and("contain", "Ansvarlige opptaksgrupper: Velg minst én admin-gruppe");
+      .and("contain", "Admin-grupper: Velg minst én admin-gruppe");
     cy.get("#admission-error-summary").contains("a", "Søknadsfrist:").click();
     cy.focused().should("have.id", "public_deadline");
   });
 
-  it("clears the recruiting-group validation error when a group is added", () => {
+  it("disables submission until an admissions group is selected", () => {
     cy.intercept("GET", "**/api/manage/group/", groups);
     visitEditor();
 
-    cy.get('button[type="submit"]').click();
-    cy.get("#admission-groups-error").should(
-      "contain",
-      "Velg minst én gruppe som har opptak",
-    );
+    cy.get("#admission-title").type("Komiteopptak 2027");
+    cy.get("#open_from").type("2027-03-01T10:00");
+    cy.get("#public_deadline").type("2027-03-08T10:00");
+    cy.get("#closed_from").type("2027-03-09T10:00");
+    selectGroup("admin-groups", groups[0].name);
 
-    cy.get("#admission-groups").select(groups[0].pk);
-
-    cy.get("#admission-groups-error").should("not.exist");
+    cy.get('button[type="submit"]').should("be.disabled");
+    selectGroup("admission-groups", groups[0].name);
+    cy.get('button[type="submit"]').should("not.be.disabled");
   });
 
   it("maps a duplicate slug response to the field and error summary", () => {
@@ -157,7 +170,10 @@ describe("manage admission editor", () => {
     cy.wait("@groups");
 
     cy.contains("Gruppene kunne ikke lastes.").should("not.exist");
-    cy.get("#admin-groups").find("option").should("have.length", 3);
+    cy.get("#admin-groups").click();
+    cy.get('[role="listbox"]').within(() => {
+      cy.get('[role="option"]').should("have.length", 2);
+    });
   });
 
   it("explains admission groups in the normal flow without a tooltip", () => {
@@ -165,43 +181,128 @@ describe("manage admission editor", () => {
     visitEditor();
 
     cy.contains("Opptaksgrupper og tilgang").should("be.visible");
-    cy.contains(
-      "Den styrer tilgang til søkere og gruppespesifikke spørsmål",
-    ).should("be.visible");
-    cy.contains("Opptaksgrupper som rekrutterer").should("be.visible");
-    cy.get("#admission-groups").should("contain", "Legg til opptaksgruppe");
+    cy.contains("Den styrer tilgang til søkerne").should("be.visible");
+    cy.contains("Grupper som har opptak").should("be.visible");
+    cy.get("#admission-groups").should("contain", "Legg til gruppe");
   });
 
-  it("uses the group name and input type when adding group-specific questions", () => {
+  it("edits the complete committee profile in one master-detail workspace", () => {
     cy.intercept("GET", "**/api/manage/group/", groups);
+    cy.intercept("POST", "**/api/manage/admission/", (request) => {
+      expect(request.body.group_content[groups[0].pk]).to.deep.equal({
+        committee_info:
+          "Webkom lager produkter som gjør studiehverdagen enklere.",
+        application_guidance:
+          "Fortell om noe du er nysgjerrig på å lære eller bygge.",
+        interview_description:
+          "Intervjuet er en uformell samtale om motivasjon og samarbeid.",
+      });
+      expect(request.body.group_content[groups[1].pk]).to.deep.equal({
+        committee_info: null,
+        application_guidance: null,
+        interview_description: null,
+      });
+      expect(request.body.group_questions).to.deep.equal({});
+      request.reply({
+        statusCode: 201,
+        body: { slug: "komiteopptak-2027" },
+      });
+    }).as("createAdmission");
     visitEditor();
-    cy.get("#admission-groups").select(groups[0].pk);
+    fillRequiredFields();
+    selectGroup("admission-groups", groups[0].name);
 
-    cy.contains("Telefonnummer innhentes alltid").should("be.visible");
-    cy.contains(
-      "Alle søkere blir bedt om telefonnummer, så du trenger ikke å legge til et eget spørsmål om det her.",
-    ).should("be.visible");
+    cy.contains("Gruppespesifikke spørsmål").should("not.exist");
+    cy.contains("button", "Legg til spørsmål for komiteen").should("not.exist");
+    cy.contains("Komiteer").should("be.visible");
+    cy.get('button[data-group-name="Webkom"]').click();
+    cy.get(`#committee-content-${groups[0].pk}-committee_info`)
+      .should("have.value", groups[0].description)
+      .clear()
+      .type("Webkom lager produkter som gjør studiehverdagen enklere.");
+    cy.get('[data-cy="committee-content-preview"]')
+      .should("be.visible")
+      .and(
+        "contain",
+        "Webkom lager produkter som gjør studiehverdagen enklere.",
+      );
+    cy.get(`#committee-content-${groups[0].pk}-application_guidance`)
+      .should("have.value", groups[0].response_label)
+      .clear()
+      .type("Fortell om noe du er nysgjerrig på å lære eller bygge.");
+    cy.get('[data-cy="committee-content-preview"]')
+      .should("be.visible")
+      .and("contain", "Fortell om noe du er nysgjerrig på å lære eller bygge.");
+    cy.get(`#committee-content-${groups[0].pk}-interview_description`)
+      .clear()
+      .type("Intervjuet er en uformell samtale om motivasjon og samarbeid.");
 
-    cy.contains("button", "Legg til spørsmål for komiteen").click();
-    cy.contains("Spørsmål 1 for Webkom").should("be.visible");
-    cy.contains("label", "Type")
-      .next("select")
-      .find('option[value="phoneinput"]')
-      .should("not.exist");
-    cy.contains("label", "Spørsmål")
-      .next("input")
-      .should("have.attr", "placeholder", "Hvilket trinn går du på?");
-    cy.contains("label", "Plassholder")
-      .next("input")
-      .should("have.attr", "placeholder", "Skriv et kort svar");
+    cy.get('[aria-label="Valgte grupper"]')
+      .eq(1)
+      .find('button[aria-label="Fjern Webkom"]')
+      .click();
+    selectGroup("admission-groups", groups[0].name);
+    cy.get('button[data-group-name="Webkom"]').click();
+    cy.get(`#committee-content-${groups[0].pk}-committee_info`).should(
+      "have.value",
+      "Webkom lager produkter som gjør studiehverdagen enklere.",
+    );
 
-    cy.contains("label", "Type").next("select").select("textarea");
-    cy.contains("label", "Spørsmål")
-      .next("input")
-      .should("have.attr", "placeholder", "Fortell litt om deg selv");
-    cy.contains("label", "Plassholder")
-      .next("input")
-      .should("have.attr", "placeholder", "Skriv et lengre svar");
+    cy.get('button[type="submit"]').click();
+    cy.wait("@createAdmission");
+  });
+
+  it("keeps global committee fallback content inherited on unrelated edits", () => {
+    cy.intercept("PATCH", "**/api/manage/admission/webkom-test/", (request) => {
+      expect(request.body.group_questions).to.deep.equal({});
+      expect(request.body.group_content[groups[0].pk]).to.deep.equal({
+        committee_info: null,
+        application_guidance: null,
+        interview_description: null,
+      });
+      request.reply({ statusCode: 200, body: {} });
+    }).as("updateAdmission");
+    visitExistingEditor();
+
+    cy.get("#admission-title").clear().type("Sommeropptak 2027 oppdatert");
+    cy.get('button[type="submit"]').click();
+    cy.wait("@updateAdmission");
+  });
+
+  it("can restore a committee override to the shared global text", () => {
+    const customizedAdmission = {
+      ...existingAdmission,
+      groups: [
+        {
+          ...groups[0],
+          committee_info: "Tilpasset Webkom-info for dette opptaket.",
+          application_guidance: null,
+          interview_description: null,
+        },
+      ],
+    };
+    cy.intercept("PATCH", "**/api/manage/admission/webkom-test/", (request) => {
+      expect(request.body.group_content[groups[0].pk]).to.deep.equal({
+        committee_info: null,
+        application_guidance: null,
+        interview_description: null,
+      });
+      request.reply({ statusCode: 200, body: {} });
+    }).as("updateAdmission");
+    visitExistingEditor(customizedAdmission);
+
+    cy.get(`#committee-content-${groups[0].pk}-committee_info`).should(
+      "have.value",
+      "Tilpasset Webkom-info for dette opptaket.",
+    );
+    cy.contains("button", "Bruk felles standardtekst").click();
+    cy.get(`#committee-content-${groups[0].pk}-committee_info`).should(
+      "have.value",
+      groups[0].description,
+    );
+    cy.get("#admission-title").clear().type("Sommeropptak med standardtekst");
+    cy.get('button[type="submit"]').click();
+    cy.wait("@updateAdmission");
   });
 
   it("discards unsaved changes without updating an existing admission", () => {

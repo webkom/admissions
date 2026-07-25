@@ -7,6 +7,7 @@ enum KeyType {
 }
 
 const DRAFT_PREFIX = "admissions.applicationDraft";
+const SAVED_PHONE_PREFIX = "admissions.savedPhoneNumber";
 let draftScope = "unscoped";
 
 export const createDraftAdmissionScope = (
@@ -128,8 +129,42 @@ export const getSelectedGroupsDraft = (scope?: string): SelectedGroupsDraft =>
 export const savePhoneNumberDraft = (phoneNumber: string) =>
   saveObject(KeyType.phoneNumber, phoneNumber);
 
-export const getPhoneNumberDraft = (defaultValue = "") =>
-  getParsedJson(KeyType.phoneNumber) || defaultValue;
+export const getPhoneNumberDraft = (defaultValue = "") => {
+  try {
+    const stored = sessionStorage.getItem(storageKey(KeyType.phoneNumber));
+    return stored === null ? defaultValue : (JSON.parse(stored) as string);
+  } catch {
+    return defaultValue;
+  }
+};
+
+const savedPhoneNumberKey = (userId: string) =>
+  `${SAVED_PHONE_PREFIX}.${encodeURIComponent(userId || "anonymous")}`;
+
+export const saveSubmittedPhoneNumber = (
+  userId: string,
+  phoneNumber: string,
+) => {
+  const trimmedPhoneNumber = phoneNumber.trim();
+  if (!trimmedPhoneNumber) return;
+  try {
+    localStorage.setItem(
+      savedPhoneNumberKey(userId),
+      JSON.stringify(trimmedPhoneNumber),
+    );
+  } catch {
+    return;
+  }
+};
+
+export const getSavedPhoneNumber = (userId: string, defaultValue = "") => {
+  try {
+    const stored = localStorage.getItem(savedPhoneNumberKey(userId));
+    return stored === null ? defaultValue : (JSON.parse(stored) as string);
+  } catch {
+    return defaultValue;
+  }
+};
 
 export const saveIsEditingDraft = (newValue: boolean) =>
   saveObject(KeyType.isEditingApplication, newValue);

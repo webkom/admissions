@@ -22,6 +22,9 @@ interface CustomSelectProps {
   "aria-label"?: string;
   "aria-describedby"?: string;
   "aria-busy"?: boolean;
+  "aria-invalid"?: boolean;
+  "aria-labelledby"?: string;
+  "data-admission-field"?: string;
   title?: string;
 }
 
@@ -37,6 +40,9 @@ export const CustomSelect: React.FC<CustomSelectProps> = ({
   "aria-label": ariaLabel,
   "aria-describedby": ariaDescribedBy,
   "aria-busy": ariaBusy,
+  "aria-invalid": ariaInvalid,
+  "aria-labelledby": ariaLabelledBy,
+  "data-admission-field": dataAdmissionField,
   title,
 }) => {
   const [open, setOpen] = React.useState(false);
@@ -209,8 +215,11 @@ export const CustomSelect: React.FC<CustomSelectProps> = ({
           open && activeIndex >= 0 ? optionId(activeIndex) : undefined
         }
         aria-label={ariaLabel}
+        aria-labelledby={ariaLabelledBy}
         aria-describedby={ariaDescribedBy}
         aria-busy={ariaBusy}
+        aria-invalid={ariaInvalid}
+        data-admission-field={dataAdmissionField}
         title={title}
         onClick={() => (open ? setOpen(false) : openList())}
         onKeyDown={handleTriggerKeyDown}
@@ -219,7 +228,9 @@ export const CustomSelect: React.FC<CustomSelectProps> = ({
           compact ? "gap-1 px-2 py-1.5 text-xs" : "gap-2 px-3 py-2.5 text-sm",
           open
             ? "border-brand-input ring-3 ring-brand-ringSoft"
-            : "hover:border-brand-strongBorder",
+            : ariaInvalid
+              ? "border-danger-border hover:border-danger-border"
+              : "hover:border-brand-strongBorder",
           disabled && "cursor-not-allowed opacity-70",
         )}
         disabled={disabled}

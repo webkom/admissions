@@ -27,6 +27,7 @@ import type { InputFieldModel } from "src/utils/jsonFields";
 import LinkButton, { StyledButton } from "src/components/LinkButton";
 import { useParams } from "react-router-dom";
 import styled from "styled-components";
+import { parsePriorityText } from "src/routes/ApplicationForm/priorityText";
 
 interface FormStructureProps {
   toggleIsEditing: () => void;
@@ -50,6 +51,12 @@ const FormStructure: React.FC<FormStructureProps> = ({ toggleIsEditing }) => {
   const isBackup = admissionSlug === "backup";
 
   const { group_applications, updated_at } = myApplication || {};
+  const selectedGroupNames =
+    group_applications?.map((application) => application.group.name) ?? [];
+  const parsedPriorityText = parsePriorityText(
+    myApplication?.priority_text ?? "",
+    selectedGroupNames,
+  );
 
   const hasSelected = group_applications && group_applications.length > 0;
 
@@ -164,10 +171,22 @@ const FormStructure: React.FC<FormStructureProps> = ({ toggleIsEditing }) => {
                 {myApplication.phone_number || "Ikke oppgitt"}
               </ReceiptValue>
             </ReceiptField>
-            {myApplication.priority_text && (
+            {parsedPriorityText.hasExplicitRanking && (
               <ReceiptField>
-                <ReceiptLabel>Prioriteringer og kommentarer</ReceiptLabel>
-                <ReceiptValue>{myApplication.priority_text}</ReceiptValue>
+                <ReceiptLabel>Prioritering</ReceiptLabel>
+                <RankingList>
+                  {parsedPriorityText.rankedGroups.map((groupName, index) => (
+                    <li key={groupName}>
+                      {index + 1}. {groupName}
+                    </li>
+                  ))}
+                </RankingList>
+              </ReceiptField>
+            )}
+            {parsedPriorityText.comments && (
+              <ReceiptField>
+                <ReceiptLabel>Andre kommentarer</ReceiptLabel>
+                <ReceiptText>{parsedPriorityText.comments}</ReceiptText>
               </ReceiptField>
             )}
           </ReceiptFields>
@@ -183,11 +202,15 @@ const FormStructure: React.FC<FormStructureProps> = ({ toggleIsEditing }) => {
             <>
               <ReceiptApplications>
                 {group_applications.map((groupApplication) => {
+                  const admissionGroup = admission.groups.find(
+                    (group) => group.pk === groupApplication.group.pk,
+                  );
                   const groupFields = (
-                    admission.groups.find(
-                      (group) => group.pk === groupApplication.group.pk,
-                    )?.header_fields ?? []
+                    admissionGroup?.header_fields ?? []
                   ).filter((field): field is InputFieldModel => "id" in field);
+                  const responseLabel =
+                    admissionGroup?.response_label ??
+                    groupApplication.group.response_label;
 
                   return (
                     <ReceiptApplication key={groupApplication.group.pk}>
@@ -206,10 +229,8 @@ const FormStructure: React.FC<FormStructureProps> = ({ toggleIsEditing }) => {
                           {groupApplication.group.name}
                         </ReceiptGroupName>
                       </ReceiptApplicationHeader>
-                      {groupApplication.group.response_label && (
-                        <ReceiptPrompt>
-                          {groupApplication.group.response_label}
-                        </ReceiptPrompt>
+                      {responseLabel && (
+                        <ReceiptPrompt>{responseLabel}</ReceiptPrompt>
                       )}
                       <ReceiptText>{groupApplication.text}</ReceiptText>
                       {groupFields.length > 0 && (
@@ -299,6 +320,15 @@ const ReceiptValue = styled.span`
   color: var(--color-text-primary);
   font-size: var(--font-size-ui);
   font-weight: var(--font-weight-medium);
+`;
+
+const RankingList = styled.ol`
+  margin: 0;
+  padding-left: var(--spacing-lg);
+  color: var(--color-text-primary);
+  font-size: var(--font-size-ui);
+  font-weight: var(--font-weight-medium);
+  line-height: var(--line-height-copy);
 `;
 
 const ReceiptNotes = styled.aside`

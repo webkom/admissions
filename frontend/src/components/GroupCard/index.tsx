@@ -9,7 +9,7 @@ interface GroupCardProps {
   name: string;
   description: string;
   readMoreLink: string;
-  logo: string;
+  logo: string | null;
   isRevy: boolean;
   isRevyBoard: boolean;
 }
@@ -54,7 +54,18 @@ const GroupCard: React.FC<GroupCardProps> = ({
       $isRevyBoard={isRevyBoard}
     >
       <Header>
-        {!(isRevy || isRevyBoard) && <Logo src={logo} alt="" />}
+        {!(isRevy || isRevyBoard) &&
+          (logo ? (
+            <Logo src={logo} alt="" />
+          ) : (
+            <LogoFallback
+              aria-hidden="true"
+              data-cy="group-logo-fallback"
+              data-group-name={name}
+            >
+              {getGroupInitials(name)}
+            </LogoFallback>
+          ))}
         <Name>{readmeIfy(name)}</Name>
       </Header>
       <Description>{readmeIfy(description, true)}</Description>
@@ -160,6 +171,30 @@ const Logo = styled.img`
   height: var(--avatar-size-sm);
   border-radius: var(--border-radius-sm);
 `;
+
+const LogoFallback = styled.span`
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  width: var(--avatar-size-sm);
+  height: var(--avatar-size-sm);
+  border-radius: var(--border-radius-sm);
+  background: var(--color-brand-soft);
+  color: var(--color-brand);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-bold);
+`;
+
+const getGroupInitials = (name: string) => {
+  const initials = name
+    .trim()
+    .split(/\s+/)
+    .map((part) => part[0])
+    .join("")
+    .slice(0, 2);
+  return initials || "?";
+};
 
 const LearnMoreLink = styled.a`
   font-weight: var(--font-weight-semibold);

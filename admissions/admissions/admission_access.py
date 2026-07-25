@@ -10,6 +10,11 @@ from admissions.admissions.models import (
     UserApplication,
 )
 
+APPLICATION_VIEW_MODE_NONE = "none"
+APPLICATION_VIEW_MODE_ADMIN_FULL = "admin_full"
+APPLICATION_VIEW_MODE_COMMITTEE_FULL = "committee_full"
+APPLICATION_VIEW_MODE_COMMITTEE_MINIMAL = "committee_minimal"
+
 
 def user_is_admission_admin(admission, user):
     return (
@@ -40,6 +45,17 @@ def get_representing_groups(admission, user):
         role__in=(constants.LEADER, constants.RECRUITING),
     )
     return admission.groups.filter(pk__in=representing.values_list("group", flat=True))
+
+
+def get_application_view_mode(admission, user):
+    represented_groups = get_representing_groups(admission, user)
+    if admission.groups.count() > 1 and represented_groups.exists():
+        return APPLICATION_VIEW_MODE_COMMITTEE_MINIMAL
+    if user_is_admission_admin(admission, user):
+        return APPLICATION_VIEW_MODE_ADMIN_FULL
+    if represented_groups.exists():
+        return APPLICATION_VIEW_MODE_COMMITTEE_FULL
+    return APPLICATION_VIEW_MODE_NONE
 
 
 def get_user_admission_groups(admission, user):
@@ -129,9 +145,12 @@ def synchronize_admission_group_disclosures(admission, next_groups, actor):
     if set(previous_groups_by_id) == set(next_groups_by_id):
         return
 
-    try:
-        saved_schedule = admission.saved_schedule
-    except SavedSchedule.DoesNotExist:
+    saved_schedule = (
+        SavedSchedule.objects.filter(admission_id=admission.pk)
+        .only("pk", "admission_id", "is_distributed", "name_visibility", "updated_at")
+        .first()
+    )
+    if saved_schedule is None:
         return
 
     visible_before = set(

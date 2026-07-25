@@ -240,7 +240,7 @@ const TimeScheduler: React.FC<TimeSchedulerProps> = ({
       <SchedulePanelHeader
         icon={CalendarRange}
         title="Når kan du intervjue?"
-        description="Velg hele intervjublokker. Hver blokk viser de enkelte intervjutidene som små streker."
+        description="Velg hele intervjublokker, eller juster enkelttider."
         actions={
           <div className="flex flex-wrap gap-1.5">
             <ScheduleGridLegendItem
@@ -250,11 +250,11 @@ const TimeScheduler: React.FC<TimeSchedulerProps> = ({
             />
             <ScheduleGridLegendItem
               label="Ikke valgt"
-              swatchClassName="border-border-soft bg-surface-neutral [background-image:var(--pattern-unavailable)]"
+              swatchClassName="border-border-soft bg-surface-neutral"
             />
             <ScheduleGridLegendItem
               label="Utilgjengelig"
-              swatchClassName="border-border-soft bg-surface-neutral opacity-55 [background-image:var(--pattern-unavailable)]"
+              swatchClassName="border-border-soft bg-surface-muted [background-image:repeating-linear-gradient(135deg,var(--color-border-muted)_0_5px,transparent_5px_11px,var(--color-border-muted)_11px_15px,transparent_15px_21px)] [background-size:16px_16px]"
             />
           </div>
         }

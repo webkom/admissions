@@ -25,6 +25,7 @@ class CreateApplicationTestCase(APITestCase):
             name="Webkom",
             lego_id=13,
             logo="https://example.com/webkom.png",
+            description="Webkom lager og drifter digitale tjenester for Abakus.",
             response_label="Hvorfor vil du søke Webkom?",
         )
         self.koskom = Group.objects.create(name="Koskom", lego_id=9)
@@ -107,6 +108,12 @@ class CreateApplicationTestCase(APITestCase):
         self.assertEqual(mine_response.data["priority_text"], priority_text)
 
     def test_my_application_includes_group_receipt_details(self):
+        AdmissionGroup.objects.filter(
+            admission=self.admission,
+            group=self.webkom,
+        ).update(
+            application_guidance=("Fortell hva du vil lære og bygge sammen med Webkom.")
+        )
         self.client.force_authenticate(user=self.pleb_anna)
         list_url = reverse(
             "userapplication-list", kwargs={"admission_slug": self.admission_slug}
@@ -126,7 +133,10 @@ class CreateApplicationTestCase(APITestCase):
             if group_application["group"]["name"] == "Webkom"
         )
         self.assertEqual(webkom["logo"], "https://example.com/webkom.png")
-        self.assertEqual(webkom["response_label"], "Hvorfor vil du søke Webkom?")
+        self.assertEqual(
+            webkom["response_label"],
+            "Fortell hva du vil lære og bygge sammen med Webkom.",
+        )
 
     def test_missing_group_selection_is_rejected_without_creating_candidate(self):
         self.client.force_authenticate(user=self.pleb_anna)
@@ -359,6 +369,47 @@ class CreateApplicationTestCase(APITestCase):
 
         self.assertEqual(questions_by_group["Webkom"], [question])
         self.assertEqual(questions_by_group["Koskom"], [])
+
+    def test_public_admission_normalizes_null_group_questions_to_an_empty_list(self):
+        AdmissionGroup.objects.filter(
+            admission=self.admission,
+            group=self.webkom,
+        ).update(header_fields=None)
+
+        groups = AdmissionPublicSerializer(self.admission).data["groups"]
+        webkom = next(group for group in groups if group["name"] == "Webkom")
+
+        self.assertEqual(webkom["header_fields"], [])
+
+    def test_public_admission_exposes_scoped_committee_content_with_fallback(self):
+        AdmissionGroup.objects.filter(
+            admission=self.admission,
+            group=self.webkom,
+        ).update(
+            committee_info=(
+                "I dette opptaket søker Webkom spesielt etter nye utviklere."
+            ),
+            application_guidance=("Fortell om noe du har vært nysgjerrig på å lage."),
+            interview_description=("Intervjuet består av en kort samtale."),
+        )
+
+        groups = AdmissionPublicSerializer(self.admission).data["groups"]
+        groups_by_name = {group["name"]: group for group in groups}
+
+        self.assertEqual(
+            groups_by_name["Webkom"]["description"],
+            "I dette opptaket søker Webkom spesielt etter nye utviklere.",
+        )
+        self.assertEqual(
+            groups_by_name["Webkom"]["response_label"],
+            "Fortell om noe du har vært nysgjerrig på å lage.",
+        )
+        self.assertEqual(
+            groups_by_name["Webkom"]["interview_description"],
+            "Intervjuet består av en kort samtale.",
+        )
+        self.assertEqual(groups_by_name["Koskom"]["description"], "")
+        self.assertEqual(groups_by_name["Koskom"]["response_label"], "")
 
     def test_missing_required_group_question_is_rejected(self):
         AdmissionGroup.objects.filter(

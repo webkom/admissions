@@ -25,6 +25,7 @@ export { compareInterviewStatuses };
 
 interface InterviewStatusControlProps {
   admissionSlug: string;
+  applicationScopeKey?: string;
   applicationId: string;
   candidateName: string;
   status: InterviewStatus;
@@ -36,6 +37,7 @@ interface InterviewStatusControlProps {
 
 const InterviewStatusControl: React.FC<InterviewStatusControlProps> = ({
   admissionSlug,
+  applicationScopeKey = "schedule",
   applicationId,
   candidateName,
   status,
@@ -44,7 +46,10 @@ const InterviewStatusControl: React.FC<InterviewStatusControlProps> = ({
   canEdit,
   compact = false,
 }) => {
-  const mutation = useAdminUpdateInterviewStatusMutation(admissionSlug);
+  const mutation = useAdminUpdateInterviewStatusMutation(
+    admissionSlug,
+    applicationScopeKey,
+  );
   const feedbackId = React.useId();
   const statusLabel = getInterviewStatusLabel(status);
   const tone = getInterviewStatusTone(status);

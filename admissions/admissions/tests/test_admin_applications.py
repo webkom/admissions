@@ -181,6 +181,10 @@ class AdminAdmissionPrivacyTestCase(APITestCase):
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertFalse(response.data["userdata"]["is_admin"])
+        self.assertEqual(
+            response.data["userdata"]["application_view_mode"],
+            "committee_full",
+        )
 
     def test_public_userdata_separates_membership_from_represented_groups(self):
         member_group = Group.objects.create(name="Member committee", lego_id=27)
@@ -201,6 +205,10 @@ class AdminAdmissionPrivacyTestCase(APITestCase):
             response.data["userdata"]["represented_groups"],
             [self.committee.name],
         )
+        self.assertEqual(
+            response.data["userdata"]["application_view_mode"],
+            "committee_minimal",
+        )
 
 
 class ListApplicationsTestCase(APITestCase):
@@ -209,10 +217,10 @@ class ListApplicationsTestCase(APITestCase):
         self.admission_slug = DEFAULT_ADMISSION_SLUG
 
         self.pleb = LegoUser.objects.create(lego_id=2)
-        leader_group = Group.objects.create(name="Abakus-Leder", lego_id=1)
+        self.admin_group = Group.objects.create(name="Abakus-Leder", lego_id=1)
 
         self.admission = create_admission()
-        self.admission.admin_groups.add(leader_group)
+        self.admission.admin_groups.add(self.admin_group)
 
         # Abakus leader
         self.admission_admin = LegoUser.objects.create(
@@ -222,7 +230,7 @@ class ListApplicationsTestCase(APITestCase):
         Membership.objects.create(
             user=self.admission_admin,
             role=LEADER,
-            group=leader_group,
+            group=self.admin_group,
         )
 
         # Webkom
@@ -406,7 +414,108 @@ class ListApplicationsTestCase(APITestCase):
         self.assertEqual(len(json[0]["group_applications"]), 1)
         # This GroupApplication should be to webkom
         self.assertEqual(json[0]["group_applications"][0]["group"]["name"], "Webkom")
+        self.assertEqual(
+            json[0]["application_view_mode"],
+            "committee_minimal",
+        )
+        self.assertEqual(json[0]["phone_number"], "00000000")
+        self.assertEqual(
+            set(json[0]),
+            {
+                "pk",
+                "application_view_mode",
+                "user",
+                "created_at",
+                "applied_within_deadline",
+                "phone_number",
+                "group_applications",
+                "interview_status",
+                "interview_status_updated_at",
+            },
+        )
+        self.assertEqual(
+            set(json[0]["group_applications"][0]),
+            {"group", "text", "header_fields_response"},
+        )
+        self.assertEqual(
+            set(json[0]["group_applications"][0]["group"]),
+            {"pk", "name", "logo", "response_label"},
+        )
+        self.assertEqual(json[0]["group_applications"][0]["text"], "Webkom application")
+        self.assertEqual(json[0]["group_applications"][0]["header_fields_response"], {})
         self.assertNotIn("priority_text", json[0])
+        self.assertNotIn("Bedkom application", str(json[0]))
+
+    def test_dual_role_admin_and_recruiter_gets_committee_minimal_view(self):
+        application = UserApplication.objects.create(
+            admission=self.admission,
+            user=self.pleb,
+            phone_number="00000000",
+            text="1. Bedkom\n2. Webkom\nprivate central comment",
+        )
+        GroupApplication.objects.create(
+            application=application,
+            group=self.webkom,
+            text="private Webkom application",
+            header_fields_response={"private": "webkom answer"},
+        )
+        GroupApplication.objects.create(
+            application=application,
+            group=self.bedkom,
+            text="private Bedkom application",
+            header_fields_response={"private": "bedkom answer"},
+        )
+        Membership.objects.create(
+            user=self.webkom_rec,
+            role=RECRUITING,
+            group=self.admin_group,
+        )
+        self.client.force_authenticate(user=self.webkom_rec)
+
+        response = self.client.get(
+            reverse(
+                "admin-userapplication-list",
+                kwargs={"admission_slug": self.admission_slug},
+            )
+        )
+        admission_response = self.client.get(
+            reverse("admission-detail", kwargs={"slug": self.admission_slug})
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(admission_response.status_code, status.HTTP_200_OK)
+        self.assertTrue(admission_response.data["userdata"]["is_admin"])
+        self.assertEqual(
+            admission_response.data["userdata"]["application_view_mode"],
+            "committee_minimal",
+        )
+        self.assertEqual(len(response.data), 1)
+        self.assertEqual(
+            response.data[0]["application_view_mode"],
+            "committee_minimal",
+        )
+        self.assertEqual(response.data[0]["phone_number"], "00000000")
+        self.assertEqual(
+            response.data[0]["group_applications"],
+            [
+                {
+                    "group": {
+                        "pk": str(self.webkom.pk),
+                        "name": self.webkom.name,
+                        "logo": self.webkom.logo,
+                        "response_label": self.webkom.response_label,
+                    },
+                    "text": "private Webkom application",
+                    "header_fields_response": {"private": "webkom answer"},
+                }
+            ],
+        )
+        self.assertNotIn("priority_text", response.data[0])
+        self.assertNotIn("email", response.data[0]["user"])
+        self.assertNotIn("username", response.data[0]["user"])
+        self.assertNotIn("private Bedkom application", str(response.data))
+        self.assertNotIn("bedkom answer", str(response.data))
+        self.assertNotIn("private central comment", str(response.data))
 
     def test_admission_admin_can_see_private_priority_comment(self):
         application = UserApplication.objects.create(
@@ -430,6 +539,10 @@ class ListApplicationsTestCase(APITestCase):
         )
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(
+            response.data[0]["application_view_mode"],
+            "admin_full",
+        )
         self.assertEqual(response.data[0]["priority_text"], application.text)
 
     def test_group_recruiter_can_update_interview_status(self):
@@ -453,9 +566,7 @@ class ListApplicationsTestCase(APITestCase):
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data["interview_status"], "confirmed")
-        self.assertEqual(
-            response.data["interview_status_updated_by"], self.webkom_rec.username
-        )
+        self.assertNotIn("interview_status_updated_by", response.data)
         application.refresh_from_db()
         self.assertEqual(application.interview_status, "confirmed")
         self.assertEqual(application.interview_status_updated_by, self.webkom_rec)
@@ -940,10 +1051,15 @@ class DeleteGroupApplicationsTestCase(APITestCase):
 
         self.webkom = Group.objects.create(name="Webkom", lego_id=1)
         self.arrkom = Group.objects.create(name="Arrkom", lego_id=2)
+        self.admin_group = Group.objects.create(name="Admission admins", lego_id=3)
         self.admission.groups.add(self.webkom, self.arrkom)
+        self.admission.admin_groups.add(self.admin_group)
 
         Membership.objects.create(
             user=self.webkom_leader, role=LEADER, group=self.webkom
+        )
+        Membership.objects.create(
+            user=self.webkom_leader, role=LEADER, group=self.admin_group
         )
 
         self.staff_user = LegoUser.objects.create(
@@ -1023,6 +1139,44 @@ class DeleteGroupApplicationsTestCase(APITestCase):
         self.assertEqual(res.data, {"groupId": ["Ugyldig gruppe-ID."]})
         self.assertTrue(
             GroupApplication.objects.filter(application=application).exists()
+        )
+
+    def test_dual_role_user_cannot_delete_hidden_or_whole_application(self):
+        application = UserApplication.objects.create(
+            user=self.pleb,
+            admission=self.admission,
+            phone_number="12345678",
+        )
+        webkom_application = GroupApplication.objects.create(
+            application=application,
+            group=self.webkom,
+            text="private Webkom application",
+        )
+        arrkom_application = GroupApplication.objects.create(
+            application=application,
+            group=self.arrkom,
+            text="private Arrkom application",
+        )
+        url = reverse(
+            "admin-userapplication-detail",
+            kwargs={"admission_slug": self.admission_slug, "pk": application.pk},
+        )
+        self.client.force_authenticate(user=self.webkom_leader)
+
+        whole_response = self.client.delete(url)
+        hidden_group_response = self.client.delete(f"{url}?groupId={self.arrkom.pk}")
+
+        self.assertEqual(whole_response.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(
+            hidden_group_response.status_code,
+            status.HTTP_403_FORBIDDEN,
+        )
+        self.assertTrue(UserApplication.objects.filter(pk=application.pk).exists())
+        self.assertTrue(
+            GroupApplication.objects.filter(pk=webkom_application.pk).exists()
+        )
+        self.assertTrue(
+            GroupApplication.objects.filter(pk=arrkom_application.pk).exists()
         )
 
 
@@ -1133,6 +1287,41 @@ class TerminateCommitteeApplicationsTestCase(APITestCase):
         self.assertTrue(
             GroupApplication.objects.filter(
                 application=self.only_committee_application, group=self.committee
+            ).exists()
+        )
+
+    def test_dual_role_admin_cannot_terminate_hidden_committee(self):
+        Membership.objects.create(
+            user=self.recruiter,
+            group=self.admin_group,
+            role=RECRUITING,
+        )
+        hidden_url = reverse(
+            "terminate-committee-applications",
+            kwargs={
+                "admission_slug": self.admission.slug,
+                "group_id": self.other_committee.pk,
+            },
+        )
+        self.client.force_authenticate(user=self.recruiter)
+
+        response = self.client.post(
+            hidden_url,
+            {"confirmation_name": self.other_committee.name},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertTrue(
+            GroupApplication.objects.filter(
+                application=self.shared_application,
+                group=self.other_committee,
+            ).exists()
+        )
+        self.assertTrue(
+            GroupApplication.objects.filter(
+                application=self.other_application,
+                group=self.other_committee,
             ).exists()
         )
 

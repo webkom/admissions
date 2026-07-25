@@ -1,14 +1,7 @@
 import React from "react";
 import { createColumnHelper } from "@tanstack/react-table";
-import FormatTime from "src/components/Time/FormatTime";
 import { ApplicationTableRow } from ".";
-import {
-  ChevronDown,
-  ChevronRight,
-  MessageCircle,
-  Phone,
-  Timer,
-} from "lucide-react";
+import { ChevronDown, ChevronRight, MessageCircle, Phone } from "lucide-react";
 import InterviewStatusControl, {
   compareInterviewStatuses,
 } from "./InterviewStatusControl";
@@ -17,6 +10,7 @@ import {
   iconSizes,
 } from "src/styles/designTokens";
 import { encodeSmsAddress } from "src/utils/emailLinks";
+import { getApplicationDeadlineStatus } from "src/utils/applicationAccess";
 
 const columnHelper = createColumnHelper<ApplicationTableRow>();
 
@@ -80,9 +74,11 @@ export const columns = [
         <span className="font-semibold text-text-primary">
           {row.original.fullname}
         </span>
-        <span className="text-detail text-text-muted">
-          @{row.original.username}
-        </span>
+        {row.original.username && (
+          <span className="text-detail text-text-muted">
+            @{row.original.username}
+          </span>
+        )}
       </div>
     ),
   }),
@@ -150,11 +146,12 @@ export const columns = [
     cell: ({ row, getValue }) => (
       <InterviewStatusControl
         admissionSlug={row.original.admissionSlug}
+        applicationScopeKey={row.original.applicationScopeKey}
         applicationId={row.original.id}
         candidateName={row.original.fullname}
         status={getValue()}
         statusUpdatedAt={row.original.interviewStatusUpdatedAt}
-        statusUpdatedBy={row.original.interviewStatusUpdatedBy}
+        statusUpdatedBy={row.original.interviewStatusUpdatedBy ?? ""}
         canEdit={row.original.canUpdateInterviewStatus}
         compact
       />
@@ -163,21 +160,21 @@ export const columns = [
   columnHelper.accessor("createdAt", {
     header: "Sendt",
     size: applicationTableColumnWidths.timestamp,
-    cell: (info) => (
-      <>
-        <span className="tabular-nums whitespace-nowrap">
-          <FormatTime format="d. MMM HH:mm">
-            {info.row.original.createdAt}
-          </FormatTime>
+    cell: (info) =>
+      info.row.original.createdAt ? (
+        <span
+          data-cy="application-sent-time"
+          data-late={!info.row.original.appliedWithinDeadline}
+          className={`tabular-nums whitespace-nowrap text-sm ${
+            info.row.original.appliedWithinDeadline
+              ? "text-success"
+              : "text-orange-500"
+          }`}
+        >
+          {getApplicationDeadlineStatus(
+            info.row.original.appliedWithinDeadline,
+          )}
         </span>
-        {!info.row.original.appliedWithinDeadline && (
-          <Timer
-            size={iconSizes.control}
-            aria-label="Søkte etter fristen"
-            className="ml-1.5 inline text-danger"
-          />
-        )}
-      </>
-    ),
+      ) : null,
   }),
 ];

@@ -231,6 +231,8 @@ const SelectableScheduleGrid: React.FC<SelectableScheduleGridProps> = ({
             activeCount={activeCount}
             totalCount={availableMinutes.length}
             selectable={isSelectable}
+            distinguishUnavailable
+            hideTrackWhenUnavailable
             fills={chunk.map((minute) =>
               isSlotSelectable(date, minute) &&
               activeSlots.has(makeSlotKey(date, minute))

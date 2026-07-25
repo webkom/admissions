@@ -55,9 +55,7 @@ describe("shared selectable schedule grid", () => {
       .should("have.attr", "data-selection-surface", "schedule-block")
       .and("have.attr", "data-selection-state", "active");
 
-    cy.get("[data-cy=admin-grid]")
-      .contains("button", "Finjuster enkelttider")
-      .click();
+    cy.get("[data-cy=admin-grid]").contains("button", "Enkelttider").click();
     cy.get(
       '[data-cy=admin-grid] [data-cy=fine-slot][data-date="2026-07-21"][data-minute="480"]',
     )
@@ -151,8 +149,11 @@ describe("shared selectable schedule grid", () => {
       .and("not.have.class", "bg-surface-neutral");
 
     overviewCell("2026-07-22", 1)
-      .should("contain.text", "Stengt")
-      .and("have.attr", "aria-label", "Stengt")
+      .should("not.contain.text", "(kort blokk)")
+      .and("not.contain.text", "0/2")
+      .and("not.contain.text", "tilgjengelige")
+      .and("have.attr", "aria-label")
+      .and("include", "onsdag 22. juli")
       .and("have.attr", "tabindex", "-1")
       .and("have.class", "bg-surface-neutral");
 
@@ -186,16 +187,31 @@ describe("shared selectable schedule grid", () => {
     )
       .should("have.attr", "aria-disabled", "true")
       .and("have.attr", "tabindex", "-1")
+      .and("have.class", "border-dashed")
+      .and("have.class", "bg-surface-muted");
+
+    cy.get(
+      '[data-cy=personal-grid] [role="button"][aria-label="personal-blocked"]',
+    )
+      .find("[data-selection-closed-overlay]")
+      .should("have.class", "opacity-35")
+      .and("have.class", "[background-image:var(--pattern-unavailable)]");
+
+    cy.get(
+      '[data-cy=personal-grid] [role="button"][aria-label="personal-blocked"]',
+    )
       .trigger("pointerdown", { pointerId: 3, force: true })
       .should("have.attr", "aria-pressed", "false");
   });
 
-  it("uses native table headers with one roving tab stop", () => {
-    cy.get('[data-cy=personal-grid] table[aria-label="personal availability"]')
+  it("uses grid headers with one roving tab stop", () => {
+    cy.get(
+      '[data-cy=personal-grid] [role="grid"][aria-label="personal availability"]',
+    )
       .should("exist")
       .within(() => {
-        cy.get('th[scope="col"]').should("have.length", 2);
-        cy.get('th[scope="row"]').should("have.length", 2);
+        cy.get('[role="columnheader"]').should("have.length", 2);
+        cy.get('[role="rowheader"]').should("have.length", 2);
         cy.get('[role="button"][tabindex="0"]')
           .should("have.length", 1)
           .and("have.attr", "aria-label")
@@ -260,7 +276,7 @@ describe("shared selectable schedule grid", () => {
 
   it("keeps day headers focused on the standard-block checkbox", () => {
     const dayCheckbox =
-      '[data-cy=admin-grid] input[aria-label^="Alle standardblokker for"]';
+      '[data-cy=admin-grid] input[aria-label^="Alle blokker for"]';
     cy.get(dayCheckbox).should("have.length.greaterThan", 0).first().check();
     cy.get(
       '[data-cy=admin-grid] [data-date="2026-07-21"][data-cy="pattern-block"]',
@@ -279,9 +295,7 @@ describe("shared selectable schedule grid", () => {
   it("includes the day in every admin grid control name", () => {
     adminBlock().should("have.attr", "aria-label").and("contain", "Tir 21.07");
 
-    cy.get("[data-cy=admin-grid]")
-      .contains("button", "Finjuster enkelttider")
-      .click();
+    cy.get("[data-cy=admin-grid]").contains("button", "Enkelttider").click();
     cy.get(
       '[data-cy=admin-grid] [data-cy=fine-slot][data-date="2026-07-21"][data-minute="480"]',
     )
@@ -371,9 +385,7 @@ describe("shared selectable schedule grid", () => {
     cy.get(
       '[data-cy=admin-grid] [data-cy=pattern-block][data-date="2026-07-21"]',
     ).should("have.length", 2);
-    cy.get("[data-cy=admin-grid]")
-      .contains("button", "Finjuster enkelttider")
-      .click();
+    cy.get("[data-cy=admin-grid]").contains("button", "Enkelttider").click();
     cy.get('[data-cy=admin-grid] [data-date="2026-07-21"][data-row-id]').should(
       "have.length",
       3,
@@ -438,9 +450,7 @@ describe("shared selectable schedule grid", () => {
       "true",
     );
 
-    cy.get("[data-cy=admin-grid]")
-      .contains("button", "Finjuster enkelttider")
-      .click();
+    cy.get("[data-cy=admin-grid]").contains("button", "Enkelttider").click();
     const fineSlot = (minute: number) =>
       `[data-cy=admin-grid] [data-cy=fine-slot][data-date="2026-07-22"][data-minute="${minute}"]`;
     cy.get(fineSlot(480)).trigger("pointerdown", { pointerId: 32 });
@@ -605,9 +615,7 @@ describe("shared selectable schedule grid", () => {
       );
     });
 
-    cy.get("[data-cy=admin-grid]")
-      .contains("button", "Finjuster enkelttider")
-      .click();
+    cy.get("[data-cy=admin-grid]").contains("button", "Enkelttider").click();
     cy.get(
       '[data-cy=admin-grid] [data-cy=planned-pause][data-date="2026-07-21"]',
     )
@@ -629,9 +637,7 @@ describe("shared selectable schedule grid", () => {
       "Ekstratid",
     );
 
-    cy.get("[data-cy=admin-grid]")
-      .contains("button", "Standardblokker")
-      .click();
+    cy.get("[data-cy=admin-grid]").contains("button", "Hele blokker").click();
     cy.get(
       '[data-cy=admin-grid] [data-cy=planned-pause][data-date="2026-07-21"]',
     ).should("not.exist");
@@ -640,14 +646,12 @@ describe("shared selectable schedule grid", () => {
       return false;
     });
     cy.get("[data-cy=admin-grid]")
-      .contains("button", "Steng alle intervjutider")
+      .contains("button", "Steng alle tider")
       .click();
     cy.get("[data-cy=admin-grid]")
-      .contains("button", "Åpne alle standardblokker")
+      .contains("button", "Åpne alle blokker")
       .click();
-    cy.get("[data-cy=admin-grid]")
-      .contains("button", "Finjuster enkelttider")
-      .click();
+    cy.get("[data-cy=admin-grid]").contains("button", "Enkelttider").click();
     cy.get(
       '[data-cy=admin-grid] [data-cy=planned-pause][data-date="2026-07-21"]',
     ).should("contain.text", "Ekstratid, 1");
@@ -660,7 +664,7 @@ describe("shared selectable schedule grid", () => {
         "contain.text",
         "Lengre pause, 90 min",
       );
-      cy.contains("button", "Finjuster enkelttider").click();
+      cy.contains("button", "Enkelttider").click();
       cy.get("[data-cy=long-pause-divider]").should("not.exist");
       cy.get("[data-cy=planned-pause]").should("have.length", 2);
     });
@@ -714,19 +718,19 @@ describe("shared selectable schedule grid", () => {
 
   it("restores the current whole-block baseline after fine-tuning", () => {
     cy.get("[data-cy=admin-config-harness]").within(() => {
-      cy.contains("button", "Finjuster enkelttider").click();
+      cy.contains("button", "Enkelttider").click();
       cy.get('[data-cy=fine-slot][data-date="2026-07-21"][data-minute="510"]')
         .click()
         .should("have.attr", "aria-pressed", "false");
 
-      cy.contains("button", "Standardblokker").click();
+      cy.contains("button", "Hele blokker").click();
       cy.get(
         '[data-cy=pattern-block][data-date="2026-07-21"][data-row-id="block-480"]',
       ).should("have.attr", "aria-pressed", "mixed");
 
-      cy.contains("button", "Finjuster enkelttider").click();
+      cy.contains("button", "Enkelttider").click();
       cy.on("window:confirm", () => true);
-      cy.contains("button", "Tilbakestill til standardmønster").click();
+      cy.contains("button", "Tilbakestill til baseline-mønster").click();
       cy.get(
         '[data-cy=fine-slot][data-date="2026-07-21"][data-minute="510"]',
       ).should("have.attr", "aria-pressed", "true");
@@ -735,7 +739,7 @@ describe("shared selectable schedule grid", () => {
 
   it("preserves a closed internal segment through save, reload and reset", () => {
     cy.get("[data-cy=persistence-admin-config-harness]").within(() => {
-      cy.contains("button", "Finjuster enkelttider").click();
+      cy.contains("button", "Enkelttider").click();
       cy.get('[data-cy=fine-slot][data-minute="510"]')
         .click()
         .should("have.attr", "aria-pressed", "false");
@@ -747,9 +751,9 @@ describe("shared selectable schedule grid", () => {
         "aria-pressed",
         "mixed",
       );
-      cy.contains("button", "Finjuster enkelttider").click();
+      cy.contains("button", "Enkelttider").click();
       cy.on("window:confirm", () => true);
-      cy.contains("button", "Tilbakestill til standardmønster").click();
+      cy.contains("button", "Tilbakestill til baseline-mønster").click();
       cy.get('[data-cy=fine-slot][data-minute="510"]').should(
         "have.attr",
         "aria-pressed",
@@ -760,12 +764,10 @@ describe("shared selectable schedule grid", () => {
 
   it("requires an explicit reset before legacy layouts can use v2 editing", () => {
     cy.get("[data-cy=legacy-admin-config-harness]").within(() => {
-      cy.contains("button", "Finjuster enkelttider").should("be.disabled");
-      cy.contains("button", "Åpne alle standardblokker").should("be.disabled");
-      cy.contains("button", "Steng alle intervjutider").should("be.disabled");
-      cy.get('input[aria-label^="Alle standardblokker for"]').should(
-        "be.disabled",
-      );
+      cy.contains("button", "Enkelttider").should("be.disabled");
+      cy.contains("button", "Åpne alle blokker").should("be.disabled");
+      cy.contains("button", "Steng alle tider").should("be.disabled");
+      cy.get('input[aria-label^="Alle blokker for"]').should("be.disabled");
       cy.get('[data-cy=pattern-block][data-row-id="block-480"]')
         .should("have.attr", "aria-disabled", "true")
         .and("have.attr", "tabindex", "-1")
@@ -774,9 +776,7 @@ describe("shared selectable schedule grid", () => {
 
       cy.on("window:confirm", () => true);
       cy.contains("button", "Tilbakestill til dagens blokkmønster").click();
-      cy.contains("button", "Åpne alle standardblokker").should(
-        "not.be.disabled",
-      );
+      cy.contains("button", "Åpne alle blokker").should("not.be.disabled");
       cy.get('[data-cy=pattern-block][data-row-id="block-480"]').should(
         "have.attr",
         "aria-disabled",

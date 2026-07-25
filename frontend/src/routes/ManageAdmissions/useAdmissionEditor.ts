@@ -7,6 +7,7 @@ import * as Yup from "yup";
 
 import { useManageAdmission } from "src/query/hooks";
 import {
+  type CommitteeContent,
   type AdmissionMutationResponse,
   type MutationAdmission,
   useManageCreateAdmission,
@@ -14,7 +15,6 @@ import {
   useManageUpdateAdmission,
 } from "src/query/mutations";
 import type { Admission } from "src/types";
-import type { FieldModel } from "src/utils/jsonFields";
 import { getApiErrorMessage, getApiFieldErrors } from "src/utils/apiErrors";
 
 export interface AdmissionFormStatus {
@@ -25,13 +25,6 @@ export interface AdmissionFormStatus {
 export interface AdmissionReviewItem {
   label: string;
   value: string;
-}
-
-interface AdmissionErrorItem {
-  field: keyof MutationAdmission;
-  label: string;
-  message: string;
-  targetId: string;
 }
 
 export type AdmissionFieldError = (
@@ -45,33 +38,43 @@ const ADMISSION_FIELD_NAMES = [
   "title",
   "slug",
   "description",
-  "group_questions",
+  "group_content",
   "open_from",
   "public_deadline",
   "closed_from",
   "admin_groups",
   "groups",
 ] as const;
+
+type AdmissionPresentedField = (typeof ADMISSION_FIELD_NAMES)[number];
+
+interface AdmissionErrorItem {
+  field: AdmissionPresentedField;
+  label: string;
+  message: string;
+  targetId: string;
+}
+
 const ADMISSION_FIELD_PRESENTATION: Record<
-  (typeof ADMISSION_FIELD_NAMES)[number],
+  AdmissionPresentedField,
   { label: string; targetId: string }
 > = {
   title: { label: "Tittel", targetId: "admission-title" },
   slug: { label: "Slug", targetId: "admission-slug" },
   description: { label: "Beskrivelse", targetId: "admission-description" },
-  group_questions: {
-    label: "Gruppespesifikke spørsmål",
-    targetId: "additional-questions-title",
+  group_content: {
+    label: "Komitéinnhold",
+    targetId: "committee-content-title",
   },
   open_from: { label: "Opptaket åpner", targetId: "open_from" },
   public_deadline: { label: "Søknadsfrist", targetId: "public_deadline" },
   closed_from: { label: "Opptaket stenger", targetId: "closed_from" },
   admin_groups: {
-    label: "Ansvarlige opptaksgrupper",
+    label: "Admin-grupper",
     targetId: "admin-groups",
   },
   groups: {
-    label: "Opptaksgrupper som rekrutterer",
+    label: "Grupper som har opptak",
     targetId: "admission-groups",
   },
 };
@@ -81,6 +84,7 @@ const createEmptyAdmission = (): MutationAdmission => ({
   slug: "",
   description: "",
   group_questions: {},
+  group_content: {},
   open_from: "",
   public_deadline: "",
   closed_from: "",
@@ -123,8 +127,16 @@ const admissionToFormValues = (admission: Admission): MutationAdmission => ({
   title: admission.title,
   slug: admission.slug,
   description: admission.description,
-  group_questions: Object.fromEntries(
-    admission.groups.map((group) => [group.pk, group.header_fields ?? []]),
+  group_questions: {},
+  group_content: Object.fromEntries(
+    admission.groups.map((group) => [
+      group.pk,
+      {
+        committee_info: group.committee_info ?? null,
+        application_guidance: group.application_guidance ?? null,
+        interview_description: group.interview_description ?? null,
+      },
+    ]),
   ),
   open_from: formatDateString(admission.open_from),
   public_deadline: formatDateString(admission.public_deadline),
@@ -139,10 +151,18 @@ const prepareAdmissionValues = (values: MutationAdmission) => {
     title: values.title.trim(),
     slug: values.slug?.trim() ?? "",
   };
+  const selectedGroupIds = new Set(displayValues.groups);
+  const selectedGroupContent = Object.fromEntries(
+    Object.entries(displayValues.group_content).filter(([groupId]) =>
+      selectedGroupIds.has(groupId),
+    ),
+  );
   return {
     displayValues,
     requestValues: {
       ...displayValues,
+      group_questions: {},
+      group_content: selectedGroupContent,
       open_from: norwegianTimeToIso(displayValues.open_from) ?? "",
       public_deadline: norwegianTimeToIso(displayValues.public_deadline) ?? "",
       closed_from: norwegianTimeToIso(displayValues.closed_from) ?? "",
@@ -195,16 +215,17 @@ const validationSchema = Yup.object({
   groups: Yup.array()
     .of(Yup.string().required())
     .min(1, "Velg minst én gruppe som har opptak"),
-  group_questions: Yup.object().test(
-    "valid-question-titles",
-    "Alle spørsmål må inneholde minst 5 tegn",
-    (groupQuestions) =>
-      (Object.values(groupQuestions ?? {}) as FieldModel[][]).every((fields) =>
-        fields.every(
-          (field) =>
-            field.type === "text" ||
-            (typeof field.title === "string" && field.title.trim().length >= 5),
-        ),
+  group_content: Yup.object().test(
+    "valid-committee-content-length",
+    "Komitéinnhold kan ikke være lengre enn 600 tegn",
+    (groupContent) =>
+      Object.values(
+        (groupContent ?? {}) as Record<string, CommitteeContent>,
+      ).every(
+        (content) =>
+          (content.committee_info?.length ?? 0) <= 600 &&
+          (content.application_guidance?.length ?? 0) <= 600 &&
+          (content.interview_description?.length ?? 0) <= 600,
       ),
   ),
 });
@@ -240,7 +261,7 @@ export const useAdmissionEditor = () => {
     });
   };
 
-  const focusField = (field: keyof MutationAdmission) => {
+  const focusField = (field: AdmissionPresentedField) => {
     const target =
       formRef.current?.querySelector<HTMLElement>(
         `[data-admission-field="${field}"]`,
@@ -460,15 +481,22 @@ export const useAdmissionEditor = () => {
         )}`,
       },
       {
-        label: "Spørsmål",
-        value: pluralize(
-          Object.values(formik.values.group_questions).reduce(
-            (count, fields) => count + fields.length,
-            0,
-          ),
-          "felt",
-          "felt",
-        ),
+        label: "Komitéinnhold",
+        value: `${
+          formik.values.groups.filter((groupId) => {
+            const content = formik.values.group_content[groupId];
+            return Boolean(
+              content &&
+                (content.committee_info !== null ||
+                  content.application_guidance !== null ||
+                  content.interview_description !== null),
+            );
+          }).length
+        } av ${pluralize(
+          formik.values.groups.length,
+          "gruppe",
+          "grupper",
+        )} tilpasset`,
       },
     ],
     [formik.values],
@@ -489,6 +517,7 @@ export const useAdmissionEditor = () => {
       fieldError,
       errorItems,
       focusField,
+      hasAdmissionGroups: Boolean(formik.values.groups.length),
       hasUnsavedChanges,
       invalidSubmission: formik.submitCount > 0 && !formik.isValid,
       discardChanges,

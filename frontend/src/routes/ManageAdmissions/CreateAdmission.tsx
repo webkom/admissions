@@ -53,7 +53,7 @@ const CreateAdmission = () => {
         </Title>
         <Lead>
           {editor.isNew
-            ? "Sett opp grunninformasjon, tidsrom, tilgang og spørsmål. Kontroller sammendraget før opptaket opprettes."
+            ? "Sett opp grunninformasjon, tidsrom, tilgang og komitéinnhold. Kontroller sammendraget før opptaket opprettes."
             : "Oppdater innstillingene og kontroller sammendraget før du lagrer."}
         </Lead>
       </FormHeader>
@@ -108,6 +108,7 @@ const CreateAdmission = () => {
       <AdmissionReviewSections
         isNew={editor.isNew}
         reviewItems={editor.reviewItems}
+        hasAdmissionGroups={editor.form.hasAdmissionGroups}
         isSaving={editor.save.isPending}
         isDeleting={editor.deletion.isPending}
         hasUnsavedChanges={editor.form.hasUnsavedChanges}

@@ -18,11 +18,11 @@ import {
   isPausePreset,
   parseIntegerInRange,
   PAUSE_PRESETS,
-  openAllStandardBlocks,
+  openAllInterviewBlocks,
   preserveManualDraftSlots,
   DURATION_PRESETS,
-  setDayStandardBlocksOpen,
-  setStandardBlockOpen,
+  setDayInterviewBlocksOpen,
+  setInterviewBlockOpen,
   shapeDraftSlots,
   rebuildBaseForBlockPattern,
   toggleFineTuneSlot,
@@ -106,7 +106,7 @@ describe("admin schedule configuration model", () => {
     expect(chunks[1]).to.have.length(3);
   });
 
-  it("offers standard slots and complete interview slots inside pauses", () => {
+  it("offers interview slots and complete interview slots inside pauses", () => {
     const chunks = buildBlockTimeChunks({
       dayStartMinute: 8 * 60,
       dayEndMinute: 10 * 60,
@@ -195,14 +195,14 @@ describe("admin schedule configuration model", () => {
       shortBlockCount: 1,
       partialBlockCount: 1,
       openSlotCount: 6,
-      closedStandardSlotCount: 1,
-      openedStandardSlotCount: 1,
+      closedInterviewSlotCount: 1,
+      openedInterviewSlotCount: 1,
       openedPauseSlotCount: 1,
       manualChangeCount: 3,
     });
   });
 
-  it("applies bulk actions with explicit standard and all-capacity scopes", () => {
+  it("applies bulk actions with explicit block and all-capacity scopes", () => {
     const date = "2026-07-20";
     const chunks = [[480, 510]];
     const pauseExtra = makeSlotKey(date, 540);
@@ -214,7 +214,11 @@ describe("admin schedule configuration model", () => {
       ],
     };
 
-    const opened = openAllStandardBlocks({ dates: [date], chunks, ...initial });
+    const opened = openAllInterviewBlocks({
+      dates: [date],
+      chunks,
+      ...initial,
+    });
     expect(opened.enabledSlots).to.deep.equal(
       new Set([makeSlotKey(date, 480), makeSlotKey(date, 510), pauseExtra]),
     );
@@ -222,20 +226,21 @@ describe("admin schedule configuration model", () => {
       { slot: pauseExtra, open: true },
     ]);
 
-    const standardClosed = setDayStandardBlocksOpen({
+    const blockClosed = setDayInterviewBlocksOpen({
       date,
       chunks,
       open: false,
       ...opened,
     });
-    expect(standardClosed.enabledSlots).to.deep.equal(new Set([pauseExtra]));
-    expect(standardClosed.slotOverrides).to.deep.equal([
+    expect(blockClosed.enabledSlots).to.deep.equal(new Set([pauseExtra]));
+    expect(blockClosed.slotOverrides).to.deep.equal([
       { slot: pauseExtra, open: true },
     ]);
 
-    expect(closeDayScheduleCapacity({ date, ...standardClosed })).to.deep.equal(
-      { enabledSlots: new Set(), slotOverrides: [] },
-    );
+    expect(closeDayScheduleCapacity({ date, ...blockClosed })).to.deep.equal({
+      enabledSlots: new Set(),
+      slotOverrides: [],
+    });
     expect(closeAllScheduleCapacity()).to.deep.equal({
       enabledSlots: new Set(),
       slotOverrides: [],
@@ -263,7 +268,7 @@ describe("admin schedule configuration model", () => {
     });
     expect(resetToggle).to.deep.equal(baseline);
 
-    const closed = setStandardBlockOpen({
+    const closed = setInterviewBlockOpen({
       date,
       minutes,
       open: false,

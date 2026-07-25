@@ -10,7 +10,7 @@ import {
 } from "./ScheduleGridFrame";
 import { buildSchedulePatternRows } from "./adminScheduleConfigModel";
 
-type EditorView = "blocks" | "fine";
+type EditingMode = "blocks" | "slots";
 
 interface AdminAvailabilityGridProps {
   dates: string[];
@@ -18,17 +18,17 @@ interface AdminAvailabilityGridProps {
   blockSize: number;
   enabledSlots: ReadonlySet<string>;
   sessionDuration: number;
-  view: EditorView;
+  view: EditingMode;
   customizationCount: number;
   fineTuningDisabled?: boolean;
   editingDisabled?: boolean;
-  onChangeView: (view: EditorView) => void;
+  onChangeView: (view: EditingMode) => void;
   onResetCustomizations: () => void;
   onSetBlock: (date: string, minutes: number[], open: boolean) => void;
   onToggleSlot: (date: string, minute: number) => void;
-  onOpenAllStandardBlocks: () => void;
+  onOpenAllBlocks: () => void;
   onCloseAllCapacity: () => void;
-  onToggleDayStandardBlocks: (date: string, open: boolean) => void;
+  onToggleDayBlocks: (date: string, open: boolean) => void;
 }
 
 const AdminAvailabilityGrid: React.FC<AdminAvailabilityGridProps> = ({
@@ -45,11 +45,11 @@ const AdminAvailabilityGrid: React.FC<AdminAvailabilityGridProps> = ({
   onResetCustomizations,
   onSetBlock,
   onToggleSlot,
-  onOpenAllStandardBlocks,
+  onOpenAllBlocks,
   onCloseAllCapacity,
-  onToggleDayStandardBlocks,
+  onToggleDayBlocks,
 }) => {
-  const standardMinutes = React.useMemo(() => chunks.flat(), [chunks]);
+  const interviewSlots = React.useMemo(() => chunks.flat(), [chunks]);
   const patternRows = React.useMemo(
     () => buildSchedulePatternRows(chunks, sessionDuration, blockSize),
     [blockSize, chunks, sessionDuration],
@@ -106,7 +106,7 @@ const AdminAvailabilityGrid: React.FC<AdminAvailabilityGridProps> = ({
               label="Stengt"
               swatchClassName="border-border-soft bg-surface-neutral [background-image:var(--pattern-unavailable)]"
             />
-            {(view === "fine" || hasOpenedPauseSlot) && (
+            {(view === "slots" || hasOpenedPauseSlot) && (
               <ScheduleGridLegendItem
                 label="Ekstratid"
                 swatchClassName="border-dashed border-brand-border bg-brand-soft"
@@ -114,18 +114,18 @@ const AdminAvailabilityGrid: React.FC<AdminAvailabilityGridProps> = ({
             )}
           </div>
         </div>
-        <SegmentedControl<EditorView>
+        <SegmentedControl<EditingMode>
           value={view}
           onChange={onChangeView}
           aria-label="Redigeringsnivå for intervjutider"
           items={[
-            { key: "blocks", label: "Standardblokker" },
+            { key: "blocks", label: "Hele blokker" },
             {
-              key: "fine",
-              label: "Finjuster enkelttider",
+              key: "slots",
+              label: "Enkelttider",
               disabled: fineTuningDisabled,
               title: fineTuningDisabled
-                ? "Tilbakestill eldre blokkoppsett før finjustering"
+                ? "Tilbakestill eldre blokkoppsett før du åpner enkelttider"
                 : undefined,
             },
           ]}
@@ -138,7 +138,7 @@ const AdminAvailabilityGrid: React.FC<AdminAvailabilityGridProps> = ({
         </p>
       )}
 
-      {view === "fine" && (
+      {view === "slots" && (
         <div
           data-cy="manual-slot-editing-notice"
           className="mx-5 mb-3 flex flex-wrap items-center justify-between gap-3 border-y border-border-soft py-2.5 text-detail text-text-muted handheld:mx-4"
@@ -153,7 +153,7 @@ const AdminAvailabilityGrid: React.FC<AdminAvailabilityGridProps> = ({
               disabled={editingDisabled}
               onClick={onResetCustomizations}
             >
-              Tilbakestill til standardmønster
+              Tilbakestill til baseline-mønster
             </button>
           )}
         </div>
@@ -164,9 +164,9 @@ const AdminAvailabilityGrid: React.FC<AdminAvailabilityGridProps> = ({
           type="button"
           className={cn(actionButtonBase, actionButtonGhost, "px-3 py-1.5")}
           disabled={editingDisabled}
-          onClick={onOpenAllStandardBlocks}
+          onClick={onOpenAllBlocks}
         >
-          Åpne alle standardblokker
+          Åpne alle blokker
         </button>
         <button
           type="button"
@@ -174,7 +174,7 @@ const AdminAvailabilityGrid: React.FC<AdminAvailabilityGridProps> = ({
           disabled={editingDisabled}
           onClick={handleCloseAllCapacity}
         >
-          Steng alle intervjutider
+          Steng alle tider
         </button>
       </div>
 
@@ -192,11 +192,11 @@ const AdminAvailabilityGrid: React.FC<AdminAvailabilityGridProps> = ({
           renderDayHeader={(date) => {
             const { weekday, dayMonth } = formatDateHeader(date);
             const isAllSelected =
-              standardMinutes.length > 0 &&
-              standardMinutes.every((minute) =>
+              interviewSlots.length > 0 &&
+              interviewSlots.every((minute) =>
                 enabledSlots.has(makeSlotKey(date, minute)),
               );
-            const isSomeSelected = standardMinutes.some((minute) =>
+            const isSomeSelected = interviewSlots.some((minute) =>
               enabledSlots.has(makeSlotKey(date, minute)),
             );
 
@@ -209,19 +209,17 @@ const AdminAvailabilityGrid: React.FC<AdminAvailabilityGridProps> = ({
                 <label className="flex cursor-pointer items-center gap-1 text-label font-semibold text-text-subtle">
                   <input
                     type="checkbox"
-                    aria-label={`Alle standardblokker for ${weekday} ${dayMonth}`}
+                    aria-label={`Alle blokker for ${weekday} ${dayMonth}`}
                     className="h-3.5 w-3.5 accent-brand"
-                    disabled={editingDisabled || standardMinutes.length === 0}
+                    disabled={editingDisabled || interviewSlots.length === 0}
                     checked={isAllSelected}
                     ref={(input) => {
                       if (input)
                         input.indeterminate = isSomeSelected && !isAllSelected;
                     }}
-                    onChange={() =>
-                      onToggleDayStandardBlocks(date, !isAllSelected)
-                    }
+                    onChange={() => onToggleDayBlocks(date, !isAllSelected)}
                   />
-                  Alle standardblokker
+                  Alle blokker
                 </label>
               </ScheduleDayHeader>
             );

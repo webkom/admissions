@@ -20,6 +20,9 @@ from structlog import get_logger
 
 from admissions.admissions import constants
 from admissions.admissions.admission_access import (
+    APPLICATION_VIEW_MODE_ADMIN_FULL,
+    APPLICATION_VIEW_MODE_COMMITTEE_MINIMAL,
+    get_application_view_mode,
     get_representing_groups,
     user_is_admission_admin,
 )
@@ -44,9 +47,11 @@ from admissions.admissions.serializers import (
     AdmissionListPublicSerializer,
     AdmissionPublicSerializer,
     ApplicationCreateUpdateSerializer,
+    CommitteeMinimalApplicationSerializer,
     GroupSerializer,
     InterviewStatusSerializer,
     InterviewStatusUpdateSerializer,
+    ManageAdmissionSerializer,
     UserApplicationSerializer,
 )
 from admissions.utils.email import send_message
@@ -248,13 +253,57 @@ class AdminApplicationViewSet(
         )
         return super().get_throttles()
 
-    def get_queryset(self):
-        admission_slug = self.kwargs.get("admission_slug", None)
+    def get_application_exposure(self):
+        if hasattr(self, "_application_exposure"):
+            return self._application_exposure
+        admission_slug = self.kwargs.get("admission_slug")
         admission = get_object_or_404(Admission, slug=admission_slug)
+        user = self.request.user
+        user.__class__ = LegoUser
+        represented_groups = get_representing_groups(admission, user)
+        view_mode = get_application_view_mode(admission, user)
+        self._application_exposure = (
+            admission,
+            represented_groups,
+            view_mode,
+        )
+        return self._application_exposure
+
+    def get_serializer_class(self):
+        if (
+            getattr(self, "action", None) == "list"
+            and self.get_application_exposure()[2]
+            == APPLICATION_VIEW_MODE_COMMITTEE_MINIMAL
+        ):
+            return CommitteeMinimalApplicationSerializer
+        return super().get_serializer_class()
+
+    def get_queryset(self):
+        admission, representing_groups, view_mode = self.get_application_exposure()
+        admission_slug = admission.slug
         user = self.request.user
         if user.is_anonymous:
             return UserApplication.objects.none()
-        user.__class__ = LegoUser
+        if view_mode == APPLICATION_VIEW_MODE_COMMITTEE_MINIMAL:
+            qs = GroupApplication.objects.filter(
+                group__in=representing_groups
+            ).select_related("group")
+            return (
+                super()
+                .get_queryset()
+                .filter(
+                    group_applications__group__in=representing_groups,
+                    admission__slug=admission_slug,
+                )
+                .distinct()
+                .prefetch_related(
+                    Prefetch(
+                        "group_applications",
+                        queryset=qs,
+                        to_attr="group_applications_filtered",
+                    )
+                )
+            )
         # Check membership in admin groups
         if user_is_admission_admin(admission, user):
             return (
@@ -264,7 +313,6 @@ class AdminApplicationViewSet(
                 .prefetch_related("group_applications", "group_applications__group")
             )
         # Check membership in admission groups
-        representing_groups = get_representing_groups(admission, user)
         if representing_groups.exists():
             qs = GroupApplication.objects.filter(
                 group__in=representing_groups
@@ -291,16 +339,12 @@ class AdminApplicationViewSet(
 
     def get_serializer_context(self):
         context = super().get_serializer_context()
-        admission_slug = self.kwargs.get("admission_slug")
-        if not admission_slug or self.request.user.is_anonymous:
+        if self.request.user.is_anonymous:
             return context
-        admission = Admission.objects.filter(slug=admission_slug).first()
-        if admission is None:
-            return context
-        self.request.user.__class__ = LegoUser
-        context["include_priority_text"] = user_is_admission_admin(
-            admission,
-            self.request.user,
+        _, _, view_mode = self.get_application_exposure()
+        context["application_view_mode"] = view_mode
+        context["include_priority_text"] = view_mode in (
+            APPLICATION_VIEW_MODE_ADMIN_FULL,
         )
         return context
 
@@ -326,22 +370,28 @@ class AdminApplicationViewSet(
             )
         except InterviewStatusNotFound:
             raise NotFound() from None
-        return Response(InterviewStatusSerializer(updated).data)
+        response_data = InterviewStatusSerializer(updated).data
+        if (
+            self.get_application_exposure()[2]
+            == APPLICATION_VIEW_MODE_COMMITTEE_MINIMAL
+        ):
+            response_data.pop("interview_status_updated_by", None)
+        return Response(response_data)
 
     def destroy(self, request, *args, **kwargs):
-        admission_slug = self.kwargs.get("admission_slug", None)
-        admission = get_object_or_404(Admission, slug=admission_slug)
+        admission, representing_groups, view_mode = self.get_application_exposure()
         self.request.user.__class__ = LegoUser
 
         group_id = request.query_params.get("groupId", None)
         user_is_admin = user_is_admission_admin(admission, self.request.user)
+        is_committee_minimal = view_mode == APPLICATION_VIEW_MODE_COMMITTEE_MINIMAL
 
         # Only admins can delete UserApplication objects
         if group_id is None:
-            if user_is_admin:
+            if user_is_admin and not is_committee_minimal:
                 return super().destroy(request, *args, **kwargs)
             else:
-                return Response(status=status.HTTP_400_BAD_REQUEST)
+                return Response(status=status.HTTP_403_FORBIDDEN)
 
         try:
             group_id = Group._meta.pk.to_python(group_id)
@@ -352,8 +402,9 @@ class AdminApplicationViewSet(
             )
 
         # Verify that the user is permitted to delete the group application
-        representing_groups = get_representing_groups(admission, self.request.user)
-        if not user_is_admin and (not representing_groups.filter(pk=group_id).exists()):
+        if (is_committee_minimal or not user_is_admin) and (
+            not representing_groups.filter(pk=group_id).exists()
+        ):
             return Response(
                 status=status.HTTP_403_FORBIDDEN,
                 data="You are not permitted to delete applications for this group",
@@ -402,6 +453,14 @@ class TerminateCommitteeApplicationsView(APIView):
         group = get_object_or_404(admission.groups, pk=group_id)
 
         if not user_is_admission_admin(admission, request.user):
+            return Response(status=status.HTTP_403_FORBIDDEN)
+        if (
+            get_application_view_mode(admission, request.user)
+            == APPLICATION_VIEW_MODE_COMMITTEE_MINIMAL
+            and not get_representing_groups(admission, request.user)
+            .filter(pk=group.pk)
+            .exists()
+        ):
             return Response(status=status.HTTP_403_FORBIDDEN)
 
         confirmation_name = request.data.get("confirmation_name")
@@ -459,7 +518,7 @@ class ManageAdmissionViewSet(viewsets.ModelViewSet):
 
     def get_serializer_class(self):
         if self.request.method == "GET":
-            return AdminAdmissionSerializer
+            return ManageAdmissionSerializer
         elif self.request.method == "POST" or self.request.method == "PATCH":
             return AdminCreateUpdateAdmissionSerializer
 

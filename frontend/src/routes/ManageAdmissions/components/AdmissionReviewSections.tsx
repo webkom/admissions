@@ -19,6 +19,7 @@ import {
 interface AdmissionReviewSectionsProps {
   isNew: boolean;
   reviewItems: AdmissionReviewItem[];
+  hasAdmissionGroups: boolean;
   isSaving: boolean;
   isDeleting: boolean;
   hasUnsavedChanges: boolean;
@@ -35,6 +36,7 @@ const AdmissionReviewSections = ({
   isSaving,
   isDeleting,
   hasUnsavedChanges,
+  hasAdmissionGroups,
   saveStatus,
   deleteStatus,
   canDelete,
@@ -69,7 +71,12 @@ const AdmissionReviewSections = ({
       <ActionRow>
         <StyledButton
           type="submit"
-          disabled={isSaving || isDeleting || (!isNew && !hasUnsavedChanges)}
+          disabled={
+            isSaving ||
+            isDeleting ||
+            (!isNew && !hasUnsavedChanges) ||
+            !hasAdmissionGroups
+          }
           success
         >
           {isSaving ? "Lagrer…" : isNew ? "Opprett opptak" : "Lagre endringer"}

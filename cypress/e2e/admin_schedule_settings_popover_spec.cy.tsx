@@ -45,7 +45,7 @@ describe("inline schedule settings and standard-block preview", () => {
       .should("contain.text", "Pause, 30 min")
       .and("contain.text", "… neste blokk");
     cy.get("[data-cy=standard-block-preview]")
-      .should("not.contain.text", "Slik blir én standardblokk")
+      .should("not.contain.text", "Slik blir én intervjublokk")
       .and("not.contain.text", "Intervjutidene hører sammen");
     cy.get("[data-cy=interview-slot]").should("have.length", 4);
     cy.get("[data-cy=layout-result-preview]").should("not.exist");

@@ -232,8 +232,8 @@ interface ScheduleDraftSummary {
   shortBlockCount: number;
   partialBlockCount: number;
   openSlotCount: number;
-  closedStandardSlotCount: number;
-  openedStandardSlotCount: number;
+  closedInterviewSlotCount: number;
+  openedInterviewSlotCount: number;
   openedPauseSlotCount: number;
   manualChangeCount: number;
 }
@@ -254,12 +254,12 @@ export const deriveScheduleDraftSummary = ({
   let wholeBlockCount = 0;
   let shortBlockCount = 0;
   let partialBlockCount = 0;
-  const standardSlots = new Set<string>();
+  const interviewBlockSlots = new Set<string>();
 
   dates.forEach((date) => {
     chunks.forEach((chunk) => {
       const keys = chunk.map((minute) => makeSlotKey(date, minute));
-      keys.forEach((key) => standardSlots.add(key));
+      keys.forEach((key) => interviewBlockSlots.add(key));
       const openCount = keys.filter((key) => enabledSlots.has(key)).length;
       if (openCount === 0) return;
       if (openCount < keys.length) {
@@ -272,14 +272,14 @@ export const deriveScheduleDraftSummary = ({
     });
   });
 
-  let closedStandardSlotCount = 0;
-  let openedStandardSlotCount = 0;
+  let closedInterviewSlotCount = 0;
+  let openedInterviewSlotCount = 0;
   let openedPauseSlotCount = 0;
   const overrides = canonicalizeSlotOverrides(slotOverrides);
   overrides.forEach((override) => {
-    if (standardSlots.has(override.slot)) {
-      if (override.open) openedStandardSlotCount += 1;
-      else closedStandardSlotCount += 1;
+    if (interviewBlockSlots.has(override.slot)) {
+      if (override.open) openedInterviewSlotCount += 1;
+      else closedInterviewSlotCount += 1;
     } else if (override.open) {
       openedPauseSlotCount += 1;
     }
@@ -290,8 +290,8 @@ export const deriveScheduleDraftSummary = ({
     shortBlockCount,
     partialBlockCount,
     openSlotCount: enabledSlots.size,
-    closedStandardSlotCount,
-    openedStandardSlotCount,
+    closedInterviewSlotCount,
+    openedInterviewSlotCount,
     openedPauseSlotCount,
     manualChangeCount: overrides.length,
   };
@@ -341,7 +341,7 @@ export interface ScheduleDraftState {
   slotOverrides: SlotOverride[];
 }
 
-const standardSlotKeys = (dates: string[], chunks: number[][]) =>
+const interviewSlotKeys = (dates: string[], chunks: number[][]) =>
   new Set(
     dates.flatMap((date) =>
       chunks.flatMap((chunk) =>
@@ -374,8 +374,8 @@ const setGeneratedSlotsOpen = ({
   };
 };
 
-/** A whole-block choice becomes the new baseline for exactly that block. */
-export const setStandardBlockOpen = ({
+/** A block choice becomes the new baseline for exactly that block. */
+export const setInterviewBlockOpen = ({
   date,
   minutes,
   open,
@@ -395,8 +395,8 @@ export const setStandardBlockOpen = ({
     open,
   });
 
-/** Opens generated structure without silently opening planned-pause extras. */
-export const openAllStandardBlocks = ({
+/** Opens all generated interview blocks without silently opening planned-pause extras. */
+export const openAllInterviewBlocks = ({
   dates,
   chunks,
   enabledSlots,
@@ -410,12 +410,12 @@ export const openAllStandardBlocks = ({
   setGeneratedSlotsOpen({
     enabledSlots,
     slotOverrides,
-    slots: standardSlotKeys(dates, chunks),
+    slots: interviewSlotKeys(dates, chunks),
     open: true,
   });
 
-/** Day-level standard controls intentionally leave pause extras untouched. */
-export const setDayStandardBlocksOpen = ({
+/** Day-level block controls intentionally leave pause extras untouched. */
+export const setDayInterviewBlocksOpen = ({
   date,
   chunks,
   open,
@@ -519,9 +519,11 @@ export const deriveResolvedLayout = ({
       slots: chunk.map((minute) => makeSlotKey(date, minute)),
     })),
   );
-  const standardSlots = new Set(resolvedBlocks.flatMap((block) => block.slots));
+  const interviewBlockSlots = new Set(
+    resolvedBlocks.flatMap((block) => block.slots),
+  );
   const openedPauseSlots = Array.from(enabledSlots)
-    .filter((slot) => !standardSlots.has(slot))
+    .filter((slot) => !interviewBlockSlots.has(slot))
     .sort(compareSlotKeys);
   let pauseRun: string[] = [];
   for (const slot of openedPauseSlots) {

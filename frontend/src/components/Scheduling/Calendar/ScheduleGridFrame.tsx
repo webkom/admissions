@@ -13,6 +13,7 @@ interface ScheduleGridFrameProps {
   children: React.ReactNode;
   className?: string;
   gridClassName?: string;
+  gridAriaLabel?: string;
   layout?: "grid" | "table";
 }
 
@@ -22,6 +23,7 @@ const ScheduleGridFrame: React.FC<ScheduleGridFrameProps> = ({
   children,
   className,
   gridClassName,
+  gridAriaLabel,
   layout = "grid",
 }) => (
   <div
@@ -32,6 +34,8 @@ const ScheduleGridFrame: React.FC<ScheduleGridFrameProps> = ({
     )}
   >
     <div
+      role={gridAriaLabel ? "grid" : undefined}
+      aria-label={gridAriaLabel}
       className={cn(
         "touch-auto",
         layout === "grid" && "grid gap-2",
@@ -170,6 +174,8 @@ interface ScheduleSelectableBlockCellProps extends ScheduleBlockCellProps {
   trackStyle?: React.CSSProperties;
   trackDataCy?: string;
   statusText?: React.ReactNode;
+  distinguishUnavailable?: boolean;
+  hideTrackWhenUnavailable?: boolean;
 }
 
 /**
@@ -189,6 +195,8 @@ export const ScheduleSelectableBlockCell = React.forwardRef<
       trackStyle,
       trackDataCy,
       statusText,
+      distinguishUnavailable = false,
+      hideTrackWhenUnavailable = false,
       className,
       ...props
     },
@@ -197,6 +205,11 @@ export const ScheduleSelectableBlockCell = React.forwardRef<
     const isActive = selectable && totalCount > 0 && activeCount === totalCount;
     const isPartial = activeCount > 0 && !isActive;
     const isVisuallyClosed = !isActive && !isPartial;
+    const closedPatternClass = isVisuallyClosed
+      ? distinguishUnavailable && !selectable
+        ? "[background-image:var(--pattern-unavailable)] [background-size:18px_18px] [background-position:0_0] opacity-35"
+        : "opacity-70 [background-size:14px_14px] [background-position:0_0] group-hover:opacity-100"
+      : "opacity-0 [background-position:8px_8px]";
     const selectionState = !selectable
       ? "blocked"
       : isActive
@@ -213,14 +226,22 @@ export const ScheduleSelectableBlockCell = React.forwardRef<
         data-selection-state={selectionState}
         className={cn(
           scheduleInteractiveCellMotionClass,
-          selectable ? "cursor-pointer" : "cursor-default",
+          selectable
+            ? "cursor-pointer"
+            : distinguishUnavailable
+              ? "cursor-not-allowed"
+              : "cursor-default",
           (isActive || isPartial) && scheduleSelectedCellClass,
           isVisuallyClosed &&
             "border-border-soft bg-surface-neutral text-text-disabled",
           selectable &&
             isVisuallyClosed &&
             "hover:border-brand-border hover:bg-surface-muted",
-          !selectable && "opacity-55",
+          distinguishUnavailable && !selectable && isVisuallyClosed
+            ? "border-dashed border-border-muted bg-surface-muted"
+            : !selectable
+              ? "opacity-55"
+              : undefined,
           className,
         )}
       >
@@ -229,10 +250,7 @@ export const ScheduleSelectableBlockCell = React.forwardRef<
           data-selection-closed-overlay=""
           className={cn(
             "pointer-events-none absolute inset-0 transition-[opacity,background-position] duration-300 ease-out motion-reduce:transition-none",
-            "[background-image:var(--pattern-unavailable)]",
-            isVisuallyClosed
-              ? "opacity-70 [background-position:0_0] group-hover:opacity-100"
-              : "opacity-0 [background-position:8px_8px]",
+            closedPatternClass,
           )}
         />
         <div className="relative z-10 flex w-full min-w-0 items-center gap-2">
@@ -245,6 +263,11 @@ export const ScheduleSelectableBlockCell = React.forwardRef<
               <ScheduleSlotSegments
                 className="h-schedule-progress"
                 closed={isVisuallyClosed}
+                hideWhenClosed={
+                  distinguishUnavailable &&
+                  !selectable &&
+                  hideTrackWhenUnavailable
+                }
                 fills={fills}
               />
             </div>
@@ -291,6 +314,7 @@ interface ScheduleSlotSegmentsProps {
   fills: number[];
   closed?: boolean;
   className?: string;
+  hideWhenClosed?: boolean;
 }
 
 /** Small per-slot tracks shared by every block mode. Fill is normalized 0–1. */
@@ -298,30 +322,37 @@ export const ScheduleSlotSegments: React.FC<ScheduleSlotSegmentsProps> = ({
   fills,
   closed = false,
   className,
-}) => (
-  <div
-    aria-hidden="true"
-    className={cn("flex h-1.5 w-full items-center gap-1", className)}
-  >
-    {fills.map((fill, index) => (
-      <span
-        key={index}
-        data-schedule-slot-segment=""
-        className="relative h-full flex-1 overflow-hidden rounded-full bg-border-faint"
-      >
+  hideWhenClosed = false,
+}) => {
+  if (closed && hideWhenClosed) return null;
+
+  return (
+    <div
+      aria-hidden="true"
+      className={cn("flex h-1.5 w-full items-center gap-1", className)}
+    >
+      {fills.map((fill, index) => (
         <span
-          className={cn(
-            "absolute inset-y-0 left-0 rounded-full transition-[width,opacity] duration-150 motion-reduce:transition-none",
-            closed ? "bg-border-mutedSoft opacity-70" : "bg-brand-activeBorder",
-          )}
-          style={{
-            width: `${Math.round(Math.max(0, Math.min(1, fill)) * 100)}%`,
-          }}
-        />
-      </span>
-    ))}
-  </div>
-);
+          key={index}
+          data-schedule-slot-segment=""
+          className="relative h-full flex-1 overflow-hidden rounded-full bg-border-faint"
+        >
+          <span
+            className={cn(
+              "absolute inset-y-0 left-0 rounded-full transition-[width,opacity] duration-150 motion-reduce:transition-none",
+              closed
+                ? "bg-border-mutedSoft opacity-70"
+                : "bg-brand-activeBorder",
+            )}
+            style={{
+              width: `${Math.round(Math.max(0, Math.min(1, fill)) * 100)}%`,
+            }}
+          />
+        </span>
+      ))}
+    </div>
+  );
+};
 
 interface ScheduleGridLegendItemProps {
   label: string;

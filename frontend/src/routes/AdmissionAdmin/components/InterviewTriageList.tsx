@@ -1,16 +1,21 @@
 import React from "react";
 import styled from "styled-components";
-import { ChevronDown, MessageCircle, Phone, Timer } from "lucide-react";
+import { ChevronDown, MessageCircle, Phone } from "lucide-react";
 import InterviewStatusControl from "src/containers/AdmissionsContainer/InterviewStatusControl";
 import ApplicationDetails from "src/containers/AdmissionsContainer/ApplicationDetails";
-import FormatTime from "src/components/Time/FormatTime";
 import { Admission, AdminApplication } from "src/types";
 import { breakpoints, iconSizes } from "src/styles/designTokens";
 import { encodeSmsAddress } from "src/utils/emailLinks";
+import { getApplicationDeadlineStatus } from "src/utils/applicationAccess";
+import {
+  hasApplicationDetails,
+  isFullAdminApplication,
+} from "src/utils/applicationAccess";
 
 interface InterviewTriageListProps {
   admission: Admission;
   applications: AdminApplication[];
+  applicationScopeKey: string;
 }
 
 const formatGroupNames = (application: AdminApplication): string => {
@@ -22,6 +27,7 @@ const formatGroupNames = (application: AdminApplication): string => {
 const InterviewTriageList: React.FC<InterviewTriageListProps> = ({
   admission,
   applications,
+  applicationScopeKey,
 }) => {
   const [expandedApplicationIds, setExpandedApplicationIds] = React.useState<
     Set<string>
@@ -42,42 +48,62 @@ const InterviewTriageList: React.FC<InterviewTriageListProps> = ({
         {applications.map((application) => {
           const phone = application.phone_number.trim();
           const phoneRecipient = encodeSmsAddress(phone);
-          const isExpanded = expandedApplicationIds.has(application.pk);
+          const fullApplication = isFullAdminApplication(application)
+            ? application
+            : undefined;
+          const applicationWithDetails = hasApplicationDetails(application)
+            ? application
+            : undefined;
+          const isExpanded =
+            Boolean(applicationWithDetails) &&
+            expandedApplicationIds.has(application.pk);
+          const identity = (
+            <div>
+              <CandidateName>{application.user.full_name}</CandidateName>
+              {fullApplication && (
+                <Username>@{fullApplication.user.username}</Username>
+              )}
+              <Groups
+                title={application.group_applications
+                  .map(({ group }) => group.name)
+                  .join(", ")}
+              >
+                {formatGroupNames(application)}
+              </Groups>
+            </div>
+          );
 
           return (
             <CandidateCard key={application.pk} $expanded={isExpanded}>
-              <CandidateToggle
-                type="button"
-                aria-expanded={isExpanded}
-                aria-controls={`mobile-application-${application.pk}`}
-                onClick={() => toggleApplication(application.pk)}
-              >
-                <div>
-                  <CandidateName>{application.user.full_name}</CandidateName>
-                  <Username>@{application.user.username}</Username>
-                  <Groups
-                    title={application.group_applications
-                      .map(({ group }) => group.name)
-                      .join(", ")}
-                  >
-                    {formatGroupNames(application)}
-                  </Groups>
-                </div>
-                <ChevronDown
-                  size={iconSizes.standard}
-                  aria-hidden="true"
-                  data-expanded={isExpanded}
-                />
-              </CandidateToggle>
+              {applicationWithDetails ? (
+                <CandidateToggle
+                  type="button"
+                  aria-expanded={isExpanded}
+                  aria-controls={`mobile-application-${application.pk}`}
+                  onClick={() => toggleApplication(application.pk)}
+                >
+                  {identity}
+                  <ChevronDown
+                    size={iconSizes.standard}
+                    aria-hidden="true"
+                    data-expanded={isExpanded}
+                  />
+                </CandidateToggle>
+              ) : (
+                <CandidateHeader>{identity}</CandidateHeader>
+              )}
 
               <CandidateSummary>
                 <InterviewStatusControl
                   admissionSlug={admission.slug}
+                  applicationScopeKey={applicationScopeKey}
                   applicationId={application.pk}
                   candidateName={application.user.full_name}
                   status={application.interview_status}
                   statusUpdatedAt={application.interview_status_updated_at}
-                  statusUpdatedBy={application.interview_status_updated_by}
+                  statusUpdatedBy={
+                    fullApplication?.interview_status_updated_by ?? ""
+                  }
                   canEdit={
                     admission.userdata.is_admin ||
                     admission.userdata.is_recruiter
@@ -85,18 +111,19 @@ const InterviewTriageList: React.FC<InterviewTriageListProps> = ({
                   compact
                 />
 
-                <SentMeta>
-                  Sendt{" "}
-                  <FormatTime format="d. MMM HH:mm">
-                    {application.created_at}
-                  </FormatTime>
-                  {!application.applied_within_deadline && (
-                    <Timer
-                      size={iconSizes.control}
-                      aria-label="Søkte etter fristen"
-                    />
-                  )}
-                </SentMeta>
+                {applicationWithDetails && (
+                  <SentMeta
+                    className={
+                      applicationWithDetails.applied_within_deadline
+                        ? "text-success"
+                        : "text-orange-500"
+                    }
+                  >
+                    {getApplicationDeadlineStatus(
+                      applicationWithDetails.applied_within_deadline,
+                    )}
+                  </SentMeta>
+                )}
               </CandidateSummary>
 
               {phoneRecipient && (
@@ -122,11 +149,12 @@ const InterviewTriageList: React.FC<InterviewTriageListProps> = ({
                 </ContactActions>
               )}
 
-              {isExpanded && (
+              {isExpanded && applicationWithDetails && (
                 <ExpandedContent id={`mobile-application-${application.pk}`}>
                   <ApplicationDetails
                     admission={admission}
-                    application={application}
+                    application={applicationWithDetails}
+                    allowGroupDeletion={Boolean(fullApplication)}
                   />
                 </ExpandedContent>
               )}
@@ -199,6 +227,14 @@ const CandidateToggle = styled.button`
   }
 `;
 
+const CandidateHeader = styled.div`
+  display: flex;
+  width: 100%;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--spacing-md);
+`;
+
 const CandidateName = styled.h3`
   margin: 0;
   color: var(--color-text-primary);
@@ -230,7 +266,6 @@ const SentMeta = styled.span`
   display: inline-flex;
   align-items: center;
   gap: var(--spacing-xs);
-  color: var(--color-text-muted);
   font-size: var(--font-size-detail);
   font-variant-numeric: tabular-nums;
   white-space: nowrap;

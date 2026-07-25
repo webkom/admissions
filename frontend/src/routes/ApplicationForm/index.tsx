@@ -10,12 +10,15 @@ import { isSensitiveAuthorityChangedError } from "src/query/sensitiveAccess";
 import {
   getApplictionTextDrafts,
   clearAllDrafts,
+  getSavedPhoneNumber,
   getPhoneNumberDraft,
   getPriorityTextDraft,
+  saveSubmittedPhoneNumber,
 } from "src/utils/draftHelper";
 import { Admission, Application, Group } from "src/types";
 import FormContainer from "./FormContainer";
 import { InputFieldModel, InputResponseModel } from "src/utils/jsonFields";
+import djangoData from "src/utils/djangoData";
 
 export type SelectedGroups = { [key: string]: boolean };
 
@@ -37,11 +40,13 @@ export type SharedApplicationProps = {
 
 const generateInitialValues: (
   selectedGroups: SelectedGroups,
+  userId: string,
   admission?: Admission,
   myApplication?: Application,
-) => FormValues = (selectedGroups, admission, myApplication) => {
+) => FormValues = (selectedGroups, userId, admission, myApplication) => {
+  const savedPhoneNumber = getSavedPhoneNumber(userId);
   const {
-    phone_number: phoneNumber = getPhoneNumberDraft(),
+    phone_number: phoneNumber = getPhoneNumberDraft(savedPhoneNumber),
     priority_text: priorityText = getPriorityTextDraft(),
     group_applications: groupApplications = getApplictionTextDrafts(),
   } = myApplication || {};
@@ -175,6 +180,7 @@ const ApplicationForm: React.FC<ApplicationFormProps> = ({
   const createApplicationMutation = useCreateApplicationMutation(
     admission?.slug ?? "",
   );
+  const currentUserId = djangoData.user.id ?? "";
 
   const onSubmit: (
     values: FormValues,
@@ -202,6 +208,7 @@ const ApplicationForm: React.FC<ApplicationFormProps> = ({
       { newApplication: submission },
       {
         onSuccess: () => {
+          saveSubmittedPhoneNumber(currentUserId, values.phoneNumber);
           clearAllDrafts();
           setSubmitting(false);
           toggleIsEditing();
@@ -219,6 +226,7 @@ const ApplicationForm: React.FC<ApplicationFormProps> = ({
     <Formik<FormValues>
       initialValues={generateInitialValues(
         selectedGroups,
+        currentUserId,
         admission,
         myApplication,
       )}

@@ -2,9 +2,9 @@ import type { FormikProps } from "formik";
 import React from "react";
 import type { ChangeEventHandler, FocusEventHandler, ReactNode } from "react";
 import styled from "styled-components";
+import { DateTime } from "luxon";
 
 import type { MutationAdmission } from "src/query/mutations";
-import { toggleFromArray } from "src/utils/methods";
 
 import type { AdmissionFieldError } from "../useAdmissionEditor";
 import {
@@ -14,8 +14,8 @@ import {
   SectionNumber,
   SectionTitle,
 } from "./AdmissionSectionStyles";
+import CommitteeContentEditor from "./CommitteeContentEditor";
 import GroupSelector from "./GroupSelector";
-import HeaderFieldsEditor from "./HeaderFieldsEditor";
 import { useManageGroups } from "src/query/hooks";
 
 interface AdmissionDetailsSectionsProps {
@@ -25,6 +25,47 @@ interface AdmissionDetailsSectionsProps {
   updateTitle: (title: string) => void;
   updateSlug: (slug: string) => void;
 }
+
+interface DefaultDatePlaceholders {
+  open_from: string;
+  public_deadline: string;
+  closed_from: string;
+}
+
+const ADMISSION_FORM_TIME_ZONE = "Europe/Oslo";
+
+const formatDateInput = (date: DateTime): string =>
+  date.toFormat("yyyy-MM-dd'T'HH:mm:ss");
+
+const getDefaultDatePlaceholders = (): DefaultDatePlaceholders => {
+  const baseDate = DateTime.now().setZone(ADMISSION_FORM_TIME_ZONE);
+  const daysUntilFirstMonday = (1 - baseDate.weekday + 7) % 7 || 7;
+  const firstMonday = baseDate.plus({ days: daysUntilFirstMonday }).set({
+    hour: 0,
+    minute: 0,
+    second: 0,
+    millisecond: 0,
+  });
+
+  const nextSunday = firstMonday.plus({ days: 6 }).set({
+    hour: 23,
+    minute: 59,
+    second: 0,
+    millisecond: 0,
+  });
+  const sundayAfter = firstMonday.plus({ days: 13 }).set({
+    hour: 23,
+    minute: 59,
+    second: 0,
+    millisecond: 0,
+  });
+
+  return {
+    open_from: formatDateInput(firstMonday),
+    public_deadline: formatDateInput(nextSunday),
+    closed_from: formatDateInput(sundayAfter),
+  };
+};
 
 const AdmissionDetailsSections = ({
   formik,
@@ -49,21 +90,40 @@ const AdmissionDetailsContent = ({
   updateTitle,
   updateSlug,
 }: AdmissionDetailsSectionsProps) => {
+  const datePlaceholders = isNew ? getDefaultDatePlaceholders() : null;
+
   const { data: availableGroups } = useManageGroups();
   const selectedGroups = formik.values.groups
     .map((groupId) => availableGroups?.find((group) => group.pk === groupId))
     .filter((group): group is NonNullable<typeof group> => Boolean(group));
 
-  const toggleAdmissionGroup = (groupId: string) => {
-    const groups = toggleFromArray(formik.values.groups, groupId);
-    const groupQuestions = Object.fromEntries(
-      groups.map((id) => [id, formik.values.group_questions[id] ?? []]),
-    );
+  const setAdminGroups = (groupIds: string[]) => {
+    void formik.setFieldTouched("admin_groups", true, false);
+    void formik.setFieldValue("admin_groups", Array.from(new Set(groupIds)));
+  };
+
+  const setAdmissionGroups = (groupIds: string[]) => {
+    const groups = Array.from(new Set(groupIds));
+    const groupContent = { ...formik.values.group_content };
+
+    groups.forEach((groupId) => {
+      if (
+        availableGroups?.some((group) => group.pk === groupId) &&
+        !groupContent[groupId]
+      ) {
+        groupContent[groupId] = {
+          committee_info: null,
+          application_guidance: null,
+          interview_description: null,
+        };
+      }
+    });
+
     void formik.setFieldTouched("groups", true, false);
     void formik.setValues({
       ...formik.values,
       groups,
-      group_questions: groupQuestions,
+      group_content: groupContent,
     });
   };
 
@@ -79,7 +139,7 @@ const AdmissionDetailsContent = ({
           <FieldBlock>
             <FieldLabel htmlFor="admission-title">Tittel</FieldLabel>
             <InputDescription id="admission-title-description">
-              Navnet søkerne ser på opptaket.
+              Navnet som vises for brukere når de søker på opptaket
             </InputDescription>
             <Input
               id="admission-title"
@@ -103,7 +163,8 @@ const AdmissionDetailsContent = ({
           <FieldBlock>
             <FieldLabel htmlFor="admission-slug">Slug</FieldLabel>
             <InputDescription id="admission-slug-description">
-              URL: opptak.abakus.no/{formik.values.slug || "komiteopptak-2027"}/
+              Opptaket vil ligge under opptak.abakus.no/
+              {formik.values.slug || "komitee"}/
             </InputDescription>
             <Input
               id="admission-slug"
@@ -112,7 +173,7 @@ const AdmissionDetailsContent = ({
               data-admission-field="slug"
               onBlur={formik.handleBlur}
               onChange={(event) => updateSlug(event.target.value)}
-              placeholder="komiteopptak-2027"
+              placeholder="komitee"
               disabled={!isNew}
               aria-describedby={`admission-slug-description${
                 fieldError("slug") ? " admission-slug-error" : ""
@@ -162,8 +223,9 @@ const AdmissionDetailsContent = ({
           <DateField
             id="open_from"
             label="Opptaket åpner"
-            description="Fra dette tidspunktet kan søkere sende inn søknader."
+            description="Fra dette tidspunktet er det mulig å legge inn søknader."
             value={formik.values.open_from}
+            placeholder={datePlaceholders?.open_from}
             error={fieldError("open_from")}
             onBlur={formik.handleBlur}
             onChange={formik.handleChange}
@@ -171,8 +233,9 @@ const AdmissionDetailsContent = ({
           <DateField
             id="public_deadline"
             label="Søknadsfrist"
-            description="Søknader etter fristen merkes som sene, men kan sendes frem til stenging."
+            description="Etter dette er det ikke garantert at søkere blir sett, men de kan fortsatt søke og redigere søknaden sin."
             value={formik.values.public_deadline}
+            placeholder={datePlaceholders?.public_deadline}
             min={formik.values.open_from || undefined}
             error={fieldError("public_deadline")}
             onBlur={formik.handleBlur}
@@ -181,8 +244,9 @@ const AdmissionDetailsContent = ({
           <DateField
             id="closed_from"
             label="Opptaket stenger"
-            description="Etter dette tidspunktet kan søknader ikke lenger opprettes eller endres."
+            description="Etter dette tidspunktet er det ikke mulig å legge inn søknader."
             value={formik.values.closed_from}
+            placeholder={datePlaceholders?.closed_from}
             min={formik.values.public_deadline || undefined}
             error={fieldError("closed_from")}
             onBlur={formik.handleBlur}
@@ -195,36 +259,21 @@ const AdmissionDetailsContent = ({
         number="3"
         titleId="admission-access-title"
         title="Opptaksgrupper og tilgang"
-        description="En opptaksgruppe er delen av organisasjonen som rekrutterer — for eksempel en komité, revygruppe eller stilling. Den styrer tilgang til søkere og gruppespesifikke spørsmål, men deler ikke intervjuplanen i egne grupper."
+        description="En opptaksgruppe er delen av organisasjonen som rekrutterer — for eksempel en komité, revygruppe eller stilling. Den styrer tilgang til søkerne, men deler ikke intervjuplanen i egne grupper."
       >
         <FieldStack>
           <FieldBlock $wide>
-            <FieldLabel htmlFor="admin-groups">
-              Ansvarlige opptaksgrupper
-            </FieldLabel>
+            <FieldLabel htmlFor="admin-groups">Admin-grupper</FieldLabel>
             <InputDescription id="admin-groups-description">
-              Velg opptaksgruppene som har ansvar for hele opptaket. Aktive
-              ledere og opptaksansvarlige kan administrere alt og se alle
-              søkere.
+              Medlemmene av disse gruppene får tilgang til å se samtlige søkere.
             </InputDescription>
             <GroupSelector
               id="admin-groups"
               value={formik.values.admin_groups}
-              addLabel="Legg til ansvarlig opptaksgruppe"
-              emptyLabel="Ingen ansvarlige opptaksgrupper er valgt."
-              selectedLabel="Valgte ansvarlige opptaksgrupper"
-              describedBy={`admin-groups-description${
-                fieldError("admin_groups") ? " admin-groups-error" : ""
-              }`}
+              addLabel="Legg til gruppe"
+              emptyLabel=""
               invalid={Boolean(fieldError("admin_groups"))}
-              admissionField="admin_groups"
-              toggleGroup={(value) => {
-                void formik.setFieldTouched("admin_groups", true, false);
-                void formik.setFieldValue(
-                  "admin_groups",
-                  toggleFromArray(formik.values.admin_groups, value),
-                );
-              }}
+              setGroups={setAdminGroups}
             />
             {fieldError("admin_groups") && (
               <FieldError id="admin-groups-error">
@@ -235,24 +284,19 @@ const AdmissionDetailsContent = ({
 
           <FieldBlock $wide>
             <FieldLabel htmlFor="admission-groups">
-              Opptaksgrupper som rekrutterer
+              Grupper som har opptak
             </FieldLabel>
             <InputDescription id="admission-groups-description">
-              Velg opptaksgruppene søkerne kan søke til. Ledere og
-              opptaksansvarlige får tilgang til søkerne i sine grupper.
+              Ledere og opptaksansvarlige i disse gruppene kan se søknadene til
+              sin respektive gruppe.
             </InputDescription>
             <GroupSelector
               id="admission-groups"
               value={formik.values.groups}
-              addLabel="Legg til opptaksgruppe"
-              emptyLabel="Ingen rekrutterende opptaksgrupper er valgt."
-              selectedLabel="Valgte rekrutterende opptaksgrupper"
-              describedBy={`admission-groups-description${
-                fieldError("groups") ? " admission-groups-error" : ""
-              }`}
+              addLabel="Legg til gruppe"
+              emptyLabel=""
               invalid={Boolean(fieldError("groups"))}
-              admissionField="groups"
-              toggleGroup={toggleAdmissionGroup}
+              setGroups={setAdmissionGroups}
             />
             {fieldError("groups") && (
               <FieldError id="admission-groups-error">
@@ -265,39 +309,22 @@ const AdmissionDetailsContent = ({
 
       <FormSection
         number="4"
-        titleId="additional-questions-title"
-        title="Gruppespesifikke spørsmål"
-        description="Vises bare når søkeren velger den aktuelle opptaksgruppen."
+        titleId="committee-content-title"
+        title="Komitéinnhold"
+        description="Tilpass informasjonen søkerne ser når de velger komité og skriver søknaden."
       >
-        <QuestionEditorList data-admission-field="group_questions">
-          {selectedGroups.length === 0 ? (
-            <InputDescription>
-              Velg opptaksgrupper over for å legge til spørsmål.
-            </InputDescription>
-          ) : (
-            selectedGroups.map((group) => (
-              <QuestionEditor key={group.pk}>
-                <QuestionEditorTitle>{group.name}</QuestionEditorTitle>
-                <HeaderFieldsEditor
-                  groupName={group.name}
-                  value={formik.values.group_questions[group.pk] ?? []}
-                  onChange={(fields) => {
-                    void formik.setFieldTouched("group_questions", true, false);
-                    void formik.setFieldValue("group_questions", {
-                      ...formik.values.group_questions,
-                      [group.pk]: fields,
-                    });
-                  }}
-                  error={fieldError("group_questions")}
-                  showErrors={
-                    formik.submitCount > 0 ||
-                    Boolean(formik.touched.group_questions)
-                  }
-                />
-              </QuestionEditor>
-            ))
-          )}
-        </QuestionEditorList>
+        <CommitteeContentEditor
+          groups={selectedGroups}
+          value={formik.values.group_content}
+          error={fieldError("group_content")}
+          onChange={(groupId, content) => {
+            void formik.setFieldTouched("group_content", true, false);
+            void formik.setFieldValue("group_content", {
+              ...formik.values.group_content,
+              [groupId]: content,
+            });
+          }}
+        />
       </FormSection>
     </>
   );
@@ -339,6 +366,7 @@ interface DateFieldProps {
   error?: string;
   onBlur: FocusEventHandler<HTMLInputElement>;
   onChange: ChangeEventHandler<HTMLInputElement>;
+  placeholder?: string;
 }
 
 const DateField = ({
@@ -348,6 +376,7 @@ const DateField = ({
   value,
   min,
   error,
+  placeholder,
   onBlur,
   onChange,
 }: DateFieldProps) => (
@@ -359,6 +388,7 @@ const DateField = ({
       name={id}
       type="datetime-local"
       value={value}
+      placeholder={placeholder}
       data-admission-field={id}
       min={min}
       onBlur={onBlur}
@@ -385,23 +415,6 @@ const FieldStack = styled.div`
   display: flex;
   flex-direction: column;
   gap: var(--spacing-2xl);
-`;
-
-const QuestionEditorList = styled.div`
-  display: flex;
-  flex-direction: column;
-  gap: var(--spacing-xl);
-`;
-
-const QuestionEditor = styled.section`
-  padding: var(--spacing-lg);
-  border: var(--border-width-default) solid var(--color-border-soft);
-  border-radius: var(--border-radius-md);
-`;
-
-const QuestionEditorTitle = styled.h3`
-  margin: 0;
-  font-size: var(--font-size-md);
 `;
 
 const FieldBlock = styled.div<{ $wide?: boolean }>`

@@ -601,13 +601,14 @@ const AvailabilityHeatmap: React.FC<AvailabilityHeatmapProps> = ({
                 const highlighted = isHighlighted(block);
                 const selected = selectedBlockKey === key;
                 const ratio = availabilityRatio(count, heatmapCapacity);
-                const availabilityText = formatHeatmapAvailability(
-                  count,
-                  heatmapCapacity,
-                );
-                const label = closed
-                  ? `${weekday} ${dayMonth}: stengt`
-                  : `${weekday} ${dayMonth}: ${availabilityText} tilgjengelige intervjuere`;
+                const availabilityText = closed
+                  ? ""
+                  : formatHeatmapAvailability(count, heatmapCapacity);
+                const label = `${weekday} ${dayMonth}${
+                  closed
+                    ? ""
+                    : `: ${availabilityText} tilgjengelige intervjuere`
+                }`;
                 return (
                   <ScheduleBlockCell
                     key={key}
@@ -619,7 +620,7 @@ const AvailabilityHeatmap: React.FC<AvailabilityHeatmapProps> = ({
                     tabIndex={closed ? -1 : 0}
                     aria-label={
                       closed
-                        ? "Stengt"
+                        ? label
                         : `${label}. Vis hvem som er tilgjengelige.`
                     }
                     aria-pressed={closed ? undefined : selected}
@@ -660,27 +661,21 @@ const AvailabilityHeatmap: React.FC<AvailabilityHeatmapProps> = ({
                         "ring-2 ring-inset ring-brand-border",
                     )}
                   >
-                    {closed ? (
-                      <span className="text-label font-semibold text-text-disabled">
-                        Stengt
+                    {!closed && (
+                      <span
+                        className={cn(
+                          "text-ui font-semibold",
+                          count === 0 ? "text-text-muted" : "text-text-primary",
+                        )}
+                      >
+                        {availabilityText}
                       </span>
-                    ) : (
-                      <>
-                        <span
-                          className={cn(
-                            "text-ui font-semibold",
-                            count === 0
-                              ? "text-text-muted"
-                              : "text-text-primary",
-                          )}
-                        >
-                          {availabilityText}
-                        </span>
-                        <ScheduleSlotSegments
-                          className="h-schedule-progress"
-                          fills={block.enabledMinutes.map(() => ratio)}
-                        />
-                      </>
+                    )}
+                    {!closed && (
+                      <ScheduleSlotSegments
+                        className="h-schedule-progress"
+                        fills={block.enabledMinutes.map(() => ratio)}
+                      />
                     )}
                     {highlighted && (
                       <span

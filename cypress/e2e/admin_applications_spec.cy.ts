@@ -49,12 +49,14 @@ const admission = {
     committee_role: "leader",
     committee_groups: ["Webkom"],
     represented_groups: ["Webkom", "Fagkom"],
+    application_view_mode: "admin_full",
   },
 };
 
 const applications = [
   {
     pk: "aaaaaaaa-0000-4000-8000-000000000001",
+    application_view_mode: "admin_full",
     user: {
       username: "ida",
       full_name: "Ida Nordmann",
@@ -84,6 +86,7 @@ const applications = [
   },
   {
     pk: "aaaaaaaa-0000-4000-8000-000000000002",
+    application_view_mode: "admin_full",
     user: {
       username: "olav",
       full_name: "Olav Hansen",
@@ -214,9 +217,11 @@ describe("admin applications review", () => {
     cy.contains("Generell søknad").should("not.exist");
     cy.contains("Hva motiverer deg?").should("not.exist");
     cy.contains("Relevant erfaring").should("be.visible");
+    cy.contains("Hvorfor vil du søke Webkom?").should("not.exist");
+    cy.contains("Hvorfor vil du søke Fagkom?").should("not.exist");
     cy.contains("Webkom").should("be.visible");
     cy.contains("Fagkom").should("be.visible");
-    cy.contains("Søknaden sist endret").should("be.visible");
+    cy.contains("Sent den").should("be.visible");
   });
 
   it("filters by normalized phone number, status, and multiple groups", () => {
@@ -256,21 +261,55 @@ describe("admin applications review", () => {
         is_admin: false,
         committee_role: "recruiting",
         represented_groups: ["Webkom"],
+        application_view_mode: "committee_minimal",
       },
     };
     const recruiterApplications = [
       {
-        ...applications[0],
-        group_applications: [applications[0].group_applications[0]],
+        pk: applications[0].pk,
+        application_view_mode: "committee_minimal",
+        user: { full_name: applications[0].user.full_name },
+        created_at: applications[0].created_at,
+        applied_within_deadline: false,
+        phone_number: applications[0].phone_number,
+        interview_status: applications[0].interview_status,
+        interview_status_updated_at:
+          applications[0].interview_status_updated_at,
+        group_applications: [
+          {
+            group: webkom,
+            text: "Jeg trives med å lære gjennom å lage produkter.",
+            header_fields_response: { experience: "Et lite React-prosjekt." },
+          },
+        ],
       },
     ];
     visitApplications([1440, 900], recruiterAdmission, recruiterApplications);
     cy.contains("button", "Vis kandidatdata").click();
-    cy.get('button[aria-label="Vis søknadsdetaljer"]').first().click();
 
-    cy.contains("Generell søknad").should("not.exist");
+    cy.contains("900 00 001").should("be.visible");
     cy.contains("Webkom").should("be.visible");
     cy.contains("Fagkom").should("not.exist");
+    cy.get('button[aria-label="Vis søknadsdetaljer"]').click();
+    cy.contains("Jeg trives med å lære gjennom å lage produkter.").should(
+      "be.visible",
+    );
+    cy.contains("Relevant erfaring").should("be.visible");
+    cy.contains("Et lite React-prosjekt.").should("be.visible");
+    cy.contains("Jeg liker å forklare vanskelige konsepter.").should(
+      "not.exist",
+    );
+    cy.contains("Sent den").should("be.visible");
+    cy.get('[data-cy="application-sent-time"]')
+      .should("have.attr", "data-late", "true")
+      .and("have.class", "text-orange-500");
+    cy.get(
+      'summary[aria-label^="Flere handlinger for søknaden fra Ida Nordmann"]',
+    ).should("not.exist");
+    cy.contains("button", "Eksporter CSV").click();
+    cy.contains("Søknadstekst").should("not.exist");
+    cy.contains("E-post").should("not.exist");
+    cy.contains("Prioriteringer").should("not.exist");
   });
 
   it("names the exact committee in the destructive confirmation", () => {

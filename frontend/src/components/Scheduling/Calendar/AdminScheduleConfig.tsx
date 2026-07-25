@@ -36,19 +36,21 @@ import {
   isPausePreset,
   MAX_RANGE_DAYS,
   normalizeSourceWindows,
-  openAllStandardBlocks,
+  openAllInterviewBlocks,
   parseIntegerInRange,
   preserveManualDraftSlots,
   rebuildBaseForBlockPattern,
   reconstructBaseSlots,
-  setDayStandardBlocksOpen,
-  setStandardBlockOpen,
+  setDayInterviewBlocksOpen,
+  setInterviewBlockOpen,
   SESSION_DURATION_LIMITS,
   toggleFineTuneSlot,
   type ScheduleConfigBaseline,
   type ScheduleDraftState,
   shapeDraftSlots,
 } from "./adminScheduleConfigModel";
+
+type EditingMode = "blocks" | "slots";
 
 interface AdminScheduleConfigProps {
   activeTab: "framework" | "availability" | "coverage";
@@ -114,7 +116,7 @@ const AdminScheduleConfig: React.FC<AdminScheduleConfigProps> = ({
   const [saveTick, setSaveTick] = useState(0);
   const [reshapedSlotCount, setReshapedSlotCount] = useState(0);
   const [isSettingsCollapsed, setIsSettingsCollapsed] = useState(false);
-  const [editorView, setEditorView] = useState<"blocks" | "fine">("blocks");
+  const [editorView, setEditorView] = useState<EditingMode>("blocks");
   const [layoutResetRequested, setLayoutResetRequested] = useState(false);
   const legacyLayoutLocked = layoutVersion < 2 && !layoutResetRequested;
 
@@ -458,7 +460,7 @@ const AdminScheduleConfig: React.FC<AdminScheduleConfigProps> = ({
     (date: string, minutes: number[], open: boolean) => {
       if (legacyLayoutLocked) return;
       commitDraftState(
-        setStandardBlockOpen({
+        setInterviewBlockOpen({
           date,
           minutes,
           open,
@@ -482,10 +484,10 @@ const AdminScheduleConfig: React.FC<AdminScheduleConfigProps> = ({
     [commitDraftState, legacyLayoutLocked],
   );
 
-  const handleOpenAllStandardBlocks = useCallback(() => {
+  const handleOpenAllBlocks = useCallback(() => {
     if (legacyLayoutLocked) return;
     commitDraftState(
-      openAllStandardBlocks({
+      openAllInterviewBlocks({
         dates,
         chunks,
         ...draftStateRef.current,
@@ -498,11 +500,11 @@ const AdminScheduleConfig: React.FC<AdminScheduleConfigProps> = ({
     commitDraftState(closeAllScheduleCapacity());
   }, [commitDraftState, legacyLayoutLocked]);
 
-  const handleToggleDayStandardBlocks = useCallback(
+  const handleToggleDayBlocks = useCallback(
     (date: string, open: boolean) => {
       if (legacyLayoutLocked) return;
       commitDraftState(
-        setDayStandardBlocksOpen({
+        setDayInterviewBlocksOpen({
           date,
           chunks,
           open,
@@ -584,7 +586,9 @@ const AdminScheduleConfig: React.FC<AdminScheduleConfigProps> = ({
 
   const handleResetCustomizations = () => {
     if (legacyLayoutLocked) return;
-    if (!window.confirm("Tilbakestille alle finjusteringer i hele perioden?"))
+    if (
+      !window.confirm("Tilbakestill alle enkeltimesendringer i hele perioden?")
+    )
       return;
     commitDraftState({
       enabledSlots: reconstructBaseSlots(
@@ -598,7 +602,7 @@ const AdminScheduleConfig: React.FC<AdminScheduleConfigProps> = ({
   const handleResetLegacyLayout = () => {
     if (
       !window.confirm(
-        "Tilbakestille det eldre blokkoppsettet til dagens standardmønster?",
+        "Tilbakestill det eldre blokkoppsettet til dagens mønster?",
       )
     )
       return;
@@ -801,9 +805,9 @@ const AdminScheduleConfig: React.FC<AdminScheduleConfigProps> = ({
               onResetCustomizations={handleResetCustomizations}
               onSetBlock={handleSetBlock}
               onToggleSlot={handleToggleSlot}
-              onOpenAllStandardBlocks={handleOpenAllStandardBlocks}
+              onOpenAllBlocks={handleOpenAllBlocks}
               onCloseAllCapacity={handleCloseAllCapacity}
-              onToggleDayStandardBlocks={handleToggleDayStandardBlocks}
+              onToggleDayBlocks={handleToggleDayBlocks}
             />
           </section>
         </SchedulePanelBody>

@@ -1,4 +1,5 @@
 from datetime import timedelta
+from unittest.mock import PropertyMock, patch
 
 from django.db import IntegrityError, transaction
 from django.test import TransactionTestCase
@@ -15,6 +16,7 @@ from admissions.admissions.models import (
     LegoUser,
     Membership,
 )
+from admissions.admissions.serializers import AdmissionPublicSerializer
 
 
 class ManageAdmissionValidationTestCase(APITestCase):
@@ -37,6 +39,16 @@ class ManageAdmissionValidationTestCase(APITestCase):
             "slug": "komiteopptak-2027",
             "description": "Opptak til Abakus sine komiteer.",
             "group_questions": {},
+            "group_content": {
+                str(self.committee.pk): {
+                    "committee_info": (
+                        "Fagkom arrangerer kurs og andre lærerike aktiviteter."
+                    ),
+                    "application_guidance": (
+                        "Fortell hvorfor du vil bli med og hva du ønsker å bidra med."
+                    ),
+                }
+            },
             "open_from": opening,
             "public_deadline": opening + timedelta(days=7),
             "closed_from": opening + timedelta(days=8),
@@ -154,6 +166,232 @@ class ManageAdmissionValidationTestCase(APITestCase):
             ).header_fields,
             [],
         )
+
+    def test_saves_admission_scoped_committee_content(self):
+        committee_info = "Fagkom skaper faglige og sosiale møteplasser for studentene."
+        application_guidance = (
+            "Fortell hva du liker å lære og hva du ønsker å bidra med."
+        )
+        interview_description = "Intervjuet er en samtale om motivasjon og samarbeid."
+
+        response = self.client.post(
+            self.url,
+            self.payload(
+                group_content={
+                    str(self.committee.pk): {
+                        "committee_info": committee_info,
+                        "application_guidance": application_guidance,
+                        "interview_description": interview_description,
+                    }
+                }
+            ),
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        admission = Admission.objects.get(slug="komiteopptak-2027")
+        relation = AdmissionGroup.objects.get(
+            admission=admission,
+            group=self.committee,
+        )
+        self.assertEqual(relation.committee_info, committee_info)
+        self.assertEqual(relation.application_guidance, application_guidance)
+        self.assertEqual(relation.interview_description, interview_description)
+        serialized_group = AdmissionPublicSerializer(admission).data["groups"][0]
+        self.assertEqual(serialized_group["description"], committee_info)
+        self.assertEqual(serialized_group["response_label"], application_guidance)
+        self.assertEqual(
+            serialized_group["interview_description"], interview_description
+        )
+
+    def test_committee_content_is_not_reused_by_a_later_admission(self):
+        first = self.client.post(self.url, self.payload(), format="json")
+        second = self.client.post(
+            self.url,
+            self.payload(
+                title="Komiteopptak 2028",
+                slug="komiteopptak-2028",
+                group_content={
+                    str(self.committee.pk): {
+                        "committee_info": "Ny informasjon for opptaket i 2028.",
+                        "application_guidance": (
+                            "Et nytt søknadsfokus som bare gjelder opptaket i 2028."
+                        ),
+                    }
+                },
+            ),
+            format="json",
+        )
+
+        self.assertEqual(first.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(second.status_code, status.HTTP_201_CREATED)
+        first_relation = AdmissionGroup.objects.get(
+            admission__slug="komiteopptak-2027",
+            group=self.committee,
+        )
+        second_relation = AdmissionGroup.objects.get(
+            admission__slug="komiteopptak-2028",
+            group=self.committee,
+        )
+        self.assertNotEqual(
+            first_relation.committee_info,
+            second_relation.committee_info,
+        )
+        self.assertNotEqual(
+            first_relation.application_guidance,
+            second_relation.application_guidance,
+        )
+
+    def test_fallback_content_remains_inherited_after_an_unrelated_edit(self):
+        self.committee.description = "Global komitéinfo før redigering."
+        self.committee.response_label = "Global søknadsveiledning før redigering."
+        self.committee.save(update_fields=["description", "response_label"])
+        inherited_content = {
+            str(self.committee.pk): {
+                "committee_info": None,
+                "application_guidance": None,
+            }
+        }
+        created = self.client.post(
+            self.url,
+            self.payload(group_content=inherited_content),
+            format="json",
+        )
+        self.assertEqual(created.status_code, status.HTTP_201_CREATED)
+
+        detail_url = reverse(
+            "manage-admission-detail",
+            kwargs={"slug": "komiteopptak-2027"},
+        )
+        before = self.client.get(detail_url)
+        self.assertEqual(before.status_code, status.HTTP_200_OK)
+        self.assertEqual(before.data["groups"][0]["committee_info"], None)
+        self.assertEqual(before.data["groups"][0]["application_guidance"], None)
+        self.assertEqual(
+            before.data["groups"][0]["description"],
+            "Global komitéinfo før redigering.",
+        )
+
+        updated = self.client.patch(
+            detail_url,
+            {
+                "title": "Komiteopptak 2027 – oppdatert",
+                "group_questions": {},
+                "group_content": inherited_content,
+            },
+            format="json",
+        )
+        self.assertEqual(updated.status_code, status.HTTP_200_OK)
+
+        self.committee.description = "Global komitéinfo etter redigering."
+        self.committee.response_label = "Global søknadsveiledning etter redigering."
+        self.committee.save(update_fields=["description", "response_label"])
+        after = self.client.get(detail_url)
+
+        self.assertEqual(
+            after.data["groups"][0]["description"],
+            "Global komitéinfo etter redigering.",
+        )
+        self.assertEqual(
+            after.data["groups"][0]["response_label"],
+            "Global søknadsveiledning etter redigering.",
+        )
+        relation = AdmissionGroup.objects.get(
+            admission__slug="komiteopptak-2027",
+            group=self.committee,
+        )
+        self.assertIsNone(relation.committee_info)
+        self.assertIsNone(relation.application_guidance)
+
+    def test_legacy_content_update_preserves_interview_description(self):
+        created = self.client.post(
+            self.url,
+            self.payload(
+                group_content={
+                    str(self.committee.pk): {
+                        "committee_info": "Fagkom skaper faglige møteplasser.",
+                        "application_guidance": "Fortell hva du ønsker å bidra med.",
+                        "interview_description": "Intervjuet er en kort samtale.",
+                    }
+                }
+            ),
+            format="json",
+        )
+        self.assertEqual(created.status_code, status.HTTP_201_CREATED)
+
+        updated = self.client.patch(
+            reverse(
+                "manage-admission-detail",
+                kwargs={"slug": "komiteopptak-2027"},
+            ),
+            {
+                "group_content": {
+                    str(self.committee.pk): {
+                        "committee_info": "Fagkom lager kurs og arrangementer.",
+                        "application_guidance": "Fortell hva du vil lære.",
+                    }
+                }
+            },
+            format="json",
+        )
+        self.assertEqual(updated.status_code, status.HTTP_200_OK)
+        relation = AdmissionGroup.objects.get(
+            admission__slug="komiteopptak-2027",
+            group=self.committee,
+        )
+        self.assertEqual(
+            relation.interview_description,
+            "Intervjuet er en kort samtale.",
+        )
+
+    def test_empty_question_submission_does_not_validate_hidden_legacy_questions(self):
+        created = self.client.post(self.url, self.payload(), format="json")
+        self.assertEqual(created.status_code, status.HTTP_201_CREATED)
+        relation = AdmissionGroup.objects.get(
+            admission__slug="komiteopptak-2027",
+            group=self.committee,
+        )
+        relation.header_fields = [{"type": "legacy-invalid-question"}]
+        relation.save(update_fields=["header_fields"])
+
+        response = self.client.patch(
+            reverse(
+                "manage-admission-detail",
+                kwargs={"slug": "komiteopptak-2027"},
+            ),
+            {
+                "title": "Komiteopptak 2027 – uten synlig spørsmålsbygger",
+                "group_questions": {},
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        relation.refresh_from_db()
+        self.assertEqual(
+            relation.header_fields,
+            [{"type": "legacy-invalid-question"}],
+        )
+
+    def test_rejects_committee_content_for_a_group_outside_the_admission(self):
+        response = self.client.post(
+            self.url,
+            self.payload(
+                group_content={
+                    str(self.webkom.pk): {
+                        "committee_info": "Webkom lager digitale tjenester.",
+                        "application_guidance": (
+                            "Fortell hva du ønsker å bygge sammen med Webkom."
+                        ),
+                    }
+                }
+            ),
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("group_content", response.data)
+        self.assertFalse(Admission.objects.filter(slug="komiteopptak-2027").exists())
 
     def test_saves_questions_on_the_selected_admission_group(self):
         question = {
@@ -276,6 +514,17 @@ class ManageAdmissionValidationTestCase(APITestCase):
             1,
         )
 
+    def test_create_does_not_require_accessing_saved_schedule_relation(self):
+        with patch.object(
+            Admission,
+            "saved_schedule",
+            new_callable=PropertyMock,
+            side_effect=AssertionError("saved_schedule should not be accessed"),
+        ):
+            response = self.client.post(self.url, self.payload(), format="json")
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+
     def test_inactive_webkom_member_cannot_create_an_admission(self):
         inactive = LegoUser.objects.create(username="inactive-manager", lego_id=703)
         Membership.objects.create(user=inactive, group=self.webkom, role=RETIREE)
@@ -303,6 +552,18 @@ class ManageAdmissionValidationTestCase(APITestCase):
         self.assertEqual(response.data["title"], "Komiteopptak 2027 – oppdatert")
         self.assertEqual(response.data["admin_groups"], [self.webkom.pk])
         self.assertEqual(response.data["groups"], [self.committee.pk])
+        relation = AdmissionGroup.objects.get(
+            admission__slug="komiteopptak-2027",
+            group=self.committee,
+        )
+        self.assertEqual(
+            relation.committee_info,
+            "Fagkom arrangerer kurs og andre lærerike aktiviteter.",
+        )
+        self.assertEqual(
+            relation.application_guidance,
+            "Fortell hvorfor du vil bli med og hva du ønsker å bidra med.",
+        )
 
 
 class AdmissionDateConstraintTestCase(TransactionTestCase):
