@@ -293,6 +293,113 @@ class AdminAdmissionPrivacyTestCase(APITestCase):
         self.assertEqual(userdata["committee_role"], RECRUITING)
         self.assertTrue(userdata["is_admin"])
 
+    def test_dual_role_context_uses_one_schedule_and_own_availability(self):
+        member_group = Group.objects.create(name="Committee one", lego_id=35)
+        authority_group = Group.objects.create(name="Committee two", lego_id=36)
+        self.admission.groups.add(member_group, authority_group)
+        self.admission.admin_groups.add(authority_group)
+        dual_role_user = LegoUser.objects.create(
+            username="dual-role-workspaces",
+            lego_id=37,
+        )
+        Membership.objects.create(
+            user=dual_role_user,
+            group=member_group,
+            role=MEMBER,
+        )
+        Membership.objects.create(
+            user=dual_role_user,
+            group=authority_group,
+            role=RECRUITING,
+        )
+        self.client.force_authenticate(user=dual_role_user)
+
+        schedule_url = reverse(
+            "saved-schedule",
+            kwargs={"admission_slug": self.admission.slug},
+        )
+        schedule_payload = {
+            "start_date": "2026-08-03",
+            "end_date": "2026-08-03",
+            "session_duration": 60,
+            "enabled_slots": ["2026-08-03|540"],
+            "day_start_minute": 540,
+            "day_end_minute": 600,
+            "expected_updated_at": None,
+        }
+
+        created_schedule = self.client.post(
+            schedule_url,
+            schedule_payload,
+            format="json",
+        )
+        fetched_schedule = self.client.get(schedule_url)
+
+        self.assertEqual(created_schedule.status_code, status.HTTP_200_OK)
+        self.assertEqual(fetched_schedule.status_code, status.HTTP_200_OK)
+        self.assertEqual(
+            fetched_schedule.data["updated_at"],
+            created_schedule.data["updated_at"],
+        )
+        self.assertEqual(
+            SavedSchedule.objects.filter(admission=self.admission).count(),
+            1,
+        )
+
+        availability_url = reverse(
+            "interview-availability",
+            kwargs={"admission_slug": self.admission.slug},
+        )
+        availability = self.client.post(
+            availability_url,
+            {
+                "slots": ["2026-08-03|540"],
+                "expected_availability_generation": 1,
+            },
+            format="json",
+        )
+
+        self.assertEqual(availability.status_code, status.HTTP_200_OK)
+        self.assertEqual(availability.data["user_id"], dual_role_user.pk)
+        self.assertEqual(availability.data["slots"], ["2026-08-03|540"])
+        self.assertTrue(
+            InterviewAvailability.objects.filter(
+                admission=self.admission,
+                user=dual_role_user,
+            ).exists()
+        )
+
+        applications_url = reverse(
+            "admin-userapplication-list",
+            kwargs={"admission_slug": self.admission.slug},
+        )
+        applications = self.client.get(applications_url)
+
+        self.assertEqual(applications.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(applications.data), 1)
+
+        member_only = LegoUser.objects.create(
+            username="member-only-workspace",
+            lego_id=38,
+        )
+        Membership.objects.create(
+            user=member_only,
+            group=member_group,
+            role=MEMBER,
+        )
+        self.client.force_authenticate(user=member_only)
+
+        forbidden_schedule = self.client.post(
+            schedule_url,
+            {
+                **schedule_payload,
+                "expected_updated_at": created_schedule.data["updated_at"],
+            },
+            format="json",
+        )
+
+        self.assertEqual(forbidden_schedule.status_code, status.HTTP_403_FORBIDDEN)
+
     def test_inactive_group_roles_are_not_projected_as_destinations(self):
         inactive_group = Group.objects.create(name="Inactive committee", lego_id=33)
         self.admission.groups.add(inactive_group)
