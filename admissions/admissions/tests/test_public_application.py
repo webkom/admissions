@@ -5,6 +5,7 @@ from rest_framework import status
 from rest_framework.test import APITestCase
 
 from admissions.admissions.models import (
+    AdmissionGroup,
     Group,
     GroupApplication,
     LegoUser,
@@ -156,6 +157,86 @@ class CreateApplicationTestCase(APITestCase):
             1,
             UserApplication.objects.get(user=self.pleb_anna).group_applications.count(),
         )
+
+    def test_omitted_group_answers_preserve_existing_committee_answers(self):
+        admission_group = AdmissionGroup.objects.get(
+            admission=self.admission,
+            group=self.webkom,
+        )
+        admission_group.header_fields = [
+            {
+                "id": "motivation",
+                "type": "textarea",
+                "title": "Motivasjon",
+                "label": "Motivasjon",
+                "placeholder": "",
+                "required": False,
+            }
+        ]
+        admission_group.save(update_fields=["header_fields"])
+        application = UserApplication.objects.create(
+            user=self.pleb_anna,
+            admission=self.admission,
+            phone_number="12345678",
+        )
+        group_application = GroupApplication.objects.create(
+            application=application,
+            group=self.webkom,
+            text="Original application",
+            header_fields_response={"motivation": "Behold dette svaret."},
+        )
+        self.client.force_authenticate(user=self.pleb_anna)
+
+        response = self.client.post(
+            reverse(
+                "userapplication-list",
+                kwargs={"admission_slug": self.admission_slug},
+            ),
+            {
+                "phone_number": "87654321",
+                "applications": {"webkom": "Oppdatert søknad"},
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        group_application.refresh_from_db()
+        self.assertEqual(
+            group_application.header_fields_response,
+            {"motivation": "Behold dette svaret."},
+        )
+        self.assertEqual(group_application.text, "Oppdatert søknad")
+
+    def test_explicit_empty_group_answers_clear_existing_committee_answers(self):
+        application = UserApplication.objects.create(
+            user=self.pleb_anna,
+            admission=self.admission,
+            phone_number="12345678",
+        )
+        group_application = GroupApplication.objects.create(
+            application=application,
+            group=self.webkom,
+            text="Original application",
+            header_fields_response={"motivation": "Fjern dette svaret."},
+        )
+        self.client.force_authenticate(user=self.pleb_anna)
+
+        response = self.client.post(
+            reverse(
+                "userapplication-list",
+                kwargs={"admission_slug": self.admission_slug},
+            ),
+            {
+                "phone_number": "87654321",
+                "applications": {"webkom": "Oppdatert søknad"},
+                "group_answers": {"webkom": {}},
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        group_application.refresh_from_db()
+        self.assertEqual(group_application.header_fields_response, {})
 
     def test_cannot_apply_for_group_outside_admission(self):
         Group.objects.create(name="Bedkom", lego_id=5)

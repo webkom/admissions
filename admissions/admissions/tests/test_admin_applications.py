@@ -1,12 +1,15 @@
 import uuid
+from concurrent.futures import ThreadPoolExecutor
 from datetime import date, timedelta
+from threading import Barrier
 from unittest import mock
 
-from django.db import connection
+from django.db import close_old_connections, connection
+from django.test import TransactionTestCase
 from django.test.utils import CaptureQueriesContext
 from django.urls import reverse
 from rest_framework import status
-from rest_framework.test import APITestCase
+from rest_framework.test import APIClient, APITestCase
 
 from admissions.admissions.constants import LEADER, MEMBER, RECRUITING, RETIREE
 from admissions.admissions.interview_workflow import update_interview_status
@@ -1228,6 +1231,57 @@ class DeleteGroupApplicationsTestCase(APITestCase):
             arrkom_application,
         )
 
+    def test_group_delete_uses_admission_application_group_lock_order(self):
+        application = UserApplication.objects.create(
+            user=self.pleb,
+            admission=self.admission,
+            phone_number="12345678",
+        )
+        GroupApplication.objects.create(
+            application=application,
+            group=self.arrkom,
+            text="Arrkom application",
+        )
+        GroupApplication.objects.create(
+            application=application,
+            group=self.webkom,
+            text="Webkom application",
+        )
+        self.client.force_authenticate(user=self.webkom_leader)
+
+        with CaptureQueriesContext(connection) as queries:
+            response = self.client.delete(
+                (
+                    f"{reverse('admin-userapplication-detail', kwargs={'admission_slug': self.admission_slug, 'pk': application.pk})}"
+                    f"?groupId={self.webkom.pk}"
+                )
+            )
+
+        self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
+        locking_queries = [
+            query["sql"].lower()
+            for query in queries.captured_queries
+            if "for update" in query["sql"].lower()
+        ]
+        admission_lock = next(
+            index
+            for index, query in enumerate(locking_queries)
+            if '"admissions_admission"' in query
+        )
+        application_lock = next(
+            index
+            for index, query in enumerate(locking_queries)
+            if '"admissions_userapplication"' in query
+        )
+        group_application_lock = next(
+            index
+            for index, query in enumerate(locking_queries)
+            if '"admissions_groupapplication"' in query
+        )
+
+        self.assertLess(admission_lock, application_lock)
+        self.assertLess(application_lock, group_application_lock)
+
     def test_malformed_group_id_returns_validation_error(self):
         application = UserApplication.objects.create(
             user=self.pleb, admission=self.admission, phone_number="12345678"
@@ -1247,6 +1301,112 @@ class DeleteGroupApplicationsTestCase(APITestCase):
         self.assertEqual(res.data, {"groupId": ["Ugyldig gruppe-ID."]})
         self.assertTrue(
             GroupApplication.objects.filter(application=application).exists()
+        )
+
+
+class ConcurrentGroupApplicationDeletionTestCase(TransactionTestCase):
+    def setUp(self):
+        self.admission = create_admission(slug="concurrent-group-delete")
+        self.first_group = Group.objects.create(name="First group", lego_id=1111)
+        self.second_group = Group.objects.create(name="Second group", lego_id=1112)
+        self.admission.groups.add(self.first_group, self.second_group)
+        self.first_leader = LegoUser.objects.create(
+            username="first-delete-leader",
+            lego_id=1113,
+        )
+        self.second_leader = LegoUser.objects.create(
+            username="second-delete-leader",
+            lego_id=1114,
+        )
+        Membership.objects.create(
+            user=self.first_leader,
+            role=LEADER,
+            group=self.first_group,
+        )
+        Membership.objects.create(
+            user=self.second_leader,
+            role=LEADER,
+            group=self.second_group,
+        )
+        candidate = LegoUser.objects.create(
+            username="concurrent-delete-candidate",
+            lego_id=1115,
+        )
+        self.application = UserApplication.objects.create(
+            user=candidate,
+            admission=self.admission,
+            phone_number="12345678",
+        )
+        GroupApplication.objects.create(
+            application=self.application,
+            group=self.first_group,
+            text="First application",
+        )
+        GroupApplication.objects.create(
+            application=self.application,
+            group=self.second_group,
+            text="Second application",
+        )
+        self.saved_schedule = SavedSchedule.objects.create(
+            admission=self.admission,
+            schedule=[
+                {
+                    "candidate_id": str(self.application.pk),
+                    "candidate": candidate.username,
+                    "time": 540,
+                    "panel": [],
+                }
+            ],
+            start_date=date(2026, 4, 21),
+            end_date=date(2026, 4, 21),
+            is_distributed=True,
+            name_visibility=SavedSchedule.NAME_VISIBILITY_COMMITTEE,
+        )
+        self.url = reverse(
+            "admin-userapplication-detail",
+            kwargs={
+                "admission_slug": self.admission.slug,
+                "pk": self.application.pk,
+            },
+        )
+
+    def test_concurrent_final_group_deletions_remove_candidate_and_schedule_row(self):
+        start = Barrier(2)
+
+        def delete_group(user_id, group_id):
+            close_old_connections()
+            client = APIClient()
+            user = LegoUser.objects.get(pk=user_id)
+            client.force_authenticate(user=user)
+            start.wait(timeout=5)
+            response = client.delete(f"{self.url}?groupId={group_id}")
+            close_old_connections()
+            return response.status_code
+
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            statuses = list(
+                executor.map(
+                    lambda args: delete_group(*args),
+                    (
+                        (self.first_leader.pk, self.first_group.pk),
+                        (self.second_leader.pk, self.second_group.pk),
+                    ),
+                )
+            )
+
+        self.assertEqual(
+            sorted(statuses),
+            [status.HTTP_204_NO_CONTENT, status.HTTP_204_NO_CONTENT],
+        )
+        self.assertFalse(
+            UserApplication.objects.filter(pk=self.application.pk).exists()
+        )
+        self.saved_schedule.refresh_from_db()
+        self.assertEqual(self.saved_schedule.schedule, [])
+        self.assertFalse(self.saved_schedule.is_distributed)
+        self.assertEqual(
+            self.saved_schedule.name_visibility,
+            SavedSchedule.NAME_VISIBILITY_HIDDEN,
         )
 
 
@@ -1461,3 +1621,4 @@ class TerminateCommitteeApplicationsTestCase(APITestCase):
 
         self.assertLess(admission_lock, group_application_lock)
         self.assertLess(admission_lock, user_application_lock)
+        self.assertLess(user_application_lock, group_application_lock)

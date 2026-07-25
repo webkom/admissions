@@ -585,7 +585,7 @@ class ApplicationCreateUpdateSerializer(serializers.HyperlinkedModelSerializer):
         write_only=True,
     )
     group_answers = serializers.DictField(
-        child=serializers.JSONField(), required=False, default=dict, write_only=True
+        child=serializers.JSONField(), required=False, write_only=True
     )
     priority_text = serializers.CharField(
         source="text",
@@ -669,6 +669,7 @@ class ApplicationCreateUpdateSerializer(serializers.HyperlinkedModelSerializer):
         ]
         admission = Admission.objects.get(slug=admission_slug)
         applications = attrs["applications"]
+        group_answers_provided = "group_answers" in attrs
         group_answers = attrs.get("group_answers", {})
         answers_by_group = {
             name.lower(): answers for name, answers in group_answers.items()
@@ -686,15 +687,27 @@ class ApplicationCreateUpdateSerializer(serializers.HyperlinkedModelSerializer):
                 "group"
             ).filter(admission=admission)
         }
+        existing_answers_by_group = {
+            group_name.lower(): answers
+            for group_name, answers in GroupApplication.objects.filter(
+                application__admission=admission,
+                application__user=self.context["request"].user,
+            ).values_list("group__name", "header_fields_response")
+        }
         for group_name in applications:
             try:
                 self.validate_field_responses(
                     question_fields_by_group.get(group_name.lower(), []),
-                    answers_by_group.get(group_name.lower(), {}),
+                    (
+                        answers_by_group.get(group_name.lower(), {})
+                        if group_answers_provided
+                        else existing_answers_by_group.get(group_name.lower(), {})
+                    ),
                 )
             except serializers.ValidationError as error:
                 raise serializers.ValidationError({"group_answers": error.detail})
-        attrs["group_answers"] = answers_by_group
+        if group_answers_provided:
+            attrs["group_answers"] = answers_by_group
         return attrs
 
     def create(self, validated_data):
@@ -704,6 +717,7 @@ class ApplicationCreateUpdateSerializer(serializers.HyperlinkedModelSerializer):
 
         admission_slug = validated_data.pop("admission_slug")
         applications = validated_data.pop("applications")
+        group_answers_provided = "group_answers" in validated_data
         group_answers = validated_data.pop("group_answers", {})
         with transaction.atomic():
             admission = Admission.objects.select_for_update().get(
@@ -742,15 +756,15 @@ class ApplicationCreateUpdateSerializer(serializers.HyperlinkedModelSerializer):
             removed_applications.delete()
 
             for group_name, group_text in applications.items():
+                defaults = {"text": group_text}
+                if group_answers_provided:
+                    defaults["header_fields_response"] = group_answers.get(
+                        group_name.lower(), {}
+                    )
                 GroupApplication.objects.update_or_create(
                     application=user_application,
                     group=resolved_groups[group_name],
-                    defaults={
-                        "text": group_text,
-                        "header_fields_response": group_answers.get(
-                            group_name.lower(), {}
-                        ),
-                    },
+                    defaults=defaults,
                 )
 
         # Notify recruiters of groups the applicant withdrew from. Best effort:

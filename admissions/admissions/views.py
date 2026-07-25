@@ -21,6 +21,7 @@ from structlog import get_logger
 from admissions.admissions import constants
 from admissions.admissions.admission_access import (
     get_representing_groups,
+    lock_user_admission_memberships,
     user_is_admission_admin,
 )
 from admissions.admissions.interview_workflow import (
@@ -331,50 +332,60 @@ class AdminApplicationViewSet(
             raise NotFound() from None
         return Response(InterviewStatusSerializer(updated).data)
 
+    @transaction.atomic
     def destroy(self, request, *args, **kwargs):
         admission_slug = self.kwargs.get("admission_slug", None)
-        admission = get_object_or_404(Admission, slug=admission_slug)
+        admission_stub = get_object_or_404(Admission, slug=admission_slug)
         self.request.user.__class__ = LegoUser
 
         group_id = request.query_params.get("groupId", None)
+        if group_id is not None:
+            try:
+                group_id = Group._meta.pk.to_python(group_id)
+            except (TypeError, ValueError, ValidationError):
+                return Response(
+                    {"groupId": ["Ugyldig gruppe-ID."]},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+        # Keep destructive writes on the same global lock order as application
+        # edits and scheduler cleanup: Admission → UserApplication →
+        # GroupApplication. Authority is recomputed after the admission lock.
+        admission = Admission.objects.select_for_update().get(pk=admission_stub.pk)
+        lock_user_admission_memberships(admission, self.request.user)
         user_is_admin = user_is_admission_admin(admission, self.request.user)
-
-        # Only admins can delete UserApplication objects
-        if group_id is None:
-            if user_is_admin:
-                return super().destroy(request, *args, **kwargs)
-            else:
-                return Response(status=status.HTTP_400_BAD_REQUEST)
-
-        try:
-            group_id = Group._meta.pk.to_python(group_id)
-        except (TypeError, ValueError, ValidationError):
-            return Response(
-                {"groupId": ["Ugyldig gruppe-ID."]},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-        # Verify that the user is permitted to delete the group application
         representing_groups = get_representing_groups(admission, self.request.user)
-        if not user_is_admin and (not representing_groups.filter(pk=group_id).exists()):
+        if group_id is None:
+            if not user_is_admin:
+                return Response(status=status.HTTP_400_BAD_REQUEST)
+        elif not user_is_admin and not representing_groups.filter(pk=group_id).exists():
             return Response(
                 status=status.HTTP_403_FORBIDDEN,
                 data="You are not permitted to delete applications for this group",
             )
 
-        # Perform the deletion
-        user_application = self.get_object()
-        group_application = get_object_or_404(
-            GroupApplication,
-            application=user_application.pk,
-            group=group_id,
-        )
+        try:
+            user_application = UserApplication.objects.select_for_update().get(
+                pk=self.kwargs["pk"],
+                admission=admission,
+            )
+        except UserApplication.DoesNotExist:
+            raise NotFound() from None
+
+        if group_id is None:
+            self.perform_destroy(user_application)
+            return Response(status=status.HTTP_204_NO_CONTENT)
+
+        try:
+            group_application = GroupApplication.objects.select_for_update().get(
+                application=user_application,
+                group=group_id,
+            )
+        except GroupApplication.DoesNotExist:
+            raise NotFound() from None
         group_application.delete()
 
-        # Delete the UserApplication if all GroupApplications are deleted
-        if not GroupApplication.objects.filter(
-            application=user_application.pk
-        ).exists():
+        if not user_application.group_applications.exists():
             self.perform_destroy(user_application)
 
         return Response(status=status.HTTP_204_NO_CONTENT)
@@ -427,15 +438,24 @@ class TerminateCommitteeApplicationsView(APIView):
             # edits cannot deadlock when the UserApplication pre-delete signal
             # locks the admission row.
             admission = Admission.objects.select_for_update().get(pk=admission.pk)
+            lock_user_admission_memberships(admission, request.user)
+            if not user_is_admission_admin(admission, request.user):
+                return Response(status=status.HTTP_403_FORBIDDEN)
             application_ids = list(
-                GroupApplication.objects.select_for_update()
-                .filter(application__admission=admission, group=group)
-                .values_list("application_id", flat=True)
+                GroupApplication.objects.filter(
+                    application__admission=admission,
+                    group=group,
+                ).values_list("application_id", flat=True)
+            )
+            applications = list(
+                UserApplication.objects.select_for_update()
+                .filter(pk__in=application_ids)
+                .order_by("pk")
             )
             list(
-                UserApplication.objects.select_for_update().filter(
-                    pk__in=application_ids
-                )
+                GroupApplication.objects.select_for_update()
+                .filter(application_id__in=application_ids, group=group)
+                .order_by("pk")
             )
             GroupApplication.objects.filter(
                 application_id__in=application_ids, group=group
@@ -444,7 +464,7 @@ class TerminateCommitteeApplicationsView(APIView):
             # A candidate may have applied to several committees. Delete the
             # admission-wide application only after its final committee entry
             # has been removed.
-            for application in UserApplication.objects.filter(pk__in=application_ids):
+            for application in applications:
                 if not application.group_applications.exists():
                     application.delete()
 
