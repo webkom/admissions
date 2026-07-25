@@ -1,3 +1,4 @@
+import uuid
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 
@@ -15,6 +16,7 @@ from admissions.admissions.models import (
     InterviewAvailability,
     SavedSchedule,
     ScheduleDeviationApproval,
+    UserApplication,
 )
 from admissions.admissions.schedule_layout import (
     ScheduleLayoutError,
@@ -32,6 +34,7 @@ from admissions.admissions.schedule_policy import (
 from admissions.admissions.schedule_validation import (
     ScheduleValidationError,
     canonicalize_schedule,
+    ensure_conflict_collection_ready,
 )
 from admissions.admissions.schedule_windows import (
     enabled_windows_to_slots,
@@ -42,7 +45,9 @@ from admissions.admissions.schedule_windows import (
 )
 from admissions.admissions.scheduling_utils import (
     canonicalize_slot_keys,
+    get_conflict_collection_readiness,
     get_conflict_review_readiness,
+    get_interviewer_participation,
 )
 
 
@@ -560,7 +565,32 @@ def _resolve_block_configuration(data, existing, configuration, enabled_slots):
     return {"layout_version": 2, "legacy_compatibility": False, **layout}
 
 
+def _ensure_conflict_collection_can_close(admission, existing):
+    if existing is None or existing.conflict_collection_revision is None:
+        return
+
+    # A stale collection must remain closable so it can be reopened with a
+    # fresh snapshot. A current collection may only be finalized when every
+    # participant has confirmed the exact scope.
+    readiness = get_conflict_collection_readiness(admission, existing)
+    if not readiness["scope_current"]:
+        return
+
+    incomplete_count = len(readiness["incomplete_participant_ids"])
+
+    if incomplete_count:
+        raise ScheduleInputError(
+            {
+                "conflict_collection_open": [
+                    f"{incomplete_count} intervjuere må kontrollere "
+                    "kandidatlisten før kontrollen avsluttes."
+                ]
+            }
+        )
+
+
 def _resolve_schedule_state(
+    admission,
     data,
     existing,
     configuration,
@@ -662,10 +692,80 @@ def _resolve_schedule_state(
     if not is_distributed:
         name_visibility = SavedSchedule.NAME_VISIBILITY_HIDDEN
 
-    # A saved internal draft automatically opens the short, assignment-based
-    # conflict review. There is no separate administrative "open review" step:
-    # members can review proposed candidates until the plan is published.
-    conflict_review_open = bool(schedule) and not is_distributed
+    existing_collection_open = bool(
+        existing is not None and existing.conflict_collection_open
+    )
+    requested_collection_open = data.get(
+        "conflict_collection_open",
+        existing_collection_open,
+    )
+    conflict_collection_open = bool(requested_collection_open and not is_distributed)
+    if existing_collection_open and not conflict_collection_open:
+        _ensure_conflict_collection_can_close(admission, existing)
+    conflict_collection_revision = (
+        existing.conflict_collection_revision if existing is not None else None
+    )
+    conflict_collection_candidate_ids = (
+        list(existing.conflict_collection_candidate_ids) if existing is not None else []
+    )
+    conflict_collection_participant_ids = (
+        list(existing.conflict_collection_participant_ids)
+        if existing is not None
+        else []
+    )
+    if conflict_collection_open and not existing_collection_open:
+        if not schedule:
+            raise ScheduleInputError(
+                {
+                    "conflict_collection_open": [
+                        "Lag et planutkast før kandidatnavn åpnes."
+                    ]
+                }
+            )
+        conflict_collection_revision = uuid.uuid4()
+        conflict_collection_candidate_ids = sorted(
+            str(candidate_id)
+            for candidate_id in UserApplication.objects.filter(
+                admission=admission
+            ).values_list("pk", flat=True)
+        )
+        participation = get_interviewer_participation(admission, existing)
+        conflict_collection_participant_ids = sorted(
+            str(user_id)
+            for user_id, state in participation.items()
+            if state == InterviewAvailability.PARTICIPATION_PARTICIPATING
+        )
+        if not conflict_collection_candidate_ids:
+            raise ScheduleInputError(
+                {
+                    "conflict_collection_open": [
+                        "Legg til kandidater før navn åpnes for inhabilitetskontroll."
+                    ]
+                }
+            )
+        if not conflict_collection_participant_ids:
+            raise ScheduleInputError(
+                {
+                    "conflict_collection_open": [
+                        "Minst én intervjuer må ha sendt inn tilgjengelighet."
+                    ]
+                }
+            )
+
+    # New drafts keep candidate names hidden until the admission admin
+    # deliberately opens the full collection from Planutkast. Assignment-only
+    # review remains available solely for legacy drafts that already used it.
+    legacy_assignment_review_open = bool(
+        existing is not None
+        and existing.conflict_review_open
+        and existing.conflict_collection_revision is None
+    )
+    conflict_review_open = bool(
+        schedule
+        and not is_distributed
+        and not conflict_collection_open
+        and legacy_assignment_review_open
+    )
 
     return {
         "grid_changed": grid_changed,
@@ -677,6 +777,10 @@ def _resolve_schedule_state(
         "schedule": schedule,
         "is_distributed": is_distributed,
         "conflict_review_open": conflict_review_open,
+        "conflict_collection_open": conflict_collection_open,
+        "conflict_collection_revision": conflict_collection_revision,
+        "conflict_collection_candidate_ids": conflict_collection_candidate_ids,
+        "conflict_collection_participant_ids": conflict_collection_participant_ids,
         "name_visibility": name_visibility,
     }
 
@@ -686,6 +790,10 @@ def _ensure_conflict_review_ready_for_publish(admission, data, schedule):
         return
 
     readiness = get_conflict_review_readiness(admission, schedule=schedule)
+    try:
+        ensure_conflict_collection_ready(admission, admission.saved_schedule)
+    except ScheduleValidationError as exc:
+        raise ScheduleInputError({"schedule": [exc.message]}) from exc
     incomplete_count = len(readiness["incomplete_participant_ids"])
     if incomplete_count:
         raise ScheduleInputError(
@@ -917,6 +1025,9 @@ def _persist_schedule(
     conflict_review_was_open = bool(
         existing is not None and existing.conflict_review_open
     )
+    conflict_collection_was_open = bool(
+        existing is not None and existing.conflict_collection_open
+    )
     with transaction.atomic():
         saved, _ = SavedSchedule.objects.update_or_create(
             admission=admission,
@@ -945,6 +1056,14 @@ def _persist_schedule(
                 "solver_options": solver_options,
                 "is_distributed": state["is_distributed"],
                 "conflict_review_open": state["conflict_review_open"],
+                "conflict_collection_open": state["conflict_collection_open"],
+                "conflict_collection_revision": state["conflict_collection_revision"],
+                "conflict_collection_candidate_ids": state[
+                    "conflict_collection_candidate_ids"
+                ],
+                "conflict_collection_participant_ids": state[
+                    "conflict_collection_participant_ids"
+                ],
                 "name_visibility": state["name_visibility"],
             },
         )
@@ -958,6 +1077,23 @@ def _persist_schedule(
                 action=(
                     ConflictReviewAuditEvent.ACTION_OPENED
                     if saved.conflict_review_open
+                    else ConflictReviewAuditEvent.ACTION_CLOSED
+                ),
+            )
+
+        if conflict_collection_was_open != saved.conflict_collection_open:
+            ConflictReviewAuditEvent.objects.create(
+                admission=admission,
+                saved_schedule=saved,
+                actor=user,
+                actor_username=user.username,
+                subject_user=user,
+                subject_username=user.username,
+                phase=ConflictReviewAuditEvent.PHASE_COLLECTION,
+                collection_revision=saved.conflict_collection_revision,
+                action=(
+                    ConflictReviewAuditEvent.ACTION_OPENED
+                    if saved.conflict_collection_open
                     else ConflictReviewAuditEvent.ACTION_CLOSED
                 ),
             )
@@ -1039,6 +1175,16 @@ def update_saved_schedule(
     _ensure_revision_matches(data, existing)
     if existing is not None:
         ensure_window_fields(existing)
+        is_initial_draft = bool(
+            "schedule" in data
+            and not existing.schedule
+            and existing.conflict_collection_revision is None
+        )
+        if "schedule" in data and not is_initial_draft:
+            try:
+                ensure_conflict_collection_ready(admission, existing)
+            except ScheduleValidationError as exc:
+                raise ScheduleInputError({exc.field: [exc.message]}) from exc
 
     configuration = _resolve_schedule_configuration(data, existing)
     enabled_windows, enabled_slots = _resolve_enabled_windows(
@@ -1056,6 +1202,7 @@ def update_saved_schedule(
         enabled_slots, configuration["session_duration"]
     )
     state = _resolve_schedule_state(
+        admission,
         data,
         existing,
         configuration,

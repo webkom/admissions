@@ -9,7 +9,13 @@ from django.test import SimpleTestCase, TestCase, override_settings
 from django.utils import timezone
 
 from admissions.admissions import constants
-from admissions.admissions.models import Group, LegoUser, Membership, SolveJob
+from admissions.admissions.models import (
+    Group,
+    LegoUser,
+    Membership,
+    SavedSchedule,
+    SolveJob,
+)
 from admissions.admissions.tests.utils import create_admission
 from admissions.utils.management.commands import run_solver_worker
 from admissions.utils.management.commands.run_solver_worker import Command
@@ -142,16 +148,16 @@ class WriteBackResilienceTestCase(TestCase):
 
     def setUp(self):
         self.user = LegoUser.objects.create(username="resilience-admin", lego_id=970)
-        self.admin_group = Group.objects.create(name="Resilience admins", lego_id=971)
+        admin_group = Group.objects.create(name="Resilience admins", lego_id=971)
         Membership.objects.create(
             user=self.user,
-            group=self.admin_group,
+            group=admin_group,
             role=constants.RECRUITING,
         )
         self.admission = create_admission(
             created_by=self.user, slug="resilience-opptak"
         )
-        self.admission.admin_groups.add(self.admin_group)
+        self.admission.admin_groups.add(admin_group)
 
     def _create_job(self, **overrides):
         defaults = {
@@ -204,6 +210,58 @@ class WriteBackResilienceTestCase(TestCase):
             },
         )
         self.assertEqual(len(attempts), 2)
+
+    def test_cancelled_job_rejects_a_late_worker_write_back(self):
+        job = self._create_job()
+        SolveJob.objects.filter(pk=job.pk).update(
+            status=SolveJob.STATUS_CANCELLED,
+            request_data={},
+            result=None,
+            finished_at=timezone.now(),
+        )
+
+        updated = Command()._write_back(
+            job,
+            result={"status": "SUCCESS", "schedule": [{"candidate": "late"}]},
+            new_status=SolveJob.STATUS_DONE,
+            error="",
+        )
+
+        self.assertEqual(updated, 0)
+        job.refresh_from_db()
+        self.assertEqual(job.status, SolveJob.STATUS_CANCELLED)
+        self.assertEqual(job.request_data, {})
+        self.assertIsNone(job.result)
+
+    def test_worker_rejects_a_baseline_that_changes_after_enqueue(self):
+        saved = SavedSchedule.objects.create(
+            admission=self.admission,
+            schedule=[],
+            start_date="2026-07-27",
+            is_distributed=False,
+        )
+        baseline = saved.updated_at.isoformat()
+        SavedSchedule.objects.filter(pk=saved.pk).update(
+            updated_at=timezone.now() + timedelta(seconds=1)
+        )
+        job = self._create_job(
+            request_data={
+                "rehydrate": True,
+                "baseline_updated_at": baseline,
+            }
+        )
+
+        with mock.patch.object(run_solver_worker, "solve_schedule") as solver:
+            Command()._run(job)
+
+        solver.assert_not_called()
+        job.refresh_from_db()
+        saved.refresh_from_db()
+        self.assertEqual(job.status, SolveJob.STATUS_DONE)
+        self.assertEqual(job.result["status"], "ERROR")
+        self.assertIn("endret", job.result["error"])
+        self.assertEqual(saved.schedule, [])
+        self.assertFalse(saved.is_distributed)
 
     def test_write_back_gives_up_after_bounded_attempts(self):
         job = self._create_job()

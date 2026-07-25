@@ -14,6 +14,7 @@ from structlog import get_logger
 
 from admissions.admissions import constants
 from admissions.admissions.admission_access import (
+    get_admission_access_projection,
     synchronize_admission_group_disclosures,
 )
 from admissions.admissions.json_models import (
@@ -134,6 +135,7 @@ class AdmissionListPublicSerializer(serializers.HyperlinkedModelSerializer):
 
     def get_userdata(self, obj):
         res = {
+            "actor_id": None,
             "has_application": False,
             "is_privileged": False,
             "is_admin": False,
@@ -141,34 +143,43 @@ class AdmissionListPublicSerializer(serializers.HyperlinkedModelSerializer):
             "committee_role": None,
             "committee_groups": [],
             "represented_groups": [],
+            "group_contexts": [],
+            "admission_actions": {
+                "administer_all_applications": False,
+                "administer_schedule": False,
+                "authority_group_ids": [],
+            },
+            "resource_scopes": {
+                "schedule": "admission",
+                "availability": "admission_user",
+            },
         }
         request = self.context.get("request")
-        if not request or not hasattr(request, "user"):
+        if (
+            not request
+            or not hasattr(request, "user")
+            or not request.user.is_authenticated
+        ):
             return res
+        res["actor_id"] = str(request.user.pk)
         res["has_application"] = UserApplication.objects.filter(
             user=request.user.pk, admission=obj.pk
         ).exists()
-        committee_groups = list(obj.groups.all())
-        roles_by_group = {}
-        for group_pk, role in (
-            Membership.objects.filter(user=request.user.pk, group__in=committee_groups)
-            .exclude(role__in=constants.INACTIVE_MEMBERSHIP_ROLES)
-            .values_list("group", "role")
-        ):
-            roles_by_group.setdefault(group_pk, set()).add(role)
+        access_projection = get_admission_access_projection(obj, request.user)
+        res.update(access_projection)
 
         is_leader = False
         is_recruiting = False
         is_committee_member = False
-        for group in committee_groups:
-            roles = roles_by_group.get(group.pk)
-            if not roles:
+        for context in access_projection["group_contexts"]:
+            if not context["sources"]["admission_group"]:
                 continue
-            res["committee_groups"].append(group.name)
+            roles = set(context["membership_roles"])
+            res["committee_groups"].append(context["group"]["name"])
             is_committee_member = True
             if roles.intersection((constants.LEADER, constants.RECRUITING)):
                 res["is_privileged"] = True
-                res["represented_groups"].append(group.name)
+                res["represented_groups"].append(context["group"]["name"])
             if constants.LEADER in roles:
                 is_leader = True
             if constants.RECRUITING in roles:
@@ -182,13 +193,7 @@ class AdmissionListPublicSerializer(serializers.HyperlinkedModelSerializer):
         elif is_committee_member:
             res["committee_role"] = constants.MEMBER
 
-        if (
-            Membership.objects.filter(
-                user=request.user.pk, group__in=obj.admin_groups.all()
-            )
-            .filter(role__in=(constants.LEADER, constants.RECRUITING))
-            .exists()
-        ):
+        if access_projection["admission_actions"]["administer_schedule"]:
             res["is_privileged"] = True
             res["is_admin"] = True
         return res
@@ -364,13 +369,19 @@ class AdminAdmissionSerializer(serializers.ModelSerializer):
 
     def get_userdata(self, obj):
         res = {
+            "actor_id": None,
             "has_application": False,
             "is_privileged": False,
             "is_admin": False,
         }
         request = self.context.get("request")
-        if not request or not hasattr(request, "user"):
+        if (
+            not request
+            or not hasattr(request, "user")
+            or not request.user.is_authenticated
+        ):
             return res
+        res["actor_id"] = str(request.user.pk)
         res["has_application"] = UserApplication.objects.filter(
             user=request.user.pk, admission=obj.pk
         ).exists()
@@ -821,6 +832,10 @@ class SavedScheduleSerializer(serializers.ModelSerializer):
             "solver_options",
             "is_distributed",
             "conflict_review_open",
+            "conflict_collection_open",
+            "conflict_collection_revision",
+            "conflict_collection_candidate_ids",
+            "conflict_collection_participant_ids",
             "name_visibility",
             "updated_at",
         ]
@@ -828,6 +843,10 @@ class SavedScheduleSerializer(serializers.ModelSerializer):
 
     def to_representation(self, instance):
         data = super().to_representation(instance)
+        if not self.context.get("include_conflict_collection_scope", False):
+            data["conflict_collection_revision"] = None
+            data["conflict_collection_candidate_ids"] = []
+            data["conflict_collection_participant_ids"] = []
         effective_name_visibility = self.context.get("effective_name_visibility")
         if effective_name_visibility is not None:
             data["name_visibility"] = effective_name_visibility
@@ -837,11 +856,10 @@ class SavedScheduleSerializer(serializers.ModelSerializer):
         if self.context.get("hide_schedule"):
             data["schedule"] = []
             return data
-        hide_candidate_identity = self.context.get("hide_candidate_identity")
-        visible_candidate_ids = self.context.get("visible_candidate_ids")
-        if hide_candidate_identity:
+        if self.context.get("hide_candidate_identity"):
             data["schedule"] = []
             return data
+        visible_candidate_ids = self.context.get("visible_candidate_ids")
 
         raw_schedule = data.get("schedule")
         if not isinstance(raw_schedule, list):
@@ -920,11 +938,6 @@ class SavedScheduleSerializer(serializers.ModelSerializer):
                 continue
             candidate_id = canonical_uuid(item.validated_data.get("candidate_id"))
             if candidate_id not in candidate_details:
-                continue
-            if (
-                visible_candidate_ids is not None
-                and candidate_id not in visible_candidate_ids
-            ):
                 continue
 
             safe_entry = dict(item.validated_data)
@@ -1220,6 +1233,7 @@ class SaveScheduleInputSerializer(serializers.Serializer):
     )
     is_distributed = serializers.BooleanField(required=False)
     conflict_review_open = serializers.BooleanField(required=False)
+    conflict_collection_open = serializers.BooleanField(required=False)
     name_visibility = serializers.ChoiceField(
         choices=["hidden", "admin_only", "committee"],
         required=False,
@@ -1444,12 +1458,23 @@ class SaveInterviewAvailabilitySerializer(serializers.Serializer):
     reviewed_candidate_ids = serializers.ListField(
         child=serializers.CharField(), required=False, max_length=500
     )
+    conflict_collection_reviewed_candidate_ids = serializers.ListField(
+        child=serializers.CharField(),
+        required=False,
+        max_length=500,
+    )
+    conflict_collection_revision = serializers.UUIDField(required=False)
     expected_availability_generation = serializers.IntegerField(
         min_value=1, required=False
     )
 
     def validate(self, attrs):
-        for field in ("slots", "conflicts", "reviewed_candidate_ids"):
+        for field in (
+            "slots",
+            "conflicts",
+            "reviewed_candidate_ids",
+            "conflict_collection_reviewed_candidate_ids",
+        ):
             values = attrs.get(field)
             if values is not None and len(values) != len(set(values)):
                 raise serializers.ValidationError({field: ["Verdiene må være unike."]})
@@ -1480,6 +1505,15 @@ class InterviewAvailabilityParticipantSerializer(serializers.Serializer):
     proposed_candidate_ids = serializers.ListField(
         child=serializers.CharField(), default=list
     )
+    conflict_collection_candidate_ids = serializers.ListField(
+        child=serializers.CharField(),
+        default=list,
+    )
+    conflict_collection_revision = serializers.UUIDField(
+        allow_null=True,
+        default=None,
+    )
+    conflict_collection_complete = serializers.BooleanField(default=False)
     conflict_review_complete = serializers.BooleanField(default=False)
     has_submitted = serializers.BooleanField()
     participation = serializers.ChoiceField(

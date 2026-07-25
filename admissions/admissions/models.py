@@ -287,6 +287,10 @@ class SavedSchedule(models.Model):
     solver_options = models.JSONField(null=True, blank=True)
     is_distributed = models.BooleanField(default=False)
     conflict_review_open = models.BooleanField(default=False)
+    conflict_collection_open = models.BooleanField(default=False)
+    conflict_collection_revision = models.UUIDField(null=True, blank=True)
+    conflict_collection_candidate_ids = models.JSONField(default=list, blank=True)
+    conflict_collection_participant_ids = models.JSONField(default=list, blank=True)
 
     NAME_VISIBILITY_HIDDEN = "hidden"
     NAME_VISIBILITY_ADMIN_ONLY = "admin_only"
@@ -368,6 +372,12 @@ class NameVisibilityAuditEvent(models.Model):
 
 
 class ConflictReviewAuditEvent(models.Model):
+    PHASE_DRAFT = "draft"
+    PHASE_COLLECTION = "collection"
+    PHASE_CHOICES = [
+        (PHASE_DRAFT, "Draft"),
+        (PHASE_COLLECTION, "Collection"),
+    ]
     ACTION_OPENED = "opened"
     ACTION_CLOSED = "closed"
     ACTION_VIEWED = "viewed"
@@ -400,6 +410,20 @@ class ConflictReviewAuditEvent(models.Model):
         related_name="conflict_review_events",
     )
     actor_username = models.CharField(max_length=150)
+    subject_user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="conflict_review_subject_events",
+    )
+    subject_username = models.CharField(max_length=150, blank=True, default="")
+    phase = models.CharField(
+        max_length=16,
+        choices=PHASE_CHOICES,
+        default=PHASE_DRAFT,
+    )
+    collection_revision = models.UUIDField(null=True, blank=True)
     action = models.CharField(max_length=16, choices=ACTION_CHOICES)
     reviewed_candidate_ids = models.JSONField(default=list, blank=True)
     conflict_candidate_ids = models.JSONField(default=list, blank=True)
@@ -481,6 +505,11 @@ class InterviewAvailability(models.Model):
     slots = models.JSONField(default=list, blank=True)
     conflicts = models.JSONField(default=list, blank=True)
     reviewed_candidate_ids = models.JSONField(default=list, blank=True)
+    conflict_collection_reviewed_candidate_ids = models.JSONField(
+        default=list,
+        blank=True,
+    )
+    conflict_collection_review_revision = models.UUIDField(null=True, blank=True)
     participation = models.CharField(
         max_length=24,
         choices=PARTICIPATION_CHOICES,

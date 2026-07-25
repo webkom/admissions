@@ -181,7 +181,7 @@ class Command(BaseCommand):
             if requested_by is None or not user_is_admission_admin(
                 job.admission, requested_by
             ):
-                raise PermissionError
+                raise SchedulePermissionDenied
             if data.get("rehydrate"):
                 with transaction.atomic():
                     admission = Admission.objects.select_for_update().get(
@@ -262,7 +262,7 @@ class Command(BaseCommand):
                     availability_generation=data.get("availability_generation", 1),
                     layout_version=data.get("layout_version", 1),
                 )
-        except PermissionError:
+        except SchedulePermissionDenied:
             error = "Kun opptaksansvarlige kan kjøre intervjusolveren."
             new_status = SolveJob.STATUS_ERROR
         except Exception as exc:

@@ -5,7 +5,6 @@ from admissions.admissions import constants
 from admissions.admissions.admission_access import (
     user_is_admission_admin,
     user_is_privileged,
-    user_is_recruiter,
 )
 
 from .models import Admission, LegoUser, Membership

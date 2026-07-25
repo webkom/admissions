@@ -4,7 +4,6 @@ from django.shortcuts import get_object_or_404
 from admissions.admissions import constants
 from admissions.admissions.models import (
     Admission,
-    ConflictReviewAuditEvent,
     Membership,
     NameVisibilityAuditEvent,
     SavedSchedule,
@@ -12,6 +11,11 @@ from admissions.admissions.models import (
 )
 
 _REPRESENTATIVE_ROLES = (constants.LEADER, constants.RECRUITING)
+_MEMBERSHIP_ROLE_PRIORITY = {
+    constants.LEADER: 0,
+    constants.RECRUITING: 1,
+    constants.MEMBER: 2,
+}
 
 
 def user_is_admission_admin(admission, user):
@@ -43,6 +47,80 @@ def get_representing_groups(admission, user):
         role__in=_REPRESENTATIVE_ROLES,
     )
     return admission.groups.filter(pk__in=representing.values_list("group", flat=True))
+
+
+def get_admission_access_projection(admission, user):
+    """Project every active admission role without flattening committee context.
+
+    The projection is navigation metadata only. Backend permission checks must
+    continue to re-evaluate the relevant membership for every request.
+    """
+
+    committee_group_ids = set(admission.groups.values_list("pk", flat=True))
+    admin_group_ids = set(admission.admin_groups.values_list("pk", flat=True))
+    admission_group_ids = committee_group_ids | admin_group_ids
+    roles_by_group = {}
+    groups_by_id = {}
+    memberships = (
+        Membership.objects.filter(user=user.pk, group_id__in=admission_group_ids)
+        .exclude(role__in=constants.INACTIVE_MEMBERSHIP_ROLES)
+        .select_related("group")
+    )
+    for membership in memberships:
+        groups_by_id[membership.group_id] = membership.group
+        roles_by_group.setdefault(membership.group_id, set()).add(membership.role)
+
+    def role_sort_key(role):
+        return (_MEMBERSHIP_ROLE_PRIORITY.get(role, 3), role)
+
+    group_contexts = []
+    authority_group_ids = []
+    for group_id, roles in roles_by_group.items():
+        group = groups_by_id[group_id]
+        sorted_roles = sorted(roles, key=role_sort_key)
+        is_representative = bool(roles.intersection(_REPRESENTATIVE_ROLES))
+        is_committee_group = group_id in committee_group_ids
+        is_admin_group = group_id in admin_group_ids
+        if is_admin_group and is_representative:
+            authority_group_ids.append(str(group_id))
+        group_contexts.append(
+            {
+                "group": {"id": str(group_id), "name": group.name},
+                "membership_role": sorted_roles[0],
+                "membership_roles": sorted_roles,
+                "sources": {
+                    "admission_group": is_committee_group,
+                    "admin_group": is_admin_group,
+                },
+                "actions": {
+                    "open_member_workspace": is_committee_group,
+                    "administer_group_applications": (
+                        is_committee_group and is_representative
+                    ),
+                },
+            }
+        )
+
+    group_contexts.sort(
+        key=lambda context: (
+            context["group"]["name"].casefold(),
+            context["group"]["id"],
+        )
+    )
+    authority_group_ids.sort()
+    is_admission_admin = bool(authority_group_ids)
+    return {
+        "group_contexts": group_contexts,
+        "admission_actions": {
+            "administer_all_applications": is_admission_admin,
+            "administer_schedule": is_admission_admin,
+            "authority_group_ids": authority_group_ids,
+        },
+        "resource_scopes": {
+            "schedule": "admission",
+            "availability": "admission_user",
+        },
+    }
 
 
 def get_user_admission_groups(admission, user):
@@ -82,17 +160,19 @@ def get_user_candidate_visible_groups(admission, saved_schedule, user):
 
 
 def candidate_identity_is_revealed(saved_schedule):
-    """Whether the legacy review workflow has crossed the identity boundary."""
+    """Whether the scheduler may return real candidate identities.
+
+    A draft starts with stable pseudonyms. Opening the full conflict collection
+    creates a revision and deliberately crosses the identity-disclosure
+    boundary. Closing the collection does not hide names again because admins
+    still need to repair and publish the reviewed draft.
+    """
 
     return bool(
         saved_schedule is not None
         and (
             saved_schedule.is_distributed
-            or saved_schedule.conflict_review_open
-            or ConflictReviewAuditEvent.objects.filter(
-                admission=saved_schedule.admission,
-                action=ConflictReviewAuditEvent.ACTION_OPENED,
-            ).exists()
+            or saved_schedule.conflict_collection_revision is not None
         )
     )
 
@@ -291,6 +371,7 @@ def schedule_response_context(
         "effective_name_visibility": effective_name_visibility,
         "revealed_group_summaries": revealed_group_summaries,
         "include_deviation_review": is_interview_admin,
+        "include_conflict_collection_scope": is_admin,
     }
 
 

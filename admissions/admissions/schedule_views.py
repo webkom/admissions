@@ -54,7 +54,7 @@ class SavedScheduleView(SchedulerFeatureGateMixin, APIView):
                 None,
                 is_admin,
                 is_recruiter,
-                is_interview_admin,
+                is_admin,
                 Response(status=status.HTTP_403_FORBIDDEN),
             )
 
@@ -86,7 +86,7 @@ class SavedScheduleView(SchedulerFeatureGateMixin, APIView):
                     user,
                     is_admin,
                     is_recruiter,
-                    is_interview_admin,
+                    is_admin,
                 ),
             ).data
         )
@@ -150,5 +150,5 @@ class SavedScheduleView(SchedulerFeatureGateMixin, APIView):
             request.user,
             is_admin,
             is_recruiter,
-            is_interview_admin,
+            is_admin,
         )

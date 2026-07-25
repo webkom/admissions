@@ -22,6 +22,7 @@ from admissions.admissions.models import Admission, LegoUser, SavedSchedule, Sol
 from admissions.admissions.schedule_validation import (
     ScheduleValidationError,
     canonicalize_solver_payload,
+    ensure_conflict_collection_ready,
 )
 from admissions.admissions.schedule_windows import enabled_windows_to_slots
 from admissions.admissions.schedule_workflow import (
@@ -122,6 +123,12 @@ class SolveScheduleView(SchedulerFeatureGateMixin, APIView):
                 )
                 data["options"] = options
             try:
+                is_initial_draft = bool(
+                    not saved_config.schedule
+                    and saved_config.conflict_collection_revision is None
+                )
+                if not is_initial_draft:
+                    ensure_conflict_collection_ready(admission, saved_config)
                 data.update(
                     canonicalize_solver_payload(
                         admission, saved_config, data, request.user
@@ -396,7 +403,9 @@ class SolveJobApplyView(SchedulerFeatureGateMixin, APIView):
                 status=status.HTTP_409_CONFLICT,
             )
         except ScheduleInputError as exc:
-            return Response(exc.errors, status=status.HTTP_400_BAD_REQUEST)
+            job.discarded_at = timezone.now()
+            job.save(update_fields=["discarded_at"])
+            return Response(exc.errors, status=status.HTTP_409_CONFLICT)
 
         job.applied_at = timezone.now()
         job.save(update_fields=["applied_at"])

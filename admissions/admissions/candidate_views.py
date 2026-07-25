@@ -18,6 +18,7 @@ from admissions.admissions.authentication import SessionAuthentication
 from admissions.admissions.models import (
     Admission,
     ConflictReviewAuditEvent,
+    InterviewAvailability,
     LegoUser,
     NameVisibilityAuditEvent,
     SavedSchedule,
@@ -26,6 +27,8 @@ from admissions.admissions.models import (
 from admissions.admissions.scheduler_feature import SchedulerFeatureGateMixin
 from admissions.admissions.scheduling_utils import (
     get_eligible_interviewer_ids,
+    get_interviewer_participation,
+    get_proposed_candidate_ids_by_interviewer,
     user_has_interview_availability,
 )
 from admissions.admissions.serializers import NameVisibilityAuditEventSerializer
@@ -37,8 +40,17 @@ class InterviewCandidatesView(SchedulerFeatureGateMixin, APIView):
     throttle_classes = [ScopedRateThrottle]
     throttle_scope = "candidate_read"
 
-    def _audit_conflict_review_access(self, admission, saved_schedule, user):
-        events = ConflictReviewAuditEvent.objects.filter(admission=admission)
+    def _audit_conflict_review_access(
+        self,
+        admission,
+        saved_schedule,
+        user,
+        phase=ConflictReviewAuditEvent.PHASE_DRAFT,
+    ):
+        events = ConflictReviewAuditEvent.objects.filter(
+            admission=admission,
+            phase=phase,
+        )
         latest_opened = events.filter(
             action=ConflictReviewAuditEvent.ACTION_OPENED
         ).first()
@@ -55,6 +67,14 @@ class InterviewCandidatesView(SchedulerFeatureGateMixin, APIView):
             saved_schedule=saved_schedule,
             actor=user,
             actor_username=user.username,
+            subject_user=user,
+            subject_username=user.username,
+            phase=phase,
+            collection_revision=(
+                saved_schedule.conflict_collection_revision
+                if phase == ConflictReviewAuditEvent.PHASE_COLLECTION
+                else None
+            ),
             action=ConflictReviewAuditEvent.ACTION_VIEWED,
         )
 
@@ -89,18 +109,69 @@ class InterviewCandidatesView(SchedulerFeatureGateMixin, APIView):
             and user.id in get_eligible_interviewer_ids(admission)
             and user_has_interview_availability(admission, user.id)
         )
+        conflict_collection_scope_current = False
+        if saved is not None and saved.conflict_collection_open:
+            current_candidate_ids = {
+                str(candidate_id)
+                for candidate_id in UserApplication.objects.filter(
+                    admission=admission
+                ).values_list("pk", flat=True)
+            }
+            participation = get_interviewer_participation(admission, saved)
+            current_participant_ids = {
+                str(user_id)
+                for user_id, state in participation.items()
+                if state == InterviewAvailability.PARTICIPATION_PARTICIPATING
+            }
+            conflict_collection_scope_current = current_candidate_ids == set(
+                saved.conflict_collection_candidate_ids
+            ) and current_participant_ids == set(
+                saved.conflict_collection_participant_ids
+            )
+        conflict_collection_open = bool(
+            saved is not None
+            and saved.conflict_collection_open
+            and conflict_collection_scope_current
+            and not saved.is_distributed
+            and str(user.id) in saved.conflict_collection_participant_ids
+        )
+        collection_candidate_ids = set()
+        if conflict_collection_open:
+            own_application_ids = set(
+                str(application_id)
+                for application_id in UserApplication.objects.filter(
+                    admission=admission,
+                    user=user,
+                ).values_list("pk", flat=True)
+            )
+            collection_candidate_ids = (
+                set(saved.conflict_collection_candidate_ids) - own_application_ids
+            )
         visible_groups = get_user_candidate_visible_groups(admission, saved, user)
         pseudonymize_identity = is_admin and not candidate_identity_revealed
         hide_identity = not is_admin and (
             not candidate_identity_revealed
-            or (not conflict_review_open and not visible_groups.exists())
+            or (
+                not conflict_collection_open
+                and not conflict_review_open
+                and not visible_groups.exists()
+            )
         )
 
         applications = UserApplication.objects.filter(admission=admission)
-        if not is_admin and not conflict_review_open:
-            applications = applications.filter(
-                group_applications__group__in=visible_groups
-            ).distinct()
+        if not is_admin:
+            if conflict_collection_open:
+                applications = applications.filter(pk__in=collection_candidate_ids)
+            elif conflict_review_open:
+                applications = applications.filter(
+                    pk__in=get_proposed_candidate_ids_by_interviewer(saved).get(
+                        str(user.id), set()
+                    )
+                )
+            else:
+                applications = applications.filter(
+                    group_applications__group__in=visible_groups
+                ).distinct()
         applications = applications.select_related("user")
         if pseudonymize_identity:
             applications = applications.order_by("created_at", "pk")
@@ -111,8 +182,16 @@ class InterviewCandidatesView(SchedulerFeatureGateMixin, APIView):
         if hide_identity:
             payload = []
         else:
-            if conflict_review_open and not is_admin:
-                self._audit_conflict_review_access(admission, saved, user)
+            if not is_admin:
+                if conflict_collection_open:
+                    self._audit_conflict_review_access(
+                        admission,
+                        saved,
+                        user,
+                        ConflictReviewAuditEvent.PHASE_COLLECTION,
+                    )
+                elif conflict_review_open:
+                    self._audit_conflict_review_access(admission, saved, user)
             pseudonyms = (
                 get_candidate_pseudonyms(admission) if pseudonymize_identity else {}
             )

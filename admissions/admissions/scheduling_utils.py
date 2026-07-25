@@ -140,6 +140,114 @@ def get_proposed_candidate_ids_by_interviewer(saved_schedule=None, schedule=None
     return proposed
 
 
+def get_conflict_collection_readiness(admission, saved_schedule=None):
+    if saved_schedule is None:
+        try:
+            saved_schedule = admission.saved_schedule
+        except SavedSchedule.DoesNotExist:
+            saved_schedule = None
+
+    current_candidate_ids = {
+        str(candidate_id)
+        for candidate_id in UserApplication.objects.filter(
+            admission=admission
+        ).values_list("pk", flat=True)
+    }
+    participation = get_interviewer_participation(admission, saved_schedule)
+    current_participant_ids = {
+        str(user_id)
+        for user_id, state in participation.items()
+        if state == InterviewAvailability.PARTICIPATION_PARTICIPATING
+    }
+    revision = (
+        saved_schedule.conflict_collection_revision
+        if saved_schedule is not None
+        else None
+    )
+    snapshot_candidate_ids = (
+        {
+            str(candidate_id)
+            for candidate_id in saved_schedule.conflict_collection_candidate_ids
+        }
+        if saved_schedule is not None
+        else set()
+    )
+    snapshot_participant_ids = (
+        {str(user_id) for user_id in saved_schedule.conflict_collection_participant_ids}
+        if saved_schedule is not None
+        else set()
+    )
+    candidate_scope_current = current_candidate_ids == snapshot_candidate_ids
+    participant_scope_current = current_participant_ids == snapshot_participant_ids
+    scope_current = candidate_scope_current and participant_scope_current
+
+    applications_by_user = {
+        str(user_id): str(application_id)
+        for application_id, user_id in UserApplication.objects.filter(
+            admission=admission
+        ).values_list("pk", "user_id")
+    }
+    availability_by_user = {
+        str(item.user_id): item
+        for item in InterviewAvailability.objects.filter(
+            admission=admission,
+            user_id__in=current_participant_ids,
+        )
+    }
+    expected_candidate_ids_by_participant = {}
+    incomplete_participant_ids = []
+    if revision is not None and scope_current:
+        for participant_id in current_participant_ids:
+            expected_ids = set(current_candidate_ids)
+            own_candidate_id = applications_by_user.get(participant_id)
+            if own_candidate_id is not None:
+                expected_ids.discard(own_candidate_id)
+            expected_candidate_ids_by_participant[participant_id] = expected_ids
+            availability = availability_by_user.get(participant_id)
+            reviewed_ids = {
+                str(candidate_id)
+                for candidate_id in (
+                    availability.conflict_collection_reviewed_candidate_ids
+                    if availability is not None
+                    else []
+                )
+            }
+            if (
+                availability is None
+                or availability.conflict_collection_review_revision != revision
+                or reviewed_ids != expected_ids
+            ):
+                incomplete_participant_ids.append(participant_id)
+    elif revision is not None:
+        incomplete_participant_ids = sorted(current_participant_ids)
+
+    is_open = bool(
+        saved_schedule is not None and saved_schedule.conflict_collection_open
+    )
+    submissions_complete = bool(
+        revision is not None
+        and scope_current
+        and not incomplete_participant_ids
+        and current_participant_ids
+    )
+    return {
+        "started": revision is not None,
+        "open": is_open,
+        "revision": revision,
+        "candidate_scope_current": candidate_scope_current,
+        "participant_scope_current": participant_scope_current,
+        "scope_current": scope_current,
+        "current_candidate_ids": current_candidate_ids,
+        "current_participant_ids": current_participant_ids,
+        "expected_candidate_ids_by_participant": (
+            expected_candidate_ids_by_participant
+        ),
+        "incomplete_participant_ids": incomplete_participant_ids,
+        "submissions_complete": submissions_complete,
+        "complete": submissions_complete and not is_open,
+    }
+
+
 def get_conflict_review_readiness(admission, saved_schedule=None, schedule=None):
     if saved_schedule is None:
         try:
@@ -163,6 +271,7 @@ def get_conflict_review_readiness(admission, saved_schedule=None, schedule=None)
     proposed_by_interviewer = get_proposed_candidate_ids_by_interviewer(
         saved_schedule, schedule
     )
+    collection = get_conflict_collection_readiness(admission, saved_schedule)
     required_participant_ids = []
     incomplete_participant_ids = []
     missing_pair_count = 0
@@ -173,17 +282,27 @@ def get_conflict_review_readiness(admission, saved_schedule=None, schedule=None)
         required_participant_ids.append(
             participant.user_id if participant is not None else interviewer_id
         )
-        stored_reviewed_ids = (
-            participant.reviewed_candidate_ids
-            if participant is not None
-            and isinstance(participant.reviewed_candidate_ids, list)
-            else []
-        )
-        reviewed_ids = {
-            str(candidate_id)
-            for candidate_id in stored_reviewed_ids
-            if candidate_id is not None
-        }
+        if collection["started"]:
+            reviewed_ids = (
+                collection["expected_candidate_ids_by_participant"].get(
+                    interviewer_id,
+                    set(),
+                )
+                if collection["complete"]
+                else set()
+            )
+        else:
+            stored_reviewed_ids = (
+                participant.reviewed_candidate_ids
+                if participant is not None
+                and isinstance(participant.reviewed_candidate_ids, list)
+                else []
+            )
+            reviewed_ids = {
+                str(candidate_id)
+                for candidate_id in stored_reviewed_ids
+                if candidate_id is not None
+            }
         missing = proposed_candidate_ids - reviewed_ids
         if missing:
             incomplete_participant_ids.append(
@@ -197,6 +316,8 @@ def get_conflict_review_readiness(admission, saved_schedule=None, schedule=None)
         "incomplete_participant_ids": incomplete_participant_ids,
         "missing_pair_count": missing_pair_count,
         "proposed_candidate_ids_by_interviewer": proposed_by_interviewer,
+        "evidence": "collection" if collection["started"] else "assignment",
+        "collection": collection,
         "is_complete": bool(required_participant_ids)
         and not incomplete_participant_ids,
     }

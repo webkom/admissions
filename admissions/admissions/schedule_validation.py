@@ -20,6 +20,7 @@ from admissions.admissions.schedule_windows import (
     parse_slot_key,
 )
 from admissions.admissions.scheduling_utils import (
+    get_conflict_collection_readiness,
     get_eligible_interviewer_ids,
     get_interviewer_participation,
 )
@@ -170,6 +171,38 @@ def _solver_blocks(saved, open_slots):
             chunk_break_minutes=saved.chunk_break_minutes,
         )
     return build_solver_block_metadata(configured_blocks, open_slots)
+
+
+def ensure_conflict_collection_ready(admission, saved):
+    readiness = get_conflict_collection_readiness(admission, saved)
+    if not readiness["started"]:
+        raise ScheduleValidationError(
+            "conflict_collection_open",
+            "Åpne og fullfør inhabilitetskontrollen i Planutkast først.",
+        )
+    if readiness["open"]:
+        raise ScheduleValidationError(
+            "conflict_collection_open",
+            "Fullfør inhabilitetskontrollen før du lager et nytt forslag.",
+        )
+
+    if not readiness["candidate_scope_current"]:
+        raise ScheduleValidationError(
+            "conflict_collection_open",
+            "Kandidatlisten er endret. Åpne inhabilitetskontrollen på nytt.",
+        )
+    if not readiness["participant_scope_current"]:
+        raise ScheduleValidationError(
+            "conflict_collection_open",
+            "Intervjuergruppen er endret. Åpne inhabilitetskontrollen på nytt.",
+        )
+
+    incomplete = readiness["incomplete_participant_ids"]
+    if incomplete:
+        raise ScheduleValidationError(
+            "conflict_collection_open",
+            f"{len(incomplete)} intervjuere må fullføre inhabilitetskontrollen.",
+        )
 
 
 def canonicalize_solver_payload(admission, saved, data, request_user):

@@ -871,7 +871,6 @@ class SavedScheduleViewTestCase(APITestCase):
             "day_start_minute": 540,
             "day_end_minute": 900,
             "is_distributed": False,
-            "name_visibility": "committee",
         }
 
         res = self.client.post(self.url, payload, format="json")
