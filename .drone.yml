@@ -69,6 +69,7 @@ steps:
     when:
       event: [push, pull_request]
     environment:
+      CPUCOUNT: "1"
       DATABASE: database
     commands:
       - make ci_settings
@@ -81,6 +82,7 @@ steps:
     depends_on:
       - build-frontend
     environment:
+      CPUCOUNT: "1"
       DATABASE: database
     commands:
       - tox -e tests
@@ -92,6 +94,7 @@ steps:
     depends_on:
       - tests
     environment:
+      CPUCOUNT: "1"
       DATABASE: database
     commands:
       - tox -e coverage
@@ -100,6 +103,8 @@ steps:
     image: abakus/lego-testbase:python3.12poetry1.8.5
     when:
       event: [push, pull_request]
+    environment:
+      CPUCOUNT: "1"
     commands:
       - tox -e isort
   
@@ -107,6 +112,8 @@ steps:
     image: abakus/lego-testbase:python3.12poetry1.8.5
     when:
       event: [push, pull_request]
+    environment:
+      CPUCOUNT: "1"
     commands:
       - tox -e black
   
@@ -137,6 +144,7 @@ steps:
       - build-frontend
     environment:
       LANG: C.UTF-8
+      CPUCOUNT: "1"
       DATABASE: database
       FRONTEND_URL: "https://localhost:5000"
       API_URL: "/api"

@@ -41,7 +41,7 @@ COPY poetry.lock pyproject.toml /app/
 WORKDIR /app
 
 RUN poetry config virtualenvs.create false \
-    && poetry install --only main --no-root --no-interaction --no-ansi
+    && CPUCOUNT=1 poetry install --only main --no-root --no-interaction --no-ansi
 
 RUN useradd --create-home --uid 10001 admissions
 
