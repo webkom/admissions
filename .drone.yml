@@ -15,7 +15,16 @@ steps:
     when:
       event: [push, pull_request]
     commands:
-      - yarn install --frozen-lockfile
+      - |
+        attempt=1
+        until yarn install --frozen-lockfile; do
+          if [ "$attempt" -ge 3 ]; then
+            exit 1
+          fi
+          attempt=$((attempt + 1))
+          printf 'Retrying Yarn install (%s/3)\n' "$attempt"
+          sleep 10
+        done
   
   - name: lint-frontend
     image: node:22
