@@ -46,7 +46,7 @@ export default defineConfig(({ mode }) => {
       outDir: isCypressFixtureBuild
         ? process.env.CYPRESS_FIXTURE_OUT_DIR
         : "assets",
-      emptyOutDir: isCypressFixtureBuild,
+      emptyOutDir: true,
       assetsDir: "bundles",
       manifest: isCypressFixtureBuild ? false : "vite-manifest.json",
       rollupOptions: {
