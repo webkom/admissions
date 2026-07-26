@@ -16,6 +16,7 @@ ADMISSIONS_SOLVER_ENGINE_VERSION = env(
 
 # GENERAL CONFIGURATION =======================================================
 DEBUG = env("DEBUG", default=True)
+ALLOW_CYPRESS_FIXTURES = env.bool("ALLOW_CYPRESS_FIXTURES", default=False)
 ALLOW_SYNTHETIC_SOLVER_INPUT = True
 SECRET_KEY = "secretkeythatisnotsosecret"
 # Port 5000 is commonly claimed by macOS AirPlay Receiver (ControlCenter).
