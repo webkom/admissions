@@ -78,6 +78,8 @@ steps:
     image: abakus/lego-testbase:python3.12poetry1.8.5
     when:
       event: [push, pull_request]
+    depends_on:
+      - build-frontend
     environment:
       DATABASE: database
     commands:
