@@ -61,11 +61,28 @@ export default defineConfig(({ mode }) => {
         mode === "production" || isCypressFixtureBuild ? false : "inline",
     },
     resolve: {
-      alias: {
-        src: path.resolve(projectRootDir, "frontend/src"),
-        assets: path.resolve(projectRootDir, "frontend/src/assets"),
-        "~": path.resolve(projectRootDir, "node_modules"),
-      },
+      alias: [
+        ...(isCypressFixtureBuild
+          ? [
+              {
+                find: /^\/static\/frontend\//,
+                replacement: `${path.resolve(projectRootDir, "frontend")}/`,
+              },
+            ]
+          : []),
+        {
+          find: "src",
+          replacement: path.resolve(projectRootDir, "frontend/src"),
+        },
+        {
+          find: "assets",
+          replacement: path.resolve(projectRootDir, "frontend/src/assets"),
+        },
+        {
+          find: "~",
+          replacement: path.resolve(projectRootDir, "node_modules"),
+        },
+      ],
     },
   };
 });
