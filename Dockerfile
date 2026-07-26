@@ -3,7 +3,15 @@ FROM node:22 AS frontend-builder
 RUN mkdir /app
 WORKDIR /app
 COPY package.json yarn.lock /app/
-RUN yarn install --frozen-lockfile
+RUN attempt=1; \
+    until yarn install --frozen-lockfile; do \
+      if [ "$attempt" -ge 3 ]; then \
+        exit 1; \
+      fi; \
+      attempt=$((attempt + 1)); \
+      printf 'Retrying Yarn install (%s/3)\n' "$attempt"; \
+      sleep 10; \
+    done
 
 COPY . /app
 
