@@ -17,9 +17,10 @@ def backfill_group_scoped_application_answers(apps, schema_editor):
         ):
             if admission_group.header_fields:
                 continue
-            AdmissionGroup.objects.using(database).filter(pk=admission_group.pk).update(
-                header_fields=legacy_fields
-            )
+            AdmissionGroup.objects.using(database).filter(
+                pk=admission_group.pk,
+                header_fields=[],
+            ).update(header_fields=legacy_fields)
 
     for application in UserApplication.objects.using(database).iterator():
         legacy_answers = application.header_fields_response
@@ -31,7 +32,8 @@ def backfill_group_scoped_application_answers(apps, schema_editor):
             if group_application.header_fields_response:
                 continue
             GroupApplication.objects.using(database).filter(
-                pk=group_application.pk
+                pk=group_application.pk,
+                header_fields_response={},
             ).update(header_fields_response=legacy_answers)
 
 
