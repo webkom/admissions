@@ -101,7 +101,7 @@ const ApplicationPortal = () => {
 
   useEffect(() => {
     if (admission?.groups.length === 1) {
-      setSelectedGroups({ [admission.groups[0].name]: true });
+      setSelectedGroups({ [admission.groups[0].name.toLowerCase()]: true });
     }
   }, [admission]);
 
