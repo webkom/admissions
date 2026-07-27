@@ -39,7 +39,7 @@ def backfill_group_scoped_application_answers(apps, schema_editor):
 
 class Migration(migrations.Migration):
     dependencies = [
-        ("admissions", "0032_conflict_collection"),
+        ("admissions", "0009_conflict_collection"),
     ]
 
     operations = [
