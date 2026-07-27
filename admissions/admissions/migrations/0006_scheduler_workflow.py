@@ -7,6 +7,7 @@ import django.db.models.deletion
 import django.utils.timezone
 from django.conf import settings
 from django.db import migrations, models
+from django.db.migrations.exceptions import IrreversibleError
 from django.db.models import F
 
 
@@ -44,6 +45,59 @@ def backfill_group_scoped_application_answers(apps, schema_editor):
                 pk=group_application.pk,
                 header_fields_response={},
             ).update(header_fields_response=legacy_answers)
+
+
+def restore_legacy_application_answers(apps, schema_editor):
+    Admission = apps.get_model("admissions", "Admission")
+    AdmissionGroup = apps.get_model("admissions", "AdmissionGroup")
+    UserApplication = apps.get_model("admissions", "UserApplication")
+    GroupApplication = apps.get_model("admissions", "GroupApplication")
+    database = schema_editor.connection.alias
+    admission_updates = []
+    application_updates = []
+
+    for admission in Admission.objects.using(database).iterator():
+        scoped_values = list(
+            AdmissionGroup.objects.using(database)
+            .filter(admission_id=admission.pk)
+            .order_by("pk")
+            .values_list("header_fields", flat=True)
+        )
+        if not scoped_values:
+            continue
+        first_value = scoped_values[0]
+        if any(value != first_value for value in scoped_values[1:]):
+            raise IrreversibleError(
+                "Committee question sets have diverged and cannot be represented "
+                "by the legacy admission field."
+            )
+        admission_updates.append((admission.pk, first_value))
+
+    for application in UserApplication.objects.using(database).iterator():
+        scoped_values = list(
+            GroupApplication.objects.using(database)
+            .filter(application_id=application.pk)
+            .order_by("pk")
+            .values_list("header_fields_response", flat=True)
+        )
+        if not scoped_values:
+            continue
+        first_value = scoped_values[0]
+        if any(value != first_value for value in scoped_values[1:]):
+            raise IrreversibleError(
+                "Committee answers have diverged and cannot be represented by "
+                "the legacy application field."
+            )
+        application_updates.append((application.pk, first_value))
+
+    for admission_id, fields in admission_updates:
+        Admission.objects.using(database).filter(pk=admission_id).update(
+            header_fields=fields
+        )
+    for application_id, answers in application_updates:
+        UserApplication.objects.using(database).filter(pk=application_id).update(
+            header_fields_response=answers
+        )
 
 
 def normalize_admission_dates(apps, schema_editor):
@@ -157,7 +211,7 @@ class Migration(migrations.Migration):
         ),
         migrations.RunPython(
             backfill_group_scoped_application_answers,
-            migrations.RunPython.noop,
+            restore_legacy_application_answers,
         ),
         migrations.AddField(
             model_name="interviewavailability",

@@ -1,7 +1,10 @@
 from datetime import timedelta
+from importlib import import_module
+from types import SimpleNamespace
 from unittest.mock import patch
 
 from django.db import connection
+from django.db.migrations.exceptions import IrreversibleError
 from django.db.migrations.executor import MigrationExecutor
 from django.db.models.query import QuerySet
 from django.test import TransactionTestCase
@@ -229,4 +232,107 @@ class GroupScopedApplicationAnswersMigrationTestCase(MigrationTestCase):
         self.assertEqual(
             racing_group_application.header_fields_response,
             self.concurrent_answers,
+        )
+
+
+class GroupScopedApplicationAnswersReverseTestCase(TransactionTestCase):
+    def setUp(self):
+        super().setUp()
+        executor = MigrationExecutor(connection)
+        self.apps = executor.loader.project_state([MIGRATION_0006]).apps
+        self.reverse = import_module(
+            "admissions.admissions.migrations.0006_scheduler_workflow"
+        ).restore_legacy_application_answers
+
+    def create_scoped_rows(self, *, question_values, answer_values):
+        Group = self.apps.get_model("admissions", "Group")
+        AdmissionGroup = self.apps.get_model("admissions", "AdmissionGroup")
+        UserApplication = self.apps.get_model("admissions", "UserApplication")
+        GroupApplication = self.apps.get_model("admissions", "GroupApplication")
+        user, admission = create_admission(
+            self.apps,
+            slug=f"reverse-{len(question_values)}-{len(answer_values)}",
+            lego_id=92000,
+        )
+        admission.header_fields = [{"id": "legacy-question"}]
+        admission.save(update_fields=["header_fields"])
+        application = UserApplication.objects.create(
+            user=user,
+            admission=admission,
+            phone_number="00000000",
+            header_fields_response={"legacy": "answer"},
+        )
+        for index, (questions, answers) in enumerate(
+            zip(question_values, answer_values, strict=True),
+            start=1,
+        ):
+            group = Group.objects.create(
+                name=f"Reverse group {index}",
+                lego_id=92000 + index,
+            )
+            AdmissionGroup.objects.create(
+                admission=admission,
+                group=group,
+                header_fields=questions,
+            )
+            GroupApplication.objects.create(
+                application=application,
+                group=group,
+                header_fields_response=answers,
+            )
+        return admission, application
+
+    def run_reverse(self):
+        self.reverse(
+            self.apps,
+            SimpleNamespace(connection=connection),
+        )
+
+    def test_reverse_copies_identical_scoped_values_to_legacy_fields(self):
+        questions = [{"id": "shared-question"}]
+        answers = {"shared-question": "shared answer"}
+        admission, application = self.create_scoped_rows(
+            question_values=[questions, questions],
+            answer_values=[answers, answers],
+        )
+
+        self.run_reverse()
+
+        admission.refresh_from_db()
+        application.refresh_from_db()
+        self.assertEqual(admission.header_fields, questions)
+        self.assertEqual(application.header_fields_response, answers)
+
+    def test_reverse_rejects_divergent_question_sets_without_partial_updates(self):
+        admission, application = self.create_scoped_rows(
+            question_values=[[{"id": "question-a"}], [{"id": "question-b"}]],
+            answer_values=[{"answer": "same"}, {"answer": "same"}],
+        )
+
+        with self.assertRaises(IrreversibleError):
+            self.run_reverse()
+
+        admission.refresh_from_db()
+        application.refresh_from_db()
+        self.assertEqual(admission.header_fields, [{"id": "legacy-question"}])
+        self.assertEqual(
+            application.header_fields_response,
+            {"legacy": "answer"},
+        )
+
+    def test_reverse_rejects_divergent_answers_without_partial_updates(self):
+        admission, application = self.create_scoped_rows(
+            question_values=[[{"id": "same"}], [{"id": "same"}]],
+            answer_values=[{"answer": "a"}, {"answer": "b"}],
+        )
+
+        with self.assertRaises(IrreversibleError):
+            self.run_reverse()
+
+        admission.refresh_from_db()
+        application.refresh_from_db()
+        self.assertEqual(admission.header_fields, [{"id": "legacy-question"}])
+        self.assertEqual(
+            application.header_fields_response,
+            {"legacy": "answer"},
         )
