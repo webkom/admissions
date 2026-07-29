@@ -23,6 +23,15 @@ RELEASE = env("RELEASE")
 DATA_UPLOAD_MAX_MEMORY_SIZE = env.int(
     "DATA_UPLOAD_MAX_MEMORY_SIZE", default=2 * 1024 * 1024
 )
+# Keep every scheduler API and UI entry point closed until the matching
+# long-lived solve worker is deployed and monitored.
+ADMISSIONS_SCHEDULER_ENABLED = env.bool(
+    "ADMISSIONS_SCHEDULER_ENABLED",
+    default=False,
+)
+# Production is pinned to the engine exercised by the release test suite.
+# The v1 implementation remains available only as a development test oracle.
+ADMISSIONS_SOLVER_ENGINE_VERSION = "v2"
 
 # Database
 DATABASES = {"default": env.db()}

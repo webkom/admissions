@@ -23,6 +23,7 @@ from admissions.admissions.models import (
     SavedSchedule,
     UserApplication,
 )
+from admissions.admissions.scheduler_feature import SchedulerFeatureGateMixin
 from admissions.admissions.scheduling_utils import (
     get_eligible_interviewer_ids,
     user_has_interview_availability,
@@ -30,7 +31,7 @@ from admissions.admissions.scheduling_utils import (
 from admissions.admissions.serializers import NameVisibilityAuditEventSerializer
 
 
-class InterviewCandidatesView(APIView):
+class InterviewCandidatesView(SchedulerFeatureGateMixin, APIView):
     authentication_classes = [SessionAuthentication]
     permission_classes = [IsAuthenticated]
     throttle_classes = [ScopedRateThrottle]
@@ -131,7 +132,7 @@ class InterviewCandidatesView(APIView):
         return Response(payload, status=status.HTTP_200_OK)
 
 
-class NameVisibilityAuditView(APIView):
+class NameVisibilityAuditView(SchedulerFeatureGateMixin, APIView):
     authentication_classes = [SessionAuthentication]
     permission_classes = [IsAuthenticated]
     throttle_classes = [ScopedRateThrottle]

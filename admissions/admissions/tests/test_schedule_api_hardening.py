@@ -1,3 +1,4 @@
+import uuid
 from datetime import timedelta
 from unittest import mock
 
@@ -36,6 +37,50 @@ from admissions.admissions.tests.utils import (
 from admissions.admissions.views import panel_gender_code
 from admissions.oauth import update_custom_user_details
 from admissions.utils.management.commands.run_solver_worker import Command
+
+
+@override_settings(ADMISSIONS_SCHEDULER_ENABLED=False)
+class SchedulerFeatureGateTestCase(APITestCase):
+    def setUp(self):
+        self.admission = create_admission(slug="disabled-scheduler")
+
+    def test_all_scheduler_endpoints_fail_closed(self):
+        job_id = uuid.uuid4()
+        urls = [
+            reverse("solve-schedule"),
+            reverse("latest-solve-job"),
+            reverse("solve-job", kwargs={"job_id": job_id}),
+            reverse("solve-job-apply", kwargs={"job_id": job_id}),
+            reverse(
+                "saved-schedule",
+                kwargs={"admission_slug": self.admission.slug},
+            ),
+            reverse(
+                "interview-availability",
+                kwargs={"admission_slug": self.admission.slug},
+            ),
+            reverse(
+                "interview-candidates",
+                kwargs={"admission_slug": self.admission.slug},
+            ),
+            reverse(
+                "name-visibility-audit",
+                kwargs={"admission_slug": self.admission.slug},
+            ),
+        ]
+
+        for url in urls:
+            with self.subTest(url=url):
+                response = self.client.get(url)
+                self.assertEqual(
+                    response.status_code,
+                    status.HTTP_503_SERVICE_UNAVAILABLE,
+                )
+                self.assertEqual(
+                    str(response.data["detail"]),
+                    "Intervjuplanleggeren er ikke tilgjengelig ennå. "
+                    "Prøv igjen senere.",
+                )
 
 
 class SavedSchedulePublishSemanticsTestCase(APITestCase):

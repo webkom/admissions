@@ -3,6 +3,7 @@ from types import SimpleNamespace
 from unittest import mock
 
 from django.core.management import call_command
+from django.core.management.base import CommandError
 from django.db import InterfaceError, OperationalError
 from django.test import SimpleTestCase, TestCase
 from django.utils import timezone
@@ -23,6 +24,14 @@ class WorkerStopped(BaseException):
 
 class WorkerLoopResilienceTestCase(SimpleTestCase):
     """A transient DB error must not kill the long-lived worker loop."""
+
+    @override_settings(ADMISSIONS_SCHEDULER_ENABLED=False)
+    def test_worker_fails_closed_when_scheduler_is_disabled(self):
+        with mock.patch.object(Command, "_claim_and_run") as claim:
+            with self.assertRaisesRegex(CommandError, "deaktivert"):
+                call_command("run_solver_worker", once=True)
+
+        claim.assert_not_called()
 
     def test_loop_survives_a_transient_db_error_while_claiming(self):
         with mock.patch.object(Command, "_reap_stale_jobs"), mock.patch.object(

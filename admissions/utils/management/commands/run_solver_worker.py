@@ -1,7 +1,8 @@
 import time
 from datetime import timedelta
 
-from django.core.management.base import BaseCommand
+from django.conf import settings
+from django.core.management.base import BaseCommand, CommandError
 from django.db import (
     InterfaceError,
     OperationalError,
@@ -32,6 +33,7 @@ from admissions.admissions.schedule_workflow import (
     ScheduleRevisionConflict,
     update_saved_schedule,
 )
+from admissions.admissions.solve_jobs import planning_input_fingerprint
 from admissions.admissions.solve_schedule import solve_schedule
 
 log = get_logger()
@@ -67,6 +69,11 @@ class Command(BaseCommand):
         )
 
     def handle(self, *args, **options):
+        if not getattr(settings, "ADMISSIONS_SCHEDULER_ENABLED", True):
+            raise CommandError(
+                "Intervjuplanleggeren er deaktivert. Sett "
+                "ADMISSIONS_SCHEDULER_ENABLED=true for både web og worker."
+            )
         poll_interval = options["poll_interval"]
         run_once = options["once"]
         log.info("solver_worker_started", poll_interval=poll_interval)
@@ -203,11 +210,35 @@ class Command(BaseCommand):
                         canonical = canonicalize_solver_payload(
                             admission, saved, data, job.requested_by
                         )
-                        data = {
+                        canonical_data = {
                             **data,
                             **canonical,
                             "previous_schedule": saved.schedule or [],
                         }
+                        expected_planning_fingerprint = data.get(
+                            "planning_input_fingerprint"
+                        )
+                        if (
+                            not expected_planning_fingerprint
+                            or planning_input_fingerprint(
+                                canonical_data,
+                                saved.schedule or [],
+                            )
+                            != expected_planning_fingerprint
+                        ):
+                            result = {
+                                "status": "ERROR",
+                                "schedule": [],
+                                "unplaceable": [],
+                                "locked_conflicts": [],
+                                "error": (
+                                    "Planleggingsgrunnlaget ble endret mens "
+                                    "løsningen ventet. Beregn et nytt forslag."
+                                ),
+                            }
+                            data = None
+                        else:
+                            data = canonical_data
             if data is not None:
                 result = solve_schedule(
                     candidates_data=data.get("candidates", []),

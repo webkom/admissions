@@ -21,13 +21,14 @@ from admissions.admissions.schedule_workflow import (
     ensure_window_fields,
     update_saved_schedule,
 )
+from admissions.admissions.scheduler_feature import SchedulerFeatureGateMixin
 from admissions.admissions.serializers import (
     SavedScheduleSerializer,
     SaveScheduleInputSerializer,
 )
 
 
-class SavedScheduleView(APIView):
+class SavedScheduleView(SchedulerFeatureGateMixin, APIView):
     authentication_classes = [SessionAuthentication]
     permission_classes = [IsAuthenticated]
     throttle_classes = [ScopedRateThrottle]

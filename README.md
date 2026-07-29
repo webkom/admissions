@@ -177,6 +177,11 @@ In production, run this as a long-lived process/container next to the web server
 A single instance is enough; jobs are claimed with row locks, so you can run more
 than one safely.
 
+Production keeps the complete scheduling UI and API disabled by default.
+Deploy and monitor the long-lived worker first, then set
+`ADMISSIONS_SCHEDULER_ENABLED=true` on both the web service and worker.
+Production pins both processes to solver engine `v2`.
+
 &nbsp;
 
 ## Permissions

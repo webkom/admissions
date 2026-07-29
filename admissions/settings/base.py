@@ -19,8 +19,9 @@ from .logging import *  # noqa
 # module before the management command performs any writes.
 ALLOW_CYPRESS_FIXTURES = False
 
+ADMISSIONS_SCHEDULER_ENABLED = True
 ADMISSIONS_SOLVER_ENGINE_VERSION = os.environ.get(
-    "ADMISSIONS_SOLVER_ENGINE_VERSION", "v1"
+    "ADMISSIONS_SOLVER_ENGINE_VERSION", "v2"
 )
 
 # GENERAL CONFIGURATION ======================================================

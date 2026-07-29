@@ -27,6 +27,7 @@ from admissions.admissions.schedule_invalidation import (
     publication_is_invalidated_by_availability,
 )
 from admissions.admissions.schedule_windows import enabled_windows_to_slots
+from admissions.admissions.scheduler_feature import SchedulerFeatureGateMixin
 from admissions.admissions.scheduling_utils import (
     availability_submission_is_current,
     canonicalize_slot_keys,
@@ -41,7 +42,7 @@ from admissions.admissions.serializers import (
 )
 
 
-class InterviewAvailabilityView(APIView):
+class InterviewAvailabilityView(SchedulerFeatureGateMixin, APIView):
     authentication_classes = [SessionAuthentication]
     permission_classes = [IsAuthenticated]
     throttle_classes = [ScopedRateThrottle]

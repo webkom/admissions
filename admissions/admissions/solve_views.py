@@ -29,6 +29,7 @@ from admissions.admissions.schedule_workflow import (
     ScheduleRevisionConflict,
     update_saved_schedule,
 )
+from admissions.admissions.scheduler_feature import SchedulerFeatureGateMixin
 from admissions.admissions.serializers import (
     ApplySolveJobSerializer,
     SavedScheduleSerializer,
@@ -41,10 +42,11 @@ from admissions.admissions.solve_jobs import (
     build_solve_request,
     cancel_solve_job,
     enqueue_solve_job,
+    planning_input_fingerprint,
 )
 
 
-class SolveScheduleView(APIView):
+class SolveScheduleView(SchedulerFeatureGateMixin, APIView):
     authentication_classes = [SessionAuthentication]
     permission_classes = [permissions.IsAuthenticated]
     throttle_classes = [ScopedRateThrottle]
@@ -165,7 +167,7 @@ class SolveScheduleView(APIView):
         return Response(SolveJobSerializer(job).data, status=status.HTTP_202_ACCEPTED)
 
 
-class SolveJobStatusView(APIView):
+class SolveJobStatusView(SchedulerFeatureGateMixin, APIView):
     authentication_classes = [SessionAuthentication]
     permission_classes = [permissions.IsAuthenticated]
     throttle_classes = [ScopedRateThrottle]
@@ -204,7 +206,7 @@ class SolveJobStatusView(APIView):
         return Response(SolveJobSerializer(job).data)
 
 
-class LatestSolveJobView(APIView):
+class LatestSolveJobView(SchedulerFeatureGateMixin, APIView):
     authentication_classes = [SessionAuthentication]
     permission_classes = [permissions.IsAuthenticated]
     throttle_classes = [ScopedRateThrottle]
@@ -239,7 +241,7 @@ class LatestSolveJobView(APIView):
         return Response(SolveJobSerializer(job).data)
 
 
-class SolveJobApplyView(APIView):
+class SolveJobApplyView(SchedulerFeatureGateMixin, APIView):
     authentication_classes = [SessionAuthentication]
     permission_classes = [permissions.IsAuthenticated]
     throttle_classes = [ScopedRateThrottle]
@@ -314,9 +316,8 @@ class SolveJobApplyView(APIView):
             )
 
         expected = serializer.validated_data["expected_updated_at"]
-        baseline = parse_datetime(
-            (job.request_data or {}).get("baseline_updated_at") or ""
-        )
+        request_data = job.request_data or {}
+        baseline = parse_datetime(request_data.get("baseline_updated_at") or "")
         if (
             baseline is None
             or baseline != saved.updated_at
@@ -332,13 +333,48 @@ class SolveJobApplyView(APIView):
                 status=status.HTTP_409_CONFLICT,
             )
 
+        expected_planning_fingerprint = request_data.get("planning_input_fingerprint")
+        try:
+            canonical = canonicalize_solver_payload(
+                admission,
+                saved,
+                request_data,
+                user,
+            )
+            current_planning_fingerprint = planning_input_fingerprint(
+                {
+                    **request_data,
+                    **canonical,
+                },
+                saved.schedule or [],
+            )
+        except ScheduleValidationError:
+            current_planning_fingerprint = None
+        if (
+            not expected_planning_fingerprint
+            or current_planning_fingerprint != expected_planning_fingerprint
+        ):
+            job.discarded_at = timezone.now()
+            job.save(update_fields=["discarded_at"])
+            return Response(
+                {
+                    "detail": (
+                        "Kandidater, intervjuere eller tilgjengelighet er endret "
+                        "siden forslaget ble beregnet. Beregn et nytt forslag."
+                    ),
+                    "schedule": [
+                        "Forslaget bygger på et utdatert planleggingsgrunnlag."
+                    ],
+                },
+                status=status.HTTP_409_CONFLICT,
+            )
+
         solve_result = job.result
         if solve_result.get("status") not in ("SUCCESS", "PARTIAL"):
             return Response(
                 {"detail": "Forslaget inneholder ingen plan som kan brukes."},
                 status=status.HTTP_409_CONFLICT,
             )
-        request_data = job.request_data or {}
         try:
             result = update_saved_schedule(
                 admission=admission,
