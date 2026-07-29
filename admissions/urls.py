@@ -39,6 +39,7 @@ from admissions.admissions.views import (
     ManageGroupViewSet,
     PublicAdmissionViewSet,
     PublicApplicationViewSet,
+    TerminateCommitteeApplicationsView,
     logout,
 )
 
@@ -103,6 +104,11 @@ urlpatterns = [
         "api/admin/admission/<slug:admission_slug>/name-visibility-audit/",
         NameVisibilityAuditView.as_view(),
         name="name-visibility-audit",
+    ),
+    path(
+        "api/admin/admission/<slug:admission_slug>/group/<uuid:group_id>/terminate/",
+        TerminateCommitteeApplicationsView.as_view(),
+        name="terminate-committee-applications",
     ),
     re_path("", include("social_django.urls", namespace="social")),
     re_path(r"^$", AppView.as_view(), name="home"),
