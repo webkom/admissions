@@ -1489,6 +1489,10 @@ class ScheduleRequestsSerializer(serializers.Serializer):
 
 class SaveInterviewAvailabilitySerializer(serializers.Serializer):
     user_id = serializers.UUIDField(required=False)
+    expected_availability_updated_at = serializers.DateTimeField(
+        required=False,
+        allow_null=True,
+    )
     experience_level = serializers.ChoiceField(
         choices=InterviewAvailability.EXPERIENCE_LEVEL_CHOICES,
         required=False,
@@ -1519,10 +1523,6 @@ class SaveInterviewAvailabilitySerializer(serializers.Serializer):
     conflict_collection_revision = serializers.UUIDField(required=False)
     expected_availability_generation = serializers.IntegerField(
         min_value=1, required=False
-    )
-    expected_availability_updated_at = serializers.DateTimeField(
-        required=False,
-        allow_null=True,
     )
 
     def validate(self, attrs):
