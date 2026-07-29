@@ -329,6 +329,30 @@ class Command(BaseCommand):
                 user.__class__ = LegoUser
                 if not user_is_admission_admin(admission, user):
                     return False
+                try:
+                    canonical = canonicalize_solver_payload(
+                        admission,
+                        saved,
+                        request_data,
+                        user,
+                    )
+                except Exception:
+                    return False
+                expected_planning_fingerprint = request_data.get(
+                    "planning_input_fingerprint"
+                )
+                if (
+                    not expected_planning_fingerprint
+                    or planning_input_fingerprint(
+                        {
+                            **request_data,
+                            **canonical,
+                        },
+                        saved.schedule or [],
+                    )
+                    != expected_planning_fingerprint
+                ):
+                    return False
                 update_saved_schedule(
                     admission=admission,
                     user=user,
