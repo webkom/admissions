@@ -10,6 +10,7 @@ from admissions.admissions.models import (
     SavedSchedule,
     ScheduleDeviationApproval,
     SolveJob,
+    UserApplication,
 )
 
 SYSTEM_ACTOR_USERNAME = "system"
@@ -57,10 +58,16 @@ def invalidate_solver_work(admission, *, clear_all_payloads=False):
     ).update(discarded_at=finished_at)
 
 
-def invalidate_planning_input(saved, *, actor, publication_invalidated):
+def invalidate_planning_input(
+    saved,
+    *,
+    actor,
+    publication_invalidated,
+):
     """Advance one planning revision and invalidate its derived solver work.
 
-    The caller owns the Admission lock and passes the matching SavedSchedule.
+    The caller owns the Admission lock and passes the matching SavedSchedule
+    instance before locking or updating InterviewAvailability rows.
     """
 
     revealed_groups = (
@@ -128,7 +135,7 @@ def publication_is_invalidated_by_availability(
     target_availability,
     previous_values,
 ):
-    """Whether an availability change invalidates a published assignment."""
+    """Whether an availability change alters a currently published assignment."""
 
     if saved is None or not saved.is_distributed:
         return False
@@ -198,13 +205,11 @@ def publication_is_invalidated_by_availability(
     ):
         return True
 
-    experience_changed = (
-        previous_values.get(
-            "experience_level",
-            InterviewAvailability.EXPERIENCE_UNKNOWN,
-        )
-        != target_availability.experience_level
+    previous_experience = previous_values.get(
+        "experience_level",
+        InterviewAvailability.EXPERIENCE_UNKNOWN,
     )
+    experience_changed = previous_experience != target_availability.experience_level
     requires_experience = bool(
         (saved.solver_options or {}).get("require_experienced_panel")
     )
@@ -230,10 +235,7 @@ def publication_is_invalidated_by_availability(
             }
             before_has_experience = any(
                 (
-                    previous_values.get(
-                        "experience_level",
-                        InterviewAvailability.EXPERIENCE_UNKNOWN,
-                    )
+                    previous_experience
                     if interviewer_id == target_id
                     else experience_by_user.get(interviewer_id)
                 )
@@ -249,3 +251,116 @@ def publication_is_invalidated_by_availability(
                 return True
 
     return False
+
+
+def _schedule_after_candidate_removal(admission, schedule, candidate_id):
+    remaining_candidate_ids = {
+        str(value)
+        for value in UserApplication.objects.filter(admission=admission)
+        .exclude(pk=candidate_id)
+        .values_list("pk", flat=True)
+    }
+    next_schedule = []
+    for item in schedule or []:
+        if not isinstance(item, dict):
+            return []
+        item_candidate_id = str(item.get("candidate_id") or "")
+        if item_candidate_id == str(candidate_id):
+            continue
+        if item_candidate_id not in remaining_candidate_ids:
+            return []
+        next_schedule.append(item)
+    return next_schedule
+
+
+def invalidate_schedule_scope(
+    admission,
+    *,
+    actor=None,
+    removed_candidate_id=None,
+):
+    """Invalidate derived scheduling state after the planning scope changes.
+
+    The caller must already be inside a transaction. Admission-scoped writers
+    lock Admission before calling this helper. OAuth owns a user lock instead,
+    so the shared serialization point here is the SavedSchedule row.
+    """
+
+    saved = (
+        SavedSchedule.objects.select_for_update().filter(admission=admission).first()
+    )
+    if saved is not None:
+        revealed_groups = list(get_name_revealed_groups(admission, saved))
+        if removed_candidate_id is not None:
+            saved.schedule = _schedule_after_candidate_removal(
+                admission,
+                saved.schedule,
+                removed_candidate_id,
+            )
+        saved.is_distributed = False
+        saved.name_visibility = SavedSchedule.NAME_VISIBILITY_HIDDEN
+        saved.conflict_review_open = False
+        saved.conflict_collection_open = False
+        saved.conflict_collection_revision = None
+        saved.conflict_collection_candidate_ids = []
+        saved.conflict_collection_participant_ids = []
+        saved.save(
+            update_fields=[
+                "schedule",
+                "is_distributed",
+                "name_visibility",
+                "conflict_review_open",
+                "conflict_collection_open",
+                "conflict_collection_revision",
+                "conflict_collection_candidate_ids",
+                "conflict_collection_participant_ids",
+                "updated_at",
+            ]
+        )
+        _hide_revealed_groups(saved, actor, revealed_groups)
+        ScheduleDeviationApproval.objects.filter(saved_schedule=saved).delete()
+
+    changed_availability = []
+    changed_at = timezone.now()
+    for availability in InterviewAvailability.objects.select_for_update().filter(
+        admission=admission
+    ):
+        changed = False
+        if availability.reviewed_candidate_ids:
+            availability.reviewed_candidate_ids = []
+            changed = True
+        if availability.conflict_collection_reviewed_candidate_ids:
+            availability.conflict_collection_reviewed_candidate_ids = []
+            changed = True
+        if availability.conflict_collection_review_revision is not None:
+            availability.conflict_collection_review_revision = None
+            changed = True
+        if removed_candidate_id is not None:
+            conflicts = [
+                value
+                for value in (availability.conflicts or [])
+                if str(value) != str(removed_candidate_id)
+            ]
+            if conflicts != (availability.conflicts or []):
+                availability.conflicts = conflicts
+                changed = True
+        if changed:
+            availability.updated_at = changed_at
+            changed_availability.append(availability)
+    if changed_availability:
+        InterviewAvailability.objects.bulk_update(
+            changed_availability,
+            [
+                "conflicts",
+                "reviewed_candidate_ids",
+                "conflict_collection_reviewed_candidate_ids",
+                "conflict_collection_review_revision",
+                "updated_at",
+            ],
+        )
+
+    invalidate_solver_work(
+        admission,
+        clear_all_payloads=removed_candidate_id is not None,
+    )
+    return saved

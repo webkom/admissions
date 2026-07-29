@@ -1,10 +1,19 @@
 from django.db import transaction
+from django.db.models import Q
 
 from six.moves.urllib.parse import urljoin
 from social_core.backends.oauth import BaseOAuth2
+from social_core.exceptions import AuthFailed
 
 from admissions.admissions import constants
-from admissions.admissions.models import Group, LegoUser, Membership
+from admissions.admissions.models import (
+    Admission,
+    Group,
+    LegoUser,
+    Membership,
+    UserApplication,
+)
+from admissions.admissions.schedule_invalidation import invalidate_schedule_scope
 
 VALID_MEMBERSHIP_ROLES = frozenset(role for role, _label in constants.ROLES)
 
@@ -206,11 +215,12 @@ def update_custom_user_details(strategy, details, user=None, *args, **kwargs):
         return
 
     response = kwargs.get("response")
-    if not isinstance(response, dict):
-        response = {}
     group_data = _parse_group_data(response)
     if group_data is None:
-        group_data = []
+        raise AuthFailed(
+            getattr(strategy, "backend", None),
+            "Invalid LEGO membership payload",
+        )
     upstream_group_ids = set()
     for group, membership in group_data:
         if membership.get("role") not in VALID_MEMBERSHIP_ROLES:
@@ -226,6 +236,14 @@ def update_custom_user_details(strategy, details, user=None, *args, **kwargs):
 
     with transaction.atomic():
         locked_user = LegoUser.objects.select_for_update(no_key=True).get(pk=user.pk)
+        old_memberships = list(
+            Membership.objects.filter(user=locked_user).select_related("group")
+        )
+        old_roles_by_group = {}
+        for membership in old_memberships:
+            old_roles_by_group.setdefault(membership.group_id, set()).add(
+                membership.role
+            )
         Membership.objects.filter(user=locked_user).delete()
         roles_by_group = {}
         ambiguous_groups = set()
@@ -248,6 +266,7 @@ def update_custom_user_details(strategy, details, user=None, *args, **kwargs):
                 roles_by_group[local_group.pk] = (local_group, role)
 
         memberships = []
+        new_roles_by_group = {}
         locked_user.is_staff = False
         for group_id, (local_group, role) in roles_by_group.items():
             if group_id in ambiguous_groups:
@@ -260,6 +279,7 @@ def update_custom_user_details(strategy, details, user=None, *args, **kwargs):
             memberships.append(
                 Membership(user=locked_user, group=local_group, role=role)
             )
+            new_roles_by_group.setdefault(local_group.pk, set()).add(role)
 
         Membership.objects.bulk_create(memberships)
         profile_picture = response.get("profilePicture")
@@ -274,7 +294,64 @@ def update_custom_user_details(strategy, details, user=None, *args, **kwargs):
             and len(profile_picture) <= profile_picture_limit
             else ""
         )
+        previous_gender = locked_user.gender
         locked_user.gender = (
             gender if isinstance(gender, str) and len(gender) <= gender_limit else ""
         )
         locked_user.save(update_fields=["is_staff", "profile_picture", "gender"])
+
+        relevant_group_ids = set(old_roles_by_group) | set(new_roles_by_group)
+        affected_admissions = list(
+            Admission.objects.filter(
+                Q(groups__id__in=relevant_group_ids)
+                | Q(admin_groups__id__in=relevant_group_ids)
+            )
+            .distinct()
+            .prefetch_related("groups", "admin_groups")
+        )
+        candidate_admission_ids = set()
+        if previous_gender != locked_user.gender:
+            candidate_admission_ids = set(
+                UserApplication.objects.filter(user=locked_user).values_list(
+                    "admission_id",
+                    flat=True,
+                )
+            )
+            known_admission_ids = {admission.pk for admission in affected_admissions}
+            affected_admissions.extend(
+                Admission.objects.filter(
+                    pk__in=candidate_admission_ids - known_admission_ids
+                ).prefetch_related("groups", "admin_groups")
+            )
+
+        def is_actionable_interviewer(admission, roles_by_group):
+            committee_group_ids = {group.pk for group in admission.groups.all()}
+            admin_group_ids = {group.pk for group in admission.admin_groups.all()}
+            return any(
+                group_id in committee_group_ids
+                and any(
+                    role not in constants.INACTIVE_MEMBERSHIP_ROLES for role in roles
+                )
+                or group_id in admin_group_ids
+                and any(
+                    role in (constants.LEADER, constants.RECRUITING) for role in roles
+                )
+                for group_id, roles in roles_by_group.items()
+            )
+
+        for admission in affected_admissions:
+            was_actionable = is_actionable_interviewer(
+                admission,
+                old_roles_by_group,
+            )
+            is_actionable = is_actionable_interviewer(
+                admission,
+                new_roles_by_group,
+            )
+            gender_affects_scope = previous_gender != locked_user.gender and (
+                admission.pk in candidate_admission_ids
+                or was_actionable
+                or is_actionable
+            )
+            if was_actionable != is_actionable or gender_affects_scope:
+                invalidate_schedule_scope(admission)

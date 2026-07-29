@@ -7,6 +7,8 @@ from django.db.models.query import QuerySet
 from django.test import TestCase, TransactionTestCase, override_settings
 from django.urls import reverse
 
+from social_core.exceptions import AuthFailed
+
 from admissions.admissions.constants import RECRUITING
 from admissions.admissions.interview_workflow import update_interview_status
 from admissions.admissions.models import (
@@ -14,6 +16,7 @@ from admissions.admissions.models import (
     GroupApplication,
     LegoUser,
     Membership,
+    SavedSchedule,
     UserApplication,
 )
 from admissions.admissions.tests.utils import create_admission
@@ -63,14 +66,28 @@ class OAuthMembershipSyncTestCase(TestCase):
         self.assertIn("admissions_sessionid", response.cookies)
         self.assertIn("redirect_uri=http%3A%2F%2F127.0.0.1%3A5002", response.url)
 
-    def test_empty_response_revokes_stale_memberships_and_staff_access(self):
+    def test_missing_membership_payload_preserves_existing_authority(self):
         Membership.objects.create(
             user=self.user,
             group=self.group,
             role="leader",
         )
 
-        self.sync({})
+        with self.assertRaises(AuthFailed):
+            self.sync({})
+
+        self.assertTrue(Membership.objects.filter(user=self.user).exists())
+        self.user.refresh_from_db()
+        self.assertTrue(self.user.is_staff)
+
+    def test_explicit_valid_empty_memberships_revoke_existing_authority(self):
+        Membership.objects.create(
+            user=self.user,
+            group=self.group,
+            role="leader",
+        )
+
+        self.sync({"memberships": [], "abakusGroups": []})
 
         self.assertFalse(Membership.objects.filter(user=self.user).exists())
         self.assertFalse(self.user.is_staff)
@@ -96,7 +113,12 @@ class OAuthMembershipSyncTestCase(TestCase):
         self.assertEqual(self.user.profile_picture, response["profilePicture"])
         self.assertEqual(self.user.gender, "female")
 
-    def test_unknown_role_cannot_create_an_authorizing_membership(self):
+    def test_unknown_role_aborts_without_mutating_existing_authority(self):
+        Membership.objects.create(
+            user=self.user,
+            group=self.group,
+            role="leader",
+        )
         response = {
             "memberships": [
                 {"abakusGroup": self.group.lego_id, "role": "administrator"},
@@ -106,12 +128,19 @@ class OAuthMembershipSyncTestCase(TestCase):
             ],
         }
 
-        self.sync(response)
+        with self.assertRaises(AuthFailed):
+            self.sync(response)
 
-        self.assertFalse(Membership.objects.filter(user=self.user).exists())
-        self.assertFalse(self.user.is_staff)
+        self.assertEqual(
+            list(
+                Membership.objects.filter(user=self.user).values_list("role", flat=True)
+            ),
+            ["leader"],
+        )
+        self.user.refresh_from_db()
+        self.assertTrue(self.user.is_staff)
 
-    def test_missing_group_details_cannot_preserve_stale_access(self):
+    def test_missing_group_details_abort_without_mutating_existing_authority(self):
         Membership.objects.create(
             user=self.user,
             group=self.group,
@@ -124,10 +153,12 @@ class OAuthMembershipSyncTestCase(TestCase):
             "abakusGroups": [],
         }
 
-        self.sync(response)
+        with self.assertRaises(AuthFailed):
+            self.sync(response)
 
-        self.assertFalse(Membership.objects.filter(user=self.user).exists())
-        self.assertFalse(self.user.is_staff)
+        self.assertTrue(Membership.objects.filter(user=self.user).exists())
+        self.user.refresh_from_db()
+        self.assertTrue(self.user.is_staff)
 
     def test_duplicate_upstream_memberships_are_collapsed(self):
         membership = {"abakusGroup": self.group.lego_id, "role": "member"}
@@ -142,28 +173,30 @@ class OAuthMembershipSyncTestCase(TestCase):
 
         self.assertEqual(Membership.objects.filter(user=self.user).count(), 1)
 
-    def test_malformed_response_revokes_access_without_raising(self):
+    def test_malformed_response_aborts_without_mutating_user_state(self):
         Membership.objects.create(
             user=self.user,
             group=self.group,
             role="leader",
         )
 
-        self.sync(
-            {
-                "memberships": None,
-                "abakusGroups": None,
-                "profilePicture": {"url": "invalid"},
-                "gender": ["invalid"],
-            }
-        )
+        with self.assertRaises(AuthFailed):
+            self.sync(
+                {
+                    "memberships": None,
+                    "abakusGroups": None,
+                    "profilePicture": {"url": "invalid"},
+                    "gender": ["invalid"],
+                }
+            )
 
-        self.assertFalse(Membership.objects.filter(user=self.user).exists())
-        self.assertFalse(self.user.is_staff)
-        self.assertEqual(self.user.profile_picture, "")
-        self.assertEqual(self.user.gender, "")
+        self.assertTrue(Membership.objects.filter(user=self.user).exists())
+        self.user.refresh_from_db()
+        self.assertTrue(self.user.is_staff)
+        self.assertEqual(self.user.profile_picture, "https://example.com/old.png")
+        self.assertEqual(self.user.gender, "male")
 
-    def test_partially_malformed_response_grants_no_membership_access(self):
+    def test_partially_malformed_response_preserves_existing_authority(self):
         other_group = Group.objects.create(name="other", lego_id=92002)
         Membership.objects.create(
             user=self.user,
@@ -181,13 +214,28 @@ class OAuthMembershipSyncTestCase(TestCase):
             ],
         }
 
-        self.sync(response)
+        with self.assertRaises(AuthFailed):
+            self.sync(response)
 
-        self.assertFalse(Membership.objects.filter(user=self.user).exists())
-        self.assertFalse(self.user.is_staff)
+        self.assertEqual(
+            list(
+                Membership.objects.filter(user=self.user).values_list(
+                    "group",
+                    "role",
+                )
+            ),
+            [(other_group.pk, "leader")],
+        )
+        self.user.refresh_from_db()
+        self.assertTrue(self.user.is_staff)
 
-    def test_conflicting_roles_for_one_group_fail_closed(self):
+    def test_conflicting_roles_abort_without_mutating_existing_authority(self):
         other_group = Group.objects.create(name="other", lego_id=92003)
+        Membership.objects.create(
+            user=self.user,
+            group=other_group,
+            role="leader",
+        )
         response = {
             "memberships": [
                 {"abakusGroup": self.group.lego_id, "role": "member"},
@@ -200,10 +248,90 @@ class OAuthMembershipSyncTestCase(TestCase):
             ],
         }
 
-        self.sync(response)
+        with self.assertRaises(AuthFailed):
+            self.sync(response)
 
-        self.assertFalse(Membership.objects.filter(user=self.user).exists())
-        self.assertFalse(self.user.is_staff)
+        self.assertEqual(
+            list(
+                Membership.objects.filter(user=self.user).values_list("role", flat=True)
+            ),
+            ["leader"],
+        )
+        self.user.refresh_from_db()
+        self.assertTrue(self.user.is_staff)
+
+    def test_no_op_membership_refresh_does_not_invalidate_a_plan(self):
+        Membership.objects.create(
+            user=self.user,
+            group=self.group,
+            role="leader",
+        )
+        admission = create_admission(slug="oauth-no-op-scope")
+        admission.groups.add(self.group)
+        saved = SavedSchedule.objects.create(
+            admission=admission,
+            schedule=[{"candidate_id": "candidate", "time": 540, "panel": []}],
+            start_date="2026-04-20",
+            is_distributed=True,
+        )
+        previous_revision = saved.updated_at
+
+        self.sync(
+            {
+                "memberships": [
+                    {"abakusGroup": self.group.lego_id, "role": "leader"},
+                ],
+                "abakusGroups": [
+                    {"id": self.group.lego_id, "name": self.group.name},
+                ],
+                "profilePicture": "https://example.com/old.png",
+                "gender": "male",
+            }
+        )
+
+        saved.refresh_from_db()
+        self.assertTrue(saved.is_distributed)
+        self.assertEqual(saved.updated_at, previous_revision)
+
+    def test_eligibility_change_unpublishes_but_preserves_the_raw_draft(self):
+        Membership.objects.create(
+            user=self.user,
+            group=self.group,
+            role="leader",
+        )
+        admission = create_admission(slug="oauth-changed-scope")
+        admission.groups.add(self.group)
+        schedule = [{"candidate_id": "candidate", "time": 540, "panel": []}]
+        saved = SavedSchedule.objects.create(
+            admission=admission,
+            schedule=schedule,
+            start_date="2026-04-20",
+            is_distributed=True,
+            name_visibility=SavedSchedule.NAME_VISIBILITY_COMMITTEE,
+        )
+        previous_revision = saved.updated_at
+
+        self.sync(
+            {
+                "memberships": [
+                    {"abakusGroup": self.group.lego_id, "role": "retiree"},
+                ],
+                "abakusGroups": [
+                    {"id": self.group.lego_id, "name": self.group.name},
+                ],
+                "profilePicture": "https://example.com/old.png",
+                "gender": "male",
+            }
+        )
+
+        saved.refresh_from_db()
+        self.assertEqual(saved.schedule, schedule)
+        self.assertFalse(saved.is_distributed)
+        self.assertEqual(
+            saved.name_visibility,
+            SavedSchedule.NAME_VISIBILITY_HIDDEN,
+        )
+        self.assertGreater(saved.updated_at, previous_revision)
 
 
 class ConcurrentOAuthMembershipSyncTestCase(TransactionTestCase):
