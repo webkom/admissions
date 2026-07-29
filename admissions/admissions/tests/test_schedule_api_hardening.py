@@ -941,6 +941,7 @@ class SavedSchedulePublishSemanticsTestCase(APITestCase):
         second_interviewer = LegoUser.objects.create(
             username="second-interviewer", lego_id=604
         )
+        self.admission.groups.add(self.admin_group)
         Membership.objects.create(
             user=second_interviewer, role=MEMBER, group=self.admin_group
         )
@@ -1434,8 +1435,8 @@ class SavedSchedulePublishSemanticsTestCase(APITestCase):
         )
 
         self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertIn("conflict_collection_open", res.data)
-        self.assertIn("Kandidatlisten er endret", str(res.data))
+        self.assertIn("schedule", res.data)
+        self.assertIn("Alle aktive kandidater", str(res.data))
 
     def test_date_range_above_limit_is_rejected(self):
         res = self.client.post(
@@ -3381,12 +3382,14 @@ class SavedScheduleVisibilityTestCase(APITestCase):
                 "interview_status_updated_by",
             )
         }
+        export_uid = response.data["schedule"][0].pop("export_uid")
         self.assertEqual(
             response.data["schedule"],
             [
                 {
                     "candidate": "Ada",
                     "candidate_id": str(self.application.pk),
+                    "candidate_visible": True,
                     "time": 8,
                     "panel": [
                         {
@@ -3402,6 +3405,7 @@ class SavedScheduleVisibilityTestCase(APITestCase):
         self.assertEqual(workflow_fields["interview_status"], "not_invited")
         self.assertTrue(workflow_fields["interview_status_updated_at"])
         self.assertEqual(workflow_fields["interview_status_updated_by"], "")
+        self.assertRegex(export_uid, r"^[0-9a-f]{40}$")
         self.assertNotIn("candidate_email", response.data["schedule"][0])
         self.assertNotIn("candidate_phone", response.data["schedule"][0])
         self.assertNotContains(response, private_marker)
@@ -3433,7 +3437,7 @@ class SavedScheduleVisibilityTestCase(APITestCase):
         self.assertEqual(item["interview_status"], "confirmed")
         self.assertEqual(item["interview_status_updated_by"], recruiter.username)
 
-    def test_adding_group_during_global_reveal_keeps_it_hidden(self):
+    def test_adding_group_with_an_existing_plan_is_rejected_atomically(self):
         other_group = Group.objects.create(name="Newkom", lego_id=740)
         other_member = LegoUser.objects.create(
             username="newkom-member",
@@ -3486,27 +3490,18 @@ class SavedScheduleVisibilityTestCase(APITestCase):
             format="json",
         )
 
-        self.assertEqual(updated.status_code, status.HTTP_200_OK, updated.data)
+        self.assertEqual(updated.status_code, status.HTTP_400_BAD_REQUEST, updated.data)
+        self.assertIn("planutkast", str(updated.data))
+        self.admission.refresh_from_db()
+        self.assertEqual(list(self.admission.groups.all()), [self.committee_group])
         saved.refresh_from_db()
         self.assertEqual(
             saved.name_visibility,
-            SavedSchedule.NAME_VISIBILITY_ADMIN_ONLY,
+            SavedSchedule.NAME_VISIBILITY_COMMITTEE,
         )
-        self.assertEqual(list(saved.revealed_groups.all()), [self.committee_group])
+        self.assertFalse(saved.revealed_groups.exists())
 
-        self.client.force_authenticate(user=other_member)
-        self.assertEqual(self.client.get(self.url).data["schedule"], [])
-        self.assertEqual(
-            self.client.get(
-                reverse(
-                    "interview-candidates",
-                    kwargs={"admission_slug": self.admission.slug},
-                )
-            ).data,
-            [],
-        )
-
-    def test_removing_and_readding_group_does_not_restore_disclosure(self):
+    def test_removing_group_with_an_existing_plan_preserves_disclosure(self):
         retained_group = Group.objects.create(name="Retainedkom", lego_id=743)
         self.admission.groups.add(retained_group)
         saved = self._create_saved(
@@ -3524,27 +3519,29 @@ class SavedScheduleVisibilityTestCase(APITestCase):
             {"groups": [str(retained_group.pk)]},
             format="json",
         )
-        readded = self.client.patch(
-            manage_url,
-            {"groups": [str(retained_group.pk), str(self.committee_group.pk)]},
-            format="json",
-        )
 
-        self.assertEqual(removed.status_code, status.HTTP_200_OK, removed.data)
-        self.assertEqual(readded.status_code, status.HTTP_200_OK, readded.data)
+        self.assertEqual(removed.status_code, status.HTTP_400_BAD_REQUEST, removed.data)
         saved.refresh_from_db()
-        self.assertFalse(
+        self.assertTrue(
             saved.revealed_groups.filter(pk=self.committee_group.pk).exists()
         )
-        event = NameVisibilityAuditEvent.objects.get(
-            saved_schedule=saved,
-            group=self.committee_group,
+        self.assertFalse(
+            NameVisibilityAuditEvent.objects.filter(
+                saved_schedule=saved,
+                group=self.committee_group,
+            ).exists()
         )
-        self.assertEqual(event.action, NameVisibilityAuditEvent.ACTION_HIDDEN)
-        self.assertEqual(event.actor, self.admin_user)
+        self.assertEqual(
+            set(self.admission.groups.values_list("pk", flat=True)),
+            {self.committee_group.pk, retained_group.pk},
+        )
 
         self.client.force_authenticate(user=self.member_user)
-        self.assertEqual(self.client.get(self.url).data["schedule"], [])
+        member_schedule = self.client.get(self.url)
+        self.assertEqual(
+            [item["candidate"] for item in member_schedule.data["schedule"]],
+            ["Ada"],
+        )
 
     def test_unpublish_then_republish_does_not_restore_global_name_visibility(self):
         slot = "2026-04-20|480"
@@ -3641,7 +3638,14 @@ class SavedScheduleVisibilityTestCase(APITestCase):
             )
         )
 
-        self.assertEqual(member_schedule.data["schedule"], [])
+        self.assertEqual(len(member_schedule.data["schedule"]), 1)
+        self.assertEqual(
+            member_schedule.data["schedule"][0]["candidate"],
+            "Skjult kandidat",
+        )
+        self.assertFalse(
+            member_schedule.data["schedule"][0]["candidate_visible"],
+        )
         self.assertEqual(member_candidates.data, [])
 
         self.client.force_authenticate(user=self.admin_user)
@@ -3719,8 +3723,10 @@ class SavedScheduleVisibilityTestCase(APITestCase):
             )
         )
         self.assertEqual(
-            [item["candidate"] for item in own_schedule.data["schedule"]], ["Ada"]
+            [item["candidate"] for item in own_schedule.data["schedule"]],
+            ["Ada", "Skjult kandidat"],
         )
+        self.assertFalse(own_schedule.data["schedule"][1]["candidate_visible"])
         self.assertEqual(
             own_candidates.data,
             [{"id": str(self.application.pk), "name": "Ada"}],
@@ -3735,7 +3741,16 @@ class SavedScheduleVisibilityTestCase(APITestCase):
                 kwargs={"admission_slug": self.admission.slug},
             )
         )
-        self.assertEqual(other_schedule.data["schedule"], [])
+        self.assertEqual(
+            [item["candidate"] for item in other_schedule.data["schedule"]],
+            ["Skjult kandidat", "Skjult kandidat"],
+        )
+        self.assertTrue(
+            all(
+                not item["candidate_visible"]
+                for item in other_schedule.data["schedule"]
+            )
+        )
         self.assertEqual(other_candidates.data, [])
 
         audit_url = reverse(
@@ -3833,7 +3848,13 @@ class SavedScheduleVisibilityTestCase(APITestCase):
                 kwargs={"admission_slug": self.admission.slug},
             )
         )
-        self.assertEqual(own_schedule.data["schedule"], [])
+        self.assertEqual(
+            [item["candidate"] for item in own_schedule.data["schedule"]],
+            ["Skjult kandidat", "Skjult kandidat"],
+        )
+        self.assertTrue(
+            all(not item["candidate_visible"] for item in own_schedule.data["schedule"])
+        )
         self.assertEqual(own_candidates.data, [])
 
         self.client.force_authenticate(user=other_member)
@@ -3845,7 +3866,8 @@ class SavedScheduleVisibilityTestCase(APITestCase):
             )
         )
         self.assertEqual(
-            [item["candidate"] for item in other_schedule.data["schedule"]], ["Grace"]
+            [item["candidate"] for item in other_schedule.data["schedule"]],
+            ["Skjult kandidat", "Grace"],
         )
         self.assertEqual(
             other_candidates.data,
@@ -3996,7 +4018,11 @@ class SavedScheduleVisibilityTestCase(APITestCase):
         res = self.client.get(self.url)
 
         self.assertEqual(res.status_code, status.HTTP_200_OK)
-        self.assertEqual([item["candidate"] for item in res.data["schedule"]], ["Ada"])
+        self.assertEqual(
+            [item["candidate"] for item in res.data["schedule"]],
+            ["Ada", "Skjult kandidat"],
+        )
+        self.assertFalse(res.data["schedule"][1]["candidate_visible"])
 
     def test_mixed_role_visibility_unions_recruiting_and_revealed_groups(self):
         recruiting_group = Group.objects.create(name="Bedkom", lego_id=720)
@@ -4074,7 +4100,7 @@ class SavedScheduleVisibilityTestCase(APITestCase):
         self.assertEqual(schedule.status_code, status.HTTP_200_OK)
         self.assertEqual(
             {item["candidate"] for item in schedule.data["schedule"]},
-            {"Ada", "Grace"},
+            {"Ada", "Grace", "Skjult kandidat"},
         )
         schedule_by_candidate = {
             item["candidate"]: item for item in schedule.data["schedule"]
@@ -4232,12 +4258,22 @@ class InterviewGenderExposureTestCase(APITestCase):
         self.assertEqual(res.status_code, status.HTTP_200_OK)
         self.assertEqual(res.data, [])
 
-    def test_availability_includes_inactive_members_in_completion_count(self):
+    def test_availability_excludes_members_without_an_actionable_workspace(self):
         inactive_member = LegoUser.objects.create(
             username="g-inactive", lego_id=805, gender="male"
         )
         Membership.objects.create(
             user=inactive_member, role=RETIREE, group=self.committee_group
+        )
+        ordinary_admin_group_member = LegoUser.objects.create(
+            username="g-admin-member",
+            lego_id=806,
+            gender="male",
+        )
+        Membership.objects.create(
+            user=ordinary_admin_group_member,
+            role=MEMBER,
+            group=self.admin_group,
         )
         InterviewAvailability.objects.create(
             admission=self.admission,
@@ -4256,10 +4292,10 @@ class InterviewGenderExposureTestCase(APITestCase):
         self.assertEqual(res.status_code, status.HTTP_200_OK)
         self.assertEqual(
             {row["username"] for row in res.data},
-            {"g-admin", "g-member", "g-inactive"},
+            {"g-admin", "g-member"},
         )
         self.assertEqual(sum(1 for row in res.data if row["has_submitted"]), 2)
-        self.assertEqual(sum(1 for row in res.data if not row["has_submitted"]), 1)
+        self.assertEqual(sum(1 for row in res.data if not row["has_submitted"]), 0)
 
     def test_unpublished_committee_visibility_does_not_release_names(self):
         SavedSchedule.objects.create(
