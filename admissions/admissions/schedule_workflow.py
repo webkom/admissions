@@ -1210,7 +1210,9 @@ def update_saved_schedule(
     # pre-lock boolean must never authorize a canonical write.
     is_admission_admin = user_is_admission_admin(admission, user)
     is_recruiter = get_representing_groups(admission, user).exists()
-    existing = SavedSchedule.objects.filter(admission=admission).first()
+    existing = (
+        SavedSchedule.objects.select_for_update().filter(admission=admission).first()
+    )
 
     mutable_fields = set(data) - {"expected_updated_at"}
     if not is_admission_admin and mutable_fields == {"name_visibility"}:

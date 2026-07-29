@@ -1579,4 +1579,8 @@ class InterviewAvailabilityParticipantSerializer(serializers.Serializer):
     needs_review = serializers.BooleanField(default=False)
     affected_assignment_count = serializers.IntegerField(min_value=0, default=0)
     availability_generation = serializers.IntegerField(min_value=1, default=1)
+    availability_updated_at = serializers.DateTimeField(
+        allow_null=True,
+        default=None,
+    )
     is_me = serializers.BooleanField()
