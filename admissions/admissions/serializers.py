@@ -318,6 +318,45 @@ class AdminCreateUpdateAdmissionSerializer(serializers.HyperlinkedModelSerialize
         input_admin_groups = validated_data.pop("admin_groups", None)
         input_groups = validated_data.pop("groups", None)
         input_group_questions = validated_data.pop("group_questions", None)
+        if pk is not None and (
+            input_admin_groups is not None or input_groups is not None
+        ):
+            existing_admission = Admission.objects.select_for_update().get(pk=pk)
+            current_admin_group_ids = set(
+                existing_admission.admin_groups.values_list("pk", flat=True)
+            )
+            current_group_ids = set(
+                existing_admission.groups.values_list("pk", flat=True)
+            )
+            next_admin_group_ids = (
+                {group.pk for group in input_admin_groups}
+                if input_admin_groups is not None
+                else current_admin_group_ids
+            )
+            next_group_ids = (
+                {group.pk for group in input_groups}
+                if input_groups is not None
+                else current_group_ids
+            )
+            group_scope_changed = (
+                next_admin_group_ids != current_admin_group_ids
+                or next_group_ids != current_group_ids
+            )
+            if group_scope_changed:
+                saved_schedule = (
+                    SavedSchedule.objects.select_for_update()
+                    .filter(admission=existing_admission)
+                    .first()
+                )
+                if saved_schedule is not None and saved_schedule.schedule:
+                    raise serializers.ValidationError(
+                        {
+                            "groups": [
+                                "Grupper kan ikke endres mens opptaket har et "
+                                "planutkast. Nullstill planutkastet først."
+                            ]
+                        }
+                    )
         admission, _ = Admission.objects.update_or_create(
             pk=pk, defaults=validated_data
         )
