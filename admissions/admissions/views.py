@@ -11,7 +11,8 @@ from django.views.decorators.csrf import ensure_csrf_cookie
 from django.views.generic.base import TemplateView
 from rest_framework import mixins, permissions, status, viewsets
 from rest_framework.decorators import action
-from rest_framework.exceptions import NotFound
+from rest_framework.exceptions import NotFound, PermissionDenied
+from rest_framework.exceptions import ValidationError as DRFValidationError
 from rest_framework.response import Response
 from rest_framework.throttling import ScopedRateThrottle
 from rest_framework.views import APIView
@@ -102,6 +103,11 @@ class AppView(TemplateView):
             "ENVIRONMENT": getattr(settings, "ENVIRONMENT_NAME", ""),
             "API_URL": settings.API_URL,
             "CSRF_COOKIE_NAME": settings.CSRF_COOKIE_NAME,
+            "SCHEDULER_ENABLED": getattr(
+                settings,
+                "ADMISSIONS_SCHEDULER_ENABLED",
+                True,
+            ),
         }
         return context
 
@@ -497,8 +503,72 @@ class ManageAdmissionViewSet(viewsets.ModelViewSet):
             return qs.filter(created_by=self.request.user)
         return qs
 
+    @staticmethod
+    def _has_locked_manage_authority(actor, admission, memberships):
+        is_webkom_member = any(
+            membership.group.name == constants.WEBKOM_GROUPNAME
+            and membership.role not in constants.INACTIVE_MEMBERSHIP_ROLES
+            for membership in memberships
+        )
+        if is_webkom_member:
+            return True
+        if admission is None:
+            return actor.is_staff
+        return actor.is_staff and admission.created_by_id == actor.pk
+
+    @transaction.atomic
     def perform_create(self, serializer):
-        serializer.save(created_by=self.request.user)
+        actor = LegoUser.objects.select_for_update(no_key=True).get(
+            pk=self.request.user.pk
+        )
+        memberships = list(
+            Membership.objects.select_for_update()
+            .filter(user=actor)
+            .select_related("group")
+            .order_by("pk")
+        )
+        if not self._has_locked_manage_authority(actor, None, memberships):
+            raise PermissionDenied
+        self.request.user = actor
+        serializer.save(created_by=actor)
+
+    @transaction.atomic
+    def perform_update(self, serializer):
+        admission = Admission.objects.select_for_update().get(pk=serializer.instance.pk)
+        actor = LegoUser.objects.select_for_update(no_key=True).get(
+            pk=self.request.user.pk
+        )
+        memberships = list(
+            Membership.objects.select_for_update()
+            .filter(user=actor)
+            .select_related("group")
+            .order_by("pk")
+        )
+        if not self._has_locked_manage_authority(actor, admission, memberships):
+            raise PermissionDenied
+        self.request.user = actor
+        serializer.instance = admission
+        serializer.save()
+
+    @transaction.atomic
+    def perform_destroy(self, instance):
+        admission = Admission.objects.select_for_update().get(pk=instance.pk)
+        actor = LegoUser.objects.select_for_update(no_key=True).get(
+            pk=self.request.user.pk
+        )
+        memberships = list(
+            Membership.objects.select_for_update()
+            .filter(user=actor)
+            .select_related("group")
+            .order_by("pk")
+        )
+        if not self._has_locked_manage_authority(actor, admission, memberships):
+            raise PermissionDenied
+        if admission.closed_from > timezone.now():
+            raise DRFValidationError(
+                {"message": "Opptaket kan ikke slettes før det har stengt"}
+            )
+        admission.delete()
 
     def destroy(self, request, *args, **kwargs):
         admission = self.get_object()

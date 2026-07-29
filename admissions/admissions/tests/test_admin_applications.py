@@ -1535,7 +1535,7 @@ class TerminateCommitteeApplicationsTestCase(APITestCase):
             user=self.admin,
             conflicts=[str(self.only_committee_application.pk)],
         )
-        SolveJob.objects.create(
+        solve_job = SolveJob.objects.create(
             admission=self.admission,
             requested_by=self.admin,
             request_data={},
@@ -1585,7 +1585,10 @@ class TerminateCommitteeApplicationsTestCase(APITestCase):
         )
         self.assertEqual(saved_schedule.revealed_groups.count(), 0)
         self.assertEqual(availability.conflicts, [])
-        self.assertFalse(SolveJob.objects.filter(admission=self.admission).exists())
+        solve_job.refresh_from_db()
+        self.assertEqual(solve_job.status, SolveJob.STATUS_CANCELLED)
+        self.assertEqual(solve_job.request_data, {})
+        self.assertIsNone(solve_job.result)
 
     def test_locks_admission_before_application_rows(self):
         self.client.force_authenticate(user=self.admin)

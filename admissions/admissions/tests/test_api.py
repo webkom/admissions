@@ -1,13 +1,18 @@
+from concurrent.futures import ThreadPoolExecutor
+from threading import Event
 from types import SimpleNamespace
+from unittest import mock
 
 from django.core.management import call_command
-from django.test import override_settings
+from django.db import close_old_connections
+from django.test import TransactionTestCase, override_settings
 from django.urls import reverse
 from rest_framework import status
-from rest_framework.test import APITestCase
+from rest_framework.test import APIClient, APITestCase
 
 from admissions.admissions.constants import LEADER, MEMBER, RECRUITING, RETIREE
 from admissions.admissions.models import (
+    Admission,
     Group,
     GroupApplication,
     InterviewAvailability,
@@ -22,6 +27,8 @@ from admissions.admissions.tests.utils import (
     create_admission,
     fake_timedelta,
 )
+from admissions.admissions.views import ManageAdmissionViewSet
+from admissions.oauth import update_custom_user_details
 
 
 class EditGroupTestCase(APITestCase):
@@ -260,6 +267,234 @@ class EditAdmissionTestCase(APITestCase):
         )
 
         self.assertEqual(res.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_group_change_is_rejected_while_a_plan_draft_exists(self):
+        replacement = Group.objects.create(name="Replacement", lego_id=17)
+        SavedSchedule.objects.create(
+            admission=self.admission,
+            schedule=[{"candidate_id": "candidate", "time": 540, "panel": []}],
+            start_date="2026-04-20",
+        )
+        original_title = self.admission.title
+        self.client.force_authenticate(user=self.staff_user)
+
+        response = self.client.patch(
+            reverse("manage-admission-detail", kwargs={"slug": self.admission.slug}),
+            {
+                "title": "Must roll back",
+                "groups": [str(replacement.pk)],
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("groups", response.data)
+        self.admission.refresh_from_db()
+        self.assertEqual(self.admission.title, original_title)
+        self.assertEqual(
+            set(self.admission.groups.values_list("pk", flat=True)),
+            {self.committee.pk},
+        )
+
+    def test_group_with_existing_applications_cannot_be_removed(self):
+        replacement = Group.objects.create(name="Replacement applications", lego_id=18)
+        candidate = LegoUser.objects.create(
+            username="admission-group-candidate",
+            lego_id=19,
+        )
+        application = UserApplication.objects.create(
+            admission=self.admission,
+            user=candidate,
+        )
+        GroupApplication.objects.create(
+            application=application,
+            group=self.committee,
+        )
+        self.client.force_authenticate(user=self.staff_user)
+
+        response = self.client.patch(
+            reverse("manage-admission-detail", kwargs={"slug": self.admission.slug}),
+            {"groups": [str(replacement.pk)]},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("groups", response.data)
+        self.assertEqual(
+            set(self.admission.groups.values_list("pk", flat=True)),
+            {self.committee.pk},
+        )
+        self.assertTrue(
+            GroupApplication.objects.filter(
+                application=application,
+                group=self.committee,
+            ).exists()
+        )
+
+    def test_group_change_succeeds_without_a_plan_or_dependent_applications(self):
+        replacement = Group.objects.create(name="Replacement empty", lego_id=20)
+        saved = SavedSchedule.objects.create(
+            admission=self.admission,
+            schedule=[],
+            start_date="2026-04-20",
+            conflict_review_open=True,
+            conflict_collection_open=True,
+            conflict_collection_revision="22222222-2222-2222-2222-222222222222",
+            conflict_collection_candidate_ids=["candidate"],
+            conflict_collection_participant_ids=["participant"],
+        )
+        job = SolveJob.objects.create(
+            admission=self.admission,
+            requested_by=self.staff_user,
+            request_data={"private": "input"},
+        )
+        self.client.force_authenticate(user=self.staff_user)
+
+        response = self.client.patch(
+            reverse("manage-admission-detail", kwargs={"slug": self.admission.slug}),
+            {"groups": [str(replacement.pk)]},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
+        self.assertEqual(
+            set(self.admission.groups.values_list("pk", flat=True)),
+            {replacement.pk},
+        )
+        saved.refresh_from_db()
+        job.refresh_from_db()
+        self.assertFalse(saved.conflict_review_open)
+        self.assertFalse(saved.conflict_collection_open)
+        self.assertIsNone(saved.conflict_collection_revision)
+        self.assertEqual(saved.conflict_collection_candidate_ids, [])
+        self.assertEqual(saved.conflict_collection_participant_ids, [])
+        self.assertEqual(job.status, SolveJob.STATUS_CANCELLED)
+
+
+class ManageAdmissionAuthorityRaceTestCase(TransactionTestCase):
+    reset_sequences = True
+
+    def setUp(self):
+        self.webkom = Group.objects.create(name="Webkom", lego_id=21)
+        self.actor = LegoUser.objects.create(
+            username="manage-admission-race",
+            lego_id=22,
+        )
+        Membership.objects.create(
+            user=self.actor,
+            group=self.webkom,
+            role=MEMBER,
+        )
+        self.admission = create_admission(
+            slug="manage-admission-race",
+            created_by=LegoUser.objects.create(
+                username="manage-admission-owner",
+                lego_id=23,
+            ),
+        )
+        committee = Group.objects.create(name="Race committee", lego_id=24)
+        admin_group = Group.objects.create(name="Race admins", lego_id=25)
+        self.admission.groups.add(committee)
+        self.admission.admin_groups.add(admin_group)
+        self.url = reverse(
+            "manage-admission-detail",
+            kwargs={"slug": self.admission.slug},
+        )
+
+    def test_committed_oauth_revocation_blocks_a_previously_authorized_patch(self):
+        permission_passed = Event()
+        continue_to_transaction = Event()
+        original_perform_update = ManageAdmissionViewSet.perform_update
+
+        def pause_after_permission(view, serializer):
+            permission_passed.set()
+            self.assertTrue(continue_to_transaction.wait(timeout=5))
+            return original_perform_update(view, serializer)
+
+        def patch_admission():
+            close_old_connections()
+            client = APIClient()
+            client.force_authenticate(
+                user=LegoUser.objects.get(pk=self.actor.pk),
+            )
+            response = client.patch(
+                self.url,
+                {"title": "Unauthorized late write"},
+                format="json",
+            )
+            close_old_connections()
+            return response.status_code
+
+        with (
+            mock.patch.object(
+                ManageAdmissionViewSet,
+                "perform_update",
+                pause_after_permission,
+            ),
+            ThreadPoolExecutor(max_workers=1) as executor,
+        ):
+            future = executor.submit(patch_admission)
+            self.assertTrue(permission_passed.wait(timeout=5))
+            update_custom_user_details(
+                None,
+                {},
+                user=self.actor,
+                response={"abakusGroups": [], "memberships": []},
+            )
+            continue_to_transaction.set()
+            response_status = future.result(timeout=5)
+
+        self.assertEqual(response_status, status.HTTP_403_FORBIDDEN)
+        self.admission.refresh_from_db()
+        self.assertNotEqual(self.admission.title, "Unauthorized late write")
+
+    def test_committed_oauth_revocation_blocks_a_previously_authorized_delete(self):
+        self.admission.open_from = fake_timedelta(days=-3)
+        self.admission.public_deadline = fake_timedelta(days=-2)
+        self.admission.closed_from = fake_timedelta(days=-1)
+        self.admission.save(
+            update_fields=["open_from", "public_deadline", "closed_from"]
+        )
+        permission_passed = Event()
+        continue_to_transaction = Event()
+        original_perform_destroy = ManageAdmissionViewSet.perform_destroy
+
+        def pause_after_permission(view, instance):
+            permission_passed.set()
+            self.assertTrue(continue_to_transaction.wait(timeout=5))
+            return original_perform_destroy(view, instance)
+
+        def delete_admission():
+            close_old_connections()
+            client = APIClient()
+            client.force_authenticate(
+                user=LegoUser.objects.get(pk=self.actor.pk),
+            )
+            response = client.delete(self.url)
+            close_old_connections()
+            return response.status_code
+
+        with (
+            mock.patch.object(
+                ManageAdmissionViewSet,
+                "perform_destroy",
+                pause_after_permission,
+            ),
+            ThreadPoolExecutor(max_workers=1) as executor,
+        ):
+            future = executor.submit(delete_admission)
+            self.assertTrue(permission_passed.wait(timeout=5))
+            update_custom_user_details(
+                None,
+                {},
+                user=self.actor,
+                response={"abakusGroups": [], "memberships": []},
+            )
+            continue_to_transaction.set()
+            response_status = future.result(timeout=5)
+
+        self.assertEqual(response_status, status.HTTP_403_FORBIDDEN)
+        self.assertTrue(Admission.objects.filter(pk=self.admission.pk).exists())
 
 
 @override_settings(

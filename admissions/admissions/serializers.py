@@ -37,6 +37,7 @@ from admissions.admissions.models import (
     SolveJob,
     UserApplication,
 )
+from admissions.admissions.schedule_invalidation import invalidate_schedule_scope
 from admissions.admissions.schedule_policy import (
     AVAILABILITY_FALLBACKS,
     PANEL_STABILITIES,
@@ -318,48 +319,69 @@ class AdminCreateUpdateAdmissionSerializer(serializers.HyperlinkedModelSerialize
         input_admin_groups = validated_data.pop("admin_groups", None)
         input_groups = validated_data.pop("groups", None)
         input_group_questions = validated_data.pop("group_questions", None)
-        if pk is not None and (
-            input_admin_groups is not None or input_groups is not None
-        ):
-            existing_admission = Admission.objects.select_for_update().get(pk=pk)
-            current_admin_group_ids = set(
-                existing_admission.admin_groups.values_list("pk", flat=True)
-            )
-            current_group_ids = set(
-                existing_admission.groups.values_list("pk", flat=True)
-            )
-            next_admin_group_ids = (
-                {group.pk for group in input_admin_groups}
-                if input_admin_groups is not None
-                else current_admin_group_ids
-            )
-            next_group_ids = (
-                {group.pk for group in input_groups}
-                if input_groups is not None
-                else current_group_ids
-            )
-            group_scope_changed = (
-                next_admin_group_ids != current_admin_group_ids
-                or next_group_ids != current_group_ids
-            )
-            if group_scope_changed:
-                saved_schedule = (
-                    SavedSchedule.objects.select_for_update()
-                    .filter(admission=existing_admission)
-                    .first()
-                )
-                if saved_schedule is not None and saved_schedule.schedule:
-                    raise serializers.ValidationError(
-                        {
-                            "groups": [
-                                "Grupper kan ikke endres mens opptaket har et "
-                                "planutkast. Nullstill planutkastet først."
-                            ]
-                        }
-                    )
-        admission, _ = Admission.objects.update_or_create(
-            pk=pk, defaults=validated_data
+        if pk is None:
+            admission = Admission.objects.create(**validated_data)
+        else:
+            admission = Admission.objects.select_for_update().get(pk=pk)
+
+        current_admin_group_ids = set(
+            admission.admin_groups.values_list("pk", flat=True)
         )
+        current_group_ids = set(admission.groups.values_list("pk", flat=True))
+        next_admin_group_ids = (
+            {group.pk for group in input_admin_groups}
+            if input_admin_groups is not None
+            else current_admin_group_ids
+        )
+        next_group_ids = (
+            {group.pk for group in input_groups}
+            if input_groups is not None
+            else current_group_ids
+        )
+        admin_groups_changed = next_admin_group_ids != current_admin_group_ids
+        groups_changed = next_group_ids != current_group_ids
+        if pk is not None and (admin_groups_changed or groups_changed):
+            saved_schedule = (
+                SavedSchedule.objects.select_for_update()
+                .filter(admission=admission)
+                .first()
+            )
+            if saved_schedule is not None and saved_schedule.schedule:
+                raise serializers.ValidationError(
+                    {
+                        "groups": [
+                            "Grupper kan ikke endres mens opptaket har et "
+                            "planutkast. Nullstill planutkastet først."
+                        ]
+                    }
+                )
+            removed_group_ids = current_group_ids - next_group_ids
+            dependent_applications = list(
+                GroupApplication.objects.select_for_update()
+                .filter(
+                    application__admission=admission,
+                    group_id__in=removed_group_ids,
+                )
+                .order_by("pk")
+            )
+            if dependent_applications:
+                raise serializers.ValidationError(
+                    {
+                        "groups": [
+                            "En gruppe med eksisterende søknader kan ikke "
+                            "fjernes fra opptaket."
+                        ]
+                    }
+                )
+
+        if pk is not None:
+            update_fields = []
+            for field, value in validated_data.items():
+                if getattr(admission, field) != value:
+                    setattr(admission, field, value)
+                    update_fields.append(field)
+            if update_fields:
+                admission.save(update_fields=update_fields)
         if input_admin_groups is not None:
             admission.admin_groups.set(input_admin_groups)
         if input_groups is not None:
@@ -369,6 +391,11 @@ class AdminCreateUpdateAdmissionSerializer(serializers.HyperlinkedModelSerialize
                 self.context["request"].user,
             )
             admission.groups.set(input_groups)
+        if pk is not None and (admin_groups_changed or groups_changed):
+            invalidate_schedule_scope(
+                admission,
+                actor=self.context["request"].user,
+            )
         if input_group_questions is not None:
             for group_id, fields in input_group_questions.items():
                 AdmissionGroup.objects.filter(

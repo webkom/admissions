@@ -8,7 +8,11 @@ from admissions.admissions.models import (
     AdmissionGroup,
     Group,
     GroupApplication,
+    InterviewAvailability,
     LegoUser,
+    NameVisibilityAuditEvent,
+    SavedSchedule,
+    SolveJob,
     UserApplication,
 )
 from admissions.admissions.tests.utils import DEFAULT_ADMISSION_SLUG, create_admission
@@ -72,6 +76,97 @@ class CreateApplicationTestCase(APITestCase):
         )
 
         self.assertEqual(res.status_code, status.HTTP_201_CREATED)
+
+    def test_new_candidate_invalidates_a_published_plan_atomically(self):
+        existing_candidate = UserApplication.objects.create(
+            admission=self.admission,
+            user=self.pleb_bob,
+        )
+        GroupApplication.objects.create(
+            application=existing_candidate,
+            group=self.webkom,
+        )
+        revision = "11111111-1111-1111-1111-111111111111"
+        schedule = [
+            {
+                "candidate_id": str(existing_candidate.pk),
+                "candidate": self.pleb_bob.username,
+                "time": 540,
+                "panel": [],
+            }
+        ]
+        saved = SavedSchedule.objects.create(
+            admission=self.admission,
+            schedule=schedule,
+            start_date="2026-04-20",
+            is_distributed=True,
+            name_visibility=SavedSchedule.NAME_VISIBILITY_COMMITTEE,
+            conflict_review_open=True,
+            conflict_collection_open=True,
+            conflict_collection_revision=revision,
+            conflict_collection_candidate_ids=[str(existing_candidate.pk)],
+            conflict_collection_participant_ids=[],
+        )
+        saved.revealed_groups.add(self.webkom)
+        availability = InterviewAvailability.objects.create(
+            admission=self.admission,
+            user=self.pleb_bob,
+            reviewed_candidate_ids=[str(existing_candidate.pk)],
+            conflict_collection_reviewed_candidate_ids=[str(existing_candidate.pk)],
+            conflict_collection_review_revision=revision,
+        )
+        job = SolveJob.objects.create(
+            admission=self.admission,
+            requested_by=self.pleb_bob,
+            request_data={"private": "input"},
+        )
+        previous_revision = saved.updated_at
+        self.client.force_authenticate(user=self.pleb_anna)
+
+        response = self.client.post(
+            reverse(
+                "userapplication-list",
+                kwargs={"admission_slug": self.admission_slug},
+            ),
+            self.application_data,
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED, response.data)
+        saved.refresh_from_db()
+        availability.refresh_from_db()
+        job.refresh_from_db()
+        self.assertEqual(saved.schedule, schedule)
+        self.assertFalse(saved.is_distributed)
+        self.assertEqual(
+            saved.name_visibility,
+            SavedSchedule.NAME_VISIBILITY_HIDDEN,
+        )
+        self.assertFalse(saved.conflict_review_open)
+        self.assertFalse(saved.conflict_collection_open)
+        self.assertIsNone(saved.conflict_collection_revision)
+        self.assertEqual(saved.conflict_collection_candidate_ids, [])
+        self.assertEqual(saved.conflict_collection_participant_ids, [])
+        self.assertFalse(saved.revealed_groups.exists())
+        self.assertGreater(saved.updated_at, previous_revision)
+        self.assertEqual(availability.reviewed_candidate_ids, [])
+        self.assertEqual(
+            availability.conflict_collection_reviewed_candidate_ids,
+            [],
+        )
+        self.assertIsNone(availability.conflict_collection_review_revision)
+        self.assertEqual(job.status, SolveJob.STATUS_CANCELLED)
+        self.assertEqual(job.request_data, {})
+        audit_event = NameVisibilityAuditEvent.objects.get(
+            admission=self.admission,
+            group=self.webkom,
+        )
+        self.assertEqual(
+            audit_event.action,
+            NameVisibilityAuditEvent.ACTION_HIDDEN,
+        )
+        self.assertIsNone(audit_event.actor)
+        self.assertEqual(audit_event.actor_username, "system")
 
     def test_missing_group_selection_is_rejected_without_creating_candidate(self):
         self.client.force_authenticate(user=self.pleb_anna)
