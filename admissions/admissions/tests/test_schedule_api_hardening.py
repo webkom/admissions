@@ -30,6 +30,7 @@ from admissions.admissions.schedule_invalidation import (
 )
 from admissions.admissions.schedule_validation import canonicalize_solver_payload
 from admissions.admissions.serializers import SolveJobSerializer, SolveOptionsSerializer
+from admissions.admissions.solve_jobs import planning_input_fingerprint
 from admissions.admissions.tests.utils import (
     ScheduleRevisionAPIClient,
     create_admission,
@@ -3460,22 +3461,41 @@ class SolveProposalApplyTestCase(APITestCase):
         self.client.force_authenticate(user=self.user)
 
     def _job(self):
+        self.saved.refresh_from_db()
+        request_data = {
+            "baseline_updated_at": self.saved.updated_at.isoformat(),
+            "candidates": [{"id": str(self.application.pk)}],
+            "interviewers": [{"id": str(self.user.pk)}],
+            "panel_size": 1,
+            "options": {
+                "policy_version": 2,
+                "panel_stability": "preferred",
+                "availability_fallback": "stop",
+                "same_panel_per_block": False,
+                "allow_overtime": False,
+            },
+            "availability_generation": self.saved.availability_generation,
+            "layout_version": self.saved.layout_version,
+        }
+        canonical = canonicalize_solver_payload(
+            self.admission,
+            self.saved,
+            request_data,
+            self.user,
+        )
+        request_data["planning_input_fingerprint"] = planning_input_fingerprint(
+            {
+                **request_data,
+                **canonical,
+            },
+            self.saved.schedule or [],
+        )
         return SolveJob.objects.create(
             admission=self.admission,
             requested_by=self.user,
             status=SolveJob.STATUS_DONE,
             finished_at=timezone.now(),
-            request_data={
-                "baseline_updated_at": self.saved.updated_at.isoformat(),
-                "panel_size": 1,
-                "options": {
-                    "policy_version": 2,
-                    "panel_stability": "preferred",
-                    "availability_fallback": "stop",
-                    "same_panel_per_block": False,
-                    "allow_overtime": False,
-                },
-            },
+            request_data=request_data,
             result={
                 "status": "SUCCESS",
                 "schedule": [
