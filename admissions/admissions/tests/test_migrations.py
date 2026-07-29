@@ -59,11 +59,20 @@ class MigrationTestCase(TransactionTestCase):
         raise NotImplementedError
 
 
-class AdmissionDateOrderMigrationTestCase(MigrationTestCase):
-    migrate_from = MIGRATION_0005
-    migrate_to = MIGRATION_0006
+class AdmissionDateOrderMigrationTestCase(TransactionTestCase):
+    def setUp(self):
+        super().setUp()
+        executor = MigrationExecutor(connection)
+        self.leaf_nodes = executor.loader.graph.leaf_nodes()
+        self.addCleanup(self.restore_schema)
 
-    def set_up_before_migration(self, apps):
+    def restore_schema(self):
+        MigrationExecutor(connection).migrate(self.leaf_nodes)
+
+    def test_invalid_dates_block_migration_without_rewriting(self):
+        executor = MigrationExecutor(connection)
+        executor.migrate([MIGRATION_0005])
+        apps = executor.loader.project_state([MIGRATION_0005]).apps
         Admission = apps.get_model("admissions", "Admission")
         now = timezone.now()
         admission = Admission.objects.create(
@@ -73,14 +82,33 @@ class AdmissionDateOrderMigrationTestCase(MigrationTestCase):
             public_deadline=now,
             closed_from=now - timedelta(days=1),
         )
-        self.admission_id = admission.pk
+        original = (
+            admission.open_from,
+            admission.public_deadline,
+            admission.closed_from,
+        )
+        self.addCleanup(
+            Admission.objects.filter(pk=admission.pk).update,
+            open_from=now - timedelta(days=1),
+            public_deadline=now + timedelta(days=1),
+            closed_from=now + timedelta(days=2),
+        )
 
-    def test_normalizes_legacy_dates_before_adding_the_constraint(self):
-        Admission = self.apps.get_model("admissions", "Admission")
+        with self.assertRaisesRegex(
+            RuntimeError,
+            "No historical dates were rewritten",
+        ):
+            MigrationExecutor(connection).migrate([MIGRATION_0006])
 
-        admission = Admission.objects.get(pk=self.admission_id)
-        self.assertLess(admission.open_from, admission.public_deadline)
-        self.assertLessEqual(admission.public_deadline, admission.closed_from)
+        admission.refresh_from_db()
+        self.assertEqual(
+            (
+                admission.open_from,
+                admission.public_deadline,
+                admission.closed_from,
+            ),
+            original,
+        )
 
 
 class GroupScopedApplicationAnswersMigrationTestCase(MigrationTestCase):
