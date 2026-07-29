@@ -10,6 +10,8 @@ MIGRATION_0003 = (
     "0003_alter_group_description_alter_group_response_label",
 )
 MIGRATION_0004 = ("admissions", "0004_scheduler_domain")
+MIGRATION_0005 = ("admissions", "0005_scheduler_authority")
+MIGRATION_0006 = ("admissions", "0006_scheduler_workflow")
 
 
 class SchedulerDomainMigrationTestCase(TransactionTestCase):
@@ -80,4 +82,45 @@ class SchedulerDomainMigrationTestCase(TransactionTestCase):
                 )
             ),
             {first.pk, second.pk},
+        )
+
+    def test_invalid_admission_dates_block_migration_without_rewriting(self):
+        executor = MigrationExecutor(connection)
+        executor.migrate([MIGRATION_0005])
+        apps = executor.loader.project_state([MIGRATION_0005]).apps
+        Admission = apps.get_model("admissions", "Admission")
+        now = timezone.now()
+        admission = Admission.objects.create(
+            title="Legacy invalid dates",
+            slug="legacy-invalid-dates",
+            open_from=now + timedelta(days=2),
+            public_deadline=now,
+            closed_from=now - timedelta(days=1),
+        )
+        original = (
+            admission.open_from,
+            admission.public_deadline,
+            admission.closed_from,
+        )
+        self.addCleanup(
+            Admission.objects.filter(pk=admission.pk).update,
+            open_from=now - timedelta(days=1),
+            public_deadline=now + timedelta(days=1),
+            closed_from=now + timedelta(days=2),
+        )
+
+        with self.assertRaisesRegex(
+            RuntimeError,
+            "No historical dates were rewritten",
+        ):
+            MigrationExecutor(connection).migrate([MIGRATION_0006])
+
+        admission.refresh_from_db()
+        self.assertEqual(
+            (
+                admission.open_from,
+                admission.public_deadline,
+                admission.closed_from,
+            ),
+            original,
         )

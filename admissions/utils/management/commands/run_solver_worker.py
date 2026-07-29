@@ -78,13 +78,15 @@ class Command(BaseCommand):
                 time.sleep(poll_interval)
 
     def _reap_stale_jobs(self):
-        """Fail jobs stuck in RUNNING far longer than a solve can take — the
-        worker that claimed them must have crashed or been restarted, so the
-        client should stop waiting on them."""
+        """Fail claimed jobs stuck in RUNNING far longer than a solve can take.
+
+        Queue age is not a worker lease. A healthy worker may legitimately leave
+        later jobs pending while earlier solves consume the full runtime budget.
+        """
         cutoff = timezone.now() - timedelta(seconds=constants.SOLVE_JOB_STALE_SECONDS)
         reaped = SolveJob.objects.filter(
-            models.Q(status=SolveJob.STATUS_RUNNING, started_at__lt=cutoff)
-            | models.Q(status=SolveJob.STATUS_PENDING, created_at__lt=cutoff)
+            status=SolveJob.STATUS_RUNNING,
+            started_at__lt=cutoff,
         ).update(
             status=SolveJob.STATUS_ERROR,
             error="Solve-worker stoppet uventet. Prøv å kjøre på nytt.",
