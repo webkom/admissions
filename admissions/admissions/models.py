@@ -574,6 +574,7 @@ class SolveJob(models.Model):
     started_at = models.DateTimeField(null=True, blank=True)
     finished_at = models.DateTimeField(null=True, blank=True)
     applied_at = models.DateTimeField(null=True, blank=True)
+    applied_schedule_updated_at = models.DateTimeField(null=True, blank=True)
     discarded_at = models.DateTimeField(null=True, blank=True)
 
     class Meta:

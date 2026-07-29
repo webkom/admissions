@@ -133,12 +133,14 @@ def _update_group_visibility(
     if visibility_became_group_scoped:
         existing.revealed_groups.set(admission.groups.all())
         existing.name_visibility = SavedSchedule.NAME_VISIBILITY_ADMIN_ONLY
-    set_group_name_visibility(
+    group_visibility_changed = set_group_name_visibility(
         existing,
         represented_groups,
         visibility == SavedSchedule.NAME_VISIBILITY_COMMITTEE,
         user,
     )
+    if not visibility_became_group_scoped and not group_visibility_changed:
+        return existing
     update_fields = ["updated_at"]
     if visibility_became_group_scoped:
         update_fields.append("name_visibility")
@@ -699,20 +701,33 @@ def _resolve_schedule_state(
         "conflict_collection_open",
         existing_collection_open,
     )
-    conflict_collection_open = bool(requested_collection_open and not is_distributed)
-    if existing_collection_open and not conflict_collection_open:
+    conflict_collection_open = bool(
+        requested_collection_open and not is_distributed and not should_clear_plan
+    )
+    if (
+        existing_collection_open
+        and not conflict_collection_open
+        and not should_clear_plan
+    ):
         _ensure_conflict_collection_can_close(admission, existing)
-    conflict_collection_revision = (
-        existing.conflict_collection_revision if existing is not None else None
-    )
-    conflict_collection_candidate_ids = (
-        list(existing.conflict_collection_candidate_ids) if existing is not None else []
-    )
-    conflict_collection_participant_ids = (
-        list(existing.conflict_collection_participant_ids)
-        if existing is not None
-        else []
-    )
+    if should_clear_plan:
+        conflict_collection_revision = None
+        conflict_collection_candidate_ids = []
+        conflict_collection_participant_ids = []
+    else:
+        conflict_collection_revision = (
+            existing.conflict_collection_revision if existing is not None else None
+        )
+        conflict_collection_candidate_ids = (
+            list(existing.conflict_collection_candidate_ids)
+            if existing is not None
+            else []
+        )
+        conflict_collection_participant_ids = (
+            list(existing.conflict_collection_participant_ids)
+            if existing is not None
+            else []
+        )
     if conflict_collection_open and not existing_collection_open:
         if not schedule:
             raise ScheduleInputError(
@@ -759,6 +774,7 @@ def _resolve_schedule_state(
         existing is not None
         and existing.conflict_review_open
         and existing.conflict_collection_revision is None
+        and not should_clear_plan
     )
     conflict_review_open = bool(
         schedule
@@ -970,6 +986,8 @@ def _project_interview_availability(
             list(row.slots or []),
             row.submitted_grid_generation,
             list(row.reviewed_candidate_ids or []),
+            list(row.conflict_collection_reviewed_candidate_ids or []),
+            row.conflict_collection_review_revision,
         )
         if state["duration_changed"]:
             row.slots = []
@@ -987,10 +1005,15 @@ def _project_interview_availability(
                 for candidate_id in row.reviewed_candidate_ids or []
                 if str(candidate_id) in retainable
             ]
+        if state["should_clear_plan"]:
+            row.conflict_collection_reviewed_candidate_ids = []
+            row.conflict_collection_review_revision = None
         next_projection = (
             list(row.slots or []),
             row.submitted_grid_generation,
             list(row.reviewed_candidate_ids or []),
+            list(row.conflict_collection_reviewed_candidate_ids or []),
+            row.conflict_collection_review_revision,
         )
         if next_projection != previous_projection:
             row.updated_at = changed_at
@@ -1003,6 +1026,8 @@ def _project_interview_availability(
                 "slots",
                 "submitted_grid_generation",
                 "reviewed_candidate_ids",
+                "conflict_collection_reviewed_candidate_ids",
+                "conflict_collection_review_revision",
                 "updated_at",
             ],
         )
@@ -1175,16 +1200,6 @@ def update_saved_schedule(
     _ensure_revision_matches(data, existing)
     if existing is not None:
         ensure_window_fields(existing)
-        is_initial_draft = bool(
-            "schedule" in data
-            and not existing.schedule
-            and existing.conflict_collection_revision is None
-        )
-        if "schedule" in data and not is_initial_draft:
-            try:
-                ensure_conflict_collection_ready(admission, existing)
-            except ScheduleValidationError as exc:
-                raise ScheduleInputError({exc.field: [exc.message]}) from exc
 
     configuration = _resolve_schedule_configuration(data, existing)
     enabled_windows, enabled_slots = _resolve_enabled_windows(
@@ -1209,6 +1224,20 @@ def update_saved_schedule(
         enabled_slots,
         layout,
     )
+    if existing is not None:
+        schedule_changed = bool(
+            "schedule" in data and data["schedule"] != existing.schedule
+        )
+        is_initial_draft = bool(
+            schedule_changed
+            and not existing.schedule
+            and existing.conflict_collection_revision is None
+        )
+        if schedule_changed and not state["should_clear_plan"] and not is_initial_draft:
+            try:
+                ensure_conflict_collection_ready(admission, existing)
+            except ScheduleValidationError as exc:
+                raise ScheduleInputError({exc.field: [exc.message]}) from exc
     schedule, panel_size, solver_options = _canonicalize_schedule(
         admission,
         user,

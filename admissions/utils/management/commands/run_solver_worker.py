@@ -353,7 +353,7 @@ class Command(BaseCommand):
                     != expected_planning_fingerprint
                 ):
                     return False
-                update_saved_schedule(
+                result = update_saved_schedule(
                     admission=admission,
                     user=user,
                     data={
@@ -368,7 +368,8 @@ class Command(BaseCommand):
                     is_recruiter=get_representing_groups(admission, user).exists(),
                 )
                 job.applied_at = timezone.now()
-                job.save(update_fields=["applied_at"])
+                job.applied_schedule_updated_at = result.saved_schedule.updated_at
+                job.save(update_fields=["applied_at", "applied_schedule_updated_at"])
                 log.info("solve_job_auto_applied", job_id=str(job.id))
                 return True
         except (

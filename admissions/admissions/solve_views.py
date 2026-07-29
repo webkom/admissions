@@ -293,6 +293,19 @@ class SolveJobApplyView(SchedulerFeatureGateMixin, APIView):
         is_admission_admin = user_is_admission_admin(admission, user)
         is_recruiter = get_representing_groups(admission, user).exists()
         if job.applied_at is not None:
+            if (
+                job.applied_schedule_updated_at is None
+                or job.applied_schedule_updated_at != saved.updated_at
+            ):
+                return Response(
+                    {
+                        "detail": (
+                            "Forslaget er allerede brukt, men planutkastet er "
+                            "endret etterpå."
+                        )
+                    },
+                    status=status.HTTP_409_CONFLICT,
+                )
             return Response(
                 SavedScheduleSerializer(
                     saved,
@@ -408,7 +421,8 @@ class SolveJobApplyView(SchedulerFeatureGateMixin, APIView):
             return Response(exc.errors, status=status.HTTP_409_CONFLICT)
 
         job.applied_at = timezone.now()
-        job.save(update_fields=["applied_at"])
+        job.applied_schedule_updated_at = result.saved_schedule.updated_at
+        job.save(update_fields=["applied_at", "applied_schedule_updated_at"])
         return Response(
             SavedScheduleSerializer(
                 result.saved_schedule,

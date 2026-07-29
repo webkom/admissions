@@ -16,19 +16,21 @@ def panel_gender_code(lego_gender):
 
 def get_eligible_interviewer_ids(admission):
     committee_ids = set(
-        Membership.objects.filter(group__in=admission.groups.all()).values_list(
-            "user_id", flat=True
-        )
+        Membership.objects.filter(group__in=admission.groups.all())
+        .exclude(role__in=constants.INACTIVE_MEMBERSHIP_ROLES)
+        .values_list("user_id", flat=True)
     )
     admin_ids = set(
-        Membership.objects.filter(group__in=admission.admin_groups.all()).values_list(
-            "user_id", flat=True
+        Membership.objects.filter(
+            group__in=admission.admin_groups.all(),
+            role__in=(constants.LEADER, constants.RECRUITING),
         )
+        .exclude(role__in=constants.INACTIVE_MEMBERSHIP_ROLES)
+        .values_list("user_id", flat=True)
     )
-    # Availability status must include every committee/admin member, even if
-    # their membership role is inactive. The response panel uses this roster to
-    # decide when "Alle har svart" is true, so excluding IR/retiree members
-    # would make the UI report completion too early.
+    # The required roster must contain only people who can act on their own
+    # availability. Active committee members have a member workspace, while an
+    # admin-group membership qualifies only when it grants admission authority.
     return committee_ids | admin_ids
 
 

@@ -3,6 +3,7 @@ from collections.abc import Mapping
 from datetime import date, datetime, timedelta
 from uuid import UUID
 
+from django.core.signing import salted_hmac
 from django.core.validators import MinLengthValidator
 from django.db import transaction
 from django.db.models import Q
@@ -856,9 +857,6 @@ class SavedScheduleSerializer(serializers.ModelSerializer):
         if self.context.get("hide_schedule"):
             data["schedule"] = []
             return data
-        if self.context.get("hide_candidate_identity"):
-            data["schedule"] = []
-            return data
         visible_candidate_ids = self.context.get("visible_candidate_ids")
 
         raw_schedule = data.get("schedule")
@@ -896,16 +894,27 @@ class SavedScheduleSerializer(serializers.ModelSerializer):
             if visible_candidate_ids is None
             else candidate_ids & visible_candidate_ids
         )
-        candidate_details = {
-            str(application.pk): {
+        applications = list(
+            UserApplication.objects.filter(
+                admission=instance.admission,
+                pk__in=candidate_ids,
+            ).select_related("user")
+        )
+        existing_candidate_ids = {str(application.pk) for application in applications}
+        candidate_details = {}
+        for application in applications:
+            candidate_id = str(application.pk)
+            if candidate_id not in authorized_candidate_ids:
+                continue
+            candidate_details[candidate_id] = {
                 "name": candidate_pseudonyms.get(
-                    str(application.pk),
+                    candidate_id,
                     application.user.get_full_name() or application.user.username,
                 ),
                 "phone": (
                     application.phone_number
                     if contact_candidate_ids is None
-                    or str(application.pk) in contact_candidate_ids
+                    or candidate_id in contact_candidate_ids
                     else None
                 ),
                 "interview_status": application.interview_status,
@@ -916,11 +925,6 @@ class SavedScheduleSerializer(serializers.ModelSerializer):
                     application.interview_status_updated_by_username
                 ),
             }
-            for application in UserApplication.objects.filter(
-                admission=instance.admission,
-                pk__in=authorized_candidate_ids,
-            ).select_related("user")
-        }
         eligible_panel_ids = {
             str(user_id) for user_id in get_eligible_interviewer_ids(instance.admission)
         }
@@ -937,22 +941,14 @@ class SavedScheduleSerializer(serializers.ModelSerializer):
             if not item.is_valid():
                 continue
             candidate_id = canonical_uuid(item.validated_data.get("candidate_id"))
-            if candidate_id not in candidate_details:
+            if candidate_id not in existing_candidate_ids:
                 continue
 
             safe_entry = dict(item.validated_data)
-            safe_entry["candidate_id"] = candidate_id
-            candidate_detail = candidate_details[candidate_id]
-            safe_entry["candidate"] = candidate_detail["name"]
-            safe_entry["interview_status"] = candidate_detail["interview_status"]
-            safe_entry["interview_status_updated_at"] = candidate_detail[
-                "interview_status_updated_at"
-            ]
-            safe_entry["interview_status_updated_by"] = candidate_detail[
-                "interview_status_updated_by"
-            ]
-            if candidate_detail["phone"]:
-                safe_entry["candidate_phone"] = candidate_detail["phone"]
+            safe_entry["export_uid"] = salted_hmac(
+                "admissions.schedule-export",
+                f"{instance.admission_id}:{candidate_id}",
+            ).hexdigest()
             safe_panel = []
             for member in safe_entry["panel"]:
                 panel_id = canonical_uuid(member.get("id"))
@@ -963,6 +959,24 @@ class SavedScheduleSerializer(serializers.ModelSerializer):
                     safe_member["is_overtime"] = member["is_overtime"]
                 safe_panel.append(safe_member)
             safe_entry["panel"] = safe_panel
+            candidate_detail = candidate_details.get(candidate_id)
+            if candidate_detail is None:
+                safe_entry.pop("candidate_id", None)
+                safe_entry["candidate"] = "Skjult kandidat"
+                safe_entry["candidate_visible"] = False
+            else:
+                safe_entry["candidate_id"] = candidate_id
+                safe_entry["candidate"] = candidate_detail["name"]
+                safe_entry["candidate_visible"] = True
+                safe_entry["interview_status"] = candidate_detail["interview_status"]
+                safe_entry["interview_status_updated_at"] = candidate_detail[
+                    "interview_status_updated_at"
+                ]
+                safe_entry["interview_status_updated_by"] = candidate_detail[
+                    "interview_status_updated_by"
+                ]
+                if candidate_detail["phone"]:
+                    safe_entry["candidate_phone"] = candidate_detail["phone"]
             visible_schedule.append(safe_entry)
         data["schedule"] = visible_schedule
         return data

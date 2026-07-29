@@ -192,7 +192,7 @@ def get_candidate_pseudonyms(admission):
 def set_group_name_visibility(saved_schedule, groups, visible, actor):
     groups = list(groups)
     if not groups:
-        return
+        return False
     group_ids = {group.pk for group in groups}
     revealed_ids = set(
         saved_schedule.revealed_groups.filter(pk__in=group_ids).values_list(
@@ -203,7 +203,7 @@ def set_group_name_visibility(saved_schedule, groups, visible, actor):
         group for group in groups if (group.pk in revealed_ids) != visible
     ]
     if not changed_groups:
-        return
+        return False
     if visible:
         saved_schedule.revealed_groups.add(*changed_groups)
         action = NameVisibilityAuditEvent.ACTION_REVEALED
@@ -211,6 +211,7 @@ def set_group_name_visibility(saved_schedule, groups, visible, actor):
         saved_schedule.revealed_groups.remove(*changed_groups)
         action = NameVisibilityAuditEvent.ACTION_HIDDEN
     record_name_visibility_events(saved_schedule, changed_groups, action, actor)
+    return True
 
 
 def record_name_visibility_events(saved_schedule, groups, action, actor):
