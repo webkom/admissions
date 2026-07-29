@@ -136,25 +136,6 @@ class WorkerFailureHandlingTestCase(SimpleTestCase):
         self.assertEqual(updated, 1)
 
 
-class WorkerStaleJobReapingTestCase(TestCase):
-    def test_old_pending_jobs_are_not_reaped_before_a_worker_claims_them(self):
-        admission = create_admission(slug="pending-queue-age")
-        old_job = SolveJob.objects.create(
-            admission=admission,
-            status=SolveJob.STATUS_PENDING,
-            request_data={},
-        )
-        SolveJob.objects.filter(pk=old_job.pk).update(
-            created_at=timezone.now()
-            - timedelta(seconds=constants.SOLVE_JOB_STALE_SECONDS + 1)
-        )
-
-        Command()._reap_stale_jobs()
-
-        old_job.refresh_from_db()
-        self.assertEqual(old_job.status, SolveJob.STATUS_PENDING)
-
-
 class WriteBackResilienceTestCase(TestCase):
     """A connection dropped during the CPU-bound solve must not discard the
     finished result or leave the job stuck in RUNNING forever."""

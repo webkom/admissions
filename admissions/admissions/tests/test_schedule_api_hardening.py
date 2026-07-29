@@ -3365,7 +3365,7 @@ class SolveJobLifecycleTestCase(APITestCase):
         self.assertEqual(stale.status, SolveJob.STATUS_ERROR)
         self.assertTrue(stale.error)
 
-    def test_worker_reaps_stale_pending_job(self):
+    def test_worker_does_not_reap_a_pending_job_based_on_queue_age(self):
         stale = SolveJob.objects.create(
             admission=self.admission,
             requested_by=self.user,
@@ -3377,10 +3377,10 @@ class SolveJobLifecycleTestCase(APITestCase):
             - timedelta(seconds=constants.SOLVE_JOB_STALE_SECONDS + 60)
         )
 
-        call_command("run_solver_worker", once=True)
+        Command()._reap_stale_jobs()
 
         stale.refresh_from_db()
-        self.assertEqual(stale.status, SolveJob.STATUS_ERROR)
+        self.assertEqual(stale.status, SolveJob.STATUS_PENDING)
 
     def test_cleanup_deletes_old_finished_jobs(self):
         old = SolveJob.objects.create(
