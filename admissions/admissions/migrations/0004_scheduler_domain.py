@@ -5,33 +5,33 @@ import uuid
 import django.db.models.deletion
 from django.conf import settings
 from django.db import migrations, models
+from django.db.models import Count
 
 
-def dedupe_group_applications(apps, schema_editor):
-    """Keep one deterministic row before enforcing the legacy uniqueness rule."""
+def assert_no_duplicate_group_applications(apps, schema_editor):
+    """Refuse to guess which real applicant record should survive."""
     GroupApplication = apps.get_model("admissions", "GroupApplication")
     database = schema_editor.connection.alias
-    seen = set()
-    duplicate_ids = []
-    rows = (
+    duplicates = list(
         GroupApplication.objects.using(database)
-        .order_by(
-            "application_id",
-            "group_id",
-            "-updated_at",
-            "-created_at",
-            "-id",
-        )
-        .values("id", "application_id", "group_id")
+        .values("application_id", "group_id")
+        .annotate(row_count=Count("id"))
+        .filter(row_count__gt=1)
+        .order_by("application_id", "group_id")[:20]
     )
-    for row in rows.iterator():
-        key = (row["application_id"], row["group_id"])
-        if key in seen:
-            duplicate_ids.append(row["id"])
-        else:
-            seen.add(key)
-    if duplicate_ids:
-        GroupApplication.objects.using(database).filter(id__in=duplicate_ids).delete()
+    if duplicates:
+        sample = ", ".join(
+            (
+                f"application={row['application_id']} "
+                f"group={row['group_id']} rows={row['row_count']}"
+            )
+            for row in duplicates
+        )
+        raise RuntimeError(
+            "Duplicate committee applications must be reviewed and resolved "
+            "before applying 0004_scheduler_domain. No rows were deleted. "
+            f"First conflicts: {sample}"
+        )
 
 
 class Migration(migrations.Migration):
@@ -153,7 +153,7 @@ class Migration(migrations.Migration):
             ),
         ),
         migrations.RunPython(
-            dedupe_group_applications,
+            assert_no_duplicate_group_applications,
             migrations.RunPython.noop,
         ),
         migrations.AddConstraint(
