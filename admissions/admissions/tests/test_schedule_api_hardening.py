@@ -120,6 +120,42 @@ class SavedSchedulePublishSemanticsTestCase(APITestCase):
             SavedSchedule.objects.get(admission=self.admission).is_distributed
         )
 
+    def test_framework_change_discards_submitted_plan_edits(self):
+        self._create_saved(is_distributed=False)
+
+        response = self.client.post(
+            self.url,
+            {
+                "session_duration": 30,
+                "schedule": self._schedule(time=600),
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
+        self.assertEqual(response.data["schedule"], [])
+        saved = SavedSchedule.objects.get(admission=self.admission)
+        self.assertEqual(saved.schedule, [])
+        self.assertFalse(saved.is_distributed)
+
+    def test_no_op_schedule_save_preserves_availability_revision(self):
+        saved = self._create_saved()
+        availability = InterviewAvailability.objects.get(
+            admission=self.admission,
+            user=self.admin_user,
+        )
+        availability_revision = availability.updated_at
+
+        response = self.client.post(
+            self.url,
+            {"expected_updated_at": saved.updated_at.isoformat()},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
+        availability.refresh_from_db()
+        self.assertEqual(availability.updated_at, availability_revision)
+
     def test_conflict_review_does_not_open_without_a_draft(self):
         self._create_saved(is_distributed=False, schedule=[])
 

@@ -608,7 +608,6 @@ def _resolve_schedule_state(
         availability_generation = existing.availability_generation
         if duration_changed or added_slots:
             availability_generation += 1
-        incoming_schedule = data.get("schedule")
         scheduled_slot_keys = {
             make_slot_key(
                 existing.start_date + timedelta(days=int(item["time"]) // (24 * 60)),
@@ -626,11 +625,7 @@ def _resolve_schedule_state(
             or layout_boundaries_rebuilt
             or bool(removed_slots.intersection(scheduled_slot_keys))
         )
-        should_clear_plan = (
-            proposal_invalidated
-            and bool(existing.schedule)
-            and ("schedule" not in data or incoming_schedule == existing.schedule)
-        )
+        should_clear_plan = proposal_invalidated and bool(existing.schedule)
 
     if should_clear_plan:
         schedule = []
@@ -830,7 +825,13 @@ def _project_interview_availability(
     old_pairs = _schedule_pairs_by_interviewer(existing_schedule)
     new_pairs = _schedule_pairs_by_interviewer(next_schedule)
     changed_at = timezone.now()
+    changed_rows = []
     for row in rows:
+        previous_projection = (
+            list(row.slots or []),
+            row.submitted_grid_generation,
+            list(row.reviewed_candidate_ids or []),
+        )
         if state["duration_changed"]:
             row.slots = []
             row.submitted_grid_generation = None
@@ -847,12 +848,25 @@ def _project_interview_availability(
                 for candidate_id in row.reviewed_candidate_ids or []
                 if str(candidate_id) in retainable
             ]
-        row.updated_at = changed_at
+        next_projection = (
+            list(row.slots or []),
+            row.submitted_grid_generation,
+            list(row.reviewed_candidate_ids or []),
+        )
+        if next_projection != previous_projection:
+            row.updated_at = changed_at
+            changed_rows.append(row)
 
-    InterviewAvailability.objects.bulk_update(
-        rows,
-        ["slots", "submitted_grid_generation", "reviewed_candidate_ids", "updated_at"],
-    )
+    if changed_rows:
+        InterviewAvailability.objects.bulk_update(
+            changed_rows,
+            [
+                "slots",
+                "submitted_grid_generation",
+                "reviewed_candidate_ids",
+                "updated_at",
+            ],
+        )
 
 
 def _persist_schedule(
