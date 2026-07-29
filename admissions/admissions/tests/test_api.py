@@ -924,7 +924,7 @@ class InterviewAvailabilityViewTestCase(APITestCase):
             conflict_review_open=True,
             name_visibility="committee",
         )
-        InterviewAvailability.objects.create(
+        availability = InterviewAvailability.objects.create(
             admission=self.admission,
             user=self.user,
             slots=["2026-04-21:540"],
@@ -933,7 +933,12 @@ class InterviewAvailabilityViewTestCase(APITestCase):
 
         res = self.client.post(
             self.url,
-            {"conflicts": [str(application.pk)]},
+            {
+                "conflicts": [str(application.pk)],
+                "expected_availability_updated_at": (
+                    availability.updated_at.isoformat()
+                ),
+            },
             format="json",
         )
 
