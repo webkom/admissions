@@ -420,6 +420,11 @@ class InterviewAvailabilityView(SchedulerFeatureGateMixin, APIView):
                     != availability_generation
                 ),
                 "availability_generation": availability_generation,
+                "availability_updated_at": (
+                    availability_map[person.id].updated_at
+                    if person.id in availability_map
+                    else None
+                ),
                 "affected_assignment_count": (
                     self._affected_assignment_count(saved_schedule, person.id)
                     if is_admin
@@ -476,6 +481,16 @@ class InterviewAvailabilityView(SchedulerFeatureGateMixin, APIView):
                     {"user_id": ["Ukjent intervjuer."]},
                     status=status.HTTP_400_BAD_REQUEST,
                 )
+            self_attestation_fields = {
+                "slots",
+                "conflicts",
+                "reviewed_candidate_ids",
+                "conflict_collection_reviewed_candidate_ids",
+                "conflict_collection_revision",
+                "expected_availability_generation",
+            }
+            if self_attestation_fields.intersection(serializer.validated_data):
+                return Response(status=status.HTTP_403_FORBIDDEN)
 
         saved_schedule = (
             SavedSchedule.objects.select_for_update()
@@ -580,6 +595,22 @@ class InterviewAvailabilityView(SchedulerFeatureGateMixin, APIView):
         )
         conflict_replace_scope = None
         if collection_review_present:
+            submitted_revision = serializer.validated_data.get(
+                "conflict_collection_revision"
+            )
+            if (
+                submitted_revision is None
+                or saved_schedule is None
+                or submitted_revision != saved_schedule.conflict_collection_revision
+            ):
+                return Response(
+                    {
+                        "conflict_collection_revision": [
+                            "Kandidatlisten er endret. Last inn siden på nytt."
+                        ]
+                    },
+                    status=status.HTTP_409_CONFLICT,
+                )
             if not conflict_collection_open:
                 return Response(
                     {
@@ -598,22 +629,6 @@ class InterviewAvailabilityView(SchedulerFeatureGateMixin, APIView):
                         "conflict_collection_revision": [
                             "Kandidat- eller intervjuerlisten er endret. "
                             "Opptaksansvarlig må åpne kontrollen på nytt."
-                        ]
-                    },
-                    status=status.HTTP_409_CONFLICT,
-                )
-            submitted_revision = serializer.validated_data.get(
-                "conflict_collection_revision"
-            )
-            if (
-                submitted_revision is None
-                or saved_schedule is None
-                or submitted_revision != saved_schedule.conflict_collection_revision
-            ):
-                return Response(
-                    {
-                        "conflict_collection_revision": [
-                            "Kandidatlisten er endret. Last inn siden på nytt."
                         ]
                     },
                     status=status.HTTP_409_CONFLICT,
@@ -697,6 +712,42 @@ class InterviewAvailabilityView(SchedulerFeatureGateMixin, APIView):
             )
             .first()
         )
+        expected_updated_at_provided = (
+            "expected_availability_updated_at" in serializer.validated_data
+        )
+        expected_updated_at = serializer.validated_data.get(
+            "expected_availability_updated_at"
+        )
+        if existing is not None and not expected_updated_at_provided:
+            return Response(
+                {
+                    "expected_availability_updated_at": [
+                        "Dette feltet er påkrevd når tilgjengeligheten oppdateres."
+                    ],
+                    "availability_updated_at": existing.updated_at,
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if existing is not None and expected_updated_at != existing.updated_at:
+            return Response(
+                {
+                    "expected_availability_updated_at": [
+                        "Tilgjengeligheten er endret. Last inn siden på nytt."
+                    ],
+                    "availability_updated_at": existing.updated_at,
+                },
+                status=status.HTTP_409_CONFLICT,
+            )
+        if existing is None and expected_updated_at is not None:
+            return Response(
+                {
+                    "expected_availability_updated_at": [
+                        "Tilgjengeligheten finnes ikke lenger. Last inn siden på nytt."
+                    ],
+                    "availability_updated_at": None,
+                },
+                status=status.HTTP_409_CONFLICT,
+            )
         defaults = {
             key: serializer.validated_data[key]
             for key in (
@@ -930,6 +981,7 @@ class InterviewAvailabilityView(SchedulerFeatureGateMixin, APIView):
                     and saved.submitted_grid_generation != current_generation
                 ),
                 "availability_generation": current_generation,
+                "availability_updated_at": saved.updated_at,
                 "affected_assignment_count": (
                     self._affected_assignment_count(saved_schedule, target_user.id)
                     if can_view_assignment_scope

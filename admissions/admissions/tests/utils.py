@@ -4,7 +4,12 @@ from django.urls import Resolver404, resolve
 from django.utils import timezone
 from rest_framework.test import APIClient
 
-from admissions.admissions.models import Admission, LegoUser, SavedSchedule
+from admissions.admissions.models import (
+    Admission,
+    InterviewAvailability,
+    LegoUser,
+    SavedSchedule,
+)
 
 DEFAULT_ADMISSION_SLUG = "opptak"
 
@@ -29,6 +34,28 @@ class ScheduleRevisionAPIClient(APIClient):
                 **data,
                 "expected_updated_at": (
                     saved_schedule.updated_at.isoformat() if saved_schedule else None
+                ),
+            }
+        if (
+            match is not None
+            and match.url_name == "interview-availability"
+            and isinstance(data, dict)
+            and "expected_availability_updated_at" not in data
+        ):
+            authenticated_user = getattr(self.handler, "_force_user", None)
+            target_user_id = data.get("user_id") or getattr(
+                authenticated_user,
+                "pk",
+                None,
+            )
+            availability = InterviewAvailability.objects.filter(
+                admission__slug=match.kwargs["admission_slug"],
+                user_id=target_user_id,
+            ).first()
+            payload = {
+                **data,
+                "expected_availability_updated_at": (
+                    availability.updated_at.isoformat() if availability else None
                 ),
             }
         return super().post(path, payload, *args, **kwargs)

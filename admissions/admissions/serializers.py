@@ -1520,6 +1520,10 @@ class SaveInterviewAvailabilitySerializer(serializers.Serializer):
     expected_availability_generation = serializers.IntegerField(
         min_value=1, required=False
     )
+    expected_availability_updated_at = serializers.DateTimeField(
+        required=False,
+        allow_null=True,
+    )
 
     def validate(self, attrs):
         for field in (

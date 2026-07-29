@@ -1836,6 +1836,8 @@ class SolveScheduleInputCapTestCase(APITestCase):
 
 
 class InterviewAvailabilityHardeningTestCase(APITestCase):
+    client_class = ScheduleRevisionAPIClient
+
     def setUp(self):
         self.committee_group = Group.objects.create(name="Komite", lego_id=620)
         self.member = LegoUser.objects.create(username="hardening-member", lego_id=621)
@@ -1938,6 +1940,142 @@ class InterviewAvailabilityHardeningTestCase(APITestCase):
             ["2026-04-21|540"],
         )
 
+    def test_availability_response_exposes_the_row_revision(self):
+        self._create_saved_schedule(enabled_slots=["2026-04-21|540"])
+        availability = InterviewAvailability.objects.create(
+            admission=self.admission,
+            user=self.member,
+            slots=["2026-04-21|540"],
+        )
+        self.client.force_authenticate(user=self.member)
+
+        response = self.client.get(self.url)
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(response.data), 1)
+        self.assertEqual(
+            response.data[0]["availability_updated_at"],
+            availability.updated_at.isoformat().replace("+00:00", "Z"),
+        )
+
+    def test_stale_availability_revision_cannot_overwrite_a_newer_save(self):
+        saved_schedule = self._create_saved_schedule(
+            enabled_slots=["2026-04-21|540", "2026-04-21|600"],
+        )
+        availability = InterviewAvailability.objects.create(
+            admission=self.admission,
+            user=self.member,
+            slots=["2026-04-21|540"],
+            participation=InterviewAvailability.PARTICIPATION_PARTICIPATING,
+            submitted_grid_generation=saved_schedule.availability_generation,
+        )
+        stale_revision = availability.updated_at.isoformat()
+        self.client.force_authenticate(user=self.member)
+
+        first = self.client.post(
+            self.url,
+            {
+                "slots": ["2026-04-21|600"],
+                "expected_availability_generation": (
+                    saved_schedule.availability_generation
+                ),
+                "expected_availability_updated_at": stale_revision,
+            },
+            format="json",
+        )
+        stale = self.client.post(
+            self.url,
+            {
+                "slots": ["2026-04-21|540"],
+                "expected_availability_generation": (
+                    saved_schedule.availability_generation
+                ),
+                "expected_availability_updated_at": stale_revision,
+            },
+            format="json",
+        )
+
+        self.assertEqual(first.status_code, status.HTTP_200_OK, first.data)
+        self.assertEqual(stale.status_code, status.HTTP_409_CONFLICT, stale.data)
+        self.assertIn("availability_updated_at", stale.data)
+        availability.refresh_from_db()
+        self.assertEqual(availability.slots, ["2026-04-21|600"])
+
+    def test_existing_availability_requires_a_row_revision(self):
+        saved_schedule = self._create_saved_schedule(
+            enabled_slots=["2026-04-21|540"],
+        )
+        InterviewAvailability.objects.create(
+            admission=self.admission,
+            user=self.member,
+            slots=["2026-04-21|540"],
+            participation=InterviewAvailability.PARTICIPATION_PARTICIPATING,
+            submitted_grid_generation=saved_schedule.availability_generation,
+        )
+        raw_client = APIClient()
+        raw_client.force_authenticate(user=self.member)
+
+        response = raw_client.post(
+            self.url,
+            {
+                "slots": ["2026-04-21|540"],
+                "expected_availability_generation": (
+                    saved_schedule.availability_generation
+                ),
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("expected_availability_updated_at", response.data)
+
+    def test_identical_availability_retry_is_a_true_no_op(self):
+        saved_schedule = self._create_saved_schedule(
+            enabled_slots=["2026-04-21|540"],
+        )
+        availability = InterviewAvailability.objects.create(
+            admission=self.admission,
+            user=self.member,
+            slots=["2026-04-21|540"],
+            participation=InterviewAvailability.PARTICIPATION_PARTICIPATING,
+            submitted_grid_generation=saved_schedule.availability_generation,
+        )
+        approval = ScheduleDeviationApproval.objects.create(
+            admission=self.admission,
+            saved_schedule=saved_schedule,
+            actor=self.admin_user,
+            actor_username=self.admin_user.username,
+            schedule_fingerprint="c" * 64,
+            deviation_fingerprint="d" * 64,
+            policy_snapshot={},
+            availability_generation=saved_schedule.availability_generation,
+            layout_version=saved_schedule.layout_version,
+        )
+        row_revision = availability.updated_at
+        schedule_revision = saved_schedule.updated_at
+        self.client.force_authenticate(user=self.member)
+
+        response = self.client.post(
+            self.url,
+            {
+                "slots": ["2026-04-21|540"],
+                "expected_availability_generation": (
+                    saved_schedule.availability_generation
+                ),
+                "expected_availability_updated_at": row_revision.isoformat(),
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
+        availability.refresh_from_db()
+        saved_schedule.refresh_from_db()
+        self.assertEqual(availability.updated_at, row_revision)
+        self.assertEqual(saved_schedule.updated_at, schedule_revision)
+        self.assertTrue(
+            ScheduleDeviationApproval.objects.filter(pk=approval.pk).exists()
+        )
+
     def test_malformed_slot_key_is_rejected(self):
         self.client.force_authenticate(user=self.member)
 
@@ -1981,6 +2119,53 @@ class InterviewAvailabilityHardeningTestCase(APITestCase):
                 user=self.member,
             ).experience_level,
             InterviewAvailability.EXPERIENCE_EXPERIENCED,
+        )
+
+    def test_admin_cannot_submit_another_interviewers_conflict_attestation(self):
+        revision = uuid.uuid4()
+        saved = self._create_saved_schedule(
+            enabled_slots=["2026-04-21|540"],
+            conflict_collection_open=True,
+            conflict_collection_revision=revision,
+            conflict_collection_candidate_ids=[str(self.application.pk)],
+            conflict_collection_participant_ids=[str(self.member.pk)],
+        )
+        availability = InterviewAvailability.objects.create(
+            admission=self.admission,
+            user=self.member,
+            slots=["2026-04-21|540"],
+            participation=InterviewAvailability.PARTICIPATION_PARTICIPATING,
+            submitted_grid_generation=saved.availability_generation,
+        )
+        self.client.force_authenticate(user=self.admin_user)
+
+        response = self.client.post(
+            self.url,
+            {
+                "user_id": str(self.member.pk),
+                "conflicts": [],
+                "conflict_collection_reviewed_candidate_ids": [
+                    str(self.application.pk)
+                ],
+                "conflict_collection_revision": str(revision),
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        availability.refresh_from_db()
+        self.assertIsNone(availability.conflict_collection_review_revision)
+        self.assertEqual(
+            availability.conflict_collection_reviewed_candidate_ids,
+            [],
+        )
+        self.assertFalse(
+            ConflictReviewAuditEvent.objects.filter(
+                admission=self.admission,
+                actor=self.admin_user,
+                subject_user=self.member,
+                action=ConflictReviewAuditEvent.ACTION_SUBMITTED,
+            ).exists()
         )
 
     def test_availability_write_rechecks_admin_authority_after_lock(self):
