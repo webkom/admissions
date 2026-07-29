@@ -327,6 +327,7 @@ const AdmissionDateTimePicker: React.FC<AdmissionDateTimePickerProps> = ({
           )
           ?.focus();
       });
+      return isoDate;
     },
     [minDate],
   );

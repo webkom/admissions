@@ -286,6 +286,33 @@ describe("admission date and time fields", () => {
     );
   });
 
+  it("keeps rapid keyboard navigation cumulative across a month boundary", () => {
+    mountPicker("?value=2026-07-31T13%3A12%3A00");
+    cy.get("#open_from").click();
+    cy.focused()
+      .should("have.attr", "data-calendar-date", "2026-07-31")
+      .type("{rightarrow}".repeat(9), { delay: 0 });
+    cy.get(
+      '[data-cy="date-dialog-open_from"] [data-calendar-date][tabindex="0"]',
+    ).should("have.length", 1);
+    cy.focused()
+      .should("have.attr", "data-calendar-date", "2026-08-09")
+      .type("{enter}");
+    cy.get("[data-cy=committed-datetime]").should(
+      "have.text",
+      "2026-08-09T13:12:00",
+    );
+  });
+
+  it("continues from the clamped minimum during rapid keyboard input", () => {
+    mountPicker("?value=2026-07-20T14%3A30%3A00&min=2026-07-20T14%3A30%3A00");
+    cy.get("#open_from").click();
+    cy.focused()
+      .should("have.attr", "data-calendar-date", "2026-07-20")
+      .type("{leftarrow}{leftarrow}{leftarrow}{rightarrow}", { delay: 0 })
+      .should("have.attr", "data-calendar-date", "2026-07-21");
+  });
+
   it("clamps keyboard month movement to the target month's last day", () => {
     mountPicker("?value=2026-01-31T13%3A12%3A00");
     cy.get("#open_from").click();
