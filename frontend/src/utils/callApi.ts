@@ -1,7 +1,8 @@
 import Cookie from "js-cookie";
 import * as Sentry from "@sentry/browser";
 import config from "src/utils/config";
-import axios, { AxiosError, AxiosResponse } from "axios";
+import axios, { type AxiosError, type AxiosResponse } from "axios";
+import { sanitizeAxiosError } from "src/utils/sanitizeAxiosError";
 
 /**
  * API base
@@ -11,22 +12,36 @@ export const apiClient = axios.create({
   headers: {
     Accept: "application/json",
     "Content-Type": "application/json",
-    "X-CSRFToken": Cookie.get("csrftoken") ?? "",
   },
   timeout: 50000,
 });
 
-/**
- * Report errors to sentry. Registered on the apiClient instance (not the
- * global axios default) so that real API/network errors are actually captured.
- */
+apiClient.interceptors.request.use((request) => {
+  request.headers.set(
+    "X-CSRFToken",
+    Cookie.get(config.CSRF_COOKIE_NAME ?? "csrftoken") ?? "",
+  );
+  return request;
+});
+
 apiClient.interceptors.response.use(
   (response: AxiosResponse) => response,
   (error: AxiosError) => {
-    Sentry.setContext("response", {
-      response: error.response,
-    });
-    Sentry.captureException(error);
-    return Promise.reject(error);
+    const status = error.response?.status;
+    if (status === undefined || status >= 500) {
+      Sentry.withScope((scope) => {
+        scope.setTag("api.status", status ?? "network_error");
+        scope.setTag(
+          "api.method",
+          error.config?.method?.toUpperCase() ?? "UNKNOWN",
+        );
+        Sentry.captureException(
+          new Error(
+            status ? `API request failed (${status})` : "API request failed",
+          ),
+        );
+      });
+    }
+    return Promise.reject(sanitizeAxiosError(error));
   },
 );

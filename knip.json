@@ -1,4 +1,13 @@
 {
   "entry": ["frontend/src/index.tsx"],
-  "project": ["frontend/src/**/*.tsx"]
+  "project": ["frontend/src/**/*.tsx"],
+  "cypress": {
+    "entry": [
+      "cypress/e2e/**/*.cy.{js,jsx,ts,tsx}",
+      "cypress/fixtures/entrypoints/**/*.{ts,tsx}",
+      "cypress/plugins/index.js",
+      "cypress/support/commands.{js,ts}",
+      "cypress/support/e2e.{js,jsx,ts,tsx}"
+    ]
+  }
 }

@@ -1,4 +1,5 @@
 import type { Config } from "tailwindcss";
+import { breakpoints } from "./frontend/src/styles/designTokens";
 
 const brand = {
   DEFAULT: "var(--color-brand)",
@@ -19,8 +20,6 @@ const brand = {
   panelBorder: "var(--color-brand-panel-border)",
   activeBorder: "var(--color-brand-active-border)",
   focus: "var(--color-brand-focus)",
-  // The `panel` variant is used as a filled tile background for selected
-  // states. Approximated as the soft brand tint.
   panel: "var(--color-brand-subtle)",
 };
 
@@ -28,12 +27,59 @@ const config: Config = {
   content: ["./frontend/**/*.{ts,tsx,js,jsx,html}"],
   theme: {
     extend: {
+      spacing: {
+        0: "0",
+        px: "var(--border-width-default)",
+        0.5: "calc(var(--spacing-xs) / 2)",
+        1: "var(--spacing-xs)",
+        1.5: "calc(var(--spacing-xs) * 3 / 2)",
+        2: "var(--spacing-sm)",
+        2.5: "calc(var(--spacing-sm) * 5 / 4)",
+        3: "calc(var(--spacing-sm) * 3 / 2)",
+        3.5: "calc(var(--spacing-sm) * 7 / 4)",
+        4: "var(--spacing-md)",
+        5: "calc(var(--spacing-md) * 5 / 4)",
+        6: "var(--spacing-lg)",
+        7: "calc(var(--spacing-lg) * 7 / 6)",
+        8: "var(--spacing-xl)",
+        9: "calc(var(--spacing-xl) * 9 / 8)",
+        10: "var(--spacing-2xl)",
+        11: "calc(var(--spacing-2xl) * 11 / 10)",
+        12: "var(--spacing-3xl)",
+        14: "calc(var(--spacing-3xl) * 7 / 6)",
+        16: "var(--spacing-4xl)",
+        20: "var(--spacing-5xl)",
+        24: "var(--spacing-6xl)",
+        28: "calc(var(--spacing-7xl) * 7 / 8)",
+        32: "var(--spacing-7xl)",
+        36: "calc(var(--spacing-7xl) * 9 / 8)",
+        40: "calc(var(--spacing-7xl) * 5 / 4)",
+        44: "calc(var(--spacing-7xl) * 11 / 8)",
+        48: "calc(var(--spacing-7xl) * 3 / 2)",
+        52: "calc(var(--spacing-7xl) * 13 / 8)",
+        56: "calc(var(--spacing-7xl) * 7 / 4)",
+        60: "calc(var(--spacing-7xl) * 15 / 8)",
+        64: "calc(var(--spacing-7xl) * 2)",
+        72: "calc(var(--spacing-7xl) * 9 / 4)",
+        80: "calc(var(--spacing-7xl) * 5 / 2)",
+        96: "calc(var(--spacing-7xl) * 3)",
+      },
       colors: {
+        white: "var(--color-absolute-white)",
+        black: "var(--color-black)",
         brand,
         success: {
           DEFAULT: "var(--color-success)",
           bg: "var(--color-success-bg)",
+          bgSoft: "var(--color-success-bg-soft)",
           border: "var(--color-success-border)",
+        },
+        coverage: {
+          low: "var(--color-coverage-low)",
+          lowBorder: "var(--color-coverage-low-border)",
+          medium: "var(--color-coverage-medium)",
+          mediumBorder: "var(--color-coverage-medium-border)",
+          text: "var(--color-coverage-text)",
         },
         danger: {
           DEFAULT: "var(--color-danger)",
@@ -47,6 +93,8 @@ const config: Config = {
           soft: "var(--color-surface-soft)",
           subtle: "var(--color-surface-subtle)",
           muted: "var(--color-surface-muted)",
+          mutedSoft: "var(--color-surface-muted-soft)",
+          translucent: "var(--color-surface-translucent)",
           hover: "var(--color-surface-hover)",
           neutral: "var(--color-surface-neutral)",
           disabled: "var(--color-surface-disabled)",
@@ -55,6 +103,8 @@ const config: Config = {
           DEFAULT: "var(--color-border-default)",
           soft: "var(--color-border-soft)",
           muted: "var(--color-border-muted)",
+          mutedSoft: "var(--color-border-muted-soft)",
+          mutedMedium: "var(--color-border-muted-medium)",
           quiet: "var(--color-border-quiet)",
           faint: "var(--color-border-faint)",
         },
@@ -69,18 +119,71 @@ const config: Config = {
           subtle: "var(--color-text-subtle)",
           faded: "var(--color-text-faded)",
           disabled: "var(--color-text-disabled)",
-          white: "#ffffff",
+          white: "var(--color-absolute-white)",
           gray3: "var(--color-gray-3)",
           gray7: "var(--color-gray-7)",
         },
       },
       borderRadius: {
+        sm: "var(--border-radius-sm)",
+        DEFAULT: "var(--border-radius-sm)",
+        md: "var(--border-radius-md)",
+        lg: "var(--border-radius-md)",
+        xl: "var(--border-radius-lg)",
+        "2xl": "var(--border-radius-lg)",
         panel: "var(--border-radius-lg)",
+        full: "var(--border-radius-pill)",
+      },
+      borderWidth: {
+        0: "0",
+        DEFAULT: "var(--border-width-default)",
+        2: "var(--border-width-strong)",
+      },
+      maxWidth: {
+        xs: "var(--content-width-xs)",
+        sm: "var(--content-width-compact)",
+        md: "var(--content-width-md)",
+        lg: "var(--content-width-lg)",
+        xl: "var(--content-width-xl)",
+        "6xl": "var(--content-width-wide)",
+        prose: "var(--content-width-prose)",
+        lego: "var(--lego-max-width)",
+        schedule: "var(--schedule-page-max-width)",
+        readable: "var(--content-width-readable)",
+      },
+      maxHeight: {
+        modal: "calc(var(--viewport-min-height) - var(--spacing-4xl))",
+      },
+      minWidth: {
+        "application-table": "var(--application-table-min-width)",
+        "schedule-table": "var(--schedule-table-min-width)",
+      },
+      width: {
+        "control-short": "var(--control-width-short)",
+        "schedule-label": "var(--schedule-label-width)",
+        "schedule-name": "var(--schedule-name-width)",
+      },
+      height: {
+        "control-sm": "var(--control-height-sm)",
+        "control-md": "var(--control-height-md)",
+        "schedule-progress": "var(--schedule-progress-height)",
+      },
+      minHeight: {
+        viewport: "var(--viewport-min-height)",
+        "control-sm": "var(--control-height-sm)",
+        "control-md": "var(--control-height-md)",
+      },
+      gridTemplateColumns: {
+        "admission-overview": "minmax(0, 1.4fr) minmax(0, 1fr)",
+        "schedule-config": "var(--schedule-sidebar-width) minmax(0, 1fr)",
+        "auto-card-sm":
+          "repeat(auto-fit, minmax(var(--layout-card-min-sm), 1fr))",
+        "auto-card-md":
+          "repeat(auto-fit, minmax(var(--layout-card-min-md), 1fr))",
+        "auto-card-lg":
+          "repeat(auto-fit, minmax(var(--layout-card-min-lg), 1fr))",
       },
       boxShadow: {
-        // Override Tailwind's stock cool-black shadows with the warm-graphite
-        // tinted tokens so `shadow-sm/shadow/shadow-md/shadow-lg` are on-brand
-        // everywhere without touching each call site.
         sm: "var(--shadow-sm)",
         DEFAULT: "var(--shadow-md)",
         md: "var(--shadow-md)",
@@ -94,58 +197,194 @@ const config: Config = {
         "tint-sm": "var(--shadow-tint-sm)",
       },
       ringWidth: {
-        3: "3px",
+        1: "var(--border-width-default)",
+        2: "var(--border-width-strong)",
+        3: "var(--focus-ring-width)",
+      },
+      outlineWidth: {
+        0: "0",
+        1: "var(--border-width-default)",
+        2: "var(--border-width-strong)",
+      },
+      outlineOffset: {
+        0: "0",
+        1: "var(--border-width-default)",
+        2: "var(--focus-ring-offset)",
+      },
+      opacity: {
+        0: "var(--opacity-hidden)",
+        5: "var(--opacity-minimal)",
+        10: "var(--opacity-soft)",
+        30: "var(--opacity-low)",
+        40: "var(--opacity-faint)",
+        50: "var(--opacity-disabled)",
+        55: "var(--opacity-medium)",
+        60: "var(--opacity-muted)",
+        70: "var(--opacity-subtle)",
+        80: "var(--opacity-hover)",
+        100: "var(--opacity-visible)",
+      },
+      transitionDuration: {
+        DEFAULT: "var(--transition-duration-standard)",
+        100: "var(--transition-duration-fast)",
+        150: "var(--transition-duration-standard)",
+        200: "var(--transition-duration-medium)",
+        500: "var(--transition-duration-progress)",
+      },
+      transitionTimingFunction: {
+        DEFAULT: "var(--easing)",
+        out: "var(--easing)",
+      },
+      backdropBlur: {
+        sm: "var(--backdrop-blur-sm)",
+      },
+      zIndex: {
+        10: "var(--content-raised-layer)",
+        30: "var(--popover-layer)",
+        modal: "var(--modal-layer)",
+        drawer: "var(--drawer-layer)",
+        toast: "var(--toast-layer)",
       },
       fontSize: {
-        nano: ["0.5625rem", { lineHeight: "0.875rem" }],
-        tiny: ["0.65rem", { lineHeight: "1rem" }],
-        label: ["0.7rem", { lineHeight: "1rem" }],
-        detail: ["0.8rem", { lineHeight: "1.15rem" }],
-        ui: ["0.875rem", { lineHeight: "1.25rem" }],
-        title: ["1rem", { lineHeight: "1.4rem" }],
-        action: ["1rem", { lineHeight: "1.5rem" }],
-        "body-lg": ["1.125rem", { lineHeight: "1.7rem" }],
-        countdown: ["2rem", { lineHeight: "2.25rem" }],
-        "display-sm": ["1.875rem", { lineHeight: "2.25rem" }],
-        "display-md": ["2.25rem", { lineHeight: "2.5rem" }],
-        "display-lg": ["3rem", { lineHeight: "3.25rem" }],
+        xs: ["var(--font-size-xs)", { lineHeight: "var(--line-height-tiny)" }],
+        sm: ["var(--font-size-sm)", { lineHeight: "var(--line-height-ui)" }],
+        base: [
+          "var(--font-size-md)",
+          { lineHeight: "var(--line-height-action)" },
+        ],
+        lg: [
+          "var(--font-size-lg)",
+          { lineHeight: "var(--line-height-body-lg)" },
+        ],
+        xl: [
+          "var(--font-size-heading-xs)",
+          { lineHeight: "var(--line-height-body-lg)" },
+        ],
+        nano: [
+          "var(--font-size-nano)",
+          { lineHeight: "var(--line-height-nano)" },
+        ],
+        tiny: [
+          "var(--font-size-tiny)",
+          { lineHeight: "var(--line-height-tiny)" },
+        ],
+        label: [
+          "var(--font-size-label)",
+          { lineHeight: "var(--line-height-tiny)" },
+        ],
+        detail: [
+          "var(--font-size-detail)",
+          { lineHeight: "var(--line-height-detail)" },
+        ],
+        ui: ["var(--font-size-ui)", { lineHeight: "var(--line-height-ui)" }],
+        title: [
+          "var(--font-size-title)",
+          { lineHeight: "var(--line-height-title)" },
+        ],
+        action: [
+          "var(--font-size-md)",
+          { lineHeight: "var(--line-height-action)" },
+        ],
+        "body-lg": [
+          "var(--font-size-lg)",
+          { lineHeight: "var(--line-height-body-lg)" },
+        ],
+        countdown: [
+          "var(--font-size-countdown)",
+          { lineHeight: "var(--line-height-countdown)" },
+        ],
+        "display-sm": [
+          "var(--font-size-xl)",
+          { lineHeight: "var(--line-height-countdown)" },
+        ],
+        "display-md": [
+          "var(--font-size-display-md)",
+          { lineHeight: "var(--line-height-display-md)" },
+        ],
+        "display-lg": [
+          "var(--font-size-display-lg)",
+          { lineHeight: "var(--line-height-display-lg)" },
+        ],
+      },
+      fontWeight: {
+        normal: "var(--font-weight-normal)",
+        medium: "var(--font-weight-medium)",
+        semibold: "var(--font-weight-semibold)",
+        bold: "var(--font-weight-bold)",
+        extrabold: "var(--font-weight-extrabold)",
       },
       letterSpacing: {
-        badge: "0.06em",
-        "badge-wide": "0.12em",
-        caps: "0.05em",
-        label: "0.08em",
-        // Tight tracking for large display headings rendered on non-h* nodes
-        // (e.g. text-display-* on a div), matching the h1/h2 element styles.
-        display: "-0.03em",
-        "display-tight": "-0.045em",
+        tight: "var(--letter-spacing-ui-tight)",
+        badge: "var(--letter-spacing-badge)",
+        "badge-wide": "var(--letter-spacing-badge-wide)",
+        caps: "var(--letter-spacing-caps)",
+        label: "var(--letter-spacing-label)",
+        display: "var(--letter-spacing-display)",
+        "display-tight": "var(--letter-spacing-display-tight)",
       },
       screens: {
-        // Orientation/size-based variants used across the scheduler UI.
-        // Both are applied as max-width media queries (smaller screens).
-        portrait: { raw: "(max-width: 900px)" },
-        handheld: { raw: "(max-width: 640px)" },
+        sm: breakpoints.handheld,
+        md: breakpoints.medium,
+        tablet: breakpoints.tablet,
+        lg: breakpoints.large,
+        xl: breakpoints.wide,
+        "2xl": breakpoints.ultraWide,
+        narrow: { raw: `(max-width: ${breakpoints.portrait})` },
+        handheld: { raw: `(max-width: ${breakpoints.handheld})` },
+      },
+      lineHeight: {
+        3: "calc(var(--spacing-sm) * 3 / 2)",
+        4: "var(--spacing-md)",
+        5: "calc(var(--spacing-md) * 5 / 4)",
+        6: "var(--spacing-lg)",
+        7: "calc(var(--spacing-lg) * 7 / 6)",
+        8: "var(--spacing-xl)",
+        9: "calc(var(--spacing-xl) * 9 / 8)",
+        10: "var(--spacing-2xl)",
+        none: "var(--line-height-none)",
+        tight: "var(--line-height-tight)",
+        snug: "var(--line-height-snug)",
+        normal: "var(--line-height-normal)",
+        relaxed: "var(--line-height-comfortable)",
+        loose: "var(--line-height-loose)",
       },
       keyframes: {
         "fade-in": {
-          from: { opacity: "0", transform: "translateY(6px)" },
+          from: {
+            opacity: "0",
+            transform: "translateY(var(--motion-distance-sm))",
+          },
           to: { opacity: "1", transform: "translateY(0)" },
         },
         "timeline-pulse": {
           "0%": {
-            boxShadow: "0 0 0 0 rgb(178 28 23 / 55%)",
+            boxShadow: "0 0 0 0 var(--color-brand-pulse-start)",
           },
           "70%": {
-            boxShadow: "0 0 0 14px rgb(178 28 23 / 0%)",
+            boxShadow:
+              "0 0 0 var(--motion-pulse-radius) var(--color-brand-pulse-end)",
           },
           "100%": {
-            boxShadow: "0 0 0 0 rgb(178 28 23 / 0%)",
+            boxShadow: "0 0 0 0 var(--color-brand-pulse-end)",
           },
+        },
+        "overlay-fade-in": {
+          from: { opacity: "0" },
+          to: { opacity: "1" },
+        },
+        "slide-in-right": {
+          from: { transform: "translateX(100%)" },
+          to: { transform: "translateX(0)" },
         },
       },
       animation: {
-        "fade-in": "fade-in 0.25s ease-out",
-        "pulse-brand": "timeline-pulse 2s ease-in-out infinite",
+        "fade-in": "fade-in var(--easing-medium)",
+        "overlay-fade-in": "overlay-fade-in var(--easing-fast)",
+        "slide-in-right": "slide-in-right var(--easing-medium)",
+        spin: "spin var(--animation-duration-spin) var(--linear) infinite",
+        pulse: "pulse var(--animation-duration-pulse) var(--easing) infinite",
+        "pulse-brand":
+          "timeline-pulse var(--animation-duration-pulse) var(--easing) infinite",
       },
       backgroundImage: {
         "toggle-active": "var(--gradient-toggle-active)",

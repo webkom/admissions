@@ -28,6 +28,7 @@
     "@webkom/lego-bricks": "^1.2.1",
     "axios": "^1.7.2",
     "formik": "^2.4.6",
+    "gsap": "^3.15.0",
     "js-cookie": "^3.0.5",
     "lucide-react": "^1.8.0",
     "luxon": "^3.4.4",
