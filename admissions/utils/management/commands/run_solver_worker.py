@@ -17,7 +17,10 @@ from django.utils.dateparse import parse_datetime
 from structlog import get_logger
 
 from admissions.admissions import constants
-from admissions.admissions.admission_access import user_is_admission_admin
+from admissions.admissions.admission_access import (
+    lock_user_admission_memberships,
+    user_is_admission_admin,
+)
 from admissions.admissions.models import Admission, LegoUser, SavedSchedule, SolveJob
 from admissions.admissions.schedule_policy import (
     build_deviation_review,
@@ -295,18 +298,25 @@ class Command(BaseCommand):
         """
         try:
             with transaction.atomic():
-                job_stub = SolveJob.objects.only("admission_id").get(pk=job_id)
+                job_stub = SolveJob.objects.only("admission_id", "requested_by_id").get(
+                    pk=job_id
+                )
                 admission = Admission.objects.select_for_update().get(
                     pk=job_stub.admission_id
                 )
+                if job_stub.requested_by_id is None:
+                    return False
+                user = LegoUser.objects.get(pk=job_stub.requested_by_id)
+                lock_user_admission_memberships(admission, user)
                 saved = SavedSchedule.objects.select_for_update().get(
                     admission=admission
                 )
                 job = SolveJob.objects.select_for_update().get(pk=job_id)
+                if job.admission_id != admission.pk or job.requested_by_id != user.pk:
+                    return False
                 request_data = job.request_data or {}
                 solve_result = job.result if isinstance(job.result, dict) else {}
                 baseline = parse_datetime(request_data.get("baseline_updated_at") or "")
-                user = job.requested_by
                 if (
                     not request_data.get("auto_apply_if_empty")
                     or job.status != SolveJob.STATUS_DONE
@@ -320,10 +330,8 @@ class Command(BaseCommand):
                     or baseline != saved.updated_at
                     or saved.schedule
                     or saved.is_distributed
-                    or user is None
                 ):
                     return False
-                user.__class__ = LegoUser
                 if not user_is_admission_admin(admission, user):
                     return False
                 try:
@@ -367,7 +375,9 @@ class Command(BaseCommand):
                 log.info("solve_job_auto_applied", job_id=str(job.id))
                 return True
         except (
+            LegoUser.DoesNotExist,
             SavedSchedule.DoesNotExist,
+            SolveJob.DoesNotExist,
             ScheduleInputError,
             SchedulePermissionDenied,
             ScheduleRevisionConflict,

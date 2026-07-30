@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="nb">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Solver setup panel test harness</title>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module">
+      import React from "react";
+      import { createRoot } from "react-dom/client";
+      import { SolverSetupHarness } from "./entrypoints/schedulerSolverSetup.tsx";
+      import "/static/frontend/src/styles/globals.css";
+      import "/static/frontend/src/styles/scheduler.css";
+
+      createRoot(document.getElementById("root")).render(
+        React.createElement(SolverSetupHarness),
+      );
+    </script>
+  </body>
+</html>

@@ -6,21 +6,29 @@ from django.db import close_old_connections, transaction
 from django.db.models.query import QuerySet
 from django.test import TestCase, TransactionTestCase, override_settings
 from django.urls import reverse
+from django.utils import timezone
 
 from social_core.exceptions import AuthFailed
 
+from admissions.admissions.admission_access import lock_user_admission_memberships
 from admissions.admissions.constants import RECRUITING
 from admissions.admissions.interview_workflow import update_interview_status
 from admissions.admissions.models import (
     Group,
     GroupApplication,
+    InterviewAvailability,
     LegoUser,
     Membership,
     SavedSchedule,
+    SolveJob,
     UserApplication,
 )
+from admissions.admissions.schedule_invalidation import invalidate_schedule_scope
+from admissions.admissions.schedule_validation import canonicalize_solver_payload
+from admissions.admissions.solve_jobs import planning_input_fingerprint
 from admissions.admissions.tests.utils import create_admission
 from admissions.oauth import update_custom_user_details, use_existing_lego_user
+from admissions.utils.management.commands import run_solver_worker
 
 
 class OAuthMembershipSyncTestCase(TestCase):
@@ -511,6 +519,172 @@ class ConcurrentOAuthMembershipSyncTestCase(TransactionTestCase):
             application.interview_status,
             UserApplication.INTERVIEW_STATUS_CONFIRMED,
         )
+        self.assertEqual(
+            list(
+                Membership.objects.filter(user=self.user).values_list("role", flat=True)
+            ),
+            ["member"],
+        )
+
+    def test_oauth_revocation_and_solver_auto_apply_use_one_lock_order(self):
+        admission = create_admission(
+            created_by=self.user,
+            slug="oauth-solver-auto-apply",
+        )
+        admission.admin_groups.add(self.group)
+        Membership.objects.create(
+            user=self.user,
+            group=self.group,
+            role=RECRUITING,
+        )
+        candidate = LegoUser.objects.create(
+            username="oauth-solver-candidate",
+            lego_id=92103,
+        )
+        application = UserApplication.objects.create(
+            admission=admission,
+            user=candidate,
+        )
+        saved = SavedSchedule.objects.create(
+            admission=admission,
+            schedule=[],
+            start_date="2026-04-20",
+            end_date="2026-04-20",
+            session_duration=60,
+            enabled_slots=["2026-04-20|540"],
+            resolved_blocks=[{"slots": ["2026-04-20|540"]}],
+            panel_size=1,
+        )
+        InterviewAvailability.objects.create(
+            admission=admission,
+            user=self.user,
+            slots=["2026-04-20|540"],
+            submitted_grid_generation=saved.availability_generation,
+            participation=InterviewAvailability.PARTICIPATION_PARTICIPATING,
+        )
+        saved.refresh_from_db()
+        request_data = {
+            "auto_apply_if_empty": True,
+            "baseline_updated_at": saved.updated_at.isoformat(),
+            "candidates": [{"id": str(application.pk)}],
+            "interviewers": [{"id": str(self.user.pk)}],
+            "panel_size": 1,
+            "options": {
+                "policy_version": 2,
+                "panel_stability": "preferred",
+                "availability_fallback": "stop",
+                "same_panel_per_block": False,
+                "allow_overtime": False,
+            },
+            "availability_generation": saved.availability_generation,
+            "layout_version": saved.layout_version,
+        }
+        canonical = canonicalize_solver_payload(
+            admission,
+            saved,
+            request_data,
+            self.user,
+        )
+        request_data["planning_input_fingerprint"] = planning_input_fingerprint(
+            {**request_data, **canonical},
+            saved.schedule,
+        )
+        job = SolveJob.objects.create(
+            admission=admission,
+            requested_by=self.user,
+            status=SolveJob.STATUS_DONE,
+            finished_at=timezone.now(),
+            request_data=request_data,
+            result={
+                "status": "SUCCESS",
+                "schedule": [
+                    {
+                        "candidate_id": str(application.pk),
+                        "candidate": "ignored",
+                        "time": 540,
+                        "panel": [
+                            {
+                                "id": str(self.user.pk),
+                                "name": "ignored",
+                                "is_overtime": False,
+                            }
+                        ],
+                    }
+                ],
+                "unplaceable": [],
+            },
+        )
+
+        oauth_invalidation_ready = Event()
+        release_oauth = Event()
+        worker_membership_lock_starting = Event()
+        thread_context = local()
+        original_invalidate = invalidate_schedule_scope
+        original_membership_lock = lock_user_admission_memberships
+
+        def pause_oauth_invalidation(current_admission, **kwargs):
+            oauth_invalidation_ready.set()
+            self.assertTrue(release_oauth.wait(timeout=5))
+            return original_invalidate(current_admission, **kwargs)
+
+        def observe_membership_lock(current_admission, actor):
+            if getattr(thread_context, "solver_worker", False):
+                worker_membership_lock_starting.set()
+            return original_membership_lock(current_admission, actor)
+
+        def revoke_authority():
+            close_old_connections()
+            try:
+                actor = LegoUser.objects.get(pk=self.user.pk)
+                update_custom_user_details(
+                    None,
+                    {},
+                    user=actor,
+                    response=self.response_for("member"),
+                )
+            finally:
+                close_old_connections()
+
+        def auto_apply():
+            close_old_connections()
+            try:
+                thread_context.solver_worker = True
+                return run_solver_worker.Command()._auto_apply_empty_draft(job.pk)
+            finally:
+                close_old_connections()
+
+        with (
+            mock.patch(
+                "admissions.oauth.invalidate_schedule_scope",
+                side_effect=pause_oauth_invalidation,
+            ),
+            mock.patch(
+                "admissions.admissions.schedule_workflow."
+                "lock_user_admission_memberships",
+                side_effect=observe_membership_lock,
+            ),
+            mock.patch.object(
+                run_solver_worker,
+                "lock_user_admission_memberships",
+                side_effect=observe_membership_lock,
+                create=True,
+            ),
+            mock.patch.object(run_solver_worker.log, "exception") as log_exception,
+            ThreadPoolExecutor(max_workers=2) as executor,
+        ):
+            oauth_future = executor.submit(revoke_authority)
+            self.assertTrue(oauth_invalidation_ready.wait(timeout=5))
+            worker_future = executor.submit(auto_apply)
+            self.assertTrue(worker_membership_lock_starting.wait(timeout=5))
+            release_oauth.set()
+            oauth_future.result(timeout=8)
+            self.assertFalse(worker_future.result(timeout=8))
+            log_exception.assert_not_called()
+
+        saved.refresh_from_db()
+        job.refresh_from_db()
+        self.assertEqual(saved.schedule, [])
+        self.assertIsNone(job.applied_at)
         self.assertEqual(
             list(
                 Membership.objects.filter(user=self.user).values_list("role", flat=True)

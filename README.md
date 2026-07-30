@@ -166,7 +166,7 @@ the web request. The frontend enqueues a `SolveJob`, the worker picks up pending
 jobs and runs them, and the frontend polls for the result.
 
 You must run the worker for the interview-distribution ("Fordel intervjuer")
-feature to produce results — without it, solve jobs stay `PENDING` forever.
+feature to produce results - without it, solve jobs stay `PENDING` forever.
 
 ```sh
 # Run alongside the Django server (a 5th terminal in development)
