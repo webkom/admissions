@@ -229,6 +229,11 @@ class Command(BaseCommand):
                 "day_end_minute": minutes[-1] + 60,
                 "chunk_size": len(minutes),
                 "chunk_break_minutes": 0,
+                "block_mode": SavedSchedule.BLOCK_MODE_STANDARD,
+                "resolved_blocks": [],
+                "layout_version": 2,
+                "slot_overrides": [],
+                "availability_generation": 1,
                 "panel_size": 1,
                 "solver_options": {
                     "policy_version": 2,
@@ -252,6 +257,9 @@ class Command(BaseCommand):
                 "slots": enabled_slots,
                 "conflicts": [],
                 "reviewed_candidate_ids": reviewed_candidate_ids,
+                "participation": InterviewAvailability.PARTICIPATION_PARTICIPATING,
+                "experience_level": InterviewAvailability.EXPERIENCE_EXPERIENCED,
+                "submitted_grid_generation": 1,
             },
         )
         SolveJob.objects.filter(admission=admission).delete()

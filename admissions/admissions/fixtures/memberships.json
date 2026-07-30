@@ -7,5 +7,14 @@
     "group": "7823814e-7bb2-4e51-9653-03f27216f2be",
     "role": "recruiting"
   }
-}
+  },
+  {
+    "model": "admissions.membership",
+    "pk": "18c86532-9eeb-44bc-9db2-1df8e81859b2",
+    "fields": {
+      "user": "a8ef4e3d-9e1f-44f3-8ed2-8d1d2d147404",
+      "group": "7823814e-7bb2-4e51-9653-03f27216f2be",
+      "role": "member"
+    }
+  }
 ]

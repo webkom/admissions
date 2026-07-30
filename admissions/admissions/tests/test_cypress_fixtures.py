@@ -83,6 +83,16 @@ class CypressFixturePreparationTestCase(TestCase):
                 set(availability.reviewed_candidate_ids),
                 set(Command.cypress_candidate_ids),
             )
+            self.assertEqual(
+                availability.participation,
+                InterviewAvailability.PARTICIPATION_PARTICIPATING,
+            )
+            group = admission.groups.get()
+            self.assertEqual(Membership.objects.filter(group=group).count(), 2)
+            self.assertCountEqual(
+                Membership.objects.filter(group=group).values_list("role", flat=True),
+                ["recruiting", "member"],
+            )
             self.assertEqual(Session.objects.count(), 0)
 
             client = Client(enforce_csrf_checks=True)
