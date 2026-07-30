@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { Suspense, useEffect, useState } from "react";
 import { Route, Routes, useParams } from "react-router-dom";
 import styled from "styled-components";
 
@@ -21,6 +21,10 @@ import LoadingBall from "src/components/LoadingBall";
 import NavBar from "src/components/NavBar";
 import NotFoundPage from "./NotFoundPage";
 import RequireAuth from "src/components/RequireAuth";
+import { canOpenScheduleWorkspace } from "src/utils/admissionAccess";
+import config from "src/utils/config";
+
+const SchedulePage = React.lazy(() => import("src/routes/SchedulePage"));
 
 interface SelectedGroups {
   [key: string]: boolean;
@@ -42,6 +46,9 @@ const ApplicationPortal = () => {
     error,
   } = useAdmission(admissionSlug ?? "");
   const { groups } = admission ?? {};
+  const canOpenSchedule = admission
+    ? canOpenScheduleWorkspace(admission.userdata)
+    : false;
 
   const toggleGroup = (name: string) => {
     setSelectedGroups({
@@ -152,6 +159,20 @@ const ApplicationPortal = () => {
                 <RequireAuth auth={!!admission?.userdata.is_privileged}>
                   <AdmissionAdmin />
                 </RequireAuth>
+              }
+            />
+            <Route
+              path="/schedule"
+              element={
+                config.SCHEDULER_ENABLED === false ? (
+                  <p role="status">Intervjuplanlegging er ikke tilgjengelig.</p>
+                ) : (
+                  <Suspense fallback={<LoadingBall />}>
+                    <RequireAuth auth={canOpenSchedule}>
+                      <SchedulePage />
+                    </RequireAuth>
+                  </Suspense>
+                )
               }
             />
             <Route path="*" element={<NotFoundPage />} />
