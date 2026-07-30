@@ -1,12 +1,16 @@
 import React, { PropsWithChildren } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import styled from "styled-components";
 import { media } from "src/styles/mediaQueries";
 
 import AbakusLogo from "src/components/AbakusLogo";
 import { isLoggedIn, isManager } from "src/utils/djangoData";
 import LinkButton from "src/components/LinkButton";
+import { handleSensitiveLogoutLink } from "src/query/sensitiveActorSync";
 
 const LandingPageSkeleton: React.FC<PropsWithChildren> = ({ children }) => {
+  const queryClient = useQueryClient();
+
   return (
     <Container>
       <BrandContainer>
@@ -23,7 +27,12 @@ const LandingPageSkeleton: React.FC<PropsWithChildren> = ({ children }) => {
         {!isLoggedIn() ? (
           <a href="/login/lego/">Logg inn</a>
         ) : (
-          <a href="/logout/">Logg ut</a>
+          <a
+            href="/logout/"
+            onClick={(event) => handleSensitiveLogoutLink(queryClient, event)}
+          >
+            Logg ut
+          </a>
         )}
       </BottomLinkWrapper>
     </Container>

@@ -1,54 +1,75 @@
-import React, { Suspense, useEffect, useState } from "react";
+import React, { Suspense, useEffect, useLayoutEffect, useState } from "react";
 import { Route, Routes, useParams } from "react-router-dom";
 import styled from "styled-components";
 
 import {
+  createDraftAdmissionScope,
   getIsEditingDraft,
   getSelectedGroupsDraft,
   saveIsEditingDraft,
   saveSelectedGroupsDraft,
+  setDraftAdmissionScope,
 } from "src/utils/draftHelper";
-import { isLoggedIn } from "src/utils/djangoData";
+import djangoData, { isLoggedIn } from "src/utils/djangoData";
 
 import { useAdmission, useMyApplication } from "src/query/hooks";
-
-import ApplicationForm from "src/routes/ApplicationForm";
-import ReceiptForm from "src/routes/ReceiptForm";
-import GroupsPage from "src/routes/GroupsPage";
-import AdmissionAdmin from "src/routes/AdmissionAdmin";
 
 import LoadingBall from "src/components/LoadingBall";
 import NavBar from "src/components/NavBar";
 import NotFoundPage from "./NotFoundPage";
 import RequireAuth from "src/components/RequireAuth";
-import { canOpenScheduleWorkspace } from "src/utils/admissionAccess";
+import {
+  canAdministerApplications,
+  canOpenScheduleWorkspace,
+} from "src/utils/admissionAccess";
 import config from "src/utils/config";
 
-const SchedulePage = React.lazy(() => import("src/routes/SchedulePage"));
+const ApplicationForm = React.lazy(() => import("src/routes/ApplicationForm"));
+const ReceiptForm = React.lazy(() => import("src/routes/ReceiptForm"));
+const GroupsPage = React.lazy(() => import("src/routes/GroupsPage"));
+const AdmissionAdmin = React.lazy(() => import("src/routes/AdmissionAdmin"));
+const SchedulePage = React.lazy(() => import("./SchedulePage"));
 
 interface SelectedGroups {
   [key: string]: boolean;
 }
 
 const ApplicationPortal = () => {
-  const { admissionSlug } = useParams();
-  const [selectedGroups, setSelectedGroups] = useState<SelectedGroups>(
-    getSelectedGroupsDraft(),
+  const { admissionSlug, "*": portalPath } = useParams();
+  const userId = djangoData.user.id ?? "";
+  const draftScope = createDraftAdmissionScope(admissionSlug ?? "", userId);
+
+  const [selectedGroups, setSelectedGroups] = useState<SelectedGroups>(() =>
+    getSelectedGroupsDraft(draftScope),
   );
   const [isEditingApplication, setIsEditingApplication] = useState<
     boolean | null
   >(null);
+  const [activeDraftScope, setActiveDraftScope] = useState<string | null>(null);
+
+  useLayoutEffect(() => {
+    setDraftAdmissionScope(admissionSlug ?? "", userId);
+    setSelectedGroups(getSelectedGroupsDraft(draftScope));
+    setIsEditingApplication(null);
+    setActiveDraftScope(draftScope);
+  }, [admissionSlug, draftScope, userId]);
 
   const { data: myApplication } = useMyApplication(admissionSlug ?? "");
   const {
     data: admission,
-    isFetching,
+    isLoading,
     error,
   } = useAdmission(admissionSlug ?? "");
   const { groups } = admission ?? {};
   const canOpenSchedule = admission
     ? canOpenScheduleWorkspace(admission.userdata)
     : false;
+  const canOpenApplicationsAdmin = admission
+    ? canAdministerApplications(admission.userdata)
+    : false;
+  const isScheduleRoute = portalPath?.replace(/^\/+/, "") === "schedule";
+  const isScheduleAccessFailure =
+    isScheduleRoute && [401, 403].includes(error?.response?.status ?? 0);
 
   const toggleGroup = (name: string) => {
     setSelectedGroups({
@@ -65,28 +86,14 @@ const ApplicationPortal = () => {
     saveSelectedGroupsDraft(selectedGroups);
   };
 
-  const initializeState = () => {
-    const parsedSelectedGroups = getSelectedGroupsDraft();
-
-    if (parsedSelectedGroups != null) {
-      setSelectedGroups(parsedSelectedGroups);
-    }
-  };
-
   useEffect(() => {
-    initializeState();
-  }, []);
-
-  useEffect(() => {
-    // Only run on first load after myApplication is set
     if (isEditingApplication === null && myApplication !== undefined) {
-      // Set to is not editing if myApplication exists (user has submitted an application)
       setIsEditingApplication(!myApplication);
     }
   }, [isEditingApplication, myApplication]);
 
   useEffect(() => {
-    if (isFetching) return;
+    if (isLoading) return;
     setIsEditingApplication(!myApplication || getIsEditingDraft());
     if (!myApplication) return;
     setSelectedGroups(
@@ -94,17 +101,19 @@ const ApplicationPortal = () => {
         ?.map((a) => a.group.name.toLowerCase())
         .reduce((obj, a) => ({ ...obj, [a]: true }), {}),
     );
-  }, [myApplication]);
+  }, [isLoading, myApplication]);
 
   useEffect(() => {
+    if (activeDraftScope !== draftScope) return;
     persistState();
-  }, [selectedGroups]);
+  }, [activeDraftScope, draftScope, selectedGroups]);
 
   useEffect(() => {
+    if (activeDraftScope !== draftScope) return;
     persistState();
     if (isEditingApplication === null) return;
     saveIsEditingDraft(isEditingApplication);
-  }, [isEditingApplication]);
+  }, [activeDraftScope, draftScope, isEditingApplication]);
 
   useEffect(() => {
     if (admission?.groups.length === 1) {
@@ -118,65 +127,79 @@ const ApplicationPortal = () => {
     if (error.response?.status === 404) {
       return <NotFoundPage />;
     }
+    if (isScheduleAccessFailure) {
+      return (
+        <PageWrapper>
+          <NavBar isEditing={false} />
+          <ContentContainer>
+            <Suspense fallback={<LoadingBall />}>
+              <SchedulePage />
+            </Suspense>
+          </ContentContainer>
+        </PageWrapper>
+      );
+    }
     return <div>Error: {error.message}</div>;
-  } else if (isFetching) {
+  } else if (isLoading || activeDraftScope !== draftScope) {
     return <LoadingBall />;
   } else {
     return (
       <PageWrapper>
         <NavBar isEditing={!!isEditingApplication} />
         <ContentContainer>
-          <Routes>
-            <Route
-              path="/velg-grupper"
-              element={
-                <GroupsPage
-                  toggleGroup={toggleGroup}
-                  selectedGroups={selectedGroups}
-                />
-              }
-            />
-            <Route
-              path="/min-soknad"
-              element={
-                myApplication && !isEditingApplication ? (
-                  <ReceiptForm toggleIsEditing={toggleIsEditing} />
-                ) : (
-                  <ApplicationForm
+          <Suspense fallback={<LoadingBall />}>
+            <Routes>
+              <Route
+                path="/velg-grupper"
+                element={
+                  <GroupsPage
                     toggleGroup={toggleGroup}
-                    toggleIsEditing={toggleIsEditing}
-                    admission={admission}
-                    groups={groups ?? []}
-                    myApplication={myApplication}
                     selectedGroups={selectedGroups}
                   />
-                )
-              }
-            />
-            <Route
-              path="/admin/*"
-              element={
-                <RequireAuth auth={!!admission?.userdata.is_privileged}>
-                  <AdmissionAdmin />
-                </RequireAuth>
-              }
-            />
-            <Route
-              path="/schedule"
-              element={
-                config.SCHEDULER_ENABLED === false ? (
-                  <p role="status">Intervjuplanlegging er ikke tilgjengelig.</p>
-                ) : (
-                  <Suspense fallback={<LoadingBall />}>
+                }
+              />
+              <Route
+                path="/min-soknad"
+                element={
+                  myApplication && !isEditingApplication ? (
+                    <ReceiptForm toggleIsEditing={toggleIsEditing} />
+                  ) : (
+                    <ApplicationForm
+                      toggleGroup={toggleGroup}
+                      toggleIsEditing={toggleIsEditing}
+                      admission={admission}
+                      groups={groups ?? []}
+                      myApplication={myApplication}
+                      selectedGroups={selectedGroups}
+                    />
+                  )
+                }
+              />
+              <Route
+                path="/admin/*"
+                element={
+                  <RequireAuth auth={canOpenApplicationsAdmin}>
+                    <AdmissionAdmin />
+                  </RequireAuth>
+                }
+              />
+              <Route
+                path="/schedule"
+                element={
+                  config.SCHEDULER_ENABLED === false ? (
+                    <p role="status">
+                      Intervjuplanlegging er ikke tilgjengelig.
+                    </p>
+                  ) : (
                     <RequireAuth auth={canOpenSchedule}>
                       <SchedulePage />
                     </RequireAuth>
-                  </Suspense>
-                )
-              }
-            />
-            <Route path="*" element={<NotFoundPage />} />
-          </Routes>
+                  )
+                }
+              />
+              <Route path="*" element={<NotFoundPage />} />
+            </Routes>
+          </Suspense>
         </ContentContainer>
       </PageWrapper>
     );
@@ -185,17 +208,13 @@ const ApplicationPortal = () => {
 
 export default ApplicationPortal;
 
-/** Styles **/
-
 const ContentContainer = styled.div`
   width: 100%;
 `;
-
-/** Styles **/
 
 const PageWrapper = styled.div`
   display: flex;
   flex-direction: column;
   align-items: center;
-  min-height: calc(100vh - 70px);
+  min-height: var(--page-min-height);
 `;

@@ -6,7 +6,7 @@ import LoadingBall from "src/components/LoadingBall";
 import GroupStatistics from "./components/GroupStatistics";
 import { replaceQuotationMarks } from "src/utils/methods";
 import { useAdmission, useAdminApplications } from "src/query/hooks";
-import { useParams } from "react-router-dom";
+import { useParams, useSearchParams } from "react-router-dom";
 
 import AdmissionsContainer from "src/containers/AdmissionsContainer";
 import { Application } from "src/types";
@@ -20,9 +20,11 @@ import { InputFieldModel } from "src/utils/jsonFields";
 import CSVExportHandler, {
   CompleteCsvData,
 } from "./components/CSVExportHandler";
+import { getAdmissionAccessProjection } from "src/utils/admissionAccess";
 
 const ViewApplications = () => {
   const { admissionSlug } = useParams();
+  const [searchParams] = useSearchParams();
   const [sortedApplications, setSortedApplications] = useState<Application[]>(
     [],
   );
@@ -39,10 +41,39 @@ const ViewApplications = () => {
     isFetching: admissionIsFetching,
   } = useAdmission(admissionSlug ?? "");
   const { groups } = admission ?? {};
+  const accessProjection = admission
+    ? getAdmissionAccessProjection(admission.userdata)
+    : null;
+  const hasAccessProjection = Boolean(
+    admission &&
+      (admission.userdata.group_contexts !== undefined ||
+        admission.userdata.admission_actions !== undefined),
+  );
+  const canAdministerAllApplications = Boolean(
+    admission &&
+      (accessProjection?.admissionActions.administer_all_applications ||
+        (!hasAccessProjection && admission.userdata.is_admin)),
+  );
+  const representedGroupIds = new Set(
+    accessProjection?.groupContexts
+      .filter((context) => context.actions.administer_group_applications)
+      .map((context) => context.group.id) ?? [],
+  );
   const availableGroups = (groups ?? []).filter(
     (group) =>
-      admission?.userdata.is_admin ||
-      group.name === djangoData.user.representative_of_group,
+      canAdministerAllApplications ||
+      representedGroupIds.has(String(group.pk)) ||
+      (!hasAccessProjection &&
+        group.name === djangoData.user.representative_of_group),
+  );
+  const requestedGroupId = searchParams.get("group");
+  const scopedGroup = requestedGroupId
+    ? availableGroups.find((group) => String(group.pk) === requestedGroupId)
+    : undefined;
+  const hasInvalidGroupScope = Boolean(requestedGroupId && !scopedGroup);
+  const effectiveSelectedGroups = useMemo(
+    () => (scopedGroup ? [scopedGroup.name] : selectedGroups),
+    [scopedGroup, selectedGroups],
   );
   const groupQuestionFields = availableGroups.flatMap((group) =>
     (group.header_fields ?? [])
@@ -82,14 +113,27 @@ const ViewApplications = () => {
 
   const filteredApplications = useMemo(
     () =>
-      sortedApplications.filter(
-        (application) =>
-          selectedGroups.length === 0 ||
-          application.group_applications.find((groupApplication) =>
-            selectedGroups.includes(groupApplication.group.name),
-          ),
-      ),
-    [selectedGroups, sortedApplications],
+      sortedApplications
+        .filter(
+          (application) =>
+            effectiveSelectedGroups.length === 0 ||
+            application.group_applications.find((groupApplication) =>
+              effectiveSelectedGroups.includes(groupApplication.group.name),
+            ),
+        )
+        .map((application) =>
+          scopedGroup
+            ? {
+                ...application,
+                group_applications: application.group_applications.filter(
+                  (groupApplication) =>
+                    String(groupApplication.group.pk) ===
+                    String(scopedGroup.pk),
+                ),
+              }
+            : application,
+        ),
+    [effectiveSelectedGroups, scopedGroup, sortedApplications],
   );
 
   const csvData = useMemo(() => {
@@ -153,6 +197,13 @@ const ViewApplications = () => {
     return <LoadingBall />;
   } else if (!admission) {
     return <p>Opptak {admissionSlug} ble ikke funnet i systemet.</p>;
+  } else if (hasInvalidGroupScope) {
+    return (
+      <p>
+        Du har ikke tilgang til denne komitévisningen. Velg komiteen fra
+        opptakets startside.
+      </p>
+    );
   } else {
     return (
       <PageWrapper>
@@ -187,16 +238,19 @@ const ViewApplications = () => {
           </StatisticsWrapper>
 
           <Statistics>
-            {[...availableGroups]
+            {availableGroups
+              .filter((group) => !scopedGroup || group.pk === scopedGroup.pk)
               .sort((a, b) => a.name.localeCompare(b.name))
               .map((group) => (
                 <GroupStatistics
                   key={group.pk}
-                  applications={sortedApplications}
+                  applications={filteredApplications}
                   groupName={group.name}
                   groupLogo={group.logo}
-                  selectedGroups={selectedGroups}
-                  setSelectedGroups={setSelectedGroups}
+                  selectedGroups={effectiveSelectedGroups}
+                  setSelectedGroups={
+                    scopedGroup ? () => undefined : setSelectedGroups
+                  }
                 />
               ))}
           </Statistics>

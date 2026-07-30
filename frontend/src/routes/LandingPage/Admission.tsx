@@ -6,6 +6,8 @@ import FormatTime from "src/components/Time/FormatTime";
 import { Admission as AdmissionInterface } from "src/types";
 import CountDown from "./CountDown";
 import LinkButton from "src/components/LinkButton";
+import { getLandingAccessLinks } from "src/utils/admissionAccess";
+import config from "src/utils/config";
 
 interface AdmissionProps {
   admission: AdmissionInterface;
@@ -18,6 +20,7 @@ const Admission: React.FC<AdmissionProps> = ({ admission }) => {
   const isSingleGroupAdmission = admission?.groups.length === 1;
   const external_link =
     "https://docs.google.com/forms/d/e/1FAIpQLSd4oaU8BADfuVrKCoMmpSQcVVrFCdlPPmP56dKznU0clQt7cg/viewform";
+  const accessLinks = getLandingAccessLinks(admission.slug, admission.userdata);
 
   return (
     <AdmissionWrapper>
@@ -100,13 +103,23 @@ const Admission: React.FC<AdmissionProps> = ({ admission }) => {
               </li>
             )}
 
-            {admission.userdata.is_privileged && (
-              <li>
-                <LinkButton to={`/${admission.slug}/admin/`}>
-                  Gå til admin panel
-                </LinkButton>
+            {accessLinks.applicationAdmin.map((link) => (
+              <li key={link.key}>
+                <LinkButton to={link.to}>{link.label}</LinkButton>
               </li>
-            )}
+            ))}
+            {config.SCHEDULER_ENABLED !== false &&
+              accessLinks.scheduleAdmin.map((link) => (
+                <li key={link.key}>
+                  <LinkButton to={link.to}>{link.label}</LinkButton>
+                </li>
+              ))}
+            {config.SCHEDULER_ENABLED !== false &&
+              accessLinks.scheduleMember.map((link) => (
+                <li key={link.key}>
+                  <LinkButton to={link.to}>{link.label}</LinkButton>
+                </li>
+              ))}
           </LinkWrapper>
         </CountDownWrapper>
       </AdmissionDetails>
