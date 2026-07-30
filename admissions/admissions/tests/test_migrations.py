@@ -10,6 +10,11 @@ from django.db.models.query import QuerySet
 from django.test import TransactionTestCase
 from django.utils import timezone
 
+MIGRATION_0003 = (
+    "admissions",
+    "0003_alter_group_description_alter_group_response_label",
+)
+MIGRATION_0004 = ("admissions", "0004_scheduler_domain")
 MIGRATION_0005 = ("admissions", "0005_scheduler_authority")
 MIGRATION_0006 = ("admissions", "0006_scheduler_workflow")
 
@@ -59,7 +64,7 @@ class MigrationTestCase(TransactionTestCase):
         raise NotImplementedError
 
 
-class AdmissionDateOrderMigrationTestCase(TransactionTestCase):
+class DestructiveMigrationPreflightTestCase(TransactionTestCase):
     def setUp(self):
         super().setUp()
         executor = MigrationExecutor(connection)
@@ -69,7 +74,58 @@ class AdmissionDateOrderMigrationTestCase(TransactionTestCase):
     def restore_schema(self):
         MigrationExecutor(connection).migrate(self.leaf_nodes)
 
-    def test_invalid_dates_block_migration_without_rewriting(self):
+    def test_duplicate_group_applications_block_migration_without_deletion(self):
+        executor = MigrationExecutor(connection)
+        executor.migrate([MIGRATION_0003])
+        apps = executor.loader.project_state([MIGRATION_0003]).apps
+        Group = apps.get_model("admissions", "Group")
+        UserApplication = apps.get_model("admissions", "UserApplication")
+        GroupApplication = apps.get_model("admissions", "GroupApplication")
+        user, admission = create_admission(
+            apps,
+            slug="duplicate-preflight",
+            lego_id=90990,
+        )
+        group = Group.objects.create(
+            name="Duplicate preflight group",
+            lego_id=90991,
+        )
+        application = UserApplication.objects.create(
+            user=user,
+            admission=admission,
+            phone_number="00000000",
+        )
+        first = GroupApplication.objects.create(
+            application=application,
+            group=group,
+            text="first",
+        )
+        second = GroupApplication.objects.create(
+            application=application,
+            group=group,
+            text="second",
+        )
+        self.addCleanup(
+            GroupApplication.objects.filter(pk=second.pk).delete,
+        )
+
+        with self.assertRaisesRegex(
+            RuntimeError,
+            "No rows were deleted",
+        ):
+            MigrationExecutor(connection).migrate([MIGRATION_0004])
+
+        self.assertEqual(
+            set(
+                GroupApplication.objects.filter(application=application).values_list(
+                    "pk",
+                    flat=True,
+                )
+            ),
+            {first.pk, second.pk},
+        )
+
+    def test_invalid_admission_dates_block_migration_without_rewriting(self):
         executor = MigrationExecutor(connection)
         executor.migrate([MIGRATION_0005])
         apps = executor.loader.project_state([MIGRATION_0005]).apps

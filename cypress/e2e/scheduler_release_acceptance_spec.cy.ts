@@ -1,0 +1,500 @@
+import type {
+  Admission,
+  Candidate,
+  InterviewAvailabilityParticipant,
+  SavedSchedule,
+} from "../../frontend/src/types";
+
+const admissionSlug = "webkom-open";
+const schedulePath = `/${admissionSlug}/schedule`;
+const wizardStorageKey = "admissions.wizard.admin.v1";
+
+const assertNoDocumentOverflow = () => {
+  cy.document().then((document) => {
+    const root = document.documentElement;
+    const body = document.body;
+    expect(
+      root.scrollWidth,
+      "document width stays inside the visual viewport",
+    ).to.be.at.most(root.clientWidth + 1);
+    expect(
+      body.scrollWidth,
+      "body width stays inside the visual viewport",
+    ).to.be.at.most(root.clientWidth + 1);
+  });
+};
+
+const visitAuthenticatedScheduler = (width: number, height: number) => {
+  cy.viewport(width, height);
+  cy.intercept("GET", `**/api/admin/admission/${admissionSlug}/schedule/`).as(
+    "releaseSchedule",
+  );
+  cy.intercept("GET", `**/api/admin/admission/${admissionSlug}/candidates/`).as(
+    "releaseCandidates",
+  );
+  cy.intercept(
+    "GET",
+    `**/api/admin/admission/${admissionSlug}/availability/`,
+  ).as("releaseAvailability");
+  cy.login("webkom");
+  cy.visit(schedulePath, {
+    onBeforeLoad(window) {
+      window.localStorage.setItem(wizardStorageKey, "1");
+    },
+  });
+  cy.get('nav[aria-label="Steg i intervjuplanleggingen"]', {
+    timeout: 10000,
+  }).should("be.visible");
+  ["@releaseSchedule", "@releaseCandidates", "@releaseAvailability"].forEach(
+    (requestAlias) => {
+      cy.wait(requestAlias).its("response.statusCode").should("eq", 200);
+    },
+  );
+};
+
+const openPublishedStage = () => {
+  cy.get('nav[aria-label="Steg i intervjuplanleggingen"]')
+    .contains("button", /Publisering|Gjennomføring/)
+    .should("be.enabled")
+    .click();
+  cy.contains("Intervjuplan").should("be.visible");
+  cy.contains("Publisert").should("be.visible");
+};
+
+const setPageScale = (pageScaleFactor: number) =>
+  cy.then(() =>
+    Cypress.automation("remote:debugger:protocol", {
+      command: "Emulation.setPageScaleFactor",
+      params: { pageScaleFactor },
+    }),
+  );
+
+const setReducedMotion = (value: "reduce" | "no-preference") =>
+  cy.then(() =>
+    Cypress.automation("remote:debugger:protocol", {
+      command: "Emulation.setEmulatedMedia",
+      params: {
+        media: "",
+        features: [{ name: "prefers-reduced-motion", value }],
+      },
+    }),
+  );
+
+describe("scheduler release acceptance", () => {
+  afterEach(() => {
+    setPageScale(1);
+    setReducedMotion("no-preference");
+  });
+
+  (
+    [
+      { name: "mobile", width: 390, height: 844 },
+      { name: "tablet", width: 768, height: 900 },
+      { name: "desktop", width: 1280, height: 900 },
+    ] as const
+  ).forEach(({ name, width, height }) => {
+    it(`keeps the authenticated ${name} workflow usable without page overflow`, () => {
+      visitAuthenticatedScheduler(width, height);
+      assertNoDocumentOverflow();
+
+      openPublishedStage();
+      if (name === "mobile") {
+        cy.get('[data-cy="distributed-plan-table-scroll"]')
+          .should("be.visible")
+          .then(($wrapper) => {
+            const wrapper = $wrapper[0];
+            expect(
+              wrapper.scrollWidth,
+              "the published table scrolls inside its own region",
+            ).to.be.greaterThan(wrapper.clientWidth);
+          })
+          .find("tbody tr")
+          .filter(":has(td:nth-child(2))")
+          .first()
+          .find("td")
+          .eq(1)
+          .then(($candidateCell) => {
+            const cell = $candidateCell[0];
+            expect(
+              getComputedStyle(cell).wordBreak,
+              "candidate names use readable word wrapping",
+            ).to.equal("normal");
+            expect(
+              cell.getBoundingClientRect().width,
+              "candidate column keeps a readable width",
+            ).to.be.at.least(160);
+          });
+      }
+      cy.contains("summary", "Flere handlinger")
+        .scrollIntoView()
+        .should("be.visible")
+        .then(($summary) => {
+          const bounds = $summary[0].getBoundingClientRect();
+          expect(bounds.left).to.be.at.least(0);
+          expect(bounds.right).to.be.at.most(width + 1);
+          expect(bounds.width).to.be.at.least(24);
+          expect(bounds.height).to.be.at.least(24);
+        });
+      assertNoDocumentOverflow();
+      cy.screenshot(`scheduler-release/${name}-published`, {
+        capture: "viewport",
+      });
+    });
+  });
+
+  it("keeps core navigation readable and operable at 200 percent page scale", () => {
+    visitAuthenticatedScheduler(1280, 900);
+    setPageScale(2);
+
+    cy.get('nav[aria-label="Steg i intervjuplanleggingen"]')
+      .scrollIntoView()
+      .should("be.visible")
+      .within(() => {
+        cy.contains("button", "Grunnlag").should("be.visible");
+        cy.contains("button", "Planutkast").should("be.visible");
+        cy.contains("button", /Publisering|Gjennomføring/).should("be.visible");
+      });
+
+    openPublishedStage();
+    cy.contains("summary", "Flere handlinger")
+      .scrollIntoView()
+      .should("be.visible")
+      .click();
+    cy.contains('[role="menuitem"]', "Eksporter plan").should("be.focused");
+    cy.focused().type("{downarrow}");
+    cy.contains('[role="menuitem"]', "Lås opp og rediger").should("be.focused");
+    cy.focused().type("{esc}");
+    cy.contains("summary", "Flere handlinger").should("be.focused");
+    assertNoDocumentOverflow();
+    cy.screenshot("scheduler-release/desktop-200-percent", {
+      capture: "viewport",
+    });
+  });
+
+  it("captures the complete publication gate without changing the saved fixture", () => {
+    cy.viewport(1280, 900);
+    cy.login("webkom");
+    cy.request<SavedSchedule>(
+      `/api/admin/admission/${admissionSlug}/schedule/`,
+    ).then(({ body: publishedSchedule }) => {
+      cy.request<Candidate[]>(
+        `/api/admin/admission/${admissionSlug}/candidates/`,
+      ).then(({ body: candidates }) => {
+        cy.request<InterviewAvailabilityParticipant[]>(
+          `/api/admin/admission/${admissionSlug}/availability/`,
+        ).then(({ body: participants }) => {
+          const collectionRevision = "cypress-complete-collection";
+          const collectionCandidateIds = candidates.map(
+            (candidate) => candidate.id,
+          );
+          const collectionParticipants = participants
+            .filter(
+              (participant) =>
+                participant.participation !== "not_participating",
+            )
+            .map((participant) => ({
+              ...participant,
+              participation: "participating" as const,
+              has_submitted: true,
+              conflict_collection_candidate_ids: collectionCandidateIds,
+              conflict_collection_revision: collectionRevision,
+              conflict_collection_complete: true,
+            }));
+          const collectionParticipantIds = collectionParticipants.map(
+            (participant) => participant.user_id,
+          );
+
+          cy.intercept(
+            "GET",
+            `**/api/admin/admission/${admissionSlug}/schedule/`,
+            {
+              statusCode: 200,
+              body: {
+                ...publishedSchedule,
+                is_distributed: false,
+                name_visibility: "hidden",
+                conflict_collection_open: false,
+                conflict_collection_revision: collectionRevision,
+                conflict_collection_candidate_ids: collectionCandidateIds,
+                conflict_collection_participant_ids: collectionParticipantIds,
+              },
+            },
+          ).as("publicationReadySchedule");
+          cy.intercept(
+            "GET",
+            `**/api/admin/admission/${admissionSlug}/availability/`,
+            {
+              statusCode: 200,
+              body: collectionParticipants,
+            },
+          );
+
+          cy.visit(schedulePath, {
+            onBeforeLoad(window) {
+              window.localStorage.setItem(wizardStorageKey, "1");
+            },
+          });
+          cy.wait("@publicationReadySchedule");
+          cy.get('nav[aria-label="Steg i intervjuplanleggingen"]', {
+            timeout: 10000,
+          })
+            .contains("button", "Publisering")
+            .should("be.enabled")
+            .click();
+
+          cy.get("[data-cy=publication-gate]")
+            .should("be.visible")
+            .and("contain.text", "Alle krav er oppfylt.");
+          cy.get("[data-cy=publish-blocked-reason]").should("not.exist");
+          cy.get("[data-cy=publish-plan]")
+            .should("be.enabled")
+            .and("contain.text", "Publiser intervjuplan");
+          assertNoDocumentOverflow();
+          cy.screenshot("scheduler-workflow/08-publication-ready", {
+            capture: "viewport",
+          });
+        });
+      });
+    });
+  });
+
+  it("exposes semantic workflow controls and visible keyboard focus", () => {
+    visitAuthenticatedScheduler(1280, 900);
+    cy.get('nav[aria-label="Steg i intervjuplanleggingen"]')
+      .find("button")
+      .should("have.length", 3)
+      .each(($button) => {
+        expect($button.text().trim()).not.to.equal("");
+        expect($button.attr("type")).to.equal("button");
+      });
+    cy.get('nav[aria-label="Steg i intervjuplanleggingen"]')
+      .contains("button", "Grunnlag")
+      .focus()
+      .should("be.focused")
+      .then(($focused) => {
+        const style = getComputedStyle($focused[0]);
+        expect(style.outlineStyle).not.to.equal("none");
+        expect(parseFloat(style.outlineWidth)).to.be.greaterThan(0);
+      });
+  });
+
+  it("traps and restores keyboard focus while honoring reduced motion", () => {
+    visitAuthenticatedScheduler(1280, 900);
+    setReducedMotion("reduce");
+
+    cy.window().then((window) => {
+      expect(window.matchMedia("(prefers-reduced-motion: reduce)").matches).to
+        .be.true;
+    });
+
+    cy.contains("button", "Hjelp")
+      .as("helpButton")
+      .focus()
+      .should("be.focused")
+      .click();
+    cy.get('[role="dialog"][aria-label="Veiledning"]')
+      .as("wizard")
+      .should("be.visible")
+      .within(() => {
+        cy.get('[aria-live="polite"]').should("contain.text", "Steg 1 av 4");
+        cy.get(".animate-fade-in").then(($animated) => {
+          const style = getComputedStyle($animated[0]);
+          expect(style.animationName).to.equal("none");
+        });
+
+        cy.get("button").first().as("firstWizardButton");
+        cy.get("button").last().as("lastWizardButton");
+        cy.get("@lastWizardButton").focus().trigger("keydown", {
+          key: "Tab",
+          code: "Tab",
+          which: 9,
+        });
+        cy.get("@firstWizardButton").should("be.focused");
+        cy.get("@firstWizardButton").trigger("keydown", {
+          key: "Tab",
+          code: "Tab",
+          which: 9,
+          shiftKey: true,
+        });
+        cy.get("@lastWizardButton").should("be.focused");
+
+        cy.focused().trigger("keydown", {
+          key: "ArrowRight",
+          code: "ArrowRight",
+          which: 39,
+        });
+        cy.get('[aria-live="polite"]').should("contain.text", "Steg 2 av 4");
+        cy.contains("h2", "Sett rammene og samle tilgjengelighet").should(
+          "be.visible",
+        );
+        cy.focused().trigger("keydown", {
+          key: "Escape",
+          code: "Escape",
+          which: 27,
+        });
+      });
+
+    cy.get('[role="dialog"][aria-label="Veiledning"]').should("not.exist");
+    cy.get("@helpButton").should("be.focused");
+  });
+
+  it("does not offer admission-wide name visibility controls to committee recruiters", () => {
+    cy.viewport(1280, 900);
+    cy.login("webkom");
+    cy.request<Admission>(`/api/admission/${admissionSlug}/`).then(
+      ({ body: verifiedAdmission }) => {
+        const memberContext =
+          verifiedAdmission.userdata.group_contexts?.find(
+            (context) => context.group.name === "Webkom",
+          ) ?? verifiedAdmission.userdata.group_contexts?.[0];
+        if (!memberContext) {
+          throw new Error("The recruiter fixture needs a committee context");
+        }
+        const recruiterAdmission: Admission = {
+          ...verifiedAdmission,
+          userdata: {
+            ...verifiedAdmission.userdata,
+            is_admin: false,
+            is_privileged: true,
+            is_recruiter: true,
+            committee_role: "recruiting",
+            committee_groups: ["Webkom"],
+            represented_groups: ["Webkom"],
+            group_contexts: [
+              {
+                ...memberContext,
+                membership_role: "recruiting",
+                membership_roles: ["recruiting"],
+                sources: {
+                  admission_group: true,
+                  admin_group: false,
+                },
+                actions: {
+                  open_member_workspace: true,
+                  administer_group_applications: true,
+                },
+              },
+            ],
+            admission_actions: {
+              administer_all_applications: false,
+              administer_schedule: false,
+              authority_group_ids: [],
+            },
+          },
+        };
+        cy.intercept("GET", `**/api/admission/${admissionSlug}/`, {
+          statusCode: 200,
+          body: recruiterAdmission,
+        });
+
+        cy.visit(
+          `${schedulePath}?mode=member&group=${encodeURIComponent(
+            memberContext.group.id,
+          )}`,
+          {
+            onBeforeLoad(window) {
+              window.localStorage.setItem(wizardStorageKey, "1");
+              window.localStorage.setItem("admissions.wizard.member.v1", "1");
+            },
+          },
+        );
+        cy.get('nav[aria-label="Steg i intervjuplanleggingen"]', {
+          timeout: 10000,
+        }).should("be.visible");
+        cy.get('nav[aria-label="Steg i intervjuplanleggingen"]')
+          .contains("button", "Intervjuplan")
+          .should("be.enabled")
+          .click();
+        cy.contains("Intervjuplan").should("be.visible");
+        cy.contains("Publisert").should("be.visible");
+
+        cy.contains("button", "Mine intervjuer").should("be.visible");
+        cy.get('[aria-label="Synlighet for kandidatnavn"]').should("not.exist");
+      },
+    );
+  });
+
+  it("recovers on the same page only after a fresh server-confirmed scheduler role", () => {
+    cy.viewport(1280, 900);
+    cy.login("webkom");
+    cy.request<Admission>(`/api/admission/${admissionSlug}/`).then(
+      ({ body: verifiedAdmission }) => {
+        let admissionReads = 0;
+        cy.intercept("GET", `**/api/admission/${admissionSlug}/`, (request) => {
+          admissionReads += 1;
+          request.reply(
+            admissionReads === 1
+              ? { statusCode: 403, body: { detail: "Forbidden" } }
+              : { statusCode: 200, body: verifiedAdmission },
+          );
+        }).as("admissionAccess");
+
+        cy.visit(schedulePath, {
+          onBeforeLoad(window) {
+            window.localStorage.setItem(wizardStorageKey, "1");
+          },
+        });
+        cy.wait("@admissionAccess");
+        cy.contains("Kandidatdata er tømt fra visningen.").should("be.visible");
+        cy.contains("button", "Kontroller tilgang").click();
+        cy.wait("@admissionAccess");
+        cy.get('nav[aria-label="Steg i intervjuplanleggingen"]', {
+          timeout: 10000,
+        }).should("be.visible");
+        cy.contains("Kandidatdata er tømt fra visningen.").should("not.exist");
+      },
+    );
+  });
+
+  it("stays fail-closed when a fresh response has no scheduler role", () => {
+    cy.viewport(1280, 900);
+    cy.login("webkom");
+    cy.request<Admission>(`/api/admission/${admissionSlug}/`).then(
+      ({ body: verifiedAdmission }) => {
+        const publicAdmission: Admission = {
+          ...verifiedAdmission,
+          userdata: {
+            ...verifiedAdmission.userdata,
+            is_admin: false,
+            is_privileged: false,
+            is_recruiter: false,
+            committee_role: null,
+            committee_groups: [],
+            represented_groups: [],
+            group_contexts: [],
+            admission_actions: {
+              administer_all_applications: false,
+              administer_schedule: false,
+              authority_group_ids: [],
+            },
+          },
+        };
+        let admissionReads = 0;
+        cy.intercept("GET", `**/api/admission/${admissionSlug}/`, (request) => {
+          admissionReads += 1;
+          request.reply(
+            admissionReads === 1
+              ? { statusCode: 403, body: { detail: "Forbidden" } }
+              : { statusCode: 200, body: publicAdmission },
+          );
+        }).as("admissionAccess");
+
+        cy.visit(schedulePath, {
+          onBeforeLoad(window) {
+            window.localStorage.setItem(wizardStorageKey, "1");
+          },
+        });
+        cy.wait("@admissionAccess");
+        cy.contains("button", "Kontroller tilgang").click();
+        cy.wait("@admissionAccess");
+        cy.contains(
+          "Serveren bekreftet ikke en aktiv rolle i intervjuplanleggingen.",
+        ).should("be.visible");
+        cy.contains("Kandidatdata er tømt fra visningen.").should("be.visible");
+        cy.get('nav[aria-label="Steg i intervjuplanleggingen"]').should(
+          "not.exist",
+        );
+      },
+    );
+  });
+});

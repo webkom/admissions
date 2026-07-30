@@ -4,9 +4,10 @@ from datetime import timedelta
 from threading import Event
 from unittest import mock
 
+from django.contrib.auth.models import AnonymousUser
 from django.core.management import call_command
 from django.db import IntegrityError, close_old_connections, transaction
-from django.test import TestCase, TransactionTestCase, override_settings
+from django.test import RequestFactory, TestCase, TransactionTestCase, override_settings
 from django.urls import reverse
 from django.utils import timezone
 from rest_framework import status
@@ -43,7 +44,7 @@ from admissions.admissions.tests.utils import (
     ScheduleRevisionAPIClient,
     create_admission,
 )
-from admissions.admissions.views import panel_gender_code
+from admissions.admissions.views import AppView, panel_gender_code
 from admissions.oauth import update_custom_user_details
 from admissions.utils.management.commands.run_solver_worker import Command
 
@@ -90,6 +91,16 @@ class SchedulerFeatureGateTestCase(APITestCase):
                     "Intervjuplanleggeren er ikke tilgjengelig ennå. "
                     "Prøv igjen senere.",
                 )
+
+    def test_frontend_receives_the_same_disabled_state(self):
+        request = RequestFactory().get("/")
+        request.user = AnonymousUser()
+        view = AppView()
+        view.setup(request)
+
+        context = view.get_context_data()
+
+        self.assertFalse(context["frontend_config"]["SCHEDULER_ENABLED"])
 
 
 class ConcurrentScheduleAuthorityRevocationTestCase(TransactionTestCase):
@@ -439,77 +450,6 @@ class SavedSchedulePublishSemanticsTestCase(APITestCase):
         self.assertFalse(
             SavedSchedule.objects.get(admission=self.admission).is_distributed
         )
-
-    def test_framework_change_resets_draft_before_conflict_collection(self):
-        saved = self._create_saved(
-            is_distributed=False,
-            with_completed_collection=False,
-        )
-
-        response = self.client.post(
-            self.url,
-            {
-                "session_duration": 30,
-                "schedule": self._schedule(time=600),
-            },
-            format="json",
-        )
-
-        self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
-        self.assertEqual(response.data["session_duration"], 30)
-        self.assertEqual(response.data["schedule"], [])
-        self.assertFalse(response.data["is_distributed"])
-        saved.refresh_from_db()
-        self.assertEqual(saved.schedule, [])
-
-    def test_framework_reset_clears_completed_collection_lifecycle(self):
-        saved = self._create_saved(is_distributed=False)
-        availability = InterviewAvailability.objects.get(
-            admission=self.admission,
-            user=self.admin_user,
-        )
-        self.assertIsNotNone(saved.conflict_collection_revision)
-        self.assertIsNotNone(availability.conflict_collection_review_revision)
-
-        response = self.client.post(
-            self.url,
-            {
-                "schedule": self._schedule(),
-                "session_duration": 30,
-            },
-            format="json",
-        )
-
-        self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
-        self.assertEqual(response.data["schedule"], [])
-        self.assertFalse(response.data["conflict_collection_open"])
-        self.assertIsNone(response.data["conflict_collection_revision"])
-        self.assertEqual(response.data["conflict_collection_candidate_ids"], [])
-        self.assertEqual(response.data["conflict_collection_participant_ids"], [])
-        availability.refresh_from_db()
-        self.assertIsNone(availability.conflict_collection_review_revision)
-        self.assertEqual(
-            availability.conflict_collection_reviewed_candidate_ids,
-            [],
-        )
-
-    def test_no_op_schedule_save_preserves_availability_revision(self):
-        saved = self._create_saved()
-        availability = InterviewAvailability.objects.get(
-            admission=self.admission,
-            user=self.admin_user,
-        )
-        availability_revision = availability.updated_at
-
-        response = self.client.post(
-            self.url,
-            {"expected_updated_at": saved.updated_at.isoformat()},
-            format="json",
-        )
-
-        self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
-        availability.refresh_from_db()
-        self.assertEqual(availability.updated_at, availability_revision)
 
     def test_admin_cannot_open_conflict_collection_without_a_draft(self):
         saved = self._create_saved(is_distributed=False, schedule=[])
@@ -1107,6 +1047,59 @@ class SavedSchedulePublishSemanticsTestCase(APITestCase):
                 self.assertEqual(invalid.status_code, status.HTTP_400_BAD_REQUEST)
                 self.assertIn("overtid", str(invalid.data))
 
+    def test_framework_change_resets_draft_before_conflict_collection(self):
+        saved = self._create_saved(
+            is_distributed=False,
+            with_completed_collection=False,
+        )
+
+        response = self.client.post(
+            self.url,
+            {
+                "schedule": self._schedule(time=600),
+                "session_duration": 30,
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
+        self.assertEqual(response.data["session_duration"], 30)
+        self.assertEqual(response.data["schedule"], [])
+        self.assertFalse(response.data["is_distributed"])
+        saved.refresh_from_db()
+        self.assertEqual(saved.schedule, [])
+
+    def test_framework_reset_clears_completed_collection_lifecycle(self):
+        saved = self._create_saved(is_distributed=False)
+        availability = InterviewAvailability.objects.get(
+            admission=self.admission,
+            user=self.admin_user,
+        )
+        self.assertIsNotNone(saved.conflict_collection_revision)
+        self.assertIsNotNone(availability.conflict_collection_review_revision)
+
+        response = self.client.post(
+            self.url,
+            {
+                "schedule": self._schedule(),
+                "session_duration": 30,
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
+        self.assertEqual(response.data["schedule"], [])
+        self.assertFalse(response.data["conflict_collection_open"])
+        self.assertIsNone(response.data["conflict_collection_revision"])
+        self.assertEqual(response.data["conflict_collection_candidate_ids"], [])
+        self.assertEqual(response.data["conflict_collection_participant_ids"], [])
+        availability.refresh_from_db()
+        self.assertIsNone(availability.conflict_collection_review_revision)
+        self.assertEqual(
+            availability.conflict_collection_reviewed_candidate_ids,
+            [],
+        )
+
     def test_explicit_true_keeps_changed_schedule_published(self):
         self._create_saved()
         self._mark_reviewed(self.application)
@@ -1411,6 +1404,24 @@ class SavedSchedulePublishSemanticsTestCase(APITestCase):
                 }
             ],
         )
+
+    def test_no_op_schedule_save_preserves_availability_revision(self):
+        saved = self._create_saved()
+        availability = InterviewAvailability.objects.get(
+            admission=self.admission,
+            user=self.admin_user,
+        )
+        availability_revision = availability.updated_at
+
+        response = self.client.post(
+            self.url,
+            {"expected_updated_at": saved.updated_at.isoformat()},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
+        availability.refresh_from_db()
+        self.assertEqual(availability.updated_at, availability_revision)
 
     def test_end_date_before_start_date_is_rejected(self):
         res = self.client.post(
@@ -3717,59 +3728,6 @@ class SavedScheduleVisibilityTestCase(APITestCase):
         self.assertEqual(res.status_code, status.HTTP_200_OK)
         self.assertEqual(res.data["schedule"][0]["candidate"], "Ada")
 
-    def test_repeating_effective_visibility_is_a_true_no_op(self):
-        recruiter = LegoUser.objects.create(
-            username="visibility-no-op-recruiter",
-            lego_id=746,
-        )
-        Membership.objects.create(
-            user=recruiter,
-            role=RECRUITING,
-            group=self.committee_group,
-        )
-        saved = self._create_saved()
-        self.client.force_authenticate(user=recruiter)
-        first = self.client.post(
-            self.url,
-            {
-                "name_visibility": "committee",
-                "expected_updated_at": saved.updated_at.isoformat(),
-            },
-            format="json",
-        )
-        self.assertEqual(first.status_code, status.HTTP_200_OK, first.data)
-        first_revision = first.data["updated_at"]
-        first_event_count = NameVisibilityAuditEvent.objects.filter(
-            saved_schedule=saved,
-        ).count()
-
-        repeated = self.client.post(
-            self.url,
-            {
-                "name_visibility": "committee",
-                "expected_updated_at": first_revision,
-            },
-            format="json",
-        )
-
-        self.assertEqual(repeated.status_code, status.HTTP_200_OK, repeated.data)
-        self.assertEqual(repeated.data["updated_at"], first_revision)
-        self.assertEqual(
-            NameVisibilityAuditEvent.objects.filter(saved_schedule=saved).count(),
-            first_event_count,
-        )
-
-        self.client.force_authenticate(user=self.admin_user)
-        admin_save = self.client.post(
-            self.url,
-            {
-                "session_duration": 30,
-                "expected_updated_at": first_revision,
-            },
-            format="json",
-        )
-        self.assertEqual(admin_save.status_code, status.HTTP_200_OK, admin_save.data)
-
     def test_legacy_schedule_rows_are_allowlisted_and_authoritative(self):
         private_marker = "private-value-that-must-not-leak"
         unrelated_user = LegoUser.objects.create(
@@ -4226,6 +4184,59 @@ class SavedScheduleVisibilityTestCase(APITestCase):
         self.assertEqual(audit.data[0]["group_name"], self.committee_group.name)
         self.assertEqual(audit.data[0]["actor_username"], recruiter.username)
         self.assertIsNotNone(audit.data[0]["created_at"])
+
+    def test_repeating_effective_visibility_is_a_true_no_op(self):
+        recruiter = LegoUser.objects.create(
+            username="visibility-no-op-recruiter",
+            lego_id=746,
+        )
+        Membership.objects.create(
+            user=recruiter,
+            role=RECRUITING,
+            group=self.committee_group,
+        )
+        saved = self._create_saved()
+        self.client.force_authenticate(user=recruiter)
+        first = self.client.post(
+            self.url,
+            {
+                "name_visibility": "committee",
+                "expected_updated_at": saved.updated_at.isoformat(),
+            },
+            format="json",
+        )
+        self.assertEqual(first.status_code, status.HTTP_200_OK, first.data)
+        first_revision = first.data["updated_at"]
+        first_event_count = NameVisibilityAuditEvent.objects.filter(
+            saved_schedule=saved,
+        ).count()
+
+        repeated = self.client.post(
+            self.url,
+            {
+                "name_visibility": "committee",
+                "expected_updated_at": first_revision,
+            },
+            format="json",
+        )
+
+        self.assertEqual(repeated.status_code, status.HTTP_200_OK, repeated.data)
+        self.assertEqual(repeated.data["updated_at"], first_revision)
+        self.assertEqual(
+            NameVisibilityAuditEvent.objects.filter(saved_schedule=saved).count(),
+            first_event_count,
+        )
+
+        self.client.force_authenticate(user=self.admin_user)
+        admin_save = self.client.post(
+            self.url,
+            {
+                "session_duration": 30,
+                "expected_updated_at": first_revision,
+            },
+            format="json",
+        )
+        self.assertEqual(admin_save.status_code, status.HTTP_200_OK, admin_save.data)
 
     def test_recruiter_can_hide_own_committee_after_global_reveal(self):
         other_group = Group.objects.create(name="Bedkom", lego_id=709)
@@ -5160,9 +5171,53 @@ class SolveProposalApplyTestCase(APITestCase):
         self.assertEqual(len(first.data["schedule"]), 1)
         self.assertEqual(second.status_code, status.HTTP_200_OK, second.data)
         job.refresh_from_db()
-        self.saved.refresh_from_db()
         self.assertIsNotNone(job.applied_at)
-        self.assertEqual(job.applied_schedule_updated_at, self.saved.updated_at)
+
+    def test_apply_rejects_proposal_after_candidate_scope_changes(self):
+        job = self._job()
+        late_candidate = LegoUser.objects.create(
+            username="proposal-late-candidate",
+            lego_id=9593,
+        )
+        UserApplication.objects.create(
+            admission=self.admission,
+            user=late_candidate,
+        )
+
+        response = self._apply(job)
+
+        self.assertEqual(response.status_code, status.HTTP_409_CONFLICT)
+        job.refresh_from_db()
+        self.assertIsNone(job.applied_at)
+        self.saved.refresh_from_db()
+        self.assertEqual(self.saved.schedule, [])
+
+    def test_apply_rejects_proposal_after_candidate_gender_changes(self):
+        job = self._job()
+        candidate = self.application.user
+        candidate.gender = "female"
+        candidate.save(update_fields=["gender"])
+
+        response = self._apply(job)
+
+        self.assertEqual(response.status_code, status.HTTP_409_CONFLICT)
+        job.refresh_from_db()
+        self.assertIsNone(job.applied_at)
+        self.assertIsNotNone(job.discarded_at)
+
+    def test_apply_rejects_proposal_after_interviewer_experience_changes(self):
+        job = self._job()
+        InterviewAvailability.objects.filter(
+            admission=self.admission,
+            user=self.user,
+        ).update(experience_level=InterviewAvailability.EXPERIENCE_EXPERIENCED)
+
+        response = self._apply(job)
+
+        self.assertEqual(response.status_code, status.HTTP_409_CONFLICT)
+        job.refresh_from_db()
+        self.assertIsNone(job.applied_at)
+        self.assertIsNotNone(job.discarded_at)
 
     def test_retrying_applied_job_rejects_an_unrelated_current_plan(self):
         job = self._job()
@@ -5620,9 +5675,26 @@ class CanonicalSolverInputTestCase(APITestCase):
         self.assertEqual(job.solver_metrics["placed_count"], 1)
         self.assertNotIn("solver_metrics", SolveJobSerializer(job).data)
         self.assertIsNotNone(job.applied_at)
+        saved = SavedSchedule.objects.get(admission=self.admission)
+        self.assertEqual(len(saved.schedule), 1)
+        self.assertEqual(job.applied_schedule_updated_at, saved.updated_at)
+
+    def test_worker_rejects_a_gender_change_after_enqueue(self):
+        response = self.client.post(self.url, self._payload(), format="json")
+        job = SolveJob.objects.get(id=response.data["job_id"])
+        self.candidate.gender = "female"
+        self.candidate.save(update_fields=["gender"])
+
+        Command()._claim_and_run()
+
+        job.refresh_from_db()
+        self.assertEqual(job.status, SolveJob.STATUS_DONE)
+        self.assertEqual(job.result["status"], "ERROR")
+        self.assertIn("Planleggingsgrunnlaget", job.result["error"])
+        self.assertIsNone(job.applied_at)
         self.assertEqual(
-            len(SavedSchedule.objects.get(admission=self.admission).schedule),
-            1,
+            SavedSchedule.objects.get(admission=self.admission).schedule,
+            [],
         )
 
 
