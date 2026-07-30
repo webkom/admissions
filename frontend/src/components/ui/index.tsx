@@ -8,6 +8,7 @@ export {
   actionButtonActive,
   actionButtonDanger,
 } from "./styles";
+export { Chip } from "./Chip";
 export { SaveButton } from "./SaveButton";
 export { MetaValue } from "./MetaValue";
 export { Stepper } from "./Stepper";

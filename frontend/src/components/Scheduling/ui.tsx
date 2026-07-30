@@ -7,6 +7,7 @@ export {
   actionButtonGhost,
   actionButtonActive,
   actionButtonDanger,
+  Chip,
   SaveButton,
   MetaValue,
   Stepper,
@@ -16,6 +17,10 @@ export {
 } from "../ui";
 
 export { SchedulingActionBar, SchedulingButton } from "./ui/actions";
+export {
+  EditablePanelChip,
+  type SchedulingWorkspaceMode,
+} from "./ui/EditablePanelChip";
 export {
   SchedulePanel,
   SchedulePanelBody,
