@@ -14,24 +14,73 @@ import {
 } from "src/query/mutations";
 import { toggleFromArray } from "src/utils/methods";
 import styled from "styled-components";
+import AdmissionDateTimePicker from "./components/AdmissionDateTimePicker";
 import GroupSelector from "./components/GroupSelector";
 import { Button } from "@webkom/lego-bricks";
 import LoadingBall from "src/components/LoadingBall";
+import {
+  ADMISSION_TIME_ZONE,
+  createDefaultAdmissionDates,
+  getAdmissionDateTimeIssue,
+} from "./admissionDateDefaults";
 
 interface ReturnedData {
   type: "error" | "success";
   message: string;
 }
 
-const formatDateString = (dateString?: string): string =>
-  formatDate(DateTime.fromISO(dateString ?? ""));
-const formatCurrentDate = (): string => formatDate(DateTime.now());
+type AdmissionDateField = "open_from" | "public_deadline" | "closed_from";
+
 const formatDate = (date: DateTime): string =>
   date.toFormat("yyyy-MM-dd'T'HH:mm:ss");
+const formatDateString = (dateString?: string): string => {
+  const date = DateTime.fromISO(dateString ?? "").setZone(ADMISSION_TIME_ZONE);
+  return date.isValid ? formatDate(date) : "";
+};
 const localTimeStringToTimezoned = (dateString: string): string | null =>
   DateTime.fromISO(dateString, {
-    zone: "local",
+    zone: ADMISSION_TIME_ZONE,
   }).toISO({ includeOffset: true });
+
+const validateAdmissionDates = (
+  values: MutationAdmission,
+): Partial<Record<AdmissionDateField, string>> => {
+  const errors: Partial<Record<AdmissionDateField, string>> = {};
+  const labels: Record<AdmissionDateField, string> = {
+    open_from: "Åpningstidspunkt",
+    public_deadline: "Søknadsfrist",
+    closed_from: "Stengetidspunkt",
+  };
+  (Object.keys(labels) as AdmissionDateField[]).forEach((field) => {
+    if (!values[field]) {
+      errors[field] = `${labels[field]} er påkrevd`;
+      return;
+    }
+    const dateTimeIssue = getAdmissionDateTimeIssue(values[field]);
+    if (dateTimeIssue === "ambiguous") {
+      errors[field] =
+        "Klokkeslettet er tvetydig ved overgang til vintertid. Velg et annet klokkeslett";
+    } else if (dateTimeIssue === "invalid") {
+      errors[field] =
+        "Velg en gyldig dato og et gyldig klokkeslett i norsk tid";
+    }
+  });
+  if (
+    !errors.open_from &&
+    !errors.public_deadline &&
+    values.public_deadline <= values.open_from
+  ) {
+    errors.public_deadline = "Søknadsfristen må være etter åpningen";
+  }
+  if (
+    !errors.public_deadline &&
+    !errors.closed_from &&
+    values.closed_from < values.public_deadline
+  ) {
+    errors.closed_from = "Stengingen kan ikke være før søknadsfristen";
+  }
+  return errors;
+};
 
 const CreateAdmission: React.FC = () => {
   const navigate = useNavigate();
@@ -59,13 +108,18 @@ const CreateAdmission: React.FC = () => {
       title: "",
       slug: "",
       description: "",
-      open_from: formatCurrentDate(),
-      public_deadline: formatCurrentDate(),
-      closed_from: formatCurrentDate(),
+      ...createDefaultAdmissionDates(),
       admin_groups: [],
       groups: [],
     },
     onSubmit: (values) => {
+      const dateErrors = validateAdmissionDates(values);
+      if (Object.keys(dateErrors).length > 0) {
+        Object.keys(dateErrors).forEach((field) => {
+          void formik.setFieldTouched(field, true, false);
+        });
+        return;
+      }
       setReturnedData(undefined);
       const processedValues = { ...values };
       // Use luxon to parse datetime with local timezone and add timezone offset to the datetime-string
@@ -138,6 +192,19 @@ const CreateAdmission: React.FC = () => {
     }
   }, [admission]);
 
+  const dateErrors = validateAdmissionDates(formik.values);
+  const dateFieldError = (field: AdmissionDateField) => dateErrors[field];
+
+  const updateDateField = (field: AdmissionDateField, value: string) => {
+    void formik.setValues(
+      (currentValues) => ({ ...currentValues, [field]: value }),
+      false,
+    );
+  };
+
+  const touchDateField = (field: AdmissionDateField) =>
+    formik.setFieldTouched(field, true, false);
+
   if (!isNew && isLoading) {
     return <LoadingBall />;
   }
@@ -178,42 +245,60 @@ const CreateAdmission: React.FC = () => {
           />
         </InputWrapper>
       </FormGroup>
+      <InputDescription id="admission-timezone-description">
+        Alle tidspunkt vises og tolkes i norsk tid (Europe/Oslo).
+      </InputDescription>
       <FormGroup>
         <InputWrapper>
           <InputTitle>Opptaket åpner</InputTitle>
-          <InputDescription>
+          <InputDescription id="open-from-description">
             Fra dette tidspunktet er det mulig å legge inn søknader
           </InputDescription>
-          <Input
-            name="open_from"
-            type="datetime-local"
+          <AdmissionDateTimePicker
+            id="open_from"
+            label="Opptaket åpner"
             value={formik.values.open_from}
-            onChange={formik.handleChange}
+            invalid={Boolean(dateFieldError("open_from"))}
+            error={dateFieldError("open_from")}
+            describedBy="open-from-description admission-timezone-description"
+            onChange={(value) => updateDateField("open_from", value)}
+            onBlur={() => void touchDateField("open_from")}
           />
         </InputWrapper>
         <InputWrapper>
           <InputTitle>Søknadsfrist</InputTitle>
-          <InputDescription>
+          <InputDescription id="public-deadline-description">
             Etter dette er ikke søkere garantert å bli sett, men de kan fortsatt
             søke og redigere søknaden sin.
           </InputDescription>
-          <Input
-            name="public_deadline"
-            type="datetime-local"
+          <AdmissionDateTimePicker
+            id="public_deadline"
+            label="Søknadsfrist"
             value={formik.values.public_deadline}
-            onChange={formik.handleChange}
+            min={formik.values.open_from || undefined}
+            minExclusive
+            invalid={Boolean(dateFieldError("public_deadline"))}
+            error={dateFieldError("public_deadline")}
+            describedBy="public-deadline-description admission-timezone-description"
+            onChange={(value) => updateDateField("public_deadline", value)}
+            onBlur={() => void touchDateField("public_deadline")}
           />
         </InputWrapper>
         <InputWrapper>
           <InputTitle>Opptaket stenger</InputTitle>
-          <InputDescription>
+          <InputDescription id="closed-from-description">
             Etter dette tidspunktet er det ikke mulig å legge inn søknader
           </InputDescription>
-          <Input
-            name="closed_from"
-            type="datetime-local"
+          <AdmissionDateTimePicker
+            id="closed_from"
+            label="Opptaket stenger"
             value={formik.values.closed_from}
-            onChange={formik.handleChange}
+            min={formik.values.public_deadline || undefined}
+            invalid={Boolean(dateFieldError("closed_from"))}
+            error={dateFieldError("closed_from")}
+            describedBy="closed-from-description admission-timezone-description"
+            onChange={(value) => updateDateField("closed_from", value)}
+            onBlur={() => void touchDateField("closed_from")}
           />
         </InputWrapper>
       </FormGroup>
@@ -261,7 +346,11 @@ const CreateAdmission: React.FC = () => {
       )}
       <FormGroup>
         <InputWrapper>
-          <Button type="submit" disabled={!formik.isValid} success>
+          <Button
+            type="submit"
+            disabled={!formik.isValid || Object.keys(dateErrors).length > 0}
+            success
+          >
             {isNew ? "Opprett opptak" : "Lagre endringer"}
           </Button>
         </InputWrapper>

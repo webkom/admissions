@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="nb">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Date-time picker test harness</title>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module">
+      import React from "react";
+      import { createRoot } from "react-dom/client";
+      import AdmissionDateTimePicker from "/static/frontend/src/routes/ManageAdmissions/components/AdmissionDateTimePicker.tsx";
+      import "/static/frontend/src/styles/globals.css";
+      import "/static/frontend/src/styles/scheduler.css";
+
+      const search = new URLSearchParams(window.location.search);
+      const initialValue = search.get("value") ?? "2026-07-17T13:12:00";
+      const placeholder = search.get("placeholder") ?? "2026-07-20T12:00:00";
+      const minimum = search.get("min") ?? undefined;
+      const minimumIsExclusive = search.get("exclusive") === "1";
+      const verticalOffset = Number(search.get("offset") ?? "0");
+
+      const Harness = () => {
+        const [value, setValue] = React.useState(initialValue);
+        const [blurCount, setBlurCount] = React.useState(0);
+
+        return React.createElement(
+          "main",
+          {
+            "data-cy": "datetime-harness",
+            style: {
+              maxWidth: 560,
+              padding: 40,
+              transform: `translateY(${verticalOffset}px)`,
+            },
+          },
+          React.createElement(
+            "label",
+            {
+              htmlFor: "open_from",
+              style: { display: "block", marginBottom: 8, fontWeight: 700 },
+            },
+            "Opptaket åpner",
+          ),
+          React.createElement(
+            "span",
+            {
+              id: "timezone-description",
+              style: { display: "block", marginBottom: 8 },
+            },
+            "Alle tider vises i norsk tid.",
+          ),
+          React.createElement(
+            "span",
+            {
+              id: "open_from-description",
+              style: { display: "block", marginBottom: 8 },
+            },
+            "Når søknadsperioden skal starte.",
+          ),
+          React.createElement(AdmissionDateTimePicker, {
+            id: "open_from",
+            label: "Opptaket åpner",
+            value,
+            placeholder,
+            min: minimum,
+            minExclusive: minimumIsExclusive,
+            describedBy: "open_from-description",
+            onChange: setValue,
+            onBlur: () => setBlurCount((count) => count + 1),
+          }),
+          React.createElement(
+            "output",
+            { "data-cy": "committed-datetime", hidden: true },
+            value,
+          ),
+          React.createElement(
+            "output",
+            { "data-cy": "blur-count", hidden: true },
+            blurCount,
+          ),
+        );
+      };
+
+      createRoot(document.getElementById("root")).render(
+        React.createElement(Harness),
+      );
+    </script>
+  </body>
+</html>

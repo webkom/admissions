@@ -1,4 +1,5 @@
 import React from "react";
+import "src/styles/scheduler.css";
 import styled from "styled-components";
 import { Link, Route, Routes } from "react-router-dom";
 import { useManageAdmissions } from "src/query/hooks";
