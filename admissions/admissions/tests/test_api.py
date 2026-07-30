@@ -13,6 +13,7 @@ from rest_framework.test import APIClient, APITestCase
 from admissions.admissions.constants import LEADER, MEMBER, RECRUITING, RETIREE
 from admissions.admissions.models import (
     Admission,
+    AdmissionGroup,
     Group,
     GroupApplication,
     InterviewAvailability,
@@ -159,6 +160,38 @@ class EditAdmissionTestCase(APITestCase):
             "admin_groups": [str(self.admin_group.pk)],
             "groups": [str(self.committee.pk)],
         }
+        self.legacy_header_fields = [
+            {
+                "id": "motivation",
+                "type": "textarea",
+                "title": "Motivasjon",
+                "label": "Motivasjon",
+                "placeholder": "",
+                "required": True,
+            }
+        ]
+
+    def patch_after_validation(self, payload, mutate):
+        original_perform_update = ManageAdmissionViewSet.perform_update
+
+        def mutate_before_save(view, serializer):
+            mutate()
+            return original_perform_update(view, serializer)
+
+        self.client.force_authenticate(user=self.staff_user)
+        with mock.patch.object(
+            ManageAdmissionViewSet,
+            "perform_update",
+            mutate_before_save,
+        ):
+            return self.client.patch(
+                reverse(
+                    "manage-admission-detail",
+                    kwargs={"slug": self.admission.slug},
+                ),
+                payload,
+                format="json",
+            )
 
     def test_pleb_cannot_edit_admission(self):
         pleb = LegoUser.objects.create(lego_id=7)
@@ -252,6 +285,231 @@ class EditAdmissionTestCase(APITestCase):
         )
 
         self.assertEqual(res.status_code, status.HTTP_200_OK)
+
+    def test_legacy_admin_client_can_create_admission(self):
+        self.client.force_authenticate(user=self.staff_user)
+
+        response = self.client.post(
+            reverse("manage-admission-list"),
+            {
+                **self.edit_admission_data,
+                "title": "Legacy admin create",
+                "slug": "legacy-admin-create",
+                "description": "Opprettet fra en allerede lastet side.",
+                "header_fields": self.legacy_header_fields,
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED, response.data)
+        admission = Admission.objects.get(slug="legacy-admin-create")
+        self.assertEqual(admission.header_fields, self.legacy_header_fields)
+        self.assertEqual(
+            AdmissionGroup.objects.get(
+                admission=admission,
+                group=self.committee,
+            ).header_fields,
+            self.legacy_header_fields,
+        )
+
+    def test_legacy_admin_client_can_load_and_edit_admission(self):
+        self.admission.header_fields = self.legacy_header_fields
+        self.admission.save(update_fields=["header_fields"])
+        AdmissionGroup.objects.filter(
+            admission=self.admission,
+            group=self.committee,
+        ).update(header_fields=self.legacy_header_fields)
+        self.client.force_authenticate(user=self.staff_user)
+
+        detail_url = reverse(
+            "manage-admission-detail",
+            kwargs={"slug": self.admission.slug},
+        )
+        get_response = self.client.get(detail_url)
+        self.assertEqual(get_response.status_code, status.HTTP_200_OK)
+        self.assertEqual(
+            get_response.data["header_fields"],
+            self.legacy_header_fields,
+        )
+
+        updated_fields = [
+            {
+                **self.legacy_header_fields[0],
+                "title": "Oppdatert motivasjon",
+                "label": "Oppdatert motivasjon",
+            }
+        ]
+        update_response = self.client.patch(
+            detail_url,
+            {
+                **self.edit_admission_data,
+                "description": "Lagret fra en allerede lastet side.",
+                "header_fields": updated_fields,
+            },
+            format="json",
+        )
+
+        self.assertEqual(
+            update_response.status_code,
+            status.HTTP_200_OK,
+            update_response.data,
+        )
+        self.admission.refresh_from_db()
+        self.assertEqual(self.admission.header_fields, updated_fields)
+        self.assertEqual(
+            AdmissionGroup.objects.get(
+                admission=self.admission,
+                group=self.committee,
+            ).header_fields,
+            updated_fields,
+        )
+
+    def test_conflicting_legacy_and_scoped_admin_payload_is_atomic(self):
+        self.admission.header_fields = self.legacy_header_fields
+        self.admission.save(update_fields=["header_fields"])
+        AdmissionGroup.objects.filter(
+            admission=self.admission,
+            group=self.committee,
+        ).update(header_fields=self.legacy_header_fields)
+        original_title = self.admission.title
+        self.client.force_authenticate(user=self.staff_user)
+
+        response = self.client.patch(
+            reverse("manage-admission-detail", kwargs={"slug": self.admission.slug}),
+            {
+                "title": "Must roll back",
+                "header_fields": self.legacy_header_fields,
+                "group_questions": {
+                    str(self.committee.pk): [],
+                },
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("header_fields", response.data)
+        self.admission.refresh_from_db()
+        self.assertEqual(self.admission.title, original_title)
+        self.assertEqual(
+            AdmissionGroup.objects.get(
+                admission=self.admission,
+                group=self.committee,
+            ).header_fields,
+            self.legacy_header_fields,
+        )
+
+    def test_legacy_admin_payload_is_rejected_after_group_schemas_diverge(self):
+        AdmissionGroup.objects.filter(
+            admission=self.admission,
+            group=self.committee,
+        ).update(header_fields=self.legacy_header_fields)
+        original_title = self.admission.title
+        self.client.force_authenticate(user=self.staff_user)
+
+        response = self.client.patch(
+            reverse("manage-admission-detail", kwargs={"slug": self.admission.slug}),
+            {
+                "title": "Must roll back",
+                "header_fields": [],
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("header_fields", response.data)
+        self.admission.refresh_from_db()
+        self.assertEqual(self.admission.title, original_title)
+        self.assertEqual(
+            AdmissionGroup.objects.get(
+                admission=self.admission,
+                group=self.committee,
+            ).header_fields,
+            self.legacy_header_fields,
+        )
+
+    def test_equal_scoped_questions_keep_the_legacy_read_alias_current(self):
+        self.client.force_authenticate(user=self.staff_user)
+
+        response = self.client.patch(
+            reverse("manage-admission-detail", kwargs={"slug": self.admission.slug}),
+            {
+                "group_questions": {
+                    str(self.committee.pk): self.legacy_header_fields,
+                }
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
+        self.admission.refresh_from_db()
+        self.assertEqual(
+            self.admission.header_fields,
+            self.legacy_header_fields,
+        )
+
+    def test_question_update_rejects_a_group_removed_after_validation(self):
+        original_title = self.admission.title
+        response = self.patch_after_validation(
+            {
+                "title": "Must reject stale questions",
+                "group_questions": {
+                    str(self.committee.pk): self.legacy_header_fields,
+                },
+            },
+            lambda: AdmissionGroup.objects.filter(
+                admission=self.admission,
+                group=self.committee,
+            ).delete(),
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("group_questions", response.data)
+        self.admission.refresh_from_db()
+        self.assertEqual(self.admission.title, original_title)
+        self.assertFalse(
+            AdmissionGroup.objects.filter(
+                admission=self.admission,
+                group=self.committee,
+            ).exists()
+        )
+
+    def test_legacy_questions_reject_a_group_added_after_validation(self):
+        original_title = self.admission.title
+        added_committee = Group.objects.create(
+            name="Concurrently added committee",
+            lego_id=26,
+        )
+
+        response = self.patch_after_validation(
+            {
+                "title": "Must reject stale legacy questions",
+                "header_fields": self.legacy_header_fields,
+            },
+            lambda: AdmissionGroup.objects.create(
+                admission=self.admission,
+                group=added_committee,
+            ),
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("header_fields", response.data)
+        self.admission.refresh_from_db()
+        self.assertEqual(self.admission.title, original_title)
+        self.assertEqual(self.admission.header_fields, [])
+        self.assertEqual(
+            AdmissionGroup.objects.get(
+                admission=self.admission,
+                group=self.committee,
+            ).header_fields,
+            [],
+        )
+        self.assertEqual(
+            AdmissionGroup.objects.get(
+                admission=self.admission,
+                group=added_committee,
+            ).header_fields,
+            [],
+        )
 
     def test_staff_user_nocreator_cannot_edit_admission(self):
         staff_user = LegoUser.objects.create(

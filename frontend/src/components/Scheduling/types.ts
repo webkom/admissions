@@ -14,3 +14,5 @@ export type {
   SlotOverride,
   SolverOptions,
 } from "../../types";
+
+export type StatusToastTone = "success" | "error";

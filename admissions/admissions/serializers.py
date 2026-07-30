@@ -70,7 +70,7 @@ class GroupSerializer(serializers.HyperlinkedModelSerializer):
             "detail_link",
             "logo",
         )
-        # name/detail_link/logo mirror the upstream Lego group — keep them
+        # name/detail_link/logo mirror the upstream Lego group - keep them
         # read-only so a recruiter can't repoint logo/detail_link at a phishing
         # URL shown to applicants. Only description/response_label are editable.
         read_only_fields = ("name", "detail_link", "logo")
@@ -205,14 +205,15 @@ class AdmissionPublicSerializer(AdmissionListPublicSerializer):
     groups = AdmissionScopedGroupSerializer(many=True)
 
     class Meta(AdmissionListPublicSerializer.Meta):
-        fields = AdmissionListPublicSerializer.Meta.fields + ("groups",)
+        fields = AdmissionListPublicSerializer.Meta.fields + (
+            "header_fields",
+            "groups",
+        )
         lookup_field = "slug"
         extra_kwargs = {"url": {"lookup_field": "slug"}}
 
 
 class AdminCreateUpdateAdmissionSerializer(serializers.HyperlinkedModelSerializer):
-    legacy_general_fields = ("header_fields",)
-
     def __init__(self, *args, **kwargs):
         """If object is being updated don't allow slug to be changed."""
         super().__init__(*args, **kwargs)
@@ -228,21 +229,12 @@ class AdminCreateUpdateAdmissionSerializer(serializers.HyperlinkedModelSerialize
     groups = serializers.PrimaryKeyRelatedField(
         many=True, required=True, queryset=Group.objects.all()
     )
+    # Rollout compatibility for already loaded clients using the former
+    # admission-wide question schema.
+    header_fields = serializers.ListField(required=False, write_only=True)
     group_questions = serializers.DictField(
         child=serializers.ListField(), required=False, write_only=True
     )
-
-    def to_internal_value(self, data):
-        legacy_fields = set(data.keys()).intersection(self.legacy_general_fields)
-        if legacy_fields:
-            raise serializers.ValidationError(
-                {
-                    field: "Generelle spørsmål støttes ikke. "
-                    "Bruk spørsmål for den aktuelle komiteen."
-                    for field in legacy_fields
-                }
-            )
-        return super().to_internal_value(data)
 
     class Meta:
         model = Admission
@@ -250,6 +242,7 @@ class AdminCreateUpdateAdmissionSerializer(serializers.HyperlinkedModelSerialize
             "title",
             "slug",
             "description",
+            "header_fields",
             "open_from",
             "public_deadline",
             "closed_from",
@@ -262,6 +255,8 @@ class AdminCreateUpdateAdmissionSerializer(serializers.HyperlinkedModelSerialize
 
     def validate(self, attrs):
         instance = self.instance
+        legacy_questions_provided = "header_fields" in attrs
+        scoped_questions_provided = "group_questions" in attrs
         open_from = attrs.get("open_from", getattr(instance, "open_from", None))
         public_deadline = attrs.get(
             "public_deadline", getattr(instance, "public_deadline", None)
@@ -289,8 +284,16 @@ class AdminCreateUpdateAdmissionSerializer(serializers.HyperlinkedModelSerialize
         if not has_groups:
             errors["groups"] = "Velg minst én gruppe som har opptak."
 
-        group_questions = attrs.get("group_questions")
-        if group_questions is not None:
+        if legacy_questions_provided:
+            try:
+                attrs["header_fields"] = InputModelList(
+                    attrs["header_fields"]
+                ).model_dump()
+            except PydanticValidationError:
+                errors["header_fields"] = "Spørsmålsoppsettet er ugyldig."
+
+        if scoped_questions_provided:
+            group_questions = attrs["group_questions"]
             configured_groups = attrs.get(
                 "groups", instance.groups.all() if instance else []
             )
@@ -309,6 +312,26 @@ class AdminCreateUpdateAdmissionSerializer(serializers.HyperlinkedModelSerialize
                     errors["group_questions"] = "Spørsmålsoppsettet er ugyldig."
                 else:
                     attrs["group_questions"] = normalized_questions
+
+        if legacy_questions_provided and "header_fields" not in errors:
+            configured_groups = attrs.get(
+                "groups", instance.groups.all() if instance else []
+            )
+            configured_group_ids = {str(group.pk) for group in configured_groups}
+            legacy_group_questions = {
+                group_id: attrs["header_fields"] for group_id in configured_group_ids
+            }
+            if scoped_questions_provided and "group_questions" not in errors:
+                scoped_questions = attrs["group_questions"]
+                if set(scoped_questions) != configured_group_ids or any(
+                    scoped_questions[group_id] != attrs["header_fields"]
+                    for group_id in configured_group_ids
+                ):
+                    errors["header_fields"] = (
+                        "Generelle spørsmål og komitéspørsmål må være like."
+                    )
+            else:
+                attrs["group_questions"] = legacy_group_questions
         if errors:
             raise serializers.ValidationError(errors)
 
@@ -316,6 +339,7 @@ class AdminCreateUpdateAdmissionSerializer(serializers.HyperlinkedModelSerialize
 
     @transaction.atomic
     def update_or_create(self, pk, validated_data):
+        legacy_questions_provided = "header_fields" in validated_data
         input_admin_groups = validated_data.pop("admin_groups", None)
         input_groups = validated_data.pop("groups", None)
         input_group_questions = validated_data.pop("group_questions", None)
@@ -327,7 +351,12 @@ class AdminCreateUpdateAdmissionSerializer(serializers.HyperlinkedModelSerialize
         current_admin_group_ids = set(
             admission.admin_groups.values_list("pk", flat=True)
         )
-        current_group_ids = set(admission.groups.values_list("pk", flat=True))
+        current_group_ids = set(
+            AdmissionGroup.objects.select_for_update()
+            .filter(admission=admission)
+            .order_by("pk")
+            .values_list("group_id", flat=True)
+        )
         next_admin_group_ids = (
             {group.pk for group in input_admin_groups}
             if input_admin_groups is not None
@@ -338,8 +367,44 @@ class AdminCreateUpdateAdmissionSerializer(serializers.HyperlinkedModelSerialize
             if input_groups is not None
             else current_group_ids
         )
+        if input_group_questions is not None:
+            question_group_ids = set(input_group_questions)
+            configured_group_ids = {str(group_id) for group_id in next_group_ids}
+            if legacy_questions_provided and question_group_ids != configured_group_ids:
+                raise serializers.ValidationError(
+                    {
+                        "header_fields": (
+                            "Komitéutvalget ble endret mens spørsmålene ble "
+                            "lagret. Last inn siden på nytt."
+                        )
+                    }
+                )
+            unknown_group_ids = question_group_ids - configured_group_ids
+            if unknown_group_ids:
+                raise serializers.ValidationError(
+                    {"group_questions": "Spørsmål må høre til en valgt gruppe."}
+                )
         admin_groups_changed = next_admin_group_ids != current_admin_group_ids
         groups_changed = next_group_ids != current_group_ids
+        if pk is not None and legacy_questions_provided:
+            existing_group_questions = list(
+                AdmissionGroup.objects.select_for_update()
+                .filter(admission=admission, group_id__in=next_group_ids)
+                .order_by("pk")
+                .values_list("header_fields", flat=True)
+            )
+            legacy_baseline = admission.header_fields or []
+            if any(
+                questions != legacy_baseline for questions in existing_group_questions
+            ):
+                raise serializers.ValidationError(
+                    {
+                        "header_fields": (
+                            "Komitéspørsmålene kan ikke lenger redigeres i den "
+                            "gamle opptaksversjonen. Last inn siden på nytt."
+                        )
+                    }
+                )
         if pk is not None and (admin_groups_changed or groups_changed):
             saved_schedule = (
                 SavedSchedule.objects.select_for_update()
@@ -398,9 +463,37 @@ class AdminCreateUpdateAdmissionSerializer(serializers.HyperlinkedModelSerialize
             )
         if input_group_questions is not None:
             for group_id, fields in input_group_questions.items():
-                AdmissionGroup.objects.filter(
+                updated_rows = AdmissionGroup.objects.filter(
                     admission=admission, group_id=group_id
                 ).update(header_fields=fields)
+                if updated_rows != 1:
+                    raise serializers.ValidationError(
+                        {
+                            "group_questions": (
+                                "Komitéutvalget ble endret mens spørsmålene "
+                                "ble lagret. Last inn siden på nytt."
+                            )
+                        }
+                    )
+            if not legacy_questions_provided:
+                resulting_group_questions = list(
+                    AdmissionGroup.objects.filter(
+                        admission=admission,
+                        group_id__in=next_group_ids,
+                    )
+                    .order_by("pk")
+                    .values_list("header_fields", flat=True)
+                )
+                if (
+                    resulting_group_questions
+                    and len(resulting_group_questions) == len(next_group_ids)
+                    and all(
+                        questions == resulting_group_questions[0]
+                        for questions in resulting_group_questions[1:]
+                    )
+                ):
+                    admission.header_fields = resulting_group_questions[0]
+                    admission.save(update_fields=["header_fields"])
         return admission
 
     def create(self, validated_data):
@@ -421,6 +514,7 @@ class AdminAdmissionSerializer(serializers.ModelSerializer):
             "title",
             "slug",
             "description",
+            "header_fields",
             "admin_groups",
             "groups",
             "open_from",
@@ -603,7 +697,6 @@ class UserSerializer(serializers.HyperlinkedModelSerializer):
 
 
 class ApplicationCreateUpdateSerializer(serializers.HyperlinkedModelSerializer):
-    legacy_general_fields = ("text", "header_fields_response")
     question_json_schema = InputModelList
     response_json_schema = InputResponseModel
     applications = serializers.DictField(
@@ -623,16 +716,63 @@ class ApplicationCreateUpdateSerializer(serializers.HyperlinkedModelSerializer):
     )
 
     def to_internal_value(self, data):
-        legacy_fields = set(data.keys()).intersection(self.legacy_general_fields)
-        if legacy_fields:
-            raise serializers.ValidationError(
-                {
-                    field: "Generelle søknadssvar støttes ikke. "
-                    "Bruk svaret for den aktuelle komiteen."
-                    for field in legacy_fields
-                }
+        self._legacy_answers_provided = False
+        self._legacy_answers = None
+        if not isinstance(data, Mapping):
+            return super().to_internal_value(data)
+
+        normalized = data.copy()
+        errors = {}
+        legacy_text_provided = "text" in data
+        priority_text_provided = "priority_text" in data
+        if (
+            legacy_text_provided
+            and priority_text_provided
+            and data["text"] != data["priority_text"]
+        ):
+            errors["text"] = (
+                "Prioriteringsteksten er ulik i gammel og ny versjon. "
+                "Last inn søknaden på nytt."
             )
-        return super().to_internal_value(data)
+        elif legacy_text_provided:
+            normalized["priority_text"] = data["text"]
+        normalized.pop("text", None)
+
+        legacy_answers_provided = "header_fields_response" in data
+        if legacy_answers_provided:
+            legacy_answers = data["header_fields_response"]
+            applications = data.get("applications")
+            scoped_answers = data.get("group_answers")
+            scoped_answers_provided = "group_answers" in data
+            if (
+                scoped_answers_provided
+                and isinstance(applications, Mapping)
+                and isinstance(scoped_answers, Mapping)
+            ):
+                selected_groups = {str(name).lower() for name in applications}
+                answers_by_group = {
+                    str(name).lower(): answers
+                    for name, answers in scoped_answers.items()
+                }
+                if set(answers_by_group) != selected_groups or any(
+                    answers_by_group[group_name] != legacy_answers
+                    for group_name in selected_groups
+                ):
+                    errors["header_fields_response"] = (
+                        "Svarene er ulike i gammel og ny versjon. "
+                        "Last inn søknaden på nytt."
+                    )
+            elif not scoped_answers_provided and isinstance(applications, Mapping):
+                normalized["group_answers"] = {
+                    name: legacy_answers for name in applications
+                }
+            self._legacy_answers_provided = True
+            self._legacy_answers = legacy_answers
+        normalized.pop("header_fields_response", None)
+
+        if errors:
+            raise serializers.ValidationError(errors)
+        return super().to_internal_value(normalized)
 
     class Meta:
         model = UserApplication
@@ -689,6 +829,106 @@ class ApplicationCreateUpdateSerializer(serializers.HyperlinkedModelSerializer):
             raise serializers.ValidationError(errors)
         return value
 
+    def _load_group_answer_state(self, admission, user, *, lock):
+        admission_groups = (
+            AdmissionGroup.objects.select_related("group")
+            .filter(admission=admission)
+            .order_by("pk")
+        )
+        group_applications = (
+            GroupApplication.objects.select_related("group")
+            .filter(
+                application__admission=admission,
+                application__user=user,
+            )
+            .order_by("pk")
+        )
+        if lock:
+            admission_groups = admission_groups.select_for_update(of=("self",))
+            group_applications = group_applications.select_for_update(of=("self",))
+
+        admission_groups = list(admission_groups)
+        groups_by_name = {
+            admission_group.group.name.lower(): admission_group.group
+            for admission_group in admission_groups
+        }
+        question_fields_by_group = {
+            admission_group.group.name.lower(): admission_group.header_fields or []
+            for admission_group in admission_groups
+        }
+        existing_answers_by_group = {
+            group_application.group.name.lower(): (
+                group_application.header_fields_response or {}
+            )
+            for group_application in group_applications
+        }
+        return groups_by_name, question_fields_by_group, existing_answers_by_group
+
+    def _validate_answers_for_current_schema(
+        self,
+        admission,
+        user,
+        applications,
+        answers_by_group,
+        group_answers_provided,
+        *,
+        lock,
+    ):
+        selected_group_names = {name.lower() for name in applications}
+        if set(answers_by_group) - selected_group_names:
+            raise serializers.ValidationError(
+                {"group_answers": "Svar må høre til en valgt gruppe."}
+            )
+
+        (
+            groups_by_name,
+            question_fields_by_group,
+            existing_answers_by_group,
+        ) = self._load_group_answer_state(admission, user, lock=lock)
+        if self._legacy_answers_provided:
+            legacy_fields = admission.header_fields or []
+            selected_group_fields = [
+                question_fields_by_group[group_name]
+                for group_name in selected_group_names
+                if group_name in question_fields_by_group
+            ]
+            existing_selected_answers = [
+                existing_answers_by_group[group_name]
+                for group_name in selected_group_names
+                if group_name in existing_answers_by_group
+            ]
+            schemas_diverged = any(
+                fields != legacy_fields for fields in selected_group_fields
+            )
+            answers_diverged = bool(existing_selected_answers) and any(
+                answers != existing_selected_answers[0]
+                for answers in existing_selected_answers[1:]
+            )
+            if schemas_diverged or answers_diverged:
+                raise serializers.ValidationError(
+                    {
+                        "header_fields_response": (
+                            "Komitéspørsmålene kan ikke lenger redigeres i den "
+                            "gamle søknadsversjonen. Last inn siden på nytt."
+                        )
+                    }
+                )
+        for group_name in applications:
+            normalized_group_name = group_name.lower()
+            answers = (
+                answers_by_group[normalized_group_name]
+                if group_answers_provided and normalized_group_name in answers_by_group
+                else existing_answers_by_group.get(normalized_group_name, {})
+            )
+            try:
+                self.validate_field_responses(
+                    question_fields_by_group.get(normalized_group_name, []),
+                    answers,
+                )
+            except serializers.ValidationError as error:
+                raise serializers.ValidationError({"group_answers": error.detail})
+        return groups_by_name
+
     def validate(self, attrs):
         attrs = super().validate(attrs)
         admission_slug = self.context["request"].parser_context["kwargs"][
@@ -701,38 +941,14 @@ class ApplicationCreateUpdateSerializer(serializers.HyperlinkedModelSerializer):
         answers_by_group = {
             name.lower(): answers for name, answers in group_answers.items()
         }
-        selected_group_names = {name.lower() for name in applications}
-
-        if set(answers_by_group) - selected_group_names:
-            raise serializers.ValidationError(
-                {"group_answers": "Svar må høre til en valgt gruppe."}
-            )
-
-        question_fields_by_group = {
-            admission_group.group.name.lower(): admission_group.header_fields or []
-            for admission_group in AdmissionGroup.objects.select_related(
-                "group"
-            ).filter(admission=admission)
-        }
-        existing_answers_by_group = {
-            group_name.lower(): answers
-            for group_name, answers in GroupApplication.objects.filter(
-                application__admission=admission,
-                application__user=self.context["request"].user,
-            ).values_list("group__name", "header_fields_response")
-        }
-        for group_name in applications:
-            try:
-                self.validate_field_responses(
-                    question_fields_by_group.get(group_name.lower(), []),
-                    (
-                        answers_by_group.get(group_name.lower(), {})
-                        if group_answers_provided
-                        else existing_answers_by_group.get(group_name.lower(), {})
-                    ),
-                )
-            except serializers.ValidationError as error:
-                raise serializers.ValidationError({"group_answers": error.detail})
+        self._validate_answers_for_current_schema(
+            admission,
+            self.context["request"].user,
+            applications,
+            answers_by_group,
+            group_answers_provided,
+            lock=False,
+        )
         if group_answers_provided:
             attrs["group_answers"] = answers_by_group
         return attrs
@@ -752,9 +968,14 @@ class ApplicationCreateUpdateSerializer(serializers.HyperlinkedModelSerializer):
                 closed_from__gte=timezone.now(),
                 open_from__lte=timezone.now(),
             )
-            admission_groups = {
-                group.name.lower(): group for group in admission.groups.all()
-            }
+            admission_groups = self._validate_answers_for_current_schema(
+                admission,
+                user,
+                applications,
+                group_answers,
+                group_answers_provided,
+                lock=True,
+            )
             resolved_groups = {}
             for group_name in applications:
                 group = admission_groups.get(group_name.lower())
@@ -772,6 +993,11 @@ class ApplicationCreateUpdateSerializer(serializers.HyperlinkedModelSerializer):
                 defaults={
                     "phone_number": phone_number,
                     "text": priority_text,
+                    **(
+                        {"header_fields_response": self._legacy_answers}
+                        if self._legacy_answers_provided
+                        else {}
+                    ),
                 },
             )
 
@@ -784,10 +1010,11 @@ class ApplicationCreateUpdateSerializer(serializers.HyperlinkedModelSerializer):
 
             for group_name, group_text in applications.items():
                 defaults = {"text": group_text}
-                if group_answers_provided:
-                    defaults["header_fields_response"] = group_answers.get(
-                        group_name.lower(), {}
-                    )
+                normalized_group_name = group_name.lower()
+                if group_answers_provided and normalized_group_name in group_answers:
+                    defaults["header_fields_response"] = group_answers[
+                        normalized_group_name
+                    ]
                 GroupApplication.objects.update_or_create(
                     application=user_application,
                     group=resolved_groups[group_name],

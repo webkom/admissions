@@ -216,7 +216,7 @@ def solve_schedule_v1(
         i.id for i in interviewers if i.experience_level == "experienced"
     )
     # Whether any interviewer has usable gender data. Without it the same-gender
-    # constraint is meaningless and must be skipped entirely — otherwise it
+    # constraint is meaningless and must be skipped entirely - otherwise it
     # would force every M/F candidate's slots to 0 and make them all unplaceable.
     gender_data_available = bool(male_iids or female_iids)
     all_slots_set = set(all_slots_data)
@@ -442,7 +442,7 @@ def solve_schedule_v1(
             valid_for[(c.id, t)] = v_ids
 
     # Warm-start: hint the previous published plan so re-solves converge faster
-    # and stay close to what the committee already saw. Hints are advisory — the
+    # and stay close to what the committee already saw. Hints are advisory - the
     # solver repairs or ignores any that no longer fit.
     prev_time_by_candidate = {}
     prev_time_vars = []

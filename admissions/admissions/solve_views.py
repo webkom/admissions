@@ -57,7 +57,7 @@ class SolveScheduleView(SchedulerFeatureGateMixin, APIView):
     @transaction.atomic
     def post(self, request):
         """Enqueue a solve. The actual solving runs in run_solver_worker, so a
-        heavy solve never blocks (or times out) the request — the client gets a
+        heavy solve never blocks (or times out) the request - the client gets a
         job id back and polls SolveJobStatusView for the result."""
         admission_slug = request.data.get("admission_slug")
         if not isinstance(admission_slug, str) or not admission_slug:

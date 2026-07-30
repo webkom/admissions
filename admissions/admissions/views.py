@@ -241,7 +241,7 @@ class AdminApplicationViewSet(
     def get_permissions(self):
         """Instantiate the permissions for this request.
 
-        Build a fresh local list every call — never append to the class-level
+        Build a fresh local list every call - never append to the class-level
         ``permission_classes``, which is shared across all requests in a
         long-lived worker and would otherwise grow unbounded.
         """

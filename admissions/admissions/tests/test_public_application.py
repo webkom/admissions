@@ -16,6 +16,7 @@ from admissions.admissions.models import (
     UserApplication,
 )
 from admissions.admissions.tests.utils import DEFAULT_ADMISSION_SLUG, create_admission
+from admissions.admissions.views import PublicApplicationViewSet
 
 
 class CreateApplicationTestCase(APITestCase):
@@ -76,6 +77,261 @@ class CreateApplicationTestCase(APITestCase):
         )
 
         self.assertEqual(res.status_code, status.HTTP_201_CREATED)
+
+    def test_legacy_client_payload_maps_global_answers_to_selected_groups(self):
+        legacy_fields = [
+            {
+                "id": "motivation",
+                "type": "textarea",
+                "title": "Motivasjon",
+                "label": "Motivasjon",
+                "placeholder": "",
+                "required": True,
+            }
+        ]
+        self.admission.header_fields = legacy_fields
+        self.admission.save(update_fields=["header_fields"])
+        AdmissionGroup.objects.filter(admission=self.admission).update(
+            header_fields=legacy_fields
+        )
+        self.client.force_authenticate(user=self.pleb_anna)
+
+        detail_response = self.client.get(
+            reverse("admission-detail", kwargs={"slug": self.admission_slug})
+        )
+        self.assertEqual(detail_response.status_code, status.HTTP_200_OK)
+        self.assertEqual(detail_response.data["header_fields"], legacy_fields)
+
+        response = self.client.post(
+            reverse(
+                "userapplication-list",
+                kwargs={"admission_slug": self.admission_slug},
+            ),
+            {
+                "text": "Ønsker Webkom mest",
+                "phone_number": "12345678",
+                "header_fields_response": {
+                    "motivation": "Jeg vil bidra i begge komiteene."
+                },
+                "applications": {
+                    "webkom": "Webkom-svar",
+                    "koskom": "Koskom-svar",
+                },
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED, response.data)
+        application = UserApplication.objects.get(user=self.pleb_anna)
+        self.assertEqual(application.text, "Ønsker Webkom mest")
+        self.assertEqual(
+            application.header_fields_response,
+            {"motivation": "Jeg vil bidra i begge komiteene."},
+        )
+        self.assertEqual(
+            list(
+                application.group_applications.order_by("group__name").values_list(
+                    "header_fields_response", flat=True
+                )
+            ),
+            [
+                {"motivation": "Jeg vil bidra i begge komiteene."},
+                {"motivation": "Jeg vil bidra i begge komiteene."},
+            ],
+        )
+
+        updated_response = self.client.post(
+            reverse(
+                "userapplication-list",
+                kwargs={"admission_slug": self.admission_slug},
+            ),
+            {
+                "text": "Oppdatert prioritering",
+                "phone_number": "87654321",
+                "header_fields_response": {"motivation": "Oppdatert svar."},
+                "applications": {
+                    "webkom": "Oppdatert Webkom-svar",
+                    "koskom": "Oppdatert Koskom-svar",
+                },
+            },
+            format="json",
+        )
+
+        self.assertEqual(
+            updated_response.status_code,
+            status.HTTP_201_CREATED,
+            updated_response.data,
+        )
+        application.refresh_from_db()
+        self.assertEqual(application.phone_number, "87654321")
+        self.assertEqual(application.text, "Oppdatert prioritering")
+        self.assertEqual(
+            list(
+                application.group_applications.order_by("group__name").values_list(
+                    "header_fields_response", flat=True
+                )
+            ),
+            [
+                {"motivation": "Oppdatert svar."},
+                {"motivation": "Oppdatert svar."},
+            ],
+        )
+
+    def test_equal_legacy_and_scoped_payload_fields_are_accepted(self):
+        self.client.force_authenticate(user=self.pleb_anna)
+        response = self.client.post(
+            reverse(
+                "userapplication-list",
+                kwargs={"admission_slug": self.admission_slug},
+            ),
+            {
+                **self.application_data,
+                "text": "Samme prioritering",
+                "priority_text": "Samme prioritering",
+                "header_fields_response": {},
+                "group_answers": {"webkom": {}, "koskom": {}},
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED, response.data)
+
+    def test_conflicting_legacy_and_scoped_payload_is_rejected_atomically(self):
+        application = UserApplication.objects.create(
+            user=self.pleb_anna,
+            admission=self.admission,
+            phone_number="12345678",
+            text="Behold prioriteringen",
+            header_fields_response={"motivation": "Behold legacy-svaret"},
+        )
+        group_application = GroupApplication.objects.create(
+            application=application,
+            group=self.webkom,
+            text="Behold komitésvaret",
+            header_fields_response={"motivation": "Behold gruppesvaret"},
+        )
+        self.client.force_authenticate(user=self.pleb_anna)
+
+        response = self.client.post(
+            reverse(
+                "userapplication-list",
+                kwargs={"admission_slug": self.admission_slug},
+            ),
+            {
+                "phone_number": "87654321",
+                "applications": {"webkom": "Skal ikke lagres"},
+                "text": "Legacy-prioritering",
+                "priority_text": "Ny prioritering",
+                "header_fields_response": {"motivation": "Legacy-svar"},
+                "group_answers": {"webkom": {"motivation": "Ulikt gruppesvar"}},
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("text", response.data)
+        self.assertIn("header_fields_response", response.data)
+        application.refresh_from_db()
+        group_application.refresh_from_db()
+        self.assertEqual(application.phone_number, "12345678")
+        self.assertEqual(application.text, "Behold prioriteringen")
+        self.assertEqual(
+            application.header_fields_response,
+            {"motivation": "Behold legacy-svaret"},
+        )
+        self.assertEqual(group_application.text, "Behold komitésvaret")
+        self.assertEqual(
+            group_application.header_fields_response,
+            {"motivation": "Behold gruppesvaret"},
+        )
+
+    def test_legacy_answers_are_rejected_after_committee_schemas_diverge(self):
+        self.admission.header_fields = []
+        self.admission.save(update_fields=["header_fields"])
+        webkom_admission = AdmissionGroup.objects.get(
+            admission=self.admission,
+            group=self.webkom,
+        )
+        webkom_admission.header_fields = [
+            {
+                "id": "webkom-only",
+                "type": "textinput",
+                "title": "Webkom-spørsmål",
+                "label": "Webkom-spørsmål",
+                "placeholder": "",
+                "required": False,
+            }
+        ]
+        webkom_admission.save(update_fields=["header_fields"])
+        self.client.force_authenticate(user=self.pleb_anna)
+
+        response = self.client.post(
+            reverse(
+                "userapplication-list",
+                kwargs={"admission_slug": self.admission_slug},
+            ),
+            {
+                **self.application_data,
+                "text": "Legacy-prioritering",
+                "header_fields_response": {},
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("header_fields_response", response.data)
+        self.assertFalse(UserApplication.objects.filter(user=self.pleb_anna).exists())
+
+    def test_legacy_answers_are_rejected_after_saved_answers_diverge(self):
+        application = UserApplication.objects.create(
+            user=self.pleb_anna,
+            admission=self.admission,
+            phone_number="12345678",
+            text="Behold prioriteringen",
+        )
+        webkom_application = GroupApplication.objects.create(
+            application=application,
+            group=self.webkom,
+            text="Behold Webkom-svaret",
+            header_fields_response={"motivation": "Webkom-svar"},
+        )
+        koskom_application = GroupApplication.objects.create(
+            application=application,
+            group=self.koskom,
+            text="Behold Koskom-svaret",
+            header_fields_response={"motivation": "Koskom-svar"},
+        )
+        self.client.force_authenticate(user=self.pleb_anna)
+
+        response = self.client.post(
+            reverse(
+                "userapplication-list",
+                kwargs={"admission_slug": self.admission_slug},
+            ),
+            {
+                **self.application_data,
+                "text": "Skal ikke lagres",
+                "header_fields_response": {"motivation": "Globalt svar"},
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("header_fields_response", response.data)
+        application.refresh_from_db()
+        webkom_application.refresh_from_db()
+        koskom_application.refresh_from_db()
+        self.assertEqual(application.text, "Behold prioriteringen")
+        self.assertEqual(webkom_application.text, "Behold Webkom-svaret")
+        self.assertEqual(koskom_application.text, "Behold Koskom-svaret")
+        self.assertEqual(
+            webkom_application.header_fields_response,
+            {"motivation": "Webkom-svar"},
+        )
+        self.assertEqual(
+            koskom_application.header_fields_response,
+            {"motivation": "Koskom-svar"},
+        )
 
     def test_new_candidate_invalidates_a_published_plan_atomically(self):
         existing_candidate = UserApplication.objects.create(
@@ -301,6 +557,113 @@ class CreateApplicationTestCase(APITestCase):
             {"motivation": "Behold dette svaret."},
         )
         self.assertEqual(group_application.text, "Oppdatert søknad")
+
+    def test_partial_group_answers_preserve_the_omitted_committee_answer(self):
+        question_fields = [
+            {
+                "id": "motivation",
+                "type": "textarea",
+                "title": "Motivasjon",
+                "label": "Motivasjon",
+                "placeholder": "",
+                "required": False,
+            }
+        ]
+        AdmissionGroup.objects.filter(admission=self.admission).update(
+            header_fields=question_fields
+        )
+        application = UserApplication.objects.create(
+            user=self.pleb_anna,
+            admission=self.admission,
+            phone_number="12345678",
+        )
+        webkom_application = GroupApplication.objects.create(
+            application=application,
+            group=self.webkom,
+            text="Original Webkom application",
+            header_fields_response={"motivation": "Originalt Webkom-svar"},
+        )
+        koskom_application = GroupApplication.objects.create(
+            application=application,
+            group=self.koskom,
+            text="Original Koskom application",
+            header_fields_response={"motivation": "Behold Koskom-svaret"},
+        )
+        self.client.force_authenticate(user=self.pleb_anna)
+
+        response = self.client.post(
+            reverse(
+                "userapplication-list",
+                kwargs={"admission_slug": self.admission_slug},
+            ),
+            {
+                "phone_number": "87654321",
+                "applications": {
+                    "webkom": "Oppdatert Webkom-søknad",
+                    "koskom": "Oppdatert Koskom-søknad",
+                },
+                "group_answers": {"webkom": {"motivation": "Oppdatert Webkom-svar"}},
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED, response.data)
+        webkom_application.refresh_from_db()
+        koskom_application.refresh_from_db()
+        self.assertEqual(
+            webkom_application.header_fields_response,
+            {"motivation": "Oppdatert Webkom-svar"},
+        )
+        self.assertEqual(
+            koskom_application.header_fields_response,
+            {"motivation": "Behold Koskom-svaret"},
+        )
+
+    def test_schema_change_after_validation_rejects_stale_answers(self):
+        required_fields = [
+            {
+                "id": "motivation",
+                "type": "textarea",
+                "title": "Motivasjon",
+                "label": "Motivasjon",
+                "placeholder": "",
+                "required": True,
+            }
+        ]
+        original_perform_create = PublicApplicationViewSet.perform_create
+
+        def change_schema_before_save(view, serializer):
+            AdmissionGroup.objects.filter(
+                admission=self.admission,
+                group=self.webkom,
+            ).update(header_fields=required_fields)
+            return original_perform_create(view, serializer)
+
+        self.client.force_authenticate(user=self.pleb_anna)
+        with patch.object(
+            PublicApplicationViewSet,
+            "perform_create",
+            change_schema_before_save,
+        ):
+            response = self.client.post(
+                reverse(
+                    "userapplication-list",
+                    kwargs={"admission_slug": self.admission_slug},
+                ),
+                {
+                    "phone_number": "12345678",
+                    "applications": {"webkom": "Webkom-søknad"},
+                    "group_answers": {"webkom": {}},
+                },
+                format="json",
+            )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("group_answers", response.data)
+        self.assertFalse(UserApplication.objects.filter(user=self.pleb_anna).exists())
+        self.assertFalse(
+            GroupApplication.objects.filter(application__user=self.pleb_anna).exists()
+        )
 
     def test_explicit_empty_group_answers_clear_existing_committee_answers(self):
         application = UserApplication.objects.create(

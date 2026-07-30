@@ -1,0 +1,163 @@
+<!doctype html>
+<html lang="nb">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Pause control test harness</title>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module">
+      import React from "react";
+      import { createRoot } from "react-dom/client";
+      import {
+        AdminScheduleSettingsPanel,
+        DURATION_PRESETS,
+      } from "./entrypoints/schedulerConfiguration.ts";
+      import "/static/frontend/src/styles/globals.css";
+      import "/static/frontend/src/styles/scheduler.css";
+
+      const search = new URLSearchParams(window.location.search);
+      const initialValue = Number(search.get("value") ?? "60");
+      const initialIsCustom = search.get("custom") === "1";
+      const initialInterviewCount = Number(search.get("count") ?? "4");
+      const initialDuration = Number(search.get("duration") ?? "30");
+      const pending = search.get("pending") === "1";
+
+      const Harness = () => {
+        const [value, setValue] = React.useState(initialValue);
+        const [isCustom, setIsCustom] = React.useState(initialIsCustom);
+        const [interviewCount, setInterviewCount] = React.useState(
+          initialInterviewCount,
+        );
+        const [duration, setDuration] = React.useState(initialDuration);
+        const [durationIsCustom, setDurationIsCustom] = React.useState(
+          !DURATION_PRESETS.includes(initialDuration),
+        );
+        const [startDate, setStartDate] = React.useState("2026-07-20");
+        const [endDate, setEndDate] = React.useState("2026-07-24");
+        const [dailyStart, setDailyStart] = React.useState({ h: 8, m: 0 });
+        const [dailyEnd, setDailyEnd] = React.useState({ h: 18, m: 0 });
+        const [saveCount, setSaveCount] = React.useState(0);
+        const formatTime = ({ h, m }) =>
+          `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
+
+        return React.createElement(
+          "div",
+          { "data-cy": "popover-harness", style: { padding: 40 } },
+          React.createElement(
+            "output",
+            { "data-cy": "committed-value", hidden: true },
+            value,
+          ),
+          React.createElement(
+            "output",
+            { "data-cy": "committed-mode", hidden: true },
+            isCustom ? "custom" : "preset",
+          ),
+          React.createElement(
+            "output",
+            { "data-cy": "duration-value", hidden: true },
+            duration,
+          ),
+          React.createElement(
+            "output",
+            { "data-cy": "duration-mode", hidden: true },
+            durationIsCustom ? "custom" : "preset",
+          ),
+          React.createElement(
+            "output",
+            { "data-cy": "period-value", hidden: true },
+            `${startDate}/${endDate}`,
+          ),
+          React.createElement(
+            "output",
+            { "data-cy": "daily-time-value", hidden: true },
+            `${formatTime(dailyStart)}/${formatTime(dailyEnd)}`,
+          ),
+          React.createElement(
+            "output",
+            { "data-cy": "save-count", hidden: true },
+            saveCount,
+          ),
+          React.createElement(AdminScheduleSettingsPanel, {
+            embedded: false,
+            period: {
+              startDate,
+              endDate,
+              isValid: true,
+              isTooLong: false,
+              onChangeStartDate: setStartDate,
+              onChangeEndDate: setEndDate,
+            },
+            duration: {
+              value: duration,
+              isCustom: durationIsCustom,
+              onSelectPreset: (nextValue) => {
+                setDuration(nextValue);
+                setDurationIsCustom(false);
+              },
+              onCommitCustomValue: (nextValue) => {
+                setDuration(nextValue);
+                setDurationIsCustom(true);
+              },
+            },
+            dailyTime: {
+              start: dailyStart,
+              end: dailyEnd,
+              isInvalid: false,
+              onChangeStart: setDailyStart,
+              onChangeEnd: setDailyEnd,
+            },
+            block: {
+              size: interviewCount,
+              onChangeSize: setInterviewCount,
+              pause: {
+                value,
+                isCustom,
+                onSelectPreset: (nextValue) => {
+                  setValue(nextValue);
+                  setIsCustom(false);
+                },
+                onCommitCustomValue: (nextValue) => {
+                  setValue(nextValue);
+                  setIsCustom(true);
+                },
+              },
+            },
+            saveStatus: {
+              hasPendingChanges: pending,
+              gridDefiningChange: false,
+              blockStructureChange: false,
+              visualGroupingChange: false,
+              availabilityAddition: pending,
+              availabilityRemoval: false,
+              hasScheduleDraft: false,
+              remoteRevisionChanged: false,
+              isSaving: false,
+              saveTick: saveCount,
+              showSave: true,
+              saveDisabled: false,
+              discardDisabled: false,
+              onDiscard: () => {},
+              onSave: () => setSaveCount((count) => count + 1),
+              openBlockCount: 22,
+              openSlotCount: 82,
+              wholeBlockCount: 20,
+              shortBlockCount: 1,
+              partialBlockCount: 1,
+              closedStandardSlotCount: 2,
+              openedStandardSlotCount: 1,
+              openedPauseSlotCount: 1,
+              manualChangeCount: 4,
+            },
+          }),
+        );
+      };
+
+      createRoot(document.getElementById("root")).render(
+        React.createElement(Harness),
+      );
+    </script>
+  </body>
+</html>
