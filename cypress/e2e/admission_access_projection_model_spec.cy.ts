@@ -354,14 +354,11 @@ describe("admission access projection", () => {
       hasDistributedPlan: false,
       myConflictReviewComplete: false,
       myConflictCandidateCount: 0,
-      hasSavedConfig: false,
       hasScheduleDraft: true,
       myAvailabilitySaved: false,
       availabilityParticipantCount: 0,
       submittedAvailabilityCount: 0,
-      proposalConflictCount: 0,
       conflictCollectionOpen: true,
-      workflowPhase: "draft",
       publicationReadiness: readiness,
     });
 
@@ -377,14 +374,11 @@ describe("admission access projection", () => {
       hasDistributedPlan: false,
       myConflictReviewComplete: false,
       myConflictCandidateCount: 2,
-      hasSavedConfig: true,
       hasScheduleDraft: true,
       myAvailabilitySaved: true,
       availabilityParticipantCount: 1,
       submittedAvailabilityCount: 1,
-      proposalConflictCount: 0,
       conflictCollectionOpen: true,
-      workflowPhase: "draft",
       publicationReadiness: {
         ...derivePublicationReadiness({
           schedule: [

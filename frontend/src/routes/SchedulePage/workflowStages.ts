@@ -24,8 +24,6 @@ export const deriveFoundationStage = ({
   hasConfiguredAvailabilityWindows: boolean;
   ownAvailabilityComplete: boolean;
   availabilityReady: boolean;
-  submittedCount: number;
-  participantCount: number;
 }): ScheduleStageSummary<FoundationStage> => {
   if (!hasConfiguredAvailabilityWindows) {
     return {

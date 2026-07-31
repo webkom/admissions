@@ -65,12 +65,6 @@ export const useScheduleWorkflow = ({
     });
   }, [isAdmin]);
 
-  const hasSavedConfig = Boolean(
-    savedSchedule &&
-      (savedSchedule.end_date !== null ||
-        (savedSchedule.enabled_windows?.length ?? 0) > 0 ||
-        savedSchedule.enabled_slots.length > 0),
-  );
   const hasConfiguredAvailabilityWindows = Boolean(
     savedSchedule &&
       ((savedSchedule.enabled_windows?.length ?? 0) > 0 ||
@@ -207,16 +201,8 @@ export const useScheduleWorkflow = ({
         hasConfiguredAvailabilityWindows,
         ownAvailabilityComplete: myAvailabilitySaved,
         availabilityReady,
-        submittedCount: submittedAvailabilityCount,
-        participantCount: availabilityParticipantCount,
       }),
-    [
-      availabilityParticipantCount,
-      availabilityReady,
-      hasConfiguredAvailabilityWindows,
-      myAvailabilitySaved,
-      submittedAvailabilityCount,
-    ],
+    [availabilityReady, hasConfiguredAvailabilityWindows, myAvailabilitySaved],
   );
   const publicationStage = useMemo(
     () =>
@@ -242,14 +228,11 @@ export const useScheduleWorkflow = ({
         hasDistributedPlan,
         myConflictReviewComplete,
         myConflictCandidateCount,
-        hasSavedConfig,
         hasScheduleDraft,
         myAvailabilitySaved,
         availabilityParticipantCount,
         submittedAvailabilityCount,
-        proposalConflictCount,
         conflictCollectionOpen: conflictCollectionNeedsAction,
-        workflowPhase,
         publicationReadiness,
       }),
     [
@@ -257,16 +240,13 @@ export const useScheduleWorkflow = ({
       conflictCollectionNeedsAction,
       hasConfiguredAvailabilityWindows,
       hasDistributedPlan,
-      hasSavedConfig,
       hasScheduleDraft,
       isAdmin,
       myConflictCandidateCount,
       myConflictReviewComplete,
       myAvailabilitySaved,
-      proposalConflictCount,
       publicationReadiness,
       submittedAvailabilityCount,
-      workflowPhase,
     ],
   );
 

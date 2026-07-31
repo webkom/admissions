@@ -259,8 +259,6 @@ describe("single-stage conveyor model", () => {
       hasConfiguredAvailabilityWindows: false,
       ownAvailabilityComplete: false,
       availabilityReady: false,
-      submittedCount: 0,
-      participantCount: 2,
     };
 
     expect(deriveFoundationStage(input)).to.include({ kind: "framework" });
@@ -275,7 +273,6 @@ describe("single-stage conveyor model", () => {
         ...input,
         hasConfiguredAvailabilityWindows: true,
         ownAvailabilityComplete: true,
-        submittedCount: 1,
       }),
     ).to.include({ kind: "coverage_waiting" });
     expect(
@@ -284,7 +281,6 @@ describe("single-stage conveyor model", () => {
         hasConfiguredAvailabilityWindows: true,
         ownAvailabilityComplete: true,
         availabilityReady: true,
-        submittedCount: 2,
       }),
     ).to.include({ kind: "coverage_ready" });
   });
@@ -447,16 +443,10 @@ describe("coarse workflow steps", () => {
       hasDistributedPlan: false,
       myConflictReviewComplete: true,
       myConflictCandidateCount: 1,
-      hasSavedConfig: true,
       hasScheduleDraft: true,
       myAvailabilitySaved: true,
       availabilityParticipantCount: 2,
       submittedAvailabilityCount: 2,
-      proposalConflictCount: publicationReadiness.proposalConflictCount,
-      workflowPhase: deriveWorkflowPhase({
-        isDistributed: false,
-        publicationReadiness,
-      }),
       publicationReadiness,
     });
 
@@ -488,13 +478,10 @@ describe("coarse workflow steps", () => {
       hasDistributedPlan: false,
       myConflictReviewComplete: false,
       myConflictCandidateCount: 0,
-      hasSavedConfig: true,
       hasScheduleDraft: false,
       myAvailabilitySaved: true,
       availabilityParticipantCount: 2,
       submittedAvailabilityCount: 1,
-      proposalConflictCount: 0,
-      workflowPhase: "setup",
       publicationReadiness: readiness({ draft: [] }),
     });
 

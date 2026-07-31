@@ -5,11 +5,7 @@ import {
   Sparkles,
 } from "lucide-react";
 
-import type {
-  PublicationReadiness,
-  WorkflowPhase,
-  WorkflowStepDefinition,
-} from "./types";
+import type { PublicationReadiness, WorkflowStepDefinition } from "./types";
 
 interface WorkflowStepParams {
   isAdmin: boolean;
@@ -17,14 +13,11 @@ interface WorkflowStepParams {
   hasDistributedPlan: boolean;
   myConflictReviewComplete: boolean;
   myConflictCandidateCount: number;
-  hasSavedConfig: boolean;
   hasScheduleDraft: boolean;
   myAvailabilitySaved: boolean;
   availabilityParticipantCount: number;
   submittedAvailabilityCount: number;
-  proposalConflictCount: number;
   conflictCollectionOpen?: boolean;
-  workflowPhase: WorkflowPhase;
   publicationReadiness: PublicationReadiness;
 }
 
