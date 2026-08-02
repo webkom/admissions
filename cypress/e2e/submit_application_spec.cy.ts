@@ -15,10 +15,14 @@ describe("submit application spec", () => {
     cy.contains("Send inn søknad").click();
     cy.contains("h1", "Søknad sendt!").should("be.visible");
     cy.contains("Slett søknad").click();
-    cy.contains("Er du sikker på at du vil slette søknaden din?")
-      .parent()
-      .contains("Ja")
-      .click();
+    cy.get("[role='dialog']")
+      .should("have.attr", "aria-modal", "true")
+      .within(() => {
+        cy.contains("Er du sikker på at du vil slette søknaden din?").should(
+          "be.visible",
+        );
+        cy.contains("button", "Bekreft").click();
+      });
     cy.location("pathname").should("eq", "/");
   });
 });
