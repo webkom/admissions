@@ -262,11 +262,14 @@ const AdminSchedulePatternGrid: React.FC<AdminSchedulePatternGridProps> = ({
     null,
   );
   const activeSlotsRef = React.useRef(activeSlots);
+  const previousViewRef = React.useRef(view);
 
   React.useEffect(() => {
     activeSlotsRef.current = activeSlots;
   }, [activeSlots]);
   React.useEffect(() => {
+    if (previousViewRef.current === view) return;
+    previousViewRef.current = view;
     setSlotEditor(null);
   }, [view]);
 
