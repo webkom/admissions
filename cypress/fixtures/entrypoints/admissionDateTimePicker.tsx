@@ -9,6 +9,8 @@ const search = new URLSearchParams(window.location.search);
 const initialValue = search.get("value") ?? "2026-07-17T13:12:00";
 const placeholder = search.get("placeholder") ?? "2026-07-20T12:00:00";
 const minimum = search.get("min") ?? undefined;
+const preservedValue = search.get("preserved") ?? undefined;
+const preservedMinimum = search.get("preservedMin") ?? undefined;
 const minimumIsExclusive = search.get("exclusive") === "1";
 const verticalOffset = Number(search.get("offset") ?? "0");
 
@@ -49,6 +51,8 @@ const AdmissionDateTimePickerHarness: React.FC = () => {
         value={value}
         placeholder={placeholder}
         min={minimum}
+        preservedValue={preservedValue}
+        preservedMin={preservedMinimum}
         minExclusive={minimumIsExclusive}
         describedBy="open_from-description"
         onChange={setValue}

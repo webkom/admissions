@@ -19,9 +19,11 @@ import GroupSelector from "./components/GroupSelector";
 import { Button } from "@webkom/lego-bricks";
 import LoadingBall from "src/components/LoadingBall";
 import {
-  ADMISSION_TIME_ZONE,
   createDefaultAdmissionDates,
   getAdmissionDateTimeIssue,
+  resolveAdmissionDateTime,
+  serializeAdmissionDateTime,
+  toAdmissionLocalDateTime,
 } from "./admissionDateDefaults";
 
 interface ReturnedData {
@@ -29,54 +31,52 @@ interface ReturnedData {
   message: string;
 }
 
-type AdmissionDateField = "open_from" | "public_deadline" | "closed_from";
-
-const formatDate = (date: DateTime): string =>
-  date.toFormat("yyyy-MM-dd'T'HH:mm:ss");
-const formatDateString = (dateString?: string): string => {
-  const date = DateTime.fromISO(dateString ?? "").setZone(ADMISSION_TIME_ZONE);
-  return date.isValid ? formatDate(date) : "";
-};
-const localTimeStringToTimezoned = (dateString: string): string | null =>
-  DateTime.fromISO(dateString, {
-    zone: ADMISSION_TIME_ZONE,
-  }).toISO({ includeOffset: true });
+const admissionDateFields = [
+  "open_from",
+  "public_deadline",
+  "closed_from",
+] as const;
+type AdmissionDateField = (typeof admissionDateFields)[number];
+type PreservedAdmissionDates = Partial<Record<AdmissionDateField, string>>;
 
 const validateAdmissionDates = (
   values: MutationAdmission,
+  preservedDates: PreservedAdmissionDates = {},
 ): Partial<Record<AdmissionDateField, string>> => {
   const errors: Partial<Record<AdmissionDateField, string>> = {};
+  const resolvedDates: Partial<Record<AdmissionDateField, DateTime>> = {};
   const labels: Record<AdmissionDateField, string> = {
     open_from: "Åpningstidspunkt",
     public_deadline: "Søknadsfrist",
     closed_from: "Stengetidspunkt",
   };
-  (Object.keys(labels) as AdmissionDateField[]).forEach((field) => {
+  admissionDateFields.forEach((field) => {
     if (!values[field]) {
       errors[field] = `${labels[field]} er påkrevd`;
       return;
     }
     const dateTimeIssue = getAdmissionDateTimeIssue(values[field]);
-    if (dateTimeIssue === "ambiguous") {
+    const resolvedDate = resolveAdmissionDateTime(
+      values[field],
+      preservedDates[field],
+    );
+    if (dateTimeIssue === "ambiguous" && !resolvedDate) {
       errors[field] =
         "Klokkeslettet er tvetydig ved overgang til vintertid. Velg et annet klokkeslett";
-    } else if (dateTimeIssue === "invalid") {
+    } else if (!resolvedDate) {
       errors[field] =
         "Velg en gyldig dato og et gyldig klokkeslett i norsk tid";
+    } else {
+      resolvedDates[field] = resolvedDate;
     }
   });
-  if (
-    !errors.open_from &&
-    !errors.public_deadline &&
-    values.public_deadline <= values.open_from
-  ) {
+  const opening = resolvedDates.open_from;
+  const deadline = resolvedDates.public_deadline;
+  const closing = resolvedDates.closed_from;
+  if (opening && deadline && deadline.toMillis() <= opening.toMillis()) {
     errors.public_deadline = "Søknadsfristen må være etter åpningen";
   }
-  if (
-    !errors.public_deadline &&
-    !errors.closed_from &&
-    values.closed_from < values.public_deadline
-  ) {
+  if (deadline && closing && closing.toMillis() < deadline.toMillis()) {
     errors.closed_from = "Stengingen kan ikke være før søknadsfristen";
   }
   return errors;
@@ -98,6 +98,11 @@ const CreateAdmission: React.FC = () => {
   const [returnedData, setReturnedData] = useState<ReturnedData>();
 
   const isNew = !admissionSlug;
+  const preservedAdmissionDates: PreservedAdmissionDates = {
+    open_from: admission?.open_from,
+    public_deadline: admission?.public_deadline,
+    closed_from: admission?.closed_from,
+  };
 
   useEffect(() => {
     setReturnedData(undefined);
@@ -113,7 +118,10 @@ const CreateAdmission: React.FC = () => {
       groups: [],
     },
     onSubmit: (values) => {
-      const dateErrors = validateAdmissionDates(values);
+      const dateErrors = validateAdmissionDates(
+        values,
+        preservedAdmissionDates,
+      );
       if (Object.keys(dateErrors).length > 0) {
         Object.keys(dateErrors).forEach((field) => {
           void formik.setFieldTouched(field, true, false);
@@ -122,13 +130,13 @@ const CreateAdmission: React.FC = () => {
       }
       setReturnedData(undefined);
       const processedValues = { ...values };
-      // Use luxon to parse datetime with local timezone and add timezone offset to the datetime-string
-      processedValues.open_from =
-        localTimeStringToTimezoned(processedValues.open_from) ?? "";
-      processedValues.closed_from =
-        localTimeStringToTimezoned(processedValues.closed_from) ?? "";
-      processedValues.public_deadline =
-        localTimeStringToTimezoned(processedValues.public_deadline) ?? "";
+      admissionDateFields.forEach((field) => {
+        processedValues[field] =
+          serializeAdmissionDateTime(
+            processedValues[field],
+            preservedAdmissionDates[field],
+          ) ?? "";
+      });
       const onSuccess = (data: AdmissionMutationResponse) => {
         setReturnedData({ type: "success", message: "Opptaket er lagret!" });
         if (data?.slug) {
@@ -183,16 +191,19 @@ const CreateAdmission: React.FC = () => {
         title: admission.title,
         slug: admission.slug,
         description: admission.description,
-        open_from: formatDateString(admission.open_from),
-        public_deadline: formatDateString(admission.public_deadline),
-        closed_from: formatDateString(admission.closed_from),
+        open_from: toAdmissionLocalDateTime(admission.open_from),
+        public_deadline: toAdmissionLocalDateTime(admission.public_deadline),
+        closed_from: toAdmissionLocalDateTime(admission.closed_from),
         admin_groups: admission.admin_groups?.map((group) => group.pk) ?? [],
         groups: admission.groups.map((group) => group.pk),
       });
     }
   }, [admission]);
 
-  const dateErrors = validateAdmissionDates(formik.values);
+  const dateErrors = validateAdmissionDates(
+    formik.values,
+    preservedAdmissionDates,
+  );
   const dateFieldError = (field: AdmissionDateField) => dateErrors[field];
 
   const updateDateField = (field: AdmissionDateField, value: string) => {
@@ -258,6 +269,7 @@ const CreateAdmission: React.FC = () => {
             id="open_from"
             label="Opptaket åpner"
             value={formik.values.open_from}
+            preservedValue={preservedAdmissionDates.open_from}
             invalid={Boolean(dateFieldError("open_from"))}
             error={dateFieldError("open_from")}
             describedBy="open-from-description admission-timezone-description"
@@ -276,6 +288,8 @@ const CreateAdmission: React.FC = () => {
             label="Søknadsfrist"
             value={formik.values.public_deadline}
             min={formik.values.open_from || undefined}
+            preservedValue={preservedAdmissionDates.public_deadline}
+            preservedMin={preservedAdmissionDates.open_from}
             minExclusive
             invalid={Boolean(dateFieldError("public_deadline"))}
             error={dateFieldError("public_deadline")}
@@ -294,6 +308,8 @@ const CreateAdmission: React.FC = () => {
             label="Opptaket stenger"
             value={formik.values.closed_from}
             min={formik.values.public_deadline || undefined}
+            preservedValue={preservedAdmissionDates.closed_from}
+            preservedMin={preservedAdmissionDates.public_deadline}
             invalid={Boolean(dateFieldError("closed_from"))}
             error={dateFieldError("closed_from")}
             describedBy="closed-from-description admission-timezone-description"

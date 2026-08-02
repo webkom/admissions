@@ -291,6 +291,19 @@ describe("admission date and time fields", () => {
     );
   });
 
+  it("orders preserved fallback values by their original offsets", () => {
+    mountPicker(
+      "?value=2026-10-25T02%3A30%3A00&preserved=2026-10-25T02%3A30%3A00%2B01%3A00&min=2026-10-25T02%3A30%3A00&preservedMin=2026-10-25T02%3A30%3A00%2B02%3A00&exclusive=1",
+    );
+
+    cy.get("#open_from-time").focus().blur().should("have.value", "02:30");
+    cy.get("[data-cy=committed-datetime]").should(
+      "have.text",
+      "2026-10-25T02:30:00",
+    );
+    cy.get('[role="alert"]').should("not.exist");
+  });
+
   it("supports keyboard date selection and escape", () => {
     mountPicker();
     cy.get("#open_from").click();

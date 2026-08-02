@@ -71,6 +71,29 @@ const managedAdmission: Admission = {
   },
 };
 
+const fallbackHourAdmission: Admission = {
+  ...managedAdmission,
+  pk: "44444444-4444-4444-8444-444444444444",
+  slug: "fallback-hour-2026",
+  title: "Opptak i vintertidsovergangen",
+  open_from: "2026-10-25T02:30:00+02:00",
+  public_deadline: "2026-10-25T02:30:00+01:00",
+  closed_from: "2026-10-25T03:30:00+01:00",
+};
+
+const visitAdmissionForEdit = (admission: Admission) => {
+  cy.intercept("GET", "**/api/manage/admission/", [admission]).as("admissions");
+  cy.intercept(
+    "GET",
+    `**/api/manage/admission/${admission.slug}/`,
+    admission,
+  ).as("admission");
+  cy.intercept("GET", "**/api/manage/group/", groups).as("groups");
+  cy.login("webkom");
+  cy.visit(`/manage/${admission.slug}`);
+  cy.wait(["@admissions", "@admission", "@groups"]);
+};
+
 describe("create admission lifecycle dates", () => {
   beforeEach(() => {
     cy.intercept("GET", "**/api/manage/admission/", []).as("admissions");
@@ -165,18 +188,7 @@ describe("create admission lifecycle dates", () => {
 
 describe("edit admission lifecycle dates", () => {
   beforeEach(() => {
-    cy.intercept("GET", "**/api/manage/admission/", [managedAdmission]).as(
-      "admissions",
-    );
-    cy.intercept(
-      "GET",
-      `**/api/manage/admission/${managedAdmission.slug}/`,
-      managedAdmission,
-    ).as("admission");
-    cy.intercept("GET", "**/api/manage/group/", groups).as("groups");
-    cy.login("webkom");
-    cy.visit(`/manage/${managedAdmission.slug}`);
-    cy.wait(["@admissions", "@admission", "@groups"]);
+    visitAdmissionForEdit(managedAdmission);
   });
 
   it("hydrates offset timestamps as Norwegian wall times and updates ordered lifecycle values", () => {
@@ -220,6 +232,59 @@ describe("edit admission lifecycle dates", () => {
     setAdmissionDateTime("public_deadline", "2026-10-29T10:00");
     setAdmissionDateTime("closed_from", "2026-10-30T23:59");
     cy.contains("button", "Lagre endringer").click();
+    cy.wait("@updateAdmission");
+  });
+});
+
+describe("edit admission during the repeated autumn hour", () => {
+  beforeEach(() => {
+    visitAdmissionForEdit(fallbackHourAdmission);
+  });
+
+  it("preserves distinct fallback offsets while saving an unrelated edit", () => {
+    cy.get("#open_from-time")
+      .should("have.value", "02:30")
+      .focus()
+      .blur()
+      .should("have.value", "02:30");
+    cy.get("#public_deadline-time")
+      .should("have.value", "02:30")
+      .focus()
+      .blur()
+      .should("have.value", "02:30");
+    cy.get("#open_from-error").should("not.exist");
+    cy.get("#public_deadline-error").should("not.exist");
+
+    cy.intercept(
+      "PATCH",
+      `**/api/manage/admission/${fallbackHourAdmission.slug}/`,
+      (request) => {
+        expect(request.body.open_from).to.equal(
+          "2026-10-25T02:30:00.000+02:00",
+        );
+        expect(request.body.public_deadline).to.equal(
+          "2026-10-25T02:30:00.000+01:00",
+        );
+        expect(request.body.closed_from).to.equal(
+          "2026-10-25T03:30:00.000+01:00",
+        );
+        expect(Date.parse(request.body.open_from)).to.be.lessThan(
+          Date.parse(request.body.public_deadline),
+        );
+        expect(Date.parse(request.body.public_deadline)).to.be.lessThan(
+          Date.parse(request.body.closed_from),
+        );
+        request.reply({
+          statusCode: 200,
+          body: { ...request.body, created_by: "test-actor" },
+        });
+      },
+    ).as("updateAdmission");
+
+    cy.get('input[name="title"]')
+      .clear()
+      .type("Oppdatert opptak i vintertidsovergangen");
+    cy.contains("button", "Lagre endringer").should("not.be.disabled").click();
     cy.wait("@updateAdmission");
   });
 });

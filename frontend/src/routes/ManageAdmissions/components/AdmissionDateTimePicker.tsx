@@ -16,7 +16,10 @@ import type { CalendarPopoverLayoutContext } from "src/components/ui/Calendar";
 import { iconSizes } from "src/styles/designTokens";
 import cn from "src/utils/cn";
 
-import { getAdmissionDateTimeIssue } from "../admissionDateDefaults";
+import {
+  getAdmissionDateTimeIssue,
+  resolveAdmissionDateTime,
+} from "../admissionDateDefaults";
 
 interface AdmissionDateTimePickerProps {
   id: string;
@@ -24,6 +27,8 @@ interface AdmissionDateTimePickerProps {
   value: string;
   placeholder?: string;
   min?: string;
+  preservedValue?: string;
+  preservedMin?: string;
   minExclusive?: boolean;
   invalid?: boolean;
   error?: string;
@@ -108,6 +113,8 @@ const AdmissionDateTimePicker: React.FC<AdmissionDateTimePickerProps> = ({
   value,
   placeholder,
   min,
+  preservedValue,
+  preservedMin,
   minExclusive = false,
   invalid = false,
   error,
@@ -153,20 +160,22 @@ const AdmissionDateTimePicker: React.FC<AdmissionDateTimePickerProps> = ({
 
   const getMinimumError = React.useCallback(
     (candidate: string): string | null => {
-      if (
-        !min ||
-        (minExclusive
-          ? candidate > min.slice(0, 19)
-          : candidate >= min.slice(0, 19))
-      ) {
-        return null;
-      }
-      if (!minParts) return null;
+      if (!min || !minParts) return null;
+      const candidateInstant = resolveAdmissionDateTime(
+        candidate,
+        preservedValue,
+      );
+      const minimumInstant = resolveAdmissionDateTime(min, preservedMin);
+      if (!candidateInstant || !minimumInstant) return null;
+      const meetsMinimum = minExclusive
+        ? candidateInstant.toMillis() > minimumInstant.toMillis()
+        : candidateInstant.toMillis() >= minimumInstant.toMillis();
+      if (meetsMinimum) return null;
       return `Tidspunktet må være ${minExclusive ? "etter" : "tidligst"} ${formatDate(
         minParts.date,
       )} kl. ${minParts.time}.`;
     },
-    [min, minExclusive, minParts],
+    [min, minExclusive, minParts, preservedMin, preservedValue],
   );
 
   const validateAndCommit = React.useCallback(
@@ -186,7 +195,10 @@ const AdmissionDateTimePicker: React.FC<AdmissionDateTimePickerProps> = ({
         onChange("");
         return false;
       }
-      if (dateTimeIssue === "ambiguous") {
+      if (
+        dateTimeIssue === "ambiguous" &&
+        !resolveAdmissionDateTime(candidate, preservedValue)
+      ) {
         setTimeError(
           "Klokkeslettet er tvetydig ved overgang til vintertid. Velg et annet klokkeslett.",
         );
@@ -205,7 +217,7 @@ const AdmissionDateTimePicker: React.FC<AdmissionDateTimePickerProps> = ({
       onChange(candidate);
       return true;
     },
-    [getMinimumError, onChange],
+    [getMinimumError, onChange, preservedValue],
   );
 
   React.useEffect(() => {
@@ -218,7 +230,7 @@ const AdmissionDateTimePicker: React.FC<AdmissionDateTimePickerProps> = ({
     }
 
     const candidate = candidateDateTime(selectedDate, timeText);
-    if (getAdmissionDateTimeIssue(candidate)) return;
+    if (!resolveAdmissionDateTime(candidate, preservedValue)) return;
 
     const minimumError = getMinimumError(candidate);
     if (minimumError) {
@@ -230,7 +242,14 @@ const AdmissionDateTimePicker: React.FC<AdmissionDateTimePickerProps> = ({
 
     setTimeError(null);
     onChange(candidate);
-  }, [getMinimumError, onChange, selectedDate, timeError, timeText]);
+  }, [
+    getMinimumError,
+    onChange,
+    preservedValue,
+    selectedDate,
+    timeError,
+    timeText,
+  ]);
 
   const closePicker = React.useCallback(
     (markTouched = true) => {
