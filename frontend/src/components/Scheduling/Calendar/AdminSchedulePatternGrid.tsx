@@ -72,7 +72,11 @@ const SlotEditorPopover: React.FC<{
     const shouldRestoreFocus =
       activeBeforeClose === null ||
       activeBeforeClose === document.body ||
-      Boolean(activeBeforeClose && popover?.contains(activeBeforeClose));
+      Boolean(
+        activeBeforeClose &&
+          (activeBeforeClose === state.anchor ||
+            popover?.contains(activeBeforeClose)),
+      );
 
     onClose();
     requestAnimationFrame(() => {
