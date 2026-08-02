@@ -749,6 +749,7 @@ describe("shared selectable schedule grid", () => {
       expect(rect.right).to.be.at.most(390);
       expect(rect.bottom).to.be.at.most(220);
     });
+    cy.get("@largeBlock").focus().should("be.focused");
     cy.get("body").click(2, 2, { force: true });
     cy.get("[data-cy=schedule-slot-editor]").should("not.exist");
     cy.focused()
