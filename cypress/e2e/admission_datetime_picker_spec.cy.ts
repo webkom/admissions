@@ -1,10 +1,9 @@
 import { DateTime } from "luxon";
 import { createDefaultAdmissionDates } from "../../frontend/src/routes/ManageAdmissions/admissionDateDefaults";
+import { visitStaticFixture } from "../support/staticFixtures";
 
 const mountPicker = (query = "") => {
-  cy.visit(
-    `http://localhost:5001/static/cypress/fixtures/admission-datetime-picker.html${query}`,
-  );
+  visitStaticFixture("admission-datetime-picker", query.replace(/^\?/, ""));
   cy.get("[data-cy=datetime-harness]").should("exist");
 };
 
@@ -128,6 +127,34 @@ describe("admission date and time fields", () => {
     );
     cy.get("#open_from").should("contain", "3. august 2026");
     cy.get("#open_from").should("be.focused");
+  });
+
+  it("keeps focus on the time field when it is opened as the calendar closes", () => {
+    mountPicker("?value=");
+    cy.get("#open_from").click();
+    navigateToMonth("2026-08-03");
+    cy.get('[data-calendar-date="2026-08-03"]').then(($date) => {
+      const document = $date[0].ownerDocument;
+      const timeInput = document.getElementById(
+        "open_from-time",
+      ) as HTMLInputElement;
+
+      $date[0].click();
+      timeInput.focus();
+      expect(document.activeElement).to.equal(timeInput);
+
+      const view = document.defaultView;
+      if (!view) throw new Error("Date-time fixture window is unavailable");
+      return new Cypress.Promise<void>((resolve) => {
+        view.requestAnimationFrame(() => resolve());
+      });
+    });
+
+    cy.get("#open_from-time").should("be.focused").type("1430").blur();
+    cy.get("[data-cy=committed-datetime]").should(
+      "have.text",
+      "2026-08-03T14:30:00",
+    );
   });
 
   [
