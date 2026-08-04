@@ -95,7 +95,9 @@ export const useScheduleConfiguration = ({
 
     return {
       startDate: savedSchedule.start_date,
-      endDate: inferEndDateFromSchedule(savedSchedule) ?? defaultEnd,
+      endDate:
+        inferEndDateFromSchedule(savedSchedule) ??
+        addDays(savedSchedule.start_date, 4),
       dayStartMinute: savedSchedule.day_start_minute,
       dayEndMinute: savedSchedule.day_end_minute,
       sessionDuration: savedSchedule.session_duration,
@@ -110,7 +112,7 @@ export const useScheduleConfiguration = ({
       enabledSlots: new Set(savedSchedule.enabled_slots),
       revision: savedSchedule.updated_at,
     };
-  }, [defaultEnd, savedSchedule]);
+  }, [defaultEnd, defaultStart, savedSchedule]);
 
   const {
     startDate,
