@@ -34,12 +34,19 @@ class Command(BaseCommand):
     cypress_credentials_filename = ".cypress-fixture-credentials.json"
     cypress_admission_id = "9cb0db0f-0139-439c-ad4b-149533a05b33"
     cypress_admission_slug = "webkom-open"
+    cypress_worker_admission_id = "64fc34b6-d597-4df2-8ecd-48c3380df456"
+    cypress_worker_admission_slug = "webkom-past-deadline"
     cypress_admin_id = "40667e62-e5fc-4f97-83f0-f5d6b4326652"
     cypress_admin_username = "webkom"
+    cypress_member_id = "a8ef4e3d-9e1f-44f3-8ed2-8d1d2d147404"
     cypress_candidate_ids = (
         "ea3a8468-32f2-4a2a-8503-5245c9602c01",
         "ea3a8468-32f2-4a2a-8503-5245c9602c02",
         "ea3a8468-32f2-4a2a-8503-5245c9602c03",
+    )
+    cypress_worker_candidate_ids = (
+        "ea3a8468-32f2-4a2a-8503-5245c9602c04",
+        "ea3a8468-32f2-4a2a-8503-5245c9602c05",
     )
     seeded_admission_ids = (
         cypress_admission_id,
@@ -261,6 +268,98 @@ class Command(BaseCommand):
                 "experience_level": InterviewAvailability.EXPERIENCE_EXPERIENCED,
                 "submitted_grid_generation": 1,
             },
+        )
+        SolveJob.objects.filter(admission=admission).delete()
+        self.prepare_cypress_worker_state(admin)
+
+    def prepare_cypress_worker_state(self, admin):
+        try:
+            admission = Admission.objects.get(
+                pk=self.cypress_worker_admission_id,
+                slug=self.cypress_worker_admission_slug,
+            )
+            member = LegoUser.objects.get(pk=self.cypress_member_id)
+        except (Admission.DoesNotExist, LegoUser.DoesNotExist) as exc:
+            raise CommandError(
+                "The exact Cypress worker admission fixtures are required."
+            ) from exc
+
+        applications = list(
+            UserApplication.objects.filter(
+                admission=admission,
+                pk__in=self.cypress_worker_candidate_ids,
+            ).order_by("created_at")
+        )
+        if {str(application.pk) for application in applications} != set(
+            self.cypress_worker_candidate_ids
+        ):
+            raise CommandError(
+                "The complete Cypress worker candidate fixture set is required."
+            )
+
+        start_date = timezone.localdate() + timedelta(days=4)
+        date_text = start_date.isoformat()
+        minutes = (10 * 60, 11 * 60)
+        enabled_slots = [f"{date_text}|{minute}" for minute in minutes]
+        saved_schedule, _ = SavedSchedule.objects.update_or_create(
+            admission=admission,
+            defaults={
+                "schedule": [],
+                "start_date": start_date,
+                "end_date": start_date,
+                "session_duration": 60,
+                "enabled_windows": [
+                    {
+                        "date": date_text,
+                        "start_minute": minutes[0],
+                        "end_minute": minutes[-1] + 60,
+                    }
+                ],
+                "enabled_slots": enabled_slots,
+                "day_start_minute": minutes[0],
+                "day_end_minute": minutes[-1] + 60,
+                "chunk_size": len(minutes),
+                "chunk_break_minutes": 0,
+                "block_mode": SavedSchedule.BLOCK_MODE_STANDARD,
+                "resolved_blocks": [{"slots": enabled_slots}],
+                "layout_version": 2,
+                "slot_overrides": [],
+                "availability_generation": 1,
+                "panel_size": 1,
+                "solver_options": {
+                    "policy_version": 2,
+                    "panel_stability": "preferred",
+                    "availability_fallback": "stop",
+                    "require_experienced_panel": True,
+                    "initial_strategy": "balanced",
+                },
+                "is_distributed": False,
+                "conflict_review_open": False,
+                "conflict_collection_open": False,
+                "name_visibility": SavedSchedule.NAME_VISIBILITY_HIDDEN,
+            },
+        )
+        saved_schedule.revealed_groups.clear()
+        InterviewAvailability.objects.filter(admission=admission).delete()
+        InterviewAvailability.objects.create(
+            admission=admission,
+            user=admin,
+            slots=enabled_slots,
+            conflicts=[],
+            reviewed_candidate_ids=[],
+            participation=InterviewAvailability.PARTICIPATION_PARTICIPATING,
+            experience_level=InterviewAvailability.EXPERIENCE_EXPERIENCED,
+            submitted_grid_generation=1,
+        )
+        InterviewAvailability.objects.create(
+            admission=admission,
+            user=member,
+            slots=[],
+            conflicts=[],
+            reviewed_candidate_ids=[],
+            participation=InterviewAvailability.PARTICIPATION_NOT_PARTICIPATING,
+            experience_level=InterviewAvailability.EXPERIENCE_UNKNOWN,
+            submitted_grid_generation=None,
         )
         SolveJob.objects.filter(admission=admission).delete()
 

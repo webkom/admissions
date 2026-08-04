@@ -16,6 +16,7 @@ from admissions.admissions.models import (
     LegoUser,
     Membership,
     SavedSchedule,
+    SolveJob,
     UserApplication,
 )
 from admissions.utils.management.commands.load_fixtures import Command
@@ -94,6 +95,34 @@ class CypressFixturePreparationTestCase(TestCase):
                 ["recruiting", "member"],
             )
             self.assertEqual(Session.objects.count(), 0)
+
+            worker_admission = Admission.objects.get(
+                pk=Command.cypress_worker_admission_id,
+                slug=Command.cypress_worker_admission_slug,
+            )
+            worker_schedule = SavedSchedule.objects.get(admission=worker_admission)
+            worker_availability = {
+                str(row.user_id): row
+                for row in InterviewAvailability.objects.filter(
+                    admission=worker_admission
+                )
+            }
+            self.assertEqual(worker_schedule.schedule, [])
+            self.assertFalse(worker_schedule.is_distributed)
+            self.assertEqual(len(worker_schedule.enabled_slots), 2)
+            self.assertEqual(
+                worker_schedule.resolved_blocks,
+                [{"slots": worker_schedule.enabled_slots}],
+            )
+            self.assertEqual(
+                worker_availability[Command.cypress_admin_id].participation,
+                InterviewAvailability.PARTICIPATION_PARTICIPATING,
+            )
+            self.assertEqual(
+                worker_availability[Command.cypress_member_id].participation,
+                InterviewAvailability.PARTICIPATION_NOT_PARTICIPATING,
+            )
+            self.assertFalse(SolveJob.objects.filter(admission=worker_admission))
 
             client = Client(enforce_csrf_checks=True)
             login_page = client.get("/api-auth/login/")

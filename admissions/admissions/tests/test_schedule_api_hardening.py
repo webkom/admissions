@@ -6,6 +6,7 @@ from unittest import mock
 
 from django.contrib.auth.models import AnonymousUser
 from django.core.management import call_command
+from django.core.management.base import CommandError
 from django.db import IntegrityError, close_old_connections, transaction
 from django.test import RequestFactory, TestCase, TransactionTestCase, override_settings
 from django.urls import reverse
@@ -4826,6 +4827,40 @@ class SolveJobLifecycleTestCase(APITestCase):
         self.assertEqual(res.data["status"], "DONE")
         self.assertIsNotNone(res.data["started_at"])
         self.assertEqual(res.data["result"]["status"], "SUCCESS")
+
+    def test_worker_can_process_an_exact_job_without_claiming_an_older_job(self):
+        other_admission = create_admission(
+            created_by=self.user,
+            slug="older-async-opptak",
+            title="Older async admission",
+        )
+        other_admission.admin_groups.add(self.group)
+        older_job = SolveJob.objects.create(
+            admission=other_admission,
+            requested_by=self.user,
+            request_data=self.payload,
+            status=SolveJob.STATUS_PENDING,
+        )
+        SolveJob.objects.filter(pk=older_job.pk).update(
+            created_at=timezone.now() - timedelta(minutes=1)
+        )
+        target_job_id = self._enqueue().data["job_id"]
+
+        call_command("run_solver_worker", once=True, job_id=target_job_id)
+
+        older_job.refresh_from_db()
+        target_job = SolveJob.objects.get(pk=target_job_id)
+        self.assertEqual(older_job.status, SolveJob.STATUS_PENDING)
+        self.assertEqual(target_job.status, SolveJob.STATUS_DONE)
+
+    def test_targeted_worker_fails_when_the_job_is_not_pending(self):
+        job_id = self._enqueue().data["job_id"]
+        SolveJob.objects.filter(pk=job_id).update(
+            status=SolveJob.STATUS_CANCELLED,
+        )
+
+        with self.assertRaises(CommandError):
+            call_command("run_solver_worker", once=True, job_id=job_id)
 
     def test_worker_rejects_legacy_committee_recruiter_job(self):
         job_id = self._enqueue().data["job_id"]

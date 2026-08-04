@@ -1,4 +1,5 @@
 import time
+import uuid
 from datetime import timedelta
 
 from django.conf import settings
@@ -67,6 +68,11 @@ class Command(BaseCommand):
             action="store_true",
             help="Run one maintenance+claim cycle and exit. Intended for tests.",
         )
+        parser.add_argument(
+            "--job-id",
+            type=uuid.UUID,
+            help="Process this pending job. Requires --once and is intended for tests.",
+        )
 
     def handle(self, *args, **options):
         if not getattr(settings, "ADMISSIONS_SCHEDULER_ENABLED", True):
@@ -76,13 +82,20 @@ class Command(BaseCommand):
             )
         poll_interval = options["poll_interval"]
         run_once = options["once"]
+        job_id = options["job_id"]
+        if job_id is not None and not run_once:
+            raise CommandError("--job-id requires --once.")
         log.info("solver_worker_started", poll_interval=poll_interval)
         while True:
             try:
                 self._reap_stale_jobs()
                 self._cleanup_old_jobs()
-                processed = self._claim_and_run()
+                processed = self._claim_and_run(job_id=job_id)
                 if run_once:
+                    if job_id is not None and not processed:
+                        raise CommandError(
+                            f"Pending solve job {job_id} could not be claimed."
+                        )
                     return
                 if not processed:
                     time.sleep(poll_interval)
@@ -146,8 +159,8 @@ class Command(BaseCommand):
         if deleted:
             log.info("solve_jobs_cleaned", count=deleted)
 
-    def _claim_and_run(self):
-        """Claim the oldest pending job and run it. Returns True if one ran.
+    def _claim_and_run(self, job_id=None):
+        """Claim the requested or oldest pending job and run it.
 
         The claim happens inside a transaction with a row lock so several
         workers can run side by side without grabbing the same job; the solve
@@ -155,12 +168,12 @@ class Command(BaseCommand):
         """
         skip_locked = connection.features.has_select_for_update_skip_locked
         with transaction.atomic():
-            job = (
-                SolveJob.objects.select_for_update(skip_locked=skip_locked)
-                .filter(status=SolveJob.STATUS_PENDING)
-                .order_by("created_at")
-                .first()
-            )
+            pending_jobs = SolveJob.objects.select_for_update(
+                skip_locked=skip_locked
+            ).filter(status=SolveJob.STATUS_PENDING)
+            if job_id is not None:
+                pending_jobs = pending_jobs.filter(pk=job_id)
+            job = pending_jobs.order_by("created_at").first()
             if job is None:
                 return False
             job.status = SolveJob.STATUS_RUNNING

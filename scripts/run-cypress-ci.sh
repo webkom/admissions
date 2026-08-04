@@ -5,6 +5,7 @@ set -Eeuo pipefail
 fixture_output_dir="$(mktemp -d /tmp/admissions-cypress-fixtures.XXXXXX)"
 fixture_server_log="$(mktemp /tmp/admissions-cypress-fixture-server.XXXXXX.log)"
 fixture_server_pid=""
+worker_request_dir=".cypress-worker-requests"
 
 cleanup() {
   exit_status=$?
@@ -18,6 +19,7 @@ cleanup() {
   rm -f .cypress-fixture-credentials.json
   rm -rf "$fixture_output_dir"
   rm -f "$fixture_server_log"
+  rm -rf "$worker_request_dir"
   exit "$exit_status"
 }
 
@@ -26,6 +28,7 @@ trap 'exit 130' INT
 trap 'exit 143' TERM HUP
 
 export CYPRESS_FIXTURE_OUT_DIR="$fixture_output_dir"
+rm -rf "$worker_request_dir"
 
 ./node_modules/.bin/vite build --mode cypress-fixtures
 ./node_modules/.bin/vite preview \
