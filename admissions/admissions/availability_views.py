@@ -20,8 +20,11 @@ from admissions.admissions.models import (
     LegoUser,
     Membership,
     SavedSchedule,
-    ScheduleDeviationApproval,
     UserApplication,
+)
+from admissions.admissions.schedule_invalidation import (
+    invalidate_planning_input,
+    publication_is_invalidated_by_availability,
 )
 from admissions.admissions.schedule_windows import enabled_windows_to_slots
 from admissions.admissions.scheduling_utils import (
@@ -289,10 +292,11 @@ class InterviewAvailabilityView(APIView):
                     status=status.HTTP_400_BAD_REQUEST,
                 )
 
-        try:
-            saved_schedule = admission.saved_schedule
-        except SavedSchedule.DoesNotExist:
-            saved_schedule = None
+        saved_schedule = (
+            SavedSchedule.objects.select_for_update()
+            .filter(admission=admission)
+            .first()
+        )
 
         if "slots" in serializer.validated_data:
             canonical_slots, invalid_key = canonicalize_slot_keys(
@@ -460,24 +464,55 @@ class InterviewAvailabilityView(APIView):
             next_reviewed.update(next_conflicts)
             defaults["conflicts"] = sorted(next_conflicts)
             defaults["reviewed_candidate_ids"] = sorted(next_reviewed)
-        saved, _ = InterviewAvailability.objects.update_or_create(
-            admission=admission,
-            user=target_user,
-            defaults=defaults,
-        )
-        participation_changed = bool(
-            requested_participation is not None
-            and (existing is None or existing.participation != requested_participation)
-        )
-        planning_input_changed = (
-            "slots" in serializer.validated_data or participation_changed
+        previous_planning_values = {
+            "slots": list(existing.slots or []) if existing is not None else [],
+            "conflicts": (
+                list(existing.conflicts or []) if existing is not None else []
+            ),
+            "participation": (
+                existing.participation
+                if existing is not None
+                else InterviewAvailability.PARTICIPATION_AWAITING
+            ),
+            "submitted_grid_generation": (
+                existing.submitted_grid_generation if existing is not None else None
+            ),
+        }
+        if existing is None:
+            saved = InterviewAvailability.objects.create(
+                admission=admission,
+                user=target_user,
+                **defaults,
+            )
+            row_changed = True
+        else:
+            changed_fields = [
+                field
+                for field, value in defaults.items()
+                if getattr(existing, field) != value
+            ]
+            row_changed = bool(changed_fields)
+            if row_changed:
+                for field in changed_fields:
+                    setattr(existing, field, defaults[field])
+                existing.save(update_fields=[*changed_fields, "updated_at"])
+            saved = existing
+        planning_input_changed = any(
+            previous_planning_values[field] != getattr(saved, field)
+            for field in previous_planning_values
         )
         if planning_input_changed and saved_schedule is not None:
-            saved_schedule.save(update_fields=["updated_at"])
-            ScheduleDeviationApproval.objects.filter(
-                saved_schedule=saved_schedule
-            ).delete()
-        if "reviewed_candidate_ids" in serializer.validated_data:
+            publication_invalidated = publication_is_invalidated_by_availability(
+                saved_schedule,
+                target_availability=saved,
+                previous_values=previous_planning_values,
+            )
+            invalidate_planning_input(
+                saved_schedule,
+                actor=user,
+                publication_invalidated=publication_invalidated,
+            )
+        if row_changed and "reviewed_candidate_ids" in serializer.validated_data:
             ConflictReviewAuditEvent.objects.create(
                 admission=admission,
                 saved_schedule=saved_schedule,

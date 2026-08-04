@@ -24,6 +24,9 @@ from admissions.admissions.models import (
     SolveJob,
     UserApplication,
 )
+from admissions.admissions.schedule_invalidation import (
+    publication_is_invalidated_by_availability,
+)
 from admissions.admissions.schedule_validation import canonicalize_solver_payload
 from admissions.admissions.serializers import SolveOptionsSerializer
 from admissions.admissions.tests.utils import (
@@ -1062,23 +1065,21 @@ class InterviewAvailabilityHardeningTestCase(APITestCase):
         defaults.update(overrides)
         return SavedSchedule.objects.create(**defaults)
 
+    def _schedule_assignment(self, *panel_users):
+        return {
+            "candidate_id": str(self.application.pk),
+            "candidate": self.applicant.username,
+            "time": 540,
+            "panel": [
+                {"id": str(user.pk), "name": user.username} for user in panel_users
+            ],
+        }
+
     def _open_conflict_review(self):
         return self._create_saved_schedule(
             conflict_review_open=True,
             enabled_slots=["2026-04-21|540"],
-            schedule=[
-                {
-                    "candidate_id": str(self.application.pk),
-                    "candidate": self.applicant.username,
-                    "time": 540,
-                    "panel": [
-                        {
-                            "id": str(self.member.pk),
-                            "name": self.member.username,
-                        }
-                    ],
-                }
-            ],
+            schedule=[self._schedule_assignment(self.member)],
         )
 
     def test_slot_outside_enabled_grid_is_rejected(self):
@@ -1617,23 +1618,40 @@ class InterviewAvailabilityHardeningTestCase(APITestCase):
 
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
 
-    def test_admin_opt_out_preserves_published_schedule_and_advances_revision(self):
+    def test_admin_opt_out_unpublishes_an_assigned_interviewer_and_keeps_draft(
+        self,
+    ):
         saved = self._create_saved_schedule(
             enabled_slots=["2026-04-21|540"],
             is_distributed=True,
-            schedule=[
-                {
-                    "candidate_id": str(self.application.pk),
-                    "candidate": self.applicant.username,
-                    "time": 540,
-                    "panel": [
-                        {
-                            "id": str(self.member.pk),
-                            "name": self.member.username,
-                        }
-                    ],
-                }
-            ],
+            name_visibility=SavedSchedule.NAME_VISIBILITY_COMMITTEE,
+            conflict_review_open=True,
+            schedule=[self._schedule_assignment(self.member)],
+        )
+        saved.revealed_groups.add(self.committee_group)
+        approval = ScheduleDeviationApproval.objects.create(
+            admission=self.admission,
+            saved_schedule=saved,
+            actor=self.admin_user,
+            actor_username=self.admin_user.username,
+            schedule_fingerprint="a" * 64,
+            deviation_fingerprint="b" * 64,
+            policy_snapshot={},
+            availability_generation=saved.availability_generation,
+            layout_version=saved.layout_version,
+        )
+        pending_job = SolveJob.objects.create(
+            admission=self.admission,
+            requested_by=self.admin_user,
+            request_data={"candidate": "private"},
+        )
+        completed_job = SolveJob.objects.create(
+            admission=self.admission,
+            requested_by=self.admin_user,
+            status=SolveJob.STATUS_DONE,
+            request_data={"candidate": "private"},
+            result={"status": "SUCCESS"},
+            finished_at=timezone.now(),
         )
         original_schedule = saved.schedule
         original_revision = saved.updated_at
@@ -1652,8 +1670,240 @@ class InterviewAvailabilityHardeningTestCase(APITestCase):
         self.assertEqual(response.data["affected_assignment_count"], 1)
         saved.refresh_from_db()
         self.assertEqual(saved.schedule, original_schedule)
-        self.assertTrue(saved.is_distributed)
+        self.assertFalse(saved.is_distributed)
+        self.assertEqual(
+            saved.name_visibility,
+            SavedSchedule.NAME_VISIBILITY_HIDDEN,
+        )
+        self.assertFalse(saved.conflict_review_open)
+        self.assertFalse(saved.revealed_groups.exists())
         self.assertGreater(saved.updated_at, original_revision)
+        self.assertFalse(
+            ScheduleDeviationApproval.objects.filter(pk=approval.pk).exists()
+        )
+        pending_job.refresh_from_db()
+        self.assertEqual(pending_job.status, SolveJob.STATUS_CANCELLED)
+        self.assertEqual(pending_job.request_data, {})
+        self.assertIsNone(pending_job.result)
+        completed_job.refresh_from_db()
+        self.assertIsNotNone(completed_job.discarded_at)
+        self.assertEqual(completed_job.result, {"status": "SUCCESS"})
+        visibility_event = NameVisibilityAuditEvent.objects.get(
+            saved_schedule=saved,
+            group=self.committee_group,
+        )
+        self.assertEqual(visibility_event.actor, self.admin_user)
+        self.assertEqual(
+            visibility_event.action,
+            NameVisibilityAuditEvent.ACTION_HIDDEN,
+        )
+        closure_event = ConflictReviewAuditEvent.objects.get(
+            saved_schedule=saved,
+            action=ConflictReviewAuditEvent.ACTION_CLOSED,
+        )
+        self.assertEqual(closure_event.actor, self.admin_user)
+
+    def test_admin_opt_out_for_unassigned_interviewer_preserves_publication(self):
+        saved = self._create_saved_schedule(
+            enabled_slots=["2026-04-21|540"],
+            is_distributed=True,
+            name_visibility=SavedSchedule.NAME_VISIBILITY_COMMITTEE,
+            schedule=[self._schedule_assignment(self.member)],
+        )
+        saved.revealed_groups.add(self.committee_group)
+        approval = ScheduleDeviationApproval.objects.create(
+            admission=self.admission,
+            saved_schedule=saved,
+            actor=self.admin_user,
+            actor_username=self.admin_user.username,
+            schedule_fingerprint="c" * 64,
+            deviation_fingerprint="d" * 64,
+            policy_snapshot={},
+            availability_generation=saved.availability_generation,
+            layout_version=saved.layout_version,
+        )
+        pending_job = SolveJob.objects.create(
+            admission=self.admission,
+            requested_by=self.admin_user,
+            request_data={"candidate": "private"},
+        )
+        original_revision = saved.updated_at
+        self.client.force_authenticate(user=self.admin_user)
+
+        response = self.client.post(
+            self.url,
+            {
+                "user_id": str(self.recruiter.pk),
+                "participation": "not_participating",
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
+        saved.refresh_from_db()
+        self.assertTrue(saved.is_distributed)
+        self.assertEqual(
+            saved.name_visibility,
+            SavedSchedule.NAME_VISIBILITY_COMMITTEE,
+        )
+        self.assertTrue(
+            saved.revealed_groups.filter(pk=self.committee_group.pk).exists()
+        )
+        self.assertGreater(saved.updated_at, original_revision)
+        self.assertTrue(
+            ScheduleDeviationApproval.objects.filter(pk=approval.pk).exists()
+        )
+        pending_job.refresh_from_db()
+        self.assertEqual(pending_job.status, SolveJob.STATUS_CANCELLED)
+        self.assertFalse(
+            NameVisibilityAuditEvent.objects.filter(saved_schedule=saved).exists()
+        )
+
+    def test_removing_an_assigned_slot_unpublishes_the_plan(self):
+        saved = self._create_saved_schedule(
+            enabled_slots=["2026-04-21|540", "2026-04-21|600"],
+            is_distributed=True,
+            schedule=[self._schedule_assignment(self.member)],
+        )
+        InterviewAvailability.objects.create(
+            admission=self.admission,
+            user=self.member,
+            slots=["2026-04-21|540", "2026-04-21|600"],
+            participation=InterviewAvailability.PARTICIPATION_PARTICIPATING,
+            submitted_grid_generation=saved.availability_generation,
+        )
+        self.client.force_authenticate(user=self.member)
+
+        response = self.client.post(
+            self.url,
+            {
+                "slots": ["2026-04-21|600"],
+                "expected_availability_generation": saved.availability_generation,
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
+        saved.refresh_from_db()
+        self.assertFalse(saved.is_distributed)
+        self.assertEqual(saved.schedule, [self._schedule_assignment(self.member)])
+
+    def test_adding_an_unrelated_slot_keeps_an_assigned_plan_published(self):
+        saved = self._create_saved_schedule(
+            enabled_slots=["2026-04-21|540", "2026-04-21|600"],
+            is_distributed=True,
+            schedule=[self._schedule_assignment(self.member)],
+        )
+        InterviewAvailability.objects.create(
+            admission=self.admission,
+            user=self.member,
+            slots=["2026-04-21|540"],
+            participation=InterviewAvailability.PARTICIPATION_PARTICIPATING,
+            submitted_grid_generation=saved.availability_generation,
+        )
+        self.client.force_authenticate(user=self.member)
+
+        response = self.client.post(
+            self.url,
+            {
+                "slots": ["2026-04-21|540", "2026-04-21|600"],
+                "expected_availability_generation": saved.availability_generation,
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
+        saved.refresh_from_db()
+        self.assertTrue(saved.is_distributed)
+
+    def test_only_conflicts_for_the_assigned_candidate_invalidate_publication(self):
+        saved = self._create_saved_schedule(
+            enabled_slots=["2026-04-21|540"],
+            is_distributed=True,
+            schedule=[self._schedule_assignment(self.member)],
+        )
+        availability = InterviewAvailability.objects.create(
+            admission=self.admission,
+            user=self.member,
+            slots=["2026-04-21|540"],
+            conflicts=["unrelated-candidate"],
+            participation=InterviewAvailability.PARTICIPATION_PARTICIPATING,
+            submitted_grid_generation=saved.availability_generation,
+        )
+        saved.refresh_from_db()
+        previous_values = {
+            "slots": ["2026-04-21|540"],
+            "conflicts": [],
+            "participation": InterviewAvailability.PARTICIPATION_PARTICIPATING,
+            "submitted_grid_generation": saved.availability_generation,
+        }
+
+        self.assertFalse(
+            publication_is_invalidated_by_availability(
+                saved,
+                target_availability=availability,
+                previous_values=previous_values,
+            )
+        )
+        availability.conflicts = [str(self.application.pk)]
+        self.assertTrue(
+            publication_is_invalidated_by_availability(
+                saved,
+                target_availability=availability,
+                previous_values=previous_values,
+            )
+        )
+
+    def test_identical_availability_retry_is_a_true_no_op(self):
+        saved = self._create_saved_schedule(
+            enabled_slots=["2026-04-21|540"],
+        )
+        availability = InterviewAvailability.objects.create(
+            admission=self.admission,
+            user=self.member,
+            slots=["2026-04-21|540"],
+            participation=InterviewAvailability.PARTICIPATION_PARTICIPATING,
+            submitted_grid_generation=saved.availability_generation,
+        )
+        approval = ScheduleDeviationApproval.objects.create(
+            admission=self.admission,
+            saved_schedule=saved,
+            actor=self.admin_user,
+            actor_username=self.admin_user.username,
+            schedule_fingerprint="e" * 64,
+            deviation_fingerprint="f" * 64,
+            policy_snapshot={},
+            availability_generation=saved.availability_generation,
+            layout_version=saved.layout_version,
+        )
+        pending_job = SolveJob.objects.create(
+            admission=self.admission,
+            requested_by=self.admin_user,
+            request_data={"candidate": "private"},
+        )
+        row_revision = availability.updated_at
+        schedule_revision = saved.updated_at
+        self.client.force_authenticate(user=self.member)
+
+        response = self.client.post(
+            self.url,
+            {
+                "slots": ["2026-04-21|540"],
+                "expected_availability_generation": saved.availability_generation,
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
+        availability.refresh_from_db()
+        saved.refresh_from_db()
+        pending_job.refresh_from_db()
+        self.assertEqual(availability.updated_at, row_revision)
+        self.assertEqual(saved.updated_at, schedule_revision)
+        self.assertEqual(pending_job.status, SolveJob.STATUS_PENDING)
+        self.assertTrue(
+            ScheduleDeviationApproval.objects.filter(pk=approval.pk).exists()
+        )
 
     def test_admin_cannot_set_participation_for_non_roster_user(self):
         self._create_saved_schedule()
