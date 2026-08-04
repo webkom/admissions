@@ -7,9 +7,15 @@ import type { SolveResponse } from "../../frontend/src/components/Scheduling/Sol
 import { useScheduleDraftPersistence } from "../../frontend/src/components/Scheduling/Solver/useScheduleDraftPersistence";
 import { useDistributedPlanActions } from "../../frontend/src/routes/SchedulePage/useDistributedPlanActions";
 import { useScheduleConfiguration } from "../../frontend/src/routes/SchedulePage/useScheduleConfiguration";
+import { useAvailabilityEditor } from "../../frontend/src/routes/SchedulePage/useAvailabilityEditor";
 import { clearSensitiveAdmissionDataForScopeChange } from "../../frontend/src/query/sensitiveAccess";
 import { buildInterviewOutreachTemplateStorageKey } from "../../frontend/src/query/sensitiveBrowserStorage";
-import type { NameVisibility, SavedSchedule } from "../../frontend/src/types";
+import type {
+  InterviewAvailabilityParticipant,
+  NameVisibility,
+  SavedSchedule,
+} from "../../frontend/src/types";
+import { apiClient } from "../../frontend/src/utils/callApi";
 import { collectUnhandledRejections } from "../support/unhandledRejections";
 
 const admissionSlug = "publication-reconciliation";
@@ -58,7 +64,15 @@ const savedSchedule = (
   },
   panel_size: 1,
   solver_options: DEFAULT_SOLVER_OPTIONS,
-  deviation_review: null,
+  deviation_review: {
+    policy: null,
+    schedule_fingerprint: "schedule-fingerprint-1",
+    deviation_fingerprint: "deviation-fingerprint-1",
+    deviations: [],
+    deviation_count: 0,
+    requires_approval: false,
+    approved: true,
+  },
   is_distributed: isDistributed,
   conflict_review_open: !isDistributed,
   name_visibility: nameVisibility,
@@ -101,12 +115,64 @@ const TransitionHarness = ({
   );
 };
 
+const AvailabilityEditorHarness = () => {
+  const [notice, setNotice] = React.useState("none");
+  const schedule = savedSchedule(true, "committee");
+  const participant: InterviewAvailabilityParticipant = {
+    user_id: "interviewer-1",
+    username: "interviewer",
+    full_name: "Interviewer",
+    experience_level: "experienced",
+    slots: ["2026-07-27|840"],
+    conflicts: [],
+    reviewed_candidate_ids: [],
+    proposed_candidate_ids: ["candidate-1"],
+    conflict_review_complete: true,
+    has_submitted: true,
+    participation: "participating",
+    needs_review: false,
+    affected_assignment_count: 1,
+    availability_generation: 1,
+    availability_updated_at: "availability-revision-1",
+    is_me: true,
+  };
+  const editor = useAvailabilityEditor({
+    admissionSlug,
+    participants: [participant],
+    savedSchedule: schedule,
+    refetchSavedSchedule: async () =>
+      (
+        await apiClient.get<SavedSchedule>(
+          `/admin/admission/${admissionSlug}/schedule/`,
+        )
+      ).data,
+    notify: (message, tone) => setNotice(`${tone ?? "success"}:${message}`),
+  });
+
+  return (
+    <div>
+      <output data-cy="availability-notice">{notice}</output>
+      <button
+        type="button"
+        onClick={() =>
+          void editor
+            .setParticipation("not_participating", participant.user_id)
+            .catch(() => undefined)
+        }
+      >
+        Opt out assigned interviewer
+      </button>
+    </div>
+  );
+};
+
 const ScheduleConfigurationHarness = ({
   queryClient,
+  schedule = savedSchedule(false, "hidden"),
 }: {
   queryClient: QueryClient;
+  schedule?: SavedSchedule;
 }) => {
-  const schedule = savedSchedule(false, "hidden");
   const configuration = useScheduleConfiguration({
     admissionSlug,
     savedSchedule: schedule,
@@ -114,6 +180,7 @@ const ScheduleConfigurationHarness = ({
   });
   return (
     <div>
+      <output data-cy="configuration-end-date">{configuration.endDate}</output>
       <button
         type="button"
         onClick={() =>
@@ -373,7 +440,10 @@ const mountHarness = (client: QueryClient, draftPersistenceReady = true) => {
   });
 };
 
-const mountScheduleConfigurationHarness = (client: QueryClient) => {
+const mountScheduleConfigurationHarness = (
+  client: QueryClient,
+  schedule?: SavedSchedule,
+) => {
   cy.visit("/api-auth/login/");
   cy.document().then((document) => {
     document.body.innerHTML = '<div id="transition-root"></div>';
@@ -381,7 +451,24 @@ const mountScheduleConfigurationHarness = (client: QueryClient) => {
     if (!root) throw new Error("Transition harness root was not created");
     createRoot(root).render(
       <QueryClientProvider client={client}>
-        <ScheduleConfigurationHarness queryClient={client} />
+        <ScheduleConfigurationHarness
+          queryClient={client}
+          schedule={schedule}
+        />
+      </QueryClientProvider>,
+    );
+  });
+};
+
+const mountAvailabilityEditorHarness = (client: QueryClient) => {
+  cy.visit("/api-auth/login/");
+  cy.document().then((document) => {
+    document.body.innerHTML = '<div id="transition-root"></div>';
+    const root = document.getElementById("transition-root");
+    if (!root) throw new Error("Transition harness root was not created");
+    createRoot(root).render(
+      <QueryClientProvider client={client}>
+        <AvailabilityEditorHarness />
       </QueryClientProvider>,
     );
   });
@@ -416,6 +503,85 @@ const mountUnmountingAutosaveHarness = (client: QueryClient) => {
 };
 
 describe("distributed plan transition reconciliation", () => {
+  it("reports auto-unpublish only after the authoritative schedule refetch", () => {
+    const client = queryClient();
+    const participantResponse = {
+      user_id: "interviewer-1",
+      username: "interviewer",
+      full_name: "Interviewer",
+      experience_level: "experienced",
+      slots: [],
+      conflicts: [],
+      reviewed_candidate_ids: [],
+      proposed_candidate_ids: ["candidate-1"],
+      conflict_review_complete: true,
+      has_submitted: false,
+      participation: "not_participating",
+      needs_review: false,
+      affected_assignment_count: 1,
+      availability_generation: 1,
+      availability_updated_at: "availability-revision-2",
+      is_me: true,
+    };
+    cy.intercept(
+      "POST",
+      `**/api/admin/admission/${admissionSlug}/availability/`,
+      { statusCode: 200, body: participantResponse },
+    ).as("saveAvailability");
+    cy.intercept("GET", scheduleUrl, {
+      delay: 250,
+      statusCode: 200,
+      body: savedSchedule(false, "hidden"),
+    }).as("refetchSchedule");
+
+    mountAvailabilityEditorHarness(client);
+    cy.contains("button", "Opt out assigned interviewer").click();
+    cy.wait("@saveAvailability");
+    cy.get('[data-cy="availability-notice"]').should("have.text", "none");
+    cy.wait("@refetchSchedule");
+    cy.get('[data-cy="availability-notice"]')
+      .should("contain.text", "error:Den publiserte planen ble tatt ned")
+      .and("contain.text", "beholdt som utkast");
+  });
+
+  it("reports an unknown plan state when the authoritative refetch fails", () => {
+    const client = queryClient();
+    cy.intercept(
+      "POST",
+      `**/api/admin/admission/${admissionSlug}/availability/`,
+      {
+        statusCode: 200,
+        body: {
+          user_id: "interviewer-1",
+          availability_updated_at: "availability-revision-2",
+        },
+      },
+    );
+    cy.intercept("GET", scheduleUrl, { statusCode: 500 });
+
+    mountAvailabilityEditorHarness(client);
+    cy.contains("button", "Opt out assigned interviewer").click();
+
+    cy.get('[data-cy="availability-notice"]')
+      .should("contain.text", "error:Endringen ble lagret")
+      .and("contain.text", "planstatus kunne ikke kontrolleres");
+  });
+
+  it("hydrates an empty legacy schedule from its stored start date", () => {
+    const client = queryClient();
+    const legacySchedule = savedSchedule(false, "hidden");
+    legacySchedule.start_date = "2026-02-03";
+    legacySchedule.end_date = null;
+    legacySchedule.schedule = [];
+
+    mountScheduleConfigurationHarness(client, legacySchedule);
+
+    cy.get('[data-cy="configuration-end-date"]').should(
+      "have.text",
+      "2026-02-07",
+    );
+  });
+
   it("saves framework changes without resubmitting the current plan", () => {
     const client = queryClient();
     cy.intercept("POST", scheduleUrl, (request) => {
@@ -930,6 +1096,31 @@ describe("distributed plan transition reconciliation", () => {
     cy.get('[data-cy="transition-error"]').should("have.text", "none");
   });
 
+  it("uses the canonical fingerprint when mutable projection text changes", () => {
+    const client = queryClient();
+    const canonical = savedSchedule(true, "admin_only");
+    canonical.schedule[0] = {
+      ...canonical.schedule[0],
+      candidate: "Candidate renamed after publication",
+    };
+    cy.intercept("POST", scheduleUrl, {
+      statusCode: 409,
+      body: { detail: "Planen ble endret." },
+    }).as("publishConflict");
+    cy.intercept("GET", scheduleUrl, {
+      statusCode: 200,
+      body: canonical,
+    }).as("reconcilePublication");
+
+    mountHarness(client);
+    cy.contains("button", "Publish").click();
+    cy.wait("@publishConflict");
+    cy.wait("@reconcilePublication");
+
+    cy.get('[data-cy="transition-outcome"]').should("have.text", "published");
+    cy.get('[data-cy="transition-error"]').should("have.text", "none");
+  });
+
   it("keeps a retry conflict when canonical publication state differs", () => {
     const client = queryClient();
     const concurrentlyPublished = savedSchedule(true, "admin_only");
@@ -941,6 +1132,10 @@ describe("distributed plan transition reconciliation", () => {
         panel: [],
       },
     ];
+    if (concurrentlyPublished.deviation_review) {
+      concurrentlyPublished.deviation_review.schedule_fingerprint =
+        "schedule-fingerprint-2";
+    }
     cy.intercept("POST", scheduleUrl, {
       statusCode: 409,
       body: { detail: "Planen ble endret." },
@@ -963,6 +1158,30 @@ describe("distributed plan transition reconciliation", () => {
     cy.get('[data-cy="transition-notice"]').should(
       "contain.text",
       "error:Planen ble endret",
+    );
+  });
+
+  it("reports an unknown state when reconciliation lacks a fingerprint", () => {
+    const client = queryClient();
+    const canonical = savedSchedule(true, "admin_only");
+    canonical.deviation_review = null;
+    cy.intercept("POST", scheduleUrl, { forceNetworkError: true }).as(
+      "lostPublishResponse",
+    );
+    cy.intercept("GET", scheduleUrl, {
+      statusCode: 200,
+      body: canonical,
+    }).as("reconcileWithoutFingerprint");
+
+    mountHarness(client);
+    cy.contains("button", "Publish").click();
+    cy.wait("@lostPublishResponse");
+    cy.wait("@reconcileWithoutFingerprint");
+
+    cy.get('[data-cy="transition-outcome"]').should("have.text", "failed");
+    cy.get('[data-cy="transition-error"]').should(
+      "contain.text",
+      "Publiseringsstatusen kunne ikke kontrolleres",
     );
   });
 
