@@ -1,13 +1,14 @@
+import time
 import uuid
 from concurrent.futures import ThreadPoolExecutor
 from datetime import timedelta
-from threading import Barrier, Event, Lock
+from threading import Event, Lock, local
 from unittest import mock
 
 from django.contrib.auth.models import AnonymousUser
 from django.core.management import call_command
 from django.core.management.base import CommandError
-from django.db import IntegrityError, close_old_connections, transaction
+from django.db import IntegrityError, close_old_connections, connection, transaction
 from django.test import RequestFactory, TestCase, TransactionTestCase, override_settings
 from django.urls import reverse
 from django.utils import timezone
@@ -2245,7 +2246,7 @@ class InterviewAvailabilityHardeningTestCase(APITestCase):
         )
 
     def test_non_admin_reads_unknown_experience_but_admin_reads_classification(self):
-        availability = InterviewAvailability.objects.create(
+        InterviewAvailability.objects.create(
             admission=self.admission,
             user=self.member,
             experience_level=InterviewAvailability.EXPERIENCE_EXPERIENCED,
@@ -5451,57 +5452,50 @@ class ConcurrentSolveProposalApplyTestCase(
         job = self._job()
         expected_updated_at = self.saved.updated_at.isoformat()
         url = reverse("solve-job-apply", kwargs={"job_id": job.id})
-        ready = Barrier(2)
         first_request_holds_admission_lock = Event()
-        second_request_reached_lock_query = Event()
-        call_state_lock = Lock()
-        admission_lock_query_count = 0
-        membership_lock_count = 0
+        release_first_request = Event()
+        second_connection_ready = Event()
+        request_context = local()
+        backend_pids = {}
+        backend_pids_lock = Lock()
 
-        def apply_proposal():
+        def apply_proposal(role):
             close_old_connections()
-            client = ScheduleRevisionAPIClient()
-            user = LegoUser.objects.get(pk=self.user.pk)
-            client.force_authenticate(user=user)
-            ready.wait(timeout=5)
-            response = client.post(
-                url,
-                {"expected_updated_at": expected_updated_at},
-                format="json",
-            )
-            close_old_connections()
-            return response.status_code, response.data
+            try:
+                connection.ensure_connection()
+                request_context.role = role
+                with backend_pids_lock:
+                    backend_pids[role] = connection.connection.get_backend_pid()
+                if role == "second":
+                    second_connection_ready.set()
+
+                client = ScheduleRevisionAPIClient()
+                user = LegoUser.objects.get(pk=self.user.pk)
+                client.force_authenticate(user=user)
+                response = client.post(
+                    url,
+                    {"expected_updated_at": expected_updated_at},
+                    format="json",
+                )
+                return response.status_code, response.data
+            finally:
+                connection.close()
 
         from admissions.admissions import solve_views
 
-        real_select_for_update = solve_views.Admission.objects.select_for_update
         real_membership_lock = solve_views.lock_user_admission_memberships
 
-        def track_admission_lock_query(*args, **kwargs):
-            nonlocal admission_lock_query_count
-            with call_state_lock:
-                admission_lock_query_count += 1
-                if admission_lock_query_count == 2:
-                    second_request_reached_lock_query.set()
-            return real_select_for_update(*args, **kwargs)
-
         def hold_first_admission_lock(*args, **kwargs):
-            nonlocal membership_lock_count
             result = real_membership_lock(*args, **kwargs)
-            with call_state_lock:
-                membership_lock_count += 1
-                is_first_request = membership_lock_count == 1
-            if is_first_request:
+            if getattr(request_context, "role", None) == "first":
                 first_request_holds_admission_lock.set()
-                self.assertTrue(second_request_reached_lock_query.wait(timeout=5))
+                if not release_first_request.wait(timeout=15):
+                    raise AssertionError(
+                        "Timed out while holding the first Admission lock."
+                    )
             return result
 
         with (
-            mock.patch.object(
-                solve_views.Admission.objects,
-                "select_for_update",
-                side_effect=track_admission_lock_query,
-            ),
             mock.patch.object(
                 solve_views,
                 "lock_user_admission_memberships",
@@ -5514,16 +5508,50 @@ class ConcurrentSolveProposalApplyTestCase(
             ) as update_schedule,
             ThreadPoolExecutor(max_workers=2) as executor,
         ):
+            first_response = executor.submit(apply_proposal, "first")
             responses = [
-                future.result(timeout=10)
-                for future in (
-                    executor.submit(apply_proposal),
-                    executor.submit(apply_proposal),
-                )
+                first_response,
             ]
+            try:
+                self.assertTrue(
+                    first_request_holds_admission_lock.wait(timeout=5),
+                    "The first request never acquired the Admission lock.",
+                )
+                second_response = executor.submit(apply_proposal, "second")
+                responses.append(second_response)
+                self.assertTrue(
+                    second_connection_ready.wait(timeout=5),
+                    "The second request never opened its database connection.",
+                )
+
+                with backend_pids_lock:
+                    first_pid = backend_pids["first"]
+                    second_pid = backend_pids["second"]
+                deadline = time.monotonic() + 5
+                blocking_pids = []
+                while time.monotonic() < deadline:
+                    with connection.cursor() as cursor:
+                        cursor.execute(
+                            "SELECT pg_blocking_pids(%s)",
+                            [second_pid],
+                        )
+                        blocking_pids = cursor.fetchone()[0]
+                    if first_pid in blocking_pids:
+                        break
+                    time.sleep(0.01)
+
+                self.assertIn(
+                    first_pid,
+                    blocking_pids,
+                    "PostgreSQL never blocked the second request on the first.",
+                )
+            finally:
+                release_first_request.set()
+
+            responses = [future.result(timeout=10) for future in responses]
 
         self.assertTrue(first_request_holds_admission_lock.is_set())
-        self.assertTrue(second_request_reached_lock_query.is_set())
+        self.assertTrue(second_connection_ready.is_set())
         self.assertEqual(
             [response_status for response_status, _ in responses],
             [status.HTTP_200_OK, status.HTTP_200_OK],
