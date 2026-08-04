@@ -1,7 +1,7 @@
 import uuid
 from concurrent.futures import ThreadPoolExecutor
 from datetime import timedelta
-from threading import Event
+from threading import Barrier, Event, Lock
 from unittest import mock
 
 from django.contrib.auth.models import AnonymousUser
@@ -2245,7 +2245,7 @@ class InterviewAvailabilityHardeningTestCase(APITestCase):
         )
 
     def test_non_admin_reads_unknown_experience_but_admin_reads_classification(self):
-        InterviewAvailability.objects.create(
+        availability = InterviewAvailability.objects.create(
             admission=self.admission,
             user=self.member,
             experience_level=InterviewAvailability.EXPERIENCE_EXPERIENCED,
@@ -2307,7 +2307,7 @@ class InterviewAvailabilityHardeningTestCase(APITestCase):
             solver_options={"require_experienced_panel": True},
             schedule=[self._schedule_assignment(self.member)],
         )
-        InterviewAvailability.objects.create(
+        availability = InterviewAvailability.objects.create(
             admission=self.admission,
             user=self.member,
             experience_level=InterviewAvailability.EXPERIENCE_EXPERIENCED,
@@ -2319,6 +2319,9 @@ class InterviewAvailabilityHardeningTestCase(APITestCase):
             {
                 "user_id": str(self.member.pk),
                 "experience_level": InterviewAvailability.EXPERIENCE_INEXPERIENCED,
+                "expected_availability_updated_at": (
+                    availability.updated_at.isoformat()
+                ),
             },
             format="json",
         )
@@ -2335,7 +2338,7 @@ class InterviewAvailabilityHardeningTestCase(APITestCase):
             solver_options={"require_experienced_panel": True},
             schedule=[self._schedule_assignment(self.member, self.recruiter)],
         )
-        InterviewAvailability.objects.create(
+        availability = InterviewAvailability.objects.create(
             admission=self.admission,
             user=self.member,
             experience_level=InterviewAvailability.EXPERIENCE_EXPERIENCED,
@@ -2352,6 +2355,9 @@ class InterviewAvailabilityHardeningTestCase(APITestCase):
             {
                 "user_id": str(self.member.pk),
                 "experience_level": InterviewAvailability.EXPERIENCE_INEXPERIENCED,
+                "expected_availability_updated_at": (
+                    availability.updated_at.isoformat()
+                ),
             },
             format="json",
         )
@@ -2366,7 +2372,7 @@ class InterviewAvailabilityHardeningTestCase(APITestCase):
             solver_options={"require_experienced_panel": True},
             schedule=[self._schedule_assignment(self.member)],
         )
-        InterviewAvailability.objects.create(
+        availability = InterviewAvailability.objects.create(
             admission=self.admission,
             user=self.member,
             experience_level=InterviewAvailability.EXPERIENCE_INEXPERIENCED,
@@ -2378,6 +2384,9 @@ class InterviewAvailabilityHardeningTestCase(APITestCase):
             {
                 "user_id": str(self.member.pk),
                 "experience_level": InterviewAvailability.EXPERIENCE_EXPERIENCED,
+                "expected_availability_updated_at": (
+                    availability.updated_at.isoformat()
+                ),
             },
             format="json",
         )
@@ -3349,6 +3358,9 @@ class InterviewAvailabilityHardeningTestCase(APITestCase):
             {
                 "user_id": str(self.member.pk),
                 "participation": "not_participating",
+                "expected_availability_updated_at": (
+                    availability.updated_at.isoformat()
+                ),
             },
             format="json",
         )
@@ -3479,7 +3491,7 @@ class InterviewAvailabilityHardeningTestCase(APITestCase):
             is_distributed=True,
             schedule=[self._schedule_assignment(self.member)],
         )
-        InterviewAvailability.objects.create(
+        availability = InterviewAvailability.objects.create(
             admission=self.admission,
             user=self.member,
             slots=["2026-04-21|540", "2026-04-21|600"],
@@ -3493,6 +3505,9 @@ class InterviewAvailabilityHardeningTestCase(APITestCase):
             {
                 "slots": ["2026-04-21|600"],
                 "expected_availability_generation": saved.availability_generation,
+                "expected_availability_updated_at": (
+                    availability.updated_at.isoformat()
+                ),
             },
             format="json",
         )
@@ -3508,7 +3523,7 @@ class InterviewAvailabilityHardeningTestCase(APITestCase):
             is_distributed=True,
             schedule=[self._schedule_assignment(self.member)],
         )
-        InterviewAvailability.objects.create(
+        availability = InterviewAvailability.objects.create(
             admission=self.admission,
             user=self.member,
             slots=["2026-04-21|540"],
@@ -3522,6 +3537,9 @@ class InterviewAvailabilityHardeningTestCase(APITestCase):
             {
                 "slots": ["2026-04-21|540", "2026-04-21|600"],
                 "expected_availability_generation": saved.availability_generation,
+                "expected_availability_updated_at": (
+                    availability.updated_at.isoformat()
+                ),
             },
             format="json",
         )
@@ -3549,6 +3567,7 @@ class InterviewAvailabilityHardeningTestCase(APITestCase):
             "slots": ["2026-04-21|540"],
             "conflicts": [],
             "participation": InterviewAvailability.PARTICIPATION_PARTICIPATING,
+            "experience_level": InterviewAvailability.EXPERIENCE_UNKNOWN,
             "submitted_grid_generation": saved.availability_generation,
         }
 
@@ -5090,7 +5109,7 @@ class SolveJobLifecycleTestCase(APITestCase):
         self.assertFalse(SolveJob.objects.filter(id=old.id).exists())
 
 
-class SolveProposalApplyTestCase(APITestCase):
+class SolveProposalApplyFixtureMixin:
     client_class = ScheduleRevisionAPIClient
 
     def setUp(self):
@@ -5195,6 +5214,9 @@ class SolveProposalApplyTestCase(APITestCase):
             {"expected_updated_at": expected or self.saved.updated_at.isoformat()},
             format="json",
         )
+
+
+class SolveProposalApplyTestCase(SolveProposalApplyFixtureMixin, APITestCase):
 
     def test_apply_promotes_exact_job_idempotently(self):
         job = self._job()
@@ -5419,6 +5441,103 @@ class SolveProposalApplyTestCase(APITestCase):
 
         self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
         self.assertTrue(SolveJob.objects.filter(pk=job.pk).exists())
+
+
+class ConcurrentSolveProposalApplyTestCase(
+    SolveProposalApplyFixtureMixin,
+    TransactionTestCase,
+):
+    def test_concurrent_apply_requests_promote_the_proposal_once(self):
+        job = self._job()
+        expected_updated_at = self.saved.updated_at.isoformat()
+        url = reverse("solve-job-apply", kwargs={"job_id": job.id})
+        ready = Barrier(2)
+        first_request_holds_admission_lock = Event()
+        second_request_reached_lock_query = Event()
+        call_state_lock = Lock()
+        admission_lock_query_count = 0
+        membership_lock_count = 0
+
+        def apply_proposal():
+            close_old_connections()
+            client = ScheduleRevisionAPIClient()
+            user = LegoUser.objects.get(pk=self.user.pk)
+            client.force_authenticate(user=user)
+            ready.wait(timeout=5)
+            response = client.post(
+                url,
+                {"expected_updated_at": expected_updated_at},
+                format="json",
+            )
+            close_old_connections()
+            return response.status_code, response.data
+
+        from admissions.admissions import solve_views
+
+        real_select_for_update = solve_views.Admission.objects.select_for_update
+        real_membership_lock = solve_views.lock_user_admission_memberships
+
+        def track_admission_lock_query(*args, **kwargs):
+            nonlocal admission_lock_query_count
+            with call_state_lock:
+                admission_lock_query_count += 1
+                if admission_lock_query_count == 2:
+                    second_request_reached_lock_query.set()
+            return real_select_for_update(*args, **kwargs)
+
+        def hold_first_admission_lock(*args, **kwargs):
+            nonlocal membership_lock_count
+            result = real_membership_lock(*args, **kwargs)
+            with call_state_lock:
+                membership_lock_count += 1
+                is_first_request = membership_lock_count == 1
+            if is_first_request:
+                first_request_holds_admission_lock.set()
+                self.assertTrue(second_request_reached_lock_query.wait(timeout=5))
+            return result
+
+        with (
+            mock.patch.object(
+                solve_views.Admission.objects,
+                "select_for_update",
+                side_effect=track_admission_lock_query,
+            ),
+            mock.patch.object(
+                solve_views,
+                "lock_user_admission_memberships",
+                side_effect=hold_first_admission_lock,
+            ),
+            mock.patch.object(
+                solve_views,
+                "update_saved_schedule",
+                wraps=solve_views.update_saved_schedule,
+            ) as update_schedule,
+            ThreadPoolExecutor(max_workers=2) as executor,
+        ):
+            responses = [
+                future.result(timeout=10)
+                for future in (
+                    executor.submit(apply_proposal),
+                    executor.submit(apply_proposal),
+                )
+            ]
+
+        self.assertTrue(first_request_holds_admission_lock.is_set())
+        self.assertTrue(second_request_reached_lock_query.is_set())
+        self.assertEqual(
+            [response_status for response_status, _ in responses],
+            [status.HTTP_200_OK, status.HTTP_200_OK],
+        )
+        self.assertEqual(
+            {response_data["updated_at"] for _, response_data in responses},
+            {responses[0][1]["updated_at"]},
+        )
+        self.assertEqual(update_schedule.call_count, 1)
+        self.saved.refresh_from_db()
+        job.refresh_from_db()
+        self.assertEqual(len(self.saved.schedule), 1)
+        self.assertIsNotNone(job.applied_at)
+        self.assertEqual(job.applied_schedule_updated_at, self.saved.updated_at)
 
 
 @override_settings(ALLOW_SYNTHETIC_SOLVER_INPUT=False)
