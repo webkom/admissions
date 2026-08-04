@@ -167,7 +167,60 @@ def publication_is_invalidated_by_availability(
     assigned_candidate_ids = {
         str(assignment.get("candidate_id") or "") for assignment in assignments
     }
-    return any(
+    if any(
         (candidate_id in previous_conflicts) != (candidate_id in next_conflicts)
         for candidate_id in assigned_candidate_ids
+    ):
+        return True
+
+    experience_changed = (
+        previous_values.get(
+            "experience_level",
+            InterviewAvailability.EXPERIENCE_UNKNOWN,
+        )
+        != target_availability.experience_level
     )
+    requires_experience = bool(
+        (saved.solver_options or {}).get("require_experienced_panel")
+    )
+    if experience_changed and requires_experience:
+        panel_ids = {
+            str(member.get("id") or "")
+            for assignment in assignments
+            for member in assignment.get("panel") or []
+            if isinstance(member, dict)
+        }
+        experience_by_user = {
+            str(user_id): experience_level
+            for user_id, experience_level in InterviewAvailability.objects.filter(
+                admission=saved.admission,
+                user_id__in=panel_ids,
+            ).values_list("user_id", "experience_level")
+        }
+        for assignment in assignments:
+            assignment_panel_ids = {
+                str(member.get("id") or "")
+                for member in assignment.get("panel") or []
+                if isinstance(member, dict)
+            }
+            before_has_experience = any(
+                (
+                    previous_values.get(
+                        "experience_level",
+                        InterviewAvailability.EXPERIENCE_UNKNOWN,
+                    )
+                    if interviewer_id == target_id
+                    else experience_by_user.get(interviewer_id)
+                )
+                == InterviewAvailability.EXPERIENCE_EXPERIENCED
+                for interviewer_id in assignment_panel_ids
+            )
+            after_has_experience = any(
+                experience_by_user.get(interviewer_id)
+                == InterviewAvailability.EXPERIENCE_EXPERIENCED
+                for interviewer_id in assignment_panel_ids
+            )
+            if before_has_experience and not after_has_experience:
+                return True
+
+    return False

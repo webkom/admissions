@@ -1306,7 +1306,9 @@ class InterviewAvailabilityHardeningTestCase(APITestCase):
             "experienced",
         )
 
-    def test_experience_change_advances_revision_and_invalidates_approvals(self):
+    def test_unassigned_experience_change_advances_revision_and_preserves_approval(
+        self,
+    ):
         saved_schedule = self._create_saved_schedule()
         approval = ScheduleDeviationApproval.objects.create(
             admission=self.admission,
@@ -1334,9 +1336,94 @@ class InterviewAvailabilityHardeningTestCase(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         saved_schedule.refresh_from_db()
         self.assertGreater(saved_schedule.updated_at, previous_revision)
-        self.assertFalse(
+        self.assertTrue(
             ScheduleDeviationApproval.objects.filter(pk=approval.pk).exists()
         )
+
+    def test_only_experienced_assignee_downgrade_unpublishes(self):
+        saved = self._create_saved_schedule(
+            is_distributed=True,
+            solver_options={"require_experienced_panel": True},
+            schedule=[self._schedule_assignment(self.member)],
+        )
+        InterviewAvailability.objects.create(
+            admission=self.admission,
+            user=self.member,
+            experience_level=InterviewAvailability.EXPERIENCE_EXPERIENCED,
+        )
+        self.client.force_authenticate(user=self.admin_user)
+
+        response = self.client.post(
+            self.url,
+            {
+                "user_id": str(self.member.pk),
+                "experience_level": InterviewAvailability.EXPERIENCE_INEXPERIENCED,
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
+        saved.refresh_from_db()
+        self.assertFalse(saved.is_distributed)
+
+    def test_experience_downgrade_preserves_panel_with_another_experienced_member(
+        self,
+    ):
+        saved = self._create_saved_schedule(
+            is_distributed=True,
+            solver_options={"require_experienced_panel": True},
+            schedule=[self._schedule_assignment(self.member, self.recruiter)],
+        )
+        InterviewAvailability.objects.create(
+            admission=self.admission,
+            user=self.member,
+            experience_level=InterviewAvailability.EXPERIENCE_EXPERIENCED,
+        )
+        InterviewAvailability.objects.create(
+            admission=self.admission,
+            user=self.recruiter,
+            experience_level=InterviewAvailability.EXPERIENCE_EXPERIENCED,
+        )
+        self.client.force_authenticate(user=self.admin_user)
+
+        response = self.client.post(
+            self.url,
+            {
+                "user_id": str(self.member.pk),
+                "experience_level": InterviewAvailability.EXPERIENCE_INEXPERIENCED,
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
+        saved.refresh_from_db()
+        self.assertTrue(saved.is_distributed)
+
+    def test_experience_upgrade_preserves_publication(self):
+        saved = self._create_saved_schedule(
+            is_distributed=True,
+            solver_options={"require_experienced_panel": True},
+            schedule=[self._schedule_assignment(self.member)],
+        )
+        InterviewAvailability.objects.create(
+            admission=self.admission,
+            user=self.member,
+            experience_level=InterviewAvailability.EXPERIENCE_INEXPERIENCED,
+        )
+        self.client.force_authenticate(user=self.admin_user)
+
+        response = self.client.post(
+            self.url,
+            {
+                "user_id": str(self.member.pk),
+                "experience_level": InterviewAvailability.EXPERIENCE_EXPERIENCED,
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
+        saved.refresh_from_db()
+        self.assertTrue(saved.is_distributed)
 
     def test_slot_with_out_of_range_minute_is_rejected(self):
         self.client.force_authenticate(user=self.member)

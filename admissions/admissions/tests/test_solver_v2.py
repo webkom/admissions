@@ -142,6 +142,24 @@ class FactorizedSolverV2TestCase(SimpleTestCase):
         )
         self.assertEqual(result["status"], "SUCCESS")
 
+    def test_all_zero_capacity_interviewers_leave_every_candidate_unplaced(self):
+        result = self.solve(
+            candidates=[
+                {"id": "c1", "name": "One"},
+                {"id": "c2", "name": "Two"},
+            ],
+            interviewers=[interviewer("i1", [])],
+            panel_size=1,
+            slots=[0, 1],
+        )
+
+        self.assertEqual(result["status"], "INFEASIBLE")
+        self.assertEqual(result["schedule"], [])
+        self.assertEqual(
+            [entry["reason_code"] for entry in result["unplaceable"]],
+            ["no_open_slots", "no_open_slots"],
+        )
+
     def test_candidate_user_id_excludes_self_interviews_before_solving(self):
         result = self.solve(
             candidates=[
@@ -502,6 +520,57 @@ class FactorizedSolverV2TestCase(SimpleTestCase):
 
         self.assertEqual(status, cp_model.FEASIBLE)
 
+    def test_short_budgets_reserve_strict_and_optimization_time(self):
+        timeout_solver = mock.Mock()
+        timeout_solver.StatusName.return_value = "UNKNOWN"
+        timeout_solver.NumBranches.return_value = 0
+        timeout_solver.NumConflicts.return_value = 0
+        previous = [
+            {
+                "candidate_id": "c1",
+                "candidate": "Candidate",
+                "time": 0,
+                "panel": [{"id": "i1", "name": "i1"}],
+            }
+        ]
+        for budget in range(1, 6):
+            with self.subTest(budget=budget):
+                solve_deadlines = []
+
+                def time_out(_built, *, deadline):
+                    solve_deadlines.append(deadline)
+                    return cp_model.UNKNOWN, timeout_solver, 0
+
+                with (
+                    mock.patch.object(
+                        solver_v2_module.time,
+                        "monotonic",
+                        return_value=100.0,
+                    ),
+                    mock.patch.object(
+                        solver_v2_module,
+                        "_solve_model",
+                        side_effect=time_out,
+                    ),
+                ):
+                    self.solve(
+                        candidates=[{"id": "c1", "name": "Candidate"}],
+                        interviewers=[interviewer("i1", [0])],
+                        panel_size=1,
+                        slots=[0],
+                        previous=previous,
+                        options={
+                            "max_solver_seconds": budget,
+                            "repair_mode": True,
+                            "repair_strategy": "minimum_change",
+                        },
+                    )
+
+                self.assertEqual(len(solve_deadlines), 3)
+                self.assertAlmostEqual(solve_deadlines[0], 100.0 + budget * 0.2)
+                self.assertAlmostEqual(solve_deadlines[1], 100.0 + budget * 0.7)
+                self.assertAlmostEqual(solve_deadlines[2], 100.0 + budget)
+
     def test_staged_lexicographic_solver_freezes_each_proven_prefix(self):
         model = cp_model.CpModel()
         first = model.NewBoolVar("first")
@@ -809,6 +878,40 @@ class IndependentSolverResultTestCase(SimpleTestCase):
         )
         self.assertEqual(key[0], 0)
         self.assertEqual(key[1], 0)
+
+    def test_zero_capacity_interviewers_are_excluded_from_fairness_spreads(self):
+        interviewers = [
+            *self.interviewers,
+            Interviewer(
+                id="i3",
+                name="No capacity",
+                gender="F",
+                experience_level="experienced",
+                availability=[],
+                biased=[],
+            ),
+        ]
+        balanced_schedule = deepcopy(self.schedule)
+        balanced_schedule[1]["panel"][0].update(
+            id="i2",
+            name="Other",
+        )
+
+        vector = evaluate_objective_vector(
+            schedule=balanced_schedule,
+            candidates=self.candidates,
+            interviewers=interviewers,
+            sorted_slots=[0, 1],
+            blocks=[{"usable_slots": [0, 1], "day": 0, "start_time": 0}],
+            previous_schedule=[],
+            panel_size=1,
+            require_experienced_panel=False,
+            active_interviewer_ids={"i1", "i2"},
+        )
+
+        self.assertEqual(vector.max_load, 1)
+        self.assertEqual(vector.load_spread, 0)
+        self.assertEqual(vector.experienced_load_spread, 0)
 
 
 @override_settings(ADMISSIONS_SOLVER_ENGINE_VERSION="v2")

@@ -939,8 +939,9 @@ def _build_model(
         load = model.NewIntVar(0, len(problem.candidates), f"load_{interviewer.id}")
         model.Add(load == _linear_sum(member_vars))
         loads.append(load)
-        active_loads.append(load)
-        if interviewer.experience_level == "experienced":
+        if member_vars:
+            active_loads.append(load)
+        if member_vars and interviewer.experience_level == "experienced":
             experienced_loads.append(load)
     max_load = model.NewIntVar(0, len(problem.candidates), "max_load")
     if loads:
@@ -1378,6 +1379,9 @@ def _evaluate_phase(
             previous_schedule=problem.previous_schedule,
             panel_size=problem.panel_size,
             require_experienced_panel=problem.options.require_experienced_panel,
+            active_interviewer_ids={
+                interviewer_id for interviewer_id, _interview_time in built.panel
+            },
         )
         key = objective_key(
             vector,
@@ -1573,6 +1577,15 @@ def _repair_neighborhood_problem(problem: SolverProblem) -> SolverProblem | None
     )
 
 
+def _phase_deadlines(phase_started: float, deadline: float):
+    remaining_budget = max(0.0, deadline - phase_started)
+    repair_slice = min(1.0, 0.2 * remaining_budget)
+    strict_slice = min(5.0, 0.5 * remaining_budget)
+    repair_deadline = min(deadline, phase_started + repair_slice)
+    strict_deadline = min(deadline, repair_deadline + strict_slice)
+    return repair_deadline, strict_deadline
+
+
 def solve_schedule_v2(
     candidates_data: List[dict],
     interviewers_data: List[dict],
@@ -1607,11 +1620,13 @@ def solve_schedule_v2(
         return early_result
     preprocess_ms = int((time.monotonic() - started) * 1000)
 
+    phase_started = time.monotonic()
+    repair_deadline, strict_deadline = _phase_deadlines(phase_started, deadline)
+
     phases: list[PhaseResult] = []
     incumbents: list[PhaseResult] = []
     neighborhood_problem = _repair_neighborhood_problem(problem)
     if neighborhood_problem is not None and time.monotonic() < deadline:
-        repair_deadline = min(deadline, time.monotonic() + 2.0)
         try:
             repair_model = _build_model(
                 neighborhood_problem,
@@ -1636,8 +1651,6 @@ def solve_schedule_v2(
             if repair_phase.schedule is not None:
                 incumbents.append(repair_phase)
 
-    strict_slice = min(5.0, 0.2 * budget)
-    strict_deadline = min(deadline, time.monotonic() + strict_slice)
     try:
         strict_model = _build_model(
             problem,

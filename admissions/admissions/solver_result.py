@@ -1,6 +1,6 @@
 from collections import Counter, defaultdict
 from dataclasses import asdict, dataclass
-from typing import Any, Iterable, Sequence
+from typing import Any, Collection, Iterable, Sequence
 
 EXPERIENCE_EXPERIENCED = "experienced"
 
@@ -352,6 +352,7 @@ def evaluate_objective_vector(
     previous_schedule: Sequence[dict],
     panel_size: int,
     require_experienced_panel: bool,
+    active_interviewer_ids: Collection[str] | None = None,
 ) -> ObjectiveVector:
     candidate_ids = {str(_value(candidate, "id")) for candidate in candidates}
     interviewer_map = {
@@ -445,11 +446,21 @@ def evaluate_objective_vector(
             )
 
     all_loads = [loads[str(_value(interviewer, "id"))] for interviewer in interviewers]
-    active_loads = all_loads
+    active_id_set = (
+        {str(value) for value in active_interviewer_ids}
+        if active_interviewer_ids is not None
+        else set(interviewer_map)
+    )
+    active_loads = [
+        loads[str(_value(interviewer, "id"))]
+        for interviewer in interviewers
+        if str(_value(interviewer, "id")) in active_id_set
+    ]
     experienced_loads = [
         loads[str(_value(interviewer, "id"))]
         for interviewer in interviewers
         if _value(interviewer, "experience_level", "unknown") == EXPERIENCE_EXPERIENCED
+        and str(_value(interviewer, "id")) in active_id_set
     ]
     max_load = max(all_loads, default=0)
     load_spread = max(active_loads) - min(active_loads) if len(active_loads) > 1 else 0
