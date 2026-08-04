@@ -4,6 +4,7 @@ import { useSaveInterviewAvailability } from "src/query/hooks";
 import type {
   ExperienceLevel,
   InterviewAvailabilityParticipant,
+  SavedSchedule,
 } from "src/types";
 import { isSensitiveAuthorityChangedError } from "src/query/sensitiveAccess";
 
@@ -15,12 +16,16 @@ const serializeSlots = (slots: Iterable<string>) =>
 interface AvailabilityEditorParams {
   admissionSlug: string;
   participants: InterviewAvailabilityParticipant[] | undefined;
+  savedSchedule: SavedSchedule | undefined;
+  refetchSavedSchedule: () => Promise<SavedSchedule | undefined>;
   notify: Notify;
 }
 
 export const useAvailabilityEditor = ({
   admissionSlug,
   participants,
+  savedSchedule,
+  refetchSavedSchedule,
   notify,
 }: AvailabilityEditorParams) => {
   const saveInterviewAvailability = useSaveInterviewAvailability(admissionSlug);
@@ -90,7 +95,35 @@ export const useAvailabilityEditor = ({
     );
   };
 
+  const reportAutoUnpublish = async (wasDistributed: boolean) => {
+    if (!wasDistributed) return false;
+    let canonicalSchedule: SavedSchedule | undefined;
+    try {
+      canonicalSchedule = await refetchSavedSchedule();
+    } catch {
+      notify(
+        "Endringen ble lagret, men planstatus kunne ikke kontrolleres. Last inn siden på nytt.",
+        "error",
+      );
+      return true;
+    }
+    if (!canonicalSchedule) {
+      notify(
+        "Endringen ble lagret, men planstatus kunne ikke kontrolleres. Last inn siden på nytt.",
+        "error",
+      );
+      return true;
+    }
+    if (canonicalSchedule.is_distributed) return false;
+    notify(
+      "Den publiserte planen ble tatt ned og beholdt som utkast fordi tildelte intervjuer må repareres.",
+      "error",
+    );
+    return true;
+  };
+
   const saveAvailability = async (slots: Set<string>) => {
+    const wasDistributed = Boolean(savedSchedule?.is_distributed);
     try {
       const saved = await saveInterviewAvailability.mutateAsync({
         slots: Array.from(slots),
@@ -103,6 +136,7 @@ export const useAvailabilityEditor = ({
       rememberAvailabilityRevision(saved);
       lastAppliedServerSlotsRef.current = serializeSlots(slots);
       lastAppliedGenerationRef.current = saved.availability_generation;
+      if (await reportAutoUnpublish(wasDistributed)) return;
       notify("Tilgjengelighet lagret.");
     } catch (error) {
       if (isSensitiveAuthorityChangedError(error)) throw error;
@@ -122,6 +156,7 @@ export const useAvailabilityEditor = ({
     reviewedCandidateIds: string[],
     conflictIds: string[],
   ) => {
+    const wasDistributed = Boolean(savedSchedule?.is_distributed);
     try {
       const saved = await saveInterviewAvailability.mutateAsync({
         reviewed_candidate_ids: reviewedCandidateIds,
@@ -131,6 +166,7 @@ export const useAvailabilityEditor = ({
         ),
       });
       rememberAvailabilityRevision(saved);
+      await reportAutoUnpublish(wasDistributed);
     } catch (error) {
       if (isSensitiveAuthorityChangedError(error)) throw error;
       notify("Kunne ikke lagre inhabilitetssjekken.", "error");
@@ -142,6 +178,7 @@ export const useAvailabilityEditor = ({
     reviewedCandidateIds: string[],
     conflictIds: string[],
   ) => {
+    const wasDistributed = Boolean(savedSchedule?.is_distributed);
     const revision = currentParticipant?.conflict_collection_revision;
     if (!revision) {
       notify("Kandidatlisten må lastes inn på nytt.", "error");
@@ -157,6 +194,7 @@ export const useAvailabilityEditor = ({
         ),
       });
       rememberAvailabilityRevision(saved);
+      await reportAutoUnpublish(wasDistributed);
     } catch (error) {
       if (isSensitiveAuthorityChangedError(error)) throw error;
       const responseStatus = (error as { response?: { status?: number } })
@@ -175,6 +213,7 @@ export const useAvailabilityEditor = ({
     participation: "awaiting_response" | "not_participating",
     userId?: string,
   ) => {
+    const wasDistributed = Boolean(savedSchedule?.is_distributed);
     try {
       const saved = await saveInterviewAvailability.mutateAsync({
         user_id: userId,
@@ -186,6 +225,7 @@ export const useAvailabilityEditor = ({
         setSelectedSlots(new Set());
         lastAppliedServerSlotsRef.current = "";
       }
+      if (await reportAutoUnpublish(wasDistributed)) return;
       notify(
         participation === "not_participating"
           ? "Registrert som ikke deltakende."
@@ -202,6 +242,7 @@ export const useAvailabilityEditor = ({
     userId: string,
     experienceLevel: ExperienceLevel,
   ) => {
+    const wasDistributed = Boolean(savedSchedule?.is_distributed);
     try {
       const saved = await saveInterviewAvailability.mutateAsync({
         user_id: userId,
@@ -209,6 +250,7 @@ export const useAvailabilityEditor = ({
         expected_availability_updated_at: expectedAvailabilityUpdatedAt(userId),
       });
       rememberAvailabilityRevision(saved);
+      if (await reportAutoUnpublish(wasDistributed)) return;
       notify("Erfaringsnivå oppdatert.");
     } catch (error) {
       if (isSensitiveAuthorityChangedError(error)) throw error;
