@@ -126,7 +126,12 @@ export const createSolveJobLifecycle = (
           interruption(isStale, authorityEpoch) ?? { kind: "missing" as const }
         );
       }
-      const purged = purgeSensitiveAuthorizationFailure(queryClient, error);
+      const purged = purgeSensitiveAdmissionAccess(
+        queryClient,
+        admissionSlug,
+        error,
+        { scopeForbiddenToAdmission: true },
+      );
       if (isStale()) return { kind: "stale" };
       if (purged) return { kind: "access-failure", purged };
       const afterRequest = interruption(isStale, authorityEpoch);
@@ -157,6 +162,7 @@ export const createSolveJobLifecycle = (
         queryClient,
         admissionSlug,
         error,
+        { scopeForbiddenToAdmission: true },
       );
       if (isStale()) return { kind: "stale" };
       if (purged) return { kind: "access-failure", purged };

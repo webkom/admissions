@@ -404,7 +404,12 @@ export const useScheduleDraftPersistence = ({
         return;
       }
       if (
-        purgeSensitiveAdmissionAccess(queryClient, config.admissionSlug, error)
+        purgeSensitiveAdmissionAccess(
+          queryClient,
+          config.admissionSlug,
+          error,
+          { scopeForbiddenToAdmission: true },
+        )
       ) {
         return;
       }

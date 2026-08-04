@@ -98,8 +98,8 @@ const queryCache = new QueryCache({
     }
 
     const status = error.response?.status;
+    const admissionSlug = failedQuery.meta?.admissionSlug;
     if (status === 404) {
-      const admissionSlug = failedQuery.meta?.admissionSlug;
       if (
         failedQuery.meta?.purgeAdmissionOnNotFound === true &&
         typeof admissionSlug === "string"
@@ -108,6 +108,12 @@ const queryCache = new QueryCache({
         return;
       }
       purgeSensitiveQuery(failedQuery, error);
+      return;
+    }
+    if (status === 403 && typeof admissionSlug === "string") {
+      purgeSensitiveAdmissionAccess(queryClient, admissionSlug, error, {
+        scopeForbiddenToAdmission: true,
+      });
       return;
     }
     purgeSensitiveAuthorizationFailure(queryClient, error);

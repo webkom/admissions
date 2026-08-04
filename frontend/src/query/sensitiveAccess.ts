@@ -182,19 +182,27 @@ export const clearSensitiveAdmissionDataForScopeChange = (
   if (clearBrowserStorage) {
     clearSensitiveAdmissionBrowserStorage(admissionSlug);
   }
+  const admissionDescriptorKey = `/admission/${admissionSlug}/`;
   const admissionAdminPrefix = `/admin/admission/${admissionSlug}/`;
   const personalAdmissionPrefix = `/admission/${admissionSlug}/application/`;
   const queryCache = queryClient.getQueryCache();
   queryCache
     .getAll()
-    .filter((query) =>
-      query.queryKey.some(
-        (part) =>
-          typeof part === "string" &&
-          (part.startsWith(admissionAdminPrefix) ||
-            part.startsWith(personalAdmissionPrefix)),
-      ),
-    )
+    .filter((query) => {
+      const isAdmissionDescriptor = query.queryKey.some(
+        (part) => part === admissionDescriptorKey,
+      );
+      return (
+        !isAdmissionDescriptor &&
+        (query.meta?.admissionSlug === admissionSlug ||
+          query.queryKey.some(
+            (part) =>
+              typeof part === "string" &&
+              (part.startsWith(admissionAdminPrefix) ||
+                part.startsWith(personalAdmissionPrefix)),
+          ))
+      );
+    })
     .forEach((query) => {
       void query.cancel({ silent: true });
       queryCache.remove(query);
@@ -205,8 +213,8 @@ export const clearSensitiveAdmissionDataForScopeChange = (
 /**
  * Re-enable sensitive reads only after the caller has made a fresh request
  * outside React Query and verified that the server still reports an active
- * scheduler role. Purge every sensitive cache entry before lifting the global
- * block so no pre-recovery response can become authoritative.
+ * scheduler role. A global block invalidates every sensitive scope; a known
+ * admission block invalidates only that admission.
  */
 export const restoreSensitiveAccessAfterVerifiedAdmission = (
   queryClient: QueryClient,
@@ -218,19 +226,22 @@ export const restoreSensitiveAccessAfterVerifiedAdmission = (
     return false;
   }
 
-  advanceSensitiveGlobalAuthorityEpoch();
-  const queryCache = queryClient.getQueryCache();
-  queryCache
-    .getAll()
-    .filter((query) => query.meta?.sensitive === true)
-    .forEach((query) => {
-      void query.cancel({ silent: true });
-      queryCache.remove(query);
-    });
-  purgeSensitiveMutations(queryClient);
-
-  sensitiveAccessError = null;
-  sensitiveCacheWritesBlocked = false;
+  if (sensitiveAccessError || sensitiveCacheWritesBlocked) {
+    advanceSensitiveGlobalAuthorityEpoch();
+    const queryCache = queryClient.getQueryCache();
+    queryCache
+      .getAll()
+      .filter((query) => query.meta?.sensitive === true)
+      .forEach((query) => {
+        void query.cancel({ silent: true });
+        queryCache.remove(query);
+      });
+    purgeSensitiveMutations(queryClient);
+    sensitiveAccessError = null;
+    sensitiveCacheWritesBlocked = false;
+  } else {
+    clearSensitiveAdmissionDataForScopeChange(queryClient, admissionSlug);
+  }
   sensitiveAdmissionAccessErrors.delete(admissionSlug);
   return true;
 };
@@ -346,12 +357,15 @@ export const purgeSensitiveAdmissionAccess = (
   queryClient: QueryClient,
   admissionSlug: string,
   error: unknown,
+  {
+    scopeForbiddenToAdmission = false,
+  }: { scopeForbiddenToAdmission?: boolean } = {},
 ) => {
   if (!isAxiosError(error)) return false;
   const status = error.response?.status ?? 0;
   if (![401, 403, 404].includes(status)) return false;
 
-  if (status === 401 || status === 403) {
+  if (status === 401 || (status === 403 && !scopeForbiddenToAdmission)) {
     return purgeSensitiveAuthorizationFailure(queryClient, error);
   }
 

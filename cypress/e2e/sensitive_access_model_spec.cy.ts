@@ -21,6 +21,21 @@ import {
 import { buildInterviewOutreachTemplateStorageKey } from "../../frontend/src/query/sensitiveBrowserStorage";
 import type { Admission } from "../../frontend/src/types";
 
+const verifiedAdmission = (slug: string) =>
+  ({
+    slug,
+    userdata: {
+      actor_id: "actor-a",
+      is_admin: false,
+      is_privileged: true,
+      is_recruiter: true,
+      committee_role: "recruiting",
+      committee_groups: ["Webkom"],
+      represented_groups: ["Webkom"],
+      has_application: false,
+    },
+  }) as Admission;
+
 describe("sensitive admission cache scope", () => {
   it("changes when scheduling privileges or represented groups change", () => {
     const adminScope = buildSensitiveAdmissionScopeKey({
@@ -64,6 +79,9 @@ describe("sensitive admission cache scope", () => {
     const myApplicationKey = [`/admission/${slug}/application/mine/`];
     const otherAdmissionKey = ["/admin/admission/other-admission/schedule/"];
 
+    queryClient.setQueryDefaults(admissionKey, {
+      meta: { sensitive: true, admissionSlug: slug },
+    });
     queryClient.setQueryData(admissionKey, { userdata: { is_admin: false } });
     queryClient.setQueryData(scheduleKey, { schedule: ["private-row"] });
     queryClient.setQueryData(candidatesKey, [{ id: "private-candidate" }]);
@@ -167,6 +185,13 @@ describe("sensitive admission cache scope", () => {
       true,
     );
     expect(window.localStorage.getItem(templateKey)).to.equal(null);
+    expect(
+      restoreSensitiveAccessAfterVerifiedAdmission(
+        queryClient,
+        "webkom-open",
+        verifiedAdmission("webkom-open"),
+      ),
+    ).to.equal(true);
   });
 
   it("purges only one admission after a not-found scope revocation", () => {
@@ -198,7 +223,107 @@ describe("sensitive admission cache scope", () => {
     expect(window.localStorage.getItem(otherKey)).to.equal(
       "Other admission data",
     );
+    expect(
+      restoreSensitiveAccessAfterVerifiedAdmission(
+        queryClient,
+        "webkom-open",
+        verifiedAdmission("webkom-open"),
+      ),
+    ).to.equal(true);
     window.localStorage.removeItem(otherKey);
+  });
+
+  it("scopes a known admission GET 403 and recovers only that admission", async () => {
+    const queryClient = new QueryClient();
+    const currentSlug = "webkom-open";
+    const otherSlug = "other-admission";
+    const currentKey = [`/admin/admission/${currentSlug}/schedule/`];
+    const otherKey = [`/admin/admission/${otherSlug}/schedule/`];
+    queryClient.setQueryDefaults(currentKey, {
+      meta: { sensitive: true, admissionSlug: currentSlug },
+    });
+    queryClient.setQueryDefaults(otherKey, {
+      meta: { sensitive: true, admissionSlug: otherSlug },
+    });
+    queryClient.setQueryData(currentKey, { schedule: ["current-private"] });
+    queryClient.setQueryData(otherKey, { schedule: ["other-private"] });
+    const forbidden = new AxiosError(
+      "Forbidden",
+      undefined,
+      undefined,
+      undefined,
+      { status: 403 } as never,
+    );
+
+    expect(
+      purgeSensitiveAdmissionAccess(queryClient, currentSlug, forbidden, {
+        scopeForbiddenToAdmission: true,
+      }),
+    ).to.equal(true);
+    expect(queryClient.getQueryData(currentKey)).to.equal(undefined);
+    expect(queryClient.getQueryData(otherKey)).to.deep.equal({
+      schedule: ["other-private"],
+    });
+    expect(
+      await runSensitiveAdmissionMutation(otherSlug, () =>
+        Promise.resolve("other-still-authorized"),
+      ),
+    ).to.equal("other-still-authorized");
+
+    expect(
+      restoreSensitiveAccessAfterVerifiedAdmission(
+        queryClient,
+        currentSlug,
+        verifiedAdmission(currentSlug),
+      ),
+    ).to.equal(true);
+    expect(queryClient.getQueryData(otherKey)).to.deep.equal({
+      schedule: ["other-private"],
+    });
+    expect(
+      await runSensitiveAdmissionMutation(currentSlug, () =>
+        Promise.resolve("current-restored"),
+      ),
+    ).to.equal("current-restored");
+  });
+
+  [401, 403].forEach((status) => {
+    it(`keeps an unclassified ${status} failure global`, () => {
+      const queryClient = new QueryClient();
+      const currentSlug = "webkom-open";
+      const currentKey = [`/admin/admission/${currentSlug}/schedule/`];
+      const otherKey = ["/admin/admission/other-admission/schedule/"];
+      for (const [key, slug] of [
+        [currentKey, currentSlug],
+        [otherKey, "other-admission"],
+      ] as const) {
+        queryClient.setQueryDefaults(key, {
+          meta: { sensitive: true, admissionSlug: slug },
+        });
+        queryClient.setQueryData(key, { schedule: ["private"] });
+      }
+      const failure = new AxiosError(
+        "Authorization failed",
+        undefined,
+        undefined,
+        undefined,
+        { status } as never,
+      );
+
+      expect(
+        purgeSensitiveAdmissionAccess(queryClient, currentSlug, failure),
+      ).to.equal(true);
+      expect(queryClient.getQueryData(currentKey)).to.equal(undefined);
+      expect(queryClient.getQueryData(otherKey)).to.equal(undefined);
+
+      expect(
+        restoreSensitiveAccessAfterVerifiedAdmission(
+          queryClient,
+          currentSlug,
+          verifiedAdmission(currentSlug),
+        ),
+      ).to.equal(true);
+    });
   });
 
   it("preserves actor-scoped templates during initial scope establishment", () => {

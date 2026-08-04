@@ -102,7 +102,9 @@ export const useDistributedPlanActions = ({
         return "access-lost" as const;
       }
       return reportAccessFailure(
-        purgeSensitiveAdmissionAccess(queryClient, admissionSlug, error),
+        purgeSensitiveAdmissionAccess(queryClient, admissionSlug, error, {
+          scopeForbiddenToAdmission: true,
+        }),
       )
         ? ("access-lost" as const)
         : ("unknown" as const);
