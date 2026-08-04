@@ -191,6 +191,11 @@ const CommonScheduleView: React.FC<ScheduleWorkspaceProps> = (props) => {
       isAvailabilityLoading={isAvailabilityLoading}
       dataHealth={dataHealth}
       candidateScopeResolved={candidateScopeResolved}
+      refetchSavedSchedule={async () => {
+        const result = await refetchSavedSchedule();
+        if (result.isError) throw result.error;
+        return result.data;
+      }}
       onRetryLoad={retryLoad}
     />
   );
@@ -203,6 +208,7 @@ interface LoadedScheduleViewProps extends ScheduleWorkspaceProps {
   isAvailabilityLoading: boolean;
   dataHealth: ScheduleDataHealth;
   candidateScopeResolved: boolean;
+  refetchSavedSchedule: () => Promise<SavedSchedule | undefined>;
   onRetryLoad: () => void;
 }
 
@@ -221,6 +227,7 @@ const LoadedScheduleView: React.FC<LoadedScheduleViewProps> = ({
   availabilityParticipants,
   dataHealth,
   candidateScopeResolved,
+  refetchSavedSchedule,
   onRetryLoad,
 }) => {
   const roleLabel = (() => {
@@ -292,6 +299,8 @@ const LoadedScheduleView: React.FC<LoadedScheduleViewProps> = ({
   const availability = useAvailabilityEditor({
     admissionSlug,
     participants: availabilityParticipants,
+    savedSchedule,
+    refetchSavedSchedule,
     notify: showToast,
   });
   const workflow = useScheduleWorkflow({
