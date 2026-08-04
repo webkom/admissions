@@ -60,6 +60,8 @@ export const useDistributedPlanActions = ({
   const reconcilePublishedSchedule = async (visibility: NameVisibility) => {
     const authorityEpoch =
       captureSensitiveAdmissionAuthorityEpoch(admissionSlug);
+    const requestedFingerprint =
+      savedSchedule?.deviation_review?.schedule_fingerprint;
     try {
       const { data } = await apiClient.get<SavedSchedule>(
         `/admin/admission/${admissionSlug}/schedule/`,
@@ -74,11 +76,19 @@ export const useDistributedPlanActions = ({
         return "access-lost" as const;
       }
       queryClient.setQueryData(scheduleQueryKey, data);
+      const canonicalFingerprint = data.deviation_review?.schedule_fingerprint;
+      if (
+        typeof requestedFingerprint !== "string" ||
+        requestedFingerprint.length === 0 ||
+        typeof canonicalFingerprint !== "string" ||
+        canonicalFingerprint.length === 0
+      ) {
+        return "unknown" as const;
+      }
       const publishedSameDraft =
         data.is_distributed &&
         data.name_visibility === visibility &&
-        JSON.stringify(data.schedule) ===
-          JSON.stringify(savedSchedule?.schedule ?? []);
+        canonicalFingerprint === requestedFingerprint;
       return publishedSameDraft
         ? ("published" as const)
         : ("different-state" as const);
