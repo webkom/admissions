@@ -454,6 +454,7 @@ export default function SolverView({
     ) ?? 0;
   const pendingUnplaced = pendingProposal?.result.unplaceable?.length ?? 0;
   const unplaceableCandidates = draft.presentation.unplaceableCandidates;
+  const unplaceableSuggestions = draft.presentation.unplaceableSuggestions;
   const currentUnplaced = draft.presentation.unplaceableCandidates.length;
   const currentOutsideAvailability =
     draft.presentation.availabilitySummary.outsideAvailabilityAssignments;
@@ -759,6 +760,21 @@ export default function SolverView({
                 </li>
               ))}
             </ul>
+            {unplaceableSuggestions.length > 0 && (
+              <div
+                data-cy="unplaceable-guidance"
+                className="mt-4 rounded-xl border border-border-soft bg-surface-subtle p-4"
+              >
+                <p className="m-0 text-ui font-semibold text-text-primary">
+                  Mulige grep
+                </p>
+                <ul className="mb-0 mt-2 space-y-1 pl-5 text-detail text-text-muted">
+                  {unplaceableSuggestions.map((suggestion) => (
+                    <li key={suggestion}>{suggestion}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
           </SchedulePanelBody>
           <SchedulePanelFooter className="sticky bottom-0 z-10 bg-surface-base">
             <span className="text-detail font-semibold text-text-muted">

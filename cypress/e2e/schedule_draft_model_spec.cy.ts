@@ -4,7 +4,10 @@ import {
   buildRepairPreviewOptions,
   buildRepairScenario,
 } from "../../frontend/src/components/Scheduling/Solver/repairScenarios";
-import { solveFailureMessage } from "../../frontend/src/components/Scheduling/Solver/solverHelpers";
+import {
+  solveFailureMessage,
+  unplaceableSuggestion,
+} from "../../frontend/src/components/Scheduling/Solver/solverHelpers";
 import type { ScheduleItem } from "../../frontend/src/types";
 
 const scheduleItem = (overrides: Partial<ScheduleItem> = {}): ScheduleItem => ({
@@ -15,6 +18,23 @@ const scheduleItem = (overrides: Partial<ScheduleItem> = {}): ScheduleItem => ({
 });
 
 describe("schedule draft model", () => {
+  it("prefers stable unplaceable codes and keeps the v1 text fallback", () => {
+    expect(
+      unplaceableSuggestion("panel_capacity", "Changed backend wording"),
+    ).to.equal("Åpne flere tidsluker eller reduser panelstørrelsen.");
+    expect(
+      unplaceableSuggestion(
+        undefined,
+        "Ingen tilgjengelige paneler har en erfaren intervjuer.",
+      ),
+    ).to.equal(
+      "Klassifiser en deltakende intervjuer som erfaren, eller slå av erfaringskravet.",
+    );
+    expect(
+      unplaceableSuggestion("future_reason", "Unknown backend wording"),
+    ).to.equal(null);
+  });
+
   it("returns a manual row to solver ownership when it is unlocked", () => {
     expect(
       toggleScheduleDraftLock(
