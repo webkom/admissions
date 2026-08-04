@@ -151,7 +151,9 @@ export const deriveSchedulePresentation = (
   const unplaceableSuggestions = Array.from(
     new Set(
       unplaceableCandidates
-        .map(({ reason }) => unplaceableSuggestion(reason))
+        .map(({ reason_code, reason }) =>
+          unplaceableSuggestion(reason_code, reason),
+        )
         .filter((suggestion): suggestion is string => Boolean(suggestion)),
     ),
   );
