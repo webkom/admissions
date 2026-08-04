@@ -2831,14 +2831,28 @@ class InterviewAvailabilityHardeningTestCase(APITestCase):
     def test_admin_opt_out_unpublishes_an_assigned_interviewer_and_keeps_draft(
         self,
     ):
+        collection_revision = uuid.uuid4()
         saved = self._create_saved_schedule(
             enabled_slots=["2026-04-21|540"],
             is_distributed=True,
             name_visibility=SavedSchedule.NAME_VISIBILITY_COMMITTEE,
             conflict_review_open=True,
+            conflict_collection_open=True,
+            conflict_collection_revision=collection_revision,
+            conflict_collection_candidate_ids=[str(self.application.pk)],
+            conflict_collection_participant_ids=[str(self.member.pk)],
             schedule=[self._schedule_assignment(self.member)],
         )
         saved.revealed_groups.add(self.committee_group)
+        availability = InterviewAvailability.objects.create(
+            admission=self.admission,
+            user=self.member,
+            slots=["2026-04-21|540"],
+            participation=InterviewAvailability.PARTICIPATION_PARTICIPATING,
+            submitted_grid_generation=saved.availability_generation,
+            conflict_collection_reviewed_candidate_ids=[str(self.application.pk)],
+            conflict_collection_review_revision=collection_revision,
+        )
         approval = ScheduleDeviationApproval.objects.create(
             admission=self.admission,
             saved_schedule=saved,
@@ -2886,6 +2900,25 @@ class InterviewAvailabilityHardeningTestCase(APITestCase):
             SavedSchedule.NAME_VISIBILITY_HIDDEN,
         )
         self.assertFalse(saved.conflict_review_open)
+        self.assertFalse(saved.conflict_collection_open)
+        self.assertEqual(saved.conflict_collection_revision, collection_revision)
+        self.assertEqual(
+            saved.conflict_collection_candidate_ids,
+            [str(self.application.pk)],
+        )
+        self.assertEqual(
+            saved.conflict_collection_participant_ids,
+            [str(self.member.pk)],
+        )
+        availability.refresh_from_db()
+        self.assertEqual(
+            availability.conflict_collection_reviewed_candidate_ids,
+            [str(self.application.pk)],
+        )
+        self.assertEqual(
+            availability.conflict_collection_review_revision,
+            collection_revision,
+        )
         self.assertFalse(saved.revealed_groups.exists())
         self.assertGreater(saved.updated_at, original_revision)
         self.assertFalse(
@@ -2907,11 +2940,19 @@ class InterviewAvailabilityHardeningTestCase(APITestCase):
             visibility_event.action,
             NameVisibilityAuditEvent.ACTION_HIDDEN,
         )
-        closure_event = ConflictReviewAuditEvent.objects.get(
+        closure_events = ConflictReviewAuditEvent.objects.filter(
             saved_schedule=saved,
             action=ConflictReviewAuditEvent.ACTION_CLOSED,
         )
-        self.assertEqual(closure_event.actor, self.admin_user)
+        self.assertEqual(closure_events.count(), 2)
+        self.assertEqual(
+            set(closure_events.values_list("phase", flat=True)),
+            {
+                ConflictReviewAuditEvent.PHASE_DRAFT,
+                ConflictReviewAuditEvent.PHASE_COLLECTION,
+            },
+        )
+        self.assertTrue(all(event.actor == self.admin_user for event in closure_events))
 
     def test_admin_opt_out_for_unassigned_interviewer_preserves_publication(self):
         saved = self._create_saved_schedule(

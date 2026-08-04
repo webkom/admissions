@@ -18,6 +18,7 @@ from admissions.admissions.models import (
     ScheduleDeviationApproval,
     UserApplication,
 )
+from admissions.admissions.schedule_invalidation import invalidate_solver_work
 from admissions.admissions.schedule_layout import (
     ScheduleLayoutError,
     build_grid_slot_keys,
@@ -600,6 +601,7 @@ def _resolve_schedule_state(
     layout,
 ):
     grid_changed = False
+    generation_changed = False
     added_slots = set()
     removed_slots = set()
     duration_changed = False
@@ -641,6 +643,24 @@ def _resolve_schedule_state(
         availability_generation = existing.availability_generation
         if duration_changed or added_slots:
             availability_generation += 1
+        generation_changed = availability_generation != existing.availability_generation
+        if generation_changed and data.get("is_distributed") is True:
+            raise ScheduleInputError(
+                {
+                    "is_distributed": [
+                        "Tilgjengeligheten må samles inn på nytt før planen publiseres."
+                    ]
+                }
+            )
+        if generation_changed and data.get("conflict_collection_open") is True:
+            raise ScheduleInputError(
+                {
+                    "conflict_collection_open": [
+                        "Tilgjengeligheten må samles inn på nytt før "
+                        "inhabilitetskontrollen åpnes."
+                    ]
+                }
+            )
         scheduled_slot_keys = {
             make_slot_key(
                 existing.start_date + timedelta(days=int(item["time"]) // (24 * 60)),
@@ -673,7 +693,7 @@ def _resolve_schedule_state(
         and existing is not None
         and data["schedule"] != existing.schedule
     )
-    if should_clear_plan:
+    if should_clear_plan or generation_changed:
         is_distributed = False
     elif "is_distributed" in data:
         is_distributed = data["is_distributed"]
@@ -697,9 +717,13 @@ def _resolve_schedule_state(
     existing_collection_open = bool(
         existing is not None and existing.conflict_collection_open
     )
-    requested_collection_open = data.get(
-        "conflict_collection_open",
-        existing_collection_open,
+    requested_collection_open = (
+        False
+        if generation_changed
+        else data.get(
+            "conflict_collection_open",
+            existing_collection_open,
+        )
     )
     conflict_collection_open = bool(
         requested_collection_open and not is_distributed and not should_clear_plan
@@ -708,6 +732,7 @@ def _resolve_schedule_state(
         existing_collection_open
         and not conflict_collection_open
         and not should_clear_plan
+        and not generation_changed
     ):
         _ensure_conflict_collection_can_close(admission, existing)
     if should_clear_plan:
@@ -775,6 +800,7 @@ def _resolve_schedule_state(
         and existing.conflict_review_open
         and existing.conflict_collection_revision is None
         and not should_clear_plan
+        and not generation_changed
     )
     conflict_review_open = bool(
         schedule
@@ -785,6 +811,7 @@ def _resolve_schedule_state(
 
     return {
         "grid_changed": grid_changed,
+        "generation_changed": generation_changed,
         "added_slots": added_slots,
         "removed_slots": removed_slots,
         "duration_changed": duration_changed,
@@ -1270,5 +1297,8 @@ def update_saved_schedule(
         solver_options,
         layout,
     )
+    if state["generation_changed"]:
+        ScheduleDeviationApproval.objects.filter(saved_schedule=saved).delete()
+        invalidate_solver_work(admission)
     _record_deviation_approval(admission, saved, user, deviation_review)
     return ScheduleUpdateResult(admission=admission, saved_schedule=saved)

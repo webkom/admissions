@@ -69,29 +69,54 @@ def invalidate_planning_input(saved, *, actor, publication_invalidated):
         else []
     )
     conflict_review_was_open = saved.conflict_review_open
+    conflict_collection_was_open = saved.conflict_collection_open
+    conflict_collection_revision = saved.conflict_collection_revision
     update_fields = ["updated_at"]
     if publication_invalidated:
         saved.is_distributed = False
         saved.name_visibility = SavedSchedule.NAME_VISIBILITY_HIDDEN
         saved.conflict_review_open = False
+        saved.conflict_collection_open = False
         update_fields.extend(
-            ["is_distributed", "name_visibility", "conflict_review_open"]
+            [
+                "is_distributed",
+                "name_visibility",
+                "conflict_review_open",
+                "conflict_collection_open",
+            ]
         )
     saved.save(update_fields=update_fields)
 
     if publication_invalidated:
         _hide_revealed_groups(saved, actor, revealed_groups)
+        actor_username = actor.username if actor is not None else SYSTEM_ACTOR_USERNAME
+        closure_events = []
         if conflict_review_was_open:
-            actor_username = (
-                actor.username if actor is not None else SYSTEM_ACTOR_USERNAME
+            closure_events.append(
+                ConflictReviewAuditEvent(
+                    admission=saved.admission,
+                    saved_schedule=saved,
+                    actor=actor,
+                    actor_username=actor_username,
+                    action=ConflictReviewAuditEvent.ACTION_CLOSED,
+                )
             )
-            ConflictReviewAuditEvent.objects.create(
-                admission=saved.admission,
-                saved_schedule=saved,
-                actor=actor,
-                actor_username=actor_username,
-                action=ConflictReviewAuditEvent.ACTION_CLOSED,
+        if conflict_collection_was_open:
+            closure_events.append(
+                ConflictReviewAuditEvent(
+                    admission=saved.admission,
+                    saved_schedule=saved,
+                    actor=actor,
+                    actor_username=actor_username,
+                    subject_user=actor,
+                    subject_username=actor_username,
+                    phase=ConflictReviewAuditEvent.PHASE_COLLECTION,
+                    collection_revision=conflict_collection_revision,
+                    action=ConflictReviewAuditEvent.ACTION_CLOSED,
+                )
             )
+        if closure_events:
+            ConflictReviewAuditEvent.objects.bulk_create(closure_events)
         ScheduleDeviationApproval.objects.filter(saved_schedule=saved).delete()
     invalidate_solver_work(saved.admission)
     return publication_invalidated

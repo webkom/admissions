@@ -1,4 +1,5 @@
 import json
+import uuid
 from datetime import date
 from pathlib import Path
 
@@ -13,6 +14,8 @@ from admissions.admissions.models import (
     LegoUser,
     Membership,
     SavedSchedule,
+    ScheduleDeviationApproval,
+    SolveJob,
 )
 from admissions.admissions.schedule_layout import (
     ScheduleLayoutError,
@@ -149,6 +152,179 @@ class AvailabilityGenerationProjectionTestCase(APITestCase):
             format="json",
         )
         self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+    def _mark_existing_schedule_published(self):
+        saved = SavedSchedule.objects.get(admission=self.admission)
+        saved.is_distributed = True
+        saved.name_visibility = SavedSchedule.NAME_VISIBILITY_COMMITTEE
+        saved.conflict_review_open = True
+        saved.conflict_collection_open = True
+        saved.conflict_collection_revision = uuid.uuid4()
+        saved.conflict_collection_candidate_ids = ["candidate-a"]
+        saved.conflict_collection_participant_ids = [str(self.admin.pk)]
+        saved.save(
+            update_fields=[
+                "is_distributed",
+                "name_visibility",
+                "conflict_review_open",
+                "conflict_collection_open",
+                "conflict_collection_revision",
+                "conflict_collection_candidate_ids",
+                "conflict_collection_participant_ids",
+                "updated_at",
+            ]
+        )
+        return saved
+
+    def _create_derived_state(self, saved):
+        approval = ScheduleDeviationApproval.objects.create(
+            admission=self.admission,
+            saved_schedule=saved,
+            actor=self.admin,
+            actor_username=self.admin.username,
+            schedule_fingerprint="a" * 64,
+            deviation_fingerprint="b" * 64,
+            policy_snapshot={},
+            availability_generation=saved.availability_generation,
+            layout_version=saved.layout_version,
+        )
+        job = SolveJob.objects.create(
+            admission=self.admission,
+            requested_by=self.admin,
+            request_data={"candidate": "private"},
+        )
+        availability = InterviewAvailability.objects.create(
+            admission=self.admission,
+            user=self.admin,
+            slots=["2026-04-20|540"],
+            conflicts=["candidate-a"],
+            conflict_collection_reviewed_candidate_ids=["candidate-a"],
+            conflict_collection_review_revision=(saved.conflict_collection_revision),
+            submitted_grid_generation=saved.availability_generation,
+        )
+        return approval, job, availability
+
+    def test_generation_change_auto_unpublishes_and_invalidates_derived_work(self):
+        saved = self._mark_existing_schedule_published()
+        approval, job, availability = self._create_derived_state(saved)
+        original_revision = saved.updated_at
+
+        response = self.client.post(
+            self.schedule_url,
+            {
+                "enabled_slots": [
+                    "2026-04-20|540",
+                    "2026-04-20|570",
+                    "2026-04-20|630",
+                    "2026-04-20|660",
+                ],
+                "slot_overrides": [],
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
+        saved.refresh_from_db()
+        self.assertEqual(saved.availability_generation, 2)
+        self.assertFalse(saved.is_distributed)
+        self.assertEqual(
+            saved.name_visibility,
+            SavedSchedule.NAME_VISIBILITY_HIDDEN,
+        )
+        self.assertFalse(saved.conflict_review_open)
+        self.assertFalse(saved.conflict_collection_open)
+        self.assertEqual(saved.conflict_collection_candidate_ids, ["candidate-a"])
+        self.assertEqual(
+            saved.conflict_collection_participant_ids,
+            [str(self.admin.pk)],
+        )
+        self.assertGreater(saved.updated_at, original_revision)
+        self.assertFalse(
+            ScheduleDeviationApproval.objects.filter(pk=approval.pk).exists()
+        )
+        job.refresh_from_db()
+        self.assertEqual(job.status, SolveJob.STATUS_CANCELLED)
+        availability.refresh_from_db()
+        self.assertEqual(
+            availability.conflict_collection_reviewed_candidate_ids,
+            ["candidate-a"],
+        )
+        self.assertEqual(
+            availability.conflict_collection_review_revision,
+            saved.conflict_collection_revision,
+        )
+
+    def test_generation_change_cannot_publish_in_the_same_request(self):
+        saved = self._mark_existing_schedule_published()
+        approval, job, availability = self._create_derived_state(saved)
+        original_revision = saved.updated_at
+
+        response = self.client.post(
+            self.schedule_url,
+            {
+                "enabled_slots": [
+                    "2026-04-20|540",
+                    "2026-04-20|570",
+                    "2026-04-20|630",
+                    "2026-04-20|660",
+                ],
+                "slot_overrides": [],
+                "is_distributed": True,
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("is_distributed", response.data)
+        saved.refresh_from_db()
+        availability.refresh_from_db()
+        job.refresh_from_db()
+        self.assertEqual(saved.updated_at, original_revision)
+        self.assertEqual(saved.availability_generation, 1)
+        self.assertTrue(saved.is_distributed)
+        self.assertTrue(saved.conflict_collection_open)
+        self.assertEqual(availability.submitted_grid_generation, 1)
+        self.assertEqual(job.status, SolveJob.STATUS_PENDING)
+        self.assertTrue(
+            ScheduleDeviationApproval.objects.filter(pk=approval.pk).exists()
+        )
+
+    def test_generation_change_cannot_open_collection_in_the_same_request(self):
+        saved = self._mark_existing_schedule_published()
+        saved.conflict_collection_open = False
+        saved.save(update_fields=["conflict_collection_open", "updated_at"])
+        approval, job, availability = self._create_derived_state(saved)
+        original_revision = saved.updated_at
+
+        response = self.client.post(
+            self.schedule_url,
+            {
+                "enabled_slots": [
+                    "2026-04-20|540",
+                    "2026-04-20|570",
+                    "2026-04-20|630",
+                    "2026-04-20|660",
+                ],
+                "slot_overrides": [],
+                "conflict_collection_open": True,
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("conflict_collection_open", response.data)
+        saved.refresh_from_db()
+        availability.refresh_from_db()
+        job.refresh_from_db()
+        self.assertEqual(saved.updated_at, original_revision)
+        self.assertEqual(saved.availability_generation, 1)
+        self.assertTrue(saved.is_distributed)
+        self.assertFalse(saved.conflict_collection_open)
+        self.assertEqual(availability.submitted_grid_generation, 1)
+        self.assertEqual(job.status, SolveJob.STATUS_PENDING)
+        self.assertTrue(
+            ScheduleDeviationApproval.objects.filter(pk=approval.pk).exists()
+        )
 
     def test_addition_makes_even_empty_submission_stale_until_reconfirmed(self):
         submitted = self.client.post(
