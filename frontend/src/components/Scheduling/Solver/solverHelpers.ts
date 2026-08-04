@@ -23,6 +23,7 @@ export interface SolveResponse {
   unplaceable?: Array<{
     candidate_id: string;
     candidate: string;
+    reason_code?: string;
     reason?: string;
   }>;
   locked_conflicts?: Array<{ message: string; assignment?: unknown }>;
@@ -37,6 +38,7 @@ export interface SolveResponse {
     deviation_count: number;
     deviation_fingerprint: string;
     requires_approval: boolean;
+    schedule_fingerprint?: string;
   };
 }
 
@@ -72,7 +74,25 @@ export const solveFailureMessage = (result: SolveResponse): string => {
   }
 };
 
-export const unplaceableSuggestion = (reason?: string): string | null => {
+export const unplaceableSuggestion = (
+  reasonCode?: string,
+  reason?: string,
+): string | null => {
+  switch (reasonCode) {
+    case "interviewer_conflict":
+      return "Be færre melde inhabilitet, eller legg til flere intervjuere.";
+    case "panel_capacity":
+      return "Åpne flere tidsluker eller reduser panelstørrelsen.";
+    case "same_gender_missing":
+      return "Slå av «samme kjønn i panel», eller legg til en intervjuer med matchende kjønn.";
+    case "experienced_interviewer_missing":
+      return "Klassifiser en deltakende intervjuer som erfaren, eller slå av erfaringskravet.";
+    case "no_open_slots":
+      return "Åpne flere tidsluker i kalenderen.";
+  }
+
+  // Solver v1 does not return reason codes. Keep its Norwegian text as a
+  // compatibility fallback while v1 remains available for rollback.
   switch (reason) {
     case "For mange i komiteen har meldt inhabilitet.":
       return "Be færre melde inhabilitet, eller legg til flere intervjuere.";
@@ -134,6 +154,8 @@ export const DEFAULT_SOLVER_OPTIONS: SolverOptions = {
   initial_strategy: "balanced",
   repair_strategy: "minimum_change",
   repair_mode: false,
+  // Solver v2 uses lexicographic objectives. This field remains serialized
+  // only because solver v1 still consumes it as a rollback implementation.
   overtime_weight: 40,
   load_balance_weight: 4,
   continuity_weight: 1,
