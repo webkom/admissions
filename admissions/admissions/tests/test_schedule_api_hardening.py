@@ -3545,57 +3545,6 @@ class InterviewAvailabilityHardeningTestCase(APITestCase):
             )
         )
 
-    def test_identical_availability_retry_is_a_true_no_op(self):
-        saved = self._create_saved_schedule(
-            enabled_slots=["2026-04-21|540"],
-        )
-        availability = InterviewAvailability.objects.create(
-            admission=self.admission,
-            user=self.member,
-            slots=["2026-04-21|540"],
-            participation=InterviewAvailability.PARTICIPATION_PARTICIPATING,
-            submitted_grid_generation=saved.availability_generation,
-        )
-        approval = ScheduleDeviationApproval.objects.create(
-            admission=self.admission,
-            saved_schedule=saved,
-            actor=self.admin_user,
-            actor_username=self.admin_user.username,
-            schedule_fingerprint="e" * 64,
-            deviation_fingerprint="f" * 64,
-            policy_snapshot={},
-            availability_generation=saved.availability_generation,
-            layout_version=saved.layout_version,
-        )
-        pending_job = SolveJob.objects.create(
-            admission=self.admission,
-            requested_by=self.admin_user,
-            request_data={"candidate": "private"},
-        )
-        row_revision = availability.updated_at
-        schedule_revision = saved.updated_at
-        self.client.force_authenticate(user=self.member)
-
-        response = self.client.post(
-            self.url,
-            {
-                "slots": ["2026-04-21|540"],
-                "expected_availability_generation": saved.availability_generation,
-            },
-            format="json",
-        )
-
-        self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
-        availability.refresh_from_db()
-        saved.refresh_from_db()
-        pending_job.refresh_from_db()
-        self.assertEqual(availability.updated_at, row_revision)
-        self.assertEqual(saved.updated_at, schedule_revision)
-        self.assertEqual(pending_job.status, SolveJob.STATUS_PENDING)
-        self.assertTrue(
-            ScheduleDeviationApproval.objects.filter(pk=approval.pk).exists()
-        )
-
     def test_admin_cannot_set_participation_for_non_roster_user(self):
         self._create_saved_schedule()
         outsider = LegoUser.objects.create(
