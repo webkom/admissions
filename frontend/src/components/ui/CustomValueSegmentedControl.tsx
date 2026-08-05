@@ -54,13 +54,10 @@ export const CustomValueSegmentedControl: React.FC<
     parsedDraft <= max &&
     (parsedDraft - min) % step === 0;
 
-  React.useEffect(() => {
+  React.useLayoutEffect(() => {
     if (!isEditing) return;
-    const frame = requestAnimationFrame(() => {
-      inputRef.current?.focus();
-      inputRef.current?.select();
-    });
-    return () => cancelAnimationFrame(frame);
+    inputRef.current?.focus();
+    inputRef.current?.select();
   }, [isEditing]);
 
   const openEditor = () => {
