@@ -71,17 +71,24 @@ export const CustomValueSegmentedControl: React.FC<
     setIsEditing(true);
   };
 
-  const commit = () => {
+  const commit = (nextDraftValue = draftValue) => {
     if (editFinishedRef.current) return true;
-    if (!isDraftValid) {
+    const nextParsedDraft = Number(nextDraftValue);
+    const isNextDraftValid =
+      nextDraftValue.trim() !== "" &&
+      Number.isInteger(nextParsedDraft) &&
+      nextParsedDraft >= min &&
+      nextParsedDraft <= max &&
+      (nextParsedDraft - min) % step === 0;
+    if (!isNextDraftValid) {
       setShowDraftError(true);
       return false;
     }
     editFinishedRef.current = true;
-    if (uniquePresets.includes(parsedDraft)) {
-      onSelectPreset(parsedDraft);
+    if (uniquePresets.includes(nextParsedDraft)) {
+      onSelectPreset(nextParsedDraft);
     } else {
-      onCommitCustomValue(parsedDraft);
+      onCommitCustomValue(nextParsedDraft);
     }
     setIsEditing(false);
     setShowDraftError(false);
@@ -200,12 +207,12 @@ export const CustomValueSegmentedControl: React.FC<
                       if (event.relatedTarget === confirmButtonRef.current) {
                         return;
                       }
-                      commit();
+                      commit(event.currentTarget.value);
                     }}
                     onKeyDown={(event) => {
                       if (event.key === "Enter") {
                         event.preventDefault();
-                        commit();
+                        commit(event.currentTarget.value);
                       }
                       if (event.key === "Escape") {
                         event.preventDefault();
@@ -239,7 +246,7 @@ export const CustomValueSegmentedControl: React.FC<
                   : "pointer-events-auto scale-100 opacity-40"
                 : "pointer-events-none scale-90 opacity-0"
             }`}
-            onClick={commit}
+            onClick={() => commit()}
           >
             <Check
               size={iconSizes.medium}
