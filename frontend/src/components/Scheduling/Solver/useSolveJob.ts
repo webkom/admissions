@@ -583,6 +583,11 @@ export function useSolveJob(admissionSlug: string) {
         return null;
       }
       if (outcome.kind === "conflict") {
+        storage.writeProposal({
+          jobId: proposal.job.job_id,
+          baseRevision: proposal.baseRevision,
+          mode: "proposal",
+        });
         setRejectedProposalJobId(proposal.job.job_id);
         setError(formatApiError(outcome.error.response?.data));
         await Promise.all([
