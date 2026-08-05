@@ -36,8 +36,9 @@ describe("landing page spec", () => {
 
     cy.wait("@logout");
     cy.location("pathname").should("eq", "/");
-    cy.window().then((window) => {
-      expect(window.localStorage.getItem(templateKey)).to.equal(null);
-    });
+    cy.window()
+      .its("localStorage")
+      .invoke("getItem", templateKey)
+      .should("equal", null);
   });
 });
