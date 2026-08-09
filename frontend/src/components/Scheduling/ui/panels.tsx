@@ -23,7 +23,7 @@ export const SchedulePanel: React.FC<SchedulePanelProps> = ({
     data-cy={dataCy}
     data-stage={stage}
     className={cn(
-      "overflow-hidden rounded-panel border border-border bg-surface-base shadow-sm",
+      "overflow-hidden rounded-md border border-border-soft bg-surface-base",
       className,
     )}
   >

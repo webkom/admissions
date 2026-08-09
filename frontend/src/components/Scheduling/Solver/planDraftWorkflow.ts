@@ -40,6 +40,9 @@ const candidateLabel = (count: number) =>
 const conflictLabel = (count: number) =>
   `${count} inhabilitet${count === 1 ? "" : "er"}`;
 
+const reviewerProgressLabel = (complete: number, required: number) =>
+  `${complete} av ${required} ${required === 1 ? "intervjuer" : "intervjuere"} har svart`;
+
 export const derivePlanDraftWorkflowState = ({
   isPublished = false,
   saveState,
@@ -86,7 +89,7 @@ export const derivePlanDraftWorkflowState = ({
       kind: "saving",
       tone: "neutral",
       title: "Lagrer utkastet",
-      description: "Neste handling blir tilgjengelig når lagringen er ferdig.",
+      description: "",
     };
   }
   if (solverError) {
@@ -110,29 +113,27 @@ export const derivePlanDraftWorkflowState = ({
     return {
       kind: "candidate_check_pending",
       tone: "warning",
-      title: `Kandidatkontroll, ${completeReviewerCount} av ${requiredReviewerCount} har svart`,
-      description:
-        "Kontroller kandidatene du foreløpig er foreslått til å intervjue.",
+      title: "Kandidatkontrollen pågår",
+      description: `${reviewerProgressLabel(completeReviewerCount, requiredReviewerCount)}. Kontroller kandidatene du er foreslått til å intervjue.`,
     };
   }
   if (pendingReviewerCount > 0) {
     return {
       kind: "waiting_for_reviews",
       tone: "neutral",
-      title: `Kandidatkontroll, ${completeReviewerCount} av ${requiredReviewerCount} har svart`,
+      title: "Kandidatkontrollen pågår",
       description:
         missingReviewerNames.length > 0
-          ? `Venter på ${missingReviewerNames.join(", ")}.`
-          : `Venter på ${pendingReviewerCount} bekreftelse${pendingReviewerCount === 1 ? "" : "r"}.`,
+          ? `${reviewerProgressLabel(completeReviewerCount, requiredReviewerCount)}. Venter på ${missingReviewerNames.join(", ")}.`
+          : `${reviewerProgressLabel(completeReviewerCount, requiredReviewerCount)}.`,
     };
   }
   if (requiredReviewerCount === 0) {
     return {
       kind: "waiting_for_reviews",
       tone: "neutral",
-      title: "Kandidatkontroll klargjøres",
-      description:
-        "Neste steg blir tilgjengelig når kandidatkontrollen er klar.",
+      title: "Forbereder kandidatkontrollen",
+      description: "",
     };
   }
   if (assignmentConflictCount > 0) {
@@ -148,8 +149,8 @@ export const derivePlanDraftWorkflowState = ({
     return {
       kind: "waiting_for_reviews",
       tone: "neutral",
-      title: "Planutkastet kontrolleres",
-      description: "Neste steg blir tilgjengelig når kontrollen er fullført.",
+      title: "Kontrollerer planutkastet",
+      description: "",
     };
   }
   return {

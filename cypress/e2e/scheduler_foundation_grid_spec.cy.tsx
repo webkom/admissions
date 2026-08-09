@@ -56,4 +56,65 @@ describe("shared scheduler grid foundation", () => {
       .should("contain.text", "Ada")
       .and("contain.text", "Grace");
   });
+
+  it("opens compact planning help only when requested", () => {
+    cy.get('[role="dialog"]').should("not.exist");
+    cy.get("[data-cy=open-scheduler-help]")
+      .as("helpButton")
+      .focus()
+      .should("be.focused")
+      .click();
+
+    cy.get('[role="dialog"][aria-label="Slik fungerer intervjuplanleggingen"]')
+      .as("helpDialog")
+      .should("be.visible")
+      .within(() => {
+        cy.contains("h3", "Grunnlag").should("be.visible");
+        cy.contains("h3", "Planutkast").should("be.visible");
+        cy.contains("h3", "Publisering").should("be.visible");
+        cy.contains(
+          "Intervjuerne ser bare kandidatene de skal kontrollere.",
+        ).should("be.visible");
+        cy.contains("Du styrer hele prosessen").should("not.exist");
+        cy.contains(/Steg \d av \d/).should("not.exist");
+
+        cy.get("button").first().as("firstHelpButton");
+        cy.get("button").last().as("lastHelpButton");
+        cy.get("@lastHelpButton").focus().trigger("keydown", {
+          key: "Tab",
+          code: "Tab",
+          which: 9,
+        });
+        cy.get("@firstHelpButton").should("be.focused");
+        cy.get("@firstHelpButton").trigger("keydown", {
+          key: "Tab",
+          code: "Tab",
+          which: 9,
+          shiftKey: true,
+        });
+        cy.get("@lastHelpButton").should("be.focused").type("{esc}");
+      });
+
+    cy.get("@helpDialog").should("not.exist");
+    cy.get("@helpButton").should("be.focused");
+  });
+
+  [390, 768, 1280].forEach((width) => {
+    it(`keeps planning help inside a ${width}px viewport`, () => {
+      cy.viewport(width, 720);
+      cy.get("[data-cy=open-scheduler-help]").click();
+      cy.get(
+        '[role="dialog"][aria-label="Slik fungerer intervjuplanleggingen"]',
+      ).should(($dialog) => {
+        const rect = $dialog[0].getBoundingClientRect();
+        expect(rect.left).to.be.at.least(0);
+        expect(rect.right).to.be.at.most(width);
+        expect(rect.top).to.be.at.least(0);
+        expect(rect.bottom).to.be.at.most(720);
+      });
+      cy.document().then((document) => {
+        expect(document.documentElement.scrollWidth).to.be.at.most(width);
+      });
+    });
+  });
 });

@@ -1,7 +1,6 @@
 import type { SavedSchedule } from "../../frontend/src/types";
 
 const admissionSlug = "webkom-past-deadline";
-const wizardStorageKey = "admissions.wizard.admin.v1";
 
 describe("real solver worker acceptance", () => {
   it("queues, solves, and applies the first draft without request stubbing", () => {
@@ -18,11 +17,7 @@ describe("real solver worker acceptance", () => {
     ).as("availability");
     cy.intercept("POST", "**/api/solve/").as("enqueueSolve");
     cy.login("webkom");
-    cy.visit(`/${admissionSlug}/schedule`, {
-      onBeforeLoad(window) {
-        window.localStorage.setItem(wizardStorageKey, "1");
-      },
-    });
+    cy.visit(`/${admissionSlug}/schedule`);
     for (const requestAlias of ["@schedule", "@candidates", "@availability"]) {
       cy.wait(requestAlias).its("response.statusCode").should("eq", 200);
     }

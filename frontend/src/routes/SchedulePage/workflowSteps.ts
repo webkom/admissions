@@ -1,8 +1,8 @@
 import {
   CalendarCheck,
   CalendarRange,
+  ClipboardList,
   LayoutPanelTop,
-  Sparkles,
 } from "lucide-react";
 
 import type { PublicationReadiness, WorkflowStepDefinition } from "./types";
@@ -103,8 +103,8 @@ export const buildWorkflowSteps = ({
       title: "Planutkast",
       description: conflictCollectionOpen
         ? "Fullfør kandidatkontrollen før du fortsetter."
-        : "Generer, kontroller kandidater og løs avvik.",
-      icon: Sparkles,
+        : "Lag utkast, kontroller kandidater og løs avvik.",
+      icon: ClipboardList,
       status: planDraftLocked
         ? "Låst"
         : conflictCollectionOpen

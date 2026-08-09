@@ -199,7 +199,7 @@ const AdvancedSolverSettings = ({
                   options={INITIAL_STRATEGY_PRESETS.map((preset) => ({
                     value: preset.key,
                     label: `${preset.label}${
-                      preset.key === "balanced" ? " - anbefalt" : ""
+                      preset.key === "balanced" ? " (anbefalt)" : ""
                     }`,
                   }))}
                   aria-label="Planleggingsstrategi"
@@ -260,8 +260,8 @@ const AdvancedSolverSettings = ({
           <section className="border-t border-border-soft pt-5">
             <p className={sectionLabelClass}>Krav</p>
             <AdvancedOptionRow
-              title="Samme kjønn i panel"
-              description="Krev minst én intervjuer med samme kjønn der kjønn er registrert."
+              title="Samme kjønn som kandidaten"
+              description="Krever minst én intervjuer med samme registrerte kjønn."
               checked={solverOptions.enforce_same_gender}
               onToggle={() =>
                 onSolverOptionsChange((current) => ({
@@ -272,8 +272,8 @@ const AdvancedSolverSettings = ({
               autofocus
             />
             <AdvancedOptionRow
-              title="Erfaren intervjuer i hvert panel"
-              description="Krev minst én intervjuer som er klassifisert som erfaren. Ukjent erfaring teller ikke."
+              title="Minst én erfaren intervjuer"
+              description="Krever minst én intervjuer som er registrert som erfaren."
               checked={solverOptions.require_experienced_panel}
               onToggle={() =>
                 onSolverOptionsChange((current) => ({
@@ -320,7 +320,7 @@ const AdvancedSolverSettings = ({
                     [
                       {
                         key: "preferred",
-                        label: "Foretrekk samme panel - anbefalt",
+                        label: "Foretrekk samme panel (anbefalt)",
                         description:
                           "Bevar panelet når det er mulig, men tillat nødvendige bytter.",
                       },
@@ -370,7 +370,7 @@ const AdvancedSolverSettings = ({
             <p className={sectionLabelClass}>Prioritering</p>
             <AdvancedOptionRow
               title="Hvile mellom arbeidsblokker"
-              description="Prøv å la en intervjuer stå over neste blokk. Strategien styrer hvor kompakt dagen ellers blir."
+              description="Prøv å la en intervjuer stå over neste blokk."
               checked={solverOptions.avoid_consecutive_interviewer_blocks}
               onToggle={() =>
                 onSolverOptionsChange((current) => ({

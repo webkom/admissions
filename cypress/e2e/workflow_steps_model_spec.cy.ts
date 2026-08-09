@@ -212,7 +212,12 @@ describe("plan draft workflow presentation", () => {
         missingReviewerNames: ["Ada"],
         assignmentConflictCount: 2,
       }),
-    ).to.include({ kind: "waiting_for_reviews", tone: "neutral" });
+    ).to.include({
+      kind: "waiting_for_reviews",
+      tone: "neutral",
+      title: "Kandidatkontrollen pågår",
+      description: "1 av 2 intervjuere har svart. Venter på Ada.",
+    });
     expect(state({ assignmentConflictCount: 2 })).to.include({
       kind: "repair_required",
       tone: "danger",
@@ -224,7 +229,12 @@ describe("plan draft workflow presentation", () => {
         assignmentConflictCount: 2,
         publicationReady: false,
       }),
-    ).to.include({ kind: "waiting_for_reviews", tone: "neutral" });
+    ).to.include({
+      kind: "waiting_for_reviews",
+      tone: "neutral",
+      title: "Forbereder kandidatkontrollen",
+      description: "",
+    });
   });
 
   it("prioritizes persistence and solver errors over normal next steps", () => {
@@ -245,7 +255,11 @@ describe("plan draft workflow presentation", () => {
   });
 
   it("exposes no next step while saving and publishes only when ready", () => {
-    expect(state({ saveState: "saving" })).to.include({ kind: "saving" });
+    expect(state({ saveState: "saving" })).to.include({
+      kind: "saving",
+      title: "Lagrer utkastet",
+      description: "",
+    });
     expect(state()).to.include({
       kind: "ready_to_publish",
       tone: "success",
@@ -274,7 +288,11 @@ describe("single-stage conveyor model", () => {
         hasConfiguredAvailabilityWindows: true,
         ownAvailabilityComplete: true,
       }),
-    ).to.include({ kind: "coverage_waiting" });
+    ).to.include({
+      kind: "coverage_waiting",
+      description:
+        "Ikke alle har svart ennå. Du kan se dekningen under «Tilgjengelighet og dekning».",
+    });
     expect(
       deriveFoundationStage({
         ...input,
@@ -282,7 +300,10 @@ describe("single-stage conveyor model", () => {
         ownAvailabilityComplete: true,
         availabilityReady: true,
       }),
-    ).to.include({ kind: "coverage_ready" });
+    ).to.include({
+      kind: "coverage_ready",
+      description: "Alle har svart. Lag planutkastet.",
+    });
   });
 
   it("gives a pending proposal precedence over every draft workspace", () => {
@@ -360,11 +381,15 @@ describe("single-stage conveyor model", () => {
     ).to.include({ kind: "draft_review" });
     expect(derivePlanDraftStage({ ...base, loading: true })).to.include({
       kind: "generating",
+      description: "Forslaget beregnes nå.",
     });
     expect(derivePlanDraftStage({ ...base, hasProposal: false })).to.include({
       kind: "recommended_setup",
     });
-    expect(derivePlanDraftStage(base)).to.include({ kind: "draft_review" });
+    expect(derivePlanDraftStage(base)).to.include({
+      kind: "draft_review",
+      description: "Se over utkastet.",
+    });
   });
 
   it("derives blocked, publishable, and published publication stages", () => {
@@ -384,7 +409,12 @@ describe("single-stage conveyor model", () => {
         isPublished: false,
         readiness: readiness(),
       }),
-    ).to.include({ kind: "publish", primaryAction: "publish" });
+    ).to.include({
+      kind: "publish",
+      primaryAction: "publish",
+      description:
+        "Alle kontroller er ferdige. Velg synlighet for kandidatnavn og publiser planen.",
+    });
     expect(
       derivePublicationStage({
         isPublished: true,
@@ -402,7 +432,12 @@ describe("single-stage conveyor model", () => {
         currentReviewRequired: true,
         currentReviewComplete: true,
       }),
-    ).to.include({ kind: "waiting_for_reviews", primaryAction: null });
+    ).to.include({
+      kind: "waiting_for_reviews",
+      primaryAction: null,
+      description:
+        "Venter på at alle intervjuere kontrollerer kandidatene sine.",
+    });
 
     expect(
       derivePublicationStage({

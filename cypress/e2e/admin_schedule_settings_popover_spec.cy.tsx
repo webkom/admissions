@@ -45,6 +45,17 @@ describe("inline schedule settings and standard-block preview", () => {
     cy.viewport(1280, 900);
     mountSettings();
 
+    cy.contains("Intervjulengde").should("be.visible");
+    cy.contains("Inkluderer tid til evaluering mellom intervjuene.").should(
+      "be.visible",
+    );
+    cy.contains("Pause mellom blokker").should("be.visible");
+    cy.contains("Tid til å bytte intervjuere.").should("be.visible");
+    cy.contains("inkludert pause mellom intervju for evaluering").should(
+      "not.exist",
+    );
+    cy.contains("for å f.eks skifte intervjuere").should("not.exist");
+
     cy.get("[data-cy=block-settings-grid]").then(($settings) => {
       cy.get("[data-cy=standard-block-preview-region]").then(($preview) => {
         const settingsRect = $settings[0].getBoundingClientRect();

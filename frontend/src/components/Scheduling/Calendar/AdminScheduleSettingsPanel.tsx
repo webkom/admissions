@@ -118,10 +118,18 @@ const ControlLabel: React.FC<{ children: React.ReactNode }> = ({
 
 const SettingField: React.FC<{
   label: string;
+  description?: string;
   children: React.ReactNode;
-}> = ({ label, children }) => (
+}> = ({ label, description, children }) => (
   <div className="min-w-0 space-y-2">
-    <ControlLabel>{label}</ControlLabel>
+    <div>
+      <ControlLabel>{label}</ControlLabel>
+      {description && (
+        <span className="mt-0.5 block text-detail text-text-subtle">
+          {description}
+        </span>
+      )}
+    </div>
     <div className="min-w-0">{children}</div>
   </div>
 );
@@ -610,7 +618,10 @@ const AdminScheduleSettingsPanel: React.FC<AdminScheduleSettingsPanelProps> = ({
       >
         <div className="grid min-w-0 gap-7 tablet:grid-cols-[minmax(var(--schedule-settings-column-min-width),0.85fr)_minmax(0,1.15fr)] tablet:items-start">
           <div data-cy="block-settings-grid" className="grid min-w-0 gap-5">
-            <SettingField label="Intervjulengde (inkludert pause mellom intervju for evaluering)">
+            <SettingField
+              label="Intervjulengde"
+              description="Inkluderer tid til evaluering mellom intervjuene."
+            >
               <CompactPresetControl
                 label="Intervjulengde"
                 presets={DURATION_PRESETS}
@@ -632,7 +643,10 @@ const AdminScheduleSettingsPanel: React.FC<AdminScheduleSettingsPanelProps> = ({
               />
             </SettingField>
 
-            <SettingField label="Pause mellom blokker (for å f.eks skifte intervjuere)">
+            <SettingField
+              label="Pause mellom blokker"
+              description="Tid til å bytte intervjuere."
+            >
               <CompactPresetControl
                 label="Pause mellom blokker"
                 presets={PAUSE_PRESETS}

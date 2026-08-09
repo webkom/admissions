@@ -57,6 +57,7 @@ const SchedulerFoundationHarness: React.FC = () => {
   const [activeSlots, setActiveSlots] = React.useState(
     new Set(chunks[0].map((minute) => makeSlotKey(dates[0], minute))),
   );
+  const help = useWizardTour();
 
   return (
     <main
@@ -67,6 +68,17 @@ const SchedulerFoundationHarness: React.FC = () => {
       data-toast-contract={foundationToast === null ? "nullable" : "toast"}
       className="p-6"
     >
+      <div className="mb-6 flex justify-end">
+        <button
+          type="button"
+          data-cy="open-scheduler-help"
+          onClick={help.open}
+          className="rounded-md border border-border-soft bg-surface-base px-3 py-2 text-ui font-semibold text-text-primary"
+        >
+          Hjelp
+        </button>
+      </div>
+      <WizardTour isOpen={help.isOpen} onClose={help.close} isAdmin />
       <SelectableScheduleGrid
         dates={dates}
         chunks={chunks}

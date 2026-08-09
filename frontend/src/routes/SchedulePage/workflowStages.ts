@@ -47,15 +47,14 @@ export const deriveFoundationStage = ({
       kind: "coverage_waiting",
       title: "Vent på de siste svarene",
       description:
-        "Du kan kontrollere dekningen nå. Planutkastet blir tilgjengelig når alle deltakende intervjuere har svart.",
+        "Ikke alle har svart ennå. Du kan se dekningen under «Tilgjengelighet og dekning».",
     };
   }
 
   return {
     kind: "coverage_ready",
     title: "Grunnlaget er klart",
-    description:
-      "Alle deltakende intervjuere har svart. Neste steg er å lage planutkastet.",
+    description: "Alle har svart. Lag planutkastet.",
   };
 };
 
@@ -171,8 +170,7 @@ export const derivePlanDraftStage = ({
     return {
       kind: "generating",
       title: "Lager planutkast",
-      description:
-        "Planleggingen pågår. Neste handling blir tilgjengelig når forslaget er klart.",
+      description: "Forslaget beregnes nå.",
     };
   }
 
@@ -188,8 +186,7 @@ export const derivePlanDraftStage = ({
   return {
     kind: "draft_review",
     title: "Kontroller planutkastet",
-    description:
-      "Se gjennom resultatet og følg den anbefalte handlingen nederst i arbeidsflaten.",
+    description: "Se over utkastet.",
   };
 };
 
@@ -255,7 +252,7 @@ export const derivePublicationStage = ({
       kind: "waiting_for_reviews",
       title: "Venter på de siste bekreftelsene",
       description:
-        "Planen går videre automatisk når alle intervjuere har kontrollert kandidatene sine.",
+        "Venter på at alle intervjuere kontrollerer kandidatene sine.",
       primaryAction: null,
       secondaryActions: currentReviewRequired ? ["review_own_check"] : [],
     };
@@ -276,7 +273,7 @@ export const derivePublicationStage = ({
     kind: "publish",
     title: "Klar for publisering",
     description:
-      "Alle krav er oppfylt. Velg synlighet for kandidatnavn og publiser planen.",
+      "Alle kontroller er ferdige. Velg synlighet for kandidatnavn og publiser planen.",
     primaryAction: "publish",
     secondaryActions: ["return_to_draft"],
   };

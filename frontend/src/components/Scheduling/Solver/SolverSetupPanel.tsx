@@ -5,7 +5,7 @@ import React, {
   type Dispatch,
   type SetStateAction,
 } from "react";
-import { AlertTriangle, SlidersHorizontal, Sparkles } from "lucide-react";
+import { AlertTriangle, ClipboardList, SlidersHorizontal } from "lucide-react";
 
 import {
   SchedulePanel,
@@ -711,7 +711,7 @@ const SolverSetupPanel = ({
             }
           >
             <SchedulePanelHeader
-              icon={Sparkles}
+              icon={ClipboardList}
               headingRef={headingRef}
               headingDataCy="schedule-stage-heading"
               title={hasProposal ? "Lag et nytt forslag" : "Lag planutkast"}
@@ -892,7 +892,7 @@ const SolverSetupPanel = ({
                       "handheld:flex-1",
                     )}
                   >
-                    <Sparkles size={iconSizes.small} aria-hidden="true" />
+                    <ClipboardList size={iconSizes.small} aria-hidden="true" />
                     {hasProposal ? "Lag nytt forslag" : "Lag planutkast"}
                   </button>
                 )}

@@ -5,7 +5,7 @@ import React, {
   useRef,
   useState,
 } from "react";
-import { ArrowRight, Sparkles } from "lucide-react";
+import { ArrowRight, ClipboardList } from "lucide-react";
 
 import type {
   Candidate,
@@ -738,7 +738,7 @@ export default function SolverView({
           className="mx-auto w-full max-w-3xl"
         >
           <SchedulePanelHeader
-            icon={Sparkles}
+            icon={ClipboardList}
             headingRef={placementHeadingRef}
             headingDataCy="schedule-stage-heading"
             title={planDraftStage.title}

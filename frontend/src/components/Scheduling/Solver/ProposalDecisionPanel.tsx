@@ -1,5 +1,5 @@
 import React from "react";
-import { ChevronDown, Sparkles } from "lucide-react";
+import { ChevronDown, ClipboardList } from "lucide-react";
 
 import { iconSizes } from "src/styles/designTokens";
 import { derivePendingProposalDecision } from "src/routes/SchedulePage/workflowStages";
@@ -91,7 +91,7 @@ const ProposalDecisionPanel: React.FC<ProposalDecisionPanelProps> = ({
       className="animate-fade-in motion-reduce:animate-none"
     >
       <SchedulePanelHeader
-        icon={Sparkles}
+        icon={ClipboardList}
         headingRef={headingRef}
         headingDataCy="schedule-stage-heading"
         title={title}

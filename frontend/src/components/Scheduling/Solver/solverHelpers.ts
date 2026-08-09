@@ -290,9 +290,8 @@ export const INITIAL_STRATEGY_PRESETS: ReadonlyArray<{
   {
     key: "balanced",
     label: "Balansert",
-    description: "En rolig kombinasjon av korte dager og jevn arbeidsmengde.",
-    example:
-      "Eksempel: når flere planer har like få avvik, velges en moderat jevn fordeling.",
+    description: "Balanserer korte dager og jevn arbeidsmengde.",
+    example: "Velger en jevn fordeling når flere planer har like få avvik.",
     loadBalanceWeight: 4,
     continuityWeight: 1,
     prioritizeContinuity: true,
@@ -302,8 +301,7 @@ export const INITIAL_STRATEGY_PRESETS: ReadonlyArray<{
     label: "Kompakte intervjudager",
     description:
       "Samler intervjuene i færre sammenhengende perioder med færre hull.",
-    example:
-      "Eksempel: intervjuene legges tettere når tilgjengeligheten tillater det.",
+    example: "Legger intervjuene tettere når tilgjengeligheten tillater det.",
     loadBalanceWeight: 2,
     continuityWeight: 48,
     prioritizeContinuity: true,
@@ -311,10 +309,8 @@ export const INITIAL_STRATEGY_PRESETS: ReadonlyArray<{
   {
     key: "balance_workload",
     label: "Jevn arbeidsmengde",
-    description:
-      "Minimerer avvik først og prioriterer jevn fordeling sterkest.",
-    example:
-      "Eksempel: blant planer med like få avvik foretrekkes den jevneste belastningen.",
+    description: "Fordeler intervjuene så jevnt som mulig.",
+    example: "Velger den jevneste belastningen blant planer med like få avvik.",
     loadBalanceWeight: 10,
     continuityWeight: 0,
     prioritizeContinuity: false,
@@ -331,20 +327,19 @@ export const REPAIR_STRATEGY_PRESETS: ReadonlyArray<{
     key: "minimum_change",
     label: "Minst mulig endring",
     description: "Bevar tider og uberørte tildelinger så langt det er mulig.",
-    example: "Eksempel: bruk én vikar i ett intervju fremfor å endre blokken.",
+    example: "Bruk én vikar i ett intervju fremfor å endre hele blokken.",
   },
   {
     key: "preserve_panels",
     label: "Behold paneler",
     description: "Prioriter samme panel gjennom hele intervjublokken.",
-    example: "Eksempel: bytt samme person i alle fire intervjuene i blokken.",
+    example: "Bytt samme person i alle intervjuene i blokken.",
   },
   {
     key: "balanced",
     label: "Balansert",
-    description: "Vei panelstabilitet mot hvor mange intervjuer som berøres.",
-    example:
-      "Eksempel: tillat et lite panelavvik når det sparer flere endringer.",
+    description: "Balanser panelstabilitet mot antall berørte intervjuer.",
+    example: "Tillat et lite panelavvik når det sparer flere andre endringer.",
   },
 ];
 

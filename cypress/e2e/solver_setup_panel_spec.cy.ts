@@ -86,7 +86,7 @@ describe("streamlined solver setup", () => {
     });
     cy.get("[data-cy=panel-size]").should("have.length", 1);
     cy.get('[aria-label="Planleggingsstrategi"]')
-      .should("contain.text", "Balansert - anbefalt")
+      .should("contain.text", "Balansert (anbefalt)")
       .click();
     cy.get('[role="listbox"][aria-label="Planleggingsstrategi"]')
       .should("contain.text", "Kompakte intervjudager")
@@ -145,7 +145,7 @@ describe("streamlined solver setup", () => {
     cy.get('[aria-label="Planleggingsstrategi"]').click();
     cy.contains('[role="option"]', "Jevn arbeidsmengde").click();
     cy.get("[data-cy=generation-workspace]")
-      .contains('[role="switch"]', "Samme kjønn i panel")
+      .contains('[role="switch"]', "Samme kjønn som kandidaten")
       .click();
     cy.get("[data-cy=reset-advanced-generation-settings]").click();
 
@@ -257,7 +257,7 @@ describe("streamlined solver setup", () => {
       .eq(1)
       .should("have.text", "Intervjuer B, Intervjuer C");
 
-    cy.contains('[role="switch"]', "Samme kjønn i panel").click();
+    cy.contains('[role="switch"]', "Samme kjønn som kandidaten").click();
     cy.get("[data-cy=generation-preview-requirements]")
       .should("contain.text", "Samme kjønn")
       .and("contain.text", "Erfaren intervjuer");

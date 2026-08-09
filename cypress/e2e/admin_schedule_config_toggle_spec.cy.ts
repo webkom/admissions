@@ -11,11 +11,7 @@ describe("admin schedule configuration toggles", () => {
       "availability",
     );
     cy.login("webkom");
-    cy.visit("/webkom-open/schedule", {
-      onBeforeLoad(window) {
-        window.localStorage.setItem("admissions.wizard.admin.v1", "1");
-      },
-    });
+    cy.visit("/webkom-open/schedule");
     ["@schedule", "@candidates", "@availability"].forEach((requestAlias) => {
       cy.wait(requestAlias).its("response.statusCode").should("eq", 200);
     });

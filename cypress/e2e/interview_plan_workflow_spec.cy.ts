@@ -11,7 +11,6 @@ describe("interview plan workflow", () => {
       cy.visit("/webkom-open/schedule", {
         onBeforeLoad(window) {
           window.localStorage.removeItem(templateStorageKey);
-          window.localStorage.setItem("admissions.wizard.admin.v1", "1");
         },
       });
       cy.get('nav[aria-label="Steg i intervjuplanleggingen"]', {
@@ -207,7 +206,7 @@ describe("interview plan workflow", () => {
       .click();
     cy.contains("Vis stengte tider").should("not.exist");
     cy.contains(
-      "Du kan kontrollere dekningen nå. Planutkastet blir tilgjengelig når alle deltakende intervjuere har svart.",
+      "Ikke alle har svart ennå. Du kan se dekningen under «Tilgjengelighet og dekning».",
     ).should("not.exist");
     cy.contains(/\d+ av \d+ har svart/).should("be.visible");
   });

@@ -8,11 +8,7 @@ describe("deterministic Cypress fixture", () => {
       "availability",
     );
 
-    cy.visit("/webkom-open/schedule", {
-      onBeforeLoad(window) {
-        window.localStorage.setItem("admissions.wizard.admin.v1", "1");
-      },
-    });
+    cy.visit("/webkom-open/schedule");
 
     cy.wait("@schedule").its("response.statusCode").should("eq", 200);
     cy.wait("@availability").its("response.statusCode").should("eq", 200);

@@ -7,7 +7,6 @@ import type {
 
 const admissionSlug = "webkom-open";
 const schedulePath = `/${admissionSlug}/schedule`;
-const wizardStorageKey = "admissions.wizard.admin.v1";
 
 const assertNoDocumentOverflow = () => {
   cy.document().then((document) => {
@@ -37,11 +36,7 @@ const visitAuthenticatedScheduler = (width: number, height: number) => {
     `**/api/admin/admission/${admissionSlug}/availability/`,
   ).as("releaseAvailability");
   cy.login("webkom");
-  cy.visit(schedulePath, {
-    onBeforeLoad(window) {
-      window.localStorage.setItem(wizardStorageKey, "1");
-    },
-  });
+  cy.visit(schedulePath);
   cy.get('nav[aria-label="Steg i intervjuplanleggingen"]', {
     timeout: 10000,
   }).should("be.visible");
@@ -229,11 +224,7 @@ describe("scheduler release acceptance", () => {
             },
           );
 
-          cy.visit(schedulePath, {
-            onBeforeLoad(window) {
-              window.localStorage.setItem(wizardStorageKey, "1");
-            },
-          });
+          cy.visit(schedulePath);
           cy.wait("@publicationReadySchedule");
           cy.get('nav[aria-label="Steg i intervjuplanleggingen"]', {
             timeout: 10000,
@@ -244,7 +235,7 @@ describe("scheduler release acceptance", () => {
 
           cy.get("[data-cy=publication-gate]")
             .should("be.visible")
-            .and("contain.text", "Alle krav er oppfylt.");
+            .and("contain.text", "Alle kontroller er ferdige.");
           cy.get("[data-cy=publish-blocked-reason]").should("not.exist");
           cy.get("[data-cy=publish-plan]")
             .should("be.enabled")
@@ -286,47 +277,43 @@ describe("scheduler release acceptance", () => {
       expect(window.matchMedia("(prefers-reduced-motion: reduce)").matches).to
         .be.true;
     });
+    cy.get('[role="dialog"]').should("not.exist");
 
     cy.contains("button", "Hjelp")
       .as("helpButton")
       .focus()
       .should("be.focused")
       .click();
-    cy.get('[role="dialog"][aria-label="Veiledning"]')
-      .as("wizard")
+    cy.get('[role="dialog"][aria-label="Slik fungerer intervjuplanleggingen"]')
+      .as("helpDialog")
       .should("be.visible")
+      .then(($dialog) => {
+        expect(getComputedStyle($dialog[0]).animationName).to.equal("none");
+      })
       .within(() => {
-        cy.get('[aria-live="polite"]').should("contain.text", "Steg 1 av 4");
-        cy.get(".animate-fade-in").then(($animated) => {
-          const style = getComputedStyle($animated[0]);
-          expect(style.animationName).to.equal("none");
-        });
+        cy.contains("h2", "Slik fungerer intervjuplanleggingen").should(
+          "be.visible",
+        );
+        cy.contains("h3", "Grunnlag").should("be.visible");
+        cy.contains("h3", "Planutkast").should("be.visible");
+        cy.contains("h3", "Publisering").should("be.visible");
+        cy.get('[aria-live="polite"]').should("not.exist");
 
-        cy.get("button").first().as("firstWizardButton");
-        cy.get("button").last().as("lastWizardButton");
-        cy.get("@lastWizardButton").focus().trigger("keydown", {
+        cy.get("button").first().as("firstHelpButton");
+        cy.get("button").last().as("lastHelpButton");
+        cy.get("@lastHelpButton").focus().trigger("keydown", {
           key: "Tab",
           code: "Tab",
           which: 9,
         });
-        cy.get("@firstWizardButton").should("be.focused");
-        cy.get("@firstWizardButton").trigger("keydown", {
+        cy.get("@firstHelpButton").should("be.focused");
+        cy.get("@firstHelpButton").trigger("keydown", {
           key: "Tab",
           code: "Tab",
           which: 9,
           shiftKey: true,
         });
-        cy.get("@lastWizardButton").should("be.focused");
-
-        cy.focused().trigger("keydown", {
-          key: "ArrowRight",
-          code: "ArrowRight",
-          which: 39,
-        });
-        cy.get('[aria-live="polite"]').should("contain.text", "Steg 2 av 4");
-        cy.contains("h2", "Sett rammene og samle tilgjengelighet").should(
-          "be.visible",
-        );
+        cy.get("@lastHelpButton").should("be.focused");
         cy.focused().trigger("keydown", {
           key: "Escape",
           code: "Escape",
@@ -334,7 +321,7 @@ describe("scheduler release acceptance", () => {
         });
       });
 
-    cy.get('[role="dialog"][aria-label="Veiledning"]').should("not.exist");
+    cy.get("@helpDialog").should("not.exist");
     cy.get("@helpButton").should("be.focused");
   });
 
@@ -391,12 +378,6 @@ describe("scheduler release acceptance", () => {
           `${schedulePath}?mode=member&group=${encodeURIComponent(
             memberContext.group.id,
           )}`,
-          {
-            onBeforeLoad(window) {
-              window.localStorage.setItem(wizardStorageKey, "1");
-              window.localStorage.setItem("admissions.wizard.member.v1", "1");
-            },
-          },
         );
         cy.get('nav[aria-label="Steg i intervjuplanleggingen"]', {
           timeout: 10000,
@@ -429,11 +410,7 @@ describe("scheduler release acceptance", () => {
           );
         }).as("admissionAccess");
 
-        cy.visit(schedulePath, {
-          onBeforeLoad(window) {
-            window.localStorage.setItem(wizardStorageKey, "1");
-          },
-        });
+        cy.visit(schedulePath);
         cy.wait("@admissionAccess");
         cy.contains("Kandidatdata er tømt fra visningen.").should("be.visible");
         cy.contains("button", "Kontroller tilgang").click();
@@ -479,11 +456,7 @@ describe("scheduler release acceptance", () => {
           );
         }).as("admissionAccess");
 
-        cy.visit(schedulePath, {
-          onBeforeLoad(window) {
-            window.localStorage.setItem(wizardStorageKey, "1");
-          },
-        });
+        cy.visit(schedulePath);
         cy.wait("@admissionAccess");
         cy.contains("button", "Kontroller tilgang").click();
         cy.wait("@admissionAccess");

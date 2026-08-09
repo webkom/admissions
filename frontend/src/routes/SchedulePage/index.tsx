@@ -237,11 +237,7 @@ const LoadedScheduleView: React.FC<LoadedScheduleViewProps> = ({
     return "Intervjuer";
   })();
 
-  const wizard = useWizardTour(canManageSchedule);
-
-  useEffect(() => {
-    wizard.openIfNotDismissed();
-  }, []);
+  const wizard = useWizardTour();
 
   const [toast, setToast] = useState<StatusToastState | null>(null);
   const [solverEditRequestKey, setSolverEditRequestKey] = useState(0);
@@ -838,7 +834,6 @@ const LoadedScheduleView: React.FC<LoadedScheduleViewProps> = ({
         isOpen={wizard.isOpen}
         onClose={wizard.close}
         isAdmin={isAdmin}
-        onNavigate={handleSectionChange}
       />
 
       <StatusToast toast={toast} onDismiss={() => setToast(null)} />
