@@ -4,11 +4,23 @@ enum KeyType {
   selectedGroups,
   isEditingApplication,
   phoneNumber,
+  groupAnswers,
+  draftUpdatedAt,
 }
 
 const DRAFT_PREFIX = "admissions.applicationDraft";
 const SAVED_PHONE_PREFIX = "admissions.savedPhoneNumber";
 let draftScope = "unscoped";
+
+/**
+ * Drafts live in localStorage, not sessionStorage.
+ *
+ * SESSION_EXPIRE_AT_BROWSER_CLOSE means a closed tab ends the session, and with
+ * sessionStorage it also destroyed the only copy of anything typed. Losing an
+ * hour of writing is both worse and far likelier than the residue risk on a
+ * shared machine, which the per-user prune below already limits.
+ */
+const draftStore = (): Storage => localStorage;
 
 export const createDraftAdmissionScope = (
   admissionSlug: string,
@@ -29,13 +41,28 @@ export const setDraftAdmissionScope = (
   const legacyPrefix = `${DRAFT_PREFIX}.${admission}.`;
   draftScope = createDraftAdmissionScope(admissionSlug, userId);
   try {
+    // Carry any draft written before the move to localStorage across, so a
+    // deploy mid-application does not throw away what someone was typing.
     Object.keys(sessionStorage)
+      .filter((key) => key.startsWith(`${DRAFT_PREFIX}.`))
+      .forEach((key) => {
+        const carried = sessionStorage.getItem(key);
+        if (carried !== null && localStorage.getItem(key) === null) {
+          localStorage.setItem(key, carried);
+        }
+        sessionStorage.removeItem(key);
+      });
+  } catch {
+    // A hardened context may deny one store but not the other; keep going.
+  }
+  try {
+    Object.keys(draftStore())
       .filter(
         (key) =>
           key.startsWith(legacyPrefix) ||
           (key.startsWith(`${DRAFT_PREFIX}.`) && !key.startsWith(userPrefix)),
       )
-      .forEach((key) => sessionStorage.removeItem(key));
+      .forEach((key) => draftStore().removeItem(key));
   } catch {
     return;
   }
@@ -46,7 +73,7 @@ const storageKey = (key: KeyType, scope = draftScope) =>
 
 const getItem = (key: KeyType, defaultValue = '""', scope = draftScope) => {
   try {
-    return sessionStorage.getItem(storageKey(key, scope)) ?? defaultValue;
+    return draftStore().getItem(storageKey(key, scope)) ?? defaultValue;
   } catch {
     return defaultValue;
   }
@@ -64,24 +91,38 @@ const getParsedJson = (
 };
 const saveObject = (
   key: KeyType,
-  value: string | boolean | SelectedGroupsDraft,
+  value: string | boolean | SelectedGroupsDraft | GroupAnswersDraft,
 ) => {
   if (value === undefined) {
     value = "";
   }
   try {
-    sessionStorage.setItem(storageKey(key), JSON.stringify(value));
+    draftStore().setItem(storageKey(key), JSON.stringify(value));
+    // Stamped on every content write so a draft can be compared for recency
+    // against the submitted application's updated_at.
+    if (key !== KeyType.draftUpdatedAt) {
+      draftStore().setItem(
+        storageKey(KeyType.draftUpdatedAt),
+        JSON.stringify(new Date().toISOString()),
+      );
+    }
   } catch {
     return;
   }
 };
 
+/** ISO timestamp of the most recent local draft write, or null if none. */
+export const getDraftUpdatedAt = (): string | null => {
+  const stored = getParsedJson(KeyType.draftUpdatedAt, null);
+  return typeof stored === "string" && stored ? stored : null;
+};
+
 export const clearAllDrafts = () => {
   const prefix = `${DRAFT_PREFIX}.${draftScope}.`;
   try {
-    Object.keys(sessionStorage)
+    Object.keys(draftStore())
       .filter((key) => key.startsWith(prefix))
-      .forEach((key) => sessionStorage.removeItem(key));
+      .forEach((key) => draftStore().removeItem(key));
   } catch {
     return;
   }
@@ -89,9 +130,9 @@ export const clearAllDrafts = () => {
 
 export const clearApplicationDraftNamespace = () => {
   try {
-    Object.keys(sessionStorage)
+    Object.keys(draftStore())
       .filter((key) => key.startsWith(`${DRAFT_PREFIX}.`))
-      .forEach((key) => sessionStorage.removeItem(key));
+      .forEach((key) => draftStore().removeItem(key));
   } catch {
     return;
   }
@@ -120,6 +161,21 @@ interface SelectedGroupsDraft {
   [key: string]: boolean;
 }
 
+/**
+ * Per-committee answers, keyed by lowercased group name. The value type mirrors
+ * InputResponseModel in utils/jsonFields so a restored draft can be merged into
+ * Formik's values without a cast.
+ */
+export interface GroupAnswersDraft {
+  [groupName: string]: Record<string, string | boolean>;
+}
+
+export const saveGroupAnswersDraft = (groupAnswers: GroupAnswersDraft) =>
+  saveObject(KeyType.groupAnswers, groupAnswers);
+
+export const getGroupAnswersDraft = (): GroupAnswersDraft =>
+  getParsedJson(KeyType.groupAnswers, "") || {};
+
 export const saveSelectedGroupsDraft = (selectedGroups: SelectedGroupsDraft) =>
   saveObject(KeyType.selectedGroups, selectedGroups);
 
@@ -131,7 +187,7 @@ export const savePhoneNumberDraft = (phoneNumber: string) =>
 
 export const getPhoneNumberDraft = (defaultValue = "") => {
   try {
-    const stored = sessionStorage.getItem(storageKey(KeyType.phoneNumber));
+    const stored = draftStore().getItem(storageKey(KeyType.phoneNumber));
     return stored === null ? defaultValue : (JSON.parse(stored) as string);
   } catch {
     return defaultValue;

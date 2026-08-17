@@ -1,4 +1,5 @@
 import React from "react";
+import { DateTime } from "luxon";
 import { Formik, FormikHelpers } from "formik";
 import * as Yup from "yup";
 import {
@@ -9,12 +10,16 @@ import { isSensitiveAuthorityChangedError } from "src/query/sensitiveAccess";
 
 import {
   getApplictionTextDrafts,
+  getGroupAnswersDraft,
+  getDraftUpdatedAt,
   clearAllDrafts,
   getSavedPhoneNumber,
   getPhoneNumberDraft,
   getPriorityTextDraft,
   saveSubmittedPhoneNumber,
 } from "src/utils/draftHelper";
+import UnsavedDraftBanner from "./UnsavedDraftBanner";
+import DraftAnswersAutosave from "./DraftAnswersAutosave";
 import { Admission, Application, Group } from "src/types";
 import FormContainer from "./FormContainer";
 import { InputFieldModel, InputResponseModel } from "src/utils/jsonFields";
@@ -43,13 +48,23 @@ const generateInitialValues: (
   userId: string,
   admission?: Admission,
   myApplication?: Application,
-) => FormValues = (selectedGroups, userId, admission, myApplication) => {
+  // When true the local draft wins over the submitted application. Without it
+  // a present myApplication shadows every draft, because destructuring
+  // defaults only fire on undefined — which silently discarded unsaved edits.
+  preferDraft?: boolean,
+) => FormValues = (
+  selectedGroups,
+  userId,
+  admission,
+  myApplication,
+  preferDraft = false,
+) => {
   const savedPhoneNumber = getSavedPhoneNumber(userId);
   const {
     phone_number: phoneNumber = getPhoneNumberDraft(savedPhoneNumber),
     priority_text: priorityText = getPriorityTextDraft(),
     group_applications: groupApplications = getApplictionTextDrafts(),
-  } = myApplication || {};
+  } = preferDraft ? {} : myApplication || {};
 
   const initialValues: FormValues = {
     phoneNumber,
@@ -85,6 +100,15 @@ const generateInitialValues: (
       ...formattedGroupApplications,
       ...groupApplications,
     };
+    // Restore the per-committee answers too. These were persisted nowhere
+    // before, so they were lost on every reload even when the texts survived.
+    const answerDrafts = getGroupAnswersDraft();
+    initialValues.groupAnswers = Object.fromEntries(
+      Object.entries(initialValues.groupAnswers).map(([groupName, blank]) => [
+        groupName,
+        { ...blank, ...(answerDrafts[groupName] ?? {}) },
+      ]),
+    );
     return initialValues;
   }
 
@@ -182,6 +206,36 @@ const ApplicationForm: React.FC<ApplicationFormProps> = ({
   );
   const currentUserId = djangoData.user.id ?? "";
 
+  // Resolved once, on mount. Reading storage on every render would let a
+  // re-render landing inside the save debounce revert recent keystrokes,
+  // because Formik runs with enableReinitialize.
+  const [pendingDraftAt] = React.useState<string | null>(() => {
+    const draftAt = getDraftUpdatedAt();
+    if (!draftAt || !myApplication?.updated_at) return null;
+    return DateTime.fromISO(draftAt) >
+      DateTime.fromISO(myApplication.updated_at)
+      ? draftAt
+      : null;
+  });
+  const [draftChoice, setDraftChoice] = React.useState<
+    "undecided" | "restored" | "discarded"
+  >("undecided");
+  const showDraftBanner =
+    pendingDraftAt !== null && draftChoice === "undecided";
+  const preferDraft = draftChoice === "restored";
+
+  const initialValues = React.useMemo(
+    () =>
+      generateInitialValues(
+        selectedGroups,
+        currentUserId,
+        admission,
+        myApplication,
+        preferDraft,
+      ),
+    [selectedGroups, currentUserId, admission, myApplication, preferDraft],
+  );
+
   const onSubmit: (
     values: FormValues,
     formikHelpers: FormikHelpers<FormValues>,
@@ -223,37 +277,47 @@ const ApplicationForm: React.FC<ApplicationFormProps> = ({
   };
 
   return (
-    <Formik<FormValues>
-      initialValues={generateInitialValues(
-        selectedGroups,
-        currentUserId,
-        admission,
-        myApplication,
+    <>
+      {showDraftBanner && pendingDraftAt && (
+        <UnsavedDraftBanner
+          draftUpdatedAt={pendingDraftAt}
+          onRestore={() => setDraftChoice("restored")}
+          onDiscard={() => {
+            clearAllDrafts();
+            setDraftChoice("discarded");
+          }}
+        />
       )}
-      validateOnChange={true}
-      enableReinitialize={true}
-      validationSchema={validationSchema(selectedGroups, admission)}
-      onSubmit={onSubmit}
-    >
-      {
-        (formikProps) => (
-          <FormContainer
-            admission={admission}
-            groups={groups}
-            selectedGroups={selectedGroups}
-            toggleGroup={toggleGroup}
-            toggleIsEditing={toggleIsEditing}
-            myApplication={myApplication}
-            handleSubmit={formikProps.handleSubmit}
-            touched={formikProps.touched}
-            errors={formikProps.errors}
-            isSubmitting={formikProps.isSubmitting}
-            isValid={formikProps.isValid}
-          />
-        )
-        // https://formik.org/docs/api/formik#props-1
-      }
-    </Formik>
+      <Formik<FormValues>
+        initialValues={initialValues}
+        validateOnChange={true}
+        enableReinitialize={true}
+        validationSchema={validationSchema(selectedGroups, admission)}
+        onSubmit={onSubmit}
+      >
+        {
+          (formikProps) => (
+            <>
+              <DraftAnswersAutosave />
+              <FormContainer
+                admission={admission}
+                groups={groups}
+                selectedGroups={selectedGroups}
+                toggleGroup={toggleGroup}
+                toggleIsEditing={toggleIsEditing}
+                myApplication={myApplication}
+                handleSubmit={formikProps.handleSubmit}
+                touched={formikProps.touched}
+                errors={formikProps.errors}
+                isSubmitting={formikProps.isSubmitting}
+                isValid={formikProps.isValid}
+              />
+            </>
+          )
+          // https://formik.org/docs/api/formik#props-1
+        }
+      </Formik>
+    </>
   );
 };
 
