@@ -14,6 +14,7 @@ import SolverView from "src/components/Scheduling/Solver/SolverView";
 import type { DraftPersistenceStatus } from "src/components/Scheduling/Solver/useScheduleDraftPersistence";
 import { normalizeSolverOptions } from "src/components/Scheduling/Solver/solverHelpers";
 import AvailabilityHeatmap from "src/components/Scheduling/Calendar/AvailabilityHeatmap";
+import AvailabilityResponseRoster from "src/components/Scheduling/Calendar/AvailabilityResponseRoster";
 import AdminScheduleConfig from "src/components/Scheduling/Calendar/AdminScheduleConfig";
 import djangoData from "src/utils/djangoData";
 import cn from "src/utils/cn";
@@ -969,6 +970,9 @@ const LoadedScheduleView: React.FC<LoadedScheduleViewProps> = ({
                         </span>
                       )
                     }
+                  />
+                  <AvailabilityResponseRoster
+                    participants={availabilityParticipants ?? []}
                   />
                   <ConflictCollectionPanel
                     open={Boolean(savedSchedule?.conflict_collection_open)}
