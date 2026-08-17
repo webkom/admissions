@@ -933,13 +933,40 @@ class InterviewAvailabilityViewTestCase(APITestCase):
 
         res = self.client.post(
             self.url,
-            {"conflicts": [str(application.pk)]},
+            {
+                "conflicts": [str(application.pk)],
+                # Conflicts may only be written together with the review that
+                # produced them, so the replace scope is unambiguous.
+                "reviewed_candidate_ids": [str(application.pk)],
+            },
             format="json",
         )
 
         self.assertEqual(res.status_code, status.HTTP_200_OK)
         self.assertEqual(res.data["slots"], ["2026-04-21:540"])
         self.assertEqual(res.data["conflicts"], [str(application.pk)])
+
+    def test_member_conflicts_need_the_matching_review(self):
+        """An ordinary member's conflicts-only write has no declared scope.
+
+        Without this fence a stale save would replace inhabilitet across every
+        candidate the member can see, clearing another member's flag.
+        """
+        InterviewAvailability.objects.create(
+            admission=self.admission,
+            user=self.user,
+            slots=["2026-04-21:540"],
+            conflicts=["real-candidate-ada"],
+        )
+
+        res = self.client.post(
+            self.url,
+            {"conflicts": []},
+            format="json",
+        )
+
+        self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("conflicts", res.data)
 
     def test_cannot_save_conflicts_before_names_are_visible(self):
         res = self.client.post(

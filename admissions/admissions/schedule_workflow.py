@@ -1,6 +1,6 @@
+import uuid
 from dataclasses import dataclass
 from datetime import datetime, timedelta
-import uuid
 
 from django.db import transaction
 from django.utils import timezone
@@ -1041,44 +1041,57 @@ def _persist_schedule(
         existing is not None and existing.conflict_collection_open
     )
     with transaction.atomic():
-        saved, _ = SavedSchedule.objects.update_or_create(
-            admission=admission,
-            defaults={
-                "schedule": schedule,
-                "start_date": configuration["start_date"],
-                "end_date": configuration["end_date"],
-                "session_duration": configuration["session_duration"],
-                "enabled_windows": enabled_windows,
-                "enabled_slots": enabled_slots,
-                "day_start_minute": configuration["day_start_minute"],
-                "day_end_minute": configuration["day_end_minute"],
-                "chunk_size": data.get(
-                    "chunk_size", existing.chunk_size if existing is not None else 4
-                ),
-                "chunk_break_minutes": data.get(
-                    "chunk_break_minutes",
-                    existing.chunk_break_minutes if existing is not None else 0,
-                ),
-                "block_mode": layout["block_mode"],
-                "resolved_blocks": layout["resolved_blocks"],
-                "layout_version": layout["layout_version"],
-                "slot_overrides": layout["slot_overrides"],
-                "availability_generation": state["availability_generation"],
-                "panel_size": panel_size,
-                "solver_options": solver_options,
-                "is_distributed": state["is_distributed"],
-                "conflict_review_open": state["conflict_review_open"],
-                "conflict_collection_open": state["conflict_collection_open"],
-                "conflict_collection_revision": state["conflict_collection_revision"],
-                "conflict_collection_candidate_ids": state[
-                    "conflict_collection_candidate_ids"
-                ],
-                "conflict_collection_participant_ids": state[
-                    "conflict_collection_participant_ids"
-                ],
-                "name_visibility": state["name_visibility"],
-            },
-        )
+        desired_fields = {
+            "schedule": schedule,
+            "start_date": configuration["start_date"],
+            "end_date": configuration["end_date"],
+            "session_duration": configuration["session_duration"],
+            "enabled_windows": enabled_windows,
+            "enabled_slots": enabled_slots,
+            "day_start_minute": configuration["day_start_minute"],
+            "day_end_minute": configuration["day_end_minute"],
+            "chunk_size": data.get(
+                "chunk_size", existing.chunk_size if existing is not None else 4
+            ),
+            "chunk_break_minutes": data.get(
+                "chunk_break_minutes",
+                existing.chunk_break_minutes if existing is not None else 0,
+            ),
+            "block_mode": layout["block_mode"],
+            "resolved_blocks": layout["resolved_blocks"],
+            "layout_version": layout["layout_version"],
+            "slot_overrides": layout["slot_overrides"],
+            "availability_generation": state["availability_generation"],
+            "panel_size": panel_size,
+            "solver_options": solver_options,
+            "is_distributed": state["is_distributed"],
+            "conflict_review_open": state["conflict_review_open"],
+            "conflict_collection_open": state["conflict_collection_open"],
+            "conflict_collection_revision": state["conflict_collection_revision"],
+            "conflict_collection_candidate_ids": state[
+                "conflict_collection_candidate_ids"
+            ],
+            "conflict_collection_participant_ids": state[
+                "conflict_collection_participant_ids"
+            ],
+            "name_visibility": state["name_visibility"],
+        }
+        if existing is None:
+            saved = SavedSchedule.objects.create(admission=admission, **desired_fields)
+        else:
+            # A byte-identical save must not bump updated_at: that token is the
+            # optimistic lock, so a no-op write 409s concurrent admins and kills
+            # DONE-but-undecided proposals.
+            saved = existing
+            changed_fields = [
+                field
+                for field, value in desired_fields.items()
+                if getattr(saved, field) != value
+            ]
+            if changed_fields:
+                for field in changed_fields:
+                    setattr(saved, field, desired_fields[field])
+                saved.save(update_fields=[*changed_fields, "updated_at"])
 
         if conflict_review_was_open != saved.conflict_review_open:
             ConflictReviewAuditEvent.objects.create(

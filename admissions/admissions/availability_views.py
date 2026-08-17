@@ -643,8 +643,26 @@ class InterviewAvailabilityView(APIView):
                     str(target_user.id),
                     set(),
                 )
-            elif conflict_replace_scope is None and visible_candidate_ids is not None:
-                conflict_replace_scope = set(visible_candidate_ids)
+            elif conflict_replace_scope is None and (is_admin or is_recruiter):
+                # Admins and recruiters set inhabilitet deliberately, and their
+                # reach is already bounded by the candidates they represent.
+                conflict_replace_scope = set(valid_candidate_ids)
+            elif conflict_replace_scope is None and (
+                "conflicts" in serializer.validated_data
+            ):
+                # For an ordinary member, falling back to the whole visible set
+                # would let a stale conflicts-only save replace inhabilitet
+                # across every candidate they can see, silently clearing someone
+                # else's flag. The write must declare which review produced it.
+                return Response(
+                    {
+                        "conflicts": [
+                            "Inhabilitet må lagres sammen med hvilken "
+                            "kandidatsjekk som er utført."
+                        ]
+                    },
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
 
         existing = (
             InterviewAvailability.objects.select_for_update()
