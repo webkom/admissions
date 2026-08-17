@@ -41,10 +41,7 @@ import {
   EmptyResults,
 } from "./ViewApplications.styles";
 
-const filterSelectionSummary = (
-  selected: { label: string }[],
-  options: { label: string }[],
-): string => {
+const filterSelectionSummary = (selected: { label: string }[]): string => {
   if (selected.length === 0) return "Alle";
   if (selected.length === 1)
     return selected[0].label.replace(/\s*\(\d+\)$/, "");

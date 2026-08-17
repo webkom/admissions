@@ -5,6 +5,7 @@ RUNSERVER_ARGS ?= $(ADMISSIONS_HOST):$(ADMISSIONS_PORT)
 help:
 	@echo 'ci_settings            - create a admissions/settings/local.py for ci'
 	@echo 'dev_settings           - create a admissions/settings/local.py for dev'
+	@echo 'initialize_development - migrate and load Admissions development fixtures'
 	@echo 'cypress_fixtures       - prepare deterministic local Cypress data/login'
 	@echo 'dev                    - run Django and the solver worker together'
 	@echo 'fixme                  - Fix code formatting'
@@ -14,6 +15,20 @@ ci_settings:
 
 dev_settings:
 	echo "from .development import *" > admissions/settings/local.py
+
+initialize_development:
+	@set -e; \
+		docker compose up -d; \
+		attempt=1; \
+		until poetry run python manage.py initialize_development; do \
+			if [ "$$attempt" -ge 10 ]; then \
+				echo "Development initialization failed after $$attempt attempts."; \
+				exit 1; \
+			fi; \
+			echo "Development initialization failed; retrying in 2 seconds... ($$attempt/10)"; \
+			sleep 2; \
+			attempt=$$((attempt + 1)); \
+		done
 
 cypress_fixtures:
 	ALLOW_CYPRESS_FIXTURES=true poetry run python manage.py load_fixtures --cypress
@@ -32,4 +47,4 @@ dev:
 fixme:
 	docker run --rm -v ${PWD}:/code -it python:3.12-slim "bash" "-c" "cd /code && pip install poetry && poetry install && poetry run isort -rc admissions && poetry run black admissions"
 
-.PHONY: ci_settings dev_settings cypress_fixtures dev
+.PHONY: ci_settings dev_settings initialize_development cypress_fixtures dev

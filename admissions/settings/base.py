@@ -17,9 +17,10 @@ from .logging import *  # noqa
 ADMISSIONS_SOLVER_ENGINE_VERSION = os.environ.get(
     "ADMISSIONS_SOLVER_ENGINE_VERSION", "v1"
 )
-# Cypress fixture preparation installs a temporary password on a seeded local
-# administrator. It must be opted into by an explicitly non-production
-# settings module before the management command will make any database writes.
+# Development fixture initialization and Cypress preparation are local-only
+# database writes. They must be enabled by an explicitly non-production
+# settings module before the management commands will write fixture data.
+ALLOW_DEVELOPMENT_INITIALIZATION = False
 ALLOW_CYPRESS_FIXTURES = False
 
 # GENERAL CONFIGURATION ======================================================

@@ -78,6 +78,12 @@ class Command(BaseCommand):
     def handle(self, *args, **options):
         prepare_cypress = options["cypress"]
         credentials_path = self.cypress_credentials_path()
+        if not options["generate"] and not getattr(
+            settings, "ALLOW_DEVELOPMENT_INITIALIZATION", False
+        ):
+            raise CommandError(
+                "Development fixture loading is disabled by this settings module."
+            )
         if prepare_cypress and not getattr(settings, "ALLOW_CYPRESS_FIXTURES", False):
             raise CommandError(
                 "Cypress fixture preparation is disabled by this settings module."

@@ -28,6 +28,13 @@ const chooseCustom = (label: string) =>
       else cy.wrap($input).check({ force: true });
     });
 
+const chooseInterviewPeriod = (startDate: string, endDate: string) => {
+  cy.get("[data-cy=interview-period-trigger]").click();
+  cy.get(`[data-calendar-date="${startDate}"]`).click();
+  cy.get(`[data-calendar-date="${endDate}"]`).click();
+  cy.get("[data-cy=apply-interview-period]").click();
+};
+
 describe("inline schedule settings and standard-block preview", () => {
   it("keeps settings and the visual block preview side by side", () => {
     cy.viewport(1280, 900);
@@ -108,20 +115,6 @@ describe("inline schedule settings and standard-block preview", () => {
                     window.getComputedStyle(finalBlockActions).opacity,
                   ),
                 });
-                if (frames.length === 2) {
-                  const startDate =
-                    window.document.querySelector<HTMLInputElement>(
-                      'input[aria-label="Startdato for intervjuperioden"]',
-                    );
-                  const valueSetter = Object.getOwnPropertyDescriptor(
-                    window.HTMLInputElement.prototype,
-                    "value",
-                  )?.set;
-                  valueSetter?.call(startDate, "2026-07-21");
-                  startDate?.dispatchEvent(
-                    new window.Event("change", { bubbles: true }),
-                  );
-                }
                 if (frames.length === 8) resolve(frames);
                 else window.requestAnimationFrame(capture);
               };
@@ -258,9 +251,7 @@ describe("inline schedule settings and standard-block preview", () => {
 
   it("updates period and daily time without an intermediate save", () => {
     mountSettings();
-    cy.get('input[aria-label="Startdato for intervjuperioden"]')
-      .clear()
-      .type("2026-07-21");
+    chooseInterviewPeriod("2026-07-21", "2026-07-24");
     cy.get("[data-cy=period-value]").should(
       "have.text",
       "2026-07-21/2026-07-24",
@@ -268,6 +259,130 @@ describe("inline schedule settings and standard-block preview", () => {
     cy.get('input[aria-label="Starttid per dag, time"]').clear().type("9");
     cy.get("[data-cy=daily-time-value]").should("have.text", "09:00/18:00");
     cy.get("[data-cy=save-count]").should("have.text", "0");
+  });
+
+  it("stages period changes until they are applied", () => {
+    mountSettings();
+    cy.get("[data-cy=interview-period-trigger]").as("trigger").click();
+    cy.get('[data-calendar-date="2026-07-21"]').click();
+    cy.get('[data-calendar-date="2026-07-25"]').click();
+    cy.get("[data-cy=period-value]").should(
+      "have.text",
+      "2026-07-20/2026-07-24",
+    );
+    cy.contains("button", "Avbryt").click();
+    cy.get("[data-cy=period-value]").should(
+      "have.text",
+      "2026-07-20/2026-07-24",
+    );
+    cy.get("@trigger").should("be.focused").click();
+    cy.get('[data-calendar-date="2026-07-21"]').click();
+    cy.get('[data-calendar-date="2026-07-25"]').click();
+    cy.get("[data-cy=apply-interview-period]").click();
+    cy.get("[data-cy=period-value]").should(
+      "have.text",
+      "2026-07-21/2026-07-25",
+    );
+  });
+
+  it("prevents a range longer than 21 days", () => {
+    mountSettings();
+    cy.get("[data-cy=interview-period-trigger]").click();
+    cy.get('[data-calendar-date="2026-07-20"]').click();
+    cy.get('button[aria-label="Neste måned"]').click();
+    cy.get('[data-calendar-date="2026-08-09"]').should("not.be.disabled");
+    cy.get('[data-calendar-date="2026-08-10"]').should("be.disabled");
+    cy.get("[data-cy=interview-period-status]").should(
+      "contain.text",
+      "senest",
+    );
+    cy.get('[data-calendar-date="2026-08-09"]').click();
+    cy.get("[data-cy=apply-interview-period]").click();
+    cy.get("[data-cy=period-value]").should(
+      "have.text",
+      "2026-07-20/2026-08-09",
+    );
+  });
+
+  it("supports a one-day interview period", () => {
+    mountSettings();
+    cy.get("[data-cy=interview-period-trigger]").click();
+    cy.get('[data-calendar-date="2026-07-20"]').click();
+    cy.get('[data-calendar-date="2026-07-20"]').click();
+    cy.get("[data-cy=apply-interview-period]").click();
+    cy.get("[data-cy=period-value]").should(
+      "have.text",
+      "2026-07-20/2026-07-20",
+    );
+    cy.get("[data-cy=interview-period-trigger]").should(
+      "contain.text",
+      "1 dag",
+    );
+  });
+
+  it("supports keyboard navigation and escape without committing", () => {
+    mountSettings();
+    cy.get("[data-cy=interview-period-trigger]").as("trigger").click();
+    cy.focused()
+      .should("have.attr", "data-calendar-date", "2026-07-20")
+      .type("{rightarrow}{enter}");
+    cy.focused()
+      .should("have.attr", "data-calendar-date", "2026-07-21")
+      .type("{rightarrow}{rightarrow}{enter}");
+    cy.get("[data-cy=apply-interview-period]").should("not.be.disabled");
+    cy.get("[data-cy=interview-period-dialog]").type("{esc}");
+    cy.get("[data-cy=period-value]").should(
+      "have.text",
+      "2026-07-20/2026-07-24",
+    );
+    cy.get("@trigger").should("be.focused");
+  });
+
+  it("supports keyboard selection across month boundaries", () => {
+    mountSettings();
+    cy.get("[data-cy=interview-period-trigger]").click();
+    cy.focused()
+      .should("have.attr", "data-calendar-date", "2026-07-20")
+      .type("{enter}");
+    cy.get('button[aria-label="Neste måned"]').focus().type("{enter}");
+    cy.get('[data-calendar-date="2026-08-01"]')
+      .should("have.attr", "tabindex", "0")
+      .focus();
+    Array.from({ length: 8 }).forEach(() => {
+      cy.focused().type("{rightarrow}");
+    });
+    cy.focused()
+      .should("have.attr", "data-calendar-date", "2026-08-09")
+      .type("{rightarrow}")
+      .should("have.attr", "data-calendar-date", "2026-08-09")
+      .type("{enter}");
+    cy.get("[data-cy=apply-interview-period]").click();
+    cy.get("[data-cy=period-value]").should(
+      "have.text",
+      "2026-07-20/2026-08-09",
+    );
+  });
+
+  [
+    { width: 390, height: 760 },
+    { width: 768, height: 300 },
+    { width: 1280, height: 760 },
+  ].forEach(({ width, height }) => {
+    it(`keeps the open period picker inside a ${width}x${height}px viewport`, () => {
+      cy.viewport(width, height);
+      mountSettings();
+      cy.get("[data-cy=interview-period-trigger]").click();
+      cy.get("[data-cy=interview-period-dialog]").should(($dialog) => {
+        const rect = $dialog[0].getBoundingClientRect();
+        expect(rect.left).to.be.at.least(0);
+        expect(rect.right).to.be.at.most(width);
+        expect(rect.top).to.be.at.least(0);
+        expect(rect.bottom).to.be.at.most(height);
+      });
+      cy.screenshot(`scheduler-workflow/period-picker-${width}x${height}`, {
+        capture: "viewport",
+      });
+    });
   });
 
   it("supports compact presets and a validated custom duration", () => {

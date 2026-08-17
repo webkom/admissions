@@ -153,8 +153,9 @@ describe("shared selectable schedule grid", () => {
       .and("not.contain.text", "0/2")
       .and("not.contain.text", "tilgjengelige")
       .and("have.attr", "aria-label")
-      .and("include", "onsdag 22. juli")
-      .and("have.attr", "tabindex", "-1")
+      .and("include", "onsdag 22. juli");
+    overviewCell("2026-07-22", 1)
+      .should("have.attr", "tabindex", "-1")
       .and("have.class", "bg-surface-neutral");
 
     cy.get("[data-cy=availability-overview-large-panel]")
@@ -410,7 +411,18 @@ describe("shared selectable schedule grid", () => {
       .should("have.attr", "aria-pressed", "false");
     cy.get(
       '[data-cy=admin-grid] [data-cy=pattern-block][data-date="2026-07-21"][data-row-id="block-480"]',
-    ).should("contain.text", "1/2");
+    ).within(() => {
+      cy.get('[data-cy=fine-slot][data-minute="480"]').should(
+        "have.attr",
+        "aria-pressed",
+        "true",
+      );
+      cy.get('[data-cy=fine-slot][data-minute="510"]').should(
+        "have.attr",
+        "aria-pressed",
+        "false",
+      );
+    });
     cy.get(
       '[data-cy=admin-grid] [data-cy=pattern-block][data-boundary-short="true"]',
     )
@@ -795,17 +807,25 @@ describe("shared selectable schedule grid", () => {
       cy.stub(window, "confirm").returns(false).as("proposalConfirm");
     });
     cy.get("[data-cy=proposal-confirmation-harness]").within(() => {
-      cy.get('input[aria-label="Startdato for intervjuperioden"]')
-        .clear()
-        .type("2026-07-22")
-        .should("have.value", "2026-07-22");
+      cy.get("[data-cy=interview-period-trigger]").click();
+    });
+    cy.get('[data-calendar-date="2026-07-22"]').click();
+    cy.get('[data-calendar-date="2026-07-24"]').click();
+    cy.get("[data-cy=apply-interview-period]").click();
+    cy.get("[data-cy=proposal-confirmation-harness]").within(() => {
+      cy.get("[data-cy=interview-period-trigger]").should(
+        "have.attr",
+        "data-start-date",
+        "2026-07-22",
+      );
       cy.contains("button", "Lagre oppsett").should("not.be.disabled").click();
       cy.get("[data-cy=proposal-confirmation-save-result]").should(
         "have.text",
         "not-saved",
       );
-      cy.get('input[aria-label="Startdato for intervjuperioden"]').should(
-        "have.value",
+      cy.get("[data-cy=interview-period-trigger]").should(
+        "have.attr",
+        "data-start-date",
         "2026-07-21",
       );
     });

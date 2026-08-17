@@ -1,8 +1,7 @@
 import type { FormikProps } from "formik";
 import React from "react";
-import type { ChangeEventHandler, FocusEventHandler, ReactNode } from "react";
+import type { ReactNode } from "react";
 import styled from "styled-components";
-import { DateTime } from "luxon";
 
 import type { MutationAdmission } from "src/query/mutations";
 
@@ -14,6 +13,7 @@ import {
   SectionNumber,
   SectionTitle,
 } from "./AdmissionSectionStyles";
+import AdmissionDateTimePicker from "./AdmissionDateTimePicker";
 import CommitteeContentEditor from "./CommitteeContentEditor";
 import GroupSelector from "./GroupSelector";
 import { useManageGroups } from "src/query/hooks";
@@ -25,47 +25,6 @@ interface AdmissionDetailsSectionsProps {
   updateTitle: (title: string) => void;
   updateSlug: (slug: string) => void;
 }
-
-interface DefaultDatePlaceholders {
-  open_from: string;
-  public_deadline: string;
-  closed_from: string;
-}
-
-const ADMISSION_FORM_TIME_ZONE = "Europe/Oslo";
-
-const formatDateInput = (date: DateTime): string =>
-  date.toFormat("yyyy-MM-dd'T'HH:mm:ss");
-
-const getDefaultDatePlaceholders = (): DefaultDatePlaceholders => {
-  const baseDate = DateTime.now().setZone(ADMISSION_FORM_TIME_ZONE);
-  const daysUntilFirstMonday = (1 - baseDate.weekday + 7) % 7 || 7;
-  const firstMonday = baseDate.plus({ days: daysUntilFirstMonday }).set({
-    hour: 0,
-    minute: 0,
-    second: 0,
-    millisecond: 0,
-  });
-
-  const nextSunday = firstMonday.plus({ days: 6 }).set({
-    hour: 23,
-    minute: 59,
-    second: 0,
-    millisecond: 0,
-  });
-  const sundayAfter = firstMonday.plus({ days: 13 }).set({
-    hour: 23,
-    minute: 59,
-    second: 0,
-    millisecond: 0,
-  });
-
-  return {
-    open_from: formatDateInput(firstMonday),
-    public_deadline: formatDateInput(nextSunday),
-    closed_from: formatDateInput(sundayAfter),
-  };
-};
 
 const AdmissionDetailsSections = ({
   formik,
@@ -90,8 +49,6 @@ const AdmissionDetailsContent = ({
   updateTitle,
   updateSlug,
 }: AdmissionDetailsSectionsProps) => {
-  const datePlaceholders = isNew ? getDefaultDatePlaceholders() : null;
-
   const { data: availableGroups } = useManageGroups();
   const selectedGroups = formik.values.groups
     .map((groupId) => availableGroups?.find((group) => group.pk === groupId))
@@ -217,40 +174,50 @@ const AdmissionDetailsContent = ({
         number="2"
         titleId="admission-dates-title"
         title="Datoer"
-        description="Alle tidspunkter tolkes som norsk tid."
+        description="Alle tider vises i norsk tid."
       >
         <FieldGrid>
           <DateField
             id="open_from"
             label="Opptaket åpner"
-            description="Fra dette tidspunktet er det mulig å legge inn søknader."
+            description="Når søknadsperioden skal starte."
             value={formik.values.open_from}
-            placeholder={datePlaceholders?.open_from}
             error={fieldError("open_from")}
-            onBlur={formik.handleBlur}
-            onChange={formik.handleChange}
+            onBlur={() => {
+              void formik.setFieldTouched("open_from", true);
+            }}
+            onChange={(value) => {
+              void formik.setFieldValue("open_from", value);
+            }}
           />
           <DateField
             id="public_deadline"
             label="Søknadsfrist"
-            description="Etter dette er det ikke garantert at søkere blir sett, men de kan fortsatt søke og redigere søknaden sin."
+            description="Etter fristen kan søkere fortsatt redigere, men behandling er ikke garantert."
             value={formik.values.public_deadline}
-            placeholder={datePlaceholders?.public_deadline}
             min={formik.values.open_from || undefined}
+            minExclusive
             error={fieldError("public_deadline")}
-            onBlur={formik.handleBlur}
-            onChange={formik.handleChange}
+            onBlur={() => {
+              void formik.setFieldTouched("public_deadline", true);
+            }}
+            onChange={(value) => {
+              void formik.setFieldValue("public_deadline", value);
+            }}
           />
           <DateField
             id="closed_from"
             label="Opptaket stenger"
-            description="Etter dette tidspunktet er det ikke mulig å legge inn søknader."
+            description="Etter dette tidspunktet kan ingen sende inn eller endre søknaden."
             value={formik.values.closed_from}
-            placeholder={datePlaceholders?.closed_from}
             min={formik.values.public_deadline || undefined}
             error={fieldError("closed_from")}
-            onBlur={formik.handleBlur}
-            onChange={formik.handleChange}
+            onBlur={() => {
+              void formik.setFieldTouched("closed_from", true);
+            }}
+            onChange={(value) => {
+              void formik.setFieldValue("closed_from", value);
+            }}
           />
         </FieldGrid>
       </FormSection>
@@ -363,10 +330,10 @@ interface DateFieldProps {
   description: string;
   value: string;
   min?: string;
+  minExclusive?: boolean;
   error?: string;
-  onBlur: FocusEventHandler<HTMLInputElement>;
-  onChange: ChangeEventHandler<HTMLInputElement>;
-  placeholder?: string;
+  onBlur: () => void;
+  onChange: (value: string) => void;
 }
 
 const DateField = ({
@@ -375,28 +342,26 @@ const DateField = ({
   description,
   value,
   min,
+  minExclusive,
   error,
-  placeholder,
   onBlur,
   onChange,
 }: DateFieldProps) => (
   <FieldBlock>
     <FieldLabel htmlFor={id}>{label}</FieldLabel>
     <InputDescription id={`${id}-description`}>{description}</InputDescription>
-    <Input
+    <AdmissionDateTimePicker
       id={id}
-      name={id}
-      type="datetime-local"
+      label={label}
       value={value}
-      placeholder={placeholder}
-      data-admission-field={id}
       min={min}
+      minExclusive={minExclusive}
       onBlur={onBlur}
       onChange={onChange}
-      aria-describedby={`${id}-description${error ? ` ${id}-error` : ""}`}
-      aria-invalid={Boolean(error)}
+      describedBy={`${id}-description`}
+      invalid={Boolean(error)}
+      error={error}
     />
-    {error && <FieldError id={`${id}-error`}>{error}</FieldError>}
   </FieldBlock>
 );
 

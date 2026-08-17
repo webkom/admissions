@@ -114,12 +114,12 @@
             onResetCustomizations: () => {},
             onSetBlock: setBlock,
             onToggleSlot: toggleSlot,
-            onOpenAllStandardBlocks: () =>
+            onOpenAllBlocks: () =>
               gridDates.forEach((date) =>
                 setBlock(date, gridChunks.flat(), true),
               ),
             onCloseAllCapacity: () => setActiveSlots(new Set()),
-            onToggleDayStandardBlocks: (date, open) =>
+            onToggleDayBlocks: (date, open) =>
               setBlock(date, gridChunks.flat(), open),
           }),
         );
@@ -373,7 +373,7 @@
             gridDates: [dates[0]],
             gridChunks: [[720, 750, 780, 810, 840], [930]],
             blockSize: 5,
-            initialView: "fine",
+            initialView: "slots",
           }),
           React.createElement(PartialGridHarness),
           React.createElement(AvailabilityOverviewHarness),

@@ -1,6 +1,6 @@
 import React from "react";
 import { DateTime } from "luxon";
-import { CustomSelect } from "src/components/ui";
+import { Chip, CustomSelect } from "src/components/ui";
 import { useAdminUpdateInterviewStatusMutation } from "src/query/mutations";
 import { isSensitiveAuthorityChangedError } from "src/query/sensitiveAccess";
 import type { InterviewStatus } from "src/types";
@@ -14,11 +14,26 @@ import {
   type InterviewStatusTone,
 } from "src/utils/interviewStatus";
 
-const interviewStatusDotTone: Record<InterviewStatusTone, string> = {
-  neutral: "bg-text-faded",
-  info: "bg-amber-500",
-  success: "bg-success",
-  danger: "bg-danger",
+const interviewStatusChipTone: Record<
+  InterviewStatusTone,
+  React.ComponentProps<typeof Chip>["tone"]
+> = {
+  neutral: "muted",
+  info: "warning",
+  success: "success",
+  danger: "danger",
+};
+
+// The editable control already shows the label inside the select, so the status
+// reads as a tinted trigger rather than a second chip beside it.
+const interviewStatusTriggerTone: Record<InterviewStatusTone, string> = {
+  neutral:
+    "[&>button]:border-border-soft [&>button]:bg-surface-subtle [&>button]:text-text-muted",
+  info: "[&>button]:border-amber-300 [&>button]:bg-amber-100 [&>button]:text-amber-900",
+  success:
+    "[&>button]:border-success-border [&>button]:bg-success-bg [&>button]:text-success",
+  danger:
+    "[&>button]:border-danger-border [&>button]:bg-danger-bg [&>button]:text-danger",
 };
 
 export { compareInterviewStatuses };
@@ -94,16 +109,9 @@ const InterviewStatusControl: React.FC<InterviewStatusControlProps> = ({
         <span
           aria-label={statusExplanation}
           title={statusExplanation}
-          className="inline-flex min-h-control-sm items-center gap-2 text-detail font-semibold text-text-primary"
+          className="inline-flex min-h-control-sm items-center"
         >
-          <span
-            aria-hidden="true"
-            className={cn(
-              "h-2.5 w-2.5 flex-none rounded-full",
-              interviewStatusDotTone[tone],
-            )}
-          />
-          {statusLabel}
+          <Chip tone={interviewStatusChipTone[tone]}>{statusLabel}</Chip>
         </span>
         {statusUpdatedAt && (
           <span className="text-detail leading-tight text-text-muted">
@@ -120,13 +128,6 @@ const InterviewStatusControl: React.FC<InterviewStatusControlProps> = ({
         className="flex w-full min-w-0 items-center gap-2"
         title={compact ? statusExplanation : undefined}
       >
-        <span
-          aria-hidden="true"
-          className={cn(
-            "h-2.5 w-2.5 flex-none rounded-full",
-            interviewStatusDotTone[tone],
-          )}
-        />
         <CustomSelect
           value={status}
           onChange={(nextStatus) => {
@@ -141,7 +142,8 @@ const InterviewStatusControl: React.FC<InterviewStatusControlProps> = ({
           compact={compact}
           className={cn(
             compact ? "min-w-0 flex-1" : "w-full",
-            "[&>button]:rounded-md [&>button]:bg-transparent [&>button]:hover:bg-surface-subtle",
+            "[&>button]:rounded-full",
+            interviewStatusTriggerTone[tone],
           )}
           aria-label={`Intervjustatus for ${candidateName}: ${statusLabel}`}
           aria-describedby={feedback ? feedbackId : undefined}

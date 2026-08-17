@@ -4,6 +4,7 @@ import type { ExperienceLevel, Interviewer } from "../types";
 import {
   buildBlockTimeChunks,
   decodeScheduleTime,
+  formatAccessibleDate,
   formatDateHeader,
   formatMinutes,
   makeSlotKey,
@@ -21,7 +22,6 @@ import {
 import {
   ScheduleBlockCell,
   ScheduleDayHeader,
-  ScheduleSlotSegments,
   ScheduleTimeLabel,
   scheduleAvailableCellClass,
   scheduleInteractiveCellMotionClass,
@@ -71,14 +71,6 @@ interface AvailabilityBlock {
   heatmapAvailableCount: number;
   allAvailableInterviewers: Interviewer[];
 }
-
-const availabilityRatio = (
-  availableCount: number,
-  heatmapCapacity: number,
-): number => {
-  if (heatmapCapacity <= 0) return 0;
-  return Math.min(Math.max(availableCount, 0) / heatmapCapacity, 1);
-};
 
 const formatHeatmapAvailability = (
   availableCount: number,
@@ -595,16 +587,14 @@ const AvailabilityHeatmap: React.FC<AvailabilityHeatmapProps> = ({
                 const key = `${date}|${chunkIndex}`;
                 const block = blocksByKey.get(key);
                 if (!block) return <div key={key} />;
-                const { weekday, dayMonth } = formatDateHeader(date);
                 const count = block.heatmapAvailableCount;
                 const closed = block.enabledMinutes.length === 0;
                 const highlighted = isHighlighted(block);
                 const selected = selectedBlockKey === key;
-                const ratio = availabilityRatio(count, heatmapCapacity);
                 const availabilityText = closed
                   ? ""
                   : formatHeatmapAvailability(count, heatmapCapacity);
-                const label = `${weekday} ${dayMonth}${
+                const label = `${formatAccessibleDate(date)}${
                   closed
                     ? ""
                     : `: ${availabilityText} tilgjengelige intervjuere`
@@ -621,7 +611,11 @@ const AvailabilityHeatmap: React.FC<AvailabilityHeatmapProps> = ({
                     aria-label={
                       closed
                         ? label
-                        : `${label}. Vis hvem som er tilgjengelige.`
+                        : `${label}.${
+                            highlighted
+                              ? " Valgt intervjuer er tilgjengelig."
+                              : ""
+                          } Vis hvem som er tilgjengelige.`
                     }
                     aria-pressed={closed ? undefined : selected}
                     onClick={(event) => {
@@ -656,9 +650,11 @@ const AvailabilityHeatmap: React.FC<AvailabilityHeatmapProps> = ({
                       selected &&
                         !closed &&
                         "border-brand-activeBorder ring-1 ring-inset ring-brand-border",
+                      // The selected interviewer's available blocks read as a
+                      // filled highlight rather than a marker in the corner.
                       highlighted &&
                         !closed &&
-                        "ring-2 ring-inset ring-brand-border",
+                        "border-brand-activeBorder bg-brand-soft",
                     )}
                   >
                     {!closed && (
@@ -670,18 +666,6 @@ const AvailabilityHeatmap: React.FC<AvailabilityHeatmapProps> = ({
                       >
                         {availabilityText}
                       </span>
-                    )}
-                    {!closed && (
-                      <ScheduleSlotSegments
-                        className="h-schedule-progress"
-                        fills={block.enabledMinutes.map(() => ratio)}
-                      />
-                    )}
-                    {highlighted && (
-                      <span
-                        aria-label="Valgt intervjuer er tilgjengelig"
-                        className="absolute bottom-1.5 right-1.5 h-1.5 w-1.5 rounded-full bg-brand"
-                      />
                     )}
                   </ScheduleBlockCell>
                 );

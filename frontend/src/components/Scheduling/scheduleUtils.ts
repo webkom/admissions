@@ -71,6 +71,13 @@ export const formatDateHeader = (
   return { weekday, dayMonth: `${day}.${month}` };
 };
 
+export const formatAccessibleDate = (date: string | Date): string =>
+  new Intl.DateTimeFormat("nb-NO", {
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+  }).format(toDate(date));
+
 export const buildBlockTimeChunks = ({
   dayStartMinute,
   dayEndMinute,

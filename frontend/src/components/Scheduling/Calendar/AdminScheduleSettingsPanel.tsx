@@ -35,6 +35,7 @@ import {
   readExpandContractState,
   setExpandedElement,
 } from "./expandContractMotion";
+import InterviewPeriodPicker from "./InterviewPeriodPicker";
 import { ScheduleSlotSegments } from "./ScheduleGridFrame";
 import StandardBlockPreview from "./StandardBlockPreview";
 
@@ -516,52 +517,15 @@ const AdminScheduleSettingsPanel: React.FC<AdminScheduleSettingsPanelProps> = ({
       >
         <SettingField label="Intervjuperiode">
           <div>
-            <div
-              className={`${rangeControlClass} w-full grid-cols-[minmax(0,1fr)_1px_minmax(0,1fr)]`}
-            >
-              <label className="flex min-w-0 flex-col justify-center py-1.5 pl-3 pr-2">
-                <span className="text-tiny font-medium text-text-subtle">
-                  Fra
-                </span>
-                <input
-                  id="period-start"
-                  aria-label="Startdato for intervjuperioden"
-                  aria-invalid={!period.isValid}
-                  aria-describedby={
-                    period.isValid ? undefined : "period-input-error"
-                  }
-                  type="date"
-                  value={period.startDate}
-                  className="w-full min-w-0 cursor-pointer border-none bg-transparent p-0 text-sm font-bold text-text-primary focus:outline-none"
-                  onChange={(event) =>
-                    period.onChangeStartDate(event.target.value)
-                  }
-                />
-              </label>
-              <span
-                className="my-2 h-6 w-px flex-none bg-border-soft"
-                aria-hidden="true"
-              />
-              <label className="flex min-w-0 flex-col justify-center py-1.5 pl-3 pr-2">
-                <span className="text-tiny font-medium text-text-subtle">
-                  Til
-                </span>
-                <input
-                  type="date"
-                  aria-label="Sluttdato for intervjuperioden"
-                  aria-invalid={!period.isValid}
-                  aria-describedby={
-                    period.isValid ? undefined : "period-input-error"
-                  }
-                  value={period.endDate}
-                  min={period.startDate}
-                  className="w-full min-w-0 cursor-pointer border-none bg-transparent p-0 text-sm font-bold text-text-primary focus:outline-none"
-                  onChange={(event) =>
-                    period.onChangeEndDate(event.target.value)
-                  }
-                />
-              </label>
-            </div>
+            <InterviewPeriodPicker
+              startDate={period.startDate}
+              endDate={period.endDate}
+              maxDays={MAX_RANGE_DAYS}
+              invalid={!period.isValid}
+              describedBy={period.isValid ? undefined : "period-input-error"}
+              onChangeStartDate={period.onChangeStartDate}
+              onChangeEndDate={period.onChangeEndDate}
+            />
             {!period.isValid && (
               <span
                 id="period-input-error"

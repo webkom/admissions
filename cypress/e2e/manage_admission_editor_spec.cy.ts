@@ -73,11 +73,37 @@ const selectGroup = (fieldId: string, groupName: string) => {
   cy.get(`#${fieldId}-listbox`).contains('[role="option"]', groupName).click();
 };
 
+const setAdmissionDateTime = (fieldId: string, value: string) => {
+  const targetDate = value.slice(0, 10);
+  const [targetYear, targetMonth] = targetDate.split("-").map(Number);
+  cy.get(`#${fieldId}`).click();
+  cy.get(`[data-cy="date-dialog-${fieldId}"]`)
+    .invoke("attr", "data-displayed-month")
+    .then((displayedMonth) => {
+      const [displayedYear, displayedMonthNumber] = String(displayedMonth)
+        .split("-")
+        .map(Number);
+      const monthOffset =
+        (targetYear - displayedYear) * 12 + targetMonth - displayedMonthNumber;
+      const navigationLabel =
+        monthOffset >= 0 ? "Neste måned" : "Forrige måned";
+      Cypress._.times(Math.abs(monthOffset), () => {
+        cy.get(`[data-cy="date-dialog-${fieldId}"]`)
+          .find(`button[aria-label="${navigationLabel}"]`)
+          .click();
+      });
+    });
+  cy.get(`[data-cy="date-dialog-${fieldId}"]`)
+    .find(`[data-calendar-date="${targetDate}"]`)
+    .click();
+  cy.get(`#${fieldId}-time`).clear().type(value.slice(11, 16)).blur();
+};
+
 const fillRequiredFields = () => {
   cy.get("#admission-title").type("Komiteopptak 2027");
-  cy.get("#open_from").type("2027-03-01T10:00");
-  cy.get("#public_deadline").type("2027-03-08T10:00");
-  cy.get("#closed_from").type("2027-03-09T10:00");
+  setAdmissionDateTime("open_from", "2027-03-01T10:00");
+  setAdmissionDateTime("public_deadline", "2027-03-08T10:00");
+  setAdmissionDateTime("closed_from", "2027-03-09T10:00");
   selectGroup("admin-groups", groups[0].name);
   selectGroup("admission-groups", groups[1].name);
 };
@@ -98,14 +124,30 @@ describe("manage admission editor", () => {
     cy.focused().should("have.id", "public_deadline");
   });
 
+  it("uses the custom date-time picker for admission lifecycle dates", () => {
+    visitExistingEditor();
+
+    cy.contains("Når søknadsperioden skal starte.").should("be.visible");
+    cy.get("#open_from")
+      .should("have.attr", "aria-haspopup", "dialog")
+      .and("not.have.attr", "type", "datetime-local")
+      .click();
+    cy.get('[data-cy="date-dialog-open_from"]')
+      .should("be.visible")
+      .and("not.contain", "Opptaket åpner")
+      .and("not.contain", "Norsk tid");
+    cy.get('[data-cy="date-dialog-open_from"]').type("{esc}");
+    cy.get("#open_from").should("be.focused");
+  });
+
   it("disables submission until an admissions group is selected", () => {
     cy.intercept("GET", "**/api/manage/group/", groups);
     visitEditor();
 
     cy.get("#admission-title").type("Komiteopptak 2027");
-    cy.get("#open_from").type("2027-03-01T10:00");
-    cy.get("#public_deadline").type("2027-03-08T10:00");
-    cy.get("#closed_from").type("2027-03-09T10:00");
+    setAdmissionDateTime("open_from", "2027-03-01T10:00");
+    setAdmissionDateTime("public_deadline", "2027-03-08T10:00");
+    setAdmissionDateTime("closed_from", "2027-03-09T10:00");
     selectGroup("admin-groups", groups[0].name);
 
     cy.get('button[type="submit"]').should("be.disabled");

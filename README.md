@@ -95,15 +95,23 @@ AUTH_LEGO_SECRET="Client Secret from OAuth2"
 AUTH_LEGO_API_URL="http://127.0.0.1:8000/"
 ```
 
-After creating and configuring your ./admissions/settings/.env file you are ready to migrate the database and run the server.
+After creating and configuring your ./admissions/settings/.env file you are ready to initialize the local development data and run the server.
 
 ```sh
-# Migrate the database migrations
-$ poetry run python manage.py migrate
+# Start PostgreSQL, apply migrations, and load Admissions development fixtures
+$ make initialize_development
 
 # Run the Django server and interview-scheduling worker together
 $ make dev
 ```
+
+The command is safe to repeat for local development.
+It refreshes the known Admissions fixture rows without flushing the database.
+It initializes Admissions only.
+The existing fixture loader also normalizes admission dates for all local
+Admissions, including custom Admissions created during development.
+To populate LEGO users and events, run LEGO's `initialize_development` management
+command from the LEGO checkout after its services are running.
 
 > If coding over long periods of time, or you want to flush the database, stop
 > `make dev`, run `poetry run python manage.py flush`, and start `make dev`

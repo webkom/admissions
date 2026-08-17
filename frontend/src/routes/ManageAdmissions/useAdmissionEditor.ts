@@ -79,15 +79,42 @@ const ADMISSION_FIELD_PRESENTATION: Record<
   },
 };
 
-const createEmptyAdmission = (): MutationAdmission => ({
+const createDefaultAdmissionDates = () => {
+  const baseDate = DateTime.now().setZone(ADMISSION_TIME_ZONE);
+  const daysUntilFirstMonday = (1 - baseDate.weekday + 7) % 7 || 7;
+  const firstMonday = baseDate.plus({ days: daysUntilFirstMonday }).set({
+    hour: 12,
+    minute: 0,
+    second: 0,
+    millisecond: 0,
+  });
+  const nextSunday = firstMonday.plus({ days: 6 }).set({
+    hour: 23,
+    minute: 59,
+    second: 0,
+    millisecond: 0,
+  });
+  const sundayAfter = firstMonday.plus({ days: 13 }).set({
+    hour: 23,
+    minute: 59,
+    second: 0,
+    millisecond: 0,
+  });
+
+  return {
+    open_from: firstMonday.toFormat("yyyy-MM-dd'T'HH:mm:ss"),
+    public_deadline: nextSunday.toFormat("yyyy-MM-dd'T'HH:mm:ss"),
+    closed_from: sundayAfter.toFormat("yyyy-MM-dd'T'HH:mm:ss"),
+  };
+};
+
+export const createEmptyAdmission = (): MutationAdmission => ({
   title: "",
   slug: "",
   description: "",
   group_questions: {},
   group_content: {},
-  open_from: "",
-  public_deadline: "",
-  closed_from: "",
+  ...createDefaultAdmissionDates(),
   admin_groups: [],
   groups: [],
 });
