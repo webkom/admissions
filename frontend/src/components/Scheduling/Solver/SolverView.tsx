@@ -92,6 +92,7 @@ interface Props {
   onOpenAvailability: () => void;
   onOpenFramework: () => void;
   onOpenConflictReview: () => void;
+  conflictReviewReachable: boolean;
   onOpenPlan: () => void;
 }
 
@@ -129,6 +130,7 @@ export default function SolverView({
   onOpenAvailability,
   onOpenFramework,
   onOpenConflictReview,
+  conflictReviewReachable,
   onOpenPlan,
 }: Props) {
   const [regenerationOpen, setRegenerationOpen] = useState(false);
@@ -715,6 +717,7 @@ export default function SolverView({
         onOpenAvailability={onOpenAvailability}
         onOpenFramework={onOpenFramework}
         onOpenConflictReview={onOpenConflictReview}
+        conflictReviewReachable={conflictReviewReachable}
       />
     );
 

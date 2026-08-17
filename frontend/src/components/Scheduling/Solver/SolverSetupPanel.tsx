@@ -75,6 +75,9 @@ interface SolverSetupPanelProps {
   onOpenAvailability: () => void;
   onOpenFramework: () => void;
   onOpenConflictReview: () => void;
+  // False when the inhabilitet review is closed, so the blocked action can
+  // point somewhere that works instead of a panel that will not render.
+  conflictReviewReachable: boolean;
 }
 
 const ExperienceEditor = ({
@@ -510,6 +513,7 @@ const SolverSetupPanel = ({
   onOpenAvailability,
   onOpenFramework,
   onOpenConflictReview,
+  conflictReviewReachable,
 }: SolverSetupPanelProps) => {
   const [advancedSettingsOpen, setAdvancedSettingsOpen] = useState(false);
   const [experienceEditorOpen, setExperienceEditorOpen] = useState(false);
@@ -675,10 +679,18 @@ const SolverSetupPanel = ({
           : !availabilityReady
             ? { label: "Se hvem som mangler", run: onOpenAvailability }
             : conflictBlockedCandidate
-              ? {
-                  label: "Endre mitt svar",
-                  run: onOpenConflictReview,
-                }
+              ? conflictReviewReachable
+                ? {
+                    label: "Endre mitt svar",
+                    run: onOpenConflictReview,
+                  }
+                : // With the review closed there is nothing to reopen, so send
+                  // the admin to where the registered inhabilitet is visible
+                  // rather than to a panel that will not render.
+                  {
+                    label: "Se registrert inhabilitet",
+                    run: onOpenAvailability,
+                  }
               : capabilityBlockedCandidate
                 ? capabilityBlockedCandidate.reasons.length === 1 &&
                   capabilityBlockedCandidate.reasons[0] === "experience"

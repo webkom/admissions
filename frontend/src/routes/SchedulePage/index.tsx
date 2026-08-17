@@ -644,10 +644,13 @@ const LoadedScheduleView: React.FC<LoadedScheduleViewProps> = ({
         ?.focus({ preventScroll: true });
     });
   };
+  // The same conditions the review stage renders under, minus the request key.
+  // Without this an action offering to open the review can resolve to nothing.
+  const conflictReviewReachable = Boolean(
+    savedSchedule?.conflict_review_open && myAvailabilityParticipant,
+  );
   const showAdminConflictReviewStage = Boolean(
-    savedSchedule?.conflict_review_open &&
-      myAvailabilityParticipant &&
-      conflictReviewRequestKey > 0,
+    conflictReviewReachable && conflictReviewRequestKey > 0,
   );
   const collectionParticipants = (availabilityParticipants ?? []).filter(
     (participant) =>
@@ -1077,6 +1080,7 @@ const LoadedScheduleView: React.FC<LoadedScheduleViewProps> = ({
                   handleSectionChange("config");
                 }}
                 onOpenConflictReview={openConflictReview}
+                conflictReviewReachable={conflictReviewReachable}
                 onOpenPlan={() => handleSectionChange("plan")}
               />
             </section>

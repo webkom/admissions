@@ -66,6 +66,12 @@ class InterviewAvailabilityParticipantSerializer(serializers.Serializer):
     username = serializers.CharField()
     full_name = serializers.CharField()
     gender = serializers.CharField(required=False, allow_blank=True, default="")
+    email = serializers.CharField(required=False, allow_blank=True, default="")
+    availability_updated_at = serializers.DateTimeField(
+        allow_null=True,
+        required=False,
+        default=None,
+    )
     experience_level = serializers.ChoiceField(
         choices=InterviewAvailability.EXPERIENCE_LEVEL_CHOICES
     )

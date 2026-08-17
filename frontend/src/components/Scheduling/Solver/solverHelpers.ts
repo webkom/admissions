@@ -367,6 +367,20 @@ export const estimateSolverSeconds = (
   return Math.min(hardCap, Math.max(2, Math.round(estimate * 1.4) * 2));
 };
 
+/**
+ * Almost every validation message from the API is already a full Norwegian
+ * sentence naming its own subject, so the field key is dropped. These few can
+ * surface a bare DRF default like "This field is required.", which says nothing
+ * on its own, so they keep a human label.
+ */
+const API_ERROR_FIELD_LABELS: Record<string, string> = {
+  start_date: "Startdato",
+  end_date: "Sluttdato",
+  session_duration: "Intervjulengde",
+  panel_size: "Panelstørrelse",
+  user_id: "Bruker",
+};
+
 export const formatApiError = (data: unknown): string => {
   if (!data) return "Kunne ikke kjøre solver.";
   if (typeof data === "string") return data;
@@ -376,13 +390,23 @@ export const formatApiError = (data: unknown): string => {
   if (typeof data !== "object") return String(data);
 
   return Object.entries(data)
-    .map(([key, value]) => `${key}: ${formatApiError(value)}`)
+    .map(([key, value]) => {
+      const detail = formatApiError(value);
+      const label = API_ERROR_FIELD_LABELS[key];
+      // An unmapped key is backend vocabulary; the message it carries is
+      // already written for a reader, so show that on its own.
+      return label ? `${label}: ${detail}` : detail;
+    })
+    .filter(Boolean)
     .join(" ");
 };
 
 export const scheduleSaveErrorMessage = (
   error: unknown,
   fallback: string,
+  // The lead-in must match the action the user took. Prefixing an inhabilitet
+  // toggle with "Planen kan ikke lagres" describes something they never did.
+  prefix = "Planen kan ikke lagres",
 ): string => {
   if (!isAxiosError(error) || error.response?.status !== 400) {
     return fallback;
@@ -395,8 +419,8 @@ export const scheduleSaveErrorMessage = (
   if (!detail) return fallback;
 
   if (detail.includes("intervjue seg selv")) {
-    return "Planen kan ikke lagres: En kandidat kan ikke intervjue seg selv. Bytt personen i panelet.";
+    return `${prefix}: En kandidat kan ikke intervjue seg selv. Bytt personen i panelet.`;
   }
 
-  return `Planen kan ikke lagres: ${detail}`;
+  return `${prefix}: ${detail}`;
 };

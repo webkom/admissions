@@ -290,6 +290,9 @@ export interface InterviewAvailabilityParticipant {
   username: string;
   full_name: string;
   gender?: string;
+  /** Admin-only; empty string for everyone else. */
+  email?: string;
+  availability_updated_at?: string | null;
   experience_level: ExperienceLevel;
   slots: string[];
   conflicts: string[];

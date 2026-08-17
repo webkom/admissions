@@ -333,6 +333,14 @@ class InterviewAvailabilityView(APIView):
                 "gender": (
                     panel_gender_code(person.gender) if is_interview_admin else ""
                 ),
+                # Contact details are for chasing missing answers, so they stay
+                # with the admins who do the chasing.
+                "email": person.email if is_interview_admin else "",
+                "availability_updated_at": (
+                    availability_map[person.id].updated_at
+                    if person.id in availability_map
+                    else None
+                ),
                 "experience_level": (
                     availability_map[person.id].experience_level
                     if is_interview_admin and person.id in availability_map

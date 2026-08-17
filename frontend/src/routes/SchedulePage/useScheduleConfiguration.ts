@@ -168,6 +168,7 @@ export const useScheduleConfiguration = ({
           : scheduleSaveErrorMessage(
               error,
               "Kunne ikke oppdatere inhabilitetskontrollen.",
+              "Inhabilitetskontrollen kan ikke lukkes",
             ),
         "error",
       );

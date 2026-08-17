@@ -1,5 +1,9 @@
 import React from "react";
+import { DateTime } from "luxon";
+import { Copy } from "lucide-react";
 import { Chip } from "src/components/ui";
+import { keyboardFocusRingClass } from "src/components/Scheduling/ui";
+import { iconSizes } from "src/styles/designTokens";
 import type { InterviewAvailabilityParticipant } from "src/types";
 import cn from "src/utils/cn";
 
@@ -15,6 +19,14 @@ const byName = (
   a: InterviewAvailabilityParticipant,
   b: InterviewAvailabilityParticipant,
 ) => displayName(a).localeCompare(displayName(b), "nb");
+
+const answeredLabel = (participant: InterviewAvailabilityParticipant) => {
+  if (!participant.availability_updated_at) return null;
+  const answered = DateTime.fromISO(
+    participant.availability_updated_at,
+  ).setLocale("nb");
+  return answered.isValid ? answered.toRelative() : null;
+};
 
 /**
  * Names every interviewer in the committee and what they have answered.
@@ -46,13 +58,36 @@ const AvailabilityResponseRoster: React.FC<AvailabilityResponseRosterProps> = ({
     };
   }, [participants]);
 
+  const [copyState, setCopyState] = React.useState<
+    "idle" | "copied" | "failed"
+  >("idle");
+  React.useEffect(() => {
+    if (copyState === "idle") return;
+    const timer = window.setTimeout(() => setCopyState("idle"), 4000);
+    return () => window.clearTimeout(timer);
+  }, [copyState]);
+
   if (participants.length === 0) return null;
+
+  const copyableAddresses = missing
+    .map((participant) => participant.email)
+    .filter((email): email is string => Boolean(email));
+
+  const copyMissingAddresses = async () => {
+    try {
+      await navigator.clipboard.writeText(copyableAddresses.join(", "));
+      setCopyState("copied");
+    } catch {
+      setCopyState("failed");
+    }
+  };
 
   const renderGroup = (
     label: string,
     group: InterviewAvailabilityParticipant[],
     tone: React.ComponentProps<typeof Chip>["tone"],
     dataCy: string,
+    showAnswered = false,
   ) => {
     if (group.length === 0) return null;
     return (
@@ -61,16 +96,22 @@ const AvailabilityResponseRoster: React.FC<AvailabilityResponseRosterProps> = ({
           {label} ({group.length})
         </p>
         <ul className="m-0 flex list-none flex-wrap gap-1.5 p-0">
-          {group.map((participant) => (
-            <li key={participant.user_id}>
-              <Chip tone={tone}>
-                {displayName(participant)}
-                {participant.is_me && (
-                  <span className="font-normal opacity-70">(deg)</span>
-                )}
-              </Chip>
-            </li>
-          ))}
+          {group.map((participant) => {
+            const answered = showAnswered ? answeredLabel(participant) : null;
+            return (
+              <li key={participant.user_id}>
+                <Chip tone={tone}>
+                  {displayName(participant)}
+                  {participant.is_me && (
+                    <span className="font-normal opacity-70">(deg)</span>
+                  )}
+                  {answered && (
+                    <span className="font-normal opacity-70">{answered}</span>
+                  )}
+                </Chip>
+              </li>
+            );
+          })}
         </ul>
       </div>
     );
@@ -90,9 +131,42 @@ const AvailabilityResponseRoster: React.FC<AvailabilityResponseRosterProps> = ({
           Alle i komiteen har svart.
         </p>
       ) : (
-        renderGroup("Mangler svar", missing, "warning", "availability-missing")
+        <div className="flex flex-col gap-1.5">
+          {renderGroup(
+            "Mangler svar",
+            missing,
+            "warning",
+            "availability-missing",
+          )}
+          {copyableAddresses.length > 0 && (
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={() => void copyMissingAddresses()}
+                data-cy="copy-missing-emails"
+                className={cn(
+                  "inline-flex items-center gap-1.5 self-start rounded-full border border-border-soft px-2.5 py-1 text-detail font-semibold text-text-muted hover:bg-surface-subtle",
+                  keyboardFocusRingClass,
+                )}
+              >
+                <Copy size={iconSizes.detail} aria-hidden="true" />
+                Kopier e-postliste ({copyableAddresses.length})
+              </button>
+              <span aria-live="polite" className="text-detail text-text-muted">
+                {copyState === "copied" && "Kopiert."}
+                {copyState === "failed" && "Kunne ikke kopiere."}
+              </span>
+            </div>
+          )}
+        </div>
       )}
-      {renderGroup("Har svart", submitted, "success", "availability-submitted")}
+      {renderGroup(
+        "Har svart",
+        submitted,
+        "success",
+        "availability-submitted",
+        true,
+      )}
       {renderGroup(
         "Deltar ikke",
         notParticipating,
