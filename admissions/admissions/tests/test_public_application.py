@@ -1,14 +1,17 @@
 from unittest.mock import patch
 
+from django.core import mail
 from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APITestCase
 
+from admissions.admissions import constants
 from admissions.admissions.models import (
     AdmissionGroup,
     Group,
     GroupApplication,
     LegoUser,
+    Membership,
     UserApplication,
 )
 from admissions.admissions.serializers import AdmissionPublicSerializer
@@ -576,6 +579,93 @@ class CreateApplicationTestCase(APITestCase):
                 application__user=self.pleb_anna, group=self.koskom
             ).exists()
         )
+
+    def test_partial_withdrawal_uses_its_own_message(self):
+        """Unticking one committee must not read as leaving the admission.
+
+        Both paths used the same anonymous template, so recruiters could not
+        tell a partial withdrawal from a full one.
+        """
+        self.client.force_authenticate(user=self.pleb_anna)
+        url = reverse(
+            "userapplication-list", kwargs={"admission_slug": self.admission_slug}
+        )
+        self.client.post(url, self.application_data, format="json")
+        # Someone must be listening, or Django never puts a mail in the outbox.
+        recruiter = LegoUser.objects.create(
+            username="koskom-recruiter", lego_id=8801, email="koskom@abakus.no"
+        )
+        Membership.objects.create(
+            user=recruiter, group=self.koskom, role=constants.RECRUITING
+        )
+        mail.outbox = []
+
+        res = self.client.post(
+            url,
+            {
+                "phone_number": "12345678",
+                "applications": {"webkom": "still want webkom"},
+            },
+            format="json",
+        )
+
+        self.assertEqual(res.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(1, len(mail.outbox))
+        sent = mail.outbox[0]
+        self.assertIn("trukket", sent.subject)
+        self.assertIn(self.koskom.name, sent.subject)
+        self.assertIn("fortsatt en aktiv søknad", sent.body)
+        # Anonymous by design: the recruiter learns what happened, not who.
+        # (Guarded: assertNotIn("") is vacuously true, and this fixture user
+        # has no name or email set.)
+        self.assertTrue(self.pleb_anna.username)
+        self.assertNotIn(self.pleb_anna.username, sent.body)
+
+    def test_reapplying_to_a_dropped_committee_notifies_nobody(self):
+        """The candidate list is computed live, so a re-tick needs no mail."""
+        self.client.force_authenticate(user=self.pleb_anna)
+        url = reverse(
+            "userapplication-list", kwargs={"admission_slug": self.admission_slug}
+        )
+        self.client.post(url, self.application_data, format="json")
+        self.client.post(
+            url,
+            {
+                "phone_number": "12345678",
+                "applications": {"webkom": "still want webkom"},
+            },
+            format="json",
+        )
+        mail.outbox = []
+
+        res = self.client.post(url, self.application_data, format="json")
+
+        self.assertEqual(res.status_code, status.HTTP_201_CREATED)
+        self.assertEqual([], mail.outbox)
+
+    def test_partial_withdrawal_keeps_the_deadline_flag(self):
+        """The dialog promises this, so pin it."""
+        self.client.force_authenticate(user=self.pleb_anna)
+        url = reverse(
+            "userapplication-list", kwargs={"admission_slug": self.admission_slug}
+        )
+        self.client.post(url, self.application_data, format="json")
+        before = UserApplication.objects.get(user=self.pleb_anna)
+        applied_within_deadline = before.applied_within_deadline
+        created_at = before.created_at
+
+        self.client.post(
+            url,
+            {
+                "phone_number": "12345678",
+                "applications": {"webkom": "still want webkom"},
+            },
+            format="json",
+        )
+
+        after = UserApplication.objects.get(user=self.pleb_anna)
+        self.assertEqual(created_at, after.created_at)
+        self.assertEqual(applied_within_deadline, after.applied_within_deadline)
 
     def test_email_failure_does_not_block_withdrawal(self):
         self.client.force_authenticate(user=self.pleb_anna)

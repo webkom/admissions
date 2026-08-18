@@ -64,9 +64,10 @@ const FormStructure: React.FC<FormStructureProps> = ({
         <Title>Skriv din søknad og send inn!</Title>
         {myApplication && (
           <CancelButtonContainer>
-            <StyledButton onClick={onCancel} disabled={!isValid}>
-              Avbryt
-            </StyledButton>
+            {/* Never gated on validity: cancel discards nothing, and gating
+                the escape hatch on the form being valid is what stranded
+                applicants with no way back to their receipt. */}
+            <StyledButton onClick={onCancel}>Avbryt</StyledButton>
           </CancelButtonContainer>
         )}
       </FormHeader>

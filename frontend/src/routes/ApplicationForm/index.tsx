@@ -19,6 +19,7 @@ import {
   getPriorityTextDraft,
   saveSubmittedPhoneNumber,
 } from "src/utils/draftHelper";
+import ConfirmDialog from "src/components/Scheduling/ConfirmDialog";
 import UnsavedDraftBanner from "./UnsavedDraftBanner";
 import DraftAnswersAutosave from "./DraftAnswersAutosave";
 import { Admission, Application, Group } from "src/types";
@@ -222,6 +223,9 @@ const ApplicationForm: React.FC<ApplicationFormProps> = ({
     "undecided" | "restored" | "discarded"
   >("undecided");
   const [submitError, setSubmitError] = React.useState("");
+  const [pendingWithdrawal, setPendingWithdrawal] = React.useState<{
+    values: FormValues;
+  } | null>(null);
   const showDraftBanner =
     pendingDraftAt !== null && draftChoice === "undecided";
   const preferDraft = draftChoice === "restored";
@@ -238,10 +242,15 @@ const ApplicationForm: React.FC<ApplicationFormProps> = ({
     [selectedGroups, currentUserId, admission, myApplication, preferDraft],
   );
 
-  const onSubmit: (
-    values: FormValues,
-    formikHelpers: FormikHelpers<FormValues>,
-  ) => void = (values, { setSubmitting }) => {
+  // Committees the applicant applied to and has now unticked. Deliberately not
+  // intersected with admission.groups: the backend derives what to keep purely
+  // from the payload, so a group since removed from the admission would still
+  // be deleted but would vanish from this warning.
+  const withdrawnGroups = (myApplication?.group_applications ?? [])
+    .map((application) => application.group)
+    .filter((group) => !selectedGroups[group.name.toLowerCase()]);
+
+  const buildSubmission = (values: FormValues): MutationApplication => {
     const submission: MutationApplication = {
       applications: {},
       phone_number: values.phoneNumber,
@@ -260,6 +269,14 @@ const ApplicationForm: React.FC<ApplicationFormProps> = ({
         submission.applications[name] = values.groups[name];
         submission.group_answers[name] = values.groupAnswers[name] ?? {};
       });
+    return submission;
+  };
+
+  const performSubmit = (
+    values: FormValues,
+    setSubmitting: (isSubmitting: boolean) => void,
+  ) => {
+    const submission = buildSubmission(values);
     setSubmitError("");
     createApplicationMutation.mutate(
       { newApplication: submission },
@@ -291,6 +308,23 @@ const ApplicationForm: React.FC<ApplicationFormProps> = ({
     );
   };
 
+  const onSubmit: (
+    values: FormValues,
+    formikHelpers: FormikHelpers<FormValues>,
+  ) => void = (values, { setSubmitting }) => {
+    if (withdrawnGroups.length > 0) {
+      // Submitting is what destroys the text and mails the committee, so the
+      // confirmation belongs here rather than on the untick, which is
+      // reversible and reachable from two different controls.
+      // Releasing the submitting flag first, or the button stays disabled
+      // behind the dialog and cancelling leaves a dead form.
+      setSubmitting(false);
+      setPendingWithdrawal({ values });
+      return;
+    }
+    performSubmit(values, setSubmitting);
+  };
+
   return (
     <>
       {showDraftBanner && pendingDraftAt && (
@@ -302,6 +336,50 @@ const ApplicationForm: React.FC<ApplicationFormProps> = ({
             setDraftChoice("discarded");
           }}
         />
+      )}
+      {pendingWithdrawal && (
+        <ConfirmDialog
+          tone="danger"
+          title={
+            withdrawnGroups.length === 1
+              ? `Trekke søknaden til ${withdrawnGroups[0].name}?`
+              : `Trekke søknaden til ${withdrawnGroups.length} komiteer?`
+          }
+          confirmLabel={
+            withdrawnGroups.length === 1
+              ? "Send inn og trekk søknaden"
+              : "Send inn og trekk søknadene"
+          }
+          onClose={() => setPendingWithdrawal(null)}
+          onConfirm={() => {
+            const { values } = pendingWithdrawal;
+            setPendingWithdrawal(null);
+            performSubmit(values, () => undefined);
+          }}
+        >
+          <div data-cy="withdraw-confirm">
+            <p>
+              Du har fjernet{" "}
+              <strong>
+                {withdrawnGroups.map((group) => group.name).join(", ")}
+              </strong>{" "}
+              fra søknaden din. Når du sender inn nå, blir søknadsteksten din
+              til{" "}
+              {withdrawnGroups.length === 1
+                ? "denne komiteen"
+                : "disse komiteene"}{" "}
+              slettet for godt — verken du eller komiteen kan hente den tilbake.
+            </p>
+            <p>
+              Vi sender en beskjed til de opptaksansvarlige om at du har trukket
+              søknaden din. Beskjeden er anonym.
+            </p>
+            <p>
+              Søknadene dine til de andre komiteene beholdes, og du blir
+              fortsatt kalt inn til intervju.
+            </p>
+          </div>
+        </ConfirmDialog>
       )}
       {submitError && (
         <div

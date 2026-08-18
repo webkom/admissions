@@ -65,7 +65,17 @@ Cypress.Commands.add("login", (username) => {
             next: "/",
           },
         }).then((loginResponse) => {
-          expect(loginResponse.status).to.eq(302);
+          // Django re-renders the login form with 200 when credentials are
+          // rejected, so a bare status assertion reads "expected 200 to equal
+          // 302" and says nothing about the cause. In practice the cause is
+          // almost always that .cypress-fixture-credentials.json belongs to a
+          // database that has since been recreated.
+          expect(
+            loginResponse.status,
+            `Cypress could not log in as "${credentials.username}". The fixture ` +
+              `credentials do not match the database — run \`make cypress_fixtures\` ` +
+              `against the database the dev server is using, then retry`,
+          ).to.eq(302);
         });
       });
     },

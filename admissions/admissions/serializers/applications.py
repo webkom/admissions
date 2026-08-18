@@ -35,7 +35,7 @@ from admissions.admissions.models import (
     UserApplication,
 )
 from admissions.admissions.serializers.groups import ShortGroupApplicationSerializer
-from admissions.utils.email import send_message
+from admissions.utils.email import MESSAGE_KIND_WITHDRAWN, send_message
 
 log = get_logger()
 
@@ -379,7 +379,15 @@ class ApplicationCreateUpdateSerializer(serializers.HyperlinkedModelSerializer):
             )
             recruiters = [recruiter.user.email for recruiter in group_recruiters]
             try:
-                send_message(admission.title, group.name, recruiters)
+                # A partial untick, not a full withdrawal: `applications` is
+                # allow_empty=False, so the applicant provably still has an
+                # active application elsewhere in this admission.
+                send_message(
+                    admission.title,
+                    group.name,
+                    recruiters,
+                    kind=MESSAGE_KIND_WITHDRAWN,
+                )
             except Exception:
                 log.exception("withdrawal_notification_failed", group=group.name)
 

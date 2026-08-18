@@ -28,7 +28,11 @@ export const useDeleteMyApplicationMutation = (slug: string) => {
       ),
     onSuccess: () => {
       if (areSensitiveAdmissionCacheWritesBlocked(slug)) return;
-      queryClient.invalidateQueries({
+      // Returned so React Query awaits it before the component's own
+      // onSuccess. Otherwise drafts are cleared while myApplication is still
+      // undefined, and enableReinitialize rebuilds the form empty — the
+      // applicant watches their text vanish until the refetch lands.
+      return queryClient.invalidateQueries({
         queryKey: applicationQueryKey,
       });
     },
@@ -73,7 +77,7 @@ export const useCreateApplicationMutation = (admissionSlug: string) => {
       ),
     onSuccess: () => {
       if (areSensitiveAdmissionCacheWritesBlocked(admissionSlug)) return;
-      queryClient.invalidateQueries({
+      return queryClient.invalidateQueries({
         queryKey: applicationQueryKey,
       });
     },

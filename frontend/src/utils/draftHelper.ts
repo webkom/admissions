@@ -2,7 +2,6 @@ enum KeyType {
   applicationText,
   priorityText,
   selectedGroups,
-  isEditingApplication,
   phoneNumber,
   groupAnswers,
   draftUpdatedAt,
@@ -97,9 +96,13 @@ const saveObject = (
     value = "";
   }
   try {
-    draftStore().setItem(storageKey(key), JSON.stringify(value));
-    // Stamped on every content write so a draft can be compared for recency
-    // against the submitted application's updated_at.
+    const serialized = JSON.stringify(value);
+    // Writing back an unchanged value must not stamp a new timestamp. Every
+    // debounced autosave fires once on mount (useDebouncedState seeds
+    // synchronously), so without this the app reports unsaved changes purely
+    // for having loaded. Any future autosave gets the same protection.
+    if (draftStore().getItem(storageKey(key)) === serialized) return;
+    draftStore().setItem(storageKey(key), serialized);
     if (key !== KeyType.draftUpdatedAt) {
       draftStore().setItem(
         storageKey(KeyType.draftUpdatedAt),
@@ -179,8 +182,21 @@ export const getGroupAnswersDraft = (): GroupAnswersDraft =>
 export const saveSelectedGroupsDraft = (selectedGroups: SelectedGroupsDraft) =>
   saveObject(KeyType.selectedGroups, selectedGroups);
 
-export const getSelectedGroupsDraft = (scope?: string): SelectedGroupsDraft =>
-  getParsedJson(KeyType.selectedGroups, "", scope ?? draftScope);
+export const getSelectedGroupsDraft = (
+  scope?: string,
+): SelectedGroupsDraft | null => {
+  const stored = getParsedJson(KeyType.selectedGroups, "", scope ?? draftScope);
+  // null distinguishes "no draft was ever written" from "the applicant
+  // deliberately unticked everything", which the caller must not conflate.
+  // A corrupted entry degrades to null rather than crashing a consumer that
+  // calls Object.values on it.
+  if (!stored || typeof stored !== "object" || Array.isArray(stored)) {
+    return null;
+  }
+  const entries = Object.entries(stored as Record<string, unknown>);
+  if (entries.some(([, value]) => typeof value !== "boolean")) return null;
+  return Object.fromEntries(entries) as SelectedGroupsDraft;
+};
 
 export const savePhoneNumberDraft = (phoneNumber: string) =>
   saveObject(KeyType.phoneNumber, phoneNumber);
@@ -221,9 +237,3 @@ export const getSavedPhoneNumber = (userId: string, defaultValue = "") => {
     return defaultValue;
   }
 };
-
-export const saveIsEditingDraft = (newValue: boolean) =>
-  saveObject(KeyType.isEditingApplication, newValue);
-
-export const getIsEditingDraft = (defaultValue: boolean | null = null) =>
-  getParsedJson(KeyType.isEditingApplication, defaultValue);

@@ -1,12 +1,17 @@
-import React, { Suspense, useEffect, useLayoutEffect, useState } from "react";
-import { Route, Routes, useParams } from "react-router-dom";
+import React, {
+  Suspense,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
+import { Navigate, Route, Routes, useParams } from "react-router-dom";
 import styled from "styled-components";
 
 import {
   createDraftAdmissionScope,
-  getIsEditingDraft,
   getSelectedGroupsDraft,
-  saveIsEditingDraft,
   saveSubmittedPhoneNumber,
   saveSelectedGroupsDraft,
   setDraftAdmissionScope,
@@ -37,8 +42,8 @@ const ApplicationPortal = () => {
   const userId = djangoData.user.id ?? "";
   const draftScope = createDraftAdmissionScope(admissionSlug ?? "", userId);
 
-  const [selectedGroups, setSelectedGroups] = useState<SelectedGroups>(() =>
-    getSelectedGroupsDraft(draftScope),
+  const [selectedGroups, setSelectedGroups] = useState<SelectedGroups>(
+    () => getSelectedGroupsDraft(draftScope) ?? {},
   );
   const [isEditingApplication, setIsEditingApplication] = useState<
     boolean | null
@@ -47,12 +52,13 @@ const ApplicationPortal = () => {
 
   useLayoutEffect(() => {
     setDraftAdmissionScope(admissionSlug ?? "", userId);
-    setSelectedGroups(getSelectedGroupsDraft(draftScope));
+    setSelectedGroups(getSelectedGroupsDraft(draftScope) ?? {});
     setIsEditingApplication(null);
     setActiveDraftScope(draftScope);
   }, [admissionSlug, draftScope, userId]);
 
-  const { data: myApplication } = useMyApplication(admissionSlug ?? "");
+  const { data: myApplication, isFetched: applicationSettled } =
+    useMyApplication(admissionSlug ?? "");
   const {
     data: admission,
     isLoading,
@@ -65,60 +71,69 @@ const ApplicationPortal = () => {
   const isScheduleAccessFailure =
     isScheduleRoute && [401, 403].includes(error?.response?.status ?? 0);
 
+  const isSingleGroupAdmission = admission?.groups.length === 1;
+
+  // A one-committee admission has exactly one meaningful selection, so derive
+  // it rather than storing it. The previous effect re-wrote state on every
+  // admission refetch — and useAdmission polls every 15s — which discarded the
+  // rest of the map and raced the hydration below.
+  const effectiveSelectedGroups: SelectedGroups = useMemo(
+    () =>
+      isSingleGroupAdmission && admission
+        ? { [admission.groups[0].name.toLowerCase()]: true }
+        : selectedGroups,
+    [admission, isSingleGroupAdmission, selectedGroups],
+  );
+
   const toggleGroup = (name: string) => {
-    setSelectedGroups({
+    if (isSingleGroupAdmission) return;
+    const next = {
       ...selectedGroups,
       [name.toLowerCase()]: !selectedGroups[name.toLowerCase()],
-    });
+    };
+    setSelectedGroups(next);
+    // Written here rather than from an effect: storage should reflect a user
+    // action, never a render.
+    saveSelectedGroupsDraft(next);
   };
 
   const toggleIsEditing = () => {
-    setIsEditingApplication(!isEditingApplication);
+    setIsEditingApplication((editing) => !editing);
   };
-
-  const persistState = () => {
-    saveSelectedGroupsDraft(selectedGroups);
-  };
-
-  useEffect(() => {
-    if (isEditingApplication === null && myApplication !== undefined) {
-      setIsEditingApplication(!myApplication);
-    }
-  }, [isEditingApplication, myApplication]);
 
   useEffect(() => {
     if (!myApplication?.phone_number) return;
     saveSubmittedPhoneNumber(userId, myApplication.phone_number);
   }, [myApplication?.phone_number, userId]);
 
+  // Hydrate the selection from the server exactly once per application, and
+  // only when the applicant has no draft of their own. Keyed on pk because it
+  // is stable across polls, refetches and reconnects, but changes if the
+  // application is deleted and recreated — which is when re-hydrating is right.
+  const hydratedForPk = useRef<string | null>(null);
   useEffect(() => {
-    if (isLoading) return;
-    setIsEditingApplication(!myApplication || getIsEditingDraft());
-    if (!myApplication) return;
+    const pk = myApplication?.pk;
+    if (!pk || hydratedForPk.current === pk) return;
+    hydratedForPk.current = pk;
+    if (getSelectedGroupsDraft() !== null) return;
     setSelectedGroups(
-      myApplication.group_applications
-        ?.map((a) => a.group.name.toLowerCase())
-        .reduce((obj, a) => ({ ...obj, [a]: true }), {}),
+      (myApplication?.group_applications ?? []).reduce(
+        (obj, application) => ({
+          ...obj,
+          [application.group.name.toLowerCase()]: true,
+        }),
+        {} as SelectedGroups,
+      ),
     );
-  }, [isLoading, myApplication]);
+  }, [myApplication]);
 
+  // Resolve the landing view once, from this query's own settled state. The
+  // previous version gated on useAdmission's isLoading while reading
+  // useMyApplication's data, so whichever resolved first decided the view.
   useEffect(() => {
-    if (activeDraftScope !== draftScope) return;
-    persistState();
-  }, [activeDraftScope, draftScope, selectedGroups]);
-
-  useEffect(() => {
-    if (activeDraftScope !== draftScope) return;
-    persistState();
-    if (isEditingApplication === null) return;
-    saveIsEditingDraft(isEditingApplication);
-  }, [activeDraftScope, draftScope, isEditingApplication]);
-
-  useEffect(() => {
-    if (admission?.groups.length === 1) {
-      setSelectedGroups({ [admission.groups[0].name.toLowerCase()]: true });
-    }
-  }, [admission]);
+    if (isEditingApplication !== null || !applicationSettled) return;
+    setIsEditingApplication(!myApplication);
+  }, [applicationSettled, isEditingApplication, myApplication]);
 
   if (!isLoggedIn()) {
     return null;
@@ -152,10 +167,17 @@ const ApplicationPortal = () => {
               <Route
                 path="/velg-grupper"
                 element={
-                  <GroupsPage
-                    toggleGroup={toggleGroup}
-                    selectedGroups={selectedGroups}
-                  />
+                  // Nothing to choose in a one-committee admission, and the
+                  // page's only control would be inert. NavBar already hides
+                  // the link; this makes the hiding real for typed URLs.
+                  isSingleGroupAdmission ? (
+                    <Navigate to={`/${admissionSlug}/min-soknad`} replace />
+                  ) : (
+                    <GroupsPage
+                      toggleGroup={toggleGroup}
+                      selectedGroups={effectiveSelectedGroups}
+                    />
+                  )
                 }
               />
               <Route
@@ -170,7 +192,7 @@ const ApplicationPortal = () => {
                       admission={admission}
                       groups={groups ?? []}
                       myApplication={myApplication}
-                      selectedGroups={selectedGroups}
+                      selectedGroups={effectiveSelectedGroups}
                     />
                   )
                 }
