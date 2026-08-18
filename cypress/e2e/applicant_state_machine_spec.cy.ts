@@ -180,6 +180,36 @@ describe("applicant state machine", () => {
     cy.get('[data-cy="withdraw-confirm"]').should("not.contain.text", "Webkom");
   });
 
+  it("lets a first-time applicant toggle committees freely", () => {
+    // Nothing has been sent yet, so unticking withdraws nothing: no
+    // confirmation, no mail. The warning is only for committees the applicant
+    // has actually applied to.
+    stubAdmission({
+      ...admission,
+      userdata: { ...admission.userdata, has_application: false },
+    });
+    stubNoApplication();
+    cy.visit("/ui-test/velg-grupper");
+    cy.contains('[role="checkbox"]', "Webkom").click();
+    cy.contains('[role="checkbox"]', "Band").click();
+    cy.contains("button", "Gå videre").click();
+
+    // Change your mind about Band before ever submitting.
+    cy.get('button[title="Band"][aria-label="Fjern Band"]').click();
+    cy.get('input[name="phoneNumber"]').clear().type("99887766");
+    cy.get('textarea[name="groups.webkom"]').type("Teksten min");
+
+    cy.intercept("POST", "**/api/admission/ui-test/application/", {
+      statusCode: 201,
+      body: submittedApplication,
+    }).as("submit");
+    stubApplication();
+    cy.contains("button", "Send inn søknad").click();
+
+    cy.get('[data-cy="withdraw-confirm"]').should("not.exist");
+    cy.wait("@submit");
+  });
+
   it("keeps the typed text visible through a first submission", () => {
     stubAdmission({
       ...admission,
