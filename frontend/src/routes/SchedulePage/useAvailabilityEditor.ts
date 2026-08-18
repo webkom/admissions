@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { StatusToastState } from "src/components/StatusToast";
 import { useSaveInterviewAvailability } from "src/query/hooks";
+import type { Fadderbarn } from "./FadderbarnPicker";
 import type {
   ExperienceLevel,
   InterviewAvailabilityParticipant,
@@ -47,10 +48,17 @@ export const useAvailabilityEditor = ({
       currentParticipant.availability_generation;
   }, [currentParticipant, selectedSlots]);
 
-  const saveAvailability = async (slots: Set<string>) => {
+  const saveAvailability = async (
+    slots: Set<string>,
+    // Sent alongside the slots so declaring a fadderbarn is part of answering,
+    // not a second thing to remember. Omitted entirely when the caller has
+    // nothing to say, so a plain slot save never clears existing declarations.
+    fadderbarn?: Fadderbarn[],
+  ) => {
     try {
       const saved = await saveInterviewAvailability.mutateAsync({
         slots: Array.from(slots),
+        ...(fadderbarn ? { fadderbarn } : {}),
         expected_availability_generation:
           lastAppliedGenerationRef.current ?? undefined,
       });

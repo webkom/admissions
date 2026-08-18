@@ -308,4 +308,10 @@ export interface InterviewAvailabilityParticipant {
   affected_assignment_count: number;
   availability_generation: number;
   is_me: boolean;
+  /** Your own declarations only; always empty on other people's rows. */
+  fadderbarn?: {
+    lego_user_id: number;
+    username?: string;
+    full_name?: string;
+  }[];
 }

@@ -122,6 +122,39 @@ class FadderbarnDeclarationTestCase(APITestCase):
         self.assertNotIn(str(application.pk), body)
         self.assertNotIn(applicant.username, body)
 
+    def test_declarations_come_back_for_editing(self):
+        self.client.post(
+            self.url,
+            {"fadderbarn": [{"lego_user_id": 5001, "full_name": "Kari Nordmann"}]},
+            format="json",
+        )
+
+        res = self.client.get(self.url)
+
+        me = next(row for row in res.data if row["is_me"])
+        self.assertEqual(
+            [{"lego_user_id": 5001, "username": "", "full_name": "Kari Nordmann"}],
+            me["fadderbarn"],
+        )
+
+    def test_nobody_sees_another_interviewers_declarations(self):
+        """A declaration names people who may never have applied."""
+        other = LegoUser.objects.create(username="other", lego_id=4002)
+        Membership.objects.create(user=other, group=self.group, role="member")
+        self.client.post(
+            self.url,
+            {"fadderbarn": [{"lego_user_id": 5001, "full_name": "Kari Nordmann"}]},
+            format="json",
+        )
+
+        self.client.force_authenticate(user=other)
+        res = self.client.get(self.url)
+
+        self.assertNotIn("Kari Nordmann", str(res.data))
+        for row in res.data:
+            if not row["is_me"]:
+                self.assertEqual([], row.get("fadderbarn", []))
+
     def test_a_declaration_becomes_a_solver_conflict(self):
         _, application = self._applicant("kari", 5001)
         self.client.post(

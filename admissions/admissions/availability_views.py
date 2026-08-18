@@ -73,6 +73,19 @@ class InterviewAvailabilityView(SchedulerFeatureGateMixin, APIView):
             )
         )
 
+    @staticmethod
+    def _own_fadderbarn(admission, user):
+        return [
+            {
+                "lego_user_id": declaration.lego_user_id,
+                "username": declaration.username,
+                "full_name": declaration.full_name,
+            }
+            for declaration in FadderbarnDeclaration.objects.filter(
+                admission=admission, interviewer=user
+            ).order_by("full_name", "lego_user_id")
+        ]
+
     def _get_admission(self, admission_slug):
         try:
             return Admission.objects.get(slug=admission_slug)
@@ -328,6 +341,7 @@ class InterviewAvailabilityView(SchedulerFeatureGateMixin, APIView):
                 and reviewed_collection_ids == candidate_ids
             )
 
+        fadderbarn_by_interviewer = {user.id: self._own_fadderbarn(admission, user)}
         payload = [
             {
                 "user_id": person.id,
@@ -400,6 +414,13 @@ class InterviewAvailabilityView(SchedulerFeatureGateMixin, APIView):
                     else 0
                 ),
                 "is_me": person.id == user.id,
+                # Only ever your own: a declaration names people who may not
+                # have applied, so it is nobody else's business.
+                "fadderbarn": (
+                    fadderbarn_by_interviewer.get(person.id, [])
+                    if person.id == user.id
+                    else []
+                ),
             }
             for person in users
         ]
@@ -919,6 +940,11 @@ class InterviewAvailabilityView(SchedulerFeatureGateMixin, APIView):
                     else 0
                 ),
                 "is_me": target_user.id == user.id,
+                "fadderbarn": (
+                    self._own_fadderbarn(admission, target_user)
+                    if target_user.id == user.id
+                    else []
+                ),
             },
             status=status.HTTP_200_OK,
         )

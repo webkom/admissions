@@ -15,6 +15,7 @@ import type { DraftPersistenceStatus } from "src/components/Scheduling/Solver/us
 import { normalizeSolverOptions } from "src/components/Scheduling/Solver/solverHelpers";
 import AvailabilityHeatmap from "src/components/Scheduling/Calendar/AvailabilityHeatmap";
 import AvailabilityResponseRoster from "src/components/Scheduling/Calendar/AvailabilityResponseRoster";
+import FadderbarnPicker, { type Fadderbarn } from "./FadderbarnPicker";
 import AdminScheduleConfig from "src/components/Scheduling/Calendar/AdminScheduleConfig";
 import djangoData from "src/utils/djangoData";
 import cn from "src/utils/cn";
@@ -469,6 +470,9 @@ const LoadedScheduleView: React.FC<LoadedScheduleViewProps> = ({
   const [toast, setToast] = useState<StatusToastState | null>(null);
   const [solverEditRequestKey, setSolverEditRequestKey] = useState(0);
   const [conflictReviewRequestKey, setConflictReviewRequestKey] = useState(0);
+  const [fadderbarn, setFadderbarn] = useState<Fadderbarn[]>([]);
+  // Hydrate once per identity, so a poll cannot overwrite an in-progress edit.
+  const hydratedFadderbarnFor = React.useRef<string | null>(null);
   const [foundationWorkspace, setFoundationWorkspace] =
     useState<FoundationWorkspace>("framework");
   const foundationWorkspaceChosen = React.useRef(false);
@@ -646,6 +650,16 @@ const LoadedScheduleView: React.FC<LoadedScheduleViewProps> = ({
   };
   // The same conditions the review stage renders under, minus the request key.
   // Without this an action offering to open the review can resolve to nothing.
+  // Load existing declarations once per identity. Keyed on user_id rather than
+  // the object, because the availability payload changes on every poll and a
+  // refetch mid-edit must not overwrite what someone is typing.
+  React.useEffect(() => {
+    const userId = myAvailabilityParticipant?.user_id;
+    if (!userId || hydratedFadderbarnFor.current === userId) return;
+    hydratedFadderbarnFor.current = userId;
+    setFadderbarn(myAvailabilityParticipant?.fadderbarn ?? []);
+  }, [myAvailabilityParticipant]);
+
   const conflictReviewReachable = Boolean(
     savedSchedule?.conflict_review_open && myAvailabilityParticipant,
   );
@@ -790,7 +804,14 @@ const LoadedScheduleView: React.FC<LoadedScheduleViewProps> = ({
                   chunkBreakMinutes={chunkBreakMinutes}
                   dayStartMinute={dayStartMinute}
                   dayEndMinute={dayEndMinute}
-                  onSave={saveAvailability}
+                  onSave={(slots) => saveAvailability(slots, fadderbarn)}
+                  extraSection={
+                    <FadderbarnPicker
+                      admissionSlug={admissionSlug ?? ""}
+                      value={fadderbarn}
+                      onChange={setFadderbarn}
+                    />
+                  }
                   participation={myAvailabilityParticipant?.participation}
                   affectedAssignmentCount={
                     myAvailabilityParticipant?.affected_assignment_count ?? 0

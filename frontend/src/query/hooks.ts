@@ -274,6 +274,12 @@ export const useSaveInterviewAvailability = (slug: string) => {
       conflict_collection_revision?: string;
       experience_level?: ExperienceLevel;
       expected_availability_generation?: number;
+      /** Full replacement of this interviewer's declarations. */
+      fadderbarn?: {
+        lego_user_id: number;
+        username?: string;
+        full_name?: string;
+      }[];
     }
   >({
     ...sensitiveAdmissionMutationOptions(slug),
@@ -319,3 +325,31 @@ export const useManageGroups = () => {
     queryKey: ["/manage/group/"],
   });
 };
+
+export interface DirectoryMember {
+  lego_user_id: number;
+  username: string;
+  full_name: string;
+  profile_picture: string;
+}
+
+/**
+ * Looks members up in LEGO through admissions, on the signed-in user's own
+ * authority. Disabled below the server's minimum query length so a debounced
+ * field does not fire a request per keystroke.
+ */
+export const useMemberSearch = (slug: string, query: string) =>
+  useQuery<DirectoryMember[], AxiosError>({
+    queryKey: [`/admin/admission/${slug}/member-search/`, query],
+    queryFn: () =>
+      apiClient
+        .get<
+          DirectoryMember[]
+        >(`/admin/admission/${slug}/member-search/?q=${encodeURIComponent(query)}`)
+        .then((response) => response.data),
+    enabled: Boolean(slug) && query.trim().length >= 2,
+    retry: false,
+    staleTime: 60000,
+    gcTime: 0,
+    meta: { sensitive: true },
+  });

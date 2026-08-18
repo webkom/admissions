@@ -121,3 +121,5 @@ class InterviewAvailabilityParticipantSerializer(serializers.Serializer):
     affected_assignment_count = serializers.IntegerField(min_value=0, default=0)
     availability_generation = serializers.IntegerField(min_value=1, default=1)
     is_me = serializers.BooleanField()
+    # Present only on your own row; always empty for everyone else's.
+    fadderbarn = FadderbarnDeclarationSerializer(many=True, required=False)

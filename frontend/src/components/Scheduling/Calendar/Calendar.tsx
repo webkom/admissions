@@ -43,6 +43,9 @@ interface TimeSchedulerProps {
   onRejoin?: () => Promise<void>;
   stage?: string;
   foundationNav?: React.ReactNode;
+  /** Rendered under the grid, above the save button, so it is answered in the
+   *  same action as the availability itself. */
+  extraSection?: React.ReactNode;
 }
 
 const TimeScheduler: React.FC<TimeSchedulerProps> = ({
@@ -63,6 +66,7 @@ const TimeScheduler: React.FC<TimeSchedulerProps> = ({
   onRejoin,
   stage,
   foundationNav,
+  extraSection,
 }) => {
   const [internalSelectedSlots, setInternalSelectedSlots] = React.useState<
     Set<string>
@@ -278,6 +282,11 @@ const TimeScheduler: React.FC<TimeSchedulerProps> = ({
             },
           }}
         />
+        {extraSection && (
+          <div className="mt-4 border-t border-border-soft pt-4">
+            {extraSection}
+          </div>
+        )}
       </SchedulePanelBody>
 
       <SchedulePanelFooter className="sticky bottom-0 z-20 bg-surface-base">
