@@ -26,6 +26,7 @@ from admissions.admissions.scheduler_feature import SchedulerFeatureGateMixin
 from admissions.admissions.scheduling_utils import (
     get_eligible_interviewer_ids,
     get_interviewer_participation,
+    conflict_review_scope,
     get_proposed_candidate_ids_by_interviewer,
     user_has_interview_availability,
 )
@@ -156,10 +157,10 @@ class InterviewCandidatesView(SchedulerFeatureGateMixin, APIView):
             if conflict_collection_open:
                 applications = applications.filter(pk__in=collection_candidate_ids)
             elif conflict_review_open:
+                # The names shown must match the list they are asked to
+                # confirm, or a swap partner appears as an unknown candidate.
                 applications = applications.filter(
-                    pk__in=get_proposed_candidate_ids_by_interviewer(saved).get(
-                        str(user.id), set()
-                    )
+                    pk__in=conflict_review_scope(saved, user.id)
                 )
             else:
                 applications = applications.filter(

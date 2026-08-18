@@ -17,6 +17,7 @@ from admissions.admissions.authentication import SessionAuthentication
 from admissions.admissions.models import (
     Admission,
     ConflictReviewAuditEvent,
+    ConflictReviewList,
     FadderbarnDeclaration,
     InterviewAvailability,
     LegoUser,
@@ -29,6 +30,7 @@ from admissions.admissions.schedule_windows import enabled_windows_to_slots
 from admissions.admissions.scheduler_feature import SchedulerFeatureGateMixin
 from admissions.admissions.scheduling_utils import (
     availability_submission_is_current,
+    conflict_review_scope,
     canonicalize_slot_keys,
     get_eligible_interviewer_ids,
     get_interviewer_participation,
@@ -72,6 +74,10 @@ class InterviewAvailabilityView(SchedulerFeatureGateMixin, APIView):
                 if isinstance(member, dict)
             )
         )
+
+    @staticmethod
+    def _review_scope(saved_schedule, user_id):
+        return conflict_review_scope(saved_schedule, user_id)
 
     @staticmethod
     def _own_fadderbarn(admission, user):
@@ -169,9 +175,7 @@ class InterviewAvailabilityView(SchedulerFeatureGateMixin, APIView):
                 user,
             )
         if self._conflict_review_is_open_for_user(admission, saved_schedule, user):
-            return get_proposed_candidate_ids_by_interviewer(saved_schedule).get(
-                str(user.id), set()
-            )
+            return self._review_scope(saved_schedule, user.id)
         visible_groups = get_user_candidate_visible_groups(
             admission,
             saved_schedule,
@@ -258,12 +262,7 @@ class InterviewAvailabilityView(SchedulerFeatureGateMixin, APIView):
             proposed_candidate_ids_map
             if is_admin
             else (
-                {
-                    str(user.id): proposed_candidate_ids_map.get(
-                        str(user.id),
-                        set(),
-                    )
-                }
+                {str(user.id): self._review_scope(saved_schedule, user.id)}
                 if requester_review_scope_open
                 else {}
             )
@@ -669,11 +668,8 @@ class InterviewAvailabilityView(SchedulerFeatureGateMixin, APIView):
                 and saved_schedule is not None
                 and saved_schedule.conflict_review_open
             ):
-                conflict_replace_scope = get_proposed_candidate_ids_by_interviewer(
-                    saved_schedule
-                ).get(
-                    str(target_user.id),
-                    set(),
+                conflict_replace_scope = self._review_scope(
+                    saved_schedule, target_user.id
                 )
             elif conflict_replace_scope is None and (is_admin or is_recruiter):
                 # Admins and recruiters set inhabilitet deliberately, and their

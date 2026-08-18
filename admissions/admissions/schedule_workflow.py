@@ -13,6 +13,7 @@ from admissions.admissions.admission_access import (
 from admissions.admissions.models import (
     Admission,
     ConflictReviewAuditEvent,
+    ConflictReviewList,
     InterviewAvailability,
     SavedSchedule,
     ScheduleDeviationApproval,
@@ -43,6 +44,7 @@ from admissions.admissions.schedule_windows import (
     slots_to_enabled_windows,
 )
 from admissions.admissions.scheduling_utils import (
+    build_conflict_review_lists,
     canonicalize_slot_keys,
     get_conflict_review_readiness,
     get_interviewer_participation,
@@ -1164,7 +1166,43 @@ def _persist_schedule(
                 state=state,
             )
 
+        _refresh_conflict_review_lists(
+            saved,
+            existing is None or existing.schedule != schedule,
+        )
+
     return saved
+
+
+def _refresh_conflict_review_lists(saved, schedule_changed):
+    """Re-snapshot who reviews whom, once per draft.
+
+    Only on an actual schedule change: regenerating on every save would hand
+    interviewers a different list between reading it and confirming it, which
+    is precisely what a snapshot exists to prevent.
+    """
+
+    if not schedule_changed:
+        return
+
+    ConflictReviewList.objects.filter(saved_schedule=saved).delete()
+    if not saved.schedule:
+        return
+
+    revision = uuid.uuid4()
+    ConflictReviewList.objects.bulk_create(
+        [
+            ConflictReviewList(
+                saved_schedule=saved,
+                revision=revision,
+                interviewer_id=interviewer_id,
+                own_candidate_ids=entry["own_candidate_ids"],
+                swap_candidate_ids=entry["swap_candidate_ids"],
+                decoys=entry["decoys"],
+            )
+            for interviewer_id, entry in build_conflict_review_lists(saved).items()
+        ]
+    )
 
 
 @transaction.atomic

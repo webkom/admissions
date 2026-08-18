@@ -170,6 +170,14 @@ def get_conflict_review_readiness(admission, saved_schedule=None, schedule=None)
     for interviewer_id, proposed_candidate_ids in proposed_by_interviewer.items():
         if not proposed_candidate_ids:
             continue
+        # Confirmation must cover everything they were shown, not just their
+        # own panel: an unreviewed swap partner is exactly the pair a repair
+        # would move onto them.
+        if saved_schedule is not None:
+            proposed_candidate_ids = (
+                conflict_review_scope(saved_schedule, interviewer_id)
+                or proposed_candidate_ids
+            )
         participant = participants.get(interviewer_id)
         required_participant_ids.append(
             participant.user_id if participant is not None else interviewer_id
@@ -201,6 +209,135 @@ def get_conflict_review_readiness(admission, saved_schedule=None, schedule=None)
         "is_complete": bool(required_participant_ids)
         and not incomplete_participant_ids,
     }
+
+
+def conflict_review_scope(saved_schedule, user_id):
+    """The candidate ids one interviewer is asked to check.
+
+    Single definition on purpose: the names shown, the payload, the writable
+    scope and the completeness check must all agree, or an interviewer is asked
+    to confirm a list they were never shown.
+
+    Falls back to the proposed pairs when no snapshot exists, so a plan saved
+    before review lists existed still has a working review.
+    """
+
+    from admissions.admissions.models import ConflictReviewList
+
+    row = (
+        ConflictReviewList.objects.filter(
+            saved_schedule=saved_schedule, interviewer_id=user_id
+        )
+        .order_by("-created_at")
+        .first()
+    )
+    if row is None:
+        return set(
+            get_proposed_candidate_ids_by_interviewer(saved_schedule).get(
+                str(user_id), set()
+            )
+        )
+    return set(row.review_candidate_ids)
+
+
+def build_conflict_review_lists(saved_schedule, swap_size=5):
+    """Per-interviewer review lists: their own candidates plus swap partners.
+
+    The swap set is not padding. Its purpose is that if a repair moves a
+    candidate onto this interviewer's panel, that pair was already reviewed —
+    otherwise the repaired plan contains an unchecked pairing. So candidates are
+    only eligible if the interviewer is actually free at their time, and are
+    ranked by how likely a repair is to touch them.
+
+    Deliberately not ranked by committee: which committee someone applied to is
+    exactly what the candidate-visibility rules exist to protect.
+    """
+
+    proposed = get_proposed_candidate_ids_by_interviewer(saved_schedule)
+    if not proposed:
+        return {}
+
+    schedule = saved_schedule.schedule or []
+    time_by_candidate = {}
+    panel_by_candidate = {}
+    for assignment in schedule:
+        if not isinstance(assignment, dict):
+            continue
+        candidate_id = assignment.get("candidate_id")
+        if candidate_id is None:
+            continue
+        time_by_candidate[str(candidate_id)] = assignment.get("time")
+        panel_by_candidate[str(candidate_id)] = {
+            str(member.get("id"))
+            for member in assignment.get("panel") or []
+            if isinstance(member, dict) and member.get("id") is not None
+        }
+
+    availability = {
+        str(row.user_id): encode_slot_keys_for(row, saved_schedule)
+        for row in InterviewAvailability.objects.filter(
+            admission_id=saved_schedule.admission_id
+        )
+    }
+
+    lists = {}
+    for interviewer_id, own_ids in proposed.items():
+        own = {str(value) for value in own_ids}
+        own_times = {time_by_candidate.get(candidate_id) for candidate_id in own} - {
+            None
+        }
+        free_slots = availability.get(interviewer_id, set())
+
+        candidates = []
+        for candidate_id, slot in time_by_candidate.items():
+            if candidate_id in own or slot is None:
+                continue
+            # Hard filter: a candidate at a time this interviewer cannot work
+            # is not a swap partner, whatever else recommends them.
+            if free_slots and slot not in free_slots:
+                continue
+            shares_panel = bool(
+                panel_by_candidate.get(candidate_id, set())
+                & {
+                    member
+                    for cid in own
+                    for member in panel_by_candidate.get(cid, set())
+                }
+                - {interviewer_id}
+            )
+            same_day = any(
+                own_time is not None and own_time // (24 * 60) == slot // (24 * 60)
+                for own_time in own_times
+            )
+            # Lower sorts first: same day, then panels a minimum-change repair
+            # would actually touch.
+            candidates.append(
+                ((0 if same_day else 1, 0 if shares_panel else 1, slot), candidate_id)
+            )
+
+        candidates.sort()
+        swap = [candidate_id for _, candidate_id in candidates[:swap_size]]
+        lists[interviewer_id] = {
+            "own_candidate_ids": sorted(own),
+            "swap_candidate_ids": swap,
+            # Filled once a real first-year roster exists to draw from.
+            # Synthesised names would pad the count without providing cover.
+            "decoys": [],
+        }
+    return lists
+
+
+def encode_slot_keys_for(availability_row, saved_schedule):
+    """This interviewer's submitted slots as absolute solver minutes."""
+    from admissions.admissions.schedule_validation import encode_slot_keys
+
+    start_date = saved_schedule.start_date
+    # An unsaved instance can still hold whatever was assigned to it, and a
+    # date arithmetic TypeError deep in the solver path is a poor way to find
+    # that out.
+    if isinstance(start_date, str):
+        start_date = datetime.strptime(start_date, "%Y-%m-%d").date()
+    return encode_slot_keys(availability_row.slots or [], start_date)
 
 
 def get_declared_conflict_candidate_ids(admission):

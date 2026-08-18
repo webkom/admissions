@@ -683,3 +683,58 @@ class FadderbarnDeclaration(models.Model):
 
     def __str__(self):
         return f"{self.interviewer} is fadder for {self.full_name or self.lego_user_id}"
+
+
+class ConflictReviewList(models.Model):
+    """The candidates one interviewer is asked to check for inhabilitet.
+
+    Snapshotted rather than derived per request so the list is identical across
+    the GET, the POST, the completeness check and the audit log. A list that
+    shifts between reads cannot be attested to.
+
+    It is deliberately wider than the interviewer's own panel: it also carries
+    candidates a repair could plausibly move onto their panel, so a repaired
+    plan only ever contains pairs that were actually reviewed. Padding the list
+    with people who did not apply is a further step that needs a real roster to
+    draw from; `decoys` exists for that and stays empty until then.
+    """
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    saved_schedule = models.ForeignKey(
+        "SavedSchedule",
+        related_name="conflict_review_lists",
+        on_delete=models.CASCADE,
+    )
+    # Shared by every row generated in one pass, so a stale attestation against
+    # an older draft is detectable.
+    revision = models.UUIDField()
+    interviewer = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        related_name="conflict_review_lists",
+        on_delete=models.CASCADE,
+    )
+    own_candidate_ids = models.JSONField(default=list, blank=True)
+    swap_candidate_ids = models.JSONField(default=list, blank=True)
+    decoys = models.JSONField(default=list, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["saved_schedule", "interviewer", "revision"],
+                name="unique_conflict_review_list_per_revision",
+            )
+        ]
+
+    @property
+    def review_candidate_ids(self):
+        """Everything this interviewer must check, real candidates only."""
+        return list(
+            dict.fromkeys(
+                [str(value) for value in self.own_candidate_ids or []]
+                + [str(value) for value in self.swap_candidate_ids or []]
+            )
+        )
+
+    def __str__(self):
+        return f"Review list for {self.interviewer} ({self.revision})"
