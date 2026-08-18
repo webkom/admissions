@@ -31,7 +31,6 @@ from admissions.admissions.interview_workflow import (
     InterviewStatusNotFound,
     update_interview_status,
 )
-from admissions.admissions.session_renewal import renew_session
 from admissions.admissions.models import (
     Admission,
     Group,
@@ -55,6 +54,7 @@ from admissions.admissions.serializers import (
     ManageAdmissionSerializer,
     UserApplicationSerializer,
 )
+from admissions.admissions.session_renewal import renew_session
 from admissions.utils.email import send_message
 
 from .authentication import SessionAuthentication
@@ -113,6 +113,11 @@ class AppView(TemplateView):
                 self.request.session.get_expiry_date().isoformat()
                 if self.request.user.is_authenticated
                 else ""
+            ),
+            "SCHEDULER_ENABLED": getattr(
+                settings,
+                "ADMISSIONS_SCHEDULER_ENABLED",
+                True,
             ),
         }
         return context

@@ -4,8 +4,8 @@ from six.moves.urllib.parse import urljoin
 from social_core.backends.oauth import BaseOAuth2
 
 from admissions.admissions import constants
-from admissions.admissions.session_renewal import stamp_session_start
 from admissions.admissions.models import Group, LegoUser, Membership
+from admissions.admissions.session_renewal import stamp_session_start
 
 VALID_MEMBERSHIP_ROLES = frozenset(role for role, _label in constants.ROLES)
 

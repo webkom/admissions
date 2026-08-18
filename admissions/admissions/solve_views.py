@@ -30,6 +30,7 @@ from admissions.admissions.schedule_workflow import (
     ScheduleRevisionConflict,
     update_saved_schedule,
 )
+from admissions.admissions.scheduler_feature import SchedulerFeatureGateMixin
 from admissions.admissions.serializers import (
     ApplySolveJobSerializer,
     SavedScheduleSerializer,
@@ -45,7 +46,7 @@ from admissions.admissions.solve_jobs import (
 )
 
 
-class SolveScheduleView(APIView):
+class SolveScheduleView(SchedulerFeatureGateMixin, APIView):
     authentication_classes = [SessionAuthentication]
     permission_classes = [permissions.IsAuthenticated]
     throttle_classes = [ScopedRateThrottle]
@@ -167,7 +168,7 @@ class SolveScheduleView(APIView):
         return Response(SolveJobSerializer(job).data, status=status.HTTP_202_ACCEPTED)
 
 
-class SolveJobStatusView(APIView):
+class SolveJobStatusView(SchedulerFeatureGateMixin, APIView):
     authentication_classes = [SessionAuthentication]
     permission_classes = [permissions.IsAuthenticated]
     throttle_classes = [ScopedRateThrottle]
@@ -206,7 +207,7 @@ class SolveJobStatusView(APIView):
         return Response(SolveJobSerializer(job).data)
 
 
-class LatestSolveJobView(APIView):
+class LatestSolveJobView(SchedulerFeatureGateMixin, APIView):
     authentication_classes = [SessionAuthentication]
     permission_classes = [permissions.IsAuthenticated]
     throttle_classes = [ScopedRateThrottle]
@@ -241,7 +242,7 @@ class LatestSolveJobView(APIView):
         return Response(SolveJobSerializer(job).data)
 
 
-class SolveJobApplyView(APIView):
+class SolveJobApplyView(SchedulerFeatureGateMixin, APIView):
     authentication_classes = [SessionAuthentication]
     permission_classes = [permissions.IsAuthenticated]
     throttle_classes = [ScopedRateThrottle]

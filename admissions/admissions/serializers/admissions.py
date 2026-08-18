@@ -2,8 +2,9 @@
 
 from django.db import transaction
 from django.db.models import Q
-from pydantic import ValidationError as PydanticValidationError
 from rest_framework import serializers
+
+from pydantic import ValidationError as PydanticValidationError
 
 from admissions.admissions import constants
 from admissions.admissions.admission_access import (

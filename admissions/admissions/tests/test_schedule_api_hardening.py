@@ -1,5 +1,5 @@
-from datetime import timedelta
 import uuid
+from datetime import timedelta
 from unittest import mock
 
 from django.core.management import call_command

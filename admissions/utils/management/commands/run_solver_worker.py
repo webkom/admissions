@@ -1,7 +1,8 @@
 import time
 from datetime import timedelta
 
-from django.core.management.base import BaseCommand
+from django.conf import settings
+from django.core.management.base import BaseCommand, CommandError
 from django.db import (
     InterfaceError,
     OperationalError,
@@ -67,6 +68,14 @@ class Command(BaseCommand):
         )
 
     def handle(self, *args, **options):
+        # Refuse to run half-enabled: a worker claiming jobs while the web app
+        # rejects scheduler requests (or the reverse) is harder to diagnose than
+        # a service that exits with the reason.
+        if not getattr(settings, "ADMISSIONS_SCHEDULER_ENABLED", True):
+            raise CommandError(
+                "Intervjuplanleggeren er deaktivert. Sett "
+                "ADMISSIONS_SCHEDULER_ENABLED=true for både web og worker."
+            )
         poll_interval = options["poll_interval"]
         run_once = options["once"]
         log.info("solver_worker_started", poll_interval=poll_interval)

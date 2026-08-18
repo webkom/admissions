@@ -23,6 +23,11 @@ ADMISSIONS_SOLVER_ENGINE_VERSION = os.environ.get(
 ALLOW_DEVELOPMENT_INITIALIZATION = False
 ALLOW_CYPRESS_FIXTURES = False
 
+# Interview scheduling needs a solve worker deployed alongside the web app.
+# Development and tests run with it on; production opts in explicitly, so the
+# feature cannot go live before the worker exists.
+ADMISSIONS_SCHEDULER_ENABLED = True
+
 # GENERAL CONFIGURATION ======================================================
 BASE_PROJECT_DIR = environ.Path(__file__) - 3  # manage.py level
 ROOT_DIR = environ.Path(__file__) - 2  # (admissions/settings/base.py - 2 = admissions/)

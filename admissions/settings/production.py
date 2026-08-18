@@ -98,6 +98,14 @@ SESSION_COOKIE_SECURE = True
 CSRF_COOKIE_SECURE = True
 SESSION_COOKIE_HTTPONLY = True
 SESSION_COOKIE_SAMESITE = "Lax"
+# Fails closed: the scheduler stays off until this is set true on BOTH the web
+# service and the solve worker. Deploy the worker first, watch it idle cleanly,
+# then flip the flag — staging before production.
+ADMISSIONS_SCHEDULER_ENABLED = env.bool(
+    "ADMISSIONS_SCHEDULER_ENABLED",
+    default=False,
+)
+
 SESSION_COOKIE_AGE = env.int("SESSION_COOKIE_AGE", default=8 * 60 * 60)
 # Sessions slide forward on real activity (see admissions.session_renewal) but
 # never outlive this ceiling measured from login.

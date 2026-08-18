@@ -45,8 +45,8 @@ from admissions.admissions.serializers.schedule import (
     InterviewerSerializer,
     LockedAssignmentSerializer,
     LockedPanelMemberSerializer,
-    SaveScheduleInputSerializer,
     SavedScheduleSerializer,
+    SaveScheduleInputSerializer,
     ScheduleItemSerializer,
     SchedulePanelMemberSerializer,
     ScheduleRequestsSerializer,
@@ -57,7 +57,6 @@ from admissions.admissions.serializers.solver import (
     SolveOptionsSerializer,
 )
 from admissions.admissions.serializers.users import UserSerializer
-
 # ``send_message`` was previously imported at the top of ``serializers.py`` and
 # relied on by ``ApplicationCreateUpdateSerializer``. Tests patch
 # ``admissions.admissions.serializers.send_message``; expose it here so the

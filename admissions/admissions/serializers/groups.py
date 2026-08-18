@@ -11,7 +11,12 @@ from typing import Any, Optional
 from django.core.validators import MinLengthValidator
 from rest_framework import serializers
 
-from admissions.admissions.models import Admission, AdmissionGroup, Group, GroupApplication
+from admissions.admissions.models import (
+    Admission,
+    AdmissionGroup,
+    Group,
+    GroupApplication,
+)
 
 
 class GroupSerializer(serializers.HyperlinkedModelSerializer):
