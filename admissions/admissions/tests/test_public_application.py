@@ -12,6 +12,7 @@ from admissions.admissions.models import (
     GroupApplication,
     LegoUser,
     Membership,
+    SavedSchedule,
     UserApplication,
 )
 from admissions.admissions.serializers import AdmissionPublicSerializer
@@ -579,6 +580,72 @@ class CreateApplicationTestCase(APITestCase):
                 application__user=self.pleb_anna, group=self.koskom
             ).exists()
         )
+
+    def _publish_plan_for(self, application):
+        return SavedSchedule.objects.create(
+            admission=self.admission,
+            schedule=[
+                {
+                    "candidate_id": str(application.pk),
+                    "candidate": "Anna",
+                    "time": 540,
+                    "panel": [],
+                }
+            ],
+            start_date="2026-04-21",
+            session_duration=60,
+            is_distributed=True,
+            name_visibility=SavedSchedule.NAME_VISIBILITY_COMMITTEE,
+        )
+
+    def test_dropping_one_committee_flags_a_published_plan(self):
+        """Consistent with a full withdrawal, which already un-publishes.
+
+        The candidate keeps their interview, so the schedule rows stay; what
+        must not stand is a published plan whose panel was chosen for a
+        committee the applicant no longer applies to.
+        """
+        self.client.force_authenticate(user=self.pleb_anna)
+        url = reverse(
+            "userapplication-list", kwargs={"admission_slug": self.admission_slug}
+        )
+        self.client.post(url, self.application_data, format="json")
+        application = UserApplication.objects.get(user=self.pleb_anna)
+        saved = self._publish_plan_for(application)
+
+        self.client.post(
+            url,
+            {
+                "phone_number": "12345678",
+                "applications": {"webkom": "still want webkom"},
+            },
+            format="json",
+        )
+
+        saved.refresh_from_db()
+        self.assertFalse(saved.is_distributed)
+        self.assertEqual(SavedSchedule.NAME_VISIBILITY_HIDDEN, saved.name_visibility)
+        # The interview itself survives: they are still a candidate.
+        self.assertEqual(1, len(saved.schedule))
+
+    def test_full_withdrawal_still_removes_the_candidate(self):
+        """The cascade must not be short-circuited by the new receiver."""
+        self.client.force_authenticate(user=self.pleb_anna)
+        list_url = reverse(
+            "userapplication-list", kwargs={"admission_slug": self.admission_slug}
+        )
+        self.client.post(list_url, self.application_data, format="json")
+        application = UserApplication.objects.get(user=self.pleb_anna)
+        saved = self._publish_plan_for(application)
+
+        mine_url = reverse(
+            "userapplication-mine", kwargs={"admission_slug": self.admission_slug}
+        )
+        self.client.delete(mine_url)
+
+        saved.refresh_from_db()
+        self.assertFalse(saved.is_distributed)
+        self.assertEqual([], saved.schedule)
 
     def test_partial_withdrawal_uses_its_own_message(self):
         """Unticking one committee must not read as leaving the admission.

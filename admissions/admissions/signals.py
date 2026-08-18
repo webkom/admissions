@@ -1,10 +1,11 @@
 from django.db import transaction
-from django.db.models.signals import pre_delete
+from django.db.models.signals import post_delete, pre_delete
 from django.dispatch import receiver
 
 from admissions.admissions.admission_access import get_name_revealed_groups
 from admissions.admissions.models import (
     Admission,
+    GroupApplication,
     InterviewAvailability,
     NameVisibilityAuditEvent,
     SavedSchedule,
@@ -94,3 +95,54 @@ def purge_withdrawn_candidate(sender, instance, **kwargs):
             )
 
         SolveJob.objects.filter(admission_id=instance.admission_id).delete()
+
+
+@receiver(post_delete, sender=GroupApplication)
+def flag_schedule_after_partial_withdrawal(sender, instance, **kwargs):
+    """Un-publish the plan when an applicant drops one committee but stays.
+
+    Withdrawing a whole application already removes the candidate and
+    un-publishes the plan (purge_withdrawn_candidate above). Dropping a single
+    committee did nothing, so a published plan could keep an interview whose
+    panel was picked for a committee the applicant no longer applies to.
+
+    Unlike a full withdrawal this leaves `schedule` and `conflicts` alone: the
+    candidate still has an interview and still needs their slot, and a declared
+    inhabilitet is a scheduling constraint regardless of which committees remain.
+    """
+
+    with transaction.atomic():
+        # UserApplication.delete() cascades here too. That case belongs to
+        # purge_withdrawn_candidate, which has already run its pre_delete.
+        if not UserApplication.objects.filter(pk=instance.application_id).exists():
+            return
+
+        application = UserApplication.objects.get(pk=instance.application_id)
+        saved = (
+            SavedSchedule.objects.select_for_update()
+            .filter(admission_id=application.admission_id)
+            .first()
+        )
+        if saved is None or not saved.is_distributed:
+            return
+
+        admission = Admission.objects.get(pk=application.admission_id)
+        revealed_groups = list(get_name_revealed_groups(admission, saved))
+        saved.is_distributed = False
+        saved.name_visibility = SavedSchedule.NAME_VISIBILITY_HIDDEN
+        saved.save(update_fields=["is_distributed", "name_visibility", "updated_at"])
+        NameVisibilityAuditEvent.objects.bulk_create(
+            [
+                NameVisibilityAuditEvent(
+                    admission=admission,
+                    saved_schedule=saved,
+                    group=group,
+                    group_name=group.name,
+                    actor=None,
+                    actor_username=SYSTEM_ACTOR_USERNAME,
+                    action=NameVisibilityAuditEvent.ACTION_HIDDEN,
+                )
+                for group in revealed_groups
+            ]
+        )
+        saved.revealed_groups.clear()
