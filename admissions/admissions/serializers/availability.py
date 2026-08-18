@@ -6,6 +6,18 @@ from admissions.admissions import constants
 from admissions.admissions.models import InterviewAvailability
 
 
+class FadderbarnDeclarationSerializer(serializers.Serializer):
+    lego_user_id = serializers.IntegerField(min_value=1)
+    # Display snapshots. Nothing is ever matched on these, so they are
+    # optional and treated as untrusted labels.
+    username = serializers.CharField(
+        max_length=150, required=False, allow_blank=True, default=""
+    )
+    full_name = serializers.CharField(
+        max_length=255, required=False, allow_blank=True, default=""
+    )
+
+
 class SaveInterviewAvailabilitySerializer(serializers.Serializer):
     user_id = serializers.UUIDField(required=False)
     experience_level = serializers.ChoiceField(
@@ -38,6 +50,14 @@ class SaveInterviewAvailabilitySerializer(serializers.Serializer):
     conflict_collection_revision = serializers.UUIDField(required=False)
     expected_availability_generation = serializers.IntegerField(
         min_value=1, required=False
+    )
+    # Declared against LEGO identities, not candidates: at declaration time the
+    # interviewer must not learn who has applied. Sent as a full replacement of
+    # this interviewer's declarations for the admission.
+    fadderbarn = FadderbarnDeclarationSerializer(
+        many=True,
+        required=False,
+        max_length=100,
     )
 
     def validate(self, attrs):

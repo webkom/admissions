@@ -16,6 +16,7 @@ from admissions.admissions.schedule_windows import (
     parse_slot_key,
 )
 from admissions.admissions.scheduling_utils import (
+    get_declared_conflict_candidate_ids,
     get_eligible_interviewer_ids,
     get_interviewer_participation,
 )
@@ -321,6 +322,7 @@ def canonicalize_solver_payload(admission, saved, data, request_user):
         }
         for candidate_id in requested_candidate_ids
     ]
+    derived_conflicts = get_declared_conflict_candidate_ids(admission)
     interviewers = []
     for interviewer_id in requested_interviewer_ids:
         user = user_map.get(interviewer_id)
@@ -340,11 +342,23 @@ def canonicalize_solver_payload(admission, saved, data, request_user):
                         all_slots
                     )
                 ),
-                "biased": [
-                    str(value)
-                    for value in (availability.conflicts if availability else [])
-                    if str(value) in candidate_ids
-                ],
+                # Declared conflicts, plus the ones derived from fadderbarn
+                # declarations. Derived ones are unioned here rather than stored
+                # on InterviewAvailability: writing them there would echo back
+                # through the availability payload and tell the interviewer
+                # exactly which of their fadderbarn applied.
+                "biased": sorted(
+                    {
+                        str(value)
+                        for value in (availability.conflicts if availability else [])
+                        if str(value) in candidate_ids
+                    }
+                    | {
+                        str(value)
+                        for value in derived_conflicts.get(interviewer_id, set())
+                        if str(value) in candidate_ids
+                    }
+                ),
                 "experience_level": (
                     availability.experience_level
                     if availability is not None

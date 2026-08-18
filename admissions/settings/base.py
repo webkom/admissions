@@ -88,6 +88,10 @@ REST_FRAMEWORK = {
         "schedule": "120/minute",
         "availability": "120/minute",
         "candidate_read": "120/minute",
+        # Every miss is an outbound call to LEGO, so this is tighter than the
+        # other read scopes and has its own bucket: a typeahead must never be
+        # able to exhaust an applicant's ability to submit.
+        "member_search": "40/minute",
     },
 }
 

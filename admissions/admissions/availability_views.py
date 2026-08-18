@@ -1,4 +1,5 @@
 from django.db import transaction
+from django.utils import timezone
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
@@ -16,6 +17,7 @@ from admissions.admissions.authentication import SessionAuthentication
 from admissions.admissions.models import (
     Admission,
     ConflictReviewAuditEvent,
+    FadderbarnDeclaration,
     InterviewAvailability,
     LegoUser,
     Membership,
@@ -738,6 +740,29 @@ class InterviewAvailabilityView(SchedulerFeatureGateMixin, APIView):
                 )
                 next_reviewed.update(next_conflicts)
                 defaults["reviewed_candidate_ids"] = sorted(next_reviewed)
+        if "fadderbarn" in serializer.validated_data:
+            # Full replacement, and stamped so "none declared" is
+            # distinguishable from "not answered yet".
+            declared = serializer.validated_data["fadderbarn"]
+            FadderbarnDeclaration.objects.filter(
+                admission=admission, interviewer=target_user
+            ).delete()
+            FadderbarnDeclaration.objects.bulk_create(
+                [
+                    FadderbarnDeclaration(
+                        admission=admission,
+                        interviewer=target_user,
+                        lego_user_id=entry["lego_user_id"],
+                        username=entry.get("username", ""),
+                        full_name=entry.get("full_name", ""),
+                    )
+                    for entry in {
+                        entry["lego_user_id"]: entry for entry in declared
+                    }.values()
+                ]
+            )
+            defaults["fadderbarn_confirmed_at"] = timezone.now()
+
         saved, _ = InterviewAvailability.objects.update_or_create(
             admission=admission,
             user=target_user,

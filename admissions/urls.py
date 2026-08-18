@@ -19,6 +19,7 @@ from django.urls import include, path, re_path
 from rest_framework import routers
 
 from admissions.admissions.availability_views import InterviewAvailabilityView
+from admissions.admissions.directory_views import MemberSearchView
 from admissions.admissions.candidate_views import (
     InterviewCandidatesView,
     NameVisibilityAuditView,
@@ -99,6 +100,11 @@ urlpatterns = [
         "api/admin/admission/<slug:admission_slug>/candidates/",
         InterviewCandidatesView.as_view(),
         name="interview-candidates",
+    ),
+    path(
+        "api/admin/admission/<slug:admission_slug>/member-search/",
+        MemberSearchView.as_view(),
+        name="member-search",
     ),
     path(
         "api/admin/admission/<slug:admission_slug>/name-visibility-audit/",

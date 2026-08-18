@@ -2,6 +2,7 @@ from datetime import datetime
 
 from admissions.admissions import constants
 from admissions.admissions.models import (
+    FadderbarnDeclaration,
     InterviewAvailability,
     Membership,
     SavedSchedule,
@@ -200,6 +201,41 @@ def get_conflict_review_readiness(admission, saved_schedule=None, schedule=None)
         "is_complete": bool(required_participant_ids)
         and not incomplete_participant_ids,
     }
+
+
+def get_declared_conflict_candidate_ids(admission):
+    """Conflicts implied by fadderbarn declarations: {interviewer_id: {pk}}.
+
+    Resolved here, on demand, and never written back to the interviewer's own
+    availability row. Being someone's fadder is declared against a LEGO identity
+    before any candidate list exists, so persisting the match would leak which
+    of an interviewer's fadderbarn actually applied.
+    """
+
+    declarations = FadderbarnDeclaration.objects.filter(
+        admission=admission
+    ).values_list("interviewer_id", "lego_user_id")
+    if not declarations:
+        return {}
+
+    lego_ids = {lego_user_id for _, lego_user_id in declarations}
+    # Exact match on lego_id: it is unique and stable, unlike usernames.
+    application_by_lego_id = {
+        lego_id: str(pk)
+        for lego_id, pk in UserApplication.objects.filter(
+            admission=admission,
+            user__lego_id__in=lego_ids,
+        ).values_list("user__lego_id", "pk")
+    }
+    if not application_by_lego_id:
+        return {}
+
+    derived = {}
+    for interviewer_id, lego_user_id in declarations:
+        candidate_id = application_by_lego_id.get(lego_user_id)
+        if candidate_id is not None:
+            derived.setdefault(interviewer_id, set()).add(candidate_id)
+    return derived
 
 
 def canonicalize_slot_keys(keys):

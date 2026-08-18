@@ -539,6 +539,10 @@ class InterviewAvailability(models.Model):
         default=EXPERIENCE_UNKNOWN,
     )
     submitted_grid_generation = models.PositiveIntegerField(null=True, blank=True)
+    # Without this, "I have no fadderbarn" is indistinguishable from "I have not
+    # answered that question yet", and the workflow cannot tell whether an
+    # interviewer is finished.
+    fadderbarn_confirmed_at = models.DateTimeField(null=True, blank=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
@@ -634,3 +638,48 @@ class Membership(models.Model):
 
     def __str__(self):
         return f"{self.user} is in {self.group}"
+
+
+class FadderbarnDeclaration(models.Model):
+    """An interviewer's declared fadderbarn for one admission.
+
+    Kept in its own model rather than a field on InterviewAvailability because
+    it is keyed on a different identity space: a LEGO user id, not a
+    UserApplication pk. At declaration time the interviewer must not learn
+    whether the person has applied, so a fadderbarn cannot be stored as a
+    candidate reference. The match is resolved server-side, lazily, and never
+    reported back to the person who declared it.
+    """
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    admission = models.ForeignKey(
+        Admission,
+        related_name="fadderbarn_declarations",
+        on_delete=models.CASCADE,
+    )
+    interviewer = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        related_name="fadderbarn_declarations",
+        on_delete=models.CASCADE,
+    )
+    # LEGO's user id. Matched on exactly; usernames change upstream, and a
+    # mismatch here silently produces a missed or invented inhabilitet.
+    lego_user_id = models.IntegerField()
+    # Snapshots for display and audit only. Nothing matches on these.
+    username = models.CharField(max_length=150, blank=True, default="")
+    full_name = models.CharField(max_length=255, blank=True, default="")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["admission", "interviewer", "lego_user_id"],
+                name="unique_fadderbarn_per_interviewer",
+            )
+        ]
+        indexes = [
+            models.Index(fields=["admission", "lego_user_id"]),
+        ]
+
+    def __str__(self):
+        return f"{self.interviewer} is fadder for {self.full_name or self.lego_user_id}"

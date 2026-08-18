@@ -21,6 +21,10 @@ uwsgi = "^2.0.28"
 premailer = "^3.10.0"
 pydantic = "^2.10.6"
 ortools = "^9.15.6755"
+# Used directly by the LEGO member lookup. Previously present only as a
+# transitive dependency of social-auth-core, which would break silently if that
+# ever stopped pulling it in.
+requests = "^2.32.3"
 
 
 [tool.poetry.group.dev.dependencies]
