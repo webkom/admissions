@@ -4,6 +4,8 @@ export type DjangoConfig = {
   ENVIRONMENT?: string;
   API_URL: string;
   CSRF_COOKIE_NAME?: string;
+  /** ISO expiry of the current session; empty when signed out. */
+  SESSION_EXPIRES_AT?: string;
 };
 const defaultConfig: DjangoConfig = {
   API_URL: "/api",

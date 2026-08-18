@@ -98,7 +98,12 @@ SESSION_COOKIE_SECURE = True
 CSRF_COOKIE_SECURE = True
 SESSION_COOKIE_HTTPONLY = True
 SESSION_COOKIE_SAMESITE = "Lax"
-SESSION_COOKIE_AGE = env.int("SESSION_COOKIE_AGE", default=60 * 60)
+SESSION_COOKIE_AGE = env.int("SESSION_COOKIE_AGE", default=8 * 60 * 60)
+# Sessions slide forward on real activity (see admissions.session_renewal) but
+# never outlive this ceiling measured from login.
+ADMISSIONS_SESSION_MAX_LIFETIME = env.int(
+    "ADMISSIONS_SESSION_MAX_LIFETIME", default=12 * 60 * 60
+)
 SESSION_EXPIRE_AT_BROWSER_CLOSE = True
 CSRF_COOKIE_SAMESITE = "Lax"
 SECURE_CONTENT_TYPE_NOSNIFF = True

@@ -4,6 +4,7 @@ from six.moves.urllib.parse import urljoin
 from social_core.backends.oauth import BaseOAuth2
 
 from admissions.admissions import constants
+from admissions.admissions.session_renewal import stamp_session_start
 from admissions.admissions.models import Group, LegoUser, Membership
 
 VALID_MEMBERSHIP_ROLES = frozenset(role for role, _label in constants.ROLES)
@@ -204,6 +205,11 @@ def _parse_group_data(response):
 def update_custom_user_details(strategy, details, user=None, *args, **kwargs):
     if not user:
         return
+
+    # Anchors the renewal ceiling: sessions slide forward on real activity but
+    # never outlive this stamp by more than ADMISSIONS_SESSION_MAX_LIFETIME.
+    request = getattr(strategy, "request", None)
+    stamp_session_start(getattr(request, "session", None))
 
     response = kwargs.get("response")
     if not isinstance(response, dict):

@@ -31,6 +31,7 @@ from admissions.admissions.interview_workflow import (
     InterviewStatusNotFound,
     update_interview_status,
 )
+from admissions.admissions.session_renewal import renew_session
 from admissions.admissions.models import (
     Admission,
     Group,
@@ -105,6 +106,14 @@ class AppView(TemplateView):
             "ENVIRONMENT": getattr(settings, "ENVIRONMENT_NAME", ""),
             "API_URL": settings.API_URL,
             "CSRF_COOKIE_NAME": settings.CSRF_COOKIE_NAME,
+            # Lets the client warn before the session expires instead of
+            # discovering it when a submit fails. Server-authoritative, so it
+            # accounts for a session that began before this page load.
+            "SESSION_EXPIRES_AT": (
+                self.request.session.get_expiry_date().isoformat()
+                if self.request.user.is_authenticated
+                else ""
+            ),
         }
         return context
 
@@ -162,9 +171,20 @@ class PublicApplicationViewSet(mixins.CreateModelMixin, viewsets.GenericViewSet)
             return ApplicationCreateUpdateSerializer
         return UserApplicationSerializer
 
+    def get_throttles(self):
+        # throttle_scope is class-level, so the `mine` GET was spending the
+        # submit budget on every portal load.
+        if self.action == "create":
+            self.throttle_scope = "application_write"
+        else:
+            self.throttle_scope = "application_read"
+        return super().get_throttles()
+
     def perform_create(self, serializer):
         admission_slug = self.kwargs.get("admission_slug", None)
         serializer.save(user=self.request.user, admission_slug=admission_slug)
+        # A submit is proof of a present human, so slide the session window.
+        renew_session(self.request)
 
     @action(detail=False, methods=["GET", "DELETE"])
     def mine(self, request, admission_slug):

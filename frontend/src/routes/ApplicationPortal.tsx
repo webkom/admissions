@@ -14,6 +14,8 @@ import {
 import djangoData, { isLoggedIn } from "src/utils/djangoData";
 
 import { useAdmission, useMyApplication } from "src/query/hooks";
+import SessionExpiredNotice from "./ApplicationForm/SessionExpiredNotice";
+import SessionExpiryWarning from "src/components/SessionExpiryWarning";
 
 import LoadingBall from "src/components/LoadingBall";
 import NavBar from "src/components/NavBar";
@@ -136,12 +138,13 @@ const ApplicationPortal = () => {
         </PageWrapper>
       );
     }
-    return <div>Error: {error.message}</div>;
+    return <SessionExpiredNotice error={error} />;
   } else if (isLoading || activeDraftScope !== draftScope) {
     return <LoadingBall />;
   } else {
     return (
       <PageWrapper>
+        <SessionExpiryWarning />
         <NavBar isEditing={!!isEditingApplication} />
         <ContentContainer>
           <Suspense fallback={<LoadingBall />}>

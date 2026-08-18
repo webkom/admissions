@@ -7,6 +7,7 @@ import {
   useCreateApplicationMutation,
 } from "src/query/mutations";
 import { isSensitiveAuthorityChangedError } from "src/query/sensitiveAccess";
+import { getApiErrorMessage } from "src/utils/apiErrors";
 
 import {
   getApplictionTextDrafts,
@@ -220,6 +221,7 @@ const ApplicationForm: React.FC<ApplicationFormProps> = ({
   const [draftChoice, setDraftChoice] = React.useState<
     "undecided" | "restored" | "discarded"
   >("undecided");
+  const [submitError, setSubmitError] = React.useState("");
   const showDraftBanner =
     pendingDraftAt !== null && draftChoice === "undecided";
   const preferDraft = draftChoice === "restored";
@@ -258,6 +260,7 @@ const ApplicationForm: React.FC<ApplicationFormProps> = ({
         submission.applications[name] = values.groups[name];
         submission.group_answers[name] = values.groupAnswers[name] ?? {};
       });
+    setSubmitError("");
     createApplicationMutation.mutate(
       { newApplication: submission },
       {
@@ -269,8 +272,20 @@ const ApplicationForm: React.FC<ApplicationFormProps> = ({
         },
         onError: (error) => {
           setSubmitting(false);
-          if (isSensitiveAuthorityChangedError(error)) return;
-          alert("Det skjedde en feil.... ");
+          if (isSensitiveAuthorityChangedError(error)) {
+            // Writes stay latched off for the rest of this tab, so without a
+            // message the applicant can press submit forever in silence.
+            setSubmitError(
+              "Innloggingen har utløpt. Det du har skrevet er lagret — last siden på nytt og logg inn igjen for å sende inn.",
+            );
+            return;
+          }
+          setSubmitError(
+            getApiErrorMessage(
+              error,
+              "Kunne ikke sende inn søknaden. Prøv igjen.",
+            ),
+          );
         },
       },
     );
@@ -287,6 +302,15 @@ const ApplicationForm: React.FC<ApplicationFormProps> = ({
             setDraftChoice("discarded");
           }}
         />
+      )}
+      {submitError && (
+        <div
+          role="alert"
+          data-cy="submit-error"
+          className="mb-4 rounded-xl border border-danger-border bg-danger-bg px-4 py-3 text-ui font-semibold text-danger"
+        >
+          {submitError}
+        </div>
       )}
       <Formik<FormValues>
         initialValues={initialValues}
