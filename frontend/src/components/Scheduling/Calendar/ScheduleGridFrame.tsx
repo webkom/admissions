@@ -207,9 +207,9 @@ export const ScheduleSelectableBlockCell = React.forwardRef<
     const isVisuallyClosed = !isActive && !isPartial;
     const closedPatternClass = isVisuallyClosed
       ? distinguishUnavailable && !selectable
-        ? "[background-image:var(--pattern-unavailable)] [background-size:18px_18px] [background-position:0_0] opacity-35"
-        : "opacity-70 [background-size:14px_14px] [background-position:0_0] group-hover:opacity-100"
-      : "opacity-0 [background-position:8px_8px]";
+        ? "[background-image:var(--pattern-unavailable)] opacity-35"
+        : "opacity-70 group-hover:opacity-100"
+      : "opacity-0";
     const selectionState = !selectable
       ? "blocked"
       : isActive

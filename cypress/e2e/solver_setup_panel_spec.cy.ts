@@ -75,10 +75,7 @@ describe("streamlined solver setup", () => {
 
     openAdvancedSettings();
     cy.get("[data-cy=generation-workspace]").should("be.visible");
-    cy.get("[data-cy=generation-sample-preview]")
-      .should("be.visible")
-      .and("contain.text", "Illustrasjon med eksempeldata")
-      .and("contain.text", "ikke et beregnet planforslag");
+
     cy.viewport(1280, 900);
     cy.screenshot("scheduler-workflow/02-first-solve-settings", {
       capture: "viewport",

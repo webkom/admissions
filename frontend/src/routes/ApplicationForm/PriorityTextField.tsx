@@ -131,8 +131,8 @@ const PriorityTextField: React.FC<PriorityTextFieldProps> = ({
           <Optional>(valgfritt)</Optional>
         </LabelRow>
         <SectionHelp>
-          Ranger komiteene du har valgt. Bare du og sentrale opptaksansvarlige
-          kan se dette.
+          Ranger komiteene du har valgt. Bare du og opptakets leder og
+          nestleder kan se dette.
         </SectionHelp>
         {rankedGroups.length > 1 ? (
           <RankingList data-cy="priority-ranking-list">
@@ -214,7 +214,7 @@ const PriorityTextField: React.FC<PriorityTextFieldProps> = ({
       <CommentsSection>
         <LabelRow>
           <FieldLabel htmlFor="priorityText-comments">
-            Andre kommentarer
+            Andre kommentarer relatert til opptaket generelt
           </FieldLabel>
           <Optional>(valgfritt)</Optional>
         </LabelRow>
@@ -230,7 +230,7 @@ const PriorityTextField: React.FC<PriorityTextFieldProps> = ({
             )
           }
           onBlur={handleBlur}
-          placeholder="Alt annet du vil si til de sentrale opptaksansvarlige."
+          placeholder="Alt annet du vil si til leder/nestleder."
           minRows={4}
         />
       </CommentsSection>

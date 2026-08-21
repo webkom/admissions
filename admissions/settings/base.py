@@ -28,6 +28,22 @@ ALLOW_CYPRESS_FIXTURES = False
 # feature cannot go live before the worker exists.
 ADMISSIONS_SCHEDULER_ENABLED = True
 
+# Fadderbarn-derived conflicts, the per-interviewer swap review list, and the
+# repair-mode review-scope hard exclusion. A bad snapshot (e.g. a broken
+# ranking or a crash in build_conflict_review_lists) can be switched off
+# without a deploy - disabling it falls back to manually-declared conflicts
+# only, not to any older mechanism (there isn't one anymore).
+ADMISSIONS_CONFLICT_REVIEW_V2 = True
+
+# A narrow, read-only LEGO service credential (OAuth2 client-credentials
+# grant) used only by the sync_directory_entries management command, never
+# in the request path. Empty by default - the command logs why and exits
+# cleanly rather than failing when unset, so this is safe to leave
+# unconfigured indefinitely (decoys just stay empty). Provisioning the actual
+# credential in LEGO is an operational step outside this codebase.
+ADMISSIONS_ROSTER_SYNC_CLIENT_ID = ""
+ADMISSIONS_ROSTER_SYNC_CLIENT_SECRET = ""
+
 # GENERAL CONFIGURATION ======================================================
 BASE_PROJECT_DIR = environ.Path(__file__) - 3  # manage.py level
 ROOT_DIR = environ.Path(__file__) - 2  # (admissions/settings/base.py - 2 = admissions/)
@@ -93,6 +109,20 @@ REST_FRAMEWORK = {
         # able to exhaust an applicant's ability to submit.
         "member_search": "40/minute",
     },
+}
+
+# CACHE CONFIGURATION ===========================================================
+# uwsgi runs with `processes = 4` (admissions.ini), and DRF throttle counters
+# and the member-search cache both need to be visible across all of them - the
+# default LocMemCache is per-process, which silently multiplies every
+# configured rate limit by the worker count. Backed by Postgres rather than a
+# new service so this doesn't require provisioning new infrastructure; see
+# migration 0036_cache_table.
+CACHES = {
+    "default": {
+        "BACKEND": "django.core.cache.backends.db.DatabaseCache",
+        "LOCATION": "django_cache",
+    }
 }
 
 # TEMPLATE CONFIGURATION =======================================================

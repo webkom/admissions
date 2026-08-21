@@ -371,25 +371,39 @@ class ApplicationCreateUpdateSerializer(serializers.HyperlinkedModelSerializer):
                     },
                 )
 
-        # Notify recruiters of groups the applicant withdrew from. Best effort:
-        # a mail outage must never roll back or 500 the application write.
-        for group in removed_groups:
-            group_recruiters = Membership.objects.filter(
-                Q(role=constants.RECRUITING) | Q(role=constants.LEADER),
-                group=group.pk,
-            )
-            recruiters = [recruiter.user.email for recruiter in group_recruiters]
-            try:
-                # A partial untick, not a full withdrawal: `applications` is
-                # allow_empty=False, so the applicant provably still has an
-                # active application elsewhere in this admission.
-                send_message(
-                    admission.title,
-                    group.name,
-                    recruiters,
-                    kind=MESSAGE_KIND_WITHDRAWN,
+            # Notify recruiters of groups the applicant withdrew from, but
+            # only once the removal has actually committed - queued here
+            # instead of after the `with` block so a later rollback (e.g. an
+            # outer transaction added around this call in the future) can't
+            # leave a recruiter told about a withdrawal that never happened.
+            # Best effort: a mail outage must never roll back or 500 the
+            # application write.
+            for group in removed_groups:
+                group_recruiters = Membership.objects.filter(
+                    Q(role=constants.RECRUITING) | Q(role=constants.LEADER),
+                    group=group.pk,
                 )
-            except Exception:
-                log.exception("withdrawal_notification_failed", group=group.name)
+                recruiters = [
+                    recruiter.user.email for recruiter in group_recruiters
+                ]
+
+                def notify(group=group, recruiters=recruiters):
+                    try:
+                        # A partial untick, not a full withdrawal:
+                        # `applications` is allow_empty=False, so the
+                        # applicant provably still has an active application
+                        # elsewhere in this admission.
+                        send_message(
+                            admission.title,
+                            group.name,
+                            recruiters,
+                            kind=MESSAGE_KIND_WITHDRAWN,
+                        )
+                    except Exception:
+                        log.exception(
+                            "withdrawal_notification_failed", group=group.name
+                        )
+
+                transaction.on_commit(notify)
 
         return user_application

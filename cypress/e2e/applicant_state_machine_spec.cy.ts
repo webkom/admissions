@@ -165,6 +165,38 @@ describe("applicant state machine", () => {
     cy.get('[data-cy="unsaved-draft-banner"]').should("not.exist");
   });
 
+  it("keeps a discarded draft discarded through a reload", () => {
+    // updated_at deliberately far in the past: the draft's timestamp (stamped
+    // with the real clock when this test types) must always read as newer.
+    const staleApplication = {
+      ...submittedApplication,
+      updated_at: "2000-01-01T10:00:00Z",
+    };
+    stubAdmission();
+    stubApplication(staleApplication);
+    cy.visit("/ui-test/min-soknad");
+    cy.wait("@myApplication");
+
+    cy.contains("button", "Endre søknad").click();
+    cy.get('textarea[name="groups.webkom"]')
+      .clear()
+      .type("En helt annen tekst enn den innsendte.");
+    // Let the debounced autosave (500ms) persist the draft before reloading.
+    cy.wait(600);
+
+    cy.reload();
+    cy.wait("@myApplication");
+    cy.contains("button", "Endre søknad").click();
+    cy.get('[data-cy="unsaved-draft-banner"]').should("be.visible");
+    cy.get('[data-cy="discard-draft"]').click();
+    cy.get('[data-cy="unsaved-draft-banner"]').should("not.exist");
+
+    cy.reload();
+    cy.wait("@myApplication");
+    cy.contains("button", "Endre søknad").click();
+    cy.get('[data-cy="unsaved-draft-banner"]').should("not.exist");
+  });
+
   it("warns before a submit that withdraws a committee", () => {
     stubAdmission();
     stubApplication();
@@ -178,6 +210,26 @@ describe("applicant state machine", () => {
     cy.get('[data-cy="withdraw-confirm"]').should("be.visible");
     cy.get('[data-cy="withdraw-confirm"]').should("contain.text", "Band");
     cy.get('[data-cy="withdraw-confirm"]').should("not.contain.text", "Webkom");
+  });
+
+  it("disables submit until the application text is written", () => {
+    // validateOnMount was missing, so isValid read true (Formik hadn't run
+    // validation yet) even with an empty required textarea - the button
+    // looked clickable but submitting did nothing.
+    stubAdmission({
+      ...admission,
+      userdata: { ...admission.userdata, has_application: false },
+    });
+    stubNoApplication();
+    cy.visit("/ui-test/velg-grupper");
+    cy.contains('[role="checkbox"]', "Webkom").click();
+    cy.contains("button", "Gå videre").click();
+
+    cy.get('input[name="phoneNumber"]').clear().type("99887766");
+    cy.contains("button", "Send inn søknad").should("be.disabled");
+
+    cy.get('textarea[name="groups.webkom"]').type("Teksten min");
+    cy.contains("button", "Send inn søknad").should("not.be.disabled");
   });
 
   it("lets a first-time applicant toggle committees freely", () => {

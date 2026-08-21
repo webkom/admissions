@@ -181,7 +181,16 @@ export const useScheduleParticipants = ({
           dates,
           sessionDuration,
         ),
-        biased: participant.conflicts,
+        // derived_conflicts is admin-only (empty otherwise) - merged here so
+        // publicationReadiness can't read "ready" while canonicalize_schedule
+        // silently rejects the publish over a fadderbarn pairing nobody
+        // explicitly ticked.
+        biased: Array.from(
+          new Set([
+            ...participant.conflicts,
+            ...(participant.derived_conflicts ?? []),
+          ]),
+        ),
         has_submitted: participant.has_submitted,
         participation: participant.participation,
         affected_assignment_count: participant.affected_assignment_count,

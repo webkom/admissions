@@ -75,6 +75,18 @@ Sentry.init({
           }
         : undefined,
     }));
+    // Everything else is dropped by default - these are the only tag keys
+    // known never to carry applicant/candidate data, so they're let through
+    // instead of scrubbed. Keep in sync with utils/sentry.py's backend
+    // allowlist.
+    const allowedTagKeys = ["api.status", "api.method", "api.route"];
+    const tags = event.tags
+      ? Object.fromEntries(
+          Object.entries(event.tags).filter(([key]) =>
+            allowedTagKeys.includes(key),
+          ),
+        )
+      : undefined;
     return {
       event_id: event.event_id,
       timestamp: event.timestamp,
@@ -82,6 +94,8 @@ Sentry.init({
       level: event.level,
       release: event.release,
       environment: event.environment,
+      transaction: event.transaction,
+      tags: tags && Object.keys(tags).length > 0 ? tags : undefined,
       exception: exceptionValues ? { values: exceptionValues } : undefined,
     };
   },

@@ -54,7 +54,7 @@ class MemberSearchView(SchedulerFeatureGateMixin, APIView):
             return Response([])
 
         try:
-            return Response(search_members(user, query))
+            return Response(search_members(user, query, request=request))
         except DirectoryAuthenticationRequired:
             # Never a silent empty list: an interviewer who sees no results
             # concludes their fadderbarn is not in Abakus and gives up.

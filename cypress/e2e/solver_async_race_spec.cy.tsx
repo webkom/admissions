@@ -95,6 +95,7 @@ const savedSchedule = (candidate: string): SavedSchedule => ({
   solver_options: DEFAULT_SOLVER_OPTIONS,
   deviation_review: null,
   is_distributed: false,
+  distributed_through: null,
   conflict_review_open: false,
   name_visibility: "hidden",
   updated_at: "revision-2",

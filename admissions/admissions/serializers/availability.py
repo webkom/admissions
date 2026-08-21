@@ -42,12 +42,6 @@ class SaveInterviewAvailabilitySerializer(serializers.Serializer):
     reviewed_candidate_ids = serializers.ListField(
         child=serializers.CharField(), required=False, max_length=500
     )
-    conflict_collection_reviewed_candidate_ids = serializers.ListField(
-        child=serializers.CharField(),
-        required=False,
-        max_length=500,
-    )
-    conflict_collection_revision = serializers.UUIDField(required=False)
     expected_availability_generation = serializers.IntegerField(
         min_value=1, required=False
     )
@@ -65,7 +59,6 @@ class SaveInterviewAvailabilitySerializer(serializers.Serializer):
             "slots",
             "conflicts",
             "reviewed_candidate_ids",
-            "conflict_collection_reviewed_candidate_ids",
         ):
             values = attrs.get(field)
             if values is not None and len(values) != len(set(values)):
@@ -97,21 +90,18 @@ class InterviewAvailabilityParticipantSerializer(serializers.Serializer):
     )
     slots = serializers.ListField(child=serializers.CharField(), default=list)
     conflicts = serializers.ListField(child=serializers.CharField(), default=list)
+    # Admin-only, never on non-admin responses: implied by a fadderbarn
+    # declaration matching an applicant, so showing it to the declaring
+    # interviewer would tell them exactly which of their fadderbarn applied.
+    derived_conflicts = serializers.ListField(
+        child=serializers.CharField(), default=list
+    )
     reviewed_candidate_ids = serializers.ListField(
         child=serializers.CharField(), default=list
     )
     proposed_candidate_ids = serializers.ListField(
         child=serializers.CharField(), default=list
     )
-    conflict_collection_candidate_ids = serializers.ListField(
-        child=serializers.CharField(),
-        default=list,
-    )
-    conflict_collection_revision = serializers.UUIDField(
-        allow_null=True,
-        default=None,
-    )
-    conflict_collection_complete = serializers.BooleanField(default=False)
     conflict_review_complete = serializers.BooleanField(default=False)
     has_submitted = serializers.BooleanField()
     participation = serializers.ChoiceField(

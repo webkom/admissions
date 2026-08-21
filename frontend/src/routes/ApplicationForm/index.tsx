@@ -214,8 +214,30 @@ const ApplicationForm: React.FC<ApplicationFormProps> = ({
   const [pendingDraftAt] = React.useState<string | null>(() => {
     const draftAt = getDraftUpdatedAt();
     if (!draftAt || !myApplication?.updated_at) return null;
-    return DateTime.fromISO(draftAt) >
-      DateTime.fromISO(myApplication.updated_at)
+    if (
+      DateTime.fromISO(draftAt) <= DateTime.fromISO(myApplication.updated_at)
+    ) {
+      return null;
+    }
+    // A newer draftUpdatedAt isn't proof of a real edit - several mount-time
+    // writers (autosave, group-answer editors) can stamp it without the
+    // content actually differing from what's already submitted. Only surface
+    // the banner when restoring the draft would change something.
+    const draftValues = generateInitialValues(
+      selectedGroups,
+      currentUserId,
+      admission,
+      myApplication,
+      true,
+    );
+    const submittedValues = generateInitialValues(
+      selectedGroups,
+      currentUserId,
+      admission,
+      myApplication,
+      false,
+    );
+    return JSON.stringify(draftValues) !== JSON.stringify(submittedValues)
       ? draftAt
       : null;
   });
@@ -368,15 +390,10 @@ const ApplicationForm: React.FC<ApplicationFormProps> = ({
               {withdrawnGroups.length === 1
                 ? "denne komiteen"
                 : "disse komiteene"}{" "}
-              slettet for godt — verken du eller komiteen kan hente den tilbake.
+              slettet for godt, og verken du eller komiteen kan hente den tilbake.
             </p>
             <p>
-              Vi sender en beskjed til de opptaksansvarlige om at du har trukket
-              søknaden din. Beskjeden er anonym.
-            </p>
-            <p>
-              Søknadene dine til de andre komiteene beholdes, og du blir
-              fortsatt kalt inn til intervju.
+              Søknadene dine til de andre komiteene beholdes.
             </p>
           </div>
         </ConfirmDialog>
@@ -393,6 +410,7 @@ const ApplicationForm: React.FC<ApplicationFormProps> = ({
       <Formik<FormValues>
         initialValues={initialValues}
         validateOnChange={true}
+        validateOnMount={true}
         enableReinitialize={true}
         validationSchema={validationSchema(selectedGroups, admission)}
         onSubmit={onSubmit}

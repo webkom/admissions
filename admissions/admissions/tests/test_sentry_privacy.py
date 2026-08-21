@@ -75,3 +75,38 @@ class SentryPrivacyTestCase(SimpleTestCase):
             self.assertNotIn(secret, serialized)
         self.assertIn("ValueError", serialized)
         self.assertIn("views.py", serialized)
+
+    def test_allowlisted_tags_and_transaction_survive(self):
+        event = {
+            "event_id": "safe-event-id",
+            "transaction": "GET /api/admin/admission/example/schedule/",
+            "tags": {
+                "api.status": 502,
+                "api.method": "GET",
+                "api.route": "/api/admin/admission/example/schedule/",
+                "candidate": "Candidate Name",
+            },
+        }
+
+        filtered = remove_sensitive_data(deepcopy(event), None)
+
+        self.assertEqual(
+            filtered["transaction"],
+            "GET /api/admin/admission/example/schedule/",
+        )
+        self.assertEqual(
+            filtered["tags"],
+            {
+                "api.status": 502,
+                "api.method": "GET",
+                "api.route": "/api/admin/admission/example/schedule/",
+            },
+        )
+
+    def test_unlisted_tags_and_missing_transaction_are_dropped(self):
+        event = {"event_id": "safe-event-id", "tags": {"candidate": "Candidate Name"}}
+
+        filtered = remove_sensitive_data(deepcopy(event), None)
+
+        self.assertNotIn("tags", filtered)
+        self.assertNotIn("transaction", filtered)

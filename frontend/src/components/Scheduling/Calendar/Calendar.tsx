@@ -335,7 +335,7 @@ const TimeScheduler: React.FC<TimeSchedulerProps> = ({
           )}
           {dirtySinceSave && (
             <span className="text-detail font-semibold text-text-muted">
-              Endringer klare til lagring
+              Ulagrede endringer
             </span>
           )}
           <SaveButton

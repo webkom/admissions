@@ -7,7 +7,6 @@ import type { AssignmentConflictSummary } from "../../frontend/src/components/Sc
 import type { RepairScenario } from "../../frontend/src/components/Scheduling/Solver/repairScenarios";
 import type { SolveResponse } from "../../frontend/src/components/Scheduling/Solver/solverHelpers";
 import { useScheduleDraft } from "../../frontend/src/components/Scheduling/Solver/useScheduleDraft";
-import ConflictCollectionPanel from "../../frontend/src/routes/SchedulePage/ConflictCollectionPanel";
 import ConflictReviewView from "../../frontend/src/routes/SchedulePage/ConflictReviewView";
 import type {
   Candidate,
@@ -124,71 +123,6 @@ const ConflictCorrectionHarness = () => {
       },
       savedReviewedCandidates,
     ),
-  );
-};
-
-const ConflictCollectionHarness = () => {
-  const [savedReviewedCandidates, setSavedReviewedCandidates] =
-    React.useState("");
-
-  return h(
-    React.Fragment,
-    null,
-    h(
-      ConflictCollectionPanel,
-      {
-        open: true,
-        participantCount: 2,
-        completedCount: 1,
-        candidateCount: 2,
-        saving: false,
-        onToggle: () => undefined,
-      },
-      h(ConflictReviewView, {
-        candidates,
-        currentParticipant: {
-          ...participant,
-          reviewed_candidate_ids: ["candidate-1"],
-          conflict_collection_candidate_ids: ["candidate-2"],
-          conflict_collection_revision: "collection-revision",
-          conflict_collection_complete: false,
-        },
-        scope: "collection",
-        onSaveReview: (reviewedCandidateIds) => {
-          setSavedReviewedCandidates(reviewedCandidateIds.join(","));
-          return Promise.resolve();
-        },
-      }),
-    ),
-    h(
-      "output",
-      { "data-cy": "collection-reviewed-candidates" },
-      savedReviewedCandidates,
-    ),
-  );
-};
-
-const EmptyConflictCollectionHarness = () => {
-  const [savedValue, setSavedValue] = React.useState("not-saved");
-  return h(
-    React.Fragment,
-    null,
-    h(ConflictReviewView, {
-      candidates: [],
-      currentParticipant: {
-        ...participant,
-        conflicts: [],
-        conflict_collection_candidate_ids: [],
-        conflict_collection_revision: "collection-revision",
-        conflict_collection_complete: false,
-      },
-      scope: "collection",
-      onSaveReview: (reviewedCandidateIds, conflictIds) => {
-        setSavedValue(`${reviewedCandidateIds.length}:${conflictIds.length}`);
-        return Promise.resolve();
-      },
-    }),
-    h("output", { "data-cy": "empty-collection-saved" }, savedValue),
   );
 };
 
@@ -498,57 +432,6 @@ describe("focused Planutkast interactions", () => {
     cy.get("[data-cy=conflict-candidate-candidate-1]").should("exist");
     cy.contains("Olav Hansen").should("not.exist");
     cy.contains("Har du en annen kjent inhabilitet?").should("not.exist");
-  });
-
-  it("uses the opened collection snapshot and requires every participant before closing", () => {
-    mountInPage(h(ConflictCollectionHarness));
-
-    cy.get("[data-cy=toggle-conflict-collection]")
-      .should("be.disabled")
-      .and("contain.text", "Fullfør og lukk navn");
-    cy.get("[data-cy=conflict-review-open]").click();
-    cy.get("[data-cy=conflict-candidate-candidate-2]").should("exist");
-    cy.get("[data-cy=conflict-candidate-candidate-1]").should("not.exist");
-    cy.get("[data-cy=conflict-submit]").click();
-    cy.get("[data-cy=collection-reviewed-candidates]").should(
-      "have.text",
-      "candidate-2",
-    );
-  });
-
-  it("lets a self-only participant confirm an empty candidate scope", () => {
-    mountInPage(h(EmptyConflictCollectionHarness));
-
-    cy.get("[data-cy=conflict-review]")
-      .should("contain.text", "Du har ingen andre kandidater å kontrollere")
-      .find("[data-cy=conflict-review-open]")
-      .click();
-    cy.get("[data-cy=conflict-submit]")
-      .should("contain.text", "Bekreft ingen inhabiliteter")
-      .click();
-    cy.get("[data-cy=empty-collection-saved]").should("have.text", "0:0");
-  });
-
-  it("lets an admin close a stale collection before reopening it", () => {
-    mountInPage(
-      h(ConflictCollectionPanel, {
-        open: true,
-        participantCount: 2,
-        completedCount: 0,
-        candidateCount: 3,
-        saving: false,
-        stale: true,
-        onToggle: () => undefined,
-      }),
-    );
-
-    cy.get("[data-cy=toggle-conflict-collection]")
-      .should("be.enabled")
-      .and("contain.text", "Lukk utdaterte navn");
-    cy.get("[data-cy=conflict-collection]").should(
-      "contain.text",
-      "Kontrollen må startes på nytt",
-    );
   });
 
   it("keeps the current draft unchanged until a repair preview is applied", () => {

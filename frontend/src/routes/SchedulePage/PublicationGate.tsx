@@ -19,6 +19,7 @@ import {
   actionButtonPrimary,
   sectionLabelClass,
 } from "src/components/Scheduling/ui";
+import { formatAccessibleDate } from "src/components/Scheduling/scheduleUtils";
 import { iconSizes, iconStrokeWidths } from "src/styles/designTokens";
 import type { NameVisibility, SavedSchedule } from "src/types";
 import cn from "src/utils/cn";
@@ -31,11 +32,13 @@ interface PublicationGateProps {
   planTransition: "publishing" | "unlocking" | null;
   planTransitionError: string;
   stage: PublicationStagePresentation;
+  dates: string[];
   onOpenDraft: () => void;
   onOpenOwnReview: () => void;
   onPublish: (
     visibility: NameVisibility,
     deviationApprovalFingerprint?: string,
+    distributedThrough?: string,
   ) => Promise<boolean>;
 }
 
@@ -82,6 +85,7 @@ const PublicationGate = ({
   planTransition,
   planTransitionError,
   stage,
+  dates,
   onOpenDraft,
   onOpenOwnReview,
   onPublish,
@@ -90,6 +94,14 @@ const PublicationGate = ({
     savedSchedule?.name_visibility ?? "hidden",
   );
   const [confirmOpen, setConfirmOpen] = useState(false);
+  const [publishScope, setPublishScope] = useState<"full" | "partial">(
+    "full",
+  );
+  const sortedDates = useMemo(() => [...dates].sort(), [dates]);
+  const [partialThroughDate, setPartialThroughDate] = useState<string>("");
+  const selectedThroughDate = sortedDates.includes(partialThroughDate)
+    ? partialThroughDate
+    : (sortedDates[0] ?? "");
   const deviationReview = savedSchedule?.deviation_review;
   const deviationApprovalPending = Boolean(
     deviationReview?.requires_approval && !deviationReview.approved,
@@ -136,6 +148,7 @@ const PublicationGate = ({
       deviationReview?.requires_approval
         ? deviationReview.deviation_fingerprint
         : undefined,
+      publishScope === "partial" ? selectedThroughDate : undefined,
     );
     if (published) setConfirmOpen(false);
   };
@@ -233,28 +246,74 @@ const PublicationGate = ({
               </ul>
             </section>
 
-            <aside className="rounded-xl bg-surface-subtle p-4">
-              <p className={sectionLabelClass}>
-                Kandidatnavn etter publisering
-              </p>
-              <SegmentedControl<NameVisibility>
-                aria-label="Synlighet for kandidatnavn ved publisering"
-                value={publishVisibility}
-                onChange={setPublishVisibility}
-                items={[
-                  { key: "hidden", label: "Skjult" },
-                  { key: "admin_only", label: "Ansvarlige" },
-                  { key: "committee", label: "Komiteen" },
-                ]}
-              />
-              <p className="m-0 mt-3 text-detail leading-relaxed text-text-muted">
-                {publishVisibility === "hidden"
-                  ? "Kandidatnavn forblir skjult etter publisering."
-                  : publishVisibility === "admin_only"
-                    ? "Bare opptaksansvarlige kan se kandidatnavnene."
-                    : "Alle med tilgang til intervjuplanen kan se kandidatnavnene."}
-              </p>
-            </aside>
+            <div className="grid gap-4">
+              <aside className="rounded-xl bg-surface-subtle p-4">
+                <p className={sectionLabelClass}>
+                  Kandidatnavn etter publisering
+                </p>
+                <SegmentedControl<NameVisibility>
+                  aria-label="Synlighet for kandidatnavn ved publisering"
+                  value={publishVisibility}
+                  onChange={setPublishVisibility}
+                  items={[
+                    { key: "hidden", label: "Skjult" },
+                    { key: "admin_only", label: "Ansvarlige" },
+                    { key: "committee", label: "Komiteen" },
+                  ]}
+                />
+                <p className="m-0 mt-3 text-detail leading-relaxed text-text-muted">
+                  {publishVisibility === "hidden"
+                    ? "Kandidatnavn forblir skjult etter publisering."
+                    : publishVisibility === "admin_only"
+                      ? "Bare opptaksansvarlige kan se kandidatnavnene."
+                      : "Alle med tilgang til intervjuplanen kan se kandidatnavnene."}
+                </p>
+              </aside>
+
+              {sortedDates.length > 1 && (
+                <aside className="rounded-xl bg-surface-subtle p-4">
+                  <p className={sectionLabelClass}>Publiseringsomfang</p>
+                  <SegmentedControl<"full" | "partial">
+                    aria-label="Hvor mye av planen som skal publiseres"
+                    value={publishScope}
+                    onChange={setPublishScope}
+                    items={[
+                      { key: "full", label: "Hele planen" },
+                      { key: "partial", label: "Til og med en dato" },
+                    ]}
+                  />
+                  {publishScope === "partial" && (
+                    <div className="mt-3">
+                      <label
+                        htmlFor="publish-through-date"
+                        className="m-0 block text-detail font-semibold text-text-primary"
+                      >
+                        Publiser til og med
+                      </label>
+                      <select
+                        id="publish-through-date"
+                        value={selectedThroughDate}
+                        onChange={(event) =>
+                          setPartialThroughDate(event.target.value)
+                        }
+                        className="mt-1 w-full rounded-md border border-border bg-surface-base px-2 py-1.5 text-ui text-text-primary"
+                      >
+                        {sortedDates.map((date) => (
+                          <option key={date} value={date}>
+                            {formatAccessibleDate(date)}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
+                  <p className="m-0 mt-3 text-detail leading-relaxed text-text-muted">
+                    {publishScope === "full"
+                      ? "Alle intervjuer i planen blir synlige med det samme."
+                      : "Intervjuer etter valgt dato holdes skjult for komiteen. Du kan utvide planen senere."}
+                  </p>
+                </aside>
+              )}
+            </div>
           </SchedulePanelBody>
           <SchedulePanelFooter className="sticky bottom-0 z-10 bg-surface-base">
             <div>
@@ -297,7 +356,9 @@ const PublicationGate = ({
                   >
                     {planTransition === "publishing"
                       ? "Publiserer…"
-                      : "Publiser intervjuplan"}
+                      : publishScope === "partial"
+                        ? `Publiser til og med ${formatAccessibleDate(selectedThroughDate)}`
+                        : "Publiser intervjuplan"}
                   </button>
                 </>
               ) : stage.primaryAction ? (
@@ -335,7 +396,9 @@ const PublicationGate = ({
           confirmLabel={
             planTransition === "publishing"
               ? "Publiserer…"
-              : "Publiser intervjuplan"
+              : publishScope === "partial"
+                ? `Publiser til og med ${formatAccessibleDate(selectedThroughDate)}`
+                : "Publiser intervjuplan"
           }
           onConfirm={confirmPublish}
           onClose={() => setConfirmOpen(false)}
@@ -343,7 +406,9 @@ const PublicationGate = ({
           tone={publishVisibility === "committee" ? "danger" : undefined}
         >
           <p className="m-0">
-            Planen blir synlig for komiteen.{" "}
+            {publishScope === "partial"
+              ? `Intervjuer til og med ${formatAccessibleDate(selectedThroughDate)} blir synlige for komiteen. Resten av planen holdes skjult inntil du utvider den.`
+              : "Hele planen blir synlig for komiteen."}{" "}
             {publishVisibility === "hidden"
               ? "Kandidatnavn forblir skjult."
               : publishVisibility === "admin_only"

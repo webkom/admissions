@@ -143,7 +143,7 @@ const FormStructure: React.FC<FormStructureProps> = ({
               <HelpText>
                 <Info aria-hidden="true" />
                 Ranger komiteene du har valgt med pilene under, og legg gjerne
-                ved kommentarer til de sentrale opptaksansvarlige.
+                ved kommentarer til opptakets leder og nestleder.
               </HelpText>
               <PriorityTextField
                 groups={groups}
@@ -241,7 +241,11 @@ const FormStructure: React.FC<FormStructureProps> = ({
                   : "Søknaden kan ses av komiteene du søker, sentrale opptaksansvarlige som koordinerer intervjuer, og leder av Abakus."}{" "}
               Opplysningene skal bare brukes til å gjennomføre opptaket.
             </SubmitInfo>
-            <SubmitInfo>Du kan når som helst trekke søknaden din.</SubmitInfo>
+            <SubmitInfo>
+              Du kan når som helst trekke deg fra en komité du har søkt til —
+              teksten slettes da permanent, og komiteen får beskjed anonymt.
+              Søknadene dine til andre komiteer påvirkes ikke.
+            </SubmitInfo>
           </div>
           {hasSelected && (
             <div>

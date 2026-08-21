@@ -105,6 +105,20 @@ ADMISSIONS_SCHEDULER_ENABLED = env.bool(
     "ADMISSIONS_SCHEDULER_ENABLED",
     default=False,
 )
+# Unlike the scheduler flag above, this isn't waiting on a coordinated
+# deploy - it's an emergency kill switch for the fadderbarn-derived-conflict
+# machinery, so it defaults on and only needs flipping if something breaks.
+ADMISSIONS_CONFLICT_REVIEW_V2 = env.bool(
+    "ADMISSIONS_CONFLICT_REVIEW_V2",
+    default=True,
+)
+# Left unset until ops provisions the service credential - see
+# sync_directory_entries. Defaults to "" like base.py rather than being
+# required, so a normal deploy without the credential still succeeds.
+ADMISSIONS_ROSTER_SYNC_CLIENT_ID = env("ADMISSIONS_ROSTER_SYNC_CLIENT_ID", default="")
+ADMISSIONS_ROSTER_SYNC_CLIENT_SECRET = env(
+    "ADMISSIONS_ROSTER_SYNC_CLIENT_SECRET", default=""
+)
 
 SESSION_COOKIE_AGE = env.int("SESSION_COOKIE_AGE", default=8 * 60 * 60)
 # Sessions slide forward on real activity (see admissions.session_renewal) but

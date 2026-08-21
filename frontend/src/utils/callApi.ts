@@ -35,6 +35,13 @@ apiClient.interceptors.response.use(
           "api.method",
           error.config?.method?.toUpperCase() ?? "UNKNOWN",
         );
+        // Path only, never the query string - query params can carry
+        // candidate/applicant ids.
+        const route = error.config?.url?.split("?")[0];
+        if (route) {
+          scope.setTag("api.route", route);
+          scope.setTransactionName(route);
+        }
         Sentry.captureException(
           new Error(
             status ? `API request failed (${status})` : "API request failed",

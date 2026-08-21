@@ -361,15 +361,6 @@ const SamplePlanPreview = ({
       aria-labelledby="generation-preview-heading"
     >
       <p className={sectionLabelClass}>Eksempel</p>
-      <h4
-        id="generation-preview-heading"
-        className="m-0 text-base font-semibold text-text-primary"
-      >
-        Slik kan oppsettet slå ut
-      </h4>
-      <p className="m-0 mt-1 text-detail leading-relaxed text-text-muted">
-        Illustrasjon med eksempeldata — ikke et beregnet planforslag.
-      </p>
 
       <div className="mt-4 overflow-hidden rounded-md border border-border-soft bg-surface-base">
         <table

@@ -51,6 +51,10 @@ class LegoOAuth2(BaseOAuth2):
         ("expires_in", "expires_in"),
         ("abakusGroups", "abakus_groups"),
         ("profilePicture", "profile_picture"),
+        # Without this, extra_data never carries a refresh_token, so
+        # UserSocialAuth.get_access_token() has nothing to refresh with and
+        # every token silently dies at LEGO's expiry. See lego_directory.py.
+        ("refresh_token", "refresh_token"),
     ]
 
     LEGO_GROUP_NAMES = [

@@ -25,6 +25,7 @@ from admissions.admissions.admission_access import (
     get_application_view_mode,
     get_representing_groups,
     user_is_admission_admin,
+    user_is_admission_leadership,
 )
 from admissions.admissions.interview_workflow import (
     InterviewStatusConflict,
@@ -366,10 +367,14 @@ class AdminApplicationViewSet(
         context = super().get_serializer_context()
         if self.request.user.is_anonymous:
             return context
-        _, _, view_mode = self.get_application_exposure()
+        admission, _, view_mode = self.get_application_exposure()
         context["application_view_mode"] = view_mode
-        context["include_priority_text"] = view_mode in (
-            APPLICATION_VIEW_MODE_ADMIN_FULL,
+        # Narrower than admin_full: a recruiting-role admin sees everything
+        # else in this mode, but this one field is for the admin group's
+        # actual leadership only.
+        context["include_priority_text"] = (
+            view_mode == APPLICATION_VIEW_MODE_ADMIN_FULL
+            and user_is_admission_leadership(admission, self.request.user)
         )
         return context
 

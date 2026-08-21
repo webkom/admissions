@@ -1,7 +1,6 @@
 import React from "react";
 import { Search, X } from "lucide-react";
 import { Chip } from "src/components/ui";
-import { keyboardFocusRingClass } from "src/components/Scheduling/ui";
 import { useMemberSearch, type DirectoryMember } from "src/query/hooks";
 import { iconSizes } from "src/styles/designTokens";
 import cn from "src/utils/cn";
@@ -23,14 +22,6 @@ interface FadderbarnPickerProps {
 const displayName = (member: Fadderbarn) =>
   member.full_name || member.username || `#${member.lego_user_id}`;
 
-/**
- * Lets an interviewer name the applicants they are a fadder for.
- *
- * Searching says nothing about who has applied — it is an Abakus member lookup,
- * and the matching against candidates happens server-side and is never reported
- * back. That is why this can safely sit next to the availability form, before
- * any candidate list exists.
- */
 const FadderbarnPicker: React.FC<FadderbarnPickerProps> = ({
   admissionSlug,
   value,
@@ -65,8 +56,6 @@ const FadderbarnPicker: React.FC<FadderbarnPickerProps> = ({
   const remove = (legoUserId: number) =>
     onChange(value.filter((member) => member.lego_user_id !== legoUserId));
 
-  // A search failure must never read as "not in Abakus", or people give up
-  // instead of retrying.
   const status = error?.response?.status;
   const searchError =
     status === 409
@@ -85,10 +74,10 @@ const FadderbarnPicker: React.FC<FadderbarnPickerProps> = ({
     >
       <div>
         <p className="m-0 text-ui font-semibold text-text-primary">
-          Har du fadderbarn som søker?
+          Har du fadderbarn?
         </p>
         <p className="m-0 mt-0.5 text-detail text-text-muted">
-          Legg dem til her, så slipper du å bli satt opp til å intervjue dem. Vi
+          Legg dem til her, så slipper du å bli satt opp til å intervjue dem (det gjør det lettere med inhabilitet). Vi
           sier aldri fra om noen av dem faktisk har søkt.
         </p>
       </div>
@@ -118,7 +107,9 @@ const FadderbarnPicker: React.FC<FadderbarnPickerProps> = ({
         <label htmlFor="fadderbarn-search" className="sr-only">
           Søk etter fadderbarn
         </label>
-        <div className="flex items-center gap-2 rounded-lg border border-border-muted bg-surface-base px-2.5 py-1.5">
+
+        {/* Focus ring applied to the wrapper container */}
+        <div className="flex items-center gap-2 rounded-lg border border-border-muted bg-surface-base px-2.5 py-1.5 transition-colors focus-within:border-brand-border focus-within:ring-2 focus-within:ring-brand-ring">
           <Search
             size={iconSizes.control}
             aria-hidden="true"
@@ -132,10 +123,7 @@ const FadderbarnPicker: React.FC<FadderbarnPickerProps> = ({
             onChange={(event) => setQuery(event.target.value)}
             placeholder="Søk etter navn i Abakus…"
             data-cy="fadderbarn-search"
-            className={cn(
-              "w-full bg-transparent text-ui outline-none",
-              keyboardFocusRingClass,
-            )}
+            className="w-full bg-transparent text-ui outline-none placeholder:text-text-disabled"
           />
         </div>
 
@@ -149,16 +137,17 @@ const FadderbarnPicker: React.FC<FadderbarnPickerProps> = ({
           </p>
         )}
 
+        {/* Results menu positioned absolutely over surrounding layout */}
         {!searchError && debouncedQuery.trim().length >= 2 && (
           <ul
             data-cy="fadderbarn-results"
-            className="m-0 mt-1 flex list-none flex-col gap-0.5 p-0"
+            className="absolute left-0 top-full z-30 m-0 mt-1 flex max-h-60 w-full list-none flex-col gap-0.5 overflow-y-auto rounded-lg border border-border-soft bg-surface-base p-1 shadow-lg"
           >
             {isFetching && suggestions.length === 0 && (
-              <li className="px-1 py-1 text-detail text-text-muted">Søker…</li>
+              <li className="px-2 py-1.5 text-detail text-text-muted">Søker…</li>
             )}
             {!isFetching && suggestions.length === 0 && (
-              <li className="px-1 py-1 text-detail text-text-muted">
+              <li className="px-2 py-1.5 text-detail text-text-muted">
                 Ingen treff.
               </li>
             )}
@@ -169,15 +158,12 @@ const FadderbarnPicker: React.FC<FadderbarnPickerProps> = ({
                   onClick={() => add(member)}
                   disabled={disabled}
                   data-cy={`fadderbarn-result-${member.lego_user_id}`}
-                  className={cn(
-                    "w-full rounded-md px-2 py-1 text-left text-ui hover:bg-surface-subtle",
-                    keyboardFocusRingClass,
-                  )}
+                  className="w-full rounded-md px-2 py-1.5 text-left text-ui transition-colors hover:bg-surface-subtle focus:bg-surface-subtle focus:outline-none"
                 >
                   {member.full_name || member.username}
                   {member.full_name && member.username && (
                     <span className="ml-1.5 text-detail text-text-muted">
-                      {member.username}
+                      ({member.username})
                     </span>
                   )}
                 </button>

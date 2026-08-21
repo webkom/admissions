@@ -56,6 +56,7 @@ const savedSchedule = (
   solver_options: DEFAULT_SOLVER_OPTIONS,
   deviation_review: null,
   is_distributed: isDistributed,
+  distributed_through: isDistributed ? "2026-07-28" : null,
   conflict_review_open: !isDistributed,
   name_visibility: nameVisibility,
   updated_at: isDistributed ? "revision-2" : "revision-1",
@@ -92,6 +93,31 @@ const TransitionHarness = ({
         }}
       >
         Publish
+      </button>
+      <button
+        type="button"
+        data-cy="publish-through-date"
+        onClick={async () => {
+          const published = await actions.publishSchedule(
+            "admin_only",
+            undefined,
+            "2026-07-28",
+          );
+          setOutcome(published ? "published" : "failed");
+        }}
+      >
+        Publish through date
+      </button>
+      <button
+        type="button"
+        data-cy="extend-distribution"
+        onClick={async () => {
+          const extended =
+            await actions.extendDistributedThrough("2026-07-29");
+          setOutcome(extended ? "published" : "failed");
+        }}
+      >
+        Extend
       </button>
     </div>
   );
@@ -338,6 +364,53 @@ describe("distributed plan transition reconciliation", () => {
       "Vent til de siste endringene",
     );
     cy.then(() => expect(publishRequests).to.equal(0));
+  });
+
+  it("sends distributed_through instead of is_distributed for a partial publish", () => {
+    const client = queryClient();
+    cy.intercept("POST", scheduleUrl, (request) => {
+      request.reply({
+        statusCode: 200,
+        body: {
+          ...savedSchedule(true, "admin_only"),
+          distributed_through: "2026-07-28",
+        },
+      });
+    }).as("partialPublish");
+
+    mountHarness(client);
+    cy.get('[data-cy="publish-through-date"]').click();
+
+    cy.wait("@partialPublish")
+      .its("request.body")
+      .should("deep.include", {
+        distributed_through: "2026-07-28",
+        name_visibility: "admin_only",
+      })
+      .and("not.have.property", "is_distributed");
+    cy.get('[data-cy="transition-outcome"]').should("have.text", "published");
+  });
+
+  it("extends the publication boundary without touching is_distributed", () => {
+    const client = queryClient();
+    cy.intercept("POST", scheduleUrl, (request) => {
+      request.reply({
+        statusCode: 200,
+        body: {
+          ...savedSchedule(true, "hidden"),
+          distributed_through: "2026-07-29",
+        },
+      });
+    }).as("extendPublish");
+
+    mountHarness(client);
+    cy.get('[data-cy="extend-distribution"]').click();
+
+    cy.wait("@extendPublish")
+      .its("request.body")
+      .should("deep.include", { distributed_through: "2026-07-29" })
+      .and("not.have.property", "is_distributed");
+    cy.get('[data-cy="transition-outcome"]').should("have.text", "published");
   });
 
   it("publishes only after the real autosave callback advances the revision", () => {

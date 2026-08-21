@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from "react";
 import { useParams } from "react-router-dom";
-import { EyeOff, FileDown, Search } from "lucide-react";
+import { EyeOff, FileDown, Info, Search } from "lucide-react";
 
 import { StyledButton } from "src/components/LinkButton";
 import LoadingBall from "src/components/LoadingBall";
@@ -199,6 +199,27 @@ const ViewApplications = () => {
           </HeaderControls>
         )}
       </Header>
+
+      {isCommitteeMinimal && (
+        <div
+          role="status"
+          data-cy="committee-scope-notice"
+          className="flex items-start gap-2 rounded-lg border border-border-soft bg-surface-subtle px-3 py-2 text-detail text-text-muted"
+        >
+          <Info
+            size={iconSizes.control}
+            aria-hidden="true"
+            className="mt-0.5 flex-none text-text-subtle"
+          />
+          <p className="m-0">
+            Dette opptaket har flere komiteer. Du ser bare søkere til{" "}
+            {admission.userdata.represented_groups.join(", ")} — de komiteene
+            du selv har en rolle i. Arbeid som gjelder hele opptaket
+            (planlegging, publisering) må gjøres av en admin uten
+            komitérolle i opptaket.
+          </p>
+        </div>
+      )}
 
       {showCandidates ? (
         <>

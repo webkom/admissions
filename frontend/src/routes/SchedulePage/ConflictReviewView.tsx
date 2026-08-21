@@ -38,7 +38,6 @@ interface ConflictReviewViewProps {
   reviewProgress?: ReviewProgress;
   showSummary?: boolean;
   onCloseStage?: () => void;
-  scope?: "draft" | "collection";
 }
 
 const serializeIds = (ids: Iterable<string>) => [...ids].sort().join("\n");
@@ -51,7 +50,6 @@ const ConflictReviewView: React.FC<ConflictReviewViewProps> = ({
   reviewProgress,
   showSummary = true,
   onCloseStage,
-  scope = "draft",
 }) => {
   const candidateById = useMemo(
     () =>
@@ -59,17 +57,8 @@ const ConflictReviewView: React.FC<ConflictReviewViewProps> = ({
     [candidates],
   );
   const reviewCandidateIds = useMemo(
-    () =>
-      new Set(
-        scope === "collection"
-          ? (currentParticipant?.conflict_collection_candidate_ids ?? [])
-          : (currentParticipant?.proposed_candidate_ids ?? []),
-      ),
-    [
-      currentParticipant?.conflict_collection_candidate_ids,
-      currentParticipant?.proposed_candidate_ids,
-      scope,
-    ],
+    () => new Set(currentParticipant?.proposed_candidate_ids ?? []),
+    [currentParticipant?.proposed_candidate_ids],
   );
   const scopedServerConflicts = useMemo(
     () =>
@@ -137,11 +126,7 @@ const ConflictReviewView: React.FC<ConflictReviewViewProps> = ({
         .sort((left, right) => left.name.localeCompare(right.name, "nb")),
     [candidateById, reviewCandidateIds],
   );
-  const reviewIsCurrent = Boolean(
-    scope === "collection"
-      ? currentParticipant?.conflict_collection_complete
-      : currentParticipant?.conflict_review_complete,
-  );
+  const reviewIsCurrent = Boolean(currentParticipant?.conflict_review_complete);
   const proposalNamesLoading =
     candidates === undefined ||
     reviewCandidates.length !== reviewCandidateIds.size;
@@ -184,10 +169,9 @@ const ConflictReviewView: React.FC<ConflictReviewViewProps> = ({
     }
     setIsSaving(true);
     try {
-      const reviewedCandidateIds =
-        scope === "collection"
-          ? new Set(reviewCandidateIds)
-          : new Set(currentParticipant.reviewed_candidate_ids);
+      const reviewedCandidateIds = new Set(
+        currentParticipant.reviewed_candidate_ids,
+      );
       reviewCandidateIds.forEach((candidateId) =>
         reviewedCandidateIds.add(candidateId),
       );
@@ -206,11 +190,7 @@ const ConflictReviewView: React.FC<ConflictReviewViewProps> = ({
     }
   };
 
-  if (
-    scope === "draft" &&
-    reviewCandidateIds.size === 0 &&
-    openRequestKey === 0
-  ) {
+  if (reviewCandidateIds.size === 0 && openRequestKey === 0) {
     return null;
   }
 
@@ -218,9 +198,7 @@ const ConflictReviewView: React.FC<ConflictReviewViewProps> = ({
     ? `${reviewProgress.complete} av ${reviewProgress.total} intervjuere har bekreftet`
     : reviewIsCurrent
       ? "Du har bekreftet kandidatkontrollen"
-      : scope === "collection" && reviewCandidateIds.size === 0
-        ? "Du har ingen andre kandidater å kontrollere"
-        : `${reviewCandidateIds.size} kandidater må kontrolleres`;
+      : `${reviewCandidateIds.size} kandidater må kontrolleres`;
 
   return (
     <div

@@ -42,7 +42,11 @@ const ToggleGroups: React.FC<ToggleGroupsProps> = ({
       <Title>Endre dine valg</Title>
       <Tooltip>
         Klikk på symbolene til {isRevy ? "gruppene" : "komiteene"} for å legge
-        til/fjerne dem fra søknaden.
+        til/fjerne dem fra søknaden. Hvis du fjerner en{" "}
+        {isRevy ? "gruppe" : "komité"} du allerede har sendt inn søknad til,
+        skjer det først når du sender inn på nytt — teksten slettes da
+        permanent for den {isRevy ? "gruppen" : "komiteen"}, og de får beskjed
+        anonymt om at du trakk deg.
       </Tooltip>
       <IconsWrapper>{ChooseGroupsItems}</IconsWrapper>
       <LinkToOverview to={`/${admissionSlug}/velg-grupper`}>

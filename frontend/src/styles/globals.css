@@ -282,8 +282,8 @@
   );
   --pattern-unavailable: repeating-linear-gradient(
     135deg,
-    var(--color-border-faint) 0 1px,
-    transparent 1px 6px
+    var(--color-on-dark-strong) 0 3px,
+    transparent 3px 7px
   );
   --shadow-panel: var(--shadow-sm);
   --shadow-panel-hover: var(--shadow-sm);
