@@ -30,8 +30,8 @@ from admissions.admissions.schedule_windows import enabled_windows_to_slots
 from admissions.admissions.scheduler_feature import SchedulerFeatureGateMixin
 from admissions.admissions.scheduling_utils import (
     availability_submission_is_current,
-    conflict_review_scope,
     canonicalize_slot_keys,
+    conflict_review_scope,
     get_eligible_interviewer_ids,
     get_interviewer_participation,
     get_proposed_candidate_ids_by_interviewer,

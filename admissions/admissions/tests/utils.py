@@ -48,8 +48,6 @@ def create_admission(
     public_deadline=None,
     closed_from=None,
 ):
-    global DEFAULT_ADMISSION_SLUG
-
     if created_by is None:
         created_by = LegoUser.objects.create(username="creator", lego_id=1)
 

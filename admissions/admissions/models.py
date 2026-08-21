@@ -1,9 +1,10 @@
 import uuid
+from datetime import date, timedelta
 
 from django.conf import settings
 from django.contrib.auth.models import AbstractUser
 from django.db import models
-from django.db.models import F, Q
+from django.db.models import ExpressionWrapper, F, Q
 from django.utils import timezone
 
 from admissions.admissions import constants
@@ -303,12 +304,27 @@ class SavedSchedule(models.Model):
     availability_generation = models.PositiveIntegerField(default=1)
     panel_size = models.PositiveSmallIntegerField(null=True, blank=True)
     solver_options = models.JSONField(null=True, blank=True)
-    is_distributed = models.BooleanField(default=False)
+    # null = nothing published. A date = rows on or before that day are
+    # published; the whole plan is the special case where this lands on (or
+    # past) the last scheduled day. Write here, never to is_distributed
+    # directly - it is a generated column and the database will reject a
+    # write to it. Application code must also never move this backwards -
+    # see schedule_workflow.py - a boundary can only ever move forward.
+    distributed_through = models.DateField(null=True, blank=True)
+    # A real, queryable database column (Postgres GENERATED ALWAYS AS ...
+    # STORED under the hood), not a Python property - every existing
+    # .filter(is_distributed=...)/.only(...)/.values(...) call keeps working
+    # unchanged. Kept only for that backward compatibility; new code should
+    # prefer distributed_through directly.
+    is_distributed = models.GeneratedField(
+        expression=ExpressionWrapper(
+            Q(distributed_through__isnull=False),
+            output_field=models.BooleanField(),
+        ),
+        output_field=models.BooleanField(),
+        db_persist=True,
+    )
     conflict_review_open = models.BooleanField(default=False)
-    conflict_collection_open = models.BooleanField(default=False)
-    conflict_collection_revision = models.UUIDField(null=True, blank=True)
-    conflict_collection_candidate_ids = models.JSONField(default=list, blank=True)
-    conflict_collection_participant_ids = models.JSONField(default=list, blank=True)
 
     NAME_VISIBILITY_HIDDEN = "hidden"
     NAME_VISIBILITY_ADMIN_ONLY = "admin_only"
@@ -330,6 +346,40 @@ class SavedSchedule(models.Model):
     )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+
+    def __init__(self, *args, **kwargs):
+        # Compatibility shim for the many existing callers (mostly test
+        # fixtures) built around the old plain-boolean field: is_distributed
+        # is a generated column now and the database rejects a direct write
+        # to it, so this translates a legacy is_distributed=True/False kwarg
+        # into distributed_through before it ever reaches the database.
+        # Application code should set distributed_through directly instead -
+        # see schedule_workflow.py's _resolve_schedule_state.
+        is_distributed = kwargs.pop("is_distributed", None)
+        super().__init__(*args, **kwargs)
+        if is_distributed is not None and "distributed_through" not in kwargs:
+            self.distributed_through = (
+                self._full_publish_boundary() if is_distributed else None
+            )
+
+    def _full_publish_boundary(self):
+        start_date = self.start_date
+        # Still a raw string here if a caller passed one - Django only
+        # normalizes DateField values on save()/full_clean(), and this shim
+        # runs during __init__, before either has happened.
+        if isinstance(start_date, str):
+            try:
+                start_date = date.fromisoformat(start_date)
+            except ValueError:
+                start_date = None
+        if start_date is None:
+            return timezone.now().date()
+        day_offsets = [
+            int(item["time"]) // (24 * 60)
+            for item in self.schedule or []
+            if isinstance(item, dict) and isinstance(item.get("time"), int)
+        ]
+        return start_date + timedelta(days=max(day_offsets, default=0) + 1)
 
     def __str__(self):
         return f"Schedule for {self.admission} (distributed={self.is_distributed})"
@@ -392,9 +442,11 @@ class NameVisibilityAuditEvent(models.Model):
 class ConflictReviewAuditEvent(models.Model):
     PHASE_DRAFT = "draft"
     PHASE_COLLECTION = "collection"
+    PHASE_DERIVED = "derived"
     PHASE_CHOICES = [
         (PHASE_DRAFT, "Draft"),
         (PHASE_COLLECTION, "Collection"),
+        (PHASE_DERIVED, "Derived"),
     ]
     ACTION_OPENED = "opened"
     ACTION_CLOSED = "closed"
@@ -523,11 +575,13 @@ class InterviewAvailability(models.Model):
     slots = models.JSONField(default=list, blank=True)
     conflicts = models.JSONField(default=list, blank=True)
     reviewed_candidate_ids = models.JSONField(default=list, blank=True)
-    conflict_collection_reviewed_candidate_ids = models.JSONField(
-        default=list,
-        blank=True,
-    )
-    conflict_collection_review_revision = models.UUIDField(null=True, blank=True)
+    # A separate namespace from the two fields above (tokens look like
+    # "d:<uuid4>", never a UserApplication pk) so a filler mark can never be
+    # confused with - or accidentally echo back as - a real one. Kept apart
+    # rather than mixed into conflicts/reviewed_candidate_ids so those two
+    # fields stay a pure, uncontaminated read of real candidate state.
+    decoy_conflicts = models.JSONField(default=list, blank=True)
+    decoy_reviewed_ids = models.JSONField(default=list, blank=True)
     participation = models.CharField(
         max_length=24,
         choices=PARTICIPATION_CHOICES,
@@ -738,3 +792,23 @@ class ConflictReviewList(models.Model):
 
     def __str__(self):
         return f"Review list for {self.interviewer} ({self.revision})"
+
+
+class DirectoryEntry(models.Model):
+    """A first-year student, synced nightly from LEGO for decoy filler names.
+
+    Populated by a management command using a narrow, read-only service
+    credential kept out of the request path entirely - never by anything
+    an interviewer's own request triggers. Deliberately holds nothing but
+    what a filler name needs to display; if this table is empty (no sync has
+    run, e.g. no credential provisioned yet), decoys are simply omitted
+    rather than synthesised - see build_conflict_review_lists.
+    """
+
+    lego_user_id = models.IntegerField(unique=True)
+    username = models.CharField(max_length=150, blank=True, default="")
+    full_name = models.CharField(max_length=255, blank=True, default="")
+    synced_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return self.full_name or self.username or str(self.lego_user_id)

@@ -19,11 +19,11 @@ from django.urls import include, path, re_path
 from rest_framework import routers
 
 from admissions.admissions.availability_views import InterviewAvailabilityView
-from admissions.admissions.directory_views import MemberSearchView
 from admissions.admissions.candidate_views import (
     InterviewCandidatesView,
     NameVisibilityAuditView,
 )
+from admissions.admissions.directory_views import MemberSearchView
 from admissions.admissions.schedule_views import SavedScheduleView
 from admissions.admissions.solve_views import (
     LatestSolveJobView,

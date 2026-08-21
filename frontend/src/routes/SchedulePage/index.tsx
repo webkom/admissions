@@ -835,7 +835,6 @@ const LoadedScheduleView: React.FC<LoadedScheduleViewProps> = ({
                       candidates={interviewCandidates}
                       currentParticipant={myAvailabilityParticipant}
                       onSaveReview={saveConflictCollectionReview}
-                      scope="collection"
                     />
                   )}
               </div>
@@ -1014,7 +1013,6 @@ const LoadedScheduleView: React.FC<LoadedScheduleViewProps> = ({
                           candidates={interviewCandidates}
                           currentParticipant={myAvailabilityParticipant}
                           onSaveReview={saveConflictCollectionReview}
-                          scope="collection"
                         />
                       )}
                   </ConflictCollectionPanel>
@@ -1140,6 +1138,7 @@ const LoadedScheduleView: React.FC<LoadedScheduleViewProps> = ({
               savedSchedule={savedSchedule}
               readiness={publicationReadiness}
               stage={publicationStage}
+              dates={dates}
               planTransition={planTransition}
               planTransitionError={planTransitionError}
               onOpenDraft={() => handleSectionChange("solver")}

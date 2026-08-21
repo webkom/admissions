@@ -11,8 +11,9 @@ as anonymous and the endpoint returns an empty list, which is why an empty
 result and a missing authorisation are reported differently below.
 """
 
-import requests
 from django.conf import settings
+
+import requests
 from social_django.models import UserSocialAuth
 from structlog import get_logger
 

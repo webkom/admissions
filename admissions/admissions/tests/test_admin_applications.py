@@ -213,7 +213,6 @@ class AdminAdmissionPrivacyTestCase(APITestCase):
 
 class ListApplicationsTestCase(APITestCase):
     def setUp(self):
-        global DEFAULT_ADMISSION_SLUG
         self.admission_slug = DEFAULT_ADMISSION_SLUG
 
         self.pleb = LegoUser.objects.create(lego_id=2)
@@ -1042,7 +1041,6 @@ class DeleteGroupApplicationsTestCase(APITestCase):
     """
 
     def setUp(self):
-        global DEFAULT_ADMISSION_SLUG
         self.admission_slug = DEFAULT_ADMISSION_SLUG
         self.admission = create_admission()
 

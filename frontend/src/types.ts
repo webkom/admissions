@@ -296,6 +296,8 @@ export interface InterviewAvailabilityParticipant {
   experience_level: ExperienceLevel;
   slots: string[];
   conflicts: string[];
+  /** Admin-only; empty for everyone else, including the declaring interviewer. */
+  derived_conflicts: string[];
   reviewed_candidate_ids: string[];
   proposed_candidate_ids: string[];
   conflict_review_complete: boolean;

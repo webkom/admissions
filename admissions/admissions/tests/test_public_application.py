@@ -21,7 +21,6 @@ from admissions.admissions.tests.utils import DEFAULT_ADMISSION_SLUG, create_adm
 
 class CreateApplicationTestCase(APITestCase):
     def setUp(self):
-        global DEFAULT_ADMISSION_SLUG
         self.admission_slug = DEFAULT_ADMISSION_SLUG
         # Create admission and group
         self.admission = create_admission()

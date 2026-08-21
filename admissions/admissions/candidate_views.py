@@ -24,9 +24,9 @@ from admissions.admissions.models import (
 )
 from admissions.admissions.scheduler_feature import SchedulerFeatureGateMixin
 from admissions.admissions.scheduling_utils import (
+    conflict_review_scope,
     get_eligible_interviewer_ids,
     get_interviewer_participation,
-    conflict_review_scope,
     get_proposed_candidate_ids_by_interviewer,
     user_has_interview_availability,
 )

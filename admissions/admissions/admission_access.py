@@ -24,6 +24,21 @@ def user_is_admission_admin(admission, user):
     )
 
 
+def user_is_admission_leadership(admission, user):
+    """Narrower than user_is_admission_admin: leader/co-leader only, not recruiting.
+
+    Gates the applicant's free-text note to "central admission officers"
+    (priority_text) - a recruiting-role admin is still an admin_full viewer
+    for everything else, but this one field is reserved for the admin
+    group's actual leadership.
+    """
+    return (
+        Membership.objects.filter(user=user.pk, group__in=admission.admin_groups.all())
+        .filter(role__in=(constants.LEADER, constants.CO_LEADER))
+        .exists()
+    )
+
+
 def user_is_interview_admin(admission, user):
     """Whether the user may operate the admission interview workflow.
 
