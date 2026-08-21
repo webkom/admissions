@@ -13,7 +13,7 @@ import type { Admission, Group } from "src/types";
  * `scopedGroup` is resolved from the `?group=` URL parameter. When present it
  * overrides the local filter checkboxes.
  */
-export interface ApplicationScope {
+interface ApplicationScope {
   availableGroups: Group[];
   scopedGroup: Group | undefined;
 }

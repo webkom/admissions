@@ -17,7 +17,7 @@ interface PanelMemberStatusParams {
   assignmentConflicts: AssignmentConflictSummary;
 }
 
-export const derivePanelMemberStatus = ({
+const derivePanelMemberStatus = ({
   scheduleIndex,
   member,
   availabilityStatus,

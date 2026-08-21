@@ -131,8 +131,8 @@ const PriorityTextField: React.FC<PriorityTextFieldProps> = ({
           <Optional>(valgfritt)</Optional>
         </LabelRow>
         <SectionHelp>
-          Ranger komiteene du har valgt. Bare du og opptakets leder og
-          nestleder kan se dette.
+          Ranger komiteene du har valgt. Bare du og opptakets leder og nestleder
+          kan se dette.
         </SectionHelp>
         {rankedGroups.length > 1 ? (
           <RankingList data-cy="priority-ranking-list">

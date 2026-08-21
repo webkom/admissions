@@ -213,10 +213,9 @@ const ViewApplications = () => {
           />
           <p className="m-0">
             Dette opptaket har flere komiteer. Du ser bare søkere til{" "}
-            {admission.userdata.represented_groups.join(", ")} — de komiteene
-            du selv har en rolle i. Arbeid som gjelder hele opptaket
-            (planlegging, publisering) må gjøres av en admin uten
-            komitérolle i opptaket.
+            {admission.userdata.represented_groups.join(", ")} — de komiteene du
+            selv har en rolle i. Arbeid som gjelder hele opptaket (planlegging,
+            publisering) må gjøres av en admin uten komitérolle i opptaket.
           </p>
         </div>
       )}

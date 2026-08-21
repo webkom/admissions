@@ -169,7 +169,7 @@ interface SelectedGroupsDraft {
  * InputResponseModel in utils/jsonFields so a restored draft can be merged into
  * Formik's values without a cast.
  */
-export interface GroupAnswersDraft {
+interface GroupAnswersDraft {
   [groupName: string]: Record<string, string | boolean>;
 }
 

@@ -112,8 +112,7 @@ const TransitionHarness = ({
         type="button"
         data-cy="extend-distribution"
         onClick={async () => {
-          const extended =
-            await actions.extendDistributedThrough("2026-07-29");
+          const extended = await actions.extendDistributedThrough("2026-07-29");
           setOutcome(extended ? "published" : "failed");
         }}
       >

@@ -9,7 +9,7 @@ const normalizeSearchValue = (value: string): string =>
 const normalizePhoneSearch = (value: string): string =>
   value.replace(/[^\d+]/g, "");
 
-export interface ApplicationFilters {
+interface ApplicationFilters {
   searchTerm: string;
   setSearchTerm: (value: string) => void;
   selectedInterviewStatus: string;

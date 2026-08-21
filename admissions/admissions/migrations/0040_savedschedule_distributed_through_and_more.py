@@ -31,25 +31,32 @@ def reverse_backfill(apps, schema_editor):
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('admissions', '0039_directory_entry_and_decoy_fields'),
+        ("admissions", "0039_directory_entry_and_decoy_fields"),
     ]
 
     operations = [
         migrations.AddField(
-            model_name='savedschedule',
-            name='distributed_through',
+            model_name="savedschedule",
+            name="distributed_through",
             field=models.DateField(blank=True, null=True),
         ),
         migrations.RunPython(backfill_distributed_through, reverse_backfill),
         # Postgres/Django don't support converting a plain column into a
         # generated one via ALTER - the field has to be dropped and re-added.
         migrations.RemoveField(
-            model_name='savedschedule',
-            name='is_distributed',
+            model_name="savedschedule",
+            name="is_distributed",
         ),
         migrations.AddField(
-            model_name='savedschedule',
-            name='is_distributed',
-            field=models.GeneratedField(db_persist=True, expression=models.ExpressionWrapper(models.Q(('distributed_through__isnull', False)), output_field=models.BooleanField()), output_field=models.BooleanField()),
+            model_name="savedschedule",
+            name="is_distributed",
+            field=models.GeneratedField(
+                db_persist=True,
+                expression=models.ExpressionWrapper(
+                    models.Q(("distributed_through__isnull", False)),
+                    output_field=models.BooleanField(),
+                ),
+                output_field=models.BooleanField(),
+            ),
         ),
     ]

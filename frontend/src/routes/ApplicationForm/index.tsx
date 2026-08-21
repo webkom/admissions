@@ -390,11 +390,10 @@ const ApplicationForm: React.FC<ApplicationFormProps> = ({
               {withdrawnGroups.length === 1
                 ? "denne komiteen"
                 : "disse komiteene"}{" "}
-              slettet for godt, og verken du eller komiteen kan hente den tilbake.
+              slettet for godt, og verken du eller komiteen kan hente den
+              tilbake.
             </p>
-            <p>
-              Søknadene dine til de andre komiteene beholdes.
-            </p>
+            <p>Søknadene dine til de andre komiteene beholdes.</p>
           </div>
         </ConfirmDialog>
       )}

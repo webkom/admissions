@@ -6,13 +6,21 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('admissions', '0037_drop_conflict_collection'),
+        ("admissions", "0037_drop_conflict_collection"),
     ]
 
     operations = [
         migrations.AlterField(
-            model_name='conflictreviewauditevent',
-            name='phase',
-            field=models.CharField(choices=[('draft', 'Draft'), ('collection', 'Collection'), ('derived', 'Derived')], default='draft', max_length=16),
+            model_name="conflictreviewauditevent",
+            name="phase",
+            field=models.CharField(
+                choices=[
+                    ("draft", "Draft"),
+                    ("collection", "Collection"),
+                    ("derived", "Derived"),
+                ],
+                default="draft",
+                max_length=16,
+            ),
         ),
     ]

@@ -383,9 +383,7 @@ class ApplicationCreateUpdateSerializer(serializers.HyperlinkedModelSerializer):
                     Q(role=constants.RECRUITING) | Q(role=constants.LEADER),
                     group=group.pk,
                 )
-                recruiters = [
-                    recruiter.user.email for recruiter in group_recruiters
-                ]
+                recruiters = [recruiter.user.email for recruiter in group_recruiters]
 
                 def notify(group=group, recruiters=recruiters):
                     try:

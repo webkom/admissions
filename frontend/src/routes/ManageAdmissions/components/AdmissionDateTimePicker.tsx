@@ -86,7 +86,7 @@ const formatDate = (value: string): string => {
   return value === today ? `I dag, ${formatted}` : formatted;
 };
 
-export const normalizeAdmissionTime = (value: string): string | null => {
+const normalizeAdmissionTime = (value: string): string | null => {
   const compact = value.trim().replace(/\s/g, "");
   let hour: number;
   let minute: number;

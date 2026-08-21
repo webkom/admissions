@@ -77,8 +77,9 @@ const FadderbarnPicker: React.FC<FadderbarnPickerProps> = ({
           Har du fadderbarn?
         </p>
         <p className="m-0 mt-0.5 text-detail text-text-muted">
-          Legg dem til her, så slipper du å bli satt opp til å intervjue dem (det gjør det lettere med inhabilitet). Vi
-          sier aldri fra om noen av dem faktisk har søkt.
+          Legg dem til her, så slipper du å bli satt opp til å intervjue dem
+          (det gjør det lettere med inhabilitet). Vi sier aldri fra om noen av
+          dem faktisk har søkt.
         </p>
       </div>
 
@@ -144,7 +145,9 @@ const FadderbarnPicker: React.FC<FadderbarnPickerProps> = ({
             className="absolute left-0 top-full z-30 m-0 mt-1 flex max-h-60 w-full list-none flex-col gap-0.5 overflow-y-auto rounded-lg border border-border-soft bg-surface-base p-1 shadow-lg"
           >
             {isFetching && suggestions.length === 0 && (
-              <li className="px-2 py-1.5 text-detail text-text-muted">Søker…</li>
+              <li className="px-2 py-1.5 text-detail text-text-muted">
+                Søker…
+              </li>
             )}
             {!isFetching && suggestions.length === 0 && (
               <li className="px-2 py-1.5 text-detail text-text-muted">

@@ -6,28 +6,36 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('admissions', '0038_alter_conflictreviewauditevent_phase'),
+        ("admissions", "0038_alter_conflictreviewauditevent_phase"),
     ]
 
     operations = [
         migrations.CreateModel(
-            name='DirectoryEntry',
+            name="DirectoryEntry",
             fields=[
-                ('id', models.AutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('lego_user_id', models.IntegerField(unique=True)),
-                ('username', models.CharField(blank=True, default='', max_length=150)),
-                ('full_name', models.CharField(blank=True, default='', max_length=255)),
-                ('synced_at', models.DateTimeField(auto_now=True)),
+                (
+                    "id",
+                    models.AutoField(
+                        auto_created=True,
+                        primary_key=True,
+                        serialize=False,
+                        verbose_name="ID",
+                    ),
+                ),
+                ("lego_user_id", models.IntegerField(unique=True)),
+                ("username", models.CharField(blank=True, default="", max_length=150)),
+                ("full_name", models.CharField(blank=True, default="", max_length=255)),
+                ("synced_at", models.DateTimeField(auto_now=True)),
             ],
         ),
         migrations.AddField(
-            model_name='interviewavailability',
-            name='decoy_conflicts',
+            model_name="interviewavailability",
+            name="decoy_conflicts",
             field=models.JSONField(blank=True, default=list),
         ),
         migrations.AddField(
-            model_name='interviewavailability',
-            name='decoy_reviewed_ids',
+            model_name="interviewavailability",
+            name="decoy_reviewed_ids",
             field=models.JSONField(blank=True, default=list),
         ),
     ]

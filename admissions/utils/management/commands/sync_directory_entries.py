@@ -16,9 +16,10 @@ request.
 
 from urllib.parse import urljoin
 
-import requests
 from django.conf import settings
 from django.core.management.base import BaseCommand
+
+import requests
 from structlog import get_logger
 
 from admissions.admissions.models import DirectoryEntry

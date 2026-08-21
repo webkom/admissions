@@ -23,7 +23,7 @@ const filenamePart = (value: string): string =>
     .replace(/[^a-z0-9_-]+/g, "-")
     .replace(/^-+|-+$/g, "");
 
-export interface ApplicationsCsvExport {
+interface ApplicationsCsvExport {
   showGroupColumn: boolean;
   csvHeaders: { label: string; key: string }[];
   exportCsvData: CompleteCsvData[];

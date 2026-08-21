@@ -58,6 +58,7 @@ from admissions.admissions.serializers.solver import (
 )
 from admissions.admissions.serializers.users import UserSerializer
 
+# isort: split
 # ``send_message`` was previously imported at the top of ``serializers.py`` and
 # relied on by ``ApplicationCreateUpdateSerializer``. Tests patch
 # ``admissions.admissions.serializers.send_message``; expose it here so the

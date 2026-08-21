@@ -94,9 +94,7 @@ const PublicationGate = ({
     savedSchedule?.name_visibility ?? "hidden",
   );
   const [confirmOpen, setConfirmOpen] = useState(false);
-  const [publishScope, setPublishScope] = useState<"full" | "partial">(
-    "full",
-  );
+  const [publishScope, setPublishScope] = useState<"full" | "partial">("full");
   const sortedDates = useMemo(() => [...dates].sort(), [dates]);
   const [partialThroughDate, setPartialThroughDate] = useState<string>("");
   const selectedThroughDate = sortedDates.includes(partialThroughDate)

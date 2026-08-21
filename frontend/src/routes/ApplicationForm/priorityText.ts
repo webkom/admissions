@@ -1,4 +1,4 @@
-export interface ParsedPriorityText {
+interface ParsedPriorityText {
   rankedGroups: string[];
   comments: string;
   hasExplicitRanking: boolean;

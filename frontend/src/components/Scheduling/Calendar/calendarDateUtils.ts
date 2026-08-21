@@ -1,4 +1,4 @@
-export interface CalendarDay {
+interface CalendarDay {
   date: Date;
   isoDate: string;
   isCurrentMonth: boolean;
