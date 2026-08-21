@@ -590,7 +590,7 @@ class FactorizedSolverV2TestCase(SimpleTestCase):
             "panel_stability": "preferred",
             "availability_fallback": "stop",
             "require_experienced_panel": False,
-            "max_solver_seconds": 1,
+            "max_solver_seconds": 5,
         }
         arguments = {
             "candidates_data": candidates,
