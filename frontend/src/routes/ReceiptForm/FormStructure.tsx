@@ -1,8 +1,8 @@
-import React from "react";
+import React, { useState } from "react";
 import { Form } from "formik";
 import FormatTime from "src/components/Time/FormatTime";
 import { Info } from "lucide-react";
-import ConfirmModal from "src/components/ConfirmModal";
+import ConfirmDialog from "src/components/Scheduling/ConfirmDialog";
 import { useAdmission, useMyApplication } from "src/query/hooks";
 import { useDeleteMyApplicationMutation } from "src/query/mutations";
 import {
@@ -49,6 +49,7 @@ const FormStructure: React.FC<FormStructureProps> = ({ toggleIsEditing }) => {
   const isRevy = admissionSlug === "revy";
   const isRevyBoard = admissionSlug === "revystyret";
   const isBackup = admissionSlug === "backup";
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
 
   const { group_applications, updated_at } = myApplication || {};
   const selectedGroupNames =
@@ -59,6 +60,11 @@ const FormStructure: React.FC<FormStructureProps> = ({ toggleIsEditing }) => {
   );
 
   const hasSelected = group_applications && group_applications.length > 0;
+  const groupTermPlural = isRevy
+    ? "gruppene"
+    : isRevyBoard
+      ? "stillingene"
+      : "komiteene";
 
   if (admissionIsLoading || applicationIsLoading) {
     return <p>Loading</p>;
@@ -90,12 +96,7 @@ const FormStructure: React.FC<FormStructureProps> = ({ toggleIsEditing }) => {
               ? "Søknaden din er mottatt. Du kan endre eller slette den frem til søknadsfristen."
               : isBackup
                 ? "Søknaden din er nå sendt til backup. Du kan endre eller slette den frem til søknadsfristen."
-                : "Søknaden din er nå sendt til de aktuelle komiteene, sentrale opptaksansvarlige som koordinerer intervjuer, og leder av Abakus. Du kan endre eller slette den frem til søknadsfristen."}{" "}
-            Gå til{" "}
-            <a href="https://abakus.no" target="_blank" rel="noreferrer">
-              abakus.no
-            </a>{" "}
-            for å se dine andre verv.
+                : "Søknaden din er nå sendt til de aktuelle komiteene. Du kan endre eller slette den frem til søknadsfristen."}{" "}
           </Notice>
         </EditInfo>
         <EditActions>
@@ -103,29 +104,54 @@ const FormStructure: React.FC<FormStructureProps> = ({ toggleIsEditing }) => {
             <StyledButton onClick={toggleIsEditing}>Endre søknad</StyledButton>
           )}
           <span />
-          <ConfirmModal
-            title="Slett søknad"
-            trigger={({ onClick }) => (
-              <StyledButton onClick={onClick} danger>
-                {deleteApplicationMutation.isPending
-                  ? "Sletter søknad..."
-                  : deleteApplicationMutation.isError
-                    ? "Klarte ikke slette søknad"
-                    : deleteApplicationMutation.isSuccess
-                      ? "Søknad slettet!"
-                      : "Slett søknad"}
-              </StyledButton>
-            )}
-            message="Er du sikker på at du vil slette søknaden din?"
-            onConfirm={() =>
+          <StyledButton onClick={() => setConfirmingDelete(true)} danger>
+            {deleteApplicationMutation.isPending
+              ? "Sletter søknad..."
+              : deleteApplicationMutation.isError
+                ? "Klarte ikke slette søknad"
+                : deleteApplicationMutation.isSuccess
+                  ? "Søknad slettet!"
+                  : "Slett søknad"}
+          </StyledButton>
+        </EditActions>
+        {confirmingDelete && (
+          <ConfirmDialog
+            tone="danger"
+            title="Slette hele søknaden din?"
+            confirmLabel="Slett søknad"
+            onClose={() => setConfirmingDelete(false)}
+            busy={deleteApplicationMutation.isPending}
+            onConfirm={() => {
               deleteApplicationMutation.mutate(undefined, {
                 onSuccess: () => {
                   clearAllDrafts();
                 },
-              })
-            }
-          />
-        </EditActions>
+                onSettled: () => {
+                  setConfirmingDelete(false);
+                },
+              });
+            }}
+          >
+            <div data-cy="delete-application-confirm">
+              <p>
+                Dette sletter hele søknaden din
+                {hasSelected && (
+                  <>
+                    {" "}
+                    til <strong>{selectedGroupNames.join(", ")}</strong>
+                  </>
+                )}{" "}
+                for godt. Verken du eller {groupTermPlural} kan hente den
+                tilbake etterpå.
+              </p>
+              <p>
+                Vil du bare trekke deg fra én eller flere{" "}
+                {isRevy ? "grupper" : isRevyBoard ? "stillinger" : "komiteer"},
+                kan du endre søknaden i stedet for å slette den helt.
+              </p>
+            </div>
+          </ConfirmDialog>
+        )}
         <SeparatorLine />
         {isBackup && (
           <>
