@@ -29,9 +29,7 @@ import {
 } from "./sensitiveAccess";
 import type { ApplicationViewMode } from "src/types";
 
-type SaveSchedulePayload = Partial<
-  Omit<SavedSchedule, "id" | "updated_at">
-> & {
+type SaveSchedulePayload = Partial<Omit<SavedSchedule, "id" | "updated_at">> & {
   expected_updated_at: string | null;
   deviation_approval_fingerprint?: string;
 };
@@ -226,10 +224,7 @@ export const useSaveSchedule = (
     mutationFn: (payload) =>
       runSensitiveAdmissionMutation(scope, () =>
         apiClient
-          .post(
-            `/admin/admission/${slug}/group/${groupId}/schedule/`,
-            payload,
-          )
+          .post(`/admin/admission/${slug}/group/${groupId}/schedule/`, payload)
           .then((r) => r.data),
       ),
     onSuccess: (data) => {
@@ -237,9 +232,7 @@ export const useSaveSchedule = (
       options.onCanonicalScheduleSaved?.(data);
       queryClient.setQueryData(scheduleQueryKey, data);
       queryClient.invalidateQueries({
-        queryKey: [
-          `/admin/admission/${slug}/group/${groupId}/availability/`,
-        ],
+        queryKey: [`/admin/admission/${slug}/group/${groupId}/availability/`],
       });
       queryClient.invalidateQueries({
         queryKey: candidatesQueryKey,
@@ -282,10 +275,7 @@ export const useInterviewAvailability = (slug: string, groupId: string) => {
   return hideDataAfterSensitiveQueryFailure(query);
 };
 
-export const useSaveInterviewAvailability = (
-  slug: string,
-  groupId: string,
-) => {
+export const useSaveInterviewAvailability = (slug: string, groupId: string) => {
   const queryClient = useQueryClient();
   const scope = admissionGroupScope(slug, groupId);
   const availabilityQueryKey = [

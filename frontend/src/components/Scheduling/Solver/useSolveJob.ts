@@ -335,7 +335,9 @@ export function useSolveJob(admissionSlug: string, groupId: string) {
           applyFinishedJob(finishedJob);
           if (finishedJob.applied_at) {
             void queryClient.invalidateQueries({
-              queryKey: [`/admin/admission/${admissionSlug}/group/${groupId}/schedule/`],
+              queryKey: [
+                `/admin/admission/${admissionSlug}/group/${groupId}/schedule/`,
+              ],
             });
           }
         };
@@ -510,7 +512,9 @@ export function useSolveJob(admissionSlug: string, groupId: string) {
         setPendingProposal(null);
         clearStoredProposal();
         await queryClient.invalidateQueries({
-          queryKey: [`/admin/admission/${admissionSlug}/group/${groupId}/schedule/`],
+          queryKey: [
+            `/admin/admission/${admissionSlug}/group/${groupId}/schedule/`,
+          ],
           exact: true,
           refetchType: "active",
         });
@@ -579,17 +583,23 @@ export function useSolveJob(admissionSlug: string, groupId: string) {
         setError(formatApiError(outcome.error.response?.data));
         await Promise.all([
           queryClient.invalidateQueries({
-            queryKey: [`/admin/admission/${admissionSlug}/group/${groupId}/schedule/`],
+            queryKey: [
+              `/admin/admission/${admissionSlug}/group/${groupId}/schedule/`,
+            ],
             exact: true,
             refetchType: "active",
           }),
           queryClient.invalidateQueries({
-            queryKey: [`/admin/admission/${admissionSlug}/group/${groupId}/availability/`],
+            queryKey: [
+              `/admin/admission/${admissionSlug}/group/${groupId}/availability/`,
+            ],
             exact: true,
             refetchType: "active",
           }),
           queryClient.invalidateQueries({
-            queryKey: [`/admin/admission/${admissionSlug}/group/${groupId}/candidates/`],
+            queryKey: [
+              `/admin/admission/${admissionSlug}/group/${groupId}/candidates/`,
+            ],
             exact: true,
             refetchType: "active",
           }),

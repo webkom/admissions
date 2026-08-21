@@ -9,7 +9,9 @@ describe("interview plan workflow", () => {
         // just any of the admission's committees they can administer.
         const groupId = response.body.userdata.committee_group_details[0].pk;
         const templateStorageKey = `admissions:webkom-open:${groupId}:interview-outreach-template`;
-        cy.request(`/api/admin/admission/webkom-open/group/${groupId}/schedule/`)
+        cy.request(
+          `/api/admin/admission/webkom-open/group/${groupId}/schedule/`,
+        )
           .its("status")
           .should("eq", 200);
         cy.visit(`/webkom-open/schedule/${groupId}`, {

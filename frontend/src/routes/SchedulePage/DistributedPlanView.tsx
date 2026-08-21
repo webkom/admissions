@@ -205,7 +205,9 @@ const DistributedPlanView: React.FC<DistributedPlanViewProps> = ({
   const lastConfiguredDate = sortedDates[sortedDates.length - 1];
   const distributedThrough = savedSchedule?.distributed_through ?? null;
   const isPartiallyPublished = Boolean(
-    distributedThrough && lastConfiguredDate && distributedThrough <= lastConfiguredDate,
+    distributedThrough &&
+      lastConfiguredDate &&
+      distributedThrough <= lastConfiguredDate,
   );
   const extendableDates = sortedDates.filter(
     (date) => !distributedThrough || date > distributedThrough,
@@ -378,26 +380,28 @@ const DistributedPlanView: React.FC<DistributedPlanViewProps> = ({
                 >
                   Eksporter plan
                 </button>
-                {isAdmin && isPartiallyPublished && extendableDates.length > 0 && (
-                  <button
-                    type="button"
-                    role="menuitem"
-                    onClick={() => {
-                      closeActionMenu(true);
-                      setExtendThroughDate(
-                        extendableDates[extendableDates.length - 1],
-                      );
-                      setIsExtendDialogOpen(true);
-                    }}
-                    disabled={planTransition !== null}
-                    className={cn(
-                      "flex items-center rounded-md px-3 py-2 text-left text-ui font-semibold text-text-primary hover:bg-surface-subtle",
-                      keyboardFocusRingClass,
-                    )}
-                  >
-                    Utvid publisering
-                  </button>
-                )}
+                {isAdmin &&
+                  isPartiallyPublished &&
+                  extendableDates.length > 0 && (
+                    <button
+                      type="button"
+                      role="menuitem"
+                      onClick={() => {
+                        closeActionMenu(true);
+                        setExtendThroughDate(
+                          extendableDates[extendableDates.length - 1],
+                        );
+                        setIsExtendDialogOpen(true);
+                      }}
+                      disabled={planTransition !== null}
+                      className={cn(
+                        "flex items-center rounded-md px-3 py-2 text-left text-ui font-semibold text-text-primary hover:bg-surface-subtle",
+                        keyboardFocusRingClass,
+                      )}
+                    >
+                      Utvid publisering
+                    </button>
+                  )}
                 {isAdmin && (
                   <button
                     type="button"
@@ -576,9 +580,7 @@ const DistributedPlanView: React.FC<DistributedPlanViewProps> = ({
         <ConfirmDialog
           title="Utvid publisering"
           confirmLabel={
-            planTransition === "publishing"
-              ? "Utvider…"
-              : "Utvid publisering"
+            planTransition === "publishing" ? "Utvider…" : "Utvid publisering"
           }
           onConfirm={confirmExtend}
           onClose={() => setIsExtendDialogOpen(false)}

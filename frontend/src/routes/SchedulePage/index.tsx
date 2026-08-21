@@ -296,9 +296,7 @@ const SchedulePage: React.FC = () => {
   // leader/recruiter over every committee's schedule (mirrors the backend's
   // user_is_interview_admin); a role held in some other committee does not
   // carry over, since each committee's schedule is independent.
-  const committeeRole = is_admin
-    ? "leader"
-    : (resolvedCommittee?.role ?? null);
+  const committeeRole = is_admin ? "leader" : (resolvedCommittee?.role ?? null);
   const canManageSchedule =
     is_admin || committeeRole === "leader" || committeeRole === "recruiting";
   const canManageInterviewWorkflow = canManageSchedule;
