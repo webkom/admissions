@@ -113,7 +113,9 @@ class InterviewAvailabilityView(SchedulerFeatureGateMixin, APIView):
     def _visible_candidate_ids(self, admission, group, saved_schedule, user, is_admin):
         if is_admin:
             return None
-        if self._conflict_review_is_open_for_user(admission, group, saved_schedule, user):
+        if self._conflict_review_is_open_for_user(
+            admission, group, saved_schedule, user
+        ):
             return self._review_scope(saved_schedule, user.id)
         # A schedule belongs to exactly one committee now: visibility is
         # either running this committee's own workflow, or this committee's
@@ -121,7 +123,8 @@ class InterviewAvailabilityView(SchedulerFeatureGateMixin, APIView):
         committee_revealed = bool(
             saved_schedule is not None
             and saved_schedule.is_distributed
-            and saved_schedule.name_visibility == SavedSchedule.NAME_VISIBILITY_COMMITTEE
+            and saved_schedule.name_visibility
+            == SavedSchedule.NAME_VISIBILITY_COMMITTEE
         )
         if not user_represents_group(admission, group, user) and not committee_revealed:
             return set()
@@ -263,6 +266,7 @@ class InterviewAvailabilityView(SchedulerFeatureGateMixin, APIView):
             user,
             is_admin,
         )
+
         # A homogeneous projection: real conflicts and this row's own decoy
         # marks flow through the exact same field, so nothing about the
         # response shape can tell them apart. Decoys must never even be
@@ -655,9 +659,7 @@ class InterviewAvailabilityView(SchedulerFeatureGateMixin, APIView):
                 value for value in defaults["conflicts"] if value in own_decoy_scope
             }
             defaults["conflicts"] = [
-                value
-                for value in defaults["conflicts"]
-                if value not in own_decoy_scope
+                value for value in defaults["conflicts"] if value not in own_decoy_scope
             ]
         submitted_decoy_reviewed = None
         if "reviewed_candidate_ids" in defaults:

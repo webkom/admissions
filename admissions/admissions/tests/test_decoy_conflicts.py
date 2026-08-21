@@ -70,9 +70,7 @@ class DecoyConflictRoundTripTestCase(APITestCase):
     def test_the_decoy_appears_in_the_candidate_list(self):
         res = self.client.get(self.candidates_url)
 
-        self.assertIn(
-            {"id": self.decoy_token, "name": "Filler One"}, res.data
-        )
+        self.assertIn({"id": self.decoy_token, "name": "Filler One"}, res.data)
 
     def test_a_decoy_mark_round_trips_through_get_after_post(self):
         res = self.client.post(

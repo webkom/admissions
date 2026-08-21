@@ -13,9 +13,10 @@ result and a missing authorisation are reported differently below.
 
 import hashlib
 
-import requests
 from django.conf import settings
 from django.core.cache import cache
+
+import requests
 from social_core.exceptions import SocialAuthBaseException
 from social_django.models import UserSocialAuth
 from social_django.utils import load_strategy

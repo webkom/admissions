@@ -293,9 +293,9 @@ class SolveJobApplyView(SchedulerFeatureGateMixin, APIView):
                 status=status.HTTP_409_CONFLICT,
             )
         is_admission_admin = user_is_admission_admin(admission, user)
-        is_recruiter = get_representing_groups(admission, user).filter(
-            pk=group.pk
-        ).exists()
+        is_recruiter = (
+            get_representing_groups(admission, user).filter(pk=group.pk).exists()
+        )
         if job.applied_at is not None:
             # user_is_interview_admin was already confirmed above (line 269)
             # before this view does anything else.

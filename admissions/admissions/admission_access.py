@@ -17,9 +17,7 @@ APPLICATION_VIEW_MODE_COMMITTEE_MINIMAL = "committee_minimal"
 def user_is_admission_admin(admission, user):
     return (
         Membership.objects.filter(user=user.pk, group__in=admission.admin_groups.all())
-        .filter(
-            role__in=(constants.LEADER, constants.CO_LEADER, constants.RECRUITING)
-        )
+        .filter(role__in=(constants.LEADER, constants.CO_LEADER, constants.RECRUITING))
         .exists()
     )
 
@@ -105,7 +103,9 @@ def schedule_response_context(admission, saved_schedule, is_interview_admin):
     committee; there is no other committee to reveal it to any more, so
     name_visibility answers this directly.
     """
-    hide_schedule = saved_schedule.distributed_through is None and not is_interview_admin
+    hide_schedule = (
+        saved_schedule.distributed_through is None and not is_interview_admin
+    )
     # Interview admins always work against the full draft; everyone else only
     # ever sees interviews on or before the published boundary, even once
     # part of the plan is published (see distributed_through's docstring).
@@ -121,7 +121,8 @@ def schedule_response_context(admission, saved_schedule, is_interview_admin):
     else:
         hide_identity = not (
             saved_schedule.is_distributed
-            and saved_schedule.name_visibility == SavedSchedule.NAME_VISIBILITY_COMMITTEE
+            and saved_schedule.name_visibility
+            == SavedSchedule.NAME_VISIBILITY_COMMITTEE
         )
         contact_candidate_ids = set()
         visible_candidate_ids = (

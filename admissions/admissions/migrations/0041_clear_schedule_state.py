@@ -30,7 +30,7 @@ def reverse_clear(apps, schema_editor):
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('admissions', '0040_savedschedule_distributed_through_and_more'),
+        ("admissions", "0040_savedschedule_distributed_through_and_more"),
     ]
 
     operations = [

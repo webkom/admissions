@@ -260,9 +260,9 @@ class Command(BaseCommand):
                 "name_visibility": SavedSchedule.NAME_VISIBILITY_COMMITTEE,
             },
         )
-        InterviewAvailability.objects.filter(
-            admission=admission, group=group
-        ).exclude(user=admin).delete()
+        InterviewAvailability.objects.filter(admission=admission, group=group).exclude(
+            user=admin
+        ).delete()
         InterviewAvailability.objects.update_or_create(
             admission=admission,
             group=group,

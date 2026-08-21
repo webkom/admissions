@@ -9,73 +9,116 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('admissions', '0041_clear_schedule_state'),
+        ("admissions", "0041_clear_schedule_state"),
     ]
 
     operations = [
         migrations.RemoveConstraint(
-            model_name='interviewavailability',
-            name='unique_admission_user_availability',
+            model_name="interviewavailability",
+            name="unique_admission_user_availability",
         ),
         migrations.RemoveConstraint(
-            model_name='solvejob',
-            name='unique_active_solve_job_per_admission',
+            model_name="solvejob",
+            name="unique_active_solve_job_per_admission",
         ),
         migrations.RemoveIndex(
-            model_name='solvejob',
-            name='admissions__admissi_980e4a_idx',
+            model_name="solvejob",
+            name="admissions__admissi_980e4a_idx",
         ),
         migrations.AddField(
-            model_name='interviewavailability',
-            name='group',
-            field=models.ForeignKey(null=True, on_delete=django.db.models.deletion.CASCADE, related_name='interview_availabilities', to='admissions.group'),
+            model_name="interviewavailability",
+            name="group",
+            field=models.ForeignKey(
+                null=True,
+                on_delete=django.db.models.deletion.CASCADE,
+                related_name="interview_availabilities",
+                to="admissions.group",
+            ),
         ),
         migrations.AddField(
-            model_name='savedschedule',
-            name='group',
-            field=models.ForeignKey(null=True, on_delete=django.db.models.deletion.CASCADE, related_name='saved_schedules', to='admissions.group'),
+            model_name="savedschedule",
+            name="group",
+            field=models.ForeignKey(
+                null=True,
+                on_delete=django.db.models.deletion.CASCADE,
+                related_name="saved_schedules",
+                to="admissions.group",
+            ),
         ),
         migrations.AddField(
-            model_name='solvejob',
-            name='group',
-            field=models.ForeignKey(null=True, on_delete=django.db.models.deletion.CASCADE, related_name='solve_jobs', to='admissions.group'),
+            model_name="solvejob",
+            name="group",
+            field=models.ForeignKey(
+                null=True,
+                on_delete=django.db.models.deletion.CASCADE,
+                related_name="solve_jobs",
+                to="admissions.group",
+            ),
         ),
         # The three AddFields above run against tables 0041 already emptied,
         # so tightening to non-nullable here can't violate any existing row.
         migrations.AlterField(
-            model_name='interviewavailability',
-            name='group',
-            field=models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='interview_availabilities', to='admissions.group'),
+            model_name="interviewavailability",
+            name="group",
+            field=models.ForeignKey(
+                on_delete=django.db.models.deletion.CASCADE,
+                related_name="interview_availabilities",
+                to="admissions.group",
+            ),
         ),
         migrations.AlterField(
-            model_name='savedschedule',
-            name='group',
-            field=models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='saved_schedules', to='admissions.group'),
+            model_name="savedschedule",
+            name="group",
+            field=models.ForeignKey(
+                on_delete=django.db.models.deletion.CASCADE,
+                related_name="saved_schedules",
+                to="admissions.group",
+            ),
         ),
         migrations.AlterField(
-            model_name='solvejob',
-            name='group',
-            field=models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='solve_jobs', to='admissions.group'),
+            model_name="solvejob",
+            name="group",
+            field=models.ForeignKey(
+                on_delete=django.db.models.deletion.CASCADE,
+                related_name="solve_jobs",
+                to="admissions.group",
+            ),
         ),
         migrations.AlterField(
-            model_name='savedschedule',
-            name='admission',
-            field=models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='saved_schedules', to='admissions.admission'),
+            model_name="savedschedule",
+            name="admission",
+            field=models.ForeignKey(
+                on_delete=django.db.models.deletion.CASCADE,
+                related_name="saved_schedules",
+                to="admissions.admission",
+            ),
         ),
         migrations.AddIndex(
-            model_name='solvejob',
-            index=models.Index(fields=['admission', 'group', 'status'], name='admissions__admissi_a16b2a_idx'),
+            model_name="solvejob",
+            index=models.Index(
+                fields=["admission", "group", "status"],
+                name="admissions__admissi_a16b2a_idx",
+            ),
         ),
         migrations.AddConstraint(
-            model_name='interviewavailability',
-            constraint=models.UniqueConstraint(fields=('admission', 'group', 'user'), name='unique_admission_group_user_availability'),
+            model_name="interviewavailability",
+            constraint=models.UniqueConstraint(
+                fields=("admission", "group", "user"),
+                name="unique_admission_group_user_availability",
+            ),
         ),
         migrations.AddConstraint(
-            model_name='savedschedule',
-            constraint=models.UniqueConstraint(fields=('admission', 'group'), name='unique_admission_group_schedule'),
+            model_name="savedschedule",
+            constraint=models.UniqueConstraint(
+                fields=("admission", "group"), name="unique_admission_group_schedule"
+            ),
         ),
         migrations.AddConstraint(
-            model_name='solvejob',
-            constraint=models.UniqueConstraint(condition=models.Q(('status__in', ('PENDING', 'RUNNING'))), fields=('admission', 'group'), name='unique_active_solve_job_per_admission_group'),
+            model_name="solvejob",
+            constraint=models.UniqueConstraint(
+                condition=models.Q(("status__in", ("PENDING", "RUNNING"))),
+                fields=("admission", "group"),
+                name="unique_active_solve_job_per_admission_group",
+            ),
         ),
     ]

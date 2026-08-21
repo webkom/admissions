@@ -3,8 +3,6 @@ from datetime import date, timedelta
 
 from django.conf import settings
 from django.contrib.auth.models import AbstractUser
-from datetime import date, timedelta
-
 from django.db import models
 from django.db.models import ExpressionWrapper, F, Q
 from django.utils import timezone
@@ -696,7 +694,9 @@ class SolveJob(models.Model):
         ]
 
     def __str__(self):
-        return f"SolveJob {self.id} for {self.group} in {self.admission} ({self.status})"
+        return (
+            f"SolveJob {self.id} for {self.group} in {self.admission} ({self.status})"
+        )
 
 
 class Membership(models.Model):

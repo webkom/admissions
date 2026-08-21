@@ -180,14 +180,18 @@ class FadderbarnDeclarationTestCase(APITestCase):
             self.url, {"fadderbarn": [{"lego_user_id": 5001}]}, format="json"
         )
 
-        self.assertEqual({}, get_declared_conflict_candidate_ids(self.admission, self.group))
+        self.assertEqual(
+            {}, get_declared_conflict_candidate_ids(self.admission, self.group)
+        )
 
     def test_a_fadderbarn_who_did_not_apply_yields_nothing(self):
         self.client.post(
             self.url, {"fadderbarn": [{"lego_user_id": 9999}]}, format="json"
         )
 
-        self.assertEqual({}, get_declared_conflict_candidate_ids(self.admission, self.group))
+        self.assertEqual(
+            {}, get_declared_conflict_candidate_ids(self.admission, self.group)
+        )
 
     def test_derived_conflicts_are_visible_to_admins(self):
         _, application = self._applicant("kari", 5001)

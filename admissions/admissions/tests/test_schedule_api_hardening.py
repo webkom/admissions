@@ -196,8 +196,9 @@ class SavedSchedulePublishSemanticsTestCase(APITestCase):
         self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertIn("distributed_through", res.data)
         self.assertEqual(
-            SavedSchedule.objects.get(admission=self.admission)
-            .distributed_through.isoformat(),
+            SavedSchedule.objects.get(
+                admission=self.admission
+            ).distributed_through.isoformat(),
             "2026-04-22",
         )
 
@@ -1880,7 +1881,7 @@ class InterviewAvailabilityHardeningTestCase(APITestCase):
             group=other_group,
             text="Hidden application",
         )
-        saved_schedule = self._create_saved_schedule(
+        self._create_saved_schedule(
             enabled_slots=["2026-04-22|600"],
             is_distributed=True,
             name_visibility=SavedSchedule.NAME_VISIBILITY_ADMIN_ONLY,

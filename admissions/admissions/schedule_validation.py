@@ -312,16 +312,12 @@ def canonicalize_solver_payload(admission, saved, data, request_user):
                         }
                         | {
                             str(value)
-                            for value in derived_conflicts.get(
-                                interviewer_id, set()
-                            )
+                            for value in derived_conflicts.get(interviewer_id, set())
                             if str(value) in candidate_ids
                         }
                         | (
                             candidate_ids
-                            - review_scope_by_interviewer.get(
-                                interviewer_id, set()
-                            )
+                            - review_scope_by_interviewer.get(interviewer_id, set())
                             if is_repair
                             else set()
                         )

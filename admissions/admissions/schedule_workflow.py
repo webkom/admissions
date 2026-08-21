@@ -713,7 +713,9 @@ def _resolve_schedule_state(
     elif schedule_changed:
         distributed_through = None
     else:
-        distributed_through = existing.distributed_through if existing is not None else None
+        distributed_through = (
+            existing.distributed_through if existing is not None else None
+        )
     is_distributed = distributed_through is not None
 
     if (

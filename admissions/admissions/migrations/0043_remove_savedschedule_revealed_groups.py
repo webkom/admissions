@@ -6,12 +6,12 @@ from django.db import migrations
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('admissions', '0042_committee_scoped_scheduling'),
+        ("admissions", "0042_committee_scoped_scheduling"),
     ]
 
     operations = [
         migrations.RemoveField(
-            model_name='savedschedule',
-            name='revealed_groups',
+            model_name="savedschedule",
+            name="revealed_groups",
         ),
     ]

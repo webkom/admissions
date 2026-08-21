@@ -39,9 +39,7 @@ class LegoDirectoryTestCase(TestCase):
     @patch("admissions.admissions.lego_directory.UserSocialAuth")
     @patch("admissions.admissions.lego_directory.requests.post")
     def test_parses_lego_s_camel_cased_response(self, mock_post, mock_social_auth):
-        mock_social_auth.objects.filter.return_value.first.return_value = (
-            self._social()
-        )
+        mock_social_auth.objects.filter.return_value.first.return_value = self._social()
         mock_post.return_value.status_code = 200
         mock_post.return_value.json.return_value = [
             self._hit(lego_user_id=42, username="ada", full_name="Ada Lovelace")
@@ -64,9 +62,7 @@ class LegoDirectoryTestCase(TestCase):
     @patch("admissions.admissions.lego_directory.UserSocialAuth")
     @patch("admissions.admissions.lego_directory.requests.post")
     def test_repeated_query_hits_lego_once(self, mock_post, mock_social_auth):
-        mock_social_auth.objects.filter.return_value.first.return_value = (
-            self._social()
-        )
+        mock_social_auth.objects.filter.return_value.first.return_value = self._social()
         mock_post.return_value.status_code = 200
         mock_post.return_value.json.return_value = [self._hit()]
 
@@ -81,9 +77,7 @@ class LegoDirectoryTestCase(TestCase):
     def test_cache_key_normalizes_whitespace_and_case(
         self, mock_post, mock_social_auth
     ):
-        mock_social_auth.objects.filter.return_value.first.return_value = (
-            self._social()
-        )
+        mock_social_auth.objects.filter.return_value.first.return_value = self._social()
         mock_post.return_value.status_code = 200
         mock_post.return_value.json.return_value = [self._hit()]
 

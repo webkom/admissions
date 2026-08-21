@@ -94,9 +94,11 @@ class AdmissionListPublicSerializer(serializers.HyperlinkedModelSerializer):
             group_role = (
                 constants.LEADER
                 if constants.LEADER in roles
-                else constants.RECRUITING
-                if constants.RECRUITING in roles
-                else constants.MEMBER
+                else (
+                    constants.RECRUITING
+                    if constants.RECRUITING in roles
+                    else constants.MEMBER
+                )
             )
             # Scheduling is committee-scoped, so the frontend needs each
             # group's id (not just its name) to link into that committee's
