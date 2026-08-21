@@ -43,6 +43,7 @@ interface PlanSlotRow {
 const DistributedPlanTable: React.FC<{
   entries: DistributedScheduleEntry[];
   admissionSlug: string;
+  groupId: string;
   admissionTitle: string;
   committeeName: string;
   savedSchedule: SavedSchedule;
@@ -75,6 +76,7 @@ const DistributedPlanTable: React.FC<{
 }> = ({
   entries,
   admissionSlug,
+  groupId,
   admissionTitle,
   committeeName,
   savedSchedule,
@@ -442,6 +444,7 @@ const DistributedPlanTable: React.FC<{
                   <td className="px-6 py-3 group-hover:bg-surface-soft">
                     <ScheduleInterviewWorkflow
                       admissionSlug={admissionSlug}
+                      groupId={groupId}
                       admissionTitle={admissionTitle}
                       committeeName={committeeName}
                       item={item}
@@ -455,6 +458,7 @@ const DistributedPlanTable: React.FC<{
                   <td className="px-6 py-3 group-hover:bg-surface-soft">
                     <ScheduleInterviewWorkflow
                       admissionSlug={admissionSlug}
+                      groupId={groupId}
                       admissionTitle={admissionTitle}
                       committeeName={committeeName}
                       item={item}

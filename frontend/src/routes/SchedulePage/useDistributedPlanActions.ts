@@ -11,6 +11,7 @@ import { useSaveSchedule } from "src/query/hooks";
 import type { NameVisibility, SavedSchedule, ScheduleItem } from "src/types";
 import { apiClient } from "src/utils/callApi";
 import {
+  admissionGroupScope,
   areSensitiveAdmissionCacheWritesBlocked,
   captureSensitiveAdmissionAuthorityEpoch,
   isSensitiveAdmissionAuthorityEpochCurrent,
@@ -22,6 +23,7 @@ type Notify = (message: string, tone?: StatusToastState["tone"]) => void;
 
 interface DistributedPlanActionsParams {
   admissionSlug: string;
+  groupId: string;
   savedSchedule: SavedSchedule | undefined;
   draftPersistenceReady?: boolean;
   notify: Notify;
@@ -29,13 +31,17 @@ interface DistributedPlanActionsParams {
 
 export const useDistributedPlanActions = ({
   admissionSlug,
+  groupId,
   savedSchedule,
   draftPersistenceReady = true,
   notify,
 }: DistributedPlanActionsParams) => {
   const queryClient = useQueryClient();
-  const saveSchedule = useSaveSchedule(admissionSlug);
-  const scheduleQueryKey = [`/admin/admission/${admissionSlug}/schedule/`];
+  const scope = admissionGroupScope(admissionSlug, groupId);
+  const saveSchedule = useSaveSchedule(admissionSlug, groupId);
+  const scheduleQueryKey = [
+    `/admin/admission/${admissionSlug}/group/${groupId}/schedule/`,
+  ];
   const [planTransition, setPlanTransition] = useState<
     "publishing" | "unlocking" | null
   >(null);
@@ -57,18 +63,14 @@ export const useDistributedPlanActions = ({
     return status === undefined || status === 409 || status >= 500;
   };
   const reconcilePublishedSchedule = async (visibility: NameVisibility) => {
-    const authorityEpoch =
-      captureSensitiveAdmissionAuthorityEpoch(admissionSlug);
+    const authorityEpoch = captureSensitiveAdmissionAuthorityEpoch(scope);
     try {
       const { data } = await apiClient.get<SavedSchedule>(
-        `/admin/admission/${admissionSlug}/schedule/`,
+        `/admin/admission/${admissionSlug}/group/${groupId}/schedule/`,
       );
       if (
-        areSensitiveAdmissionCacheWritesBlocked(admissionSlug) ||
-        !isSensitiveAdmissionAuthorityEpochCurrent(
-          admissionSlug,
-          authorityEpoch,
-        )
+        areSensitiveAdmissionCacheWritesBlocked(scope) ||
+        !isSensitiveAdmissionAuthorityEpochCurrent(scope, authorityEpoch)
       ) {
         return "access-lost" as const;
       }
@@ -82,12 +84,7 @@ export const useDistributedPlanActions = ({
         ? ("published" as const)
         : ("different-state" as const);
     } catch (error) {
-      if (
-        !isSensitiveAdmissionAuthorityEpochCurrent(
-          admissionSlug,
-          authorityEpoch,
-        )
-      ) {
+      if (!isSensitiveAdmissionAuthorityEpochCurrent(scope, authorityEpoch)) {
         return "access-lost" as const;
       }
       return handleAuthorizationFailure(error)
@@ -108,7 +105,7 @@ export const useDistributedPlanActions = ({
         is_distributed: savedSchedule.is_distributed,
         expected_updated_at: savedSchedule.updated_at,
       });
-      if (areSensitiveAdmissionCacheWritesBlocked(admissionSlug)) return false;
+      if (areSensitiveAdmissionCacheWritesBlocked(scope)) return false;
       notify(successMessage);
       return true;
     } catch (error) {
@@ -131,7 +128,7 @@ export const useDistributedPlanActions = ({
         name_visibility: visibility,
         expected_updated_at: savedSchedule.updated_at,
       });
-      if (areSensitiveAdmissionCacheWritesBlocked(admissionSlug)) return false;
+      if (areSensitiveAdmissionCacheWritesBlocked(scope)) return false;
       notify("Synlighet oppdatert.");
       return true;
     } catch (error) {
@@ -150,6 +147,7 @@ export const useDistributedPlanActions = ({
   const publishSchedule = async (
     visibility: NameVisibility,
     deviationApprovalFingerprint?: string,
+    distributedThrough?: string,
   ) => {
     if (!savedSchedule || savedSchedule.schedule.length === 0) return false;
     if (!draftPersistenceReady) {
@@ -163,7 +161,9 @@ export const useDistributedPlanActions = ({
     setPlanTransitionError("");
     try {
       await saveSchedule.mutateAsync({
-        is_distributed: true,
+        ...(distributedThrough
+          ? { distributed_through: distributedThrough }
+          : { is_distributed: true }),
         name_visibility: visibility,
         ...(deviationApprovalFingerprint
           ? {
@@ -172,8 +172,12 @@ export const useDistributedPlanActions = ({
           : {}),
         expected_updated_at: savedSchedule.updated_at,
       });
-      if (areSensitiveAdmissionCacheWritesBlocked(admissionSlug)) return false;
-      notify("Intervjuplanen er publisert for komiteen.");
+      if (areSensitiveAdmissionCacheWritesBlocked(scope)) return false;
+      notify(
+        distributedThrough
+          ? "Intervjuplanen er delvis publisert for komiteen."
+          : "Intervjuplanen er publisert for komiteen.",
+      );
       return true;
     } catch (error) {
       if (isSensitiveAuthorityChangedError(error)) return false;
@@ -208,6 +212,35 @@ export const useDistributedPlanActions = ({
     }
   };
 
+  const extendDistributedThrough = async (date: string) => {
+    if (!savedSchedule) return false;
+    setPlanTransition("publishing");
+    setPlanTransitionError("");
+    try {
+      await saveSchedule.mutateAsync({
+        distributed_through: date,
+        expected_updated_at: savedSchedule.updated_at,
+      });
+      if (areSensitiveAdmissionCacheWritesBlocked(scope)) return false;
+      notify("Publiseringsgrensen er utvidet.");
+      return true;
+    } catch (error) {
+      if (isSensitiveAuthorityChangedError(error)) return false;
+      if (handleAuthorizationFailure(error)) return false;
+      const message = isConflictError(error)
+        ? CONFLICT_MESSAGE
+        : scheduleSaveErrorMessage(
+            error,
+            "Kunne ikke utvide publiseringsgrensen. Prøv igjen.",
+          );
+      setPlanTransitionError(message);
+      notify(message, "error");
+      return false;
+    } finally {
+      setPlanTransition(null);
+    }
+  };
+
   const unlockSchedule = async () => {
     if (!savedSchedule) return false;
     setPlanTransition("unlocking");
@@ -217,7 +250,7 @@ export const useDistributedPlanActions = ({
         is_distributed: false,
         expected_updated_at: savedSchedule.updated_at,
       });
-      if (areSensitiveAdmissionCacheWritesBlocked(admissionSlug)) return false;
+      if (areSensitiveAdmissionCacheWritesBlocked(scope)) return false;
       notify("Intervjuplanen er låst opp for redigering.");
       return true;
     } catch (error) {
@@ -321,6 +354,7 @@ export const useDistributedPlanActions = ({
 
   return {
     publishSchedule,
+    extendDistributedThrough,
     unlockSchedule,
     planTransition,
     planTransitionError,

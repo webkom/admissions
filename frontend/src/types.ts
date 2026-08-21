@@ -89,6 +89,9 @@ interface AdmissionUserData {
   is_recruiter: boolean;
   committee_role: "leader" | "recruiting" | "member" | null;
   committee_groups: string[];
+  committee_group_details: (Pick<Group, "pk" | "name"> & {
+    role: "leader" | "recruiting" | "member";
+  })[];
   represented_groups: string[];
   application_view_mode: ApplicationViewMode;
 }
@@ -275,13 +278,9 @@ export interface SavedSchedule {
   } | null;
   deviation_review?: ScheduleDeviationReview | null;
   is_distributed: boolean;
+  distributed_through: string | null;
   conflict_review_open: boolean;
-  conflict_collection_open?: boolean;
-  conflict_collection_revision?: string | null;
-  conflict_collection_candidate_ids?: string[];
-  conflict_collection_participant_ids?: string[];
   name_visibility: NameVisibility;
-  revealed_groups?: Array<{ id: string; name: string }>;
   updated_at: string;
 }
 
@@ -301,9 +300,6 @@ export interface InterviewAvailabilityParticipant {
   reviewed_candidate_ids: string[];
   proposed_candidate_ids: string[];
   conflict_review_complete: boolean;
-  conflict_collection_candidate_ids?: string[];
-  conflict_collection_revision?: string | null;
-  conflict_collection_complete?: boolean;
   has_submitted: boolean;
   participation: InterviewerParticipation;
   needs_review: boolean;

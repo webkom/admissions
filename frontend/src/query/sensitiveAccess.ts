@@ -14,6 +14,19 @@ export interface SensitiveAdmissionAuthorityEpoch {
   admission: number;
 }
 
+/**
+ * Every committee's schedule/candidates/availability is independent now, so
+ * the sensitive-access bookkeeping below (which keys purely on the string
+ * passed in as "admissionSlug") must key on the committee, not just the
+ * admission - otherwise an access error on one committee would block or
+ * purge every other committee's still-valid cache for the same admission.
+ * Deliberately built to also be the URL infix these resources share, so the
+ * prefix-matching in purgeSensitiveAdmissionQueries keeps working unmodified
+ * for callers that pass this in place of a bare admission slug.
+ */
+export const admissionGroupScope = (admissionSlug: string, groupId: string) =>
+  `${admissionSlug}/group/${groupId}`;
+
 export class SensitiveAuthorityChangedError extends Error {
   readonly admissionSlug: string;
 

@@ -12,6 +12,7 @@ import {
   type SolveResponse,
 } from "./solverHelpers";
 import djangoData from "src/utils/djangoData";
+import { admissionGroupScope } from "src/query/sensitiveAccess";
 import { createSolveJobLifecycle } from "./solveJobLifecycle";
 import { createSolveJobStorage, type StoredSolveJob } from "./solveJobStorage";
 
@@ -21,15 +22,19 @@ interface SolveJobCompletion {
   result: SolveResponse | null;
 }
 
-export function useSolveJob(admissionSlug: string) {
+export function useSolveJob(admissionSlug: string, groupId: string) {
   const queryClient = useQueryClient();
   const lifecycle = useMemo(
-    () => createSolveJobLifecycle(admissionSlug, queryClient),
-    [admissionSlug, queryClient],
+    () => createSolveJobLifecycle(admissionSlug, groupId, queryClient),
+    [admissionSlug, groupId, queryClient],
   );
   const storage = useMemo(
-    () => createSolveJobStorage(admissionSlug, djangoData.user.id),
-    [admissionSlug],
+    () =>
+      createSolveJobStorage(
+        admissionGroupScope(admissionSlug, groupId),
+        djangoData.user.id,
+      ),
+    [admissionSlug, groupId],
   );
 
   const [loading, setLoading] = useState(false);
@@ -330,7 +335,7 @@ export function useSolveJob(admissionSlug: string) {
           applyFinishedJob(finishedJob);
           if (finishedJob.applied_at) {
             void queryClient.invalidateQueries({
-              queryKey: [`/admin/admission/${admissionSlug}/schedule/`],
+              queryKey: [`/admin/admission/${admissionSlug}/group/${groupId}/schedule/`],
             });
           }
         };
@@ -355,6 +360,7 @@ export function useSolveJob(admissionSlug: string) {
     })();
   }, [
     admissionSlug,
+    groupId,
     clearAfterAccessFailure,
     clearStoredJob,
     lifecycle,
@@ -504,7 +510,7 @@ export function useSolveJob(admissionSlug: string) {
         setPendingProposal(null);
         clearStoredProposal();
         await queryClient.invalidateQueries({
-          queryKey: [`/admin/admission/${admissionSlug}/schedule/`],
+          queryKey: [`/admin/admission/${admissionSlug}/group/${groupId}/schedule/`],
           exact: true,
           refetchType: "active",
         });
@@ -573,17 +579,17 @@ export function useSolveJob(admissionSlug: string) {
         setError(formatApiError(outcome.error.response?.data));
         await Promise.all([
           queryClient.invalidateQueries({
-            queryKey: [`/admin/admission/${admissionSlug}/schedule/`],
+            queryKey: [`/admin/admission/${admissionSlug}/group/${groupId}/schedule/`],
             exact: true,
             refetchType: "active",
           }),
           queryClient.invalidateQueries({
-            queryKey: [`/admin/admission/${admissionSlug}/availability/`],
+            queryKey: [`/admin/admission/${admissionSlug}/group/${groupId}/availability/`],
             exact: true,
             refetchType: "active",
           }),
           queryClient.invalidateQueries({
-            queryKey: [`/admin/admission/${admissionSlug}/candidates/`],
+            queryKey: [`/admin/admission/${admissionSlug}/group/${groupId}/candidates/`],
             exact: true,
             refetchType: "active",
           }),

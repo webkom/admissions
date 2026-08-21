@@ -40,16 +40,18 @@ const inferEndDateFromSchedule = (savedSchedule: SavedSchedule) => {
 
 interface ScheduleConfigurationParams {
   admissionSlug: string;
+  groupId: string;
   savedSchedule: SavedSchedule | undefined;
   notify: Notify;
 }
 
 export const useScheduleConfiguration = ({
   admissionSlug,
+  groupId,
   savedSchedule,
   notify,
 }: ScheduleConfigurationParams) => {
-  const saveSchedule = useSaveSchedule(admissionSlug);
+  const saveSchedule = useSaveSchedule(admissionSlug, groupId);
   const defaultStart = useMemo(() => nextMonday(), []);
   const defaultEnd = useMemo(() => addDays(defaultStart, 4), [defaultStart]);
   const configuration = useMemo(() => {
@@ -144,38 +146,6 @@ export const useScheduleConfiguration = ({
     }
   };
 
-  const setConflictCollectionOpen = async (open: boolean) => {
-    if (!savedSchedule) {
-      notify("Lagre tidsoppsettet før kandidatnavn åpnes.", "error");
-      return false;
-    }
-    try {
-      await saveSchedule.mutateAsync({
-        conflict_collection_open: open,
-        expected_updated_at: savedSchedule.updated_at,
-      });
-      notify(
-        open
-          ? "Kandidatnavn er åpnet for inhabilitetskontroll."
-          : "Inhabilitetskontrollen er fullført og kandidatnavnene er lukket.",
-      );
-      return true;
-    } catch (error) {
-      if (isSensitiveAuthorityChangedError(error)) throw error;
-      notify(
-        isConflictError(error)
-          ? CONFLICT_MESSAGE
-          : scheduleSaveErrorMessage(
-              error,
-              "Kunne ikke oppdatere inhabilitetskontrollen.",
-              "Inhabilitetskontrollen kan ikke lukkes",
-            ),
-        "error",
-      );
-      return false;
-    }
-  };
-
   return {
     startDate,
     endDate,
@@ -193,6 +163,5 @@ export const useScheduleConfiguration = ({
     revision,
     dates,
     saveConfig,
-    setConflictCollectionOpen,
   };
 };

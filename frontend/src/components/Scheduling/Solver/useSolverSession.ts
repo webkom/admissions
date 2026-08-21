@@ -23,6 +23,7 @@ import { useSolveJob } from "./useSolveJob";
 
 interface UseSolverSessionParams {
   admissionSlug: string;
+  groupId: string;
   candidates: Candidate[];
   interviewers: Interviewer[];
   dates: string[];
@@ -35,6 +36,7 @@ interface UseSolverSessionParams {
 
 export const useSolverSession = ({
   admissionSlug,
+  groupId,
   candidates,
   interviewers,
   dates,
@@ -53,9 +55,11 @@ export const useSolverSession = ({
   const [pendingProposalSolverOptions, setPendingProposalSolverOptions] =
     useState<SolverOptions | null>(null);
   const [solveTick, setSolveTick] = useState(0);
-  const solveJob = useSolveJob(admissionSlug);
-  const { data: savedSchedule, error: savedScheduleError } =
-    useSavedSchedule(admissionSlug);
+  const solveJob = useSolveJob(admissionSlug, groupId);
+  const { data: savedSchedule, error: savedScheduleError } = useSavedSchedule(
+    admissionSlug,
+    groupId,
+  );
   const [draftBaseRevision, setDraftBaseRevision] = useState<string | null>(
     null,
   );
@@ -440,6 +444,7 @@ export const useSolverSession = ({
         syntheticInput
           ? {
               admission_slug: admissionSlug,
+              group_id: groupId,
               candidates,
               interviewers,
               panel_size: panelSize,
@@ -454,6 +459,7 @@ export const useSolverSession = ({
             }
           : {
               admission_slug: admissionSlug,
+              group_id: groupId,
               candidates: candidates.map(({ id }) => ({ id })),
               interviewers: interviewers.map(({ id }) => ({ id })),
               panel_size: panelSize,
@@ -518,6 +524,7 @@ export const useSolverSession = ({
     },
     [
       admissionSlug,
+      groupId,
       candidates,
       canonicalBlocks,
       dates,

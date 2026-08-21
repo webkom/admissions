@@ -18,6 +18,7 @@ import {
 } from "src/types";
 import { apiClient } from "src/utils/callApi";
 import {
+  admissionGroupScope,
   areSensitiveAdmissionCacheWritesBlocked,
   areSensitiveCacheWritesBlocked,
   isSensitiveAuthorityChangedError,
@@ -29,7 +30,7 @@ import {
 import type { ApplicationViewMode } from "src/types";
 
 type SaveSchedulePayload = Partial<
-  Omit<SavedSchedule, "id" | "updated_at" | "revealed_groups">
+  Omit<SavedSchedule, "id" | "updated_at">
 > & {
   expected_updated_at: string | null;
   deviation_approval_fingerprint?: string;
@@ -175,51 +176,70 @@ export const useAdminApplications = (
   return hideDataAfterSensitiveQueryFailure(query);
 };
 
-export const useInterviewCandidates = (slug: string) => {
+export const useInterviewCandidates = (slug: string, groupId: string) => {
+  const scope = admissionGroupScope(slug, groupId);
   const query = useQuery<Candidate[], AxiosError>({
-    queryKey: [`/admin/admission/${slug}/candidates/`],
-    enabled: Boolean(slug) && !areSensitiveAdmissionCacheWritesBlocked(slug),
-    ...sensitiveQueryOptions(slug),
-    meta: admissionSensitiveQueryMeta(slug, true),
+    queryKey: [`/admin/admission/${slug}/group/${groupId}/candidates/`],
+    enabled:
+      Boolean(slug) &&
+      Boolean(groupId) &&
+      !areSensitiveAdmissionCacheWritesBlocked(scope),
+    ...sensitiveQueryOptions(scope),
+    meta: admissionSensitiveQueryMeta(scope, true),
   });
   return hideDataAfterSensitiveQueryFailure(query);
 };
 
-export const useSavedSchedule = (slug: string) => {
+export const useSavedSchedule = (slug: string, groupId: string) => {
+  const scope = admissionGroupScope(slug, groupId);
   const query = useQuery<SavedSchedule, AxiosError>({
-    queryKey: [`/admin/admission/${slug}/schedule/`],
-    enabled: Boolean(slug) && !areSensitiveAdmissionCacheWritesBlocked(slug),
-    ...sensitiveQueryOptions(slug),
-    meta: admissionSensitiveQueryMeta(slug, false),
+    queryKey: [`/admin/admission/${slug}/group/${groupId}/schedule/`],
+    enabled:
+      Boolean(slug) &&
+      Boolean(groupId) &&
+      !areSensitiveAdmissionCacheWritesBlocked(scope),
+    ...sensitiveQueryOptions(scope),
+    meta: admissionSensitiveQueryMeta(scope, false),
   });
   return hideDataAfterSensitiveQueryFailure(query);
 };
 
 export const useSaveSchedule = (
   slug: string,
+  groupId: string,
   options: SaveScheduleOptions = {},
 ) => {
   const queryClient = useQueryClient();
-  const scheduleQueryKey = [`/admin/admission/${slug}/schedule/`];
-  const candidatesQueryKey = [`/admin/admission/${slug}/candidates/`];
+  const scope = admissionGroupScope(slug, groupId);
+  const scheduleQueryKey = [
+    `/admin/admission/${slug}/group/${groupId}/schedule/`,
+  ];
+  const candidatesQueryKey = [
+    `/admin/admission/${slug}/group/${groupId}/candidates/`,
+  ];
   return useMutation<
     SavedSchedule,
     SensitiveAdmissionMutationError,
     SaveSchedulePayload
   >({
-    ...sensitiveAdmissionMutationOptions(slug),
+    ...sensitiveAdmissionMutationOptions(scope),
     mutationFn: (payload) =>
-      runSensitiveAdmissionMutation(slug, () =>
+      runSensitiveAdmissionMutation(scope, () =>
         apiClient
-          .post(`/admin/admission/${slug}/schedule/`, payload)
+          .post(
+            `/admin/admission/${slug}/group/${groupId}/schedule/`,
+            payload,
+          )
           .then((r) => r.data),
       ),
     onSuccess: (data) => {
-      if (areSensitiveAdmissionCacheWritesBlocked(slug)) return;
+      if (areSensitiveAdmissionCacheWritesBlocked(scope)) return;
       options.onCanonicalScheduleSaved?.(data);
       queryClient.setQueryData(scheduleQueryKey, data);
       queryClient.invalidateQueries({
-        queryKey: [`/admin/admission/${slug}/availability/`],
+        queryKey: [
+          `/admin/admission/${slug}/group/${groupId}/availability/`,
+        ],
       });
       queryClient.invalidateQueries({
         queryKey: candidatesQueryKey,
@@ -248,19 +268,29 @@ export const useSaveSchedule = (
   });
 };
 
-export const useInterviewAvailability = (slug: string) => {
+export const useInterviewAvailability = (slug: string, groupId: string) => {
+  const scope = admissionGroupScope(slug, groupId);
   const query = useQuery<InterviewAvailabilityParticipant[], AxiosError>({
-    queryKey: [`/admin/admission/${slug}/availability/`],
-    enabled: Boolean(slug) && !areSensitiveAdmissionCacheWritesBlocked(slug),
-    ...sensitiveQueryOptions(slug),
-    meta: admissionSensitiveQueryMeta(slug, true),
+    queryKey: [`/admin/admission/${slug}/group/${groupId}/availability/`],
+    enabled:
+      Boolean(slug) &&
+      Boolean(groupId) &&
+      !areSensitiveAdmissionCacheWritesBlocked(scope),
+    ...sensitiveQueryOptions(scope),
+    meta: admissionSensitiveQueryMeta(scope, true),
   });
   return hideDataAfterSensitiveQueryFailure(query);
 };
 
-export const useSaveInterviewAvailability = (slug: string) => {
+export const useSaveInterviewAvailability = (
+  slug: string,
+  groupId: string,
+) => {
   const queryClient = useQueryClient();
-  const availabilityQueryKey = [`/admin/admission/${slug}/availability/`];
+  const scope = admissionGroupScope(slug, groupId);
+  const availabilityQueryKey = [
+    `/admin/admission/${slug}/group/${groupId}/availability/`,
+  ];
   return useMutation<
     InterviewAvailabilityParticipant,
     SensitiveAdmissionMutationError,
@@ -270,8 +300,6 @@ export const useSaveInterviewAvailability = (slug: string) => {
       slots?: string[];
       conflicts?: string[];
       reviewed_candidate_ids?: string[];
-      conflict_collection_reviewed_candidate_ids?: string[];
-      conflict_collection_revision?: string;
       experience_level?: ExperienceLevel;
       expected_availability_generation?: number;
       /** Full replacement of this interviewer's declarations. */
@@ -282,27 +310,30 @@ export const useSaveInterviewAvailability = (slug: string) => {
       }[];
     }
   >({
-    ...sensitiveAdmissionMutationOptions(slug),
+    ...sensitiveAdmissionMutationOptions(scope),
     mutationFn: (payload) =>
-      runSensitiveAdmissionMutation(slug, () =>
+      runSensitiveAdmissionMutation(scope, () =>
         apiClient
-          .post(`/admin/admission/${slug}/availability/`, payload)
+          .post(
+            `/admin/admission/${slug}/group/${groupId}/availability/`,
+            payload,
+          )
           .then((r) => r.data),
       ),
     onSuccess: () => {
-      if (areSensitiveAdmissionCacheWritesBlocked(slug)) return;
+      if (areSensitiveAdmissionCacheWritesBlocked(scope)) return;
       queryClient.invalidateQueries({
         queryKey: availabilityQueryKey,
       });
       queryClient.invalidateQueries({
-        queryKey: [`/admin/admission/${slug}/schedule/`],
+        queryKey: [`/admin/admission/${slug}/group/${groupId}/schedule/`],
       });
     },
     onError: (error) => {
       if (isSensitiveAuthorityChangedError(error)) return;
       const status = error.response?.status ?? 0;
       if (status !== 404) return;
-      purgeSensitiveAdmissionAccess(queryClient, slug, error);
+      purgeSensitiveAdmissionAccess(queryClient, scope, error);
     },
   });
 };

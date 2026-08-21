@@ -31,6 +31,7 @@ export interface DraftPersistenceStatus {
 
 interface DraftPersistenceConfig {
   admissionSlug: string;
+  groupId: string;
   startDate: string;
   endDate: string;
   sessionDuration: number;
@@ -97,7 +98,7 @@ export const useScheduleDraftPersistence = ({
   const onRevisionSavedRef = useRef(onRevisionSaved);
   const onConflictRef = useRef(onConflict);
   const onSavedRef = useRef(onSaved);
-  const saveSchedule = useSaveSchedule(config.admissionSlug, {
+  const saveSchedule = useSaveSchedule(config.admissionSlug, config.groupId, {
     onCanonicalScheduleSaved: (schedule) =>
       onRevisionSavedRef.current(schedule.updated_at),
   });

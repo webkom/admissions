@@ -40,6 +40,10 @@ export { compareInterviewStatuses };
 
 interface InterviewStatusControlProps {
   admissionSlug: string;
+  /** Only known when rendered from within one committee's own schedule page
+   * - keeps that committee's schedule cache entry optimistically in sync.
+   * The admin applications list spans every committee, so it has none. */
+  groupId?: string;
   applicationScopeKey?: string;
   applicationId: string;
   candidateName: string;
@@ -52,6 +56,7 @@ interface InterviewStatusControlProps {
 
 const InterviewStatusControl: React.FC<InterviewStatusControlProps> = ({
   admissionSlug,
+  groupId,
   applicationScopeKey = "schedule",
   applicationId,
   candidateName,
@@ -64,6 +69,7 @@ const InterviewStatusControl: React.FC<InterviewStatusControlProps> = ({
   const mutation = useAdminUpdateInterviewStatusMutation(
     admissionSlug,
     applicationScopeKey,
+    groupId,
   );
   const feedbackId = React.useId();
   const statusLabel = getInterviewStatusLabel(status);

@@ -1,20 +1,29 @@
 describe("admin schedule configuration toggles", () => {
   beforeEach(() => {
     cy.viewport(1440, 900);
-    cy.intercept("GET", "**/api/admin/admission/webkom-open/schedule/").as(
-      "schedule",
-    );
-    cy.intercept("GET", "**/api/admin/admission/webkom-open/candidates/").as(
-      "candidates",
-    );
-    cy.intercept("GET", "**/api/admin/admission/webkom-open/availability/").as(
-      "availability",
-    );
+    // Scheduling is committee-scoped, so every request carries the fixture
+    // admin's own committee id in the path - fetch it once up front instead
+    // of hardcoding it.
     cy.login("webkom");
-    cy.visit("/webkom-open/schedule", {
-      onBeforeLoad(window) {
-        window.localStorage.setItem("admissions.wizard.admin.v1", "1");
-      },
+    cy.request("/api/admission/webkom-open/").then((response) => {
+      const groupId = response.body.userdata.committee_group_details[0].pk;
+      cy.intercept(
+        "GET",
+        `**/api/admin/admission/webkom-open/group/${groupId}/schedule/`,
+      ).as("schedule");
+      cy.intercept(
+        "GET",
+        `**/api/admin/admission/webkom-open/group/${groupId}/candidates/`,
+      ).as("candidates");
+      cy.intercept(
+        "GET",
+        `**/api/admin/admission/webkom-open/group/${groupId}/availability/`,
+      ).as("availability");
+      cy.visit(`/webkom-open/schedule/${groupId}`, {
+        onBeforeLoad(window) {
+          window.localStorage.setItem("admissions.wizard.admin.v1", "1");
+        },
+      });
     });
     ["@schedule", "@candidates", "@availability"].forEach((requestAlias) => {
       cy.wait(requestAlias).its("response.statusCode").should("eq", 200);

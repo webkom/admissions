@@ -140,13 +140,13 @@ export const useTerminateCommitteeMutation = (admissionSlug: string) => {
           { confirmation_name: confirmationName },
         ),
       ),
-    onSuccess: () => {
+    onSuccess: (_, { groupId }) => {
       if (areSensitiveAdmissionCacheWritesBlocked(admissionSlug)) return;
       [
         `/admin/admission/${admissionSlug}/application/`,
-        `/admin/admission/${admissionSlug}/candidates/`,
-        `/admin/admission/${admissionSlug}/schedule/`,
-        `/admin/admission/${admissionSlug}/availability/`,
+        `/admin/admission/${admissionSlug}/group/${groupId}/candidates/`,
+        `/admin/admission/${admissionSlug}/group/${groupId}/schedule/`,
+        `/admin/admission/${admissionSlug}/group/${groupId}/availability/`,
       ].forEach((queryKey) => {
         queryClient.invalidateQueries({ queryKey: [queryKey] });
       });
@@ -178,13 +178,19 @@ interface InterviewStatusMutationContext {
 export const useAdminUpdateInterviewStatusMutation = (
   admissionSlug: string,
   applicationScopeKey: string,
+  /** Only known when called from within one committee's own schedule page -
+   * the admin applications list spans every committee, so there is no
+   * single schedule cache entry to keep in sync there. */
+  groupId?: string,
 ) => {
   const queryClient = useQueryClient();
   const applicationsQueryKey = [
     `/admin/admission/${admissionSlug}/application/`,
     applicationScopeKey,
   ];
-  const scheduleQueryKey = [`/admin/admission/${admissionSlug}/schedule/`];
+  const scheduleQueryKey = groupId
+    ? [`/admin/admission/${admissionSlug}/group/${groupId}/schedule/`]
+    : null;
 
   return useMutation<
     InterviewStatusUpdateResponse,
@@ -218,7 +224,9 @@ export const useAdminUpdateInterviewStatusMutation = (
         captureSensitiveAdmissionAuthorityEpoch(admissionSlug);
       await Promise.all([
         queryClient.cancelQueries({ queryKey: applicationsQueryKey }),
-        queryClient.cancelQueries({ queryKey: scheduleQueryKey }),
+        ...(scheduleQueryKey
+          ? [queryClient.cancelQueries({ queryKey: scheduleQueryKey })]
+          : []),
       ]);
       if (
         !isSensitiveAdmissionAuthorityEpochCurrent(
@@ -231,8 +239,9 @@ export const useAdminUpdateInterviewStatusMutation = (
       const previousApplication = queryClient
         .getQueryData<AdminApplication[]>(applicationsQueryKey)
         ?.find((application) => application.pk === applicationId);
-      const previousSchedule =
-        queryClient.getQueryData<SavedSchedule>(scheduleQueryKey);
+      const previousSchedule = scheduleQueryKey
+        ? queryClient.getQueryData<SavedSchedule>(scheduleQueryKey)
+        : undefined;
 
       queryClient.setQueryData<AdminApplication[]>(
         applicationsQueryKey,
@@ -243,18 +252,20 @@ export const useAdminUpdateInterviewStatusMutation = (
               : application,
           ),
       );
-      queryClient.setQueryData<SavedSchedule>(scheduleQueryKey, (current) =>
-        current
-          ? {
-              ...current,
-              schedule: current.schedule.map((item) =>
-                item.candidate_id === applicationId
-                  ? { ...item, interview_status: interviewStatus }
-                  : item,
-              ),
-            }
-          : current,
-      );
+      if (scheduleQueryKey) {
+        queryClient.setQueryData<SavedSchedule>(scheduleQueryKey, (current) =>
+          current
+            ? {
+                ...current,
+                schedule: current.schedule.map((item) =>
+                  item.candidate_id === applicationId
+                    ? { ...item, interview_status: interviewStatus }
+                    : item,
+                ),
+              }
+            : current,
+        );
+      }
 
       return {
         previousStatus: previousApplication
@@ -286,7 +297,14 @@ export const useAdminUpdateInterviewStatusMutation = (
             queryKey: applicationsQueryKey,
             exact: true,
           }),
-          queryClient.resetQueries({ queryKey: scheduleQueryKey, exact: true }),
+          ...(scheduleQueryKey
+            ? [
+                queryClient.resetQueries({
+                  queryKey: scheduleQueryKey,
+                  exact: true,
+                }),
+              ]
+            : []),
         ]);
         return;
       }
@@ -302,7 +320,7 @@ export const useAdminUpdateInterviewStatusMutation = (
             ),
         );
       }
-      if (context?.previousSchedule) {
+      if (scheduleQueryKey && context?.previousSchedule) {
         queryClient.setQueryData(scheduleQueryKey, context.previousSchedule);
       }
     },
@@ -329,25 +347,27 @@ export const useAdminUpdateInterviewStatusMutation = (
               : application,
           ),
       );
-      queryClient.setQueryData<SavedSchedule>(scheduleQueryKey, (current) =>
-        current
-          ? {
-              ...current,
-              schedule: current.schedule.map((item) =>
-                item.candidate_id === applicationId
-                  ? {
-                      ...item,
-                      interview_status: updatedStatus.interview_status,
-                      interview_status_updated_at:
-                        updatedStatus.interview_status_updated_at,
-                      interview_status_updated_by:
-                        updatedStatus.interview_status_updated_by,
-                    }
-                  : item,
-              ),
-            }
-          : current,
-      );
+      if (scheduleQueryKey) {
+        queryClient.setQueryData<SavedSchedule>(scheduleQueryKey, (current) =>
+          current
+            ? {
+                ...current,
+                schedule: current.schedule.map((item) =>
+                  item.candidate_id === applicationId
+                    ? {
+                        ...item,
+                        interview_status: updatedStatus.interview_status,
+                        interview_status_updated_at:
+                          updatedStatus.interview_status_updated_at,
+                        interview_status_updated_by:
+                          updatedStatus.interview_status_updated_by,
+                      }
+                    : item,
+                ),
+              }
+            : current,
+        );
+      }
     },
     onSettled: (_data, error) => {
       if (
@@ -360,7 +380,9 @@ export const useAdminUpdateInterviewStatusMutation = (
       void queryClient.invalidateQueries({
         queryKey: [`/admin/admission/${admissionSlug}/application/`],
       });
-      void queryClient.invalidateQueries({ queryKey: scheduleQueryKey });
+      if (scheduleQueryKey) {
+        void queryClient.invalidateQueries({ queryKey: scheduleQueryKey });
+      }
     },
   });
 };

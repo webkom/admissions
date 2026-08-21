@@ -18,7 +18,10 @@ import {
   NameVisibility,
   SavedSchedule,
 } from "../../types";
-import { formatSlotLabel } from "src/components/Scheduling/scheduleUtils";
+import {
+  formatAccessibleDate,
+  formatSlotLabel,
+} from "src/components/Scheduling/scheduleUtils";
 import cn from "src/utils/cn";
 import PlanFilterBar from "./PlanFilterBar";
 import DistributedPlanCalendar from "./DistributedPlanCalendar";
@@ -48,6 +51,7 @@ import { iconSizes } from "src/styles/designTokens";
 
 interface DistributedPlanViewProps {
   admissionSlug: string;
+  groupId: string;
   admissionTitle: string;
   committeeName: string;
   savedSchedule: SavedSchedule | undefined;
@@ -74,6 +78,7 @@ interface DistributedPlanViewProps {
   ) => Promise<boolean>;
   onUnlock: () => Promise<boolean>;
   onUnlocked: () => void;
+  onExtendDistributedThrough: (date: string) => Promise<boolean>;
   planTransition: "publishing" | "unlocking" | null;
   planTransitionError: string;
   myConflicts: string[];
@@ -84,6 +89,7 @@ interface DistributedPlanViewProps {
 
 const DistributedPlanView: React.FC<DistributedPlanViewProps> = ({
   admissionSlug,
+  groupId,
   admissionTitle,
   committeeName,
   savedSchedule,
@@ -100,6 +106,7 @@ const DistributedPlanView: React.FC<DistributedPlanViewProps> = ({
   onSetBookingSource,
   onUnlock,
   onUnlocked,
+  onExtendDistributedThrough,
   planTransition,
   planTransitionError,
   myConflicts,
@@ -117,6 +124,8 @@ const DistributedPlanView: React.FC<DistributedPlanViewProps> = ({
   const [isChangingTime, setIsChangingTime] = useState(false);
   const [lockBusyIndex, setLockBusyIndex] = useState<number | null>(null);
   const [isUnlockDialogOpen, setIsUnlockDialogOpen] = useState(false);
+  const [isExtendDialogOpen, setIsExtendDialogOpen] = useState(false);
+  const [extendThroughDate, setExtendThroughDate] = useState("");
   const {
     detailsRef: actionMenuRef,
     closeDetails: closeActionMenu,
@@ -125,7 +134,7 @@ const DistributedPlanView: React.FC<DistributedPlanViewProps> = ({
   const [outreachPersistenceState, setOutreachPersistenceState] = useState<
     "saving" | "saved" | "error"
   >("saved");
-  const outreachTemplateStorageKey = `admissions:${admissionSlug}:interview-outreach-template`;
+  const outreachTemplateStorageKey = `admissions:${admissionSlug}:${groupId}:interview-outreach-template`;
   const defaultOutreachTemplates = useMemo(
     () => createDefaultInterviewOutreachTemplates(committeeName),
     [committeeName],
@@ -192,11 +201,14 @@ const DistributedPlanView: React.FC<DistributedPlanViewProps> = ({
     savedSchedule &&
       candidateNamesAreVisible(savedSchedule, canToggleCandidateNames),
   );
-  const hasPartialCandidateDisclosure = Boolean(
-    isAdmin &&
-      savedSchedule &&
-      savedSchedule.name_visibility !== "committee" &&
-      savedSchedule.revealed_groups?.length,
+  const sortedDates = useMemo(() => [...dates].sort(), [dates]);
+  const lastConfiguredDate = sortedDates[sortedDates.length - 1];
+  const distributedThrough = savedSchedule?.distributed_through ?? null;
+  const isPartiallyPublished = Boolean(
+    distributedThrough && lastConfiguredDate && distributedThrough <= lastConfiguredDate,
+  );
+  const extendableDates = sortedDates.filter(
+    (date) => !distributedThrough || date > distributedThrough,
   );
 
   const toggleLock = async (scheduleIndex: number) => {
@@ -276,10 +288,7 @@ const DistributedPlanView: React.FC<DistributedPlanViewProps> = ({
 
   const handleSelectVisibility = async (next: NameVisibility) => {
     if (!canToggleCandidateNames || isUpdatingNames) return;
-    if (
-      next === savedSchedule.name_visibility &&
-      !hasPartialCandidateDisclosure
-    ) {
+    if (next === savedSchedule.name_visibility) {
       return;
     }
 
@@ -314,12 +323,24 @@ const DistributedPlanView: React.FC<DistributedPlanViewProps> = ({
     onUnlocked();
   };
 
+  const confirmExtend = async () => {
+    if (!extendThroughDate) return;
+    const extended = await onExtendDistributedThrough(extendThroughDate);
+    if (extended) setIsExtendDialogOpen(false);
+  };
+
   return (
     <SchedulePanel>
       <SchedulePanelHeader
         icon={CalendarCheck}
         title="Intervjuplan"
-        chips={<Chip tone="success">Publisert</Chip>}
+        chips={
+          <Chip tone="success">
+            {isPartiallyPublished && distributedThrough
+              ? `Publisert t.o.m. ${formatAccessibleDate(distributedThrough)}`
+              : "Publisert"}
+          </Chip>
+        }
         actions={
           <div className="flex flex-wrap items-center gap-2">
             <details
@@ -357,6 +378,26 @@ const DistributedPlanView: React.FC<DistributedPlanViewProps> = ({
                 >
                   Eksporter plan
                 </button>
+                {isAdmin && isPartiallyPublished && extendableDates.length > 0 && (
+                  <button
+                    type="button"
+                    role="menuitem"
+                    onClick={() => {
+                      closeActionMenu(true);
+                      setExtendThroughDate(
+                        extendableDates[extendableDates.length - 1],
+                      );
+                      setIsExtendDialogOpen(true);
+                    }}
+                    disabled={planTransition !== null}
+                    className={cn(
+                      "flex items-center rounded-md px-3 py-2 text-left text-ui font-semibold text-text-primary hover:bg-surface-subtle",
+                      keyboardFocusRingClass,
+                    )}
+                  >
+                    Utvid publisering
+                  </button>
+                )}
                 {isAdmin && (
                   <button
                     type="button"
@@ -399,9 +440,6 @@ const DistributedPlanView: React.FC<DistributedPlanViewProps> = ({
         canToggleCandidateNames={canToggleCandidateNames}
         canHideCandidateNames={isAdmin}
         nameVisibility={savedSchedule.name_visibility}
-        revealedGroupNames={
-          savedSchedule.revealed_groups?.map((group) => group.name) ?? []
-        }
         onSelectVisibility={(next) => {
           if (!isUpdatingNames) handleSelectVisibility(next);
         }}
@@ -447,6 +485,7 @@ const DistributedPlanView: React.FC<DistributedPlanViewProps> = ({
           <DistributedPlanCalendar
             entries={displayEntries}
             admissionSlug={admissionSlug}
+            groupId={groupId}
             admissionTitle={admissionTitle}
             committeeName={committeeName}
             savedSchedule={savedSchedule}
@@ -471,6 +510,7 @@ const DistributedPlanView: React.FC<DistributedPlanViewProps> = ({
           <DistributedPlanTable
             entries={displayEntries}
             admissionSlug={admissionSlug}
+            groupId={groupId}
             admissionTitle={admissionTitle}
             committeeName={committeeName}
             savedSchedule={savedSchedule}
@@ -529,6 +569,45 @@ const DistributedPlanView: React.FC<DistributedPlanViewProps> = ({
             Planen skjules for komiteen og åpnes i Planutkast, der du kan gjøre
             endringer og lagre et nytt utkast.
           </p>
+        </ConfirmDialog>
+      )}
+
+      {isExtendDialogOpen && (
+        <ConfirmDialog
+          title="Utvid publisering"
+          confirmLabel={
+            planTransition === "publishing"
+              ? "Utvider…"
+              : "Utvid publisering"
+          }
+          onConfirm={confirmExtend}
+          onClose={() => setIsExtendDialogOpen(false)}
+          busy={planTransition === "publishing"}
+        >
+          <p className="m-0">
+            Flere intervjuer blir synlige for komiteen. Planen er nå publisert
+            til og med{" "}
+            {distributedThrough ? formatAccessibleDate(distributedThrough) : ""}
+            .
+          </p>
+          <label
+            htmlFor="extend-through-date"
+            className="m-0 mt-4 block text-detail font-semibold text-text-primary"
+          >
+            Publiser til og med
+          </label>
+          <select
+            id="extend-through-date"
+            value={extendThroughDate}
+            onChange={(event) => setExtendThroughDate(event.target.value)}
+            className="mt-1 w-full rounded-md border border-border bg-surface-base px-2 py-1.5 text-ui text-text-primary"
+          >
+            {extendableDates.map((date) => (
+              <option key={date} value={date}>
+                {formatAccessibleDate(date)}
+              </option>
+            ))}
+          </select>
         </ConfirmDialog>
       )}
     </SchedulePanel>

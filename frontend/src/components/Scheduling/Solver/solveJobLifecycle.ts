@@ -2,6 +2,7 @@ import type { QueryClient } from "@tanstack/react-query";
 import { isAxiosError } from "axios";
 
 import {
+  admissionGroupScope,
   areSensitiveAdmissionCacheWritesBlocked,
   captureSensitiveAdmissionAuthorityEpoch,
   isSensitiveAdmissionAuthorityEpochCurrent,
@@ -45,8 +46,10 @@ const neverStale = () => false;
 
 export const createSolveJobLifecycle = (
   admissionSlug: string,
+  groupId: string,
   queryClient: QueryClient,
 ) => {
+  const scope = admissionGroupScope(admissionSlug, groupId);
   const interruption = (
     isStale: IsStale = neverStale,
     authorityEpoch?: SensitiveAdmissionAuthorityEpoch,
@@ -54,11 +57,11 @@ export const createSolveJobLifecycle = (
     if (isStale()) return { kind: "stale" };
     if (
       authorityEpoch &&
-      !isSensitiveAdmissionAuthorityEpochCurrent(admissionSlug, authorityEpoch)
+      !isSensitiveAdmissionAuthorityEpochCurrent(scope, authorityEpoch)
     ) {
       return { kind: "stale" };
     }
-    if (areSensitiveAdmissionCacheWritesBlocked(admissionSlug)) {
+    if (areSensitiveAdmissionCacheWritesBlocked(scope)) {
       return { kind: "access-failure", purged: false };
     }
     return null;
@@ -68,8 +71,7 @@ export const createSolveJobLifecycle = (
     payload: unknown,
     isStale: IsStale = neverStale,
   ): Promise<SolveJobRequestOutcome> => {
-    const authorityEpoch =
-      captureSensitiveAdmissionAuthorityEpoch(admissionSlug);
+    const authorityEpoch = captureSensitiveAdmissionAuthorityEpoch(scope);
     const beforeRequest = interruption(isStale, authorityEpoch);
     if (beforeRequest) return beforeRequest;
 
@@ -79,11 +81,7 @@ export const createSolveJobLifecycle = (
         interruption(isStale, authorityEpoch) ?? { kind: "created", job: data }
       );
     } catch (error) {
-      const purged = purgeSensitiveAdmissionAccess(
-        queryClient,
-        admissionSlug,
-        error,
-      );
+      const purged = purgeSensitiveAdmissionAccess(queryClient, scope, error);
       if (isStale()) return { kind: "stale" };
       if (purged) return { kind: "access-failure", purged };
       const afterRequest = interruption(isStale, authorityEpoch);
@@ -96,8 +94,7 @@ export const createSolveJobLifecycle = (
     jobId: string,
     isStale: IsStale = neverStale,
   ): Promise<SolveJobReadOutcome> => {
-    const authorityEpoch =
-      captureSensitiveAdmissionAuthorityEpoch(admissionSlug);
+    const authorityEpoch = captureSensitiveAdmissionAuthorityEpoch(scope);
     const beforeRequest = interruption(isStale, authorityEpoch);
     if (beforeRequest) return beforeRequest;
 
@@ -124,14 +121,13 @@ export const createSolveJobLifecycle = (
   const latest = async (
     isStale: IsStale = neverStale,
   ): Promise<SolveJobReadOutcome> => {
-    const authorityEpoch =
-      captureSensitiveAdmissionAuthorityEpoch(admissionSlug);
+    const authorityEpoch = captureSensitiveAdmissionAuthorityEpoch(scope);
     const beforeRequest = interruption(isStale, authorityEpoch);
     if (beforeRequest) return beforeRequest;
 
     try {
       const response = await apiClient.get<SolveJob | "">("/solve/latest/", {
-        params: { admission_slug: admissionSlug },
+        params: { admission_slug: admissionSlug, group_id: groupId },
       });
       const interrupted = interruption(isStale, authorityEpoch);
       if (interrupted) return interrupted;
@@ -152,8 +148,7 @@ export const createSolveJobLifecycle = (
     jobId: string,
     isStale: IsStale = neverStale,
   ): Promise<SolveJobCancelOutcome> => {
-    const authorityEpoch =
-      captureSensitiveAdmissionAuthorityEpoch(admissionSlug);
+    const authorityEpoch = captureSensitiveAdmissionAuthorityEpoch(scope);
     const beforeRequest = interruption(isStale, authorityEpoch);
     if (beforeRequest) return beforeRequest;
 
@@ -180,8 +175,7 @@ export const createSolveJobLifecycle = (
     expectedUpdatedAt: string,
     isStale: IsStale = neverStale,
   ) => {
-    const authorityEpoch =
-      captureSensitiveAdmissionAuthorityEpoch(admissionSlug);
+    const authorityEpoch = captureSensitiveAdmissionAuthorityEpoch(scope);
     const beforeRequest = interruption(isStale, authorityEpoch);
     if (beforeRequest) return beforeRequest;
 
@@ -193,15 +187,19 @@ export const createSolveJobLifecycle = (
       const interrupted = interruption(isStale, authorityEpoch);
       if (interrupted) return interrupted;
       queryClient.setQueryData(
-        [`/admin/admission/${admissionSlug}/schedule/`],
+        [`/admin/admission/${admissionSlug}/group/${groupId}/schedule/`],
         data,
       );
       await Promise.all([
         queryClient.invalidateQueries({
-          queryKey: [`/admin/admission/${admissionSlug}/availability/`],
+          queryKey: [
+            `/admin/admission/${admissionSlug}/group/${groupId}/availability/`,
+          ],
         }),
         queryClient.invalidateQueries({
-          queryKey: [`/admin/admission/${admissionSlug}/candidates/`],
+          queryKey: [
+            `/admin/admission/${admissionSlug}/group/${groupId}/candidates/`,
+          ],
         }),
       ]);
       return { kind: "applied" as const, schedule: data };
@@ -224,8 +222,7 @@ export const createSolveJobLifecycle = (
     onJobChange: OnJobChange = () => undefined,
   ): Promise<SolveJobPollOutcome> => {
     let job = created;
-    const authorityEpoch =
-      captureSensitiveAdmissionAuthorityEpoch(admissionSlug);
+    const authorityEpoch = captureSensitiveAdmissionAuthorityEpoch(scope);
     const beforePoll = interruption(isStale, authorityEpoch);
     if (beforePoll) return beforePoll;
     onJobChange(job);

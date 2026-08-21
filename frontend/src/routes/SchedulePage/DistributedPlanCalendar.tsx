@@ -19,6 +19,7 @@ import type { InterviewOutreachTemplates } from "./interviewOutreach";
 const DistributedPlanCalendar: React.FC<{
   entries: DistributedScheduleEntry[];
   admissionSlug: string;
+  groupId: string;
   admissionTitle: string;
   committeeName: string;
   savedSchedule: SavedSchedule;
@@ -50,6 +51,7 @@ const DistributedPlanCalendar: React.FC<{
 }> = ({
   entries,
   admissionSlug,
+  groupId,
   admissionTitle,
   committeeName,
   savedSchedule,
@@ -174,6 +176,7 @@ const DistributedPlanCalendar: React.FC<{
               />
               <ScheduleInterviewWorkflow
                 admissionSlug={admissionSlug}
+                groupId={groupId}
                 admissionTitle={admissionTitle}
                 committeeName={committeeName}
                 item={item}

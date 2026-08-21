@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { useParams } from "react-router-dom";
+import { Navigate, useParams } from "react-router-dom";
 import { ArrowRight, HelpCircle, Loader2, RefreshCw } from "lucide-react";
 import {
   useAdmission,
@@ -16,6 +16,7 @@ import { normalizeSolverOptions } from "src/components/Scheduling/Solver/solverH
 import AvailabilityHeatmap from "src/components/Scheduling/Calendar/AvailabilityHeatmap";
 import AvailabilityResponseRoster from "src/components/Scheduling/Calendar/AvailabilityResponseRoster";
 import FadderbarnPicker, { type Fadderbarn } from "./FadderbarnPicker";
+import CommitteePicker from "./CommitteePicker";
 import AdminScheduleConfig from "src/components/Scheduling/Calendar/AdminScheduleConfig";
 import djangoData from "src/utils/djangoData";
 import cn from "src/utils/cn";
@@ -26,7 +27,6 @@ import WorkflowStepper from "./WorkflowStepper";
 import MemberAvailabilityPending from "./MemberAvailabilityPending";
 import DistributedPlanView from "./DistributedPlanView";
 import ConflictReviewView from "./ConflictReviewView";
-import ConflictCollectionPanel from "./ConflictCollectionPanel";
 import PublicationGate from "./PublicationGate";
 import { useAvailabilityEditor } from "./useAvailabilityEditor";
 import { useDistributedPlanActions } from "./useDistributedPlanActions";
@@ -62,14 +62,8 @@ import {
 import { publishSensitiveActorIdentity } from "src/query/sensitiveActorSync";
 import { apiClient } from "src/utils/callApi";
 
-const sameIds = (left: string[], right: string[]) => {
-  if (left.length !== right.length) return false;
-  const rightIds = new Set(right);
-  return left.every((value) => rightIds.has(value));
-};
-
 const SchedulePage: React.FC = () => {
-  const { admissionSlug } = useParams();
+  const { admissionSlug, groupId } = useParams();
   const queryClient = useQueryClient();
   const [isAccessRecoveryLoading, setIsAccessRecoveryLoading] = useState(false);
   const [accessRecoveryError, setAccessRecoveryError] = useState("");
@@ -263,27 +257,62 @@ const SchedulePage: React.FC = () => {
     );
   }
 
-  const { is_admin, committee_role, represented_groups, committee_groups } =
-    admission.userdata;
-  const committeeName =
-    represented_groups[0] ??
-    committee_groups[0] ??
-    (admission.groups.length === 1
-      ? admission.groups[0].name
-      : admission.title);
-  const canManageInterviewWorkflow =
-    is_admin || committee_role === "leader" || committee_role === "recruiting";
-  const canManageSchedule = is_admin;
+  const { is_admin, committee_group_details } = admission.userdata;
+  // Every committee's schedule is independent now, so someone who belongs
+  // to more than one has to say which before anything loads - but the
+  // choice is their own committees, not every committee in the admission.
+  // Being a full admin does not widen this list; it only means every
+  // resolved committee below grants full (not just member) access. Only an
+  // admin who belongs to no committee at all falls back to the full
+  // admission roster, so they are not locked out entirely.
+  const availableCommittees =
+    committee_group_details.length > 0 || !is_admin
+      ? committee_group_details
+      : admission.groups;
+
+  if (!groupId) {
+    if (availableCommittees.length === 1) {
+      return (
+        <Navigate
+          to={`/${admissionSlug}/schedule/${availableCommittees[0].pk}`}
+          replace
+        />
+      );
+    }
+    return (
+      <CommitteePicker
+        admissionSlug={admissionSlug ?? ""}
+        admissionTitle={admission.title}
+        committees={availableCommittees}
+      />
+    );
+  }
+
+  const resolvedCommittee = committee_group_details.find(
+    (committee) => committee.pk === groupId,
+  );
+  const committeeName = resolvedCommittee?.name ?? admission.title;
+  // A full admission admin has the same standing as this committee's own
+  // leader/recruiter over every committee's schedule (mirrors the backend's
+  // user_is_interview_admin); a role held in some other committee does not
+  // carry over, since each committee's schedule is independent.
+  const committeeRole = is_admin
+    ? "leader"
+    : (resolvedCommittee?.role ?? null);
+  const canManageSchedule =
+    is_admin || committeeRole === "leader" || committeeRole === "recruiting";
+  const canManageInterviewWorkflow = canManageSchedule;
 
   return (
     <CommonScheduleView
-      key={`${admissionSlug}:${sensitiveScopeKey}`}
+      key={`${admissionSlug}:${groupId}:${sensitiveScopeKey}`}
       admissionTitle={admission.title}
       committeeName={committeeName}
       admissionSlug={admissionSlug ?? ""}
+      groupId={groupId}
       isAdmin={canManageSchedule}
       canManageSchedule={canManageSchedule}
-      committeeRole={committee_role}
+      committeeRole={committeeRole}
       canManageInterviewWorkflow={canManageInterviewWorkflow}
     />
   );
@@ -293,6 +322,7 @@ interface CommonScheduleViewProps {
   admissionTitle: string;
   committeeName: string;
   admissionSlug: string;
+  groupId: string;
   isAdmin: boolean;
   canManageSchedule: boolean;
   committeeRole: "leader" | "recruiting" | "member" | null;
@@ -300,53 +330,26 @@ interface CommonScheduleViewProps {
 }
 
 const CommonScheduleView: React.FC<CommonScheduleViewProps> = (props) => {
-  const { admissionSlug, isAdmin } = props;
-  const queryClient = useQueryClient();
-  const previousCollectionOpenRef = React.useRef<boolean | undefined>(
-    undefined,
-  );
+  const { admissionSlug, groupId } = props;
   const {
     data: savedSchedule,
     isError: isSavedScheduleError,
     error: savedScheduleError,
     refetch: refetchSavedSchedule,
-  } = useSavedSchedule(admissionSlug);
+  } = useSavedSchedule(admissionSlug, groupId);
   const {
     data: interviewCandidates,
     isError: isCandidatesError,
     error: candidatesError,
     refetch: refetchCandidates,
-  } = useInterviewCandidates(admissionSlug);
+  } = useInterviewCandidates(admissionSlug, groupId);
   const {
     data: availabilityParticipants,
     isLoading: isAvailabilityLoading,
     isError: isAvailabilityError,
     error: availabilityError,
     refetch: refetchAvailability,
-  } = useInterviewAvailability(admissionSlug);
-
-  useEffect(() => {
-    if (isAdmin || savedSchedule === undefined) return;
-    const collectionOpen = Boolean(savedSchedule.conflict_collection_open);
-    if (previousCollectionOpenRef.current === collectionOpen) return;
-    previousCollectionOpenRef.current = collectionOpen;
-    if (collectionOpen) return;
-
-    const candidatesQueryKey = [
-      `/admin/admission/${admissionSlug}/candidates/`,
-    ];
-    queryClient.setQueryData(candidatesQueryKey, []);
-    void queryClient.invalidateQueries({
-      queryKey: candidatesQueryKey,
-      exact: true,
-      refetchType: "active",
-    });
-  }, [
-    admissionSlug,
-    isAdmin,
-    queryClient,
-    savedSchedule?.conflict_collection_open,
-  ]);
+  } = useInterviewAvailability(admissionSlug, groupId);
 
   const accessDenied = [
     savedScheduleError,
@@ -443,6 +446,7 @@ const LoadedScheduleView: React.FC<LoadedScheduleViewProps> = ({
   admissionTitle,
   committeeName,
   admissionSlug,
+  groupId,
   isAdmin,
   committeeRole,
   canManageSchedule,
@@ -492,7 +496,7 @@ const LoadedScheduleView: React.FC<LoadedScheduleViewProps> = ({
 
   useEffect(() => {
     setDraftPersistenceStatus(null);
-  }, [admissionSlug]);
+  }, [admissionSlug, groupId]);
 
   const showToast = (
     message: string,
@@ -511,11 +515,13 @@ const LoadedScheduleView: React.FC<LoadedScheduleViewProps> = ({
   }, [toast]);
   const configuration = useScheduleConfiguration({
     admissionSlug,
+    groupId,
     savedSchedule,
     notify: showToast,
   });
   const availability = useAvailabilityEditor({
     admissionSlug,
+    groupId,
     participants: availabilityParticipants,
     notify: showToast,
   });
@@ -539,6 +545,7 @@ const LoadedScheduleView: React.FC<LoadedScheduleViewProps> = ({
   });
   const planActions = useDistributedPlanActions({
     admissionSlug,
+    groupId,
     savedSchedule,
     draftPersistenceReady,
     notify: showToast,
@@ -560,7 +567,6 @@ const LoadedScheduleView: React.FC<LoadedScheduleViewProps> = ({
     dates,
     revision: configurationRevision,
     saveConfig,
-    setConflictCollectionOpen,
   } = configuration;
   const {
     selectedSlots: mySelectedSlots,
@@ -568,12 +574,9 @@ const LoadedScheduleView: React.FC<LoadedScheduleViewProps> = ({
     currentParticipant: myAvailabilityParticipant,
     saveAvailability,
     saveConflictReview,
-    saveConflictCollectionReview,
     setParticipation,
     setExperienceLevel,
   } = availability;
-  const [conflictCollectionSaving, setConflictCollectionSaving] =
-    useState(false);
   const {
     activeSection,
     visitedSections,
@@ -599,6 +602,7 @@ const LoadedScheduleView: React.FC<LoadedScheduleViewProps> = ({
   } = participants;
   const {
     publishSchedule: handlePublishSchedule,
+    extendDistributedThrough: handleExtendDistributedThrough,
     unlockSchedule: handleUnlockSchedule,
     planTransition,
     planTransitionError,
@@ -666,43 +670,6 @@ const LoadedScheduleView: React.FC<LoadedScheduleViewProps> = ({
   const showAdminConflictReviewStage = Boolean(
     conflictReviewReachable && conflictReviewRequestKey > 0,
   );
-  const collectionParticipants = (availabilityParticipants ?? []).filter(
-    (participant) =>
-      savedSchedule?.conflict_collection_participant_ids?.includes(
-        participant.user_id,
-      ),
-  );
-  const collectionParticipantCount =
-    savedSchedule?.conflict_collection_participant_ids?.length ?? 0;
-  const completedCollectionCount = collectionParticipants.filter(
-    (participant) => participant.conflict_collection_complete,
-  ).length;
-  const collectionScopeStale = Boolean(
-    savedSchedule?.conflict_collection_open &&
-      interviewCandidates !== undefined &&
-      availabilityParticipants !== undefined &&
-      (!sameIds(
-        savedSchedule.conflict_collection_candidate_ids ?? [],
-        interviewCandidates.map((candidate) => candidate.id),
-      ) ||
-        !sameIds(
-          savedSchedule.conflict_collection_participant_ids ?? [],
-          availabilityParticipants
-            .filter(
-              (participant) => participant.participation === "participating",
-            )
-            .map((participant) => participant.user_id),
-        )),
-  );
-  const toggleConflictCollection = async (open: boolean) => {
-    if (conflictCollectionSaving) return;
-    setConflictCollectionSaving(true);
-    try {
-      await setConflictCollectionOpen(open);
-    } finally {
-      setConflictCollectionSaving(false);
-    }
-  };
 
   useEffect(() => {
     if (foundationWorkspaceChosen.current) return;
@@ -828,15 +795,6 @@ const LoadedScheduleView: React.FC<LoadedScheduleViewProps> = ({
                       openRequestKey={conflictReviewRequestKey}
                     />
                   )}
-                {savedSchedule?.conflict_collection_open &&
-                  myAvailabilityParticipant?.participation ===
-                    "participating" && (
-                    <ConflictReviewView
-                      candidates={interviewCandidates}
-                      currentParticipant={myAvailabilityParticipant}
-                      onSaveReview={saveConflictCollectionReview}
-                    />
-                  )}
               </div>
             )}
           </div>
@@ -894,8 +852,15 @@ const LoadedScheduleView: React.FC<LoadedScheduleViewProps> = ({
                   chunkBreakMinutes={chunkBreakMinutes}
                   dayStartMinute={dayStartMinute}
                   dayEndMinute={dayEndMinute}
-                  onSave={saveAvailability}
+                  onSave={(slots) => saveAvailability(slots, fadderbarn)}
                   onSaveSuccess={() => openFoundationWorkspace("coverage")}
+                  extraSection={
+                    <FadderbarnPicker
+                      admissionSlug={admissionSlug ?? ""}
+                      value={fadderbarn}
+                      onChange={setFadderbarn}
+                    />
+                  }
                   participation={myAvailabilityParticipant?.participation}
                   affectedAssignmentCount={
                     myAvailabilityParticipant?.affected_assignment_count ?? 0
@@ -997,25 +962,6 @@ const LoadedScheduleView: React.FC<LoadedScheduleViewProps> = ({
                   <AvailabilityResponseRoster
                     participants={availabilityParticipants ?? []}
                   />
-                  <ConflictCollectionPanel
-                    open={Boolean(savedSchedule?.conflict_collection_open)}
-                    participantCount={collectionParticipantCount}
-                    completedCount={completedCollectionCount}
-                    candidateCount={interviewCandidates?.length ?? 0}
-                    saving={conflictCollectionSaving}
-                    stale={collectionScopeStale}
-                    onToggle={(open) => void toggleConflictCollection(open)}
-                  >
-                    {myAvailabilityParticipant &&
-                      myAvailabilityParticipant.participation ===
-                        "participating" && (
-                        <ConflictReviewView
-                          candidates={interviewCandidates}
-                          currentParticipant={myAvailabilityParticipant}
-                          onSaveReview={saveConflictCollectionReview}
-                        />
-                      )}
-                  </ConflictCollectionPanel>
                 </>
               )}
             </div>
@@ -1057,6 +1003,7 @@ const LoadedScheduleView: React.FC<LoadedScheduleViewProps> = ({
                 sessionDuration={sessionDuration}
                 admissionTitle={admissionTitle}
                 admissionSlug={admissionSlug}
+                groupId={groupId}
                 startDate={startDate}
                 endDate={endDate}
                 enabledWindows={savedSchedule?.enabled_windows ?? []}
@@ -1110,6 +1057,7 @@ const LoadedScheduleView: React.FC<LoadedScheduleViewProps> = ({
           (savedSchedule?.is_distributed ? (
             <DistributedPlanView
               admissionSlug={admissionSlug}
+              groupId={groupId}
               admissionTitle={admissionTitle}
               committeeName={committeeName}
               savedSchedule={savedSchedule}
@@ -1126,6 +1074,7 @@ const LoadedScheduleView: React.FC<LoadedScheduleViewProps> = ({
               onSetBookingSource={handleSetBookingSource}
               onUnlock={handleUnlockSchedule}
               onUnlocked={openProposalForEditing}
+              onExtendDistributedThrough={handleExtendDistributedThrough}
               planTransition={planTransition}
               planTransitionError={planTransitionError}
               myConflicts={myAvailabilityParticipant?.conflicts ?? []}

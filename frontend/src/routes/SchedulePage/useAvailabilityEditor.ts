@@ -15,16 +15,21 @@ const serializeSlots = (slots: Iterable<string>) =>
 
 interface AvailabilityEditorParams {
   admissionSlug: string;
+  groupId: string;
   participants: InterviewAvailabilityParticipant[] | undefined;
   notify: Notify;
 }
 
 export const useAvailabilityEditor = ({
   admissionSlug,
+  groupId,
   participants,
   notify,
 }: AvailabilityEditorParams) => {
-  const saveInterviewAvailability = useSaveInterviewAvailability(admissionSlug);
+  const saveInterviewAvailability = useSaveInterviewAvailability(
+    admissionSlug,
+    groupId,
+  );
   const [selectedSlots, setSelectedSlots] = useState<Set<string>>(new Set());
   const lastAppliedServerSlotsRef = useRef<string | null>(null);
   const lastAppliedGenerationRef = useRef<number | null>(null);
@@ -95,35 +100,6 @@ export const useAvailabilityEditor = ({
     }
   };
 
-  const saveConflictCollectionReview = async (
-    reviewedCandidateIds: string[],
-    conflictIds: string[],
-  ) => {
-    const revision = currentParticipant?.conflict_collection_revision;
-    if (!revision) {
-      notify("Kandidatlisten må lastes inn på nytt.", "error");
-      throw new Error("Missing conflict collection revision");
-    }
-    try {
-      await saveInterviewAvailability.mutateAsync({
-        conflict_collection_reviewed_candidate_ids: reviewedCandidateIds,
-        conflict_collection_revision: revision,
-        conflicts: conflictIds,
-      });
-    } catch (error) {
-      if (isSensitiveAuthorityChangedError(error)) throw error;
-      const responseStatus = (error as { response?: { status?: number } })
-        .response?.status;
-      notify(
-        responseStatus === 409
-          ? "Kandidatlisten er endret. Last inn siden på nytt."
-          : "Kunne ikke lagre inhabilitetssjekken.",
-        "error",
-      );
-      throw error;
-    }
-  };
-
   const setParticipation = async (
     participation: "awaiting_response" | "not_participating",
     userId?: string,
@@ -172,7 +148,6 @@ export const useAvailabilityEditor = ({
     currentParticipant,
     saveAvailability,
     saveConflictReview,
-    saveConflictCollectionReview,
     setParticipation,
     setExperienceLevel,
   };

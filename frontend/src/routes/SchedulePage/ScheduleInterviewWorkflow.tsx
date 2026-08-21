@@ -15,6 +15,7 @@ type WorkflowPart = "combined" | "status" | "action";
 
 const ScheduleInterviewWorkflow: React.FC<{
   admissionSlug: string;
+  groupId: string;
   admissionTitle: string;
   committeeName: string;
   item: ScheduleItem;
@@ -25,6 +26,7 @@ const ScheduleInterviewWorkflow: React.FC<{
   part?: WorkflowPart;
 }> = ({
   admissionSlug,
+  groupId,
   admissionTitle,
   committeeName,
   item,
@@ -50,6 +52,7 @@ const ScheduleInterviewWorkflow: React.FC<{
   const statusControl = (
     <InterviewStatusControl
       admissionSlug={admissionSlug}
+      groupId={groupId}
       applicationId={item.candidate_id}
       candidateName={item.candidate}
       status={item.interview_status}

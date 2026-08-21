@@ -1,25 +1,30 @@
 describe("interview plan workflow", () => {
-  const templateStorageKey = "admissions:webkom:interview-outreach-template";
-
   beforeEach(() => {
     cy.viewport(1440, 900);
     cy.login("webkom").then(() => {
-      cy.request("/api/admission/webkom-open/").its("status").should("eq", 200);
-      cy.request("/api/admin/admission/webkom-open/schedule/")
-        .its("status")
-        .should("eq", 200);
-      cy.visit("/webkom-open/schedule", {
-        onBeforeLoad(window) {
-          window.localStorage.removeItem(templateStorageKey);
-          window.localStorage.setItem("admissions.wizard.admin.v1", "1");
-        },
+      cy.request("/api/admission/webkom-open/").then((response) => {
+        expect(response.status).to.eq(200);
+        // Scheduling is committee-scoped: the fixture admin's own
+        // committee (Webkom) is the one they represent as a member, not
+        // just any of the admission's committees they can administer.
+        const groupId = response.body.userdata.committee_group_details[0].pk;
+        const templateStorageKey = `admissions:webkom-open:${groupId}:interview-outreach-template`;
+        cy.request(`/api/admin/admission/webkom-open/group/${groupId}/schedule/`)
+          .its("status")
+          .should("eq", 200);
+        cy.visit(`/webkom-open/schedule/${groupId}`, {
+          onBeforeLoad(window) {
+            window.localStorage.removeItem(templateStorageKey);
+            window.localStorage.setItem("admissions.wizard.admin.v1", "1");
+          },
+        });
+        cy.get('nav[aria-label="Steg i intervjuplanleggingen"]', {
+          timeout: 10000,
+        })
+          .contains("button", /Publisering|Gjennomføring/)
+          .should("be.enabled")
+          .click();
       });
-      cy.get('nav[aria-label="Steg i intervjuplanleggingen"]', {
-        timeout: 10000,
-      })
-        .contains("button", /Publisering|Gjennomføring/)
-        .should("be.enabled")
-        .click();
     });
   });
 

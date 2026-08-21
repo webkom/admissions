@@ -67,7 +67,7 @@ const ApplicationPortal = () => {
   const { groups } = admission ?? {};
   const isMember = (admission?.userdata.committee_groups?.length ?? 0) > 0;
   const isPrivileged = !!admission?.userdata.is_privileged;
-  const isScheduleRoute = portalPath?.replace(/^\/+/, "") === "schedule";
+  const isScheduleRoute = /^\/*schedule(\/|$)/.test(portalPath ?? "");
   const isScheduleAccessFailure =
     isScheduleRoute && [401, 403].includes(error?.response?.status ?? 0);
 
@@ -206,7 +206,7 @@ const ApplicationPortal = () => {
                 }
               />
               <Route
-                path="/schedule"
+                path="/schedule/:groupId?"
                 element={
                   <RequireAuth auth={isMember || isPrivileged}>
                     <SchedulePage />

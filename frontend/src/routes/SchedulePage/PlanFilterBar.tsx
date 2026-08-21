@@ -20,7 +20,6 @@ interface PlanFilterBarProps {
   canToggleCandidateNames: boolean;
   canHideCandidateNames: boolean;
   nameVisibility: NameVisibility;
-  revealedGroupNames: string[];
   onSelectVisibility: (next: NameVisibility) => void;
   isUpdatingNames: boolean;
   conflictBadgeCount: number;
@@ -35,24 +34,10 @@ const PlanFilterBar: React.FC<PlanFilterBarProps> = ({
   canToggleCandidateNames,
   canHideCandidateNames,
   nameVisibility,
-  revealedGroupNames,
   onSelectVisibility,
   isUpdatingNames,
   conflictBadgeCount,
 }) => {
-  const disclosureGroupPreviewLimit = 3;
-  const partialDisclosure =
-    canHideCandidateNames &&
-    nameVisibility !== "committee" &&
-    revealedGroupNames.length > 0;
-  const previewNames = revealedGroupNames
-    .slice(0, disclosureGroupPreviewLimit)
-    .join(", ");
-  const remainingGroupCount = Math.max(
-    0,
-    revealedGroupNames.length - disclosureGroupPreviewLimit,
-  );
-
   return (
     <div className="flex flex-wrap items-center gap-2 border-b border-border-soft px-6 py-3">
       <button
@@ -111,15 +96,6 @@ const PlanFilterBar: React.FC<PlanFilterBarProps> = ({
           {isUpdatingNames && (
             <span className="text-detail italic text-text-muted">
               Oppdaterer…
-            </span>
-          )}
-          {partialDisclosure && (
-            <span
-              className="rounded-full border border-brand-border bg-brand-muted px-2 py-1 text-label font-semibold text-brand"
-              title={`Navn er synlige for: ${revealedGroupNames.join(", ")}`}
-            >
-              Delvis synlig for {previewNames}
-              {remainingGroupCount > 0 ? ` +${remainingGroupCount}` : ""}
             </span>
           )}
         </div>

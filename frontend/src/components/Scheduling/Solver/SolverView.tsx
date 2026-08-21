@@ -61,6 +61,7 @@ interface Props {
   sessionDuration: number;
   admissionTitle: string;
   admissionSlug: string;
+  groupId: string;
   startDate: string;
   endDate: string;
   enabledWindows: EnabledWindow[];
@@ -102,6 +103,7 @@ export default function SolverView({
   dates,
   sessionDuration,
   admissionSlug,
+  groupId,
   startDate,
   endDate,
   enabledWindows,
@@ -177,6 +179,7 @@ export default function SolverView({
   );
   const session = useSolverSession({
     admissionSlug,
+    groupId,
     candidates,
     interviewers,
     dates,
@@ -200,6 +203,7 @@ export default function SolverView({
   const persistenceConfig = useMemo(
     () => ({
       admissionSlug,
+      groupId,
       startDate,
       endDate,
       sessionDuration,
@@ -217,6 +221,7 @@ export default function SolverView({
     }),
     [
       admissionSlug,
+      groupId,
       blockMode,
       chunkBreakMinutes,
       chunkSize,
