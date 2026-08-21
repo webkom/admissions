@@ -580,9 +580,10 @@ class CreateApplicationTestCase(APITestCase):
             ).exists()
         )
 
-    def _publish_plan_for(self, application):
+    def _publish_plan_for(self, application, group):
         return SavedSchedule.objects.create(
             admission=self.admission,
+            group=group,
             schedule=[
                 {
                     "candidate_id": str(application.pk),
@@ -600,9 +601,9 @@ class CreateApplicationTestCase(APITestCase):
     def test_dropping_one_committee_flags_a_published_plan(self):
         """Consistent with a full withdrawal, which already un-publishes.
 
-        The candidate keeps their interview, so the schedule rows stay; what
-        must not stand is a published plan whose panel was chosen for a
-        committee the applicant no longer applies to.
+        Each committee's schedule is independent, so this must only touch the
+        dropped committee's own plan - the candidate keeps their interview
+        with the committee they are still applying to.
         """
         self.client.force_authenticate(user=self.pleb_anna)
         url = reverse(
@@ -610,7 +611,8 @@ class CreateApplicationTestCase(APITestCase):
         )
         self.client.post(url, self.application_data, format="json")
         application = UserApplication.objects.get(user=self.pleb_anna)
-        saved = self._publish_plan_for(application)
+        webkom_saved = self._publish_plan_for(application, self.webkom)
+        koskom_saved = self._publish_plan_for(application, self.koskom)
 
         self.client.post(
             url,
@@ -621,11 +623,20 @@ class CreateApplicationTestCase(APITestCase):
             format="json",
         )
 
-        saved.refresh_from_db()
-        self.assertFalse(saved.is_distributed)
-        self.assertEqual(SavedSchedule.NAME_VISIBILITY_HIDDEN, saved.name_visibility)
+        koskom_saved.refresh_from_db()
+        self.assertFalse(koskom_saved.is_distributed)
+        self.assertEqual(
+            SavedSchedule.NAME_VISIBILITY_HIDDEN, koskom_saved.name_visibility
+        )
         # The interview itself survives: they are still a candidate.
-        self.assertEqual(1, len(saved.schedule))
+        self.assertEqual(1, len(koskom_saved.schedule))
+
+        # Webkom's own, independent plan is untouched by the Koskom drop.
+        webkom_saved.refresh_from_db()
+        self.assertTrue(webkom_saved.is_distributed)
+        self.assertEqual(
+            SavedSchedule.NAME_VISIBILITY_COMMITTEE, webkom_saved.name_visibility
+        )
 
     def test_full_withdrawal_still_removes_the_candidate(self):
         """The cascade must not be short-circuited by the new receiver."""
@@ -635,7 +646,7 @@ class CreateApplicationTestCase(APITestCase):
         )
         self.client.post(list_url, self.application_data, format="json")
         application = UserApplication.objects.get(user=self.pleb_anna)
-        saved = self._publish_plan_for(application)
+        saved = self._publish_plan_for(application, self.webkom)
 
         mine_url = reverse(
             "userapplication-mine", kwargs={"admission_slug": self.admission_slug}
@@ -666,14 +677,18 @@ class CreateApplicationTestCase(APITestCase):
         )
         mail.outbox = []
 
-        res = self.client.post(
-            url,
-            {
-                "phone_number": "12345678",
-                "applications": {"webkom": "still want webkom"},
-            },
-            format="json",
-        )
+        # The notification is queued with transaction.on_commit, which a
+        # TestCase's wrapping (and rolled-back) transaction never fires on
+        # its own.
+        with self.captureOnCommitCallbacks(execute=True):
+            res = self.client.post(
+                url,
+                {
+                    "phone_number": "12345678",
+                    "applications": {"webkom": "still want webkom"},
+                },
+                format="json",
+            )
 
         self.assertEqual(res.status_code, status.HTTP_201_CREATED)
         self.assertEqual(1, len(mail.outbox))
@@ -704,7 +719,8 @@ class CreateApplicationTestCase(APITestCase):
         )
         mail.outbox = []
 
-        res = self.client.post(url, self.application_data, format="json")
+        with self.captureOnCommitCallbacks(execute=True):
+            res = self.client.post(url, self.application_data, format="json")
 
         self.assertEqual(res.status_code, status.HTTP_201_CREATED)
         self.assertEqual([], mail.outbox)

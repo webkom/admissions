@@ -20,6 +20,7 @@ from admissions.admissions import constants
 from admissions.admissions.admission_access import (
     get_representing_groups,
     user_is_admission_admin,
+    user_is_interview_admin,
 )
 from admissions.admissions.models import Admission, LegoUser, SavedSchedule, SolveJob
 from admissions.admissions.schedule_policy import (
@@ -178,8 +179,8 @@ class Command(BaseCommand):
         new_status = SolveJob.STATUS_DONE
         try:
             requested_by = job.requested_by
-            if requested_by is None or not user_is_admission_admin(
-                job.admission, requested_by
+            if requested_by is None or not user_is_interview_admin(
+                job.admission, job.group, requested_by
             ):
                 raise SchedulePermissionDenied
             if data.get("rehydrate"):
@@ -187,7 +188,9 @@ class Command(BaseCommand):
                     admission = Admission.objects.select_for_update().get(
                         pk=job.admission_id
                     )
-                    saved = SavedSchedule.objects.get(admission=admission)
+                    saved = SavedSchedule.objects.get(
+                        admission=admission, group=job.group
+                    )
                     baseline_updated_at = parse_datetime(
                         data.get("baseline_updated_at") or ""
                     )
@@ -274,12 +277,15 @@ class Command(BaseCommand):
         """
         try:
             with transaction.atomic():
-                job_stub = SolveJob.objects.only("admission_id").get(pk=job_id)
+                job_stub = SolveJob.objects.only("admission_id", "group_id").get(
+                    pk=job_id
+                )
                 admission = Admission.objects.select_for_update().get(
                     pk=job_stub.admission_id
                 )
+                group = job_stub.group
                 saved = SavedSchedule.objects.select_for_update().get(
-                    admission=admission
+                    admission=admission, group=group
                 )
                 job = SolveJob.objects.select_for_update().get(pk=job_id)
                 request_data = job.request_data or {}
@@ -303,10 +309,11 @@ class Command(BaseCommand):
                 ):
                     return False
                 user.__class__ = LegoUser
-                if not user_is_admission_admin(admission, user):
+                if not user_is_interview_admin(admission, group, user):
                     return False
                 update_saved_schedule(
                     admission=admission,
+                    group=group,
                     user=user,
                     data={
                         "expected_updated_at": saved.updated_at,
@@ -317,7 +324,9 @@ class Command(BaseCommand):
                     },
                     is_admin=True,
                     is_admission_admin=user_is_admission_admin(admission, user),
-                    is_recruiter=get_representing_groups(admission, user).exists(),
+                    is_recruiter=get_representing_groups(admission, user)
+                    .filter(pk=group.pk)
+                    .exists(),
                 )
                 job.applied_at = timezone.now()
                 job.save(update_fields=["applied_at"])

@@ -14,6 +14,8 @@ from admissions.admissions import constants
 from admissions.admissions.constants import MEMBER, RECRUITING, RETIREE
 from admissions.admissions.models import (
     ConflictReviewAuditEvent,
+    ConflictReviewList,
+    FadderbarnDeclaration,
     Group,
     GroupApplication,
     InterviewAvailability,
@@ -25,11 +27,7 @@ from admissions.admissions.models import (
     SolveJob,
     UserApplication,
 )
-from admissions.admissions.schedule_validation import (
-    ScheduleValidationError,
-    canonicalize_solver_payload,
-    ensure_conflict_collection_ready,
-)
+from admissions.admissions.schedule_validation import canonicalize_solver_payload
 from admissions.admissions.serializers import SolveJobSerializer, SolveOptionsSerializer
 from admissions.admissions.tests.utils import (
     ScheduleRevisionAPIClient,
@@ -55,6 +53,7 @@ class SavedSchedulePublishSemanticsTestCase(APITestCase):
             created_by=self.admin_user, slug="hardening-opptak"
         )
         self.admission.admin_groups.add(self.admin_group)
+        self.admission.groups.add(self.admin_group)
         self.candidate_user = LegoUser.objects.create(
             username="hardening-candidate", lego_id=602
         )
@@ -63,13 +62,23 @@ class SavedSchedulePublishSemanticsTestCase(APITestCase):
             user=self.candidate_user,
             phone_number="12345678",
         )
+        GroupApplication.objects.create(
+            application=self.application,
+            group=self.admin_group,
+            text="Hardening application",
+        )
         InterviewAvailability.objects.create(
             admission=self.admission,
+            group=self.admin_group,
             user=self.admin_user,
             slots=["2026-04-20|540", "2026-04-20|600"],
         )
         self.url = reverse(
-            "saved-schedule", kwargs={"admission_slug": self.admission.slug}
+            "saved-schedule",
+            kwargs={
+                "admission_slug": self.admission.slug,
+                "group_id": self.admin_group.pk,
+            },
         )
         self.client.force_authenticate(user=self.admin_user)
 
@@ -91,6 +100,7 @@ class SavedSchedulePublishSemanticsTestCase(APITestCase):
     def _create_saved(self, **overrides):
         defaults = {
             "admission": self.admission,
+            "group": self.admin_group,
             "schedule": self._schedule(),
             "start_date": "2026-04-20",
             "end_date": "2026-04-24",
@@ -105,6 +115,7 @@ class SavedSchedulePublishSemanticsTestCase(APITestCase):
     def _mark_reviewed(self, *applications):
         InterviewAvailability.objects.filter(
             admission=self.admission,
+            group=self.admin_group,
             user=self.admin_user,
         ).update(
             reviewed_candidate_ids=[str(application.pk) for application in applications]
@@ -125,178 +136,95 @@ class SavedSchedulePublishSemanticsTestCase(APITestCase):
             SavedSchedule.objects.get(admission=self.admission).is_distributed
         )
 
-    def test_admin_can_open_conflict_collection_without_a_draft(self):
-        self._create_saved(is_distributed=False, schedule=[])
+    def test_distributed_through_publishes_only_part_of_the_plan(self):
+        second_candidate = LegoUser.objects.create(
+            username="hardening-candidate-2", lego_id=603
+        )
+        second_application = UserApplication.objects.create(
+            admission=self.admission, user=second_candidate
+        )
+        GroupApplication.objects.create(
+            application=second_application,
+            group=self.admin_group,
+            text="Second hardening application",
+        )
+        second_entry = self._schedule(time=2 * 24 * 60 + 540)
+        second_entry[0]["candidate_id"] = str(second_application.pk)
+        self._create_saved(
+            is_distributed=False,
+            schedule=self._schedule(time=540) + second_entry,
+            enabled_slots=["2026-04-20|540", "2026-04-22|540"],
+        )
+        self._mark_reviewed(self.application, second_application)
 
         res = self.client.post(
             self.url,
-            {"conflict_collection_open": True},
+            {"distributed_through": "2026-04-21"},
             format="json",
         )
 
         self.assertEqual(res.status_code, status.HTTP_200_OK)
-        self.assertFalse(res.data["conflict_review_open"])
-        self.assertTrue(res.data["conflict_collection_open"])
-        self.assertEqual(
-            res.data["conflict_collection_candidate_ids"],
-            [str(self.application.pk)],
-        )
-        self.assertEqual(
-            res.data["conflict_collection_participant_ids"],
-            [str(self.admin_user.pk)],
-        )
-        self.assertTrue(res.data["conflict_collection_revision"])
-        self.assertTrue(
-            ConflictReviewAuditEvent.objects.filter(
-                admission=self.admission,
-                action=ConflictReviewAuditEvent.ACTION_OPENED,
-                phase=ConflictReviewAuditEvent.PHASE_COLLECTION,
-            ).exists()
-        )
+        self.assertEqual(res.data["distributed_through"], "2026-04-21")
+        self.assertTrue(res.data["is_distributed"])
+        saved = SavedSchedule.objects.get(admission=self.admission)
+        self.assertEqual(saved.distributed_through.isoformat(), "2026-04-21")
 
-    def test_participating_admin_can_submit_their_own_conflicts(self):
-        revision = uuid.uuid4()
-        self._create_saved(
-            is_distributed=False,
-            schedule=[],
-            conflict_collection_open=True,
-            conflict_collection_revision=revision,
-            conflict_collection_candidate_ids=[str(self.application.pk)],
-            conflict_collection_participant_ids=[str(self.admin_user.pk)],
-        )
+    def test_distributed_through_cannot_precede_start_date(self):
+        self._create_saved(is_distributed=False)
 
-        response = self.client.post(
-            reverse(
-                "interview-availability",
-                kwargs={"admission_slug": self.admission.slug},
-            ),
-            {
-                "conflicts": [str(self.application.pk)],
-                "conflict_collection_reviewed_candidate_ids": [
-                    str(self.application.pk)
-                ],
-                "conflict_collection_revision": str(revision),
-            },
-            format="json",
-        )
-
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertTrue(response.data["conflict_collection_complete"])
-        self.assertEqual(response.data["conflicts"], [str(self.application.pk)])
-        event = ConflictReviewAuditEvent.objects.get(
-            admission=self.admission,
-            phase=ConflictReviewAuditEvent.PHASE_COLLECTION,
-            action=ConflictReviewAuditEvent.ACTION_SUBMITTED,
-        )
-        self.assertEqual(event.actor_id, self.admin_user.pk)
-        self.assertEqual(event.subject_user_id, self.admin_user.pk)
-
-    def test_current_collection_cannot_close_before_every_participant_confirms(self):
-        revision = uuid.uuid4()
-        saved = self._create_saved(
-            is_distributed=False,
-            schedule=[],
-            conflict_collection_open=True,
-            conflict_collection_revision=revision,
-            conflict_collection_candidate_ids=[str(self.application.pk)],
-            conflict_collection_participant_ids=[str(self.admin_user.pk)],
-        )
-
-        response = self.client.post(
+        res = self.client.post(
             self.url,
-            {
-                "conflict_collection_open": False,
-                "expected_updated_at": saved.updated_at.isoformat(),
-            },
+            {"distributed_through": "2026-04-01"},
             format="json",
         )
 
-        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertIn("conflict_collection_open", response.data)
-        saved.refresh_from_db()
-        self.assertTrue(saved.conflict_collection_open)
-
-    def test_stale_collection_can_close_so_it_can_be_reopened(self):
-        revision = uuid.uuid4()
-        saved = self._create_saved(
-            is_distributed=False,
-            schedule=[],
-            conflict_collection_open=True,
-            conflict_collection_revision=revision,
-            conflict_collection_candidate_ids=[str(self.application.pk)],
-            conflict_collection_participant_ids=[str(self.admin_user.pk)],
-        )
-        late_candidate = LegoUser.objects.create(
-            username="late-close-candidate",
-            lego_id=604,
-        )
-        UserApplication.objects.create(
-            admission=self.admission,
-            user=late_candidate,
+        self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("distributed_through", res.data)
+        self.assertIsNone(
+            SavedSchedule.objects.get(admission=self.admission).distributed_through
         )
 
-        response = self.client.post(
+    def test_distributed_through_cannot_move_backward(self):
+        self._create_saved(is_distributed=False, distributed_through="2026-04-22")
+
+        res = self.client.post(
             self.url,
-            {
-                "conflict_collection_open": False,
-                "expected_updated_at": saved.updated_at.isoformat(),
-            },
+            {"distributed_through": "2026-04-21"},
             format="json",
         )
 
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertFalse(response.data["conflict_collection_open"])
-
-    def test_solver_rejects_a_stale_completed_conflict_collection(self):
-        revision = uuid.uuid4()
-        saved = self._create_saved(
-            is_distributed=False,
-            schedule=[],
-            conflict_collection_open=False,
-            conflict_collection_revision=revision,
-            conflict_collection_candidate_ids=[str(self.application.pk)],
-            conflict_collection_participant_ids=[str(self.admin_user.pk)],
-        )
-        InterviewAvailability.objects.filter(
-            admission=self.admission,
-            user=self.admin_user,
-        ).update(
-            conflict_collection_review_revision=revision,
-            conflict_collection_reviewed_candidate_ids=[str(self.application.pk)],
-        )
-        ensure_conflict_collection_ready(self.admission, saved)
-
-        late_candidate = LegoUser.objects.create(
-            username="late-conflict-candidate",
-            lego_id=603,
-        )
-        UserApplication.objects.create(
-            admission=self.admission,
-            user=late_candidate,
+        self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("distributed_through", res.data)
+        self.assertEqual(
+            SavedSchedule.objects.get(admission=self.admission)
+            .distributed_through.isoformat(),
+            "2026-04-22",
         )
 
-        with self.assertRaises(ScheduleValidationError) as error:
-            ensure_conflict_collection_ready(self.admission, saved)
+    def test_distributed_through_can_move_forward(self):
+        self._create_saved(is_distributed=False, distributed_through="2026-04-21")
+        self._mark_reviewed(self.application)
 
-        self.assertEqual(error.exception.field, "conflict_collection_open")
-        self.assertIn("Kandidatlisten er endret", error.exception.message)
-
-    def test_solver_rejects_an_incomplete_closed_conflict_collection(self):
-        revision = uuid.uuid4()
-        saved = self._create_saved(
-            is_distributed=False,
-            schedule=[],
-            conflict_collection_open=False,
-            conflict_collection_revision=revision,
-            conflict_collection_candidate_ids=[str(self.application.pk)],
-            conflict_collection_participant_ids=[str(self.admin_user.pk)],
+        res = self.client.post(
+            self.url,
+            {"distributed_through": "2026-04-22"},
+            format="json",
         )
 
-        with self.assertRaises(ScheduleValidationError) as error:
-            ensure_conflict_collection_ready(self.admission, saved)
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.assertEqual(res.data["distributed_through"], "2026-04-22")
 
-        self.assertEqual(error.exception.field, "conflict_collection_open")
-        self.assertIn("må fullføre", error.exception.message)
+    def test_distributed_through_together_with_conflict_review_open_is_rejected(self):
+        self._create_saved(is_distributed=False, conflict_review_open=True)
+
+        res = self.client.post(
+            self.url,
+            {"distributed_through": "2026-04-21", "conflict_review_open": True},
+            format="json",
+        )
+
+        self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("conflict_review_open", res.data)
 
     def test_publish_is_blocked_until_open_conflict_review_is_complete(self):
         self._create_saved(is_distributed=False, conflict_review_open=True)
@@ -599,6 +527,11 @@ class SavedSchedulePublishSemanticsTestCase(APITestCase):
             user=second_candidate,
             phone_number="12345678",
         )
+        GroupApplication.objects.create(
+            application=second_application,
+            group=self.admin_group,
+            text="Second panel application",
+        )
         second_interviewer = LegoUser.objects.create(
             username="second-interviewer", lego_id=604
         )
@@ -607,6 +540,7 @@ class SavedSchedulePublishSemanticsTestCase(APITestCase):
         )
         InterviewAvailability.objects.create(
             admission=self.admission,
+            group=self.admin_group,
             user=second_interviewer,
             slots=["2026-04-20|600"],
         )
@@ -639,6 +573,7 @@ class SavedSchedulePublishSemanticsTestCase(APITestCase):
         )
         InterviewAvailability.objects.create(
             admission=self.admission,
+            group=self.admin_group,
             user=self.candidate_user,
             slots=["2026-04-20|540"],
         )
@@ -1081,6 +1016,27 @@ class SavedSchedulePublishSemanticsTestCase(APITestCase):
         self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertIn("schedule", res.data)
 
+    def test_derived_fadderbarn_conflict_is_rejected(self):
+        """canonicalize_schedule must catch this too, not just the solver.
+
+        A manually-edited or imported schedule bypasses the solver's own
+        "biased" set entirely, so this is the only place a fadderbarn pairing
+        the interviewer never explicitly ticked would otherwise be caught.
+        """
+        self._create_saved(is_distributed=False)
+        FadderbarnDeclaration.objects.create(
+            admission=self.admission,
+            interviewer=self.admin_user,
+            lego_user_id=self.candidate_user.lego_id,
+            username=self.candidate_user.username,
+            full_name="",
+        )
+
+        res = self.client.post(self.url, {"schedule": self._schedule()}, format="json")
+
+        self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("schedule", res.data)
+
     def test_publishing_requires_every_active_candidate(self):
         self._create_saved(is_distributed=False)
         second_user = LegoUser.objects.create(username="second-candidate", lego_id=604)
@@ -1119,12 +1075,14 @@ class SolveScheduleInputCapTestCase(APITestCase):
         Membership.objects.create(user=self.user, role=RECRUITING, group=self.group)
         self.admission = create_admission(created_by=self.user, slug="caps-opptak")
         self.admission.admin_groups.add(self.group)
+        self.admission.groups.add(self.group)
         self.client.force_authenticate(user=self.user)
         self.url = reverse("solve-schedule")
 
     def _solve(self, extra):
         payload = {
             "admission_slug": self.admission.slug,
+            "group_id": str(self.group.pk),
             "candidates": [{"id": "c1", "name": "C1"}],
             "interviewers": [
                 {"id": "i1", "name": "I1", "gender": "M", "availability": [0]}
@@ -1215,12 +1173,16 @@ class SolveScheduleInputCapTestCase(APITestCase):
 
     def test_db_rejects_a_second_active_job_for_the_same_admission(self):
         SolveJob.objects.create(
-            admission=self.admission, requested_by=self.user, request_data={}
+            admission=self.admission,
+            group=self.group,
+            requested_by=self.user,
+            request_data={},
         )
 
         with self.assertRaises(IntegrityError), transaction.atomic():
             SolveJob.objects.create(
                 admission=self.admission,
+                group=self.group,
                 requested_by=self.user,
                 request_data={},
                 status=SolveJob.STATUS_RUNNING,
@@ -1229,6 +1191,7 @@ class SolveScheduleInputCapTestCase(APITestCase):
     def test_finished_job_does_not_block_a_new_enqueue(self):
         SolveJob.objects.create(
             admission=self.admission,
+            group=self.group,
             requested_by=self.user,
             request_data={},
             status=SolveJob.STATUS_DONE,
@@ -1241,7 +1204,10 @@ class SolveScheduleInputCapTestCase(APITestCase):
 
     def test_enqueue_losing_the_race_rejects_a_different_winning_job(self):
         winner = SolveJob.objects.create(
-            admission=self.admission, requested_by=self.user, request_data={}
+            admission=self.admission,
+            group=self.group,
+            requested_by=self.user,
+            request_data={},
         )
 
         real_filter = SolveJob.objects.filter
@@ -1306,12 +1272,16 @@ class InterviewAvailabilityHardeningTestCase(APITestCase):
 
         self.url = reverse(
             "interview-availability",
-            kwargs={"admission_slug": self.admission.slug},
+            kwargs={
+                "admission_slug": self.admission.slug,
+                "group_id": self.committee_group.pk,
+            },
         )
 
     def _create_saved_schedule(self, **overrides):
         defaults = {
             "admission": self.admission,
+            "group": self.committee_group,
             "schedule": [],
             "start_date": "2026-04-21",
             "session_duration": 60,
@@ -1348,7 +1318,9 @@ class InterviewAvailabilityHardeningTestCase(APITestCase):
         self.assertIn("slots", res.data)
         self.assertFalse(
             InterviewAvailability.objects.filter(
-                admission=self.admission, user=self.member
+                admission=self.admission,
+                group=self.committee_group,
+                user=self.member,
             ).exists()
         )
 
@@ -1388,6 +1360,7 @@ class InterviewAvailabilityHardeningTestCase(APITestCase):
         self.assertFalse(
             InterviewAvailability.objects.filter(
                 admission=self.admission,
+                group=self.committee_group,
                 user=self.member,
             ).exists()
         )
@@ -1415,6 +1388,7 @@ class InterviewAvailabilityHardeningTestCase(APITestCase):
     def test_non_admin_reads_unknown_experience_but_admin_reads_classification(self):
         InterviewAvailability.objects.create(
             admission=self.admission,
+            group=self.committee_group,
             user=self.member,
             experience_level=InterviewAvailability.EXPERIENCE_EXPERIENCED,
         )
@@ -1492,6 +1466,7 @@ class InterviewAvailabilityHardeningTestCase(APITestCase):
         self._open_conflict_review()
         InterviewAvailability.objects.create(
             admission=self.admission,
+            group=self.committee_group,
             user=self.member,
             slots=["2026-04-21|540"],
         )
@@ -1524,6 +1499,7 @@ class InterviewAvailabilityHardeningTestCase(APITestCase):
         self._open_conflict_review()
         InterviewAvailability.objects.create(
             admission=self.admission,
+            group=self.committee_group,
             user=self.member,
             slots=["2026-04-21|540"],
         )
@@ -1532,13 +1508,19 @@ class InterviewAvailabilityHardeningTestCase(APITestCase):
         candidates_res = self.client.get(
             reverse(
                 "interview-candidates",
-                kwargs={"admission_slug": self.admission.slug},
+                kwargs={
+                    "admission_slug": self.admission.slug,
+                    "group_id": self.committee_group.pk,
+                },
             )
         )
         schedule_res = self.client.get(
             reverse(
                 "saved-schedule",
-                kwargs={"admission_slug": self.admission.slug},
+                kwargs={
+                    "admission_slug": self.admission.slug,
+                    "group_id": self.committee_group.pk,
+                },
             )
         )
         review_res = self.client.post(
@@ -1597,6 +1579,7 @@ class InterviewAvailabilityHardeningTestCase(APITestCase):
         self._open_conflict_review()
         availability = InterviewAvailability.objects.create(
             admission=self.admission,
+            group=self.committee_group,
             user=self.member,
             slots=["2026-04-21|540"],
             conflicts=[str(other_application.pk)],
@@ -1616,265 +1599,6 @@ class InterviewAvailabilityHardeningTestCase(APITestCase):
         availability.refresh_from_db()
         self.assertEqual(availability.conflicts, [str(other_application.pk)])
 
-    def test_stale_collection_submission_is_rejected_without_changing_conflicts(self):
-        revision = uuid.uuid4()
-        saved = self._create_saved_schedule(
-            enabled_slots=["2026-04-21|540"],
-            conflict_collection_open=True,
-            conflict_collection_revision=revision,
-            conflict_collection_candidate_ids=[str(self.application.pk)],
-            conflict_collection_participant_ids=[str(self.member.pk)],
-        )
-        availability = InterviewAvailability.objects.create(
-            admission=self.admission,
-            user=self.member,
-            slots=["2026-04-21|540"],
-            conflicts=[],
-            participation=InterviewAvailability.PARTICIPATION_PARTICIPATING,
-            submitted_grid_generation=saved.availability_generation,
-        )
-        late_user = LegoUser.objects.create(
-            username="late-collection-candidate",
-            lego_id=640,
-        )
-        UserApplication.objects.create(
-            user=late_user,
-            admission=self.admission,
-        )
-        self.client.force_authenticate(user=self.member)
-
-        candidates_response = self.client.get(
-            reverse(
-                "interview-candidates",
-                kwargs={"admission_slug": self.admission.slug},
-            )
-        )
-        availability_response = self.client.get(self.url)
-        response = self.client.post(
-            self.url,
-            {
-                "conflicts": [str(self.application.pk)],
-                "conflict_collection_reviewed_candidate_ids": [
-                    str(self.application.pk)
-                ],
-                "conflict_collection_revision": str(revision),
-            },
-            format="json",
-        )
-
-        self.assertEqual(candidates_response.status_code, status.HTTP_200_OK)
-        self.assertEqual(candidates_response.data, [])
-        me = next(item for item in availability_response.data if item["is_me"])
-        self.assertEqual(me["conflict_collection_candidate_ids"], [])
-        self.assertEqual(response.status_code, status.HTTP_409_CONFLICT)
-        availability.refresh_from_db()
-        self.assertEqual(availability.conflicts, [])
-        self.assertIsNone(availability.conflict_collection_review_revision)
-
-    def test_participant_with_zero_available_slots_can_complete_collection(self):
-        revision = uuid.uuid4()
-        saved = self._create_saved_schedule(
-            enabled_slots=["2026-04-21|540"],
-            conflict_collection_open=True,
-            conflict_collection_revision=revision,
-            conflict_collection_candidate_ids=[str(self.application.pk)],
-            conflict_collection_participant_ids=[str(self.member.pk)],
-        )
-        InterviewAvailability.objects.create(
-            admission=self.admission,
-            user=self.member,
-            slots=[],
-            participation=InterviewAvailability.PARTICIPATION_PARTICIPATING,
-            submitted_grid_generation=saved.availability_generation,
-        )
-        self.client.force_authenticate(user=self.member)
-
-        candidates_response = self.client.get(
-            reverse(
-                "interview-candidates",
-                kwargs={"admission_slug": self.admission.slug},
-            )
-        )
-        response = self.client.post(
-            self.url,
-            {
-                "conflicts": [],
-                "conflict_collection_reviewed_candidate_ids": [
-                    str(self.application.pk)
-                ],
-                "conflict_collection_revision": str(revision),
-            },
-            format="json",
-        )
-
-        self.assertEqual(candidates_response.status_code, status.HTTP_200_OK)
-        self.assertEqual(
-            [candidate["id"] for candidate in candidates_response.data],
-            [str(self.application.pk)],
-        )
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertTrue(response.data["conflict_collection_complete"])
-
-    def test_self_only_participant_can_confirm_an_empty_collection_scope(self):
-        self.application.delete()
-        own_application = UserApplication.objects.create(
-            user=self.member,
-            admission=self.admission,
-        )
-        revision = uuid.uuid4()
-        saved = self._create_saved_schedule(
-            enabled_slots=["2026-04-21|540"],
-            conflict_collection_open=True,
-            conflict_collection_revision=revision,
-            conflict_collection_candidate_ids=[str(own_application.pk)],
-            conflict_collection_participant_ids=[str(self.member.pk)],
-        )
-        InterviewAvailability.objects.create(
-            admission=self.admission,
-            user=self.member,
-            slots=["2026-04-21|540"],
-            participation=InterviewAvailability.PARTICIPATION_PARTICIPATING,
-            submitted_grid_generation=saved.availability_generation,
-        )
-        self.client.force_authenticate(user=self.member)
-
-        before = self.client.get(self.url)
-        me = next(item for item in before.data if item["is_me"])
-        response = self.client.post(
-            self.url,
-            {
-                "conflicts": [],
-                "conflict_collection_reviewed_candidate_ids": [],
-                "conflict_collection_revision": str(revision),
-            },
-            format="json",
-        )
-
-        self.assertEqual(me["conflict_collection_candidate_ids"], [])
-        self.assertEqual(
-            str(me["conflict_collection_revision"]),
-            str(revision),
-        )
-        self.assertFalse(me["conflict_collection_complete"])
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertTrue(response.data["conflict_collection_complete"])
-
-    def test_member_can_review_snapshot_candidates_during_open_collection(self):
-        other_group = Group.objects.create(name="Andre innsamling", lego_id=636)
-        self.admission.groups.add(other_group)
-        other_user = LegoUser.objects.create(
-            username="other-collection-candidate", lego_id=637
-        )
-        other_application = UserApplication.objects.create(
-            user=other_user,
-            admission=self.admission,
-        )
-        GroupApplication.objects.create(
-            application=other_application,
-            group=other_group,
-            text="Other application",
-        )
-        revision = uuid.uuid4()
-        self._create_saved_schedule(
-            enabled_slots=["2026-04-21|540"],
-            conflict_collection_open=True,
-            conflict_collection_revision=revision,
-            conflict_collection_candidate_ids=[
-                str(self.application.pk),
-                str(other_application.pk),
-            ],
-            conflict_collection_participant_ids=[str(self.member.pk)],
-        )
-        InterviewAvailability.objects.create(
-            admission=self.admission,
-            user=self.member,
-            slots=["2026-04-21|540"],
-            participation=InterviewAvailability.PARTICIPATION_PARTICIPATING,
-            submitted_grid_generation=1,
-        )
-        self.client.force_authenticate(user=self.member)
-
-        candidates_response = self.client.get(
-            reverse(
-                "interview-candidates",
-                kwargs={"admission_slug": self.admission.slug},
-            )
-        )
-        availability_response = self.client.get(self.url)
-        review_response = self.client.post(
-            self.url,
-            {
-                "conflicts": [str(other_application.pk)],
-                "conflict_collection_reviewed_candidate_ids": [
-                    str(self.application.pk),
-                    str(other_application.pk),
-                ],
-                "conflict_collection_revision": str(revision),
-            },
-            format="json",
-        )
-
-        self.assertEqual(candidates_response.status_code, status.HTTP_200_OK)
-        self.assertEqual(
-            {item["id"] for item in candidates_response.data},
-            {str(self.application.pk), str(other_application.pk)},
-        )
-        me = next(item for item in availability_response.data if item["is_me"])
-        self.assertEqual(
-            set(me["conflict_collection_candidate_ids"]),
-            {str(self.application.pk), str(other_application.pk)},
-        )
-        self.assertFalse(me["conflict_collection_complete"])
-        self.assertEqual(review_response.status_code, status.HTTP_200_OK)
-        self.assertTrue(review_response.data["conflict_collection_complete"])
-        self.assertEqual(
-            review_response.data["conflicts"],
-            [str(other_application.pk)],
-        )
-
-    def test_closed_collection_revokes_member_candidate_scope(self):
-        revision = uuid.uuid4()
-        saved = self._create_saved_schedule(
-            enabled_slots=["2026-04-21|540"],
-            conflict_collection_open=False,
-            conflict_collection_revision=revision,
-            conflict_collection_candidate_ids=[str(self.application.pk)],
-            conflict_collection_participant_ids=[str(self.member.pk)],
-        )
-        InterviewAvailability.objects.create(
-            admission=self.admission,
-            user=self.member,
-            slots=["2026-04-21|540"],
-            participation=InterviewAvailability.PARTICIPATION_PARTICIPATING,
-            submitted_grid_generation=saved.availability_generation,
-        )
-        self.client.force_authenticate(user=self.member)
-
-        candidates_response = self.client.get(
-            reverse(
-                "interview-candidates",
-                kwargs={"admission_slug": self.admission.slug},
-            )
-        )
-        review_response = self.client.post(
-            self.url,
-            {
-                "conflict_collection_reviewed_candidate_ids": [
-                    str(self.application.pk)
-                ],
-                "conflict_collection_revision": str(revision),
-            },
-            format="json",
-        )
-
-        self.assertEqual(candidates_response.status_code, status.HTTP_200_OK)
-        self.assertEqual(candidates_response.data, [])
-        self.assertEqual(review_response.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertIn(
-            "conflict_collection_reviewed_candidate_ids",
-            review_response.data,
-        )
-
     def test_review_scope_requires_submitted_interview_availability(self):
         other_group = Group.objects.create(name="Andre uten tider", lego_id=632)
         self.admission.groups.add(other_group)
@@ -1891,6 +1615,7 @@ class InterviewAvailabilityHardeningTestCase(APITestCase):
         self._open_conflict_review()
         InterviewAvailability.objects.create(
             admission=self.admission,
+            group=self.committee_group,
             user=self.member,
             slots=[],
             reviewed_candidate_ids=[str(self.application.pk)],
@@ -1900,7 +1625,10 @@ class InterviewAvailabilityHardeningTestCase(APITestCase):
         candidates_res = self.client.get(
             reverse(
                 "interview-candidates",
-                kwargs={"admission_slug": self.admission.slug},
+                kwargs={
+                    "admission_slug": self.admission.slug,
+                    "group_id": self.committee_group.pk,
+                },
             )
         )
         availability_res = self.client.get(self.url)
@@ -1928,6 +1656,7 @@ class InterviewAvailabilityHardeningTestCase(APITestCase):
         self._open_conflict_review()
         InterviewAvailability.objects.create(
             admission=self.admission,
+            group=self.committee_group,
             user=self.member,
             slots=["2026-04-21|540"],
             reviewed_candidate_ids=[str(self.application.pk)],
@@ -1948,6 +1677,7 @@ class InterviewAvailabilityHardeningTestCase(APITestCase):
         saved = self._open_conflict_review()
         InterviewAvailability.objects.create(
             admission=self.admission,
+            group=self.committee_group,
             user=self.member,
             slots=["2026-04-21|540"],
             reviewed_candidate_ids=[str(self.application.pk)],
@@ -2046,6 +1776,7 @@ class InterviewAvailabilityHardeningTestCase(APITestCase):
         Membership.objects.create(user=other_member, role=MEMBER, group=other_group)
         InterviewAvailability.objects.create(
             admission=self.admission,
+            group=self.committee_group,
             user=other_member,
             slots=["2026-04-21|540"],
             conflicts=[],
@@ -2057,7 +1788,11 @@ class InterviewAvailabilityHardeningTestCase(APITestCase):
         self.assertEqual(res.status_code, status.HTTP_200_OK)
         self.assertEqual(
             {row["username"] for row in res.data},
-            {"hardening-member", "hardening-recruiter"},
+            {
+                "hardening-member",
+                "hardening-recruiter",
+                "hardening-availability-admin",
+            },
         )
 
     def test_member_cannot_save_conflicts_before_names_released(self):
@@ -2073,7 +1808,9 @@ class InterviewAvailabilityHardeningTestCase(APITestCase):
         self.assertIn("conflicts", res.data)
         self.assertFalse(
             InterviewAvailability.objects.filter(
-                admission=self.admission, user=self.member
+                admission=self.admission,
+                group=self.committee_group,
+                user=self.member,
             ).exists()
         )
 
@@ -2085,6 +1822,7 @@ class InterviewAvailabilityHardeningTestCase(APITestCase):
         )
         InterviewAvailability.objects.create(
             admission=self.admission,
+            group=self.committee_group,
             user=self.member,
             slots=["2026-04-21|540"],
             conflicts=[],
@@ -2110,6 +1848,7 @@ class InterviewAvailabilityHardeningTestCase(APITestCase):
         self._create_saved_schedule(enabled_slots=["2026-04-22|600"])
         InterviewAvailability.objects.create(
             admission=self.admission,
+            group=self.committee_group,
             user=self.member,
             slots=["2026-04-21|540"],
             conflicts=[str(self.application.pk)],
@@ -2146,13 +1885,12 @@ class InterviewAvailabilityHardeningTestCase(APITestCase):
             is_distributed=True,
             name_visibility=SavedSchedule.NAME_VISIBILITY_ADMIN_ONLY,
         )
-        saved_schedule.revealed_groups.add(other_group)
         InterviewAvailability.objects.create(
             admission=self.admission,
+            group=self.committee_group,
             user=self.recruiter,
             conflicts=[str(self.application.pk), str(other_application.pk)],
         )
-        saved_schedule.revealed_groups.remove(other_group)
         self.client.force_authenticate(user=self.recruiter)
 
         res = self.client.post(
@@ -2211,6 +1949,7 @@ class InterviewAvailabilityHardeningTestCase(APITestCase):
         self._create_saved_schedule(name_visibility="hidden")
         InterviewAvailability.objects.create(
             admission=self.admission,
+            group=self.committee_group,
             user=self.member,
             conflicts=[str(self.application.pk)],
         )
@@ -2228,6 +1967,7 @@ class InterviewAvailabilityHardeningTestCase(APITestCase):
         self._create_saved_schedule(name_visibility="committee", is_distributed=False)
         InterviewAvailability.objects.create(
             admission=self.admission,
+            group=self.committee_group,
             user=self.member,
             conflicts=[str(self.application.pk)],
         )
@@ -2360,12 +2100,17 @@ class SavedScheduleVisibilityTestCase(APITestCase):
             text="Arrkom application",
         )
         self.url = reverse(
-            "saved-schedule", kwargs={"admission_slug": self.admission.slug}
+            "saved-schedule",
+            kwargs={
+                "admission_slug": self.admission.slug,
+                "group_id": self.committee_group.pk,
+            },
         )
 
     def _create_saved(self, **overrides):
         defaults = {
             "admission": self.admission,
+            "group": self.committee_group,
             "schedule": [
                 {
                     "candidate": "Ada",
@@ -2403,7 +2148,10 @@ class SavedScheduleVisibilityTestCase(APITestCase):
         res = self.client.post(
             reverse(
                 "interview-availability",
-                kwargs={"admission_slug": self.admission.slug},
+                kwargs={
+                    "admission_slug": self.admission.slug,
+                    "group_id": self.committee_group.pk,
+                },
             ),
             {"slots": ["2026-04-20|540"]},
             format="json",
@@ -2428,6 +2176,90 @@ class SavedScheduleVisibilityTestCase(APITestCase):
 
         self.assertEqual(res.status_code, status.HTTP_200_OK)
         self.assertEqual(res.data["schedule"][0]["candidate"], "Ada")
+
+    def test_partial_publication_hides_rows_after_the_boundary_for_members(self):
+        other_candidate = LegoUser.objects.create(
+            username="vis-candidate-2",
+            first_name="Bea",
+            email="bea@example.com",
+            lego_id=705,
+        )
+        other_application = UserApplication.objects.create(
+            admission=self.admission, user=other_candidate
+        )
+        GroupApplication.objects.create(
+            application=other_application,
+            group=self.committee_group,
+            text="Arrkom application",
+        )
+        self._create_saved(
+            is_distributed=False,
+            distributed_through="2026-04-21",
+            name_visibility="committee",
+            schedule=[
+                {
+                    "candidate": "Ada",
+                    "candidate_id": str(self.application.pk),
+                    "time": 8,
+                    "panel": [],
+                },
+                {
+                    "candidate": "Bea",
+                    "candidate_id": str(other_application.pk),
+                    "time": 2 * 24 * 60 + 8,
+                    "panel": [],
+                },
+            ],
+        )
+        self.client.force_authenticate(user=self.member_user)
+
+        res = self.client.get(self.url)
+
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        candidates = {entry["candidate"] for entry in res.data["schedule"]}
+        self.assertEqual(candidates, {"Ada"})
+
+    def test_partial_publication_still_shows_admin_the_whole_plan(self):
+        other_candidate = LegoUser.objects.create(
+            username="vis-candidate-2",
+            first_name="Bea",
+            email="bea@example.com",
+            lego_id=705,
+        )
+        other_application = UserApplication.objects.create(
+            admission=self.admission, user=other_candidate
+        )
+        GroupApplication.objects.create(
+            application=other_application,
+            group=self.committee_group,
+            text="Arrkom application",
+        )
+        self._create_saved(
+            is_distributed=False,
+            distributed_through="2026-04-21",
+            name_visibility="committee",
+            schedule=[
+                {
+                    "candidate": "Ada",
+                    "candidate_id": str(self.application.pk),
+                    "time": 8,
+                    "panel": [],
+                },
+                {
+                    "candidate": "Bea",
+                    "candidate_id": str(other_application.pk),
+                    "time": 2 * 24 * 60 + 8,
+                    "panel": [],
+                },
+            ],
+        )
+        self.client.force_authenticate(user=self.admin_user)
+
+        res = self.client.get(self.url)
+
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        candidates = {entry["candidate"] for entry in res.data["schedule"]}
+        self.assertEqual(candidates, {"Ada", "Bea"})
 
     def test_legacy_schedule_rows_are_allowlisted_and_authoritative(self):
         private_marker = "private-value-that-must-not-leak"
@@ -2534,123 +2366,11 @@ class SavedScheduleVisibilityTestCase(APITestCase):
         self.assertEqual(item["interview_status"], "confirmed")
         self.assertEqual(item["interview_status_updated_by"], recruiter.username)
 
-    def test_adding_group_during_global_reveal_keeps_it_hidden(self):
-        other_group = Group.objects.create(name="Newkom", lego_id=740)
-        other_member = LegoUser.objects.create(
-            username="newkom-member",
-            lego_id=741,
-        )
-        Membership.objects.create(
-            user=other_member,
-            role=MEMBER,
-            group=other_group,
-        )
-        other_candidate = LegoUser.objects.create(
-            username="newkom-candidate",
-            first_name="Grace",
-            lego_id=742,
-        )
-        other_application = UserApplication.objects.create(
-            admission=self.admission,
-            user=other_candidate,
-        )
-        GroupApplication.objects.create(
-            application=other_application,
-            group=other_group,
-            text="Newkom application",
-        )
-        saved = self._create_saved(
-            name_visibility=SavedSchedule.NAME_VISIBILITY_COMMITTEE,
-            schedule=[
-                {
-                    "candidate": "Ada",
-                    "candidate_id": str(self.application.pk),
-                    "time": 8,
-                    "panel": [],
-                },
-                {
-                    "candidate": "Grace",
-                    "candidate_id": str(other_application.pk),
-                    "time": 9,
-                    "panel": [],
-                },
-            ],
-        )
-        self.client.force_authenticate(user=self.admin_user)
-
-        updated = self.client.patch(
-            reverse(
-                "manage-admission-detail",
-                kwargs={"slug": self.admission.slug},
-            ),
-            {"groups": [str(self.committee_group.pk), str(other_group.pk)]},
-            format="json",
-        )
-
-        self.assertEqual(updated.status_code, status.HTTP_200_OK, updated.data)
-        saved.refresh_from_db()
-        self.assertEqual(
-            saved.name_visibility,
-            SavedSchedule.NAME_VISIBILITY_ADMIN_ONLY,
-        )
-        self.assertEqual(list(saved.revealed_groups.all()), [self.committee_group])
-
-        self.client.force_authenticate(user=other_member)
-        self.assertEqual(self.client.get(self.url).data["schedule"], [])
-        self.assertEqual(
-            self.client.get(
-                reverse(
-                    "interview-candidates",
-                    kwargs={"admission_slug": self.admission.slug},
-                )
-            ).data,
-            [],
-        )
-
-    def test_removing_and_readding_group_does_not_restore_disclosure(self):
-        retained_group = Group.objects.create(name="Retainedkom", lego_id=743)
-        self.admission.groups.add(retained_group)
-        saved = self._create_saved(
-            name_visibility=SavedSchedule.NAME_VISIBILITY_ADMIN_ONLY
-        )
-        saved.revealed_groups.add(self.committee_group)
-        manage_url = reverse(
-            "manage-admission-detail",
-            kwargs={"slug": self.admission.slug},
-        )
-        self.client.force_authenticate(user=self.admin_user)
-
-        removed = self.client.patch(
-            manage_url,
-            {"groups": [str(retained_group.pk)]},
-            format="json",
-        )
-        readded = self.client.patch(
-            manage_url,
-            {"groups": [str(retained_group.pk), str(self.committee_group.pk)]},
-            format="json",
-        )
-
-        self.assertEqual(removed.status_code, status.HTTP_200_OK, removed.data)
-        self.assertEqual(readded.status_code, status.HTTP_200_OK, readded.data)
-        saved.refresh_from_db()
-        self.assertFalse(
-            saved.revealed_groups.filter(pk=self.committee_group.pk).exists()
-        )
-        event = NameVisibilityAuditEvent.objects.get(
-            saved_schedule=saved,
-            group=self.committee_group,
-        )
-        self.assertEqual(event.action, NameVisibilityAuditEvent.ACTION_HIDDEN)
-        self.assertEqual(event.actor, self.admin_user)
-
-        self.client.force_authenticate(user=self.member_user)
-        self.assertEqual(self.client.get(self.url).data["schedule"], [])
-
-    def test_unpublish_then_republish_does_not_restore_global_name_visibility(self):
+    def test_unpublish_then_republish_does_not_restore_name_visibility(self):
         slot = "2026-04-20|480"
         InterviewAvailability.objects.create(
             admission=self.admission,
+            group=self.committee_group,
             user=self.admin_user,
             slots=[slot],
         )
@@ -2673,7 +2393,6 @@ class SavedScheduleVisibilityTestCase(APITestCase):
             is_distributed=True,
             name_visibility=SavedSchedule.NAME_VISIBILITY_COMMITTEE,
         )
-        saved.revealed_groups.add(self.committee_group)
         self.client.force_authenticate(user=self.admin_user)
 
         unpublished = self.client.post(
@@ -2713,14 +2432,16 @@ class SavedScheduleVisibilityTestCase(APITestCase):
             saved.name_visibility,
             SavedSchedule.NAME_VISIBILITY_HIDDEN,
         )
-        self.assertFalse(saved.revealed_groups.exists())
 
         self.client.force_authenticate(user=self.member_user)
         member_schedule = self.client.get(self.url)
         member_candidates = self.client.get(
             reverse(
                 "interview-candidates",
-                kwargs={"admission_slug": self.admission.slug},
+                kwargs={
+                    "admission_slug": self.admission.slug,
+                    "group_id": self.committee_group.pk,
+                },
             )
         )
 
@@ -2731,7 +2452,10 @@ class SavedScheduleVisibilityTestCase(APITestCase):
         audit = self.client.get(
             reverse(
                 "name-visibility-audit",
-                kwargs={"admission_slug": self.admission.slug},
+                kwargs={
+                    "admission_slug": self.admission.slug,
+                    "group_id": self.committee_group.pk,
+                },
             )
         )
         self.assertEqual(audit.status_code, status.HTTP_200_OK)
@@ -2790,15 +2514,17 @@ class SavedScheduleVisibilityTestCase(APITestCase):
         self.assertEqual(reveal.status_code, status.HTTP_200_OK)
         self.assertEqual(reveal.data["name_visibility"], "committee")
         saved.refresh_from_db()
-        self.assertEqual(saved.name_visibility, "hidden")
-        self.assertEqual(list(saved.revealed_groups.all()), [self.committee_group])
+        self.assertEqual(saved.name_visibility, "committee")
 
         self.client.force_authenticate(user=self.member_user)
         own_schedule = self.client.get(self.url)
         own_candidates = self.client.get(
             reverse(
                 "interview-candidates",
-                kwargs={"admission_slug": self.admission.slug},
+                kwargs={
+                    "admission_slug": self.admission.slug,
+                    "group_id": self.committee_group.pk,
+                },
             )
         )
         self.assertEqual(
@@ -2810,25 +2536,38 @@ class SavedScheduleVisibilityTestCase(APITestCase):
         )
         self.assertNotIn("revealed_groups", own_schedule.data)
 
+        # other_member belongs to Bedkom, not Arrkom - a fully unrelated
+        # committee has no access to Arrkom's schedule at all now.
         self.client.force_authenticate(user=other_member)
-        other_schedule = self.client.get(self.url)
-        other_candidates = self.client.get(
-            reverse(
-                "interview-candidates",
-                kwargs={"admission_slug": self.admission.slug},
-            )
+        self.assertEqual(
+            self.client.get(self.url).status_code, status.HTTP_403_FORBIDDEN
         )
-        self.assertEqual(other_schedule.data["schedule"], [])
-        self.assertEqual(other_candidates.data, [])
+        self.assertEqual(
+            self.client.get(
+                reverse(
+                    "interview-candidates",
+                    kwargs={
+                        "admission_slug": self.admission.slug,
+                        "group_id": self.committee_group.pk,
+                    },
+                )
+            ).status_code,
+            status.HTTP_403_FORBIDDEN,
+        )
 
         audit_url = reverse(
             "name-visibility-audit",
-            kwargs={"admission_slug": self.admission.slug},
+            kwargs={
+                "admission_slug": self.admission.slug,
+                "group_id": self.committee_group.pk,
+            },
         )
+        # The recruiter is this committee's own interview admin, so they
+        # can see its audit trail; an ordinary committee member cannot.
         self.client.force_authenticate(user=recruiter)
         self.assertEqual(
             self.client.get(audit_url).status_code,
-            status.HTTP_403_FORBIDDEN,
+            status.HTTP_200_OK,
         )
         self.client.force_authenticate(user=self.member_user)
         self.assertEqual(
@@ -2837,15 +2576,7 @@ class SavedScheduleVisibilityTestCase(APITestCase):
         )
         self.client.force_authenticate(user=self.admin_user)
         admin_schedule = self.client.get(self.url)
-        self.assertEqual(
-            admin_schedule.data["revealed_groups"],
-            [
-                {
-                    "id": str(self.committee_group.pk),
-                    "name": self.committee_group.name,
-                }
-            ],
-        )
+        self.assertEqual(admin_schedule.data["name_visibility"], "committee")
         audit = self.client.get(audit_url)
         self.assertEqual(audit.status_code, status.HTTP_200_OK)
         self.assertEqual(len(audit.data), 1)
@@ -2906,40 +2637,49 @@ class SavedScheduleVisibilityTestCase(APITestCase):
         self.assertEqual(hidden.data["name_visibility"], "admin_only")
         saved.refresh_from_db()
         self.assertEqual(saved.name_visibility, "admin_only")
-        self.assertEqual(list(saved.revealed_groups.all()), [other_group])
 
         self.client.force_authenticate(user=self.member_user)
         own_schedule = self.client.get(self.url)
         own_candidates = self.client.get(
             reverse(
                 "interview-candidates",
-                kwargs={"admission_slug": self.admission.slug},
+                kwargs={
+                    "admission_slug": self.admission.slug,
+                    "group_id": self.committee_group.pk,
+                },
             )
         )
         self.assertEqual(own_schedule.data["schedule"], [])
         self.assertEqual(own_candidates.data, [])
 
+        # other_member belongs to Bedkom, not Arrkom - a fully unrelated
+        # committee has no access to Arrkom's schedule at all now, whatever
+        # revealed_groups says.
         self.client.force_authenticate(user=other_member)
-        other_schedule = self.client.get(self.url)
-        other_candidates = self.client.get(
-            reverse(
-                "interview-candidates",
-                kwargs={"admission_slug": self.admission.slug},
-            )
+        self.assertEqual(
+            self.client.get(self.url).status_code, status.HTTP_403_FORBIDDEN
         )
         self.assertEqual(
-            [item["candidate"] for item in other_schedule.data["schedule"]], ["Grace"]
-        )
-        self.assertEqual(
-            other_candidates.data,
-            [{"id": str(other_application.pk), "name": "Grace"}],
+            self.client.get(
+                reverse(
+                    "interview-candidates",
+                    kwargs={
+                        "admission_slug": self.admission.slug,
+                        "group_id": self.committee_group.pk,
+                    },
+                )
+            ).status_code,
+            status.HTTP_403_FORBIDDEN,
         )
 
         self.client.force_authenticate(user=self.admin_user)
         audit = self.client.get(
             reverse(
                 "name-visibility-audit",
-                kwargs={"admission_slug": self.admission.slug},
+                kwargs={
+                    "admission_slug": self.admission.slug,
+                    "group_id": self.committee_group.pk,
+                },
             )
         )
         self.assertEqual(audit.status_code, status.HTTP_200_OK)
@@ -2969,7 +2709,6 @@ class SavedScheduleVisibilityTestCase(APITestCase):
         self.assertEqual(res.status_code, status.HTTP_403_FORBIDDEN)
         saved.refresh_from_db()
         self.assertEqual(len(saved.schedule), 1)
-        self.assertFalse(saved.revealed_groups.exists())
 
     def test_recruiter_explicit_null_revision_cannot_update_visibility(self):
         recruiter = LegoUser.objects.create(username="vis-recruiter-cas", lego_id=730)
@@ -2992,7 +2731,6 @@ class SavedScheduleVisibilityTestCase(APITestCase):
         self.assertEqual(set(res.data), {"detail"})
         saved.refresh_from_db()
         self.assertEqual(saved.name_visibility, "hidden")
-        self.assertFalse(saved.revealed_groups.exists())
 
     def test_recruiter_must_send_schedule_revision(self):
         recruiter = LegoUser.objects.create(
@@ -3017,7 +2755,6 @@ class SavedScheduleVisibilityTestCase(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertIn("expected_updated_at", response.data)
         saved.refresh_from_db()
-        self.assertFalse(saved.revealed_groups.exists())
 
     def test_recruiter_cannot_reveal_unpublished_schedule(self):
         recruiter = LegoUser.objects.create(username="vis-recruiter-3", lego_id=710)
@@ -3039,9 +2776,12 @@ class SavedScheduleVisibilityTestCase(APITestCase):
         )
 
         self.assertEqual(draft.status_code, status.HTTP_200_OK)
-        self.assertEqual(draft.data["schedule"], [])
+        # The recruiter is this committee's own interview admin now that
+        # scheduling is committee-scoped, so they work against the full
+        # draft - unlike an ordinary committee member, who is still gated
+        # by is_distributed.
+        self.assertEqual(draft.data["schedule"][0]["candidate"], "Ada")
         self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertFalse(saved.revealed_groups.exists())
 
     def test_committee_member_does_not_see_other_committee_candidate(self):
         other_group = Group.objects.create(name="Bedkom", lego_id=705)
@@ -3081,7 +2821,7 @@ class SavedScheduleVisibilityTestCase(APITestCase):
         self.assertEqual(res.status_code, status.HTTP_200_OK)
         self.assertEqual([item["candidate"] for item in res.data["schedule"]], ["Ada"])
 
-    def test_mixed_role_visibility_unions_recruiting_and_revealed_groups(self):
+    def test_recruiting_another_committee_grants_no_extra_visibility(self):
         recruiting_group = Group.objects.create(name="Bedkom", lego_id=720)
         unrelated_group = Group.objects.create(name="Fagkom", lego_id=721)
         self.admission.groups.add(recruiting_group, unrelated_group)
@@ -3120,8 +2860,8 @@ class SavedScheduleVisibilityTestCase(APITestCase):
         applications[0].phone_number = "+47 411 11 111"
         applications[0].save(update_fields=["phone_number"])
 
-        saved = self._create_saved(
-            name_visibility="admin_only",
+        self._create_saved(
+            name_visibility="committee",
             schedule=[
                 {
                     "candidate": "Ada",
@@ -3143,33 +2883,36 @@ class SavedScheduleVisibilityTestCase(APITestCase):
                 },
             ],
         )
-        saved.revealed_groups.add(self.committee_group)
         self.client.force_authenticate(user=mixed_user)
 
         schedule = self.client.get(self.url)
         candidates = self.client.get(
             reverse(
                 "interview-candidates",
-                kwargs={"admission_slug": self.admission.slug},
+                kwargs={
+                    "admission_slug": self.admission.slug,
+                    "group_id": self.committee_group.pk,
+                },
             )
         )
 
+        # mixed_user recruits Bedkom, but that grants no visibility into
+        # Arrkom's schedule - each committee's schedule is independent now,
+        # so only Arrkom's own (revealed) candidate, Ada, is visible, and
+        # mixed_user gets no elevated contact access since they are only an
+        # ordinary member of Arrkom itself.
         self.assertEqual(schedule.status_code, status.HTTP_200_OK)
         self.assertEqual(
             {item["candidate"] for item in schedule.data["schedule"]},
-            {"Ada", "Grace"},
+            {"Ada"},
         )
         schedule_by_candidate = {
             item["candidate"]: item for item in schedule.data["schedule"]
         }
         self.assertNotIn("candidate_phone", schedule_by_candidate["Ada"])
         self.assertEqual(
-            schedule_by_candidate["Grace"]["candidate_phone"],
-            "+47 411 11 111",
-        )
-        self.assertEqual(
             {item["name"] for item in candidates.data},
-            {"Ada", "Grace"},
+            {"Ada"},
         )
 
     def test_admin_sees_names_even_when_hidden(self):
@@ -3232,10 +2975,18 @@ class InterviewGenderExposureTestCase(APITestCase):
             text="Arrkom application",
         )
         self.candidates_url = reverse(
-            "interview-candidates", kwargs={"admission_slug": self.admission.slug}
+            "interview-candidates",
+            kwargs={
+                "admission_slug": self.admission.slug,
+                "group_id": self.committee_group.pk,
+            },
         )
         self.availability_url = reverse(
-            "interview-availability", kwargs={"admission_slug": self.admission.slug}
+            "interview-availability",
+            kwargs={
+                "admission_slug": self.admission.slug,
+                "group_id": self.committee_group.pk,
+            },
         )
 
     def test_admin_does_not_receive_candidate_gender(self):
@@ -3249,6 +3000,7 @@ class InterviewGenderExposureTestCase(APITestCase):
     def test_committee_member_never_sees_candidate_gender(self):
         SavedSchedule.objects.create(
             admission=self.admission,
+            group=self.committee_group,
             schedule=[],
             start_date="2026-04-20",
             is_distributed=True,
@@ -3280,11 +3032,13 @@ class InterviewGenderExposureTestCase(APITestCase):
         )
         InterviewAvailability.objects.create(
             admission=self.admission,
+            group=self.committee_group,
             user=self.admin_user,
             slots=["2026-04-20|480"],
         )
         InterviewAvailability.objects.create(
             admission=self.admission,
+            group=self.committee_group,
             user=self.member_user,
             slots=["2026-04-20|480"],
         )
@@ -3303,6 +3057,7 @@ class InterviewGenderExposureTestCase(APITestCase):
     def test_unpublished_committee_visibility_does_not_release_names(self):
         SavedSchedule.objects.create(
             admission=self.admission,
+            group=self.committee_group,
             schedule=[],
             start_date="2026-04-20",
             is_distributed=False,
@@ -3318,6 +3073,7 @@ class InterviewGenderExposureTestCase(APITestCase):
     def test_availability_payload_carries_panel_gender_for_admin(self):
         InterviewAvailability.objects.create(
             admission=self.admission,
+            group=self.committee_group,
             user=self.admin_user,
             slots=[],
         )
@@ -3344,9 +3100,11 @@ class SolveJobLifecycleTestCase(APITestCase):
         Membership.objects.create(user=self.user, role=RECRUITING, group=self.group)
         self.admission = create_admission(created_by=self.user, slug="async-opptak")
         self.admission.admin_groups.add(self.group)
+        self.admission.groups.add(self.group)
         self.solve_url = reverse("solve-schedule")
         self.payload = {
             "admission_slug": self.admission.slug,
+            "group_id": str(self.group.pk),
             "candidates": [{"id": "c1", "name": "Ada", "gender": ""}],
             "interviewers": [
                 {"id": "i1", "name": "Ola", "gender": "M", "availability": [0]}
@@ -3382,6 +3140,7 @@ class SolveJobLifecycleTestCase(APITestCase):
         job_id = self._enqueue().data["job_id"]
         saved = SavedSchedule.objects.create(
             admission=self.admission,
+            group=self.group,
             schedule=[],
             start_date="2026-04-20",
             is_distributed=False,
@@ -3431,7 +3190,11 @@ class SolveJobLifecycleTestCase(APITestCase):
         job_url = reverse("solve-job", kwargs={"job_id": job_id})
         status_response = self.client.get(job_url)
         latest_response = self.client.get(
-            reverse("latest-solve-job"), {"admission_slug": self.admission.slug}
+            reverse("latest-solve-job"),
+            {
+                "admission_slug": self.admission.slug,
+                "group_id": str(self.group.pk),
+            },
         )
         cancel_response = self.client.delete(job_url)
         apply_response = self.client.post(
@@ -3450,12 +3213,18 @@ class SolveJobLifecycleTestCase(APITestCase):
 
         pending = self.client.get(
             reverse("latest-solve-job"),
-            {"admission_slug": self.admission.slug},
+            {
+                "admission_slug": self.admission.slug,
+                "group_id": str(self.group.pk),
+            },
         )
         call_command("run_solver_worker", once=True)
         completed = self.client.get(
             reverse("latest-solve-job"),
-            {"admission_slug": self.admission.slug},
+            {
+                "admission_slug": self.admission.slug,
+                "group_id": str(self.group.pk),
+            },
         )
 
         self.assertEqual(pending.status_code, status.HTTP_200_OK)
@@ -3470,12 +3239,18 @@ class SolveJobLifecycleTestCase(APITestCase):
 
         pending = self.client.get(
             reverse("latest-solve-job"),
-            {"admission_slug": self.admission.slug},
+            {
+                "admission_slug": self.admission.slug,
+                "group_id": str(self.group.pk),
+            },
         )
         call_command("run_solver_worker", once=True)
         completed = self.client.get(
             reverse("latest-solve-job"),
-            {"admission_slug": self.admission.slug},
+            {
+                "admission_slug": self.admission.slug,
+                "group_id": str(self.group.pk),
+            },
         )
 
         self.assertEqual(pending.status_code, status.HTTP_204_NO_CONTENT)
@@ -3541,6 +3316,7 @@ class SolveJobLifecycleTestCase(APITestCase):
     def test_worker_reaps_stale_running_job(self):
         stale = SolveJob.objects.create(
             admission=self.admission,
+            group=self.group,
             requested_by=self.user,
             request_data={},
             status=SolveJob.STATUS_RUNNING,
@@ -3557,6 +3333,7 @@ class SolveJobLifecycleTestCase(APITestCase):
     def test_worker_reaps_stale_pending_job(self):
         stale = SolveJob.objects.create(
             admission=self.admission,
+            group=self.group,
             requested_by=self.user,
             request_data={},
             status=SolveJob.STATUS_PENDING,
@@ -3574,6 +3351,7 @@ class SolveJobLifecycleTestCase(APITestCase):
     def test_cleanup_deletes_old_finished_jobs(self):
         old = SolveJob.objects.create(
             admission=self.admission,
+            group=self.group,
             requested_by=self.user,
             request_data={},
             status=SolveJob.STATUS_DONE,
@@ -3590,6 +3368,7 @@ class SolveJobLifecycleTestCase(APITestCase):
     def test_worker_cleans_old_results_even_when_processing_a_job(self):
         old = SolveJob.objects.create(
             admission=self.admission,
+            group=self.group,
             requested_by=self.user,
             request_data={"candidate": "private"},
             result={"candidate": "private"},
@@ -3622,6 +3401,7 @@ class SolveProposalApplyTestCase(APITestCase):
             slug="proposal-apply",
         )
         self.admission.admin_groups.add(self.group)
+        self.admission.groups.add(self.group)
         candidate = LegoUser.objects.create(
             username="proposal-candidate",
             lego_id=9592,
@@ -3630,8 +3410,14 @@ class SolveProposalApplyTestCase(APITestCase):
             admission=self.admission,
             user=candidate,
         )
+        GroupApplication.objects.create(
+            application=self.application,
+            group=self.group,
+            text="Proposal application",
+        )
         self.saved = SavedSchedule.objects.create(
             admission=self.admission,
+            group=self.group,
             schedule=[],
             start_date="2026-04-20",
             end_date="2026-04-20",
@@ -3642,6 +3428,7 @@ class SolveProposalApplyTestCase(APITestCase):
         )
         InterviewAvailability.objects.create(
             admission=self.admission,
+            group=self.group,
             user=self.user,
             slots=["2026-04-20|540"],
             submitted_grid_generation=self.saved.availability_generation,
@@ -3652,6 +3439,7 @@ class SolveProposalApplyTestCase(APITestCase):
     def _job(self):
         return SolveJob.objects.create(
             admission=self.admission,
+            group=self.group,
             requested_by=self.user,
             status=SolveJob.STATUS_DONE,
             finished_at=timezone.now(),
@@ -3713,7 +3501,9 @@ class SolveProposalApplyTestCase(APITestCase):
 
         self.saved.refresh_from_db()
         published_job = self._job()
-        SavedSchedule.objects.filter(pk=self.saved.pk).update(is_distributed=True)
+        SavedSchedule.objects.filter(pk=self.saved.pk).update(
+            distributed_through=timezone.now().date()
+        )
         published = self._apply(published_job)
         self.assertEqual(published.status_code, status.HTTP_409_CONFLICT)
 
@@ -3799,7 +3589,10 @@ class SolveProposalApplyTestCase(APITestCase):
         response = self.client.post(
             reverse(
                 "saved-schedule",
-                kwargs={"admission_slug": self.admission.slug},
+                kwargs={
+                    "admission_slug": self.admission.slug,
+                    "group_id": self.group.pk,
+                },
             ),
             {"panel_size": 1},
             format="json",
@@ -3823,6 +3616,7 @@ class CanonicalSolverInputTestCase(APITestCase):
             created_by=self.admin, slug="canonical-opptak"
         )
         self.admission.admin_groups.add(self.admin_group)
+        self.admission.groups.add(self.admin_group)
         self.candidate = LegoUser.objects.create(
             username="canonical-candidate", lego_id=962, gender="male"
         )
@@ -3831,8 +3625,14 @@ class CanonicalSolverInputTestCase(APITestCase):
             user=self.candidate,
             phone_number="12345678",
         )
+        GroupApplication.objects.create(
+            application=self.application,
+            group=self.admin_group,
+            text="Canonical application",
+        )
         SavedSchedule.objects.create(
             admission=self.admission,
+            group=self.admin_group,
             schedule=[],
             start_date="2026-04-20",
             end_date="2026-04-20",
@@ -3843,6 +3643,7 @@ class CanonicalSolverInputTestCase(APITestCase):
         )
         InterviewAvailability.objects.create(
             admission=self.admission,
+            group=self.admin_group,
             user=self.admin,
             slots=["2026-04-20|540"],
         )
@@ -3852,6 +3653,7 @@ class CanonicalSolverInputTestCase(APITestCase):
     def _payload(self, candidate_id=None):
         return {
             "admission_slug": self.admission.slug,
+            "group_id": str(self.admin_group.pk),
             "candidates": [
                 {
                     "id": candidate_id or str(self.application.pk),
@@ -3934,6 +3736,7 @@ class CanonicalSolverInputTestCase(APITestCase):
 
         InterviewAvailability.objects.create(
             admission=self.admission,
+            group=self.admin_group,
             user=optional,
             slots=[],
             participation=InterviewAvailability.PARTICIPATION_NOT_PARTICIPATING,
@@ -4010,7 +3813,14 @@ class CanonicalSolverInputTestCase(APITestCase):
             username="late-canonical-candidate",
             lego_id=964,
         )
-        UserApplication.objects.create(admission=self.admission, user=other_user)
+        other_application = UserApplication.objects.create(
+            admission=self.admission, user=other_user
+        )
+        GroupApplication.objects.create(
+            application=other_application,
+            group=self.admin_group,
+            text="Late canonical application",
+        )
 
         res = self.client.post(self.url, self._payload(), format="json")
 
@@ -4041,6 +3851,97 @@ class CanonicalSolverInputTestCase(APITestCase):
             payload["interviewers"][0]["experience_level"],
             InterviewAvailability.EXPERIENCE_UNKNOWN,
         )
+
+    def test_repair_mode_excludes_candidates_outside_the_review_scope(self):
+        """A repair must never place a candidate onto a panel that never
+        reviewed them - otherwise the repaired plan has an unchecked pairing."""
+        second_user = LegoUser.objects.create(
+            username="canonical-candidate-2", lego_id=965, gender="male"
+        )
+        second_application = UserApplication.objects.create(
+            admission=self.admission, user=second_user, phone_number="87654321"
+        )
+        GroupApplication.objects.create(
+            application=second_application,
+            group=self.admin_group,
+            text="Canonical application 2",
+        )
+        saved_schedule = SavedSchedule.objects.get(admission=self.admission)
+        ConflictReviewList.objects.create(
+            saved_schedule=saved_schedule,
+            revision=uuid.uuid4(),
+            interviewer_id=self.admin.pk,
+            own_candidate_ids=[str(self.application.pk)],
+            swap_candidate_ids=[],
+            decoys=[],
+        )
+
+        payload = canonicalize_solver_payload(
+            self.admission,
+            saved_schedule,
+            {
+                "candidates": [
+                    {"id": str(self.application.pk)},
+                    {"id": str(second_application.pk)},
+                ],
+                "interviewers": [{"id": str(self.admin.pk)}],
+                "panel_size": 1,
+                "options": {},
+                "locked_assignments": [
+                    {
+                        "candidate_id": str(self.application.pk),
+                        "time": 540,
+                        "panel": [{"id": str(self.admin.pk), "name": "x"}],
+                    }
+                ],
+            },
+            self.admin,
+        )
+
+        biased = set(payload["interviewers"][0]["biased"])
+        self.assertIn(str(second_application.pk), biased)
+        self.assertNotIn(str(self.application.pk), biased)
+
+    def test_review_scope_is_not_enforced_without_locked_assignments(self):
+        """A fresh solve has nothing reviewed yet, so the review-scope
+        exclusion (which only makes sense for a repair) must not apply."""
+        second_user = LegoUser.objects.create(
+            username="canonical-candidate-3", lego_id=966, gender="male"
+        )
+        second_application = UserApplication.objects.create(
+            admission=self.admission, user=second_user, phone_number="87654321"
+        )
+        GroupApplication.objects.create(
+            application=second_application,
+            group=self.admin_group,
+            text="Canonical application 3",
+        )
+        saved_schedule = SavedSchedule.objects.get(admission=self.admission)
+        ConflictReviewList.objects.create(
+            saved_schedule=saved_schedule,
+            revision=uuid.uuid4(),
+            interviewer_id=self.admin.pk,
+            own_candidate_ids=[str(self.application.pk)],
+            swap_candidate_ids=[],
+            decoys=[],
+        )
+
+        payload = canonicalize_solver_payload(
+            self.admission,
+            saved_schedule,
+            {
+                "candidates": [
+                    {"id": str(self.application.pk)},
+                    {"id": str(second_application.pk)},
+                ],
+                "interviewers": [{"id": str(self.admin.pk)}],
+                "panel_size": 1,
+                "options": {},
+            },
+            self.admin,
+        )
+
+        self.assertEqual(payload["interviewers"][0]["biased"], [])
 
     def test_cross_admission_candidate_is_rejected(self):
         other = create_admission(
@@ -4096,8 +3997,12 @@ class CandidateWithdrawalPrivacyTestCase(TestCase):
             admission=admission, user=candidate, phone_number="12345678"
         )
         candidate_id = str(application.pk)
+        GroupApplication.objects.create(
+            application=application, group=committee, text="Purge application"
+        )
         saved = SavedSchedule.objects.create(
             admission=admission,
+            group=committee,
             schedule=[
                 {
                     "candidate_id": candidate_id,
@@ -4110,12 +4015,12 @@ class CandidateWithdrawalPrivacyTestCase(TestCase):
             is_distributed=True,
             name_visibility="committee",
         )
-        saved.revealed_groups.add(committee)
         availability = InterviewAvailability.objects.create(
-            admission=admission, user=admin, conflicts=[candidate_id]
+            admission=admission, group=committee, user=admin, conflicts=[candidate_id]
         )
         SolveJob.objects.create(
             admission=admission,
+            group=committee,
             requested_by=admin,
             request_data={
                 "candidates": [{"id": candidate_id, "name": candidate.username}]
@@ -4147,11 +4052,14 @@ class CandidateWithdrawalPrivacyTestCase(TestCase):
         admin = LegoUser.objects.create(username="legacy-admin", lego_id=982)
         candidate = LegoUser.objects.create(username="legacy-candidate", lego_id=983)
         admission = create_admission(created_by=admin, slug="legacy-purge-opptak")
+        committee = Group.objects.create(name="Legacy purge committee", lego_id=987)
+        admission.groups.add(committee)
         application = UserApplication.objects.create(
             admission=admission, user=candidate, phone_number="12345678"
         )
         saved = SavedSchedule.objects.create(
             admission=admission,
+            group=committee,
             schedule=[
                 {
                     "candidate": candidate.username,
@@ -4175,11 +4083,14 @@ class CandidateWithdrawalPrivacyTestCase(TestCase):
         admin = LegoUser.objects.create(username="legacy-id-admin", lego_id=984)
         candidate = LegoUser.objects.create(username="renamed-candidate", lego_id=985)
         admission = create_admission(created_by=admin, slug="legacy-id-purge")
+        committee = Group.objects.create(name="Legacy id purge committee", lego_id=988)
+        admission.groups.add(committee)
         application = UserApplication.objects.create(
             admission=admission, user=candidate, phone_number="12345678"
         )
         saved = SavedSchedule.objects.create(
             admission=admission,
+            group=committee,
             schedule=[
                 {
                     "candidate_id": "real-candidate-old-username",

@@ -9,10 +9,11 @@ class ActiveSolveRequestConflict(Exception):
     pass
 
 
-def active_solve_job(admission):
+def active_solve_job(admission, group):
     return (
         SolveJob.objects.filter(
             admission=admission,
+            group=group,
             status__in=SolveJob.ACTIVE_STATUSES,
         )
         .order_by("created_at")
@@ -64,9 +65,9 @@ def build_solve_request(data, synthetic_input, previous_schedule):
     }
 
 
-def enqueue_solve_job(admission, requested_by, request_data):
+def enqueue_solve_job(admission, group, requested_by, request_data):
     request_fingerprint = solve_request_fingerprint(request_data)
-    existing = active_solve_job(admission)
+    existing = active_solve_job(admission, group)
     if existing is not None:
         if existing.request_fingerprint == request_fingerprint:
             return existing
@@ -75,12 +76,13 @@ def enqueue_solve_job(admission, requested_by, request_data):
         with transaction.atomic():
             return SolveJob.objects.create(
                 admission=admission,
+                group=group,
                 requested_by=requested_by,
                 request_data=request_data,
                 request_fingerprint=request_fingerprint,
             )
     except IntegrityError:
-        existing = active_solve_job(admission)
+        existing = active_solve_job(admission, group)
         if existing is None:
             raise
         if existing.request_fingerprint == request_fingerprint:

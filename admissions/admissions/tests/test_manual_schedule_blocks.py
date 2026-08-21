@@ -7,6 +7,7 @@ from rest_framework.test import APITestCase
 from admissions.admissions.constants import RECRUITING
 from admissions.admissions.models import (
     Group,
+    GroupApplication,
     InterviewAvailability,
     LegoUser,
     Membership,
@@ -33,6 +34,7 @@ class ManualScheduleBlocksTestCase(APITestCase):
             slug="manual-blocks-opptak",
         )
         self.admission.admin_groups.add(self.group)
+        self.admission.groups.add(self.group)
         self.candidate = LegoUser.objects.create(
             username="manual-candidate", lego_id=5202
         )
@@ -41,8 +43,15 @@ class ManualScheduleBlocksTestCase(APITestCase):
             user=self.candidate,
             phone_number="12345678",
         )
+        GroupApplication.objects.create(
+            application=self.application, group=self.group, text="søknad"
+        )
         self.url = reverse(
-            "saved-schedule", kwargs={"admission_slug": self.admission.slug}
+            "saved-schedule",
+            kwargs={
+                "admission_slug": self.admission.slug,
+                "group_id": self.group.pk,
+            },
         )
         self.client.force_authenticate(user=self.admin)
 
@@ -57,6 +66,7 @@ class ManualScheduleBlocksTestCase(APITestCase):
     def _saved(self, **overrides):
         defaults = {
             "admission": self.admission,
+            "group": self.group,
             "schedule": [],
             "start_date": date(2026, 4, 20),
             "end_date": date(2026, 4, 20),
@@ -75,6 +85,7 @@ class ManualScheduleBlocksTestCase(APITestCase):
         saved = self._saved()
         InterviewAvailability.objects.create(
             admission=self.admission,
+            group=self.group,
             user=self.admin,
             slots=["2026-04-20|540", "2026-04-20|630"],
             submitted_grid_generation=saved.availability_generation,
@@ -179,6 +190,9 @@ class ManualScheduleBlocksTestCase(APITestCase):
             user=second_candidate,
             phone_number="87654321",
         )
+        GroupApplication.objects.create(
+            application=second_application, group=self.group, text="søknad 2"
+        )
         self._saved(
             manual_blocks=[
                 {
@@ -227,11 +241,13 @@ class ManualScheduleBlocksTestCase(APITestCase):
         )
         InterviewAvailability.objects.create(
             admission=self.admission,
+            group=self.group,
             user=self.admin,
             slots=["2026-04-20|540"],
         )
         SolveJob.objects.create(
             admission=self.admission,
+            group=self.group,
             requested_by=self.admin,
             request_data={},
         )
@@ -265,6 +281,7 @@ class ManualScheduleBlocksTestCase(APITestCase):
         )
         InterviewAvailability.objects.create(
             admission=self.admission,
+            group=self.group,
             user=self.admin,
             slots=["2026-04-20|540"],
         )
@@ -297,6 +314,7 @@ class ManualScheduleBlocksTestCase(APITestCase):
         self._saved()
         InterviewAvailability.objects.create(
             admission=self.admission,
+            group=self.group,
             user=self.admin,
             slots=["2026-04-20|540"],
         )
@@ -332,6 +350,7 @@ class ManualScheduleBlocksTestCase(APITestCase):
         )
         InterviewAvailability.objects.create(
             admission=self.admission,
+            group=self.group,
             user=self.admin,
             slots=["2026-04-20|540"],
         )
@@ -396,6 +415,7 @@ class ManualScheduleBlocksTestCase(APITestCase):
     def test_new_saved_schedule_defaults_to_standard_blocks(self):
         saved = SavedSchedule.objects.create(
             admission=self.admission,
+            group=self.group,
             schedule=[],
             start_date="2026-04-20",
         )

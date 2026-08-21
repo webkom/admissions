@@ -3,6 +3,8 @@ from datetime import date, timedelta
 
 from django.conf import settings
 from django.contrib.auth.models import AbstractUser
+from datetime import date, timedelta
+
 from django.db import models
 from django.db.models import ExpressionWrapper, F, Q
 from django.utils import timezone
@@ -274,8 +276,14 @@ class InterviewStatusAuditEvent(models.Model):
 
 
 class SavedSchedule(models.Model):
-    admission = models.OneToOneField(
-        Admission, on_delete=models.CASCADE, related_name="saved_schedule"
+    admission = models.ForeignKey(
+        Admission, on_delete=models.CASCADE, related_name="saved_schedules"
+    )
+    # One independent schedule per committee within the admission - own
+    # candidate pool, interviewer pool, publish state, and conflict review.
+    # See unique_admission_group_schedule below.
+    group = models.ForeignKey(
+        Group, on_delete=models.CASCADE, related_name="saved_schedules"
     )
     schedule = models.JSONField()
     start_date = models.DateField()
@@ -339,13 +347,16 @@ class SavedSchedule(models.Model):
         choices=NAME_VISIBILITY_CHOICES,
         default=NAME_VISIBILITY_HIDDEN,
     )
-    revealed_groups = models.ManyToManyField(
-        Group,
-        blank=True,
-        related_name="revealed_interview_schedules",
-    )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["admission", "group"],
+                name="unique_admission_group_schedule",
+            )
+        ]
 
     def __init__(self, *args, **kwargs):
         # Compatibility shim for the many existing callers (mostly test
@@ -382,7 +393,10 @@ class SavedSchedule(models.Model):
         return start_date + timedelta(days=max(day_offsets, default=0) + 1)
 
     def __str__(self):
-        return f"Schedule for {self.admission} (distributed={self.is_distributed})"
+        return (
+            f"Schedule for {self.group} in {self.admission} "
+            f"(distributed={self.is_distributed})"
+        )
 
     @property
     def manual_blocks(self):
@@ -567,6 +581,12 @@ class InterviewAvailability(models.Model):
     admission = models.ForeignKey(
         Admission, on_delete=models.CASCADE, related_name="interview_availabilities"
     )
+    # One submission per committee a person interviews for - two committees
+    # in the same admission can run different interview weeks, so a shared
+    # row could not track "is this current" against two generation counters.
+    group = models.ForeignKey(
+        Group, on_delete=models.CASCADE, related_name="interview_availabilities"
+    )
     user = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
@@ -602,12 +622,13 @@ class InterviewAvailability(models.Model):
     class Meta:
         constraints = [
             models.UniqueConstraint(
-                fields=["admission", "user"], name="unique_admission_user_availability"
+                fields=["admission", "group", "user"],
+                name="unique_admission_group_user_availability",
             )
         ]
 
     def __str__(self):
-        return f"Availability for {self.user} in {self.admission}"
+        return f"Availability for {self.user} in {self.group} ({self.admission})"
 
 
 class SolveJob(models.Model):
@@ -630,6 +651,9 @@ class SolveJob(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     admission = models.ForeignKey(
         Admission, on_delete=models.CASCADE, related_name="solve_jobs"
+    )
+    group = models.ForeignKey(
+        Group, on_delete=models.CASCADE, related_name="solve_jobs"
     )
     requested_by = models.ForeignKey(
         settings.AUTH_USER_MODEL, null=True, on_delete=models.SET_NULL
@@ -656,9 +680,9 @@ class SolveJob(models.Model):
         ordering = ["created_at"]
         constraints = [
             models.UniqueConstraint(
-                fields=["admission"],
+                fields=["admission", "group"],
                 condition=models.Q(status__in=("PENDING", "RUNNING")),
-                name="unique_active_solve_job_per_admission",
+                name="unique_active_solve_job_per_admission_group",
             ),
             models.CheckConstraint(
                 condition=models.Q(applied_at__isnull=True)
@@ -668,11 +692,11 @@ class SolveJob(models.Model):
         ]
         indexes = [
             models.Index(fields=["status", "created_at"]),
-            models.Index(fields=["admission", "status"]),
+            models.Index(fields=["admission", "group", "status"]),
         ]
 
     def __str__(self):
-        return f"SolveJob {self.id} for {self.admission} ({self.status})"
+        return f"SolveJob {self.id} for {self.group} in {self.admission} ({self.status})"
 
 
 class Membership(models.Model):

@@ -1,4 +1,5 @@
 from django.db import transaction
+from django.shortcuts import get_object_or_404
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
@@ -9,7 +10,8 @@ from admissions.admissions.admission_access import (
     get_representing_groups,
     schedule_response_context,
     user_is_admission_admin,
-    user_is_committee_member,
+    user_is_group_member,
+    user_is_interview_admin,
 )
 from admissions.admissions.authentication import SessionAuthentication
 from admissions.admissions.models import Admission, LegoUser, SavedSchedule
@@ -34,11 +36,22 @@ class SavedScheduleView(SchedulerFeatureGateMixin, APIView):
     throttle_classes = [ScopedRateThrottle]
     throttle_scope = "schedule"
 
-    def _get_admission_and_check(self, request, admission_slug, require_admin=False):
+    def _get_admission_and_check(
+        self, request, admission_slug, group_id, require_admin=False
+    ):
         try:
             admission = Admission.objects.get(slug=admission_slug)
         except Admission.DoesNotExist:
-            return None, False, False, False, Response(status=status.HTTP_404_NOT_FOUND)
+            return (
+                None,
+                None,
+                False,
+                False,
+                False,
+                Response(status=status.HTTP_404_NOT_FOUND),
+            )
+
+        group = get_object_or_404(admission.groups, pk=group_id)
 
         user = request.user
         user.__class__ = LegoUser
@@ -47,23 +60,11 @@ class SavedScheduleView(SchedulerFeatureGateMixin, APIView):
         representing_groups = get_representing_groups(admission, user)
         is_recruiter = representing_groups.exists()
 
-        is_interview_admin = is_admin
+        is_interview_admin = user_is_interview_admin(admission, group, user)
 
         if require_admin and not is_interview_admin:
             return (
                 None,
-                is_admin,
-                is_recruiter,
-                is_admin,
-                Response(status=status.HTTP_403_FORBIDDEN),
-            )
-
-        if (
-            not is_admin
-            and not is_recruiter
-            and not user_is_committee_member(admission, user)
-        ):
-            return (
                 None,
                 is_admin,
                 is_recruiter,
@@ -71,50 +72,47 @@ class SavedScheduleView(SchedulerFeatureGateMixin, APIView):
                 Response(status=status.HTTP_403_FORBIDDEN),
             )
 
-        return admission, is_admin, is_recruiter, is_interview_admin, None
+        if (
+            not is_interview_admin
+            and not is_recruiter
+            and not user_is_group_member(group, user)
+        ):
+            return (
+                None,
+                None,
+                is_admin,
+                is_recruiter,
+                is_interview_admin,
+                Response(status=status.HTTP_403_FORBIDDEN),
+            )
 
-    def _schedule_response(
-        self, saved, admission, user, is_admin, is_recruiter, is_interview_admin
-    ):
+        return admission, group, is_admin, is_recruiter, is_interview_admin, None
+
+    def _schedule_response(self, saved, admission, is_interview_admin):
         ensure_window_fields(saved)
         return Response(
             SavedScheduleSerializer(
                 saved,
-                context=schedule_response_context(
-                    admission,
-                    saved,
-                    user,
-                    is_admin,
-                    is_recruiter,
-                    is_admin,
-                ),
+                context=schedule_response_context(admission, saved, is_interview_admin),
             ).data
         )
 
-    def get(self, request, admission_slug):
-        admission, is_admin, is_recruiter, is_interview_admin, err = (
-            self._get_admission_and_check(request, admission_slug)
+    def get(self, request, admission_slug, group_id):
+        admission, group, is_admin, is_recruiter, is_interview_admin, err = (
+            self._get_admission_and_check(request, admission_slug, group_id)
         )
         if err:
             return err
 
-        try:
-            saved = admission.saved_schedule
-            return self._schedule_response(
-                saved,
-                admission,
-                request.user,
-                is_admin,
-                is_recruiter,
-                is_interview_admin,
-            )
-        except SavedSchedule.DoesNotExist:
+        saved = SavedSchedule.objects.filter(admission=admission, group=group).first()
+        if saved is None:
             return Response(status=status.HTTP_404_NOT_FOUND)
+        return self._schedule_response(saved, admission, is_interview_admin)
 
     @transaction.atomic
-    def post(self, request, admission_slug):
-        admission, is_admin, is_recruiter, is_interview_admin, err = (
-            self._get_admission_and_check(request, admission_slug)
+    def post(self, request, admission_slug, group_id):
+        admission, group, is_admin, is_recruiter, is_interview_admin, err = (
+            self._get_admission_and_check(request, admission_slug, group_id)
         )
         if err:
             return err
@@ -126,6 +124,7 @@ class SavedScheduleView(SchedulerFeatureGateMixin, APIView):
         try:
             result = update_saved_schedule(
                 admission=admission,
+                group=group,
                 user=request.user,
                 data=serializer.validated_data,
                 is_admin=is_interview_admin,
@@ -145,10 +144,5 @@ class SavedScheduleView(SchedulerFeatureGateMixin, APIView):
             return Response(exc.errors, status=status.HTTP_400_BAD_REQUEST)
 
         return self._schedule_response(
-            result.saved_schedule,
-            result.admission,
-            request.user,
-            is_admin,
-            is_recruiter,
-            is_admin,
+            result.saved_schedule, result.admission, is_interview_admin
         )

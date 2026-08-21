@@ -139,20 +139,22 @@ class WriteBackResilienceTestCase(TestCase):
 
     def setUp(self):
         self.user = LegoUser.objects.create(username="resilience-admin", lego_id=970)
-        admin_group = Group.objects.create(name="Resilience admins", lego_id=971)
+        self.group = Group.objects.create(name="Resilience admins", lego_id=971)
         Membership.objects.create(
             user=self.user,
-            group=admin_group,
+            group=self.group,
             role=constants.RECRUITING,
         )
         self.admission = create_admission(
             created_by=self.user, slug="resilience-opptak"
         )
-        self.admission.admin_groups.add(admin_group)
+        self.admission.admin_groups.add(self.group)
+        self.admission.groups.add(self.group)
 
     def _create_job(self, **overrides):
         defaults = {
             "admission": self.admission,
+            "group": self.group,
             "requested_by": self.user,
             "request_data": {"panel_size": 1},
             "status": SolveJob.STATUS_RUNNING,
@@ -227,6 +229,7 @@ class WriteBackResilienceTestCase(TestCase):
     def test_worker_rejects_a_baseline_that_changes_after_enqueue(self):
         saved = SavedSchedule.objects.create(
             admission=self.admission,
+            group=self.group,
             schedule=[],
             start_date="2026-07-27",
             is_distributed=False,

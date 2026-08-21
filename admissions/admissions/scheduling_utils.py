@@ -1,7 +1,12 @@
+import random
+import uuid
 from datetime import datetime
+
+from django.conf import settings
 
 from admissions.admissions import constants
 from admissions.admissions.models import (
+    DirectoryEntry,
     FadderbarnDeclaration,
     InterviewAvailability,
     Membership,
@@ -11,15 +16,20 @@ from admissions.admissions.models import (
 from admissions.admissions.schedule_windows import make_slot_key, parse_slot_key
 
 
+def conflict_review_v2_enabled():
+    """Kill switch for derived conflicts, review lists, and the repair-mode
+    hard exclusion built on top of them. Off falls back to manually-declared
+    conflicts only - there is no older mechanism to fall back to."""
+    return getattr(settings, "ADMISSIONS_CONFLICT_REVIEW_V2", True)
+
+
 def panel_gender_code(lego_gender):
     return constants.LEGO_GENDER_TO_PANEL_CODE.get(lego_gender or "", "")
 
 
-def get_eligible_interviewer_ids(admission):
+def get_eligible_interviewer_ids(admission, group):
     committee_ids = set(
-        Membership.objects.filter(group__in=admission.groups.all()).values_list(
-            "user_id", flat=True
-        )
+        Membership.objects.filter(group=group).values_list("user_id", flat=True)
     )
     admin_ids = set(
         Membership.objects.filter(group__in=admission.admin_groups.all()).values_list(
@@ -30,6 +40,11 @@ def get_eligible_interviewer_ids(admission):
     # their membership role is inactive. The response panel uses this roster to
     # decide when "Alle har svart" is true, so excluding IR/retiree members
     # would make the UI report completion too early.
+    #
+    # admin_ids stays admission-wide, not scoped to `group`: Webkom (the
+    # admin group running the shared tool) can sit in on any committee's
+    # interviews, unlike ordinary committee members who are scoped to their
+    # own committee.
     return committee_ids | admin_ids
 
 
@@ -51,7 +66,7 @@ def availability_submission_is_current(availability, saved_schedule):
     )
 
 
-def get_interviewer_participation(admission, saved_schedule=None):
+def get_interviewer_participation(admission, group, saved_schedule=None):
     """Resolve the full roster without conflating membership with planning.
 
     A missing or stale availability response remains awaiting. Explicit opt-out
@@ -59,15 +74,15 @@ def get_interviewer_participation(admission, saved_schedule=None):
     """
 
     if saved_schedule is None:
-        try:
-            saved_schedule = admission.saved_schedule
-        except SavedSchedule.DoesNotExist:
-            saved_schedule = None
-    roster_ids = get_eligible_interviewer_ids(admission)
+        saved_schedule = SavedSchedule.objects.filter(
+            admission=admission, group=group
+        ).first()
+    roster_ids = get_eligible_interviewer_ids(admission, group)
     rows = {
         row.user_id: row
         for row in InterviewAvailability.objects.filter(
             admission=admission,
+            group=group,
             user_id__in=roster_ids,
         )
     }
@@ -87,30 +102,31 @@ def get_interviewer_participation(admission, saved_schedule=None):
     return resolved
 
 
-def get_participating_interviewer_ids(admission, saved_schedule=None):
+def get_participating_interviewer_ids(admission, group, saved_schedule=None):
     return {
         user_id
         for user_id, participation in get_interviewer_participation(
-            admission, saved_schedule
+            admission, group, saved_schedule
         ).items()
         if participation == InterviewAvailability.PARTICIPATION_PARTICIPATING
     }
 
 
-def get_unresolved_interviewer_ids(admission, saved_schedule=None):
+def get_unresolved_interviewer_ids(admission, group, saved_schedule=None):
     return {
         user_id
         for user_id, participation in get_interviewer_participation(
-            admission, saved_schedule
+            admission, group, saved_schedule
         ).items()
         if participation == InterviewAvailability.PARTICIPATION_AWAITING
     }
 
 
-def user_has_interview_availability(admission, user_id):
+def user_has_interview_availability(admission, group, user_id):
     return (
         InterviewAvailability.objects.filter(
             admission=admission,
+            group=group,
             user_id=user_id,
         )
         .exclude(slots=[])
@@ -141,24 +157,26 @@ def get_proposed_candidate_ids_by_interviewer(saved_schedule=None, schedule=None
     return proposed
 
 
-def get_conflict_review_readiness(admission, saved_schedule=None, schedule=None):
+def get_conflict_review_readiness(admission, group, saved_schedule=None, schedule=None):
     if saved_schedule is None:
-        try:
-            saved_schedule = admission.saved_schedule
-        except SavedSchedule.DoesNotExist:
-            saved_schedule = None
+        saved_schedule = SavedSchedule.objects.filter(
+            admission=admission, group=group
+        ).first()
 
     candidate_ids = {
         str(candidate_id)
         for candidate_id in UserApplication.objects.filter(
-            admission=admission
-        ).values_list("pk", flat=True)
+            admission=admission, group_applications__group=group
+        )
+        .distinct()
+        .values_list("pk", flat=True)
     }
     participants = {
         str(participant.user_id): participant
         for participant in InterviewAvailability.objects.filter(
             admission=admission,
-            user_id__in=get_eligible_interviewer_ids(admission),
+            group=group,
+            user_id__in=get_eligible_interviewer_ids(admission, group),
         )
     }
     proposed_by_interviewer = get_proposed_candidate_ids_by_interviewer(
@@ -240,6 +258,56 @@ def conflict_review_scope(saved_schedule, user_id):
     return set(row.review_candidate_ids)
 
 
+def decoy_review_scope(saved_schedule, user_id):
+    """This interviewer's filler entries: [{"token": "d:...", "name": ...}].
+
+    Same snapshot as conflict_review_scope (the same ConflictReviewList row),
+    so a filler always appears and disappears in lockstep with the real
+    review list it pads - never independently, or the pattern itself would
+    be a tell.
+    """
+
+    from admissions.admissions.models import ConflictReviewList
+
+    row = (
+        ConflictReviewList.objects.filter(
+            saved_schedule=saved_schedule, interviewer_id=user_id
+        )
+        .order_by("-created_at")
+        .first()
+    )
+    if row is None or not isinstance(row.decoys, list):
+        return []
+    return [
+        entry
+        for entry in row.decoys
+        if isinstance(entry, dict) and isinstance(entry.get("token"), str)
+    ]
+
+
+def _block_index_by_minute(saved_schedule):
+    """Absolute minute -> index into resolved_blocks, for the block ranking tier.
+
+    Whole blocks move together under the default panel_stability, so a
+    candidate sharing a block with one of the interviewer's own candidates is
+    the likeliest thing a repair actually touches - more so than merely
+    sharing a day.
+    """
+    from admissions.admissions.schedule_validation import encode_slot_keys
+
+    start_date = saved_schedule.start_date
+    if isinstance(start_date, str):
+        start_date = datetime.strptime(start_date, "%Y-%m-%d").date()
+
+    block_by_minute = {}
+    for index, block in enumerate(saved_schedule.resolved_blocks or []):
+        if not isinstance(block, dict):
+            continue
+        for minute in encode_slot_keys(block.get("slots") or [], start_date):
+            block_by_minute[minute] = index
+    return block_by_minute
+
+
 def build_conflict_review_lists(saved_schedule, swap_size=5):
     """Per-interviewer review lists: their own candidates plus swap partners.
 
@@ -252,6 +320,9 @@ def build_conflict_review_lists(saved_schedule, swap_size=5):
     Deliberately not ranked by committee: which committee someone applied to is
     exactly what the candidate-visibility rules exist to protect.
     """
+
+    if not conflict_review_v2_enabled():
+        return {}
 
     proposed = get_proposed_candidate_ids_by_interviewer(saved_schedule)
     if not proposed:
@@ -276,15 +347,40 @@ def build_conflict_review_lists(saved_schedule, swap_size=5):
     availability = {
         str(row.user_id): encode_slot_keys_for(row, saved_schedule)
         for row in InterviewAvailability.objects.filter(
-            admission_id=saved_schedule.admission_id
+            admission_id=saved_schedule.admission_id,
+            group_id=saved_schedule.group_id,
         )
     }
+    block_by_minute = _block_index_by_minute(saved_schedule)
+    # A shared pool, not a fresh draw per interviewer: fillers recurring
+    # across different interviewers' lists is what makes them look like real
+    # candidate recurrence rather than a giveaway. Empty until a roster sync
+    # has actually populated DirectoryEntry (see the sync_directory_entries
+    # command) - no synthesised names, those would pad the count without
+    # providing any real cover.
+    # Deliberately admission-wide, not scoped to saved_schedule.group: a
+    # decoy must not be a real applicant to *any* committee in the
+    # admission, not just this one, or the padding gives away real
+    # recurrence patterns.
+    applicant_lego_ids = set(
+        UserApplication.objects.filter(admission=saved_schedule.admission)
+        .exclude(user__lego_id__isnull=True)
+        .values_list("user__lego_id", flat=True)
+    )
+    decoy_pool = list(
+        DirectoryEntry.objects.exclude(lego_user_id__in=applicant_lego_ids)
+    )
 
     lists = {}
     for interviewer_id, own_ids in proposed.items():
         own = {str(value) for value in own_ids}
         own_times = {time_by_candidate.get(candidate_id) for candidate_id in own} - {
             None
+        }
+        own_blocks = {
+            block_by_minute[own_time]
+            for own_time in own_times
+            if own_time in block_by_minute
         }
         free_slots = availability.get(interviewer_id, set())
 
@@ -305,24 +401,44 @@ def build_conflict_review_lists(saved_schedule, swap_size=5):
                 }
                 - {interviewer_id}
             )
+            same_block = bool(own_blocks) and block_by_minute.get(slot) in own_blocks
             same_day = any(
                 own_time is not None and own_time // (24 * 60) == slot // (24 * 60)
                 for own_time in own_times
             )
-            # Lower sorts first: same day, then panels a minimum-change repair
-            # would actually touch.
+            # Lower sorts first: same block, then same day, then (as a pure
+            # tiebreak within those) panels a minimum-change repair would
+            # actually touch.
             candidates.append(
-                ((0 if same_day else 1, 0 if shares_panel else 1, slot), candidate_id)
+                (
+                    (
+                        0 if same_block else 1,
+                        0 if same_day else 1,
+                        0 if shares_panel else 1,
+                        slot,
+                    ),
+                    candidate_id,
+                )
             )
 
         candidates.sort()
         swap = [candidate_id for _, candidate_id in candidates[:swap_size]]
+        decoy_count = min(swap_size, len(decoy_pool))
+        decoys = (
+            [
+                {
+                    "token": f"d:{uuid.uuid4()}",
+                    "name": entry.full_name or entry.username,
+                }
+                for entry in random.sample(decoy_pool, decoy_count)
+            ]
+            if decoy_count
+            else []
+        )
         lists[interviewer_id] = {
             "own_candidate_ids": sorted(own),
             "swap_candidate_ids": swap,
-            # Filled once a real first-year roster exists to draw from.
-            # Synthesised names would pad the count without providing cover.
-            "decoys": [],
+            "decoys": decoys,
         }
     return lists
 
@@ -340,14 +456,23 @@ def encode_slot_keys_for(availability_row, saved_schedule):
     return encode_slot_keys(availability_row.slots or [], start_date)
 
 
-def get_declared_conflict_candidate_ids(admission):
+def get_declared_conflict_candidate_ids(admission, group):
     """Conflicts implied by fadderbarn declarations: {interviewer_id: {pk}}.
 
     Resolved here, on demand, and never written back to the interviewer's own
     availability row. Being someone's fadder is declared against a LEGO identity
     before any candidate list exists, so persisting the match would leak which
     of an interviewer's fadderbarn actually applied.
+
+    The declaration itself (FadderbarnDeclaration) stays admission-wide - a
+    person declares their fadderbarn once, not per committee - but resolving
+    it against the candidate pool must be scoped to `group`: otherwise a
+    Webkom interviewer's fadderbarn who only applied to Bedkom would surface
+    in Webkom's own derived-conflicts view.
     """
+
+    if not conflict_review_v2_enabled():
+        return {}
 
     declarations = FadderbarnDeclaration.objects.filter(
         admission=admission
@@ -361,8 +486,11 @@ def get_declared_conflict_candidate_ids(admission):
         lego_id: str(pk)
         for lego_id, pk in UserApplication.objects.filter(
             admission=admission,
+            group_applications__group=group,
             user__lego_id__in=lego_ids,
-        ).values_list("user__lego_id", "pk")
+        )
+        .distinct()
+        .values_list("user__lego_id", "pk")
     }
     if not application_by_lego_id:
         return {}
@@ -371,7 +499,10 @@ def get_declared_conflict_candidate_ids(admission):
     for interviewer_id, lego_user_id in declarations:
         candidate_id = application_by_lego_id.get(lego_user_id)
         if candidate_id is not None:
-            derived.setdefault(interviewer_id, set()).add(candidate_id)
+            # str: every caller looks this up by the string id it already has
+            # (same convention as candidate_id above) - a raw UUID key here
+            # would never match and the union would silently be a no-op.
+            derived.setdefault(str(interviewer_id), set()).add(candidate_id)
     return derived
 
 

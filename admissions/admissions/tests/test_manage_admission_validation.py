@@ -517,9 +517,9 @@ class ManageAdmissionValidationTestCase(APITestCase):
     def test_create_does_not_require_accessing_saved_schedule_relation(self):
         with patch.object(
             Admission,
-            "saved_schedule",
+            "saved_schedules",
             new_callable=PropertyMock,
-            side_effect=AssertionError("saved_schedule should not be accessed"),
+            side_effect=AssertionError("saved_schedules should not be accessed"),
         ):
             response = self.client.post(self.url, self.payload(), format="json")
 

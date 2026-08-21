@@ -11,10 +11,14 @@ as anonymous and the endpoint returns an empty list, which is why an empty
 result and a missing authorisation are reported differently below.
 """
 
-from django.conf import settings
+import hashlib
 
 import requests
+from django.conf import settings
+from django.core.cache import cache
+from social_core.exceptions import SocialAuthBaseException
 from social_django.models import UserSocialAuth
+from social_django.utils import load_strategy
 from structlog import get_logger
 
 log = get_logger()
@@ -25,6 +29,17 @@ USER_CONTENT_TYPE = "users.user"
 # someone typing, and the availability form must never block on it.
 TIMEOUT = (2, 3)
 MAX_RESULTS = 10
+# Result sets are identical for any authenticated user (LEGO applies the same
+# permission filter regardless of who's asking), so this is keyed on the
+# query alone, never per-user. Auth failures and outages are exceptions
+# raised before a result is cached, so they're never cached either.
+SEARCH_CACHE_TTL = 60
+
+
+def _search_cache_key(query):
+    normalized = query.strip().lower()
+    digest = hashlib.sha256(normalized.encode()).hexdigest()
+    return f"lego_directory:search:{digest}"
 
 
 class DirectoryUnavailable(Exception):
@@ -35,11 +50,22 @@ class DirectoryAuthenticationRequired(Exception):
     """The user's LEGO token is missing, expired, or lacks the scope."""
 
 
-def _access_token(user):
+def _access_token(user, strategy=None):
+    """Return a live access token, refreshing it against LEGO if expired.
+
+    Without this, a token just dies at LEGO's ~7 day ceiling and every
+    interviewer would need to fully log out and back in to search again -
+    get_access_token() is what makes that invisible.
+    """
     social = UserSocialAuth.objects.filter(user=user, provider="lego").first()
     if social is None:
         raise DirectoryAuthenticationRequired
-    token = (social.extra_data or {}).get("access_token")
+    try:
+        token = social.get_access_token(strategy or load_strategy())
+    except SocialAuthBaseException as error:
+        raise DirectoryAuthenticationRequired from error
+    except requests.RequestException as error:
+        raise DirectoryUnavailable(str(error)) from error
     if not token:
         raise DirectoryAuthenticationRequired
     return token
@@ -52,14 +78,20 @@ def _base_url():
     return url.rstrip("/")
 
 
-def search_members(user, query):
+def search_members(user, query, request=None):
     """Return up to MAX_RESULTS members matching `query`.
 
     Only the fields needed to recognise and record a person are returned; the
     rest of LEGO's payload is discarded rather than passed through.
     """
 
-    token = _access_token(user)
+    cache_key = _search_cache_key(query)
+    cached = cache.get(cache_key)
+    if cached is not None:
+        return cached
+
+    strategy = load_strategy(request) if request is not None else None
+    token = _access_token(user, strategy=strategy)
     try:
         response = requests.post(
             f"{_base_url()}{AUTOCOMPLETE_PATH}",
@@ -84,7 +116,9 @@ def search_members(user, query):
 
     results = []
     for hit in payload[:MAX_RESULTS]:
-        if not isinstance(hit, dict) or hit.get("content_type") != USER_CONTENT_TYPE:
+        # LEGO's DRF renderer camelCases every response key (content_type ->
+        # contentType, full_name -> fullName, etc).
+        if not isinstance(hit, dict) or hit.get("contentType") != USER_CONTENT_TYPE:
             continue
         lego_user_id = hit.get("id")
         if not isinstance(lego_user_id, int):
@@ -93,8 +127,9 @@ def search_members(user, query):
             {
                 "lego_user_id": lego_user_id,
                 "username": hit.get("username") or "",
-                "full_name": hit.get("full_name") or "",
-                "profile_picture": hit.get("profile_picture") or "",
+                "full_name": hit.get("fullName") or "",
+                "profile_picture": hit.get("profilePicture") or "",
             }
         )
+    cache.set(cache_key, results, SEARCH_CACHE_TTL)
     return results

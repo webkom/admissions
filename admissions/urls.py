@@ -87,17 +87,17 @@ urlpatterns = [
         name="solve-job-apply",
     ),
     path(
-        "api/admin/admission/<slug:admission_slug>/schedule/",
+        "api/admin/admission/<slug:admission_slug>/group/<uuid:group_id>/schedule/",
         SavedScheduleView.as_view(),
         name="saved-schedule",
     ),
     path(
-        "api/admin/admission/<slug:admission_slug>/availability/",
+        "api/admin/admission/<slug:admission_slug>/group/<uuid:group_id>/availability/",
         InterviewAvailabilityView.as_view(),
         name="interview-availability",
     ),
     path(
-        "api/admin/admission/<slug:admission_slug>/candidates/",
+        "api/admin/admission/<slug:admission_slug>/group/<uuid:group_id>/candidates/",
         InterviewCandidatesView.as_view(),
         name="interview-candidates",
     ),
@@ -107,7 +107,7 @@ urlpatterns = [
         name="member-search",
     ),
     path(
-        "api/admin/admission/<slug:admission_slug>/name-visibility-audit/",
+        "api/admin/admission/<slug:admission_slug>/group/<uuid:group_id>/name-visibility-audit/",
         NameVisibilityAuditView.as_view(),
         name="name-visibility-audit",
     ),

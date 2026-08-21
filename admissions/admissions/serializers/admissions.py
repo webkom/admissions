@@ -10,7 +10,6 @@ from admissions.admissions import constants
 from admissions.admissions.admission_access import (
     APPLICATION_VIEW_MODE_NONE,
     get_application_view_mode,
-    synchronize_admission_group_disclosures,
 )
 from admissions.admissions.json_models import InputModelList
 from admissions.admissions.models import (
@@ -60,6 +59,7 @@ class AdmissionListPublicSerializer(serializers.HyperlinkedModelSerializer):
             "is_recruiter": False,
             "committee_role": None,
             "committee_groups": [],
+            "committee_group_details": [],
             "represented_groups": [],
             "application_view_mode": APPLICATION_VIEW_MODE_NONE,
         }
@@ -91,6 +91,24 @@ class AdmissionListPublicSerializer(serializers.HyperlinkedModelSerializer):
             if not roles:
                 continue
             res["committee_groups"].append(group.name)
+            group_role = (
+                constants.LEADER
+                if constants.LEADER in roles
+                else constants.RECRUITING
+                if constants.RECRUITING in roles
+                else constants.MEMBER
+            )
+            # Scheduling is committee-scoped, so the frontend needs each
+            # group's id (not just its name) to link into that committee's
+            # own /schedule/<group_id> route - for every committee role, not
+            # just recruiters/leaders, since ordinary members reach their own
+            # committee's schedule too. The role travels with it because a
+            # person can be a recruiter of one committee and a plain member of
+            # another within the same admission - the admission-wide
+            # committee_role below can't tell those two apart.
+            res["committee_group_details"].append(
+                {"pk": str(group.pk), "name": group.name, "role": group_role}
+            )
             is_committee_member = True
             if roles.intersection((constants.LEADER, constants.RECRUITING)):
                 res["is_privileged"] = True
@@ -262,11 +280,6 @@ class AdminCreateUpdateAdmissionSerializer(serializers.HyperlinkedModelSerialize
         if input_admin_groups is not None:
             admission.admin_groups.set(input_admin_groups)
         if input_groups is not None:
-            synchronize_admission_group_disclosures(
-                admission,
-                input_groups,
-                self.context["request"].user,
-            )
             admission.groups.set(input_groups)
         if input_group_questions is not None:
             for group_id, fields in input_group_questions.items():

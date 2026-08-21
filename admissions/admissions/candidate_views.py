@@ -7,16 +7,14 @@ from rest_framework.views import APIView
 
 from admissions.admissions import constants
 from admissions.admissions.admission_access import (
-    get_user_candidate_visible_groups,
     user_is_admission_admin,
-    user_is_committee_member,
+    user_is_group_member,
     user_is_interview_admin,
 )
 from admissions.admissions.authentication import SessionAuthentication
 from admissions.admissions.models import (
     Admission,
     ConflictReviewAuditEvent,
-    InterviewAvailability,
     LegoUser,
     NameVisibilityAuditEvent,
     SavedSchedule,
@@ -25,6 +23,7 @@ from admissions.admissions.models import (
 from admissions.admissions.scheduler_feature import SchedulerFeatureGateMixin
 from admissions.admissions.scheduling_utils import (
     conflict_review_scope,
+    decoy_review_scope,
     get_eligible_interviewer_ids,
     get_interviewer_participation,
     get_proposed_candidate_ids_by_interviewer,
@@ -44,10 +43,11 @@ class InterviewCandidatesView(SchedulerFeatureGateMixin, APIView):
         admission,
         saved_schedule,
         user,
-        phase=ConflictReviewAuditEvent.PHASE_DRAFT,
     ):
+        phase = ConflictReviewAuditEvent.PHASE_DRAFT
         events = ConflictReviewAuditEvent.objects.filter(
             admission=admission,
+            saved_schedule=saved_schedule,
             phase=phase,
         )
         latest_opened = events.filter(
@@ -69,119 +69,80 @@ class InterviewCandidatesView(SchedulerFeatureGateMixin, APIView):
             subject_user=user,
             subject_username=user.username,
             phase=phase,
-            collection_revision=(
-                saved_schedule.conflict_collection_revision
-                if phase == ConflictReviewAuditEvent.PHASE_COLLECTION
-                else None
-            ),
             action=ConflictReviewAuditEvent.ACTION_VIEWED,
         )
 
-    def get(self, request, admission_slug):
+    def get(self, request, admission_slug, group_id):
         try:
             admission = Admission.objects.get(slug=admission_slug)
         except Admission.DoesNotExist:
             return Response(status=status.HTTP_404_NOT_FOUND)
 
+        group = get_object_or_404(admission.groups, pk=group_id)
+
         user = request.user
         user.__class__ = LegoUser
 
         is_admin = user_is_admission_admin(admission, user)
-        is_interview_admin = user_is_interview_admin(admission, user)
-        is_committee_member = user_is_committee_member(admission, user)
+        is_interview_admin = user_is_interview_admin(admission, group, user)
+        is_committee_member = user_is_group_member(group, user)
 
         if not is_committee_member and not is_interview_admin:
             return Response(status=status.HTTP_403_FORBIDDEN)
 
-        saved = None
-        try:
-            saved = admission.saved_schedule
-        except SavedSchedule.DoesNotExist:
-            pass
+        saved = SavedSchedule.objects.filter(admission=admission, group=group).first()
 
         conflict_review_open = bool(
             saved is not None
             and saved.conflict_review_open
             and not saved.is_distributed
-            and user.id in get_eligible_interviewer_ids(admission)
-            and user_has_interview_availability(admission, user.id)
+            and user.id in get_eligible_interviewer_ids(admission, group)
+            and user_has_interview_availability(admission, group, user.id)
         )
-        conflict_collection_scope_current = False
-        if saved is not None and saved.conflict_collection_open:
-            current_candidate_ids = {
-                str(candidate_id)
-                for candidate_id in UserApplication.objects.filter(
-                    admission=admission
-                ).values_list("pk", flat=True)
-            }
-            participation = get_interviewer_participation(admission, saved)
-            current_participant_ids = {
-                str(user_id)
-                for user_id, state in participation.items()
-                if state == InterviewAvailability.PARTICIPATION_PARTICIPATING
-            }
-            conflict_collection_scope_current = current_candidate_ids == set(
-                saved.conflict_collection_candidate_ids
-            ) and current_participant_ids == set(
-                saved.conflict_collection_participant_ids
-            )
-        conflict_collection_open = bool(
+        # A schedule belongs to exactly one committee now, so "can this
+        # viewer see candidate identities" is just: do they run this
+        # committee's workflow, or has this committee's own recruiter
+        # published names to it.
+        committee_revealed = bool(
             saved is not None
-            and saved.conflict_collection_open
-            and conflict_collection_scope_current
-            and not saved.is_distributed
-            and str(user.id) in saved.conflict_collection_participant_ids
+            and saved.is_distributed
+            and saved.name_visibility == SavedSchedule.NAME_VISIBILITY_COMMITTEE
         )
-        collection_candidate_ids = set()
-        if conflict_collection_open:
-            own_application_ids = set(
-                str(application_id)
-                for application_id in UserApplication.objects.filter(
-                    admission=admission,
-                    user=user,
-                ).values_list("pk", flat=True)
-            )
-            collection_candidate_ids = (
-                set(saved.conflict_collection_candidate_ids) - own_application_ids
-            )
-        visible_groups = get_user_candidate_visible_groups(admission, saved, user)
         hide_identity = (
             not is_admin
-            and not conflict_collection_open
+            and not is_interview_admin
             and not conflict_review_open
-            and not visible_groups.exists()
+            and not committee_revealed
         )
 
-        applications = UserApplication.objects.filter(admission=admission)
+        applications = UserApplication.objects.filter(
+            admission=admission, group_applications__group=group
+        ).distinct()
         if not is_admin:
-            if conflict_collection_open:
-                applications = applications.filter(pk__in=collection_candidate_ids)
-            elif conflict_review_open:
+            if conflict_review_open:
                 # The names shown must match the list they are asked to
                 # confirm, or a swap partner appears as an unknown candidate.
                 applications = applications.filter(
                     pk__in=conflict_review_scope(saved, user.id)
                 )
-            else:
-                applications = applications.filter(
-                    group_applications__group__in=visible_groups
-                ).distinct()
+            elif not is_interview_admin and not committee_revealed:
+                applications = applications.none()
         applications = applications.select_related("user").order_by(
             "user__first_name", "user__last_name", "user__username"
         )
         if hide_identity:
             payload = []
         else:
+            decoy_entries = []
             if not is_admin:
-                if conflict_collection_open:
-                    self._audit_conflict_review_access(
-                        admission,
-                        saved,
-                        user,
-                        ConflictReviewAuditEvent.PHASE_COLLECTION,
-                    )
-                elif conflict_review_open:
+                if conflict_review_open:
                     self._audit_conflict_review_access(admission, saved, user)
+                    # Same list, same request: a filler that only shows up on
+                    # a separate call would be distinguishable by timing.
+                    decoy_entries = [
+                        {"id": entry["token"], "name": entry["name"]}
+                        for entry in decoy_review_scope(saved, user.id)
+                    ]
             payload = [
                 {
                     "id": str(application.pk),
@@ -189,7 +150,7 @@ class InterviewCandidatesView(SchedulerFeatureGateMixin, APIView):
                     or application.user.username,
                 }
                 for application in applications
-            ]
+            ] + decoy_entries
 
         return Response(payload, status=status.HTTP_200_OK)
 
@@ -200,13 +161,14 @@ class NameVisibilityAuditView(SchedulerFeatureGateMixin, APIView):
     throttle_classes = [ScopedRateThrottle]
     throttle_scope = "schedule"
 
-    def get(self, request, admission_slug):
+    def get(self, request, admission_slug, group_id):
         admission = get_object_or_404(Admission, slug=admission_slug)
+        group = get_object_or_404(admission.groups, pk=group_id)
         request.user.__class__ = LegoUser
-        if not user_is_admission_admin(admission, request.user):
+        if not user_is_interview_admin(admission, group, request.user):
             return Response(status=status.HTTP_403_FORBIDDEN)
         events = NameVisibilityAuditEvent.objects.filter(
-            admission=admission
+            admission=admission, saved_schedule__group=group
         ).select_related("group", "actor")[: constants.MAX_NAME_VISIBILITY_AUDIT_EVENTS]
         serializer = NameVisibilityAuditEventSerializer(events, many=True)
         return Response(serializer.data)

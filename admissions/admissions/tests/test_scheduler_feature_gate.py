@@ -35,7 +35,13 @@ class SchedulerFeatureGateTestCase(APITestCase):
         ):
             with self.subTest(route=route):
                 res = self.client.get(
-                    reverse(route, kwargs={"admission_slug": DEFAULT_ADMISSION_SLUG})
+                    reverse(
+                        route,
+                        kwargs={
+                            "admission_slug": DEFAULT_ADMISSION_SLUG,
+                            "group_id": self.group.pk,
+                        },
+                    )
                 )
                 self.assertEqual(status.HTTP_503_SERVICE_UNAVAILABLE, res.status_code)
 
@@ -65,7 +71,10 @@ class SchedulerEnabledTestCase(APITestCase):
         res = self.client.get(
             reverse(
                 "interview-availability",
-                kwargs={"admission_slug": DEFAULT_ADMISSION_SLUG},
+                kwargs={
+                    "admission_slug": DEFAULT_ADMISSION_SLUG,
+                    "group_id": self.group.pk,
+                },
             )
         )
         self.assertNotEqual(status.HTTP_503_SERVICE_UNAVAILABLE, res.status_code)

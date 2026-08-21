@@ -1,11 +1,9 @@
-from django.db.models import Q
 from django.shortcuts import get_object_or_404
 
 from admissions.admissions import constants
 from admissions.admissions.models import (
     Admission,
     Membership,
-    NameVisibilityAuditEvent,
     SavedSchedule,
     UserApplication,
 )
@@ -19,7 +17,9 @@ APPLICATION_VIEW_MODE_COMMITTEE_MINIMAL = "committee_minimal"
 def user_is_admission_admin(admission, user):
     return (
         Membership.objects.filter(user=user.pk, group__in=admission.admin_groups.all())
-        .filter(role__in=(constants.LEADER, constants.RECRUITING))
+        .filter(
+            role__in=(constants.LEADER, constants.CO_LEADER, constants.RECRUITING)
+        )
         .exists()
     )
 
@@ -39,17 +39,19 @@ def user_is_admission_leadership(admission, user):
     )
 
 
-def user_is_interview_admin(admission, user):
-    """Whether the user may operate the admission interview workflow.
+def user_is_interview_admin(admission, group, user):
+    """Whether the user may operate this committee's interview workflow.
 
-    Admission admin-group membership governs the broader application admin
-    surface. Committee leaders and recruiting responsibles also own the
-    interview workflow, so they get the same scheduling capabilities without
-    being promoted to admission-wide application admins.
+    Each committee runs its own independent schedule, so this is scoped to
+    the one committee being operated on - not "any committee in this
+    admission", which would leak visibility into every other committee's
+    candidates and interviewers. Admission admin-group membership (Webkom
+    running the shared admissions tool) still grants access to every
+    committee's workflow; a committee's own leader/recruiter gets it only
+    for their own committee.
     """
-    return (
-        user_is_admission_admin(admission, user)
-        or get_representing_groups(admission, user).exists()
+    return user_is_admission_admin(admission, user) or user_represents_group(
+        admission, group, user
     )
 
 
@@ -60,6 +62,18 @@ def get_representing_groups(admission, user):
         role__in=(constants.LEADER, constants.RECRUITING),
     )
     return admission.groups.filter(pk__in=representing.values_list("group", flat=True))
+
+
+def user_represents_group(admission, group, user):
+    return get_representing_groups(admission, user).filter(pk=group.pk).exists()
+
+
+def user_is_group_member(group, user):
+    return (
+        Membership.objects.filter(user=user.pk, group=group)
+        .exclude(role__in=constants.INACTIVE_MEMBERSHIP_ROLES)
+        .exists()
+    )
 
 
 def get_application_view_mode(admission, user):
@@ -73,140 +87,6 @@ def get_application_view_mode(admission, user):
     return APPLICATION_VIEW_MODE_NONE
 
 
-def get_user_admission_groups(admission, user):
-    memberships = (
-        Membership.objects.filter(user=user.pk, group__in=admission.groups.all())
-        .exclude(role__in=constants.INACTIVE_MEMBERSHIP_ROLES)
-        .values_list("group", flat=True)
-    )
-    return admission.groups.filter(pk__in=memberships)
-
-
-def get_name_revealed_groups(admission, saved_schedule):
-    if (
-        saved_schedule.is_distributed
-        and saved_schedule.name_visibility == SavedSchedule.NAME_VISIBILITY_COMMITTEE
-    ):
-        return admission.groups.all()
-    if not saved_schedule.is_distributed:
-        return admission.groups.none()
-    return saved_schedule.revealed_groups.all()
-
-
-def get_user_name_revealed_groups(admission, saved_schedule, user):
-    return get_user_admission_groups(admission, user).filter(
-        pk__in=get_name_revealed_groups(admission, saved_schedule)
-    )
-
-
-def get_user_candidate_visible_groups(admission, saved_schedule, user):
-    represented_groups = get_representing_groups(admission, user)
-    if saved_schedule is None:
-        return represented_groups
-    revealed_groups = get_user_name_revealed_groups(admission, saved_schedule, user)
-    return admission.groups.filter(
-        Q(pk__in=represented_groups) | Q(pk__in=revealed_groups)
-    ).distinct()
-
-
-def set_group_name_visibility(saved_schedule, groups, visible, actor):
-    groups = list(groups)
-    if not groups:
-        return
-    group_ids = {group.pk for group in groups}
-    revealed_ids = set(
-        saved_schedule.revealed_groups.filter(pk__in=group_ids).values_list(
-            "pk", flat=True
-        )
-    )
-    changed_groups = [
-        group for group in groups if (group.pk in revealed_ids) != visible
-    ]
-    if not changed_groups:
-        return
-    if visible:
-        saved_schedule.revealed_groups.add(*changed_groups)
-        action = NameVisibilityAuditEvent.ACTION_REVEALED
-    else:
-        saved_schedule.revealed_groups.remove(*changed_groups)
-        action = NameVisibilityAuditEvent.ACTION_HIDDEN
-    record_name_visibility_events(saved_schedule, changed_groups, action, actor)
-
-
-def record_name_visibility_events(saved_schedule, groups, action, actor):
-    groups = list(groups)
-    if not groups:
-        return
-    NameVisibilityAuditEvent.objects.bulk_create(
-        [
-            NameVisibilityAuditEvent(
-                admission=saved_schedule.admission,
-                saved_schedule=saved_schedule,
-                group=group,
-                group_name=group.name,
-                actor=actor,
-                actor_username=actor.username,
-                action=action,
-            )
-            for group in groups
-        ]
-    )
-
-
-def synchronize_admission_group_disclosures(admission, next_groups, actor):
-    previous_groups = list(admission.groups.all())
-    next_groups_by_id = {group.pk: group for group in next_groups}
-    previous_groups_by_id = {group.pk: group for group in previous_groups}
-    if set(previous_groups_by_id) == set(next_groups_by_id):
-        return
-
-    saved_schedule = (
-        SavedSchedule.objects.filter(admission_id=admission.pk)
-        .only("pk", "admission_id", "is_distributed", "name_visibility", "updated_at")
-        .first()
-    )
-    if saved_schedule is None:
-        return
-
-    visible_before = set(
-        get_name_revealed_groups(admission, saved_schedule).values_list("pk", flat=True)
-    )
-    removed_groups = [
-        group
-        for group_id, group in previous_groups_by_id.items()
-        if group_id not in next_groups_by_id
-    ]
-    added_groups = [
-        group
-        for group_id, group in next_groups_by_id.items()
-        if group_id not in previous_groups_by_id
-    ]
-
-    update_fields = ["updated_at"]
-    if saved_schedule.name_visibility == SavedSchedule.NAME_VISIBILITY_COMMITTEE:
-        saved_schedule.revealed_groups.set(
-            [
-                group
-                for group_id, group in next_groups_by_id.items()
-                if group_id in visible_before
-            ]
-        )
-        saved_schedule.name_visibility = SavedSchedule.NAME_VISIBILITY_ADMIN_ONLY
-        update_fields.append("name_visibility")
-    else:
-        stale_groups = removed_groups + added_groups
-        if stale_groups:
-            saved_schedule.revealed_groups.remove(*stale_groups)
-
-    record_name_visibility_events(
-        saved_schedule,
-        [group for group in removed_groups if group.pk in visible_before],
-        NameVisibilityAuditEvent.ACTION_HIDDEN,
-        actor,
-    )
-    saved_schedule.save(update_fields=update_fields)
-
-
 def user_is_committee_member(admission, user):
     return (
         Membership.objects.filter(user=user.pk, group__in=admission.groups.all())
@@ -215,69 +95,52 @@ def user_is_committee_member(admission, user):
     )
 
 
-def schedule_response_context(
-    admission,
-    saved_schedule,
-    user,
-    is_admin,
-    is_recruiter,
-    is_interview_admin=False,
-):
-    hide_schedule = not saved_schedule.is_distributed and not is_interview_admin
-    hide_identity = False
-    visible_candidate_ids = None
-    contact_candidate_ids = None if is_admin else set()
-    effective_name_visibility = saved_schedule.name_visibility
-    revealed_group_summaries = None
+def schedule_response_context(admission, saved_schedule, is_interview_admin):
+    """Visibility rules for one committee's own, independent schedule.
 
-    if is_admin:
-        revealed_group_summaries = [
-            {"id": str(group.pk), "name": group.name}
-            for group in get_name_revealed_groups(admission, saved_schedule).order_by(
-                "name"
-            )
-        ]
+    An interview admin (the admission's own admin group, or this specific
+    committee's leader/recruiter) always sees the full draft and every
+    candidate. Everyone else - an ordinary committee member - sees identity
+    only once the plan is both published and set to reveal names to the
+    committee; there is no other committee to reveal it to any more, so
+    name_visibility answers this directly.
+    """
+    hide_schedule = saved_schedule.distributed_through is None and not is_interview_admin
+    # Interview admins always work against the full draft; everyone else only
+    # ever sees interviews on or before the published boundary, even once
+    # part of the plan is published (see distributed_through's docstring).
+    publication_boundary = (
+        None if is_interview_admin else saved_schedule.distributed_through
+    )
 
-    if not is_admin:
-        represented_groups = get_representing_groups(admission, user)
-        visible_groups = get_user_candidate_visible_groups(
-            admission, saved_schedule, user
+    if is_interview_admin:
+        hide_identity = False
+        visible_candidate_ids = None
+        contact_candidate_ids = None
+        effective_name_visibility = saved_schedule.name_visibility
+    else:
+        hide_identity = not (
+            saved_schedule.is_distributed
+            and saved_schedule.name_visibility == SavedSchedule.NAME_VISIBILITY_COMMITTEE
         )
-        if is_recruiter:
-            contact_candidate_ids = set(
+        contact_candidate_ids = set()
+        visible_candidate_ids = (
+            set()
+            if hide_identity
+            else set(
                 str(candidate_id)
                 for candidate_id in UserApplication.objects.filter(
                     admission=admission,
-                    group_applications__group__in=represented_groups,
+                    group_applications__group_id=saved_schedule.group_id,
                 )
                 .values_list("pk", flat=True)
                 .distinct()
             )
-            revealed_groups = get_name_revealed_groups(
-                admission, saved_schedule
-            ).filter(pk__in=represented_groups)
-            effective_name_visibility = (
-                SavedSchedule.NAME_VISIBILITY_COMMITTEE
-                if represented_groups.exists()
-                and not represented_groups.exclude(pk__in=revealed_groups).exists()
-                else SavedSchedule.NAME_VISIBILITY_ADMIN_ONLY
-            )
-        else:
-            hide_identity = not visible_groups.exists()
-            effective_name_visibility = (
-                SavedSchedule.NAME_VISIBILITY_COMMITTEE
-                if not hide_identity
-                else SavedSchedule.NAME_VISIBILITY_HIDDEN
-            )
-
-        visible_candidate_ids = set(
-            str(candidate_id)
-            for candidate_id in UserApplication.objects.filter(
-                admission=admission,
-                group_applications__group__in=visible_groups,
-            )
-            .values_list("pk", flat=True)
-            .distinct()
+        )
+        effective_name_visibility = (
+            SavedSchedule.NAME_VISIBILITY_COMMITTEE
+            if not hide_identity
+            else SavedSchedule.NAME_VISIBILITY_HIDDEN
         )
 
     return {
@@ -286,8 +149,8 @@ def schedule_response_context(
         "visible_candidate_ids": visible_candidate_ids,
         "contact_candidate_ids": contact_candidate_ids,
         "effective_name_visibility": effective_name_visibility,
-        "revealed_group_summaries": revealed_group_summaries,
         "include_deviation_review": is_interview_admin,
+        "publication_boundary": publication_boundary,
     }
 
 

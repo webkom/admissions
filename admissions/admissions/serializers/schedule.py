@@ -1,7 +1,7 @@
 """Schedule serializers covering saved schedules and solver request payloads."""
 
 from collections.abc import Mapping
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from uuid import UUID
 
 from rest_framework import serializers
@@ -28,6 +28,12 @@ from admissions.admissions.schedule_validation import (
 )
 from admissions.admissions.scheduling_utils import get_eligible_interviewer_ids
 from admissions.admissions.serializers.solver import SolveOptionsSerializer
+
+
+def _entry_calendar_date(start_date, time_value):
+    if start_date is None or not isinstance(time_value, int):
+        return None
+    return start_date + timedelta(days=time_value // (24 * 60))
 
 
 class SchedulePanelMemberSerializer(serializers.Serializer):
@@ -100,8 +106,8 @@ class SaveScheduleInputSerializer(serializers.Serializer):
         write_only=True,
     )
     is_distributed = serializers.BooleanField(required=False)
+    distributed_through = serializers.DateField(required=False, allow_null=True)
     conflict_review_open = serializers.BooleanField(required=False)
-    conflict_collection_open = serializers.BooleanField(required=False)
     name_visibility = serializers.ChoiceField(
         choices=["hidden", "admin_only", "committee"],
         required=False,
@@ -134,7 +140,9 @@ class SaveScheduleInputSerializer(serializers.Serializer):
         return windows
 
     def validate(self, attrs):
-        if attrs.get("is_distributed") and attrs.get("conflict_review_open"):
+        if (
+            attrs.get("is_distributed") or attrs.get("distributed_through")
+        ) and attrs.get("conflict_review_open"):
             raise serializers.ValidationError(
                 {
                     "conflict_review_open": [
@@ -198,6 +206,7 @@ class LockedAssignmentSerializer(serializers.Serializer):
 
 class ScheduleRequestsSerializer(serializers.Serializer):
     admission_slug = serializers.SlugField()
+    group_id = serializers.UUIDField()
     baseline_updated_at = serializers.DateTimeField(required=False)
     candidates = CandidateSerializer(many=True, max_length=500)
     interviewers = InterviewerSerializer(many=True, max_length=200)
@@ -336,6 +345,7 @@ class SavedScheduleSerializer(serializers.ModelSerializer):
         try:
             canonical_schedule = canonicalize_schedule(
                 admission=instance.admission,
+                group=instance.group,
                 schedule=instance.schedule,
                 start_date=instance.start_date,
                 enabled_slots=instance.enabled_slots,
@@ -404,11 +414,8 @@ class SavedScheduleSerializer(serializers.ModelSerializer):
             "panel_size",
             "solver_options",
             "is_distributed",
+            "distributed_through",
             "conflict_review_open",
-            "conflict_collection_open",
-            "conflict_collection_revision",
-            "conflict_collection_candidate_ids",
-            "conflict_collection_participant_ids",
             "name_visibility",
             "updated_at",
         ]
@@ -419,9 +426,6 @@ class SavedScheduleSerializer(serializers.ModelSerializer):
         effective_name_visibility = self.context.get("effective_name_visibility")
         if effective_name_visibility is not None:
             data["name_visibility"] = effective_name_visibility
-        revealed_group_summaries = self.context.get("revealed_group_summaries")
-        if revealed_group_summaries is not None:
-            data["revealed_groups"] = revealed_group_summaries
         if self.context.get("hide_schedule"):
             data["schedule"] = []
             return data
@@ -434,6 +438,21 @@ class SavedScheduleSerializer(serializers.ModelSerializer):
         if not isinstance(raw_schedule, list):
             data["schedule"] = []
             return data
+
+        publication_boundary = self.context.get("publication_boundary")
+        if publication_boundary is not None:
+            raw_schedule = [
+                entry
+                for entry in raw_schedule
+                if isinstance(entry, Mapping)
+                and (
+                    entry_date := _entry_calendar_date(
+                        instance.start_date, entry.get("time")
+                    )
+                )
+                is not None
+                and entry_date <= publication_boundary
+            ]
 
         def canonical_uuid(value):
             try:
@@ -487,7 +506,10 @@ class SavedScheduleSerializer(serializers.ModelSerializer):
             ).select_related("user")
         }
         eligible_panel_ids = {
-            str(user_id) for user_id in get_eligible_interviewer_ids(instance.admission)
+            str(user_id)
+            for user_id in get_eligible_interviewer_ids(
+                instance.admission, instance.group
+            )
         }
         panel_names = {
             str(user.pk): user.get_full_name() or user.username

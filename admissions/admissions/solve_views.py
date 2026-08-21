@@ -16,13 +16,13 @@ from admissions.admissions.admission_access import (
     get_representing_groups,
     schedule_response_context,
     user_is_admission_admin,
+    user_is_interview_admin,
 )
 from admissions.admissions.authentication import SessionAuthentication
 from admissions.admissions.models import Admission, LegoUser, SavedSchedule, SolveJob
 from admissions.admissions.schedule_validation import (
     ScheduleValidationError,
     canonicalize_solver_payload,
-    ensure_conflict_collection_ready,
 )
 from admissions.admissions.schedule_windows import enabled_windows_to_slots
 from admissions.admissions.schedule_workflow import (
@@ -67,13 +67,16 @@ class SolveScheduleView(SchedulerFeatureGateMixin, APIView):
 
         user = request.user
         user.__class__ = LegoUser
-        if not user_is_admission_admin(admission, user):
-            return Response(status=status.HTTP_403_FORBIDDEN)
 
         serializer = ScheduleRequestsSerializer(data=request.data)
         if not serializer.is_valid():
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
         data = serializer.validated_data
+        group = get_object_or_404(admission.groups, pk=data["group_id"])
+
+        if not user_is_interview_admin(admission, group, user):
+            return Response(status=status.HTTP_403_FORBIDDEN)
+
         data["preview_only"] = bool(
             data.get("preview_only") or (data.get("options") or {}).get("repair_mode")
         )
@@ -84,9 +87,10 @@ class SolveScheduleView(SchedulerFeatureGateMixin, APIView):
             or getattr(settings, "ALLOW_UNMARKED_SYNTHETIC_SOLVER_INPUT", False)
         )
         if not synthetic_input:
-            try:
-                saved_config = admission.saved_schedule
-            except SavedSchedule.DoesNotExist:
+            saved_config = SavedSchedule.objects.filter(
+                admission=admission, group=group
+            ).first()
+            if saved_config is None:
                 return Response(
                     {"all_slots": ["Tidsoppsettet må lagres før planlegging."]},
                     status=status.HTTP_400_BAD_REQUEST,
@@ -122,7 +126,6 @@ class SolveScheduleView(SchedulerFeatureGateMixin, APIView):
                 )
                 data["options"] = options
             try:
-                ensure_conflict_collection_ready(admission, saved_config)
                 data.update(
                     canonicalize_solver_payload(
                         admission, saved_config, data, request.user
@@ -134,10 +137,12 @@ class SolveScheduleView(SchedulerFeatureGateMixin, APIView):
                     status=status.HTTP_400_BAD_REQUEST,
                 )
 
-        try:
-            previous_schedule = admission.saved_schedule.schedule or []
-        except SavedSchedule.DoesNotExist:
-            previous_schedule = []
+        previous_schedule = (
+            SavedSchedule.objects.filter(admission=admission, group=group)
+            .values_list("schedule", flat=True)
+            .first()
+            or []
+        )
 
         if not synthetic_input:
             data["availability_generation"] = saved_config.availability_generation
@@ -150,9 +155,9 @@ class SolveScheduleView(SchedulerFeatureGateMixin, APIView):
             )
         request_data = build_solve_request(data, synthetic_input, previous_schedule)
         try:
-            job = enqueue_solve_job(admission, user, request_data)
+            job = enqueue_solve_job(admission, group, user, request_data)
         except ActiveSolveRequestConflict:
-            existing = active_solve_job(admission)
+            existing = active_solve_job(admission, group)
             return Response(
                 {
                     "detail": (
@@ -178,7 +183,7 @@ class SolveJobStatusView(SchedulerFeatureGateMixin, APIView):
         job = get_object_or_404(SolveJob, id=job_id)
         user = request.user
         user.__class__ = LegoUser
-        if not user_is_admission_admin(job.admission, user):
+        if not user_is_interview_admin(job.admission, job.group, user):
             return None, Response(status=status.HTTP_403_FORBIDDEN)
         return job, None
 
@@ -216,12 +221,14 @@ class LatestSolveJobView(SchedulerFeatureGateMixin, APIView):
     def get(self, request):
         admission_slug = request.query_params.get("admission_slug")
         admission = get_object_or_404(Admission, slug=admission_slug)
+        group_id = request.query_params.get("group_id")
+        group = get_object_or_404(admission.groups, pk=group_id)
         user = request.user
         user.__class__ = LegoUser
-        if not user_is_admission_admin(admission, user):
+        if not user_is_interview_admin(admission, group, user):
             return Response(status=status.HTTP_403_FORBIDDEN)
         job = (
-            SolveJob.objects.filter(admission=admission)
+            SolveJob.objects.filter(admission=admission, group=group)
             .filter(
                 Q(status__in=SolveJob.ACTIVE_STATUSES)
                 | Q(
@@ -256,14 +263,15 @@ class SolveJobApplyView(SchedulerFeatureGateMixin, APIView):
 
         job_stub = get_object_or_404(SolveJob, id=job_id)
         admission = Admission.objects.select_for_update().get(pk=job_stub.admission_id)
+        group = job_stub.group
         user = request.user
         user.__class__ = LegoUser
-        if not user_is_admission_admin(admission, user):
+        if not user_is_interview_admin(admission, group, user):
             return Response(status=status.HTTP_403_FORBIDDEN)
 
         saved = (
             SavedSchedule.objects.select_for_update()
-            .filter(admission=admission)
+            .filter(admission=admission, group=group)
             .first()
         )
         if saved is None:
@@ -285,19 +293,16 @@ class SolveJobApplyView(SchedulerFeatureGateMixin, APIView):
                 status=status.HTTP_409_CONFLICT,
             )
         is_admission_admin = user_is_admission_admin(admission, user)
-        is_recruiter = get_representing_groups(admission, user).exists()
+        is_recruiter = get_representing_groups(admission, user).filter(
+            pk=group.pk
+        ).exists()
         if job.applied_at is not None:
+            # user_is_interview_admin was already confirmed above (line 269)
+            # before this view does anything else.
             return Response(
                 SavedScheduleSerializer(
                     saved,
-                    context=schedule_response_context(
-                        admission,
-                        saved,
-                        user,
-                        is_admission_admin,
-                        is_recruiter,
-                        is_admission_admin,
-                    ),
+                    context=schedule_response_context(admission, saved, True),
                 ).data
             )
         if (
@@ -345,6 +350,7 @@ class SolveJobApplyView(SchedulerFeatureGateMixin, APIView):
         try:
             result = update_saved_schedule(
                 admission=admission,
+                group=group,
                 user=user,
                 data={
                     "expected_updated_at": expected,
@@ -373,12 +379,7 @@ class SolveJobApplyView(SchedulerFeatureGateMixin, APIView):
             SavedScheduleSerializer(
                 result.saved_schedule,
                 context=schedule_response_context(
-                    result.admission,
-                    result.saved_schedule,
-                    user,
-                    is_admission_admin,
-                    is_recruiter,
-                    is_admission_admin,
+                    result.admission, result.saved_schedule, True
                 ),
             ).data
         )

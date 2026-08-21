@@ -108,7 +108,8 @@ class CypressFixturePreparationTestCase(TestCase):
             self.assertEqual(login.status_code, 302)
             self.assertIn(settings.SESSION_COOKIE_NAME, client.cookies)
             schedule_response = client.get(
-                f"/api/admin/admission/{Command.cypress_admission_slug}/schedule/"
+                f"/api/admin/admission/{Command.cypress_admission_slug}"
+                f"/group/{saved_schedule.group_id}/schedule/"
             )
             self.assertEqual(schedule_response.status_code, 200)
             self.assertEqual(len(schedule_response.json()["schedule"]), 3)
@@ -128,6 +129,15 @@ class CypressFixturePreparationTestCase(TestCase):
                 text="Interrupted Cypress application",
                 phone_number="12345678",
             )
+            # A prior Cypress run can leave the fixture schedule unpublished
+            # (a spec exercising the unlock flow, say). Re-seeding must
+            # re-publish it - update_or_create's update path writes to a
+            # generated column here, which the database silently drops
+            # unless the command targets distributed_through directly.
+            saved_schedule = SavedSchedule.objects.get(admission=admission)
+            saved_schedule.distributed_through = None
+            saved_schedule.save(update_fields=["distributed_through"])
+
             second_path = self.call_cypress_fixtures(project_dir)
             second_password = json.loads(second_path.read_text(encoding="utf-8"))[
                 "password"
@@ -147,6 +157,8 @@ class CypressFixturePreparationTestCase(TestCase):
                 SavedSchedule.objects.filter(admission=admission).count(),
                 1,
             )
+            saved_schedule.refresh_from_db()
+            self.assertTrue(saved_schedule.is_distributed)
             self.assertEqual(
                 InterviewAvailability.objects.filter(
                     admission=admission,

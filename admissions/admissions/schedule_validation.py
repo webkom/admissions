@@ -2,6 +2,7 @@ from datetime import date
 
 from admissions.admissions import constants
 from admissions.admissions.models import (
+    ConflictReviewList,
     InterviewAvailability,
     LegoUser,
     SavedSchedule,
@@ -16,6 +17,7 @@ from admissions.admissions.schedule_windows import (
     parse_slot_key,
 )
 from admissions.admissions.scheduling_utils import (
+    conflict_review_v2_enabled,
     get_declared_conflict_candidate_ids,
     get_eligible_interviewer_ids,
     get_interviewer_participation,
@@ -169,81 +171,8 @@ def _solver_blocks(saved, open_slots):
     return build_solver_block_metadata(configured_blocks, open_slots)
 
 
-def ensure_conflict_collection_ready(admission, saved):
-    revision = saved.conflict_collection_revision
-    if revision is None:
-        return
-    if saved.conflict_collection_open:
-        raise ScheduleValidationError(
-            "conflict_collection_open",
-            "Fullfør og lukk inhabilitetskontrollen før planutkastet lages.",
-        )
-
-    current_candidate_ids = {
-        str(candidate_id)
-        for candidate_id in UserApplication.objects.filter(
-            admission=admission
-        ).values_list("pk", flat=True)
-    }
-    participation = get_interviewer_participation(admission, saved)
-    current_participant_ids = {
-        str(user_id)
-        for user_id, state in participation.items()
-        if state == InterviewAvailability.PARTICIPATION_PARTICIPATING
-    }
-    if current_candidate_ids != set(saved.conflict_collection_candidate_ids):
-        raise ScheduleValidationError(
-            "conflict_collection_open",
-            "Kandidatlisten er endret. Åpne inhabilitetskontrollen på nytt.",
-        )
-    if current_participant_ids != set(saved.conflict_collection_participant_ids):
-        raise ScheduleValidationError(
-            "conflict_collection_open",
-            "Intervjuergruppen er endret. Åpne inhabilitetskontrollen på nytt.",
-        )
-
-    applications_by_user = {
-        str(user_id): str(application_id)
-        for application_id, user_id in UserApplication.objects.filter(
-            admission=admission
-        ).values_list("pk", "user_id")
-    }
-    availability_by_user = {
-        str(item.user_id): item
-        for item in InterviewAvailability.objects.filter(
-            admission=admission,
-            user_id__in=current_participant_ids,
-        )
-    }
-    incomplete = []
-    for participant_id in current_participant_ids:
-        expected_ids = set(current_candidate_ids)
-        own_candidate_id = applications_by_user.get(participant_id)
-        if own_candidate_id is not None:
-            expected_ids.discard(own_candidate_id)
-        availability = availability_by_user.get(participant_id)
-        reviewed_ids = {
-            str(candidate_id)
-            for candidate_id in (
-                availability.conflict_collection_reviewed_candidate_ids
-                if availability is not None
-                else []
-            )
-        }
-        if (
-            availability is None
-            or availability.conflict_collection_review_revision != revision
-            or reviewed_ids != expected_ids
-        ):
-            incomplete.append(participant_id)
-    if incomplete:
-        raise ScheduleValidationError(
-            "conflict_collection_open",
-            f"{len(incomplete)} intervjuere må fullføre inhabilitetskontrollen.",
-        )
-
-
 def canonicalize_solver_payload(admission, saved, data, request_user):
+    group = saved.group
     saved_slot_keys = saved.enabled_slots or enabled_windows_to_slots(
         saved.enabled_windows, saved.session_duration
     )
@@ -255,7 +184,11 @@ def canonicalize_solver_payload(admission, saved, data, request_user):
     solver_blocks = _solver_blocks(saved, all_slots)
 
     applications = list(
-        UserApplication.objects.filter(admission=admission).select_related("user")
+        UserApplication.objects.filter(
+            admission=admission, group_applications__group=group
+        )
+        .distinct()
+        .select_related("user")
     )
     application_map = {str(application.pk): application for application in applications}
     requested_candidate_ids = [str(item["id"]) for item in data["candidates"]]
@@ -265,9 +198,11 @@ def canonicalize_solver_payload(admission, saved, data, request_user):
         )
 
     submitted = list(
-        InterviewAvailability.objects.filter(admission=admission).select_related("user")
+        InterviewAvailability.objects.filter(
+            admission=admission, group=group
+        ).select_related("user")
     )
-    participation = get_interviewer_participation(admission, saved)
+    participation = get_interviewer_participation(admission, group, saved)
     unresolved_ids = {
         user_id
         for user_id, state in participation.items()
@@ -322,7 +257,26 @@ def canonicalize_solver_payload(admission, saved, data, request_user):
         }
         for candidate_id in requested_candidate_ids
     ]
-    derived_conflicts = get_declared_conflict_candidate_ids(admission)
+    derived_conflicts = get_declared_conflict_candidate_ids(admission, group)
+    # A repair (an existing plan is being partly preserved, so some
+    # assignments arrive locked) must never place a candidate onto an
+    # interviewer's panel who was outside their own+swap review scope for the
+    # plan being repaired - otherwise the repaired plan contains a pairing
+    # nobody ever reviewed. Not applied to a fresh solve: nothing has been
+    # reviewed yet, so there is no scope to enforce.
+    # Also checked directly (not just via an empty ConflictReviewList
+    # queryset): rows generated before a flag-flip must not keep constraining
+    # repairs after it's switched off.
+    is_repair = bool(data.get("locked_assignments")) and conflict_review_v2_enabled()
+    review_scope_by_interviewer = (
+        {
+            str(row.interviewer_id): set(row.own_candidate_ids)
+            | set(row.swap_candidate_ids)
+            for row in ConflictReviewList.objects.filter(saved_schedule=saved)
+        }
+        if is_repair
+        else {}
+    )
     interviewers = []
     for interviewer_id in requested_interviewer_ids:
         user = user_map.get(interviewer_id)
@@ -348,16 +302,30 @@ def canonicalize_solver_payload(admission, saved, data, request_user):
                 # through the availability payload and tell the interviewer
                 # exactly which of their fadderbarn applied.
                 "biased": sorted(
-                    {
-                        str(value)
-                        for value in (availability.conflicts if availability else [])
-                        if str(value) in candidate_ids
-                    }
-                    | {
-                        str(value)
-                        for value in derived_conflicts.get(interviewer_id, set())
-                        if str(value) in candidate_ids
-                    }
+                    (
+                        {
+                            str(value)
+                            for value in (
+                                availability.conflicts if availability else []
+                            )
+                            if str(value) in candidate_ids
+                        }
+                        | {
+                            str(value)
+                            for value in derived_conflicts.get(
+                                interviewer_id, set()
+                            )
+                            if str(value) in candidate_ids
+                        }
+                        | (
+                            candidate_ids
+                            - review_scope_by_interviewer.get(
+                                interviewer_id, set()
+                            )
+                            if is_repair
+                            else set()
+                        )
+                    )
                 ),
                 "experience_level": (
                     availability.experience_level
@@ -413,6 +381,7 @@ def canonicalize_solver_payload(admission, saved, data, request_user):
 def canonicalize_schedule(
     *,
     admission,
+    group,
     schedule,
     start_date,
     enabled_slots,
@@ -438,7 +407,11 @@ def canonicalize_schedule(
         raise ScheduleValidationError("solver_options", str(exc)) from exc
 
     applications = list(
-        UserApplication.objects.filter(admission=admission).select_related("user")
+        UserApplication.objects.filter(
+            admission=admission, group_applications__group=group
+        )
+        .distinct()
+        .select_related("user")
     )
     candidate_map = {str(application.pk): application for application in applications}
     enabled_times = encode_slot_keys(enabled_slots, start_date)
@@ -447,10 +420,10 @@ def canonicalize_schedule(
             "schedule", "Tidsoppsettet må ha minst én åpen tidsluke."
         )
 
-    allowed_user_ids = get_eligible_interviewer_ids(admission)
+    allowed_user_ids = get_eligible_interviewer_ids(admission, group)
     participating_user_ids = {
         user_id
-        for user_id, state in get_interviewer_participation(admission).items()
+        for user_id, state in get_interviewer_participation(admission, group).items()
         if state == InterviewAvailability.PARTICIPATION_PARTICIPATING
     }
     if panel_size > len(participating_user_ids):
@@ -464,9 +437,10 @@ def canonicalize_schedule(
     availability = {
         str(item.user_id): item
         for item in InterviewAvailability.objects.filter(
-            admission=admission, user_id__in=allowed_user_ids
+            admission=admission, group=group, user_id__in=allowed_user_ids
         )
     }
+    derived_conflicts = get_declared_conflict_candidate_ids(admission, group)
 
     allow_overtime = policy.allows_availability_deviations
     seen_candidates = set()
@@ -522,11 +496,16 @@ def canonicalize_schedule(
                     "Planen inneholder en intervjuer som ikke deltar.",
                 )
             saved_availability = availability.get(interviewer_id)
+            # Declared conflicts, plus the ones derived from fadderbarn
+            # declarations - without this union, a manually-edited or
+            # imported schedule could still pair an interviewer with a
+            # fadderbarn who applied, even though the solver itself already
+            # respects it via canonicalize_solver_payload's "biased" set.
             conflicts = (
                 set(str(value) for value in (saved_availability.conflicts or []))
                 if saved_availability
                 else set()
-            )
+            ) | derived_conflicts.get(interviewer_id, set())
             if candidate_id in conflicts:
                 raise ScheduleValidationError(
                     "schedule", "Planen bryter en registrert inhabilitet."

@@ -24,6 +24,7 @@ class SolverQualityTestCase(APITestCase):
         Membership.objects.create(user=self.user, role=LEADER, group=self.group)
         self.admission = create_admission(created_by=self.user, slug="quality-opptak")
         self.admission.admin_groups.add(self.group)
+        self.admission.groups.add(self.group)
         self.client.force_authenticate(user=self.user)
         self.url = reverse("solve-schedule")
 
@@ -37,6 +38,7 @@ class SolverQualityTestCase(APITestCase):
             {
                 **payload,
                 "admission_slug": self.admission.slug,
+                "group_id": str(self.group.pk),
                 "synthetic": True,
             },
             format="json",

@@ -1,9 +1,11 @@
 from unittest.mock import patch
 
+from django.test import override_settings
 from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APITestCase
 
+from admissions.admissions.constants import RECRUITING
 from admissions.admissions.lego_directory import (
     DirectoryAuthenticationRequired,
     DirectoryUnavailable,
@@ -32,7 +34,10 @@ class FadderbarnDeclarationTestCase(APITestCase):
         self.client.force_authenticate(user=self.interviewer)
         self.url = reverse(
             "interview-availability",
-            kwargs={"admission_slug": DEFAULT_ADMISSION_SLUG},
+            kwargs={
+                "admission_slug": DEFAULT_ADMISSION_SLUG,
+                "group_id": self.group.pk,
+            },
         )
 
     def _applicant(self, username, lego_id):
@@ -161,16 +166,58 @@ class FadderbarnDeclarationTestCase(APITestCase):
             self.url, {"fadderbarn": [{"lego_user_id": 5001}]}, format="json"
         )
 
-        derived = get_declared_conflict_candidate_ids(self.admission)
+        derived = get_declared_conflict_candidate_ids(self.admission, self.group)
 
-        self.assertEqual({str(application.pk)}, derived[self.interviewer.id])
+        # String, not the interviewer's raw UUID: every caller looks this up
+        # by the string id it already has, so a UUID-keyed dict here would
+        # make every consumer's union silently a no-op.
+        self.assertEqual({str(application.pk)}, derived[str(self.interviewer.id)])
+
+    @override_settings(ADMISSIONS_CONFLICT_REVIEW_V2=False)
+    def test_the_kill_switch_disables_derived_conflicts(self):
+        self._applicant("kari", 5001)
+        self.client.post(
+            self.url, {"fadderbarn": [{"lego_user_id": 5001}]}, format="json"
+        )
+
+        self.assertEqual({}, get_declared_conflict_candidate_ids(self.admission, self.group))
 
     def test_a_fadderbarn_who_did_not_apply_yields_nothing(self):
         self.client.post(
             self.url, {"fadderbarn": [{"lego_user_id": 9999}]}, format="json"
         )
 
-        self.assertEqual({}, get_declared_conflict_candidate_ids(self.admission))
+        self.assertEqual({}, get_declared_conflict_candidate_ids(self.admission, self.group))
+
+    def test_derived_conflicts_are_visible_to_admins(self):
+        _, application = self._applicant("kari", 5001)
+        self.client.post(
+            self.url, {"fadderbarn": [{"lego_user_id": 5001}]}, format="json"
+        )
+        admin_group = Group.objects.create(name="Webkom-admin", lego_id=14)
+        self.admission.admin_groups.add(admin_group)
+        admin = LegoUser.objects.create(username="admin", lego_id=4002)
+        Membership.objects.create(user=admin, group=admin_group, role=RECRUITING)
+        self.client.force_authenticate(user=admin)
+
+        res = self.client.get(self.url)
+
+        row = next(
+            row for row in res.data if row["user_id"] == str(self.interviewer.id)
+        )
+        self.assertEqual([str(application.pk)], row["derived_conflicts"])
+
+    def test_derived_conflicts_are_never_shown_to_non_admins(self):
+        """Even to the declaring interviewer themselves - see the privacy test above."""
+        self._applicant("kari", 5001)
+        self.client.post(
+            self.url, {"fadderbarn": [{"lego_user_id": 5001}]}, format="json"
+        )
+
+        res = self.client.get(self.url)
+
+        for row in res.data:
+            self.assertEqual([], row["derived_conflicts"])
 
 
 class MemberSearchTestCase(APITestCase):

@@ -273,6 +273,7 @@ class SolveScheduleViewTestCase(APITestCase):
         Membership.objects.create(user=self.user, role=RECRUITING, group=self.group)
         self.admission = create_admission(created_by=self.user, slug="solve-opptak")
         self.admission.admin_groups.add(self.group)
+        self.admission.groups.add(self.group)
         self.client.force_authenticate(user=self.user)
         self.url = reverse("solve-schedule")
 
@@ -282,7 +283,11 @@ class SolveScheduleViewTestCase(APITestCase):
         returned verbatim."""
         res = self.client.post(
             self.url,
-            {**payload, "admission_slug": self.admission.slug},
+            {
+                **payload,
+                "admission_slug": self.admission.slug,
+                "group_id": str(self.group.pk),
+            },
             format="json",
         )
         if res.status_code != status.HTTP_202_ACCEPTED:
@@ -670,14 +675,20 @@ class SavedScheduleViewTestCase(APITestCase):
             created_by=self.admin_user, slug="schedule-opptak"
         )
         self.admission.admin_groups.add(self.admin_group)
+        self.admission.groups.add(self.admin_group)
         self.url = reverse(
-            "saved-schedule", kwargs={"admission_slug": self.admission.slug}
+            "saved-schedule",
+            kwargs={
+                "admission_slug": self.admission.slug,
+                "group_id": self.admin_group.pk,
+            },
         )
         self.client.force_authenticate(user=self.admin_user)
 
     def test_grid_change_clears_existing_plan(self):
         SavedSchedule.objects.create(
             admission=self.admission,
+            group=self.admin_group,
             schedule=[{"candidate": "Ada", "time": 8, "panel": []}],
             start_date="2026-04-20",
             end_date="2026-04-24",
@@ -769,11 +780,13 @@ class SavedScheduleViewTestCase(APITestCase):
         interviewer = LegoUser.objects.create(username="available-user", lego_id=304)
         InterviewAvailability.objects.create(
             admission=self.admission,
+            group=self.admin_group,
             user=interviewer,
             slots=["2026-04-21|540"],
         )
         SavedSchedule.objects.create(
             admission=self.admission,
+            group=self.admin_group,
             schedule=[],
             start_date="2026-04-21",
             end_date="2026-04-21",
@@ -810,6 +823,7 @@ class SavedScheduleViewTestCase(APITestCase):
     def test_block_break_change_clears_existing_plan(self):
         SavedSchedule.objects.create(
             admission=self.admission,
+            group=self.admin_group,
             schedule=[{"candidate": "Ada", "time": 8, "panel": []}],
             start_date="2026-04-21",
             end_date="2026-04-21",
@@ -889,7 +903,10 @@ class InterviewAvailabilityViewTestCase(APITestCase):
         self.admission.groups.add(self.group)
         self.url = reverse(
             "interview-availability",
-            kwargs={"admission_slug": self.admission.slug},
+            kwargs={
+                "admission_slug": self.admission.slug,
+                "group_id": self.group.pk,
+            },
         )
         self.client.force_authenticate(user=self.user)
 
@@ -905,6 +922,7 @@ class InterviewAvailabilityViewTestCase(APITestCase):
         )
         SavedSchedule.objects.create(
             admission=self.admission,
+            group=self.group,
             schedule=[
                 {
                     "candidate_id": str(application.pk),
@@ -926,6 +944,7 @@ class InterviewAvailabilityViewTestCase(APITestCase):
         )
         InterviewAvailability.objects.create(
             admission=self.admission,
+            group=self.group,
             user=self.user,
             slots=["2026-04-21:540"],
             conflicts=["real-candidate-ada"],
@@ -954,6 +973,7 @@ class InterviewAvailabilityViewTestCase(APITestCase):
         """
         InterviewAvailability.objects.create(
             admission=self.admission,
+            group=self.group,
             user=self.user,
             slots=["2026-04-21:540"],
             conflicts=["real-candidate-ada"],
@@ -986,6 +1006,7 @@ class InterviewAvailabilityViewTestCase(APITestCase):
     def test_get_returns_saved_conflicts_for_participant(self):
         InterviewAvailability.objects.create(
             admission=self.admission,
+            group=self.group,
             user=self.user,
             slots=["2026-04-21:540"],
             conflicts=["real-candidate-ada"],
@@ -1021,7 +1042,10 @@ class InterviewCandidatesViewTestCase(APITestCase):
         )
         self.url = reverse(
             "interview-candidates",
-            kwargs={"admission_slug": self.admission.slug},
+            kwargs={
+                "admission_slug": self.admission.slug,
+                "group_id": self.group.pk,
+            },
         )
         self.client.force_authenticate(user=self.user)
 
@@ -1034,6 +1058,7 @@ class InterviewCandidatesViewTestCase(APITestCase):
     def test_candidate_names_hidden_when_not_released_to_committee(self):
         SavedSchedule.objects.create(
             admission=self.admission,
+            group=self.group,
             schedule=[],
             start_date="2026-04-21",
             session_duration=60,
@@ -1048,6 +1073,7 @@ class InterviewCandidatesViewTestCase(APITestCase):
     def test_committee_member_sees_names_when_released(self):
         SavedSchedule.objects.create(
             admission=self.admission,
+            group=self.group,
             schedule=[],
             start_date="2026-04-21",
             session_duration=60,
@@ -1093,7 +1119,18 @@ class InterviewCandidatesViewTestCase(APITestCase):
         )
         self.client.force_authenticate(user=recruiter_user)
 
-        res = self.client.get(self.url)
+        # Each committee's candidate list is independent now, so the
+        # recruiter must be asked about their own committee's URL - they
+        # have no access to self.url (Intervjukomite) at all.
+        res = self.client.get(
+            reverse(
+                "interview-candidates",
+                kwargs={
+                    "admission_slug": self.admission.slug,
+                    "group_id": recruiter_group.pk,
+                },
+            )
+        )
 
         self.assertEqual(res.status_code, status.HTTP_200_OK)
         self.assertEqual(

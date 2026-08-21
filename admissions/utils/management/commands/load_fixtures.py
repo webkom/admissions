@@ -11,7 +11,10 @@ from django.core.management.base import BaseCommand, CommandError
 from django.db import transaction
 from django.utils import timezone
 
-from admissions.admissions.admission_access import user_is_admission_admin
+from admissions.admissions.admission_access import (
+    get_representing_groups,
+    user_is_admission_admin,
+)
 from admissions.admissions.models import (
     Admission,
     AdmissionGroup,
@@ -156,6 +159,16 @@ class Command(BaseCommand):
             raise CommandError(
                 "The Cypress fixture user is not an administrator for webkom-open."
             )
+        # The fixture candidates all apply to Webkom specifically (see
+        # applications.json/group_applications.json), so the fixture
+        # schedule/availability - one per committee now - must be seeded for
+        # that same committee, not just any group the admin administers.
+        group = get_representing_groups(admission, admin).first()
+        if group is None:
+            raise CommandError(
+                "The Cypress fixture administrator must represent a committee "
+                "in webkom-open."
+            )
 
         # A failed or interrupted public-application spec can leave the fixture
         # administrator with an application whose generated primary key is not
@@ -208,6 +221,7 @@ class Command(BaseCommand):
         ]
         saved_schedule, _ = SavedSchedule.objects.update_or_create(
             admission=admission,
+            group=group,
             defaults={
                 "schedule": schedule,
                 "start_date": start_date,
@@ -237,17 +251,21 @@ class Command(BaseCommand):
                     "availability_fallback": "stop",
                     "initial_strategy": "balanced",
                 },
-                "is_distributed": True,
+                # is_distributed is a generated column now (see models.py) -
+                # a write to it here would be silently dropped on the
+                # update_or_create update path, since only distributed_through
+                # is a real column.
+                "distributed_through": start_date + timedelta(days=1),
                 "conflict_review_open": False,
                 "name_visibility": SavedSchedule.NAME_VISIBILITY_COMMITTEE,
             },
         )
-        saved_schedule.revealed_groups.set(admission.groups.all())
-        InterviewAvailability.objects.filter(admission=admission).exclude(
-            user=admin
-        ).delete()
+        InterviewAvailability.objects.filter(
+            admission=admission, group=group
+        ).exclude(user=admin).delete()
         InterviewAvailability.objects.update_or_create(
             admission=admission,
+            group=group,
             user=admin,
             defaults={
                 "slots": enabled_slots,
@@ -258,7 +276,7 @@ class Command(BaseCommand):
                 "submitted_grid_generation": 1,
             },
         )
-        SolveJob.objects.filter(admission=admission).delete()
+        SolveJob.objects.filter(admission=admission, group=group).delete()
 
     def write_cypress_credentials(self, path, password):
         path.write_text(

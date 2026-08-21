@@ -115,22 +115,30 @@ class AvailabilityGenerationProjectionTestCase(APITestCase):
     client_class = ScheduleRevisionAPIClient
 
     def setUp(self):
-        group = Group.objects.create(name="Layout generation", lego_id=6400)
+        self.group = Group.objects.create(name="Layout generation", lego_id=6400)
         self.admin = LegoUser.objects.create(
             username="layout-generation-admin", lego_id=6401
         )
-        Membership.objects.create(user=self.admin, group=group, role=RECRUITING)
+        Membership.objects.create(user=self.admin, group=self.group, role=RECRUITING)
         self.admission = create_admission(
             created_by=self.admin,
             slug="layout-generation",
         )
-        self.admission.admin_groups.add(group)
+        self.admission.admin_groups.add(self.group)
+        self.admission.groups.add(self.group)
         self.schedule_url = reverse(
-            "saved-schedule", kwargs={"admission_slug": self.admission.slug}
+            "saved-schedule",
+            kwargs={
+                "admission_slug": self.admission.slug,
+                "group_id": self.group.pk,
+            },
         )
         self.availability_url = reverse(
             "interview-availability",
-            kwargs={"admission_slug": self.admission.slug},
+            kwargs={
+                "admission_slug": self.admission.slug,
+                "group_id": self.group.pk,
+            },
         )
         self.client.force_authenticate(user=self.admin)
         response = self.client.post(
@@ -258,6 +266,7 @@ class AvailabilityGenerationProjectionTestCase(APITestCase):
     def test_duration_change_clears_slots_and_submission_but_preserves_conflicts(self):
         InterviewAvailability.objects.create(
             admission=self.admission,
+            group=self.group,
             user=self.admin,
             slots=["2026-04-20|540"],
             conflicts=["candidate-a"],

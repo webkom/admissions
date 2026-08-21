@@ -23,7 +23,8 @@ class ScheduleRevisionAPIClient(APIClient):
             and "expected_updated_at" not in data
         ):
             saved_schedule = SavedSchedule.objects.filter(
-                admission__slug=match.kwargs["admission_slug"]
+                admission__slug=match.kwargs["admission_slug"],
+                group_id=match.kwargs["group_id"],
             ).first()
             payload = {
                 **data,

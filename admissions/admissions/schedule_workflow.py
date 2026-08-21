@@ -6,18 +6,14 @@ from django.db import transaction
 from django.utils import timezone
 
 from admissions.admissions import constants
-from admissions.admissions.admission_access import (
-    get_representing_groups,
-    set_group_name_visibility,
-)
 from admissions.admissions.models import (
     Admission,
     ConflictReviewAuditEvent,
     ConflictReviewList,
     InterviewAvailability,
+    NameVisibilityAuditEvent,
     SavedSchedule,
     ScheduleDeviationApproval,
-    UserApplication,
 )
 from admissions.admissions.schedule_layout import (
     ScheduleLayoutError,
@@ -47,7 +43,6 @@ from admissions.admissions.scheduling_utils import (
     build_conflict_review_lists,
     canonicalize_slot_keys,
     get_conflict_review_readiness,
-    get_interviewer_participation,
 )
 
 
@@ -104,6 +99,7 @@ def _ensure_revision_matches(data, existing):
 
 def _update_group_visibility(
     admission,
+    group,
     user,
     data,
     existing,
@@ -125,24 +121,30 @@ def _update_group_visibility(
             {"name_visibility": ["Planen må publiseres før navn kan vises."]}
         )
 
-    represented_groups = get_representing_groups(admission, user)
-    visibility_became_group_scoped = (
-        visibility != SavedSchedule.NAME_VISIBILITY_COMMITTEE
-        and existing.name_visibility == SavedSchedule.NAME_VISIBILITY_COMMITTEE
-    )
-    if visibility_became_group_scoped:
-        existing.revealed_groups.set(admission.groups.all())
-        existing.name_visibility = SavedSchedule.NAME_VISIBILITY_ADMIN_ONLY
-    set_group_name_visibility(
-        existing,
-        represented_groups,
-        visibility == SavedSchedule.NAME_VISIBILITY_COMMITTEE,
-        user,
-    )
-    update_fields = ["updated_at"]
-    if visibility_became_group_scoped:
-        update_fields.append("name_visibility")
-    existing.save(update_fields=update_fields)
+    # A schedule belongs to exactly one committee now, so this toggle is
+    # simply that committee's own name_visibility - there is no other
+    # committee it could mean anything for.
+    if visibility != existing.name_visibility:
+        was_revealed = (
+            existing.name_visibility == SavedSchedule.NAME_VISIBILITY_COMMITTEE
+        )
+        is_revealed = visibility == SavedSchedule.NAME_VISIBILITY_COMMITTEE
+        existing.name_visibility = visibility
+        existing.save(update_fields=["name_visibility", "updated_at"])
+        if was_revealed != is_revealed:
+            NameVisibilityAuditEvent.objects.create(
+                admission=admission,
+                saved_schedule=existing,
+                group=group,
+                group_name=group.name,
+                actor=user,
+                actor_username=user.username,
+                action=(
+                    NameVisibilityAuditEvent.ACTION_REVEALED
+                    if is_revealed
+                    else NameVisibilityAuditEvent.ACTION_HIDDEN
+                ),
+            )
     return existing
 
 
@@ -565,79 +567,23 @@ def _resolve_block_configuration(data, existing, configuration, enabled_slots):
     return {"layout_version": 2, "legacy_compatibility": False, **layout}
 
 
-def _ensure_conflict_collection_can_close(admission, existing):
-    if existing is None or existing.conflict_collection_revision is None:
-        return
+def _full_publish_boundary(start_date, schedule):
+    """distributed_through for an unscoped ("is_distributed: true") publish.
 
-    current_candidate_ids = {
-        str(candidate_id)
-        for candidate_id in UserApplication.objects.filter(
-            admission=admission
-        ).values_list("pk", flat=True)
-    }
-    participation = get_interviewer_participation(admission, existing)
-    current_participant_ids = {
-        str(user_id)
-        for user_id, state in participation.items()
-        if state == InterviewAvailability.PARTICIPATION_PARTICIPATING
-    }
-    snapshot_candidate_ids = set(existing.conflict_collection_candidate_ids)
-    snapshot_participant_ids = set(existing.conflict_collection_participant_ids)
-
-    # A stale collection must remain closable so it can be reopened with a
-    # fresh snapshot. A current collection may only be finalized when every
-    # participant has confirmed the exact scope.
-    if (
-        current_candidate_ids != snapshot_candidate_ids
-        or current_participant_ids != snapshot_participant_ids
-    ):
-        return
-
-    applications_by_user = {
-        str(user_id): str(application_id)
-        for application_id, user_id in UserApplication.objects.filter(
-            admission=admission
-        ).values_list("pk", "user_id")
-    }
-    availability_by_user = {
-        str(item.user_id): item
-        for item in InterviewAvailability.objects.filter(
-            admission=admission,
-            user_id__in=current_participant_ids,
-        )
-    }
-    incomplete_count = 0
-    for participant_id in current_participant_ids:
-        expected_ids = set(current_candidate_ids)
-        own_candidate_id = applications_by_user.get(participant_id)
-        if own_candidate_id is not None:
-            expected_ids.discard(own_candidate_id)
-        availability = availability_by_user.get(participant_id)
-        reviewed_ids = {
-            str(candidate_id)
-            for candidate_id in (
-                availability.conflict_collection_reviewed_candidate_ids
-                if availability is not None
-                else []
-            )
-        }
-        if (
-            availability is None
-            or availability.conflict_collection_review_revision
-            != existing.conflict_collection_revision
-            or reviewed_ids != expected_ids
-        ):
-            incomplete_count += 1
-
-    if incomplete_count:
-        raise ScheduleInputError(
-            {
-                "conflict_collection_open": [
-                    f"{incomplete_count} intervjuere må kontrollere "
-                    "kandidatlisten før navnene lukkes."
-                ]
-            }
-        )
+    The calendar day of the last scheduled interview, plus a one-day margin -
+    the special case in distributed_through's own docstring where the
+    boundary lands past the whole plan rather than partway through it.
+    """
+    if not schedule or start_date is None:
+        return None
+    day_offsets = [
+        int(item["time"]) // (24 * 60)
+        for item in schedule
+        if isinstance(item, dict) and isinstance(item.get("time"), int)
+    ]
+    if not day_offsets:
+        return None
+    return start_date + timedelta(days=max(day_offsets) + 1)
 
 
 def _resolve_schedule_state(
@@ -727,16 +673,52 @@ def _resolve_schedule_state(
         and existing is not None
         and data["schedule"] != existing.schedule
     )
+    # distributed_through is the field that actually gets written (see
+    # models.py - is_distributed is a generated column derived from it and
+    # the database rejects direct writes to it). "distributed_through" in
+    # data takes precedence when present, for the admin's own publish-through
+    # date control; is_distributed alone is still the all-or-nothing publish
+    # toggle and computes the boundary for it.
     if should_clear_plan:
-        is_distributed = False
+        distributed_through = None
+    elif "distributed_through" in data:
+        distributed_through = data["distributed_through"]
+        if distributed_through is not None:
+            if distributed_through < configuration["start_date"]:
+                raise ScheduleInputError(
+                    {
+                        "distributed_through": [
+                            "Kan ikke publisere før planens startdato."
+                        ]
+                    }
+                )
+            if (
+                existing is not None
+                and existing.distributed_through is not None
+                and distributed_through < existing.distributed_through
+            ):
+                raise ScheduleInputError(
+                    {
+                        "distributed_through": [
+                            "Publiseringsgrensen kan ikke flyttes bakover."
+                        ]
+                    }
+                )
     elif "is_distributed" in data:
-        is_distributed = data["is_distributed"]
+        distributed_through = (
+            _full_publish_boundary(configuration["start_date"], schedule)
+            if data["is_distributed"]
+            else None
+        )
     elif schedule_changed:
-        is_distributed = False
+        distributed_through = None
     else:
-        is_distributed = existing.is_distributed if existing is not None else False
+        distributed_through = existing.distributed_through if existing is not None else None
+    is_distributed = distributed_through is not None
 
-    if data.get("is_distributed") is True and not schedule:
+    if (
+        data.get("is_distributed") is True or data.get("distributed_through")
+    ) and not schedule:
         raise ScheduleInputError(
             {"is_distributed": ["Kan ikke publisere en tom intervjuplan."]}
         )
@@ -752,57 +734,6 @@ def _resolve_schedule_state(
     # conflict review. There is no separate administrative "open review" step:
     # members can review proposed candidates until the plan is published.
     conflict_review_open = bool(schedule) and not is_distributed
-    existing_collection_open = bool(
-        existing is not None and existing.conflict_collection_open
-    )
-    requested_collection_open = data.get(
-        "conflict_collection_open",
-        existing_collection_open,
-    )
-    conflict_collection_open = bool(requested_collection_open and not is_distributed)
-    if existing_collection_open and not conflict_collection_open:
-        _ensure_conflict_collection_can_close(admission, existing)
-    conflict_collection_revision = (
-        existing.conflict_collection_revision if existing is not None else None
-    )
-    conflict_collection_candidate_ids = (
-        list(existing.conflict_collection_candidate_ids) if existing is not None else []
-    )
-    conflict_collection_participant_ids = (
-        list(existing.conflict_collection_participant_ids)
-        if existing is not None
-        else []
-    )
-    if conflict_collection_open and not existing_collection_open:
-        conflict_collection_revision = uuid.uuid4()
-        conflict_collection_candidate_ids = sorted(
-            str(candidate_id)
-            for candidate_id in UserApplication.objects.filter(
-                admission=admission
-            ).values_list("pk", flat=True)
-        )
-        participation = get_interviewer_participation(admission, existing)
-        conflict_collection_participant_ids = sorted(
-            str(user_id)
-            for user_id, state in participation.items()
-            if state == InterviewAvailability.PARTICIPATION_PARTICIPATING
-        )
-        if not conflict_collection_candidate_ids:
-            raise ScheduleInputError(
-                {
-                    "conflict_collection_open": [
-                        "Legg til kandidater før navn åpnes for inhabilitetskontroll."
-                    ]
-                }
-            )
-        if not conflict_collection_participant_ids:
-            raise ScheduleInputError(
-                {
-                    "conflict_collection_open": [
-                        "Minst én intervjuer må ha sendt inn tilgjengelighet."
-                    ]
-                }
-            )
 
     return {
         "grid_changed": grid_changed,
@@ -813,20 +744,20 @@ def _resolve_schedule_state(
         "should_clear_plan": should_clear_plan,
         "schedule": schedule,
         "is_distributed": is_distributed,
+        "distributed_through": distributed_through,
         "conflict_review_open": conflict_review_open,
-        "conflict_collection_open": conflict_collection_open,
-        "conflict_collection_revision": conflict_collection_revision,
-        "conflict_collection_candidate_ids": conflict_collection_candidate_ids,
-        "conflict_collection_participant_ids": conflict_collection_participant_ids,
         "name_visibility": name_visibility,
     }
 
 
-def _ensure_conflict_review_ready_for_publish(admission, data, schedule):
-    if data.get("is_distributed") is not True or not schedule:
+def _ensure_conflict_review_ready_for_publish(admission, group, data, schedule):
+    is_publishing = data.get("is_distributed") is True or bool(
+        data.get("distributed_through")
+    )
+    if not is_publishing or not schedule:
         return
 
-    readiness = get_conflict_review_readiness(admission, schedule=schedule)
+    readiness = get_conflict_review_readiness(admission, group, schedule=schedule)
     incomplete_count = len(readiness["incomplete_participant_ids"])
     if incomplete_count:
         raise ScheduleInputError(
@@ -842,6 +773,7 @@ def _ensure_conflict_review_ready_for_publish(admission, data, schedule):
 
 def _canonicalize_schedule(
     admission,
+    group,
     user,
     data,
     existing,
@@ -897,6 +829,7 @@ def _canonicalize_schedule(
         try:
             schedule = canonicalize_schedule(
                 admission=admission,
+                group=group,
                 schedule=schedule,
                 start_date=configuration["start_date"],
                 enabled_slots=enabled_slots,
@@ -985,10 +918,12 @@ def _schedule_pairs_by_interviewer(schedule):
 
 
 def _project_interview_availability(
-    *, admission, existing_schedule, next_schedule, enabled_slots, state
+    *, admission, group, existing_schedule, next_schedule, enabled_slots, state
 ):
     rows = list(
-        InterviewAvailability.objects.select_for_update().filter(admission=admission)
+        InterviewAvailability.objects.select_for_update().filter(
+            admission=admission, group=group
+        )
     )
     if not rows:
         return
@@ -1024,6 +959,7 @@ def _project_interview_availability(
 
 def _persist_schedule(
     admission,
+    group,
     user,
     data,
     existing,
@@ -1039,8 +975,10 @@ def _persist_schedule(
     conflict_review_was_open = bool(
         existing is not None and existing.conflict_review_open
     )
-    conflict_collection_was_open = bool(
-        existing is not None and existing.conflict_collection_open
+    previous_name_visibility = (
+        existing.name_visibility
+        if existing is not None
+        else SavedSchedule.NAME_VISIBILITY_HIDDEN
     )
     with transaction.atomic():
         desired_fields = {
@@ -1066,20 +1004,14 @@ def _persist_schedule(
             "availability_generation": state["availability_generation"],
             "panel_size": panel_size,
             "solver_options": solver_options,
-            "is_distributed": state["is_distributed"],
+            "distributed_through": state["distributed_through"],
             "conflict_review_open": state["conflict_review_open"],
-            "conflict_collection_open": state["conflict_collection_open"],
-            "conflict_collection_revision": state["conflict_collection_revision"],
-            "conflict_collection_candidate_ids": state[
-                "conflict_collection_candidate_ids"
-            ],
-            "conflict_collection_participant_ids": state[
-                "conflict_collection_participant_ids"
-            ],
             "name_visibility": state["name_visibility"],
         }
         if existing is None:
-            saved = SavedSchedule.objects.create(admission=admission, **desired_fields)
+            saved = SavedSchedule.objects.create(
+                admission=admission, group=group, **desired_fields
+            )
         else:
             # A byte-identical save must not bump updated_at: that token is the
             # optimistic lock, so a no-op write 409s concurrent admins and kills
@@ -1094,6 +1026,11 @@ def _persist_schedule(
                 for field in changed_fields:
                     setattr(saved, field, desired_fields[field])
                 saved.save(update_fields=[*changed_fields, "updated_at"])
+                if "distributed_through" in changed_fields:
+                    # save(update_fields=...) doesn't refresh GeneratedField
+                    # columns unless they're part of the same update, so
+                    # is_distributed goes stale on this in-memory instance.
+                    saved.refresh_from_db(fields=["is_distributed"])
 
         if conflict_review_was_open != saved.conflict_review_open:
             ConflictReviewAuditEvent.objects.create(
@@ -1108,58 +1045,29 @@ def _persist_schedule(
                 ),
             )
 
-        if conflict_collection_was_open != saved.conflict_collection_open:
-            ConflictReviewAuditEvent.objects.create(
+        was_revealed = (
+            previous_name_visibility == SavedSchedule.NAME_VISIBILITY_COMMITTEE
+        )
+        is_revealed = saved.name_visibility == SavedSchedule.NAME_VISIBILITY_COMMITTEE
+        if was_revealed != is_revealed:
+            NameVisibilityAuditEvent.objects.create(
                 admission=admission,
                 saved_schedule=saved,
+                group=group,
+                group_name=group.name,
                 actor=user,
                 actor_username=user.username,
-                subject_user=user,
-                subject_username=user.username,
-                phase=ConflictReviewAuditEvent.PHASE_COLLECTION,
-                collection_revision=saved.conflict_collection_revision,
                 action=(
-                    ConflictReviewAuditEvent.ACTION_OPENED
-                    if saved.conflict_collection_open
-                    else ConflictReviewAuditEvent.ACTION_CLOSED
+                    NameVisibilityAuditEvent.ACTION_REVEALED
+                    if is_revealed
+                    else NameVisibilityAuditEvent.ACTION_HIDDEN
                 ),
             )
-
-        if not saved.is_distributed:
-            set_group_name_visibility(
-                saved,
-                saved.revealed_groups.all(),
-                False,
-                user,
-            )
-        elif "name_visibility" in data:
-            show_names = (
-                data["name_visibility"] == SavedSchedule.NAME_VISIBILITY_COMMITTEE
-            )
-            if not show_names:
-                set_group_name_visibility(
-                    saved,
-                    saved.revealed_groups.all(),
-                    False,
-                    user,
-                )
-            else:
-                set_group_name_visibility(
-                    saved,
-                    saved.revealed_groups.exclude(pk__in=admission.groups.all()),
-                    False,
-                    user,
-                )
-                set_group_name_visibility(
-                    saved,
-                    admission.groups.all(),
-                    True,
-                    user,
-                )
 
         if existing is not None:
             _project_interview_availability(
                 admission=admission,
+                group=group,
                 existing_schedule=existing.schedule,
                 next_schedule=schedule,
                 enabled_slots=enabled_slots,
@@ -1209,6 +1117,7 @@ def _refresh_conflict_review_lists(saved, schedule_changed):
 def update_saved_schedule(
     *,
     admission,
+    group,
     user,
     data,
     is_admin,
@@ -1216,12 +1125,13 @@ def update_saved_schedule(
     is_admission_admin=False,
 ):
     admission = Admission.objects.select_for_update().get(pk=admission.pk)
-    existing = SavedSchedule.objects.filter(admission=admission).first()
+    existing = SavedSchedule.objects.filter(admission=admission, group=group).first()
 
     mutable_fields = set(data) - {"expected_updated_at"}
     if not is_admission_admin and mutable_fields == {"name_visibility"}:
         saved = _update_group_visibility(
             admission,
+            group,
             user,
             data,
             existing,
@@ -1264,6 +1174,7 @@ def update_saved_schedule(
     )
     schedule, panel_size, solver_options = _canonicalize_schedule(
         admission,
+        group,
         user,
         data,
         existing,
@@ -1272,7 +1183,7 @@ def update_saved_schedule(
         state,
         layout,
     )
-    _ensure_conflict_review_ready_for_publish(admission, data, schedule)
+    _ensure_conflict_review_ready_for_publish(admission, group, data, schedule)
     deviation_review = _deviation_review_for_publish(
         data,
         schedule,
@@ -1282,6 +1193,7 @@ def update_saved_schedule(
     )
     saved = _persist_schedule(
         admission,
+        group,
         user,
         data,
         existing,

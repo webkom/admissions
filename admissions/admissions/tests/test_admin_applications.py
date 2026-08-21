@@ -6,7 +6,13 @@ from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APITestCase
 
-from admissions.admissions.constants import LEADER, MEMBER, RECRUITING, RETIREE
+from admissions.admissions.constants import (
+    CO_LEADER,
+    LEADER,
+    MEMBER,
+    RECRUITING,
+    RETIREE,
+)
 from admissions.admissions.interview_workflow import update_interview_status
 from admissions.admissions.models import (
     Group,
@@ -98,6 +104,36 @@ class AdminAdmissionPrivacyTestCase(APITestCase):
         self.assertNotIn("text", data)
         self.assertNotIn("header_fields_response", data)
         self.assertNotIn("priority_text", data)
+
+    def test_priority_text_is_visible_to_leadership_only(self):
+        """Every admin_full viewer sees the application - only leader/co-leader
+        see the applicant's note to "central admission officers"."""
+        co_leader_admin = LegoUser.objects.create(
+            username="co-leader-admin", lego_id=27
+        )
+        Membership.objects.create(
+            user=co_leader_admin, group=self.admin_group, role=CO_LEADER
+        )
+        UserApplication.objects.filter(
+            admission=self.admission, user=self.candidate
+        ).update(text="private central comment")
+        url = reverse(
+            "admin-userapplication-list",
+            kwargs={"admission_slug": self.admission.slug},
+        )
+
+        for admin in (self.leader_admin, co_leader_admin):
+            with self.subTest(role=admin.username):
+                self.client.force_authenticate(user=admin)
+                response = self.client.get(url)
+                self.assertEqual(
+                    response.data[0]["priority_text"], "private central comment"
+                )
+
+        self.client.force_authenticate(user=self.recruiting_admin)
+        response = self.client.get(url)
+        self.assertEqual(response.data[0]["application_view_mode"], "admin_full")
+        self.assertNotIn("priority_text", response.data[0])
 
     def test_ordinary_admin_group_member_cannot_retrieve_admin_admission(self):
         self.client.force_authenticate(user=self.admin)
@@ -1327,19 +1363,21 @@ class TerminateCommitteeApplicationsTestCase(APITestCase):
         self.client.force_authenticate(user=self.admin)
         saved_schedule = SavedSchedule.objects.create(
             admission=self.admission,
+            group=self.committee,
             schedule=[{"candidate_id": str(self.only_committee_application.pk)}],
             start_date=date.today(),
             is_distributed=True,
             name_visibility=SavedSchedule.NAME_VISIBILITY_COMMITTEE,
         )
-        saved_schedule.revealed_groups.add(self.committee, self.other_committee)
         availability = InterviewAvailability.objects.create(
             admission=self.admission,
+            group=self.committee,
             user=self.admin,
             conflicts=[str(self.only_committee_application.pk)],
         )
         SolveJob.objects.create(
             admission=self.admission,
+            group=self.committee,
             requested_by=self.admin,
             request_data={},
         )
@@ -1386,6 +1424,5 @@ class TerminateCommitteeApplicationsTestCase(APITestCase):
         self.assertEqual(
             saved_schedule.name_visibility, SavedSchedule.NAME_VISIBILITY_HIDDEN
         )
-        self.assertEqual(saved_schedule.revealed_groups.count(), 0)
         self.assertEqual(availability.conflicts, [])
         self.assertFalse(SolveJob.objects.filter(admission=self.admission).exists())

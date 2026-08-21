@@ -2,7 +2,6 @@ from django.db import transaction
 from django.db.models.signals import post_delete, pre_delete
 from django.dispatch import receiver
 
-from admissions.admissions.admission_access import get_name_revealed_groups
 from admissions.admissions.models import (
     Admission,
     GroupApplication,
@@ -21,18 +20,25 @@ def purge_withdrawn_candidate(sender, instance, **kwargs):
     with transaction.atomic():
         admission = Admission.objects.select_for_update().get(pk=instance.admission_id)
         candidate_id = str(instance.pk)
-        try:
-            saved = SavedSchedule.objects.get(admission_id=instance.admission_id)
-        except SavedSchedule.DoesNotExist:
-            saved = None
 
-        if saved is not None:
-            revealed_groups = list(get_name_revealed_groups(admission, saved))
+        # Withdrawing the whole application can affect several committees'
+        # schedules at once now that each committee's schedule is
+        # independent - one row per (admission, group), not one per
+        # admission - so every one of the admission's schedules needs its
+        # own purge pass, not just the first one found.
+        for saved in SavedSchedule.objects.select_for_update().filter(
+            admission_id=instance.admission_id
+        ):
+            was_visible = (
+                saved.is_distributed
+                and saved.name_visibility == SavedSchedule.NAME_VISIBILITY_COMMITTEE
+            )
             current_schedule = saved.schedule or []
             current_candidate_ids = {
                 str(value)
                 for value in UserApplication.objects.filter(
-                    admission_id=instance.admission_id
+                    admission_id=instance.admission_id,
+                    group_applications__group_id=saved.group_id,
                 ).values_list("pk", flat=True)
             }
             has_legacy_rows = any(
@@ -51,31 +57,26 @@ def purge_withdrawn_candidate(sender, instance, **kwargs):
             )
             if schedule != current_schedule:
                 saved.schedule = schedule
-                saved.is_distributed = False
+                saved.distributed_through = None
                 saved.name_visibility = SavedSchedule.NAME_VISIBILITY_HIDDEN
                 saved.save(
                     update_fields=[
                         "schedule",
-                        "is_distributed",
+                        "distributed_through",
                         "name_visibility",
                         "updated_at",
                     ]
                 )
-                NameVisibilityAuditEvent.objects.bulk_create(
-                    [
-                        NameVisibilityAuditEvent(
-                            admission=admission,
-                            saved_schedule=saved,
-                            group=group,
-                            group_name=group.name,
-                            actor=None,
-                            actor_username=SYSTEM_ACTOR_USERNAME,
-                            action=NameVisibilityAuditEvent.ACTION_HIDDEN,
-                        )
-                        for group in revealed_groups
-                    ]
-                )
-                saved.revealed_groups.clear()
+                if was_visible:
+                    NameVisibilityAuditEvent.objects.create(
+                        admission=admission,
+                        saved_schedule=saved,
+                        group=saved.group,
+                        group_name=saved.group.name,
+                        actor=None,
+                        actor_username=SYSTEM_ACTOR_USERNAME,
+                        action=NameVisibilityAuditEvent.ACTION_HIDDEN,
+                    )
 
         changed_availability = []
         for availability in InterviewAvailability.objects.filter(
@@ -118,31 +119,33 @@ def flag_schedule_after_partial_withdrawal(sender, instance, **kwargs):
             return
 
         application = UserApplication.objects.get(pk=instance.application_id)
+        # Scoped to the committee actually dropped: each committee's schedule
+        # is independent now, so dropping Bedkom must never touch Webkom's.
         saved = (
             SavedSchedule.objects.select_for_update()
-            .filter(admission_id=application.admission_id)
+            .filter(
+                admission_id=application.admission_id,
+                group_id=instance.group_id,
+            )
             .first()
         )
         if saved is None or not saved.is_distributed:
             return
 
         admission = Admission.objects.get(pk=application.admission_id)
-        revealed_groups = list(get_name_revealed_groups(admission, saved))
-        saved.is_distributed = False
+        was_visible = saved.name_visibility == SavedSchedule.NAME_VISIBILITY_COMMITTEE
+        saved.distributed_through = None
         saved.name_visibility = SavedSchedule.NAME_VISIBILITY_HIDDEN
-        saved.save(update_fields=["is_distributed", "name_visibility", "updated_at"])
-        NameVisibilityAuditEvent.objects.bulk_create(
-            [
-                NameVisibilityAuditEvent(
-                    admission=admission,
-                    saved_schedule=saved,
-                    group=group,
-                    group_name=group.name,
-                    actor=None,
-                    actor_username=SYSTEM_ACTOR_USERNAME,
-                    action=NameVisibilityAuditEvent.ACTION_HIDDEN,
-                )
-                for group in revealed_groups
-            ]
+        saved.save(
+            update_fields=["distributed_through", "name_visibility", "updated_at"]
         )
-        saved.revealed_groups.clear()
+        if was_visible:
+            NameVisibilityAuditEvent.objects.create(
+                admission=admission,
+                saved_schedule=saved,
+                group=saved.group,
+                group_name=saved.group.name,
+                actor=None,
+                actor_username=SYSTEM_ACTOR_USERNAME,
+                action=NameVisibilityAuditEvent.ACTION_HIDDEN,
+            )
