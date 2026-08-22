@@ -3,6 +3,7 @@ import { DateTime } from "luxon";
 import { LogIn } from "lucide-react";
 import { useLocation } from "react-router-dom";
 import config from "src/utils/config";
+import { apiClient } from "src/utils/callApi";
 import { isLoggedIn } from "src/utils/djangoData";
 import cn from "src/utils/cn";
 
@@ -25,9 +26,36 @@ const SessionExpiryWarning: React.FC = () => {
   // safe is worse than saying nothing.
   const draftsAreKeptHere = !/\/(admin|schedule)(\/|$)/.test(pathname);
 
+  // Seeded from the render-time value, then kept current from the server.
+  // Without the refresh below this was fixed for the life of the page, so
+  // after "Forleng innlogging" (which opens login in a second tab) this tab
+  // went on counting down to the old expiry and stayed stuck on "utløpt".
+  const [liveExpiresAt, setLiveExpiresAt] = React.useState(expiresAt);
+
   React.useEffect(() => {
-    if (!expiresAt || !isLoggedIn()) return;
-    const expiry = DateTime.fromISO(expiresAt);
+    if (!isLoggedIn()) return;
+    let cancelled = false;
+    const refresh = async () => {
+      try {
+        const { data } = await apiClient.get<{ expires_at: string | null }>(
+          "/session/",
+        );
+        if (!cancelled && data.expires_at) setLiveExpiresAt(data.expires_at);
+      } catch {
+        // Offline or logged out - leave the last known value in place rather
+        // than blanking a warning that may still be true.
+      }
+    };
+    window.addEventListener("focus", refresh);
+    return () => {
+      cancelled = true;
+      window.removeEventListener("focus", refresh);
+    };
+  }, []);
+
+  React.useEffect(() => {
+    if (!liveExpiresAt || !isLoggedIn()) return;
+    const expiry = DateTime.fromISO(liveExpiresAt);
     if (!expiry.isValid) return;
 
     const tick = () => {
@@ -37,7 +65,7 @@ const SessionExpiryWarning: React.FC = () => {
     tick();
     const timer = window.setInterval(tick, 30000);
     return () => window.clearInterval(timer);
-  }, [expiresAt]);
+  }, [liveExpiresAt]);
 
   if (minutesLeft === null || minutesLeft > WARN_BEFORE_MINUTES) return null;
 

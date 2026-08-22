@@ -28,7 +28,11 @@ apiClient.interceptors.response.use(
   (response: AxiosResponse) => response,
   (error: AxiosError) => {
     const status = error.response?.status;
-    if (status === undefined || status >= 500) {
+    // 4xx is reported too, not just 5xx and network failures. It is still a
+    // scrubbed event - a synthetic Error carrying the status, never the
+    // response body - but dropping this whole class meant a production
+    // incident showing up as client-side 400s or 409s was invisible here.
+    if (status === undefined || status >= 400) {
       Sentry.withScope((scope) => {
         scope.setTag("api.status", status ?? "network_error");
         scope.setTag(

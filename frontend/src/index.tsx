@@ -53,8 +53,35 @@ Sentry.init({
   environment: config.ENVIRONMENT,
   sendDefaultPii: false,
   beforeBreadcrumb(breadcrumb) {
-    if (["console", "fetch", "xhr"].includes(breadcrumb.category ?? "")) {
+    const category = breadcrumb.category ?? "";
+    // Request and console breadcrumbs carry URLs and logged payloads, both of
+    // which can hold applicant/candidate data. Dropped outright.
+    if (["console", "fetch", "xhr"].includes(category)) {
       return null;
+    }
+    // UI breadcrumbs are kept for the interaction trail but stripped of their
+    // message: it is built from the clicked element's text, which on these
+    // pages is very often a candidate's name.
+    if (category.startsWith("ui.")) {
+      return {
+        category,
+        type: breadcrumb.type,
+        timestamp: breadcrumb.timestamp,
+      };
+    }
+    // Navigation keeps the path but never the query string, same rule as the
+    // api.route tag below.
+    if (category === "navigation") {
+      const data = breadcrumb.data ?? {};
+      return {
+        category,
+        type: breadcrumb.type,
+        timestamp: breadcrumb.timestamp,
+        data: {
+          from: String(data.from ?? "").split("?")[0],
+          to: String(data.to ?? "").split("?")[0],
+        },
+      };
     }
     return breadcrumb;
   },
@@ -97,6 +124,11 @@ Sentry.init({
       transaction: event.transaction,
       tags: tags && Object.keys(tags).length > 0 ? tags : undefined,
       exception: exceptionValues ? { values: exceptionValues } : undefined,
+      // Retained so an incident has a trail to read. Safe to pass through
+      // because beforeBreadcrumb above has already dropped the request and
+      // console categories outright and stripped the rest down to
+      // category/type/timestamp (plus a query-less path for navigation).
+      breadcrumbs: event.breadcrumbs,
     };
   },
 });

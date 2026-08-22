@@ -25,6 +25,7 @@ from admissions.admissions.candidate_views import (
 )
 from admissions.admissions.directory_views import MemberSearchView
 from admissions.admissions.schedule_views import SavedScheduleView
+from admissions.admissions.session_views import SessionStatusView
 from admissions.admissions.solve_views import (
     LatestSolveJobView,
     SolveJobApplyView,
@@ -70,6 +71,7 @@ urlpatterns = [
     path("api/manage/", include(manageRouter.urls)),
     path("api-auth/", include("rest_framework.urls", namespace="rest_framework")),
     path("api/", include(publicRouter.urls)),
+    path("api/session/", SessionStatusView.as_view(), name="session-status"),
     path("api/solve/", SolveScheduleView.as_view(), name="solve-schedule"),
     path(
         "api/solve/latest/",
