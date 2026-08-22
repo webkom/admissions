@@ -113,7 +113,17 @@ const InterviewPeriodPicker: React.FC<InterviewPeriodPickerProps> = ({
 
   const closeAndRestoreFocus = React.useCallback(() => {
     setIsOpen(false);
-    requestAnimationFrame(() => triggerRef.current?.focus());
+    // Focused synchronously rather than a frame later. The trigger is always
+    // mounted - only the dialog goes away - so there is nothing to wait for,
+    // and setIsOpen is batched, so this still runs before the dialog is
+    // unmounted from under the focused element. Deferring it meant that on a
+    // loaded machine the focus() could land long after the dialog closed, by
+    // which point the user may have moved on to another field: it would then
+    // yank focus out of whatever they were editing. That is how it broke the
+    // daily-time inputs - focus jumped back to this trigger mid-edit, the
+    // emptied hour field took a blur, and TimeSegmentField's blur handler
+    // restored the previous value over the top of what was being typed.
+    triggerRef.current?.focus();
   }, []);
 
   const updateDialogLayout = React.useCallback(() => {
