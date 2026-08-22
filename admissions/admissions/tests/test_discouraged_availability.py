@@ -172,6 +172,40 @@ class DiscouragedAvailabilityApiTestCase(APITestCase):
         self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertIn("discouraged_slots", res.data)
 
+    def test_discouraged_slots_without_slots_is_rejected(self):
+        """A discouraged-only POST must not slip past the slot validation.
+
+        Canonicalisation, the disjointness filter and the grid-membership
+        check all hang off the submitted slots, while the persistence
+        defaults pick discouraged_slots up unconditionally - so before this
+        was rejected, a payload like this one stored raw unvalidated keys,
+        broke the disjointness invariant against the slots already on the
+        row, and echoed the junk back to every client on the next GET.
+        """
+        self.client.post(
+            self.url,
+            {"slots": ["2026-04-21|540"], "discouraged_slots": ["2026-04-21|600"]},
+            format="json",
+        )
+
+        res = self.client.post(
+            self.url,
+            {
+                "discouraged_slots": [
+                    "total-garbage",
+                    "2026-12-24|540",
+                    "2026-04-21|540",
+                ]
+            },
+            format="json",
+        )
+
+        self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("discouraged_slots", res.data)
+        # The earlier, validated answer is left exactly as it was.
+        self.assertEqual(self._saved().slots, ["2026-04-21|540"])
+        self.assertEqual(self._saved().discouraged_slots, ["2026-04-21|600"])
+
     def test_omitting_the_field_leaves_an_earlier_answer_untouched(self):
         self.client.post(
             self.url,

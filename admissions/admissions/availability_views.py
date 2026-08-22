@@ -465,6 +465,24 @@ class InterviewAvailabilityView(SchedulerFeatureGateMixin, APIView):
             admission=admission, group=group
         ).first()
 
+        # discouraged_slots is only meaningful alongside the grid it belongs
+        # to: everything that validates it - canonicalisation, disjointness
+        # from slots, and membership of the opened grid - is derived from the
+        # slots submitted with it, so all of it lives in the branch below.
+        # The persistence defaults further down pick the field up
+        # unconditionally, so accepting it on its own would let raw,
+        # uncanonicalised keys through unvalidated and break the disjointness
+        # invariant on the stored row. Reject that shape instead; the UI
+        # always submits the two together (see useAvailabilityEditor).
+        if (
+            "discouraged_slots" in serializer.validated_data
+            and "slots" not in serializer.validated_data
+        ):
+            return Response(
+                {"discouraged_slots": ["Kan ikke lagres uten tilgjengelighet."]},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
         if "slots" in serializer.validated_data:
             canonical_slots, invalid_key = canonicalize_slot_keys(
                 serializer.validated_data["slots"]
