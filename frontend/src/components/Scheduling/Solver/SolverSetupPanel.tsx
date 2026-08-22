@@ -518,31 +518,34 @@ const SolverSetupPanel = ({
     (interviewer) => interviewer.participation !== "not_participating",
   );
 
+  // These three effects used to defer their focus() call by one
+  // requestAnimationFrame. That's unnecessary - a useEffect body already
+  // runs after React has committed and painted, so the target ref is
+  // already attached by the time any of these run - and it's actively
+  // harmful under a starved rAF: a test (or a real user on a loaded
+  // machine) that acts before that deferred frame finally fires lands on
+  // whatever had focus before, not the panel that just opened, most
+  // visibly when the panel's own Escape handler never sees the keydown
+  // because focus never made it inside the panel to receive it.
   useEffect(() => {
     if (!regenerationOpen) return;
-    window.requestAnimationFrame(() => {
-      configurationRef.current?.scrollIntoView({
-        behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches
-          ? "auto"
-          : "smooth",
-        block: "start",
-      });
-      headingRef.current?.focus({ preventScroll: true });
+    configurationRef.current?.scrollIntoView({
+      behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches
+        ? "auto"
+        : "smooth",
+      block: "start",
     });
+    headingRef.current?.focus({ preventScroll: true });
   }, [regenerationOpen]);
 
   useEffect(() => {
     if (!experienceEditorOpen) return;
-    window.requestAnimationFrame(() =>
-      experienceEditorHeadingRef.current?.focus({ preventScroll: true }),
-    );
+    experienceEditorHeadingRef.current?.focus({ preventScroll: true });
   }, [experienceEditorOpen]);
 
   useEffect(() => {
     if (!advancedSettingsOpen) return;
-    window.requestAnimationFrame(() =>
-      advancedSettingsHeadingRef.current?.focus({ preventScroll: true }),
-    );
+    advancedSettingsHeadingRef.current?.focus({ preventScroll: true });
   }, [advancedSettingsOpen]);
 
   const panelFormationImpossible = interviewerCount < panelSize;
@@ -605,9 +608,14 @@ const SolverSetupPanel = ({
   };
   const closeAdvancedSettings = () => {
     setAdvancedSettingsOpen(false);
-    window.requestAnimationFrame(() =>
-      advancedSettingsButtonRef.current?.focus({ preventScroll: true }),
-    );
+    // The toggle button is always mounted (unlike the panel it opens), so
+    // there's nothing to wait a frame for: focusing it now, before React
+    // unmounts the panel underneath the currently-focused element, moves
+    // focus away first - the browser only auto-blurs to body when the
+    // element that still HAS focus gets removed, and by commit time that's
+    // no longer this button. A requestAnimationFrame defer here bought
+    // nothing but an unbounded wait under a starved rAF.
+    advancedSettingsButtonRef.current?.focus({ preventScroll: true });
   };
   const updateExperienceLevel = (
     userId: string,
