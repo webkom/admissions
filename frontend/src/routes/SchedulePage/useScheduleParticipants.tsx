@@ -176,8 +176,18 @@ export const useScheduleParticipants = ({
         name: participant.full_name,
         gender: participant.gender,
         experience_level: participant.experience_level,
+        // The solver's schedulable set is both lists together; `discouraged`
+        // then marks which half of it costs extra to use.
         availability: slotsToSolverAvailability(
-          new Set(participant.slots),
+          new Set([
+            ...participant.slots,
+            ...(participant.discouraged_slots ?? []),
+          ]),
+          dates,
+          sessionDuration,
+        ),
+        discouraged: slotsToSolverAvailability(
+          new Set(participant.discouraged_slots ?? []),
           dates,
           sessionDuration,
         ),

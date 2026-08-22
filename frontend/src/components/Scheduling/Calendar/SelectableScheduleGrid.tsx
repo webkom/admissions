@@ -24,6 +24,15 @@ interface SelectableScheduleGridProps {
   sessionDuration: number;
   selectableSlots?: ReadonlySet<string>;
   activeSlots: ReadonlySet<string>;
+  /**
+   * Subset of activeSlots to mark as "chosen, but reluctantly". The grid
+   * still counts these as selected - it only renders and announces them
+   * differently - so selection behaviour is unchanged for callers that
+   * never pass it.
+   */
+  secondarySlots?: ReadonlySet<string>;
+  /** Announced after the count on any cell holding a secondary slot. */
+  secondaryLabel?: string;
   onChangeActiveSlots: (slots: Set<string>) => void;
   labels: SelectableScheduleGridLabels;
   renderDayHeader?: (date: string) => React.ReactNode;
@@ -41,6 +50,8 @@ const SelectableScheduleGrid: React.FC<SelectableScheduleGridProps> = ({
   sessionDuration,
   selectableSlots,
   activeSlots,
+  secondarySlots,
+  secondaryLabel,
   onChangeActiveSlots,
   labels,
   renderDayHeader,
@@ -214,6 +225,11 @@ const SelectableScheduleGrid: React.FC<SelectableScheduleGridProps> = ({
         const isActive =
           isSelectable && activeCount === availableMinutes.length;
         const isPartial = activeCount > 0 && !isActive;
+        const secondaryCount = secondarySlots
+          ? availableMinutes.filter((minute) =>
+              secondarySlots.has(makeSlotKey(date, minute)),
+            ).length
+          : 0;
         const cellKey = `${date}::${chunkIndex}`;
         const cellLabel = labels.cell({
           date,
@@ -240,12 +256,17 @@ const SelectableScheduleGrid: React.FC<SelectableScheduleGridProps> = ({
                 : 0,
             )}
             role="button"
+            data-secondary-count={secondaryCount || undefined}
             tabIndex={isSelectable && cellKey === rovingCellKey ? 0 : -1}
             aria-pressed={isPartial ? "mixed" : isActive}
             aria-disabled={!isSelectable}
             aria-label={
               isSelectable
-                ? `${cellLabel}, ${activeCount} av ${availableMinutes.length}`
+                ? `${cellLabel}, ${activeCount} av ${availableMinutes.length}${
+                    secondaryCount && secondaryLabel
+                      ? `, ${secondaryLabel}`
+                      : ""
+                  }`
                 : labels.unavailableCell
             }
             onPointerDown={(event) => {
@@ -264,6 +285,11 @@ const SelectableScheduleGrid: React.FC<SelectableScheduleGridProps> = ({
             }}
             onKeyDown={(event) =>
               handleCellKeyDown(event, date, chunk, chunkIndex)
+            }
+            className={
+              secondaryCount
+                ? "border-dashed border-warning-border bg-warning-bg"
+                : undefined
             }
           />
         );

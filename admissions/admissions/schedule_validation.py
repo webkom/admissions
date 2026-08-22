@@ -285,16 +285,28 @@ def canonicalize_solver_payload(admission, saved, data, request_user):
                 "interviewers", "Intervjuerlisten inneholder en ukjent bruker."
             )
         availability = availability_map.get(interviewer_id)
+        # Both lists together are what the interviewer can actually do; the
+        # "helst ikke" half is handed to the solver separately below so it
+        # can prefer against it rather than be barred from it.
         submitted_slots = availability.slots if availability is not None else []
+        submitted_discouraged = (
+            availability.discouraged_slots if availability is not None else []
+        )
+        schedulable_slots = list(submitted_slots) + list(submitted_discouraged or [])
         interviewers.append(
             {
                 "id": interviewer_id,
                 "name": user.get_full_name() or user.username,
                 "gender": {"male": "M", "female": "F"}.get(user.gender, ""),
                 "availability": sorted(
-                    encode_slot_keys(submitted_slots, saved.start_date).intersection(
+                    encode_slot_keys(schedulable_slots, saved.start_date).intersection(
                         all_slots
                     )
+                ),
+                "discouraged": sorted(
+                    encode_slot_keys(
+                        submitted_discouraged or [], saved.start_date
+                    ).intersection(all_slots)
                 ),
                 # Declared conflicts, plus the ones derived from fadderbarn
                 # declarations. Derived ones are unioned here rather than stored
@@ -507,7 +519,14 @@ def canonicalize_schedule(
                     "schedule", "Planen bryter en registrert inhabilitet."
                 )
             available_times = (
-                encode_slot_keys(saved_availability.slots, start_date)
+                # "Helst ikke" counts as available here: the interviewer said
+                # they can make it, so the solver pays a preference cost for
+                # using one - it is never a deviation needing admin approval.
+                encode_slot_keys(
+                    list(saved_availability.slots or [])
+                    + list(saved_availability.discouraged_slots or []),
+                    start_date,
+                )
                 if saved_availability
                 and (
                     saved_availability.submitted_grid_generation

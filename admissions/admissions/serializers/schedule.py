@@ -183,6 +183,11 @@ class InterviewerSerializer(CandidateSerializer):
     availability = serializers.ListField(
         child=serializers.IntegerField(), default=list, max_length=5000
     )
+    # Defaults to empty so a client that never sends it keeps the previous
+    # behaviour exactly: every available time equally preferred.
+    discouraged = serializers.ListField(
+        child=serializers.IntegerField(), default=list, max_length=5000
+    )
     biased = serializers.ListField(
         child=serializers.CharField(), default=list, max_length=500
     )

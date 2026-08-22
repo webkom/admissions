@@ -354,6 +354,11 @@ class InterviewAvailabilityView(SchedulerFeatureGateMixin, APIView):
                     if person.id in availability_map
                     else []
                 ),
+                "discouraged_slots": (
+                    availability_map[person.id].discouraged_slots
+                    if person.id in availability_map
+                    else []
+                ),
                 "conflicts": conflicts_map.get(person.id, []),
                 "derived_conflicts": (
                     self._visible_conflicts(
@@ -471,6 +476,23 @@ class InterviewAvailabilityView(SchedulerFeatureGateMixin, APIView):
                 )
             serializer.validated_data["slots"] = canonical_slots
 
+            if "discouraged_slots" in serializer.validated_data:
+                canonical_discouraged, invalid_key = canonicalize_slot_keys(
+                    serializer.validated_data["discouraged_slots"]
+                )
+                if canonical_discouraged is None:
+                    return Response(
+                        {"discouraged_slots": [f"Invalid slot key: {invalid_key}"]},
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
+                # Held disjoint from slots, and never wider than them: a slot
+                # is exactly one of freely available, "helst ikke", or not
+                # offered, so the two lists can never disagree about one slot.
+                available = set(canonical_slots)
+                serializer.validated_data["discouraged_slots"] = [
+                    slot for slot in canonical_discouraged if slot not in available
+                ]
+
             expected_generation = serializer.validated_data.get(
                 "expected_availability_generation"
             )
@@ -525,6 +547,21 @@ class InterviewAvailabilityView(SchedulerFeatureGateMixin, APIView):
                         "slots": [
                             f"Tidspunktet {outside[0]} er ikke en del av "
                             "intervjuplanens tidsoppsett."
+                        ]
+                    },
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            outside_discouraged = [
+                key
+                for key in serializer.validated_data.get("discouraged_slots", [])
+                if key not in enabled_set
+            ]
+            if outside_discouraged:
+                return Response(
+                    {
+                        "discouraged_slots": [
+                            f"Tidspunktet {outside_discouraged[0]} er ikke en del "
+                            "av intervjuplanens tidsoppsett."
                         ]
                     },
                     status=status.HTTP_400_BAD_REQUEST,
@@ -644,6 +681,7 @@ class InterviewAvailabilityView(SchedulerFeatureGateMixin, APIView):
             key: serializer.validated_data[key]
             for key in (
                 "slots",
+                "discouraged_slots",
                 "conflicts",
                 "reviewed_candidate_ids",
                 "experience_level",
@@ -685,6 +723,7 @@ class InterviewAvailabilityView(SchedulerFeatureGateMixin, APIView):
         elif requested_participation is not None:
             defaults["participation"] = requested_participation
             defaults["slots"] = []
+            defaults["discouraged_slots"] = []
             defaults["submitted_grid_generation"] = None
         if review_fields_present:
             existing_conflicts = set(
@@ -829,6 +868,7 @@ class InterviewAvailabilityView(SchedulerFeatureGateMixin, APIView):
                     else InterviewAvailability.EXPERIENCE_UNKNOWN
                 ),
                 "slots": saved.slots,
+                "discouraged_slots": saved.discouraged_slots,
                 "conflicts": self._visible_conflicts(
                     saved.conflicts,
                     visible_candidate_ids,

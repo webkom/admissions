@@ -307,6 +307,7 @@ export const useSaveInterviewAvailability = (slug: string, groupId: string) => {
       user_id?: string;
       participation?: "awaiting_response" | "not_participating";
       slots?: string[];
+      discouraged_slots?: string[];
       conflicts?: string[];
       reviewed_candidate_ids?: string[];
       experience_level?: ExperienceLevel;

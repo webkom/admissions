@@ -131,6 +131,8 @@ export interface Interviewer {
   gender?: string;
   experience_level?: ExperienceLevel;
   availability: number[];
+  /** Subset of `availability` the interviewer would rather not be used. */
+  discouraged?: number[];
   biased: string[];
   has_submitted: boolean;
   participation?: InterviewerParticipation;
@@ -294,6 +296,8 @@ export interface InterviewAvailabilityParticipant {
   availability_updated_at?: string | null;
   experience_level: ExperienceLevel;
   slots: string[];
+  /** "Helst ikke" - schedulable, but only at a cost. Disjoint from `slots`. */
+  discouraged_slots: string[];
   conflicts: string[];
   /** Admin-only; empty for everyone else, including the declaring interviewer. */
   derived_conflicts: string[];
