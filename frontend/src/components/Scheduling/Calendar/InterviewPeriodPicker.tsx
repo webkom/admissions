@@ -65,6 +65,7 @@ const InterviewPeriodPicker: React.FC<InterviewPeriodPickerProps> = ({
 }) => {
   const triggerRef = React.useRef<HTMLButtonElement>(null);
   const dialogRef = React.useRef<HTMLDivElement>(null);
+  const pendingFocusFrameRef = React.useRef<number | null>(null);
   const titleId = React.useId();
   const hintId = React.useId();
   const [isOpen, setIsOpen] = React.useState(false);
@@ -195,6 +196,15 @@ const InterviewPeriodPicker: React.FC<InterviewPeriodPickerProps> = ({
     };
   }, [isCompact, isOpen]);
 
+  React.useEffect(
+    () => () => {
+      if (pendingFocusFrameRef.current !== null) {
+        cancelAnimationFrame(pendingFocusFrameRef.current);
+      }
+    },
+    [],
+  );
+
   const selectDate = (isoDate: string) => {
     if (selectionPhase !== "end" || !draftStartDate) {
       setDraftStartDate(isoDate);
@@ -239,7 +249,28 @@ const InterviewPeriodPicker: React.FC<InterviewPeriodPickerProps> = ({
       const nextDate = parseIsoDate(isoDate) ?? date;
       setDisplayedMonth(startOfMonth(nextDate));
       setFocusedDate(isoDate);
-      requestAnimationFrame(() => {
+      if (pendingFocusFrameRef.current !== null) {
+        cancelAnimationFrame(pendingFocusFrameRef.current);
+        pendingFocusFrameRef.current = null;
+      }
+      // Same-month navigation (the common case) targets a button that
+      // already exists, so focus it immediately - it doesn't need the
+      // grid to re-render first, and staying synchronous means rapid
+      // keypresses (arrow-key repeat, or a throttled rAF under load)
+      // can't land on a stale element because a still-pending focus
+      // move hasn't happened yet. Only crossing a month boundary needs
+      // the deferred rAF, since that button doesn't exist until the new
+      // month's grid commits.
+      const existingTarget =
+        dialogRef.current?.querySelector<HTMLButtonElement>(
+          `[data-calendar-date="${isoDate}"]`,
+        );
+      if (existingTarget) {
+        existingTarget.focus();
+        return;
+      }
+      pendingFocusFrameRef.current = requestAnimationFrame(() => {
+        pendingFocusFrameRef.current = null;
         dialogRef.current
           ?.querySelector<HTMLButtonElement>(
             `[data-calendar-date="${isoDate}"]`,
