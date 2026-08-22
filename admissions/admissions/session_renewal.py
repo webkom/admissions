@@ -11,7 +11,10 @@ renew forever with nobody present. Instead the views that represent a real
 human action call `renew_session` explicitly, and renewal stops at a ceiling.
 """
 
+from datetime import datetime
+
 from django.conf import settings
+from django.contrib.sessions.models import Session
 from django.utils import timezone
 
 SESSION_STARTED_AT_KEY = "_session_started_at"
@@ -68,3 +71,41 @@ def renew_session(request):
 
     session.modified = True
     return True
+
+
+def session_expires_at(request):
+    """The session's real expiry, or None when there is nothing to report.
+
+    Not ``session.get_expiry_date()``. That returns ``_session_expiry`` when
+    set and otherwise falls back to ``now() + SESSION_COOKIE_AGE``, computed
+    at call time - and ``renew_session`` above deliberately never writes
+    ``_session_expiry``, precisely so the cookie stays a browser-session
+    cookie. The fallback was therefore always what the caller got, so every
+    page render reported a full untouched window no matter how old the
+    session actually was, and the client-side warning could never fire.
+
+    ``expire_date`` on the stored row is the value the server will actually
+    enforce, and ``SessionStore.save()`` recomputes it on each renewal, so it
+    also reflects renewals correctly.
+    """
+
+    session = getattr(request, "session", None)
+    session_key = getattr(session, "session_key", None)
+    if not session_key:
+        return None
+
+    explicit_expiry = session.get("_session_expiry")
+    if isinstance(explicit_expiry, datetime):
+        return explicit_expiry
+
+    try:
+        return (
+            Session.objects.filter(session_key=session_key)
+            .values_list("expire_date", flat=True)
+            .first()
+        )
+    except Exception:
+        # A non-database session backend has no such row. Reporting nothing
+        # degrades to "no warning", which is strictly better than reporting a
+        # window that is not the one being enforced.
+        return None

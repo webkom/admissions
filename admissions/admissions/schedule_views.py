@@ -28,6 +28,7 @@ from admissions.admissions.serializers import (
     SavedScheduleSerializer,
     SaveScheduleInputSerializer,
 )
+from admissions.admissions.session_renewal import renew_session
 
 
 class SavedScheduleView(SchedulerFeatureGateMixin, APIView):
@@ -142,6 +143,12 @@ class SavedScheduleView(SchedulerFeatureGateMixin, APIView):
             )
         except ScheduleInputError as exc:
             return Response(exc.errors, status=status.HTTP_400_BAD_REQUEST)
+
+        # A save is proof of a present human, same as an application submit.
+        # Without this the interviewer and admin write flows were the only
+        # real activity in the product that never slid the session window,
+        # so a long planning session expired mid-edit.
+        renew_session(request)
 
         return self._schedule_response(
             result.saved_schedule, result.admission, is_interview_admin

@@ -1,6 +1,7 @@
 import React from "react";
 import { DateTime } from "luxon";
 import { LogIn } from "lucide-react";
+import { useLocation } from "react-router-dom";
 import config from "src/utils/config";
 import { isLoggedIn } from "src/utils/djangoData";
 import cn from "src/utils/cn";
@@ -17,6 +18,12 @@ const WARN_BEFORE_MINUTES = 5;
 const SessionExpiryWarning: React.FC = () => {
   const expiresAt = config.SESSION_EXPIRES_AT;
   const [minutesLeft, setMinutesLeft] = React.useState<number | null>(null);
+  const { pathname } = useLocation();
+  // Only the applicant form autosaves. This banner renders portal-wide, so on
+  // /admin and /schedule the reassurance was simply untrue - those routes keep
+  // nothing in the browser, and telling a recruiter mid-edit that their work is
+  // safe is worse than saying nothing.
+  const draftsAreKeptHere = !/\/(admin|schedule)(\/|$)/.test(pathname);
 
   React.useEffect(() => {
     if (!expiresAt || !isLoggedIn()) return;
@@ -41,9 +48,11 @@ const SessionExpiryWarning: React.FC = () => {
       className="flex flex-wrap items-center justify-center gap-3 border-b border-amber-300 bg-amber-100 px-4 py-2"
     >
       <p className="m-0 text-detail font-semibold text-amber-900">
-        {minutesLeft > 0
-          ? `Innloggingen utløper om ${minutesLeft} min. Det du skriver er lagret i nettleseren.`
-          : "Innloggingen har utløpt. Det du skriver er lagret i nettleseren."}
+        {`${
+          minutesLeft > 0
+            ? `Innloggingen utløper om ${minutesLeft} min.`
+            : "Innloggingen har utløpt."
+        }${draftsAreKeptHere ? " Det du skriver er lagret i nettleseren." : ""}`}
       </p>
       <a
         href="/login/lego/"

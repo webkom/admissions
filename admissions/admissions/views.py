@@ -55,8 +55,16 @@ from admissions.admissions.serializers import (
     ManageAdmissionSerializer,
     UserApplicationSerializer,
 )
-from admissions.admissions.session_renewal import renew_session
+from admissions.admissions.session_renewal import renew_session, session_expires_at
 from admissions.utils.email import send_message
+
+
+def _isoformat_or_blank(value):
+    """Empty string, not None: the template context feeds a JSON blob the
+    client reads as a plain optional string."""
+
+    return value.isoformat() if value else ""
+
 
 from .authentication import SessionAuthentication
 from .permissions import (
@@ -108,12 +116,14 @@ class AppView(TemplateView):
             "API_URL": settings.API_URL,
             "CSRF_COOKIE_NAME": settings.CSRF_COOKIE_NAME,
             # Lets the client warn before the session expires instead of
-            # discovering it when a submit fails. Server-authoritative, so it
-            # accounts for a session that began before this page load.
-            "SESSION_EXPIRES_AT": (
-                self.request.session.get_expiry_date().isoformat()
+            # discovering it when a submit fails. Reads the enforced
+            # expire_date rather than session.get_expiry_date(), which without
+            # _session_expiry set just returns now() + SESSION_COOKIE_AGE and
+            # so reported a fresh full window on every single page load.
+            "SESSION_EXPIRES_AT": _isoformat_or_blank(
+                session_expires_at(self.request)
                 if self.request.user.is_authenticated
-                else ""
+                else None
             ),
             "SCHEDULER_ENABLED": getattr(
                 settings,

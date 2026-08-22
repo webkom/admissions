@@ -45,6 +45,7 @@ from admissions.admissions.serializers import (
     InterviewAvailabilityParticipantSerializer,
     SaveInterviewAvailabilitySerializer,
 )
+from admissions.admissions.session_renewal import renew_session
 
 
 class InterviewAvailabilityView(SchedulerFeatureGateMixin, APIView):
@@ -807,6 +808,12 @@ class InterviewAvailabilityView(SchedulerFeatureGateMixin, APIView):
         current_generation = (
             saved_schedule.availability_generation if saved_schedule is not None else 1
         )
+
+        # A save is proof of a present human, same as an application submit.
+        # Without this the interviewer and admin write flows were the only
+        # real activity in the product that never slid the session window,
+        # so a long planning session expired mid-edit.
+        renew_session(request)
 
         return Response(
             {
