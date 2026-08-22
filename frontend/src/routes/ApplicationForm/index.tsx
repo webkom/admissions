@@ -21,6 +21,7 @@ import {
 } from "src/utils/draftHelper";
 import ConfirmDialog from "src/components/Scheduling/ConfirmDialog";
 import UnsavedDraftBanner from "./UnsavedDraftBanner";
+import { DraftWriteGateProvider } from "src/utils/draftWriteGate";
 import DraftAnswersAutosave from "./DraftAnswersAutosave";
 import { Admission, Application, Group } from "src/types";
 import FormContainer from "./FormContainer";
@@ -427,36 +428,38 @@ const ApplicationForm: React.FC<ApplicationFormProps> = ({
           {submitError}
         </div>
       )}
-      <Formik<FormValues>
-        initialValues={initialValues}
-        validateOnChange={true}
-        validateOnMount={true}
-        enableReinitialize={true}
-        validationSchema={validationSchema(selectedGroups, admission)}
-        onSubmit={onSubmit}
-      >
-        {
-          (formikProps) => (
-            <>
-              <DraftAnswersAutosave />
-              <FormContainer
-                admission={admission}
-                groups={groups}
-                selectedGroups={selectedGroups}
-                toggleGroup={toggleGroup}
-                toggleIsEditing={toggleIsEditing}
-                myApplication={myApplication}
-                handleSubmit={formikProps.handleSubmit}
-                touched={formikProps.touched}
-                errors={formikProps.errors}
-                isSubmitting={formikProps.isSubmitting}
-                isValid={formikProps.isValid}
-              />
-            </>
-          )
-          // https://formik.org/docs/api/formik#props-1
-        }
-      </Formik>
+      <DraftWriteGateProvider value={!showDraftBanner}>
+        <Formik<FormValues>
+          initialValues={initialValues}
+          validateOnChange={true}
+          validateOnMount={true}
+          enableReinitialize={true}
+          validationSchema={validationSchema(selectedGroups, admission)}
+          onSubmit={onSubmit}
+        >
+          {
+            (formikProps) => (
+              <>
+                <DraftAnswersAutosave />
+                <FormContainer
+                  admission={admission}
+                  groups={groups}
+                  selectedGroups={selectedGroups}
+                  toggleGroup={toggleGroup}
+                  toggleIsEditing={toggleIsEditing}
+                  myApplication={myApplication}
+                  handleSubmit={formikProps.handleSubmit}
+                  touched={formikProps.touched}
+                  errors={formikProps.errors}
+                  isSubmitting={formikProps.isSubmitting}
+                  isValid={formikProps.isValid}
+                />
+              </>
+            )
+            // https://formik.org/docs/api/formik#props-1
+          }
+        </Formik>
+      </DraftWriteGateProvider>
     </>
   );
 };

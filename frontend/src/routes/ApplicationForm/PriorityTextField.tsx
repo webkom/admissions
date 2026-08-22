@@ -6,6 +6,7 @@ import styled from "styled-components";
 import { FieldLabel, StyledTextAreaField } from "src/components/styledFields";
 import { Group } from "src/types";
 import { savePriorityTextDraft } from "src/utils/draftHelper";
+import { useDraftWritesAllowed } from "src/utils/draftWriteGate";
 import useDebouncedState from "src/utils/useDebouncedState";
 import { FormValues, SelectedGroups } from ".";
 import { parsePriorityText, serializePriorityText } from "./priorityText";
@@ -47,9 +48,12 @@ const PriorityTextField: React.FC<PriorityTextFieldProps> = ({
   const [dropTargetIndex, setDropTargetIndex] = useState<number | null>(null);
   const debouncedValue = useDebouncedState(values.priorityText);
 
+  const draftWritesAllowed = useDraftWritesAllowed();
+
   useEffect(() => {
+    if (!draftWritesAllowed) return;
     savePriorityTextDraft(debouncedValue);
-  }, [debouncedValue]);
+  }, [draftWritesAllowed, debouncedValue]);
 
   useEffect(() => {
     setRankedGroups((current) =>

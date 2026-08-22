@@ -9,6 +9,7 @@ import {
 import readmeIfy from "src/components/ReadmeLogo";
 import useDebouncedState from "src/utils/useDebouncedState";
 import { saveApplicationTextDraft } from "src/utils/draftHelper";
+import { useDraftWritesAllowed } from "src/utils/draftWriteGate";
 import { Group } from "src/types";
 import { FieldInputProps, FormikProps } from "formik";
 import { FormValues } from "src/routes/ApplicationForm";
@@ -38,9 +39,12 @@ const Application: React.FC<ApplicationProps> = ({
 }) => {
   const debouncedValue = useDebouncedState(value);
 
+  const draftWritesAllowed = useDraftWritesAllowed();
+
   useEffect(() => {
+    if (!draftWritesAllowed) return;
     saveApplicationTextDraft([group.name, value]);
-  }, [debouncedValue]);
+  }, [draftWritesAllowed, debouncedValue]);
 
   const error =
     touched.groups && touched.groups[name]

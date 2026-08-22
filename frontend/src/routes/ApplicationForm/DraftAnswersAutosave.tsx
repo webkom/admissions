@@ -3,6 +3,7 @@ import { useFormikContext } from "formik";
 import type { FormValues } from ".";
 import { saveGroupAnswersDraft } from "src/utils/draftHelper";
 import useDebouncedState from "src/utils/useDebouncedState";
+import { useDraftWritesAllowed } from "src/utils/draftWriteGate";
 
 /**
  * Persists the per-committee answers to the local draft.
@@ -16,14 +17,16 @@ const DraftAnswersAutosave: React.FC = () => {
   const serialized = JSON.stringify(values.groupAnswers ?? {});
   const debounced = useDebouncedState(serialized);
 
+  const draftWritesAllowed = useDraftWritesAllowed();
+
   useEffect(() => {
-    if (!debounced) return;
+    if (!draftWritesAllowed || !debounced) return;
     try {
       saveGroupAnswersDraft(JSON.parse(debounced));
     } catch {
       // A malformed snapshot is not worth losing the rest of the draft over.
     }
-  }, [debounced]);
+  }, [draftWritesAllowed, debounced]);
 
   return null;
 };
