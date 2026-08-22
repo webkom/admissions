@@ -100,9 +100,13 @@ describe("interview plan workflow", () => {
       .scrollIntoView()
       .should("be.visible");
     cy.contains("button", "Administrer").should("be.visible").click();
+    // "Deltar", not "Mangler svar": the roster covers this committee's own
+    // interviewers, and the Webkom fixture's single member has submitted.
+    // It listed a missing response only while the roster pooled every
+    // committee in the admission together.
     cy.get('[aria-label="Deltakelse"]')
       .should("be.visible")
-      .and("contain", "Mangler svar");
+      .and("contain", "Deltar");
     cy.contains("button", "Skjul").click();
     cy.get("#gender-filter").should("not.exist");
     cy.get("#interviewer-highlight").should("not.exist");
@@ -136,10 +140,18 @@ describe("interview plan workflow", () => {
       .find('button[aria-label="Lukk detaljer"]')
       .click();
     cy.contains("Vis stengte tider").should("not.exist");
+    // Reaches the ready stage rather than "vent på de siste svarene" for the
+    // same reason as the roster above: every interviewer in this committee
+    // has answered, so the foundation is complete.
     cy.contains(
-      "Du kan kontrollere dekningen nå. Planutkastet blir tilgjengelig når alle deltakende intervjuere har svart.",
+      "Alle deltakende intervjuere har svart. Neste steg er å lage planutkastet.",
     ).should("be.visible");
-    cy.contains(/\d+ av \d+ har svart/).should("be.visible");
+    // The "N av M har svart" counter is what the roster shows while replies
+    // are still outstanding; once the committee is complete it gives way to
+    // this confirmation (and the "Lag planutkast" action).
+    cy.get("[data-cy=availability-roster-all-answered]")
+      .should("be.visible")
+      .and("contain.text", "Alle i komiteen har svart.");
   });
 
   it("keeps published-plan controls out of the proposal step", () => {

@@ -28,9 +28,13 @@ describe("admin schedule configuration toggles", () => {
     ["@schedule", "@candidates", "@availability"].forEach((requestAlias) => {
       cy.wait(requestAlias).its("response.statusCode").should("eq", 200);
     });
+    // 1 of 1: the interviewer pool is this committee's own members, and the
+    // Webkom fixture has exactly one. It read 1/2 while the pool was every
+    // committee in the admission pooled together - the bug committee-scoped
+    // scheduling exists to fix.
     cy.get("[data-cy=foundation-tab-coverage]", { timeout: 10000 }).should(
       "contain.text",
-      "1/2",
+      "1/1",
     );
     cy.get('nav[aria-label="Steg i intervjuplanleggingen"]').within(() => {
       cy.contains("button", "Grunnlag").click();

@@ -126,22 +126,18 @@ describe("shared selectable schedule grid", () => {
       '[data-cy=availability-overview] [data-cy="availability-overview-legend"]',
     ).should("not.exist");
 
+    // The overview shares the cell chrome (sizing, borders, fill states) but
+    // not the per-slot fill tracks: it renders one availability count per
+    // block through ScheduleBlockCell, where the selectable grid renders
+    // ScheduleSlotSegments through ScheduleSelectableBlockCell.
     overviewCell("2026-07-21", 0)
       .should("contain.text", "2/2")
       .and("have.class", "border-border")
-      .and("have.class", "bg-brand-soft")
-      .find("[data-schedule-slot-segment] > span")
-      .should("have.class", "motion-reduce:transition-none")
-      .and("have.attr", "style")
-      .and("include", "width: 100%");
+      .and("have.class", "bg-brand-soft");
 
     overviewCell("2026-07-21", 1)
       .should("contain.text", "1/2")
-      .and("have.class", "bg-surface-base")
-      .find("[data-schedule-slot-segment] > span")
-      .should("have.class", "motion-reduce:transition-none")
-      .and("have.attr", "style")
-      .and("include", "width: 50%");
+      .and("have.class", "bg-surface-base");
 
     overviewCell("2026-07-21", 2)
       .should("contain.text", "0/2")

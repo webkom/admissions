@@ -60,7 +60,12 @@ const solveJob = (
       : "2026-07-24T08:00:02Z",
   applied_at: null,
   discarded_at: status === "CANCELLED" ? "2026-07-24T08:00:03Z" : null,
-  proposal_expires_at: "2026-07-25T08:00:00Z",
+  // Relative to now, not a fixed date: SolverView compares this against
+  // Date.now() to decide whether a proposal can still be applied, so a
+  // hardcoded timestamp silently turns every proposal in this spec into an
+  // expired one once that date passes ("Forkast og lag nytt" replaces
+  // "Bruk forslaget"). No test here asserts the expired path.
+  proposal_expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
   baseline_updated_at: "revision-1",
   auto_apply_if_empty: false,
   preview_only: false,

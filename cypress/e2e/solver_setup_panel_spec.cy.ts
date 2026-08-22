@@ -252,14 +252,14 @@ describe("streamlined solver setup", () => {
       .should("have.text", "Intervjuer B, Intervjuer C");
 
     cy.contains('[role="switch"]', "Samme kjønn i panel").click();
+    // Both requirements render as their own chip rather than one
+    // comma-joined string. Asserted on the requirements element only: the
+    // surrounding sample preview also contains the panel column, whose
+    // members this same test expects to be comma-joined above.
     cy.get("[data-cy=generation-preview-requirements]")
       .should("contain.text", "Samme kjønn")
       .and("contain.text", "Erfaren intervjuer")
       .and("not.contain.text", ", ");
-    cy.get("[data-cy=generation-sample-preview]").should(
-      "not.contain.text",
-      ", ",
-    );
   });
 
   it("offers a direct way to select experienced interviewers", () => {

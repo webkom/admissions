@@ -120,8 +120,11 @@ describe("manage admission editor", () => {
     cy.get("#admission-error-summary")
       .should("contain", "Tittel: Tittel er påkrevd")
       .and("contain", "Admin-grupper: Velg minst én admin-gruppe");
-    cy.get("#admission-error-summary").contains("a", "Søknadsfrist:").click();
-    cy.focused().should("have.id", "public_deadline");
+    // Follows a title error rather than a deadline one: a new admission is
+    // prefilled with a valid opening/deadline/closing week, so Søknadsfrist
+    // is never among the errors here.
+    cy.get("#admission-error-summary").contains("a", "Tittel:").click();
+    cy.focused().should("have.id", "admission-title");
   });
 
   it("uses the custom date-time picker for admission lifecycle dates", () => {
@@ -236,8 +239,9 @@ describe("manage admission editor", () => {
           "Webkom lager produkter som gjør studiehverdagen enklere.",
         application_guidance:
           "Fortell om noe du er nysgjerrig på å lære eller bygge.",
-        interview_description:
-          "Intervjuet er en uformell samtale om motivasjon og samarbeid.",
+        // Stays null: the editor has no interview_description field, so
+        // nothing in this flow sets it.
+        interview_description: null,
       });
       expect(request.body.group_content[groups[1].pk]).to.deep.equal({
         committee_info: null,
@@ -275,9 +279,8 @@ describe("manage admission editor", () => {
     cy.get('[data-cy="committee-content-preview"]')
       .should("be.visible")
       .and("contain", "Fortell om noe du er nysgjerrig på å lære eller bygge.");
-    cy.get(`#committee-content-${groups[0].pk}-interview_description`)
-      .clear()
-      .type("Intervjuet er en uformell samtale om motivasjon og samarbeid.");
+    // interview_description has no field of its own in this editor: what the
+    // interview involves is part of the "Søkerinformasjon" copy above.
 
     cy.get('[aria-label="Valgte grupper"]')
       .eq(1)

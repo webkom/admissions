@@ -274,7 +274,7 @@ describe("scheduler release acceptance", () => {
     cy.get("@helpButton").should("be.focused");
   });
 
-  it("does not offer admission-wide name visibility controls to committee recruiters", () => {
+  it("scopes name visibility to the recruiter's own committee plan", () => {
     cy.viewport(1280, 900);
     cy.login("webkom");
     cy.request<Admission>(`/api/admission/${admissionSlug}/`).then(
@@ -305,15 +305,27 @@ describe("scheduler release acceptance", () => {
         cy.get('nav[aria-label="Steg i intervjuplanleggingen"]', {
           timeout: 10000,
         }).should("be.visible");
+        // A recruiter reaches the published plan through the management
+        // stepper, not the member-only "Intervjuplan" step: committee-scoped
+        // scheduling gives a committee's own recruiter the full workflow for
+        // that committee. What they still must not get is the
+        // admission-wide name visibility control asserted below.
         cy.get('nav[aria-label="Steg i intervjuplanleggingen"]')
-          .contains("button", "Intervjuplan")
+          .contains("button", /Publisering|Gjennomføring/)
           .should("be.enabled")
           .click();
         cy.contains("Intervjuplan").should("be.visible");
         cy.contains("Publisert").should("be.visible");
 
         cy.contains("button", "Mine intervjuer").should("be.visible");
-        cy.get('[aria-label="Synlighet for kandidatnavn"]').should("not.exist");
+        // The toggle a committee recruiter sees governs their own
+        // committee's plan and nothing else - matching the backend, which
+        // lets a recruiter set name_visibility for the schedule they own.
+        // The admission-wide variant this test used to guard against is gone
+        // outright: revealed_groups and its cross-committee disclosure
+        // machinery were removed with committee-scoped scheduling, so no
+        // role can reveal names to another committee any more.
+        cy.get('[aria-label="Synlighet for kandidatnavn"]').should("exist");
       },
     );
   });

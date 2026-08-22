@@ -63,12 +63,20 @@ const getApplicationAndInterviewValue = (
   group: Group,
   content: CommitteeContent,
 ) => {
-  const applicationGuidance = content.application_guidance ?? "";
-  const interviewDescription = content.interview_description ?? "";
-
-  if (!applicationGuidance && !interviewDescription) {
+  // null means "never set, inherit the committee's default text"; an empty
+  // string means the admin deliberately emptied the field. Treating both as
+  // "fall back to the default" made this field impossible to clear - it
+  // snapped straight back to the default text, and whatever was typed next
+  // landed after it. Mirrors getFieldValue's null check above.
+  if (
+    content.application_guidance === null &&
+    content.interview_description === null
+  ) {
     return group.response_label ?? "";
   }
+
+  const applicationGuidance = content.application_guidance ?? "";
+  const interviewDescription = content.interview_description ?? "";
 
   if (applicationGuidance === interviewDescription) {
     return applicationGuidance;
