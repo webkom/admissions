@@ -9,8 +9,13 @@ import { useDistributedPlanActions } from "../../frontend/src/routes/SchedulePag
 import type { NameVisibility, SavedSchedule } from "../../frontend/src/types";
 
 const admissionSlug = "publication-reconciliation";
-const scheduleUrl = `**/api/admin/admission/${admissionSlug}/schedule/`;
-const scheduleQueryKey = [`/admin/admission/${admissionSlug}/schedule/`];
+// Each committee owns an independent schedule, so every admin schedule
+// route is scoped to one group.
+const groupId = "11111111-1111-4111-8111-111111111111";
+const scheduleUrl = `**/api/admin/admission/${admissionSlug}/group/${groupId}/schedule/`;
+const scheduleQueryKey = [
+  `/admin/admission/${admissionSlug}/group/${groupId}/schedule/`,
+];
 
 const savedSchedule = (
   isDistributed: boolean,
@@ -73,6 +78,7 @@ const TransitionHarness = ({
   const [notice, setNotice] = React.useState("none");
   const actions = useDistributedPlanActions({
     admissionSlug,
+    groupId,
     savedSchedule: schedule,
     draftPersistenceReady,
     notify: (message, tone) => setNotice(`${tone ?? "success"}:${message}`),
@@ -147,6 +153,7 @@ const AutosaveThenPublishHarness = () => {
       hasLocalDraft && draftBaseRevision !== schedule.updated_at,
     config: {
       admissionSlug,
+      groupId,
       startDate: schedule.start_date,
       endDate: schedule.end_date,
       sessionDuration: schedule.session_duration,
@@ -184,6 +191,7 @@ const AutosaveThenPublishHarness = () => {
     !hasLocalDraft;
   const actions = useDistributedPlanActions({
     admissionSlug,
+    groupId,
     savedSchedule: schedule,
     draftPersistenceReady,
     notify: (message, tone) => setNotice(`${tone ?? "success"}:${message}`),

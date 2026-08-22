@@ -23,7 +23,12 @@ import {
 import type { Admission, SavedSchedule } from "../../frontend/src/types";
 
 const admissionSlug = "race-admission";
-const scheduleKey = [`/admin/admission/${admissionSlug}/schedule/`];
+// Each committee owns an independent schedule, so every admin schedule
+// route is scoped to one group.
+const groupId = "22222222-2222-4222-8222-222222222222";
+const scheduleKey = [
+  `/admin/admission/${admissionSlug}/group/${groupId}/schedule/`,
+];
 
 const solveResult = (candidate: string): SolveResponse => ({
   status: "SUCCESS",
@@ -102,7 +107,7 @@ const savedSchedule = (candidate: string): SavedSchedule => ({
 });
 
 const SolveHarness = () => {
-  const solve = useSolveJob(admissionSlug);
+  const solve = useSolveJob(admissionSlug, groupId);
   const run = (
     purpose: string,
     options: {
@@ -194,6 +199,7 @@ const UnmountDuringSolveHarness = () => {
 const WorkerAutoApplyHarness = () => {
   const session = useSolverSession({
     admissionSlug,
+    groupId,
     candidates: [{ id: "auto-applied", name: "Auto applied" }],
     interviewers: [
       {
@@ -241,7 +247,7 @@ const SaveScheduleEpochHarness = ({
 }: {
   queryClient: QueryClient;
 }) => {
-  const saveSchedule = useSaveSchedule(admissionSlug);
+  const saveSchedule = useSaveSchedule(admissionSlug, groupId);
   const [outcome, setOutcome] = React.useState("idle");
   const save = async (candidate: string) => {
     setOutcome("saving");
@@ -311,6 +317,7 @@ const DraftConflictHarness = () => {
     remoteRevisionChanged: false,
     config: {
       admissionSlug,
+      groupId,
       startDate: "2026-07-27",
       endDate: "2026-07-27",
       sessionDuration: 60,
@@ -367,6 +374,7 @@ const ProposalComparisonHarness = () => (
     sessionDuration={60}
     admissionTitle="Proposal race"
     admissionSlug={admissionSlug}
+    groupId={groupId}
     startDate="2026-07-27"
     endDate="2026-07-27"
     enabledWindows={[
@@ -395,9 +403,11 @@ const ProposalComparisonHarness = () => (
     missingReviewerNames={[]}
     publicationReady
     onDraftPersistenceChange={() => undefined}
+    onExperienceLevelChange={() => Promise.resolve()}
     onOpenAvailability={() => undefined}
     onOpenFramework={() => undefined}
     onOpenConflictReview={() => undefined}
+    conflictReviewReachable={false}
     onOpenPlan={() => undefined}
   />
 );
@@ -472,7 +482,7 @@ describe("solver asynchronous and revision races", () => {
 
     cy.intercept(
       "GET",
-      "**/api/admin/admission/race-admission/schedule/",
+      `**/api/admin/admission/${admissionSlug}/group/${groupId}/schedule/`,
       (request) => {
         scheduleReads += 1;
         request.reply({
@@ -700,10 +710,14 @@ describe("solver asynchronous and revision races", () => {
         },
       ],
     };
-    cy.intercept("GET", "**/api/admin/admission/race-admission/schedule/", {
-      statusCode: 200,
-      body: currentSchedule,
-    }).as("proposalSchedule");
+    cy.intercept(
+      "GET",
+      `**/api/admin/admission/${admissionSlug}/group/${groupId}/schedule/`,
+      {
+        statusCode: 200,
+        body: currentSchedule,
+      },
+    ).as("proposalSchedule");
     cy.intercept("GET", "**/api/solve/latest/**", {
       statusCode: 200,
       body: solveJob("comparison-job", "DONE", proposedResult),
@@ -790,7 +804,7 @@ describe("solver asynchronous and revision races", () => {
 
     cy.intercept(
       "GET",
-      "**/api/admin/admission/race-admission/schedule/",
+      `**/api/admin/admission/${admissionSlug}/group/${groupId}/schedule/`,
       (request) => {
         scheduleReads += 1;
         request.reply({ statusCode: 200, body: revisionOne });
@@ -891,10 +905,14 @@ describe("solver asynchronous and revision races", () => {
       ],
       updated_at: "revision-1",
     };
-    cy.intercept("GET", "**/api/admin/admission/race-admission/schedule/", {
-      statusCode: 200,
-      body: currentSchedule,
-    }).as("focusRestoreSchedule");
+    cy.intercept(
+      "GET",
+      `**/api/admin/admission/${admissionSlug}/group/${groupId}/schedule/`,
+      {
+        statusCode: 200,
+        body: currentSchedule,
+      },
+    ).as("focusRestoreSchedule");
 
     mountHarness(<ProposalComparisonHarness />, client);
     cy.wait("@focusRestoreSchedule");
@@ -946,7 +964,7 @@ describe("solver asynchronous and revision races", () => {
     let releaseOldSave: (() => void) | null = null;
     cy.intercept(
       "POST",
-      "**/api/admin/admission/race-admission/schedule/",
+      `**/api/admin/admission/${admissionSlug}/group/${groupId}/schedule/`,
       (request) => {
         const candidate = request.body.schedule?.[0]?.candidate as string;
         if (candidate === "Private old response") {
@@ -1029,14 +1047,18 @@ describe("solver asynchronous and revision races", () => {
 
   it("keeps a local edit unsaved and authoritative recovery explicit after 409", () => {
     cy.clock();
-    cy.intercept("POST", "**/api/admin/admission/race-admission/schedule/", {
-      statusCode: 409,
-      body: {
-        expected_updated_at: [
-          "Planen ble endret av noen andre. Last inn på nytt.",
-        ],
+    cy.intercept(
+      "POST",
+      `**/api/admin/admission/${admissionSlug}/group/${groupId}/schedule/`,
+      {
+        statusCode: 409,
+        body: {
+          expected_updated_at: [
+            "Planen ble endret av noen andre. Last inn på nytt.",
+          ],
+        },
       },
-    }).as("saveConflict");
+    ).as("saveConflict");
 
     mountHarness(<DraftConflictHarness />, queryClient(), false);
     cy.tick(401);

@@ -1,8 +1,22 @@
 import type { Admission, SavedSchedule } from "../../frontend/src/types";
 
 const admissionSlug = "webkom-open";
-const schedulePath = `/${admissionSlug}/schedule`;
 const wizardStorageKey = "admissions.wizard.admin.v1";
+
+// Scheduling is committee-scoped, so both the page route and every admin
+// schedule endpoint carry the group. Resolved from the fixture admin's own
+// committee rather than hardcoded, matching interview_plan_workflow_spec.
+const scheduleGroupId = (admission: Admission) =>
+  admission.userdata.committee_group_details[0].pk;
+
+const withScheduleGroup = (run: (groupId: string) => void) =>
+  cy.request<Admission>(`/api/admission/${admissionSlug}/`).then((response) => {
+    expect(response.status).to.eq(200);
+    run(scheduleGroupId(response.body));
+  });
+
+const schedulePathFor = (groupId: string) =>
+  `/${admissionSlug}/schedule/${groupId}`;
 
 const assertNoDocumentOverflow = () => {
   cy.document().then((document) => {
@@ -21,21 +35,25 @@ const assertNoDocumentOverflow = () => {
 
 const visitAuthenticatedScheduler = (width: number, height: number) => {
   cy.viewport(width, height);
-  cy.intercept("GET", `**/api/admin/admission/${admissionSlug}/schedule/`).as(
-    "releaseSchedule",
-  );
-  cy.intercept("GET", `**/api/admin/admission/${admissionSlug}/candidates/`).as(
-    "releaseCandidates",
-  );
   cy.intercept(
     "GET",
-    `**/api/admin/admission/${admissionSlug}/availability/`,
+    `**/api/admin/admission/${admissionSlug}/group/*/schedule/`,
+  ).as("releaseSchedule");
+  cy.intercept(
+    "GET",
+    `**/api/admin/admission/${admissionSlug}/group/*/candidates/`,
+  ).as("releaseCandidates");
+  cy.intercept(
+    "GET",
+    `**/api/admin/admission/${admissionSlug}/group/*/availability/`,
   ).as("releaseAvailability");
   cy.login("webkom");
-  cy.visit(schedulePath, {
-    onBeforeLoad(window) {
-      window.localStorage.setItem(wizardStorageKey, "1");
-    },
+  withScheduleGroup((groupId) => {
+    cy.visit(schedulePathFor(groupId), {
+      onBeforeLoad(window) {
+        window.localStorage.setItem(wizardStorageKey, "1");
+      },
+    });
   });
   cy.get('nav[aria-label="Steg i intervjuplanleggingen"]', {
     timeout: 10000,
@@ -142,41 +160,47 @@ describe("scheduler release acceptance", () => {
   it("captures the complete publication gate without changing the saved fixture", () => {
     cy.viewport(1280, 900);
     cy.login("webkom");
-    cy.request<SavedSchedule>(
-      `/api/admin/admission/${admissionSlug}/schedule/`,
-    ).then(({ body: publishedSchedule }) => {
-      cy.intercept("GET", `**/api/admin/admission/${admissionSlug}/schedule/`, {
-        statusCode: 200,
-        body: {
-          ...publishedSchedule,
-          is_distributed: false,
-          name_visibility: "hidden",
-        },
-      }).as("publicationReadySchedule");
+    withScheduleGroup((groupId) => {
+      cy.request<SavedSchedule>(
+        `/api/admin/admission/${admissionSlug}/group/${groupId}/schedule/`,
+      ).then(({ body: publishedSchedule }) => {
+        cy.intercept(
+          "GET",
+          `**/api/admin/admission/${admissionSlug}/group/${groupId}/schedule/`,
+          {
+            statusCode: 200,
+            body: {
+              ...publishedSchedule,
+              is_distributed: false,
+              name_visibility: "hidden",
+            },
+          },
+        ).as("publicationReadySchedule");
 
-      cy.visit(schedulePath, {
-        onBeforeLoad(window) {
-          window.localStorage.setItem(wizardStorageKey, "1");
-        },
-      });
-      cy.wait("@publicationReadySchedule");
-      cy.get('nav[aria-label="Steg i intervjuplanleggingen"]', {
-        timeout: 10000,
-      })
-        .contains("button", "Publisering")
-        .should("be.enabled")
-        .click();
+        cy.visit(schedulePathFor(groupId), {
+          onBeforeLoad(window) {
+            window.localStorage.setItem(wizardStorageKey, "1");
+          },
+        });
+        cy.wait("@publicationReadySchedule");
+        cy.get('nav[aria-label="Steg i intervjuplanleggingen"]', {
+          timeout: 10000,
+        })
+          .contains("button", "Publisering")
+          .should("be.enabled")
+          .click();
 
-      cy.get("[data-cy=publication-gate]")
-        .should("be.visible")
-        .and("contain.text", "Alle krav er oppfylt.");
-      cy.get("[data-cy=publish-blocked-reason]").should("not.exist");
-      cy.get("[data-cy=publish-plan]")
-        .should("be.enabled")
-        .and("contain.text", "Publiser intervjuplan");
-      assertNoDocumentOverflow();
-      cy.screenshot("scheduler-workflow/08-publication-ready", {
-        capture: "viewport",
+        cy.get("[data-cy=publication-gate]")
+          .should("be.visible")
+          .and("contain.text", "Alle krav er oppfylt.");
+        cy.get("[data-cy=publish-blocked-reason]").should("not.exist");
+        cy.get("[data-cy=publish-plan]")
+          .should("be.enabled")
+          .and("contain.text", "Publiser intervjuplan");
+        assertNoDocumentOverflow();
+        cy.screenshot("scheduler-workflow/08-publication-ready", {
+          capture: "viewport",
+        });
       });
     });
   });
@@ -272,7 +296,7 @@ describe("scheduler release acceptance", () => {
           body: recruiterAdmission,
         });
 
-        cy.visit(schedulePath, {
+        cy.visit(schedulePathFor(scheduleGroupId(verifiedAdmission)), {
           onBeforeLoad(window) {
             window.localStorage.setItem(wizardStorageKey, "1");
             window.localStorage.setItem("admissions.wizard.member.v1", "1");
@@ -309,7 +333,7 @@ describe("scheduler release acceptance", () => {
           );
         }).as("admissionAccess");
 
-        cy.visit(schedulePath, {
+        cy.visit(schedulePathFor(scheduleGroupId(verifiedAdmission)), {
           onBeforeLoad(window) {
             window.localStorage.setItem(wizardStorageKey, "1");
           },
@@ -353,7 +377,7 @@ describe("scheduler release acceptance", () => {
           );
         }).as("admissionAccess");
 
-        cy.visit(schedulePath, {
+        cy.visit(schedulePathFor(scheduleGroupId(verifiedAdmission)), {
           onBeforeLoad(window) {
             window.localStorage.setItem(wizardStorageKey, "1");
           },
