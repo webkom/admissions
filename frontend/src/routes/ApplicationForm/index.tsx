@@ -195,6 +195,29 @@ type ApplicationFormProps = SharedApplicationProps;
 
 // Highest order component for application form.
 // Handles form values, submit post and form validation.
+// JSON.stringify is key-order sensitive, and the two sides of the draft
+// comparison below are built from different sources: groupAnswers is
+// assembled in header_fields display order, while header_fields_response
+// comes back from Postgres as jsonb, which returns its uuid keys reordered.
+// Comparing the raw strings therefore reported a difference between values
+// that were identical, and since the check runs once on mount that pinned
+// the "Du har ulagrede endringer" banner open for good. Ordering keys at
+// every level makes the comparison about content only.
+const canonicalize = (value: unknown): unknown => {
+  if (Array.isArray(value)) return value.map(canonicalize);
+  if (value !== null && typeof value === "object") {
+    return Object.fromEntries(
+      Object.entries(value as Record<string, unknown>)
+        .sort(([left], [right]) => left.localeCompare(right))
+        .map(([key, nested]) => [key, canonicalize(nested)]),
+    );
+  }
+  return value;
+};
+
+const sameContent = (left: unknown, right: unknown) =>
+  JSON.stringify(canonicalize(left)) === JSON.stringify(canonicalize(right));
+
 const ApplicationForm: React.FC<ApplicationFormProps> = ({
   myApplication,
   selectedGroups,
@@ -237,9 +260,7 @@ const ApplicationForm: React.FC<ApplicationFormProps> = ({
       myApplication,
       false,
     );
-    return JSON.stringify(draftValues) !== JSON.stringify(submittedValues)
-      ? draftAt
-      : null;
+    return sameContent(draftValues, submittedValues) ? null : draftAt;
   });
   const [draftChoice, setDraftChoice] = React.useState<
     "undecided" | "restored" | "discarded"

@@ -21,6 +21,9 @@ let draftScope = "unscoped";
  */
 const draftStore = (): Storage => localStorage;
 
+const savedPhoneNumberKey = (userId: string) =>
+  `${SAVED_PHONE_PREFIX}.${encodeURIComponent(userId || "anonymous")}`;
+
 export const createDraftAdmissionScope = (
   admissionSlug: string,
   userId: string,
@@ -59,7 +62,13 @@ export const setDraftAdmissionScope = (
       .filter(
         (key) =>
           key.startsWith(legacyPrefix) ||
-          (key.startsWith(`${DRAFT_PREFIX}.`) && !key.startsWith(userPrefix)),
+          (key.startsWith(`${DRAFT_PREFIX}.`) && !key.startsWith(userPrefix)) ||
+          // The saved phone number is drafted PII under its own prefix, so
+          // the draft-prefix filters above never reached it and it outlived
+          // every actor change. On a shared machine that left the previous
+          // applicant's number readable by whoever logged in next.
+          (key.startsWith(`${SAVED_PHONE_PREFIX}.`) &&
+            key !== savedPhoneNumberKey(userId)),
       )
       .forEach((key) => draftStore().removeItem(key));
   } catch {
@@ -134,7 +143,14 @@ export const clearAllDrafts = () => {
 export const clearApplicationDraftNamespace = () => {
   try {
     Object.keys(draftStore())
-      .filter((key) => key.startsWith(`${DRAFT_PREFIX}.`))
+      .filter(
+        (key) =>
+          key.startsWith(`${DRAFT_PREFIX}.`) ||
+          // Logging out is the point at which someone hands the machine back,
+          // so the saved phone number goes too - it is the applicant's own
+          // PII and nothing after logout has any use for it.
+          key.startsWith(`${SAVED_PHONE_PREFIX}.`),
+      )
       .forEach((key) => draftStore().removeItem(key));
   } catch {
     return;
@@ -209,9 +225,6 @@ export const getPhoneNumberDraft = (defaultValue = "") => {
     return defaultValue;
   }
 };
-
-const savedPhoneNumberKey = (userId: string) =>
-  `${SAVED_PHONE_PREFIX}.${encodeURIComponent(userId || "anonymous")}`;
 
 export const saveSubmittedPhoneNumber = (
   userId: string,
