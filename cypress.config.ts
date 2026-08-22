@@ -4,6 +4,31 @@ export default defineConfig({
   allowCypressEnv: false,
   projectId: "w2s2pw",
   requestTimeout: 15000,
+  setupNodeEvents(on) {
+    // CI runs the browser without a focused, on-screen window, and
+    // Chromium throttles requestAnimationFrame hard for a backgrounded or
+    // occluded window - GSAP's ticker (gsap-core.js) is rAF-driven, so
+    // every GSAP-timed transition in the suite (see expandContractMotion.ts)
+    // inherits that throttling. The effect isn't a uniform slowdown: GSAP's
+    // default lag smoothing caps how much elapsed time a throttled tick may
+    // credit, so a starved tween can crawl well past its real duration
+    // (a spec sampling it mid-flight reads it as never finishing) while a
+    // tick that lands right on an already-settled frame reads full opacity
+    // a spec expected to still be transitioning. Same root cause, two
+    // different-looking failures. Disabling background throttling makes
+    // the CI window tick like an actual focused browser, which is what
+    // every transition assertion in the suite already assumes.
+    on("before:browser:launch", (browser, launchOptions) => {
+      if (browser.family === "chromium") {
+        launchOptions.args.push(
+          "--disable-background-timer-throttling",
+          "--disable-backgrounding-occluded-windows",
+          "--disable-renderer-backgrounding",
+        );
+      }
+      return launchOptions;
+    });
+  },
   // Needed together with the reduced-motion default in support/e2e.ts, and
   // only visible once that landed. Three CI runs separate the two causes:
   // with motion still reduced, a longer timeout changed nothing (a spec
