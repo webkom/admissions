@@ -1,5 +1,29 @@
 import { gsap } from "gsap";
 
+// GSAP's default lag smoothing exists to keep a stalled tween from lurching
+// forward once the tab catches up - it caps how much elapsed time a single
+// delayed tick may credit toward progress (see gsap-core.js's _tick). That's
+// the wrong tradeoff for a CPU-starved CI runner: instead of the tween
+// jumping to its end state once a frame is finally available, it creeps
+// along at that capped rate, so a nominal 500ms transition can take many
+// real seconds under sustained throttling - long enough to blow past even a
+// generous command-timeout retry. Disabling it makes a stalled tween finish
+// on the next tick it actually gets, matching what these expand/contract
+// transitions should look like regardless of how starved the tab is.
+gsap.ticker.lagSmoothing(0);
+
+// Cypress can fake Date but not requestAnimationFrame, so a spec that needs
+// to inspect a specific instant mid-transition (rather than race a real
+// animation frame against however loaded the runner is) has no way to
+// force GSAP's rAF-driven ticker to advance on demand. Exposing the ticker
+// only when Cypress's own runner is present - window.Cypress is injected
+// by Cypress itself, never in a real deployment - gives it exactly that,
+// via ticker.tick(), without adding anything reachable by an actual user.
+if (typeof window !== "undefined" && "Cypress" in window) {
+  (window as unknown as { __gsapTicker: typeof gsap.ticker }).__gsapTicker =
+    gsap.ticker;
+}
+
 export const EXPAND_CONTRACT_MOTION = {
   durationSeconds: 0.5,
   enterEase: "power2.out",

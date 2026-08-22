@@ -85,52 +85,71 @@ describe("inline schedule settings and standard-block preview", () => {
   });
 
   it("uses the same expand-contract motion for pauses and final-block actions", () => {
+    // Sampling real animation frames races the CI machine's actual paint
+    // rate: on a starved runner the transition can finish (or, before
+    // expandContractMotion.ts disabled GSAP's lag smoothing, barely move)
+    // entirely inside whatever gap falls between polling ticks, regardless
+    // of how early the poll starts. Cypress can fake Date but not
+    // requestAnimationFrame, so from here on GSAP's own ticker is driven
+    // by hand through window.__gsapTicker (a Cypress-only hook, see
+    // expandContractMotion.ts) against a faked Date.now() - which instant
+    // into the transition each check lands on is exact, not a guess about
+    // how many real frames happened to run.
+    cy.clock(0, ["Date"]);
     mountSettings(0, false, 4, 30);
 
     cy.get('[role="radiogroup"][aria-label="Pause mellom blokker"]')
       .find('input[type="radio"][value="60"]')
       .check({ force: true });
 
-    cy.window()
-      .then(
-        (window) =>
-          new Cypress.Promise<{ pause: number; actions: number }[]>(
-            (resolve) => {
-              const frames: { pause: number; actions: number }[] = [];
-              const capture = () => {
-                const pause = window.document.querySelector<HTMLElement>(
-                  "[data-cy=schedule-pause]",
-                );
-                const finalBlockActions =
-                  window.document.querySelector<HTMLElement>(
-                    "[data-cy=final-block-snap-footer]",
-                  );
-                if (!pause || !finalBlockActions) {
-                  window.requestAnimationFrame(capture);
-                  return;
-                }
-                frames.push({
-                  pause: Number(window.getComputedStyle(pause).opacity),
-                  actions: Number(
-                    window.getComputedStyle(finalBlockActions).opacity,
-                  ),
-                });
-                if (frames.length === 8) resolve(frames);
-                else window.requestAnimationFrame(capture);
-              };
-              capture();
-            },
-          ),
-      )
-      .then((frames) => {
-        expect(frames[0].pause).to.be.lessThan(0.95);
-        expect(frames[0].actions).to.be.lessThan(0.95);
-        expect(
-          Math.max(
-            ...frames.map((frame) => Math.abs(frame.pause - frame.actions)),
-          ),
-        ).to.be.lessThan(0.04);
-      });
+    // The tween isn't created until this fires: animateExpandedElementOnNextFrame
+    // defers the actual gsap.fromTo() call by one requestAnimationFrame,
+    // and that part can't be faked away. Waiting for one real frame here
+    // is a world apart from racing the full 500ms transition against one.
+    cy.window().then(
+      (window) =>
+        new Cypress.Promise<void>((resolve) => {
+          window.requestAnimationFrame(() => resolve());
+        }),
+    );
+
+    const tickAndRead = (ms: number) =>
+      cy.tick(ms).then(() =>
+        cy.window().then((window) => {
+          const ticker = (
+            window as unknown as { __gsapTicker: { tick: () => void } }
+          ).__gsapTicker;
+          ticker.tick();
+          const pause = window.document.querySelector<HTMLElement>(
+            "[data-cy=schedule-pause]",
+          );
+          const finalBlockActions = window.document.querySelector<HTMLElement>(
+            "[data-cy=final-block-snap-footer]",
+          );
+          if (!pause || !finalBlockActions) {
+            throw new Error("schedule-pause / final-block-snap-footer missing");
+          }
+          return {
+            pause: Number(window.getComputedStyle(pause).opacity),
+            actions: Number(window.getComputedStyle(finalBlockActions).opacity),
+          };
+        }),
+      );
+
+    tickAndRead(80).then((first) => {
+      expect(first.pause).to.be.lessThan(0.95);
+      expect(first.actions).to.be.lessThan(0.95);
+      expect(Math.abs(first.pause - first.actions)).to.be.lessThan(0.04);
+    });
+
+    tickAndRead(160).then((midway) => {
+      expect(Math.abs(midway.pause - midway.actions)).to.be.lessThan(0.04);
+    });
+
+    tickAndRead(260).then((settled) => {
+      expect(settled.pause).to.be.closeTo(1, 0.01);
+      expect(settled.actions).to.be.closeTo(1, 0.01);
+    });
 
     cy.get("[data-cy=schedule-pause]").should(
       "have.attr",
