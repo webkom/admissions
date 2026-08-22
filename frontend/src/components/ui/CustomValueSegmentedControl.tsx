@@ -56,11 +56,15 @@ export const CustomValueSegmentedControl: React.FC<
 
   React.useEffect(() => {
     if (!isEditing) return;
-    const frame = requestAnimationFrame(() => {
-      inputRef.current?.focus();
-      inputRef.current?.select();
-    });
-    return () => cancelAnimationFrame(frame);
+    // Focused and selected synchronously, not inside a requestAnimationFrame:
+    // this effect already runs after React has committed the editor, so the
+    // input is attached and there is nothing to wait a frame for. Deferring
+    // it meant that on a slow or loaded machine the select() could land
+    // *after* the user had begun typing, so their next keystroke replaced
+    // the selected digits instead of appending - typing "45" quickly ended
+    // up committing "5".
+    inputRef.current?.focus();
+    inputRef.current?.select();
   }, [isEditing]);
 
   const openEditor = () => {
