@@ -800,6 +800,7 @@ describe("solver asynchronous and revision races", () => {
     };
     let scheduleReads = 0;
     let applyRequests = 0;
+    let proposalReads = 0;
     let proposalInvalidated = false;
     let mountedRoot: ReturnType<typeof createRoot> | null = null;
     const persistedProposal = () => ({
@@ -815,10 +816,16 @@ describe("solver asynchronous and revision races", () => {
         request.reply({ statusCode: 200, body: revisionOne });
       },
     ).as("applyConflictSchedule");
+    // Counted together on purpose: which of these two the app uses to
+    // re-read the proposal after a reload is an implementation detail that
+    // legitimately varies (see the wait below), but that it re-reads it at
+    // all is the behaviour under test.
     cy.intercept("GET", "**/api/solve/latest/**", (request) => {
+      proposalReads += 1;
       request.reply({ statusCode: 200, body: persistedProposal() });
     }).as("applyConflictProposal");
     cy.intercept("GET", "**/api/solve/apply-conflict-job/", (request) => {
+      proposalReads += 1;
       request.reply({ statusCode: 200, body: persistedProposal() });
     }).as("restoredRejectedProposal");
     cy.intercept(
@@ -872,6 +879,10 @@ describe("solver asynchronous and revision races", () => {
     });
 
     cy.then(() => mountedRoot?.unmount());
+    let proposalReadsBeforeReload = 0;
+    cy.then(() => {
+      proposalReadsBeforeReload = proposalReads;
+    });
     const reloadedClient = queryClientWithDefaultQuery();
     cy.document().then((document) => {
       document.body.innerHTML = '<div id="race-root"></div>';
@@ -884,7 +895,20 @@ describe("solver asynchronous and revision races", () => {
         </QueryClientProvider>,
       );
     });
-    cy.wait(["@applyConflictSchedule", "@restoredRejectedProposal"]);
+    cy.wait("@applyConflictSchedule");
+    // Not `cy.wait("@restoredRejectedProposal")`: which endpoint the reload
+    // re-reads the proposal through depends on whether the stored proposal
+    // survived to this point, and both outcomes are correct. Once the apply
+    // response marks the job discarded, rememberProposal clears it from
+    // session storage (that is what the discarded_at guard is for), so a
+    // reload after that cleanup has nothing to restore by id and asks
+    // /solve/latest/ instead of /solve/<id>/. Whether the cleanup lands
+    // before this unmount is pure timing - it decided this test's outcome
+    // roughly one run in three on a loaded machine. Either way the reload
+    // must re-read the proposal and must still refuse to offer it.
+    cy.wrap(null).should(() => {
+      expect(proposalReads).to.be.greaterThan(proposalReadsBeforeReload);
+    });
     cy.get("[data-cy=candidate-proposal]").should("not.exist");
     cy.contains("button", "Bruk forslaget").should("not.exist");
     cy.then(() => expect(applyRequests).to.equal(1));
