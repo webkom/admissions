@@ -1,0 +1,28 @@
+.link-slide {
+  position: relative;
+  display: inline-block;
+  transition: color var(--easing-fast);
+}
+
+.link-slide::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  bottom: calc(-1 * var(--spacing-xs));
+  display: block;
+  height: var(--underline-thickness);
+  width: 0;
+  background: var(--color-brand);
+  transition: width var(--easing-fast);
+  border-radius: var(--border-radius-sm);
+}
+
+.link-slide:hover::after,
+.link-slide:focus::after {
+  width: 100%;
+}
+
+.link-slide:hover,
+.link-slide:focus {
+  color: var(--color-brand) !important;
+}

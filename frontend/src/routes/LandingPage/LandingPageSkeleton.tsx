@@ -1,82 +1,47 @@
 import React, { PropsWithChildren } from "react";
-import styled from "styled-components";
-import { media } from "src/styles/mediaQueries";
-
+import { useQueryClient } from "@tanstack/react-query";
 import AbakusLogo from "src/components/AbakusLogo";
 import { isLoggedIn, isManager } from "src/utils/djangoData";
 import LinkButton from "src/components/LinkButton";
+import { handleSensitiveLogoutLink } from "src/query/sensitiveActorSync";
 
 const LandingPageSkeleton: React.FC<PropsWithChildren> = ({ children }) => {
+  const queryClient = useQueryClient();
+
   return (
-    <Container>
-      <BrandContainer>
+    <div className="mx-auto flex min-h-viewport w-full max-w-6xl flex-col items-center px-8 py-16 handheld:px-4 handheld:py-8">
+      <div className="mb-8 max-w-44 handheld:max-w-36">
         <AbakusLogo />
-      </BrandContainer>
-      <Title>Opptak</Title>
+      </div>
+      <h1 className="mb-4 text-center text-[length:var(--font-size-hero-fluid)] font-extrabold tracking-display-tight text-text-strong handheld:text-display-lg">
+        Opptak
+      </h1>
       {children}
       {isManager() && (
-        <LegoButtonWrapper>
+        <div className="mt-16">
           <LinkButton to={`/manage/`}>Administrer opptak</LinkButton>
-        </LegoButtonWrapper>
+        </div>
       )}
-      <BottomLinkWrapper>
+      <div className="mt-24 flex w-full justify-center border-t border-border-soft pt-8 pb-8">
         {!isLoggedIn() ? (
-          <a href="/login/lego/">Logg inn</a>
+          <a
+            className="text-sm font-medium text-text-secondary transition-colors duration-200 hover:text-text-strong"
+            href="/login/lego/"
+          >
+            Logg inn
+          </a>
         ) : (
-          <a href="/logout/">Logg ut</a>
+          <a
+            className="text-sm font-medium text-text-secondary transition-colors duration-200 hover:text-text-strong"
+            href="/logout/"
+            onClick={(event) => handleSensitiveLogoutLink(queryClient, event)}
+          >
+            Logg ut
+          </a>
         )}
-      </BottomLinkWrapper>
-    </Container>
+      </div>
+    </div>
   );
 };
 
 export default LandingPageSkeleton;
-
-/** Styles **/
-
-const Container = styled.div`
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  margin: 0 auto;
-  padding-top: 2rem;
-  width: 80%;
-  max-width: 100%;
-  min-height: 100vh;
-  ${media.portrait`
-    width: 90%;
-  `}
-  ${media.handheld`
-    width: initial;
-    padding: 1em 0.2em 2em 0.2em;
-    `};
-`;
-
-const BrandContainer = styled.div`
-  max-width: 200px;
-
-  ${media.handheld`
-    margin: 0 1rem 0 1rem;
-    width: 35%;
-    `};
-`;
-
-const Title = styled.h1`
-  font-size: 1.8rem;
-  margin-top: 5px;
-  ${media.handheld`
-    font-size: 1.3rem;
-  `};
-`;
-
-const LegoButtonWrapper = styled.div`
-  margin-top: 3em;
-`;
-
-const BottomLinkWrapper = styled.div`
-  display: flex;
-  flex-grow: 1;
-  align-items: flex-end;
-  padding-top: 2rem;
-  padding-bottom: 0.2rem;
-`;

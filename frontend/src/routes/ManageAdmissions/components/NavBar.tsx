@@ -1,6 +1,5 @@
 import React from "react";
-import { Link } from "react-router-dom";
-import LinkButton from "src/components/LinkButton";
+import { NavLink } from "react-router-dom";
 import { Admission } from "src/types";
 import styled from "styled-components";
 
@@ -8,47 +7,67 @@ interface Props {
   admissions?: Admission[];
 }
 
-const NavBar: React.FC<Props> = ({ admissions }) => {
-  return (
-    <Wrapper>
-      <NavHeader>Opptak</NavHeader>
+const NavBar: React.FC<Props> = ({ admissions }) => (
+  <Navigation aria-label="Opptak som kan administreres">
+    <NavHeader>Opptak</NavHeader>
+    <NavigationList>
       {admissions?.map((admission) => (
-        <NavLink
-          key={admission.pk + admission.title}
-          to={"/manage/" + admission.slug}
-        >
-          {admission.title}
-        </NavLink>
+        <li key={admission.pk}>
+          <AdmissionLink to={`/manage/${admission.slug}`}>
+            {admission.title}
+          </AdmissionLink>
+        </li>
       ))}
-      {admissions?.length === 0 && (
-        <p>Du har ikke redigeringstilgang til noen opptak.</p>
-      )}
-      <CreateNewWrapper>
-        <LinkButton to="/manage/create" dark size="small">
-          Lag nytt
-        </LinkButton>
-      </CreateNewWrapper>
-    </Wrapper>
-  );
-};
+    </NavigationList>
+    {admissions?.length === 0 && (
+      <EmptyText>Du har ikke opprettet noen opptak ennå.</EmptyText>
+    )}
+  </Navigation>
+);
 
 export default NavBar;
 
-const Wrapper = styled.div`
-  padding: 0 1rem;
+const Navigation = styled.nav`
+  padding: 0 var(--spacing-xl);
 `;
 
-const NavHeader = styled.h3`
+const NavHeader = styled.h2`
+  margin: 0 0 var(--spacing-md);
+  font-size: var(--font-size-md);
+`;
+
+const NavigationList = styled.ul`
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-xs);
   margin: 0;
+  padding: 0;
+  list-style: none;
 `;
 
-const NavLink = styled(Link)`
+const AdmissionLink = styled(NavLink)`
   display: block;
-  line-height: 1.4;
-  padding: 0.3rem 0;
+  padding: var(--spacing-sm) var(--spacing-md);
+  border-left: var(--border-width-emphasis) solid transparent;
+  color: var(--color-text-primary);
+  font-size: var(--font-size-sm);
   font-weight: 500;
+  text-decoration: none;
+
+  &:hover {
+    background: var(--color-surface-subtle);
+  }
+
+  &.active {
+    border-left-color: var(--color-brand);
+    background: var(--color-brand-soft);
+    color: var(--color-brand);
+    font-weight: 600;
+  }
 `;
 
-const CreateNewWrapper = styled.div`
-  margin-top: 1rem;
+const EmptyText = styled.p`
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-sm);
 `;

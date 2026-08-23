@@ -1,10 +1,306 @@
-@import url("https://unpkg.com/ionicons@4.5.10-0/dist/css/ionicons.min.css");
 @import url("./fonts.css");
-@import url("~/@webkom/lego-bricks/dist/style.css");
+@import url("@webkom/lego-bricks/dist/style.css");
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --font-family: inter, -apple-system, blinkmacsystemfont, "Segoe UI", roboto,
+    helvetica, arial, sans-serif;
+  --font-display: inter, -apple-system, blinkmacsystemfont, "Segoe UI", roboto,
+    helvetica, arial, sans-serif;
+  --font-weight-normal: 400;
+  --font-weight-medium: 500;
+  --font-weight-semibold: 600;
+  --font-weight-bold: 700;
+  --font-weight-extrabold: 800;
+  --font-size-nano: 0.5625rem;
+  --font-size-tiny: 0.65rem;
+  --font-size-label: var(--font-size-xs);
+  --font-size-detail: 0.8rem;
+  --font-size-ui: var(--font-size-sm);
+  --font-size-title: var(--font-size-md);
+  --font-size-heading-xs: 1.25rem;
+  --font-size-heading-sm: 1.375rem;
+  --font-size-heading-md: 1.5rem;
+  --font-size-countdown: 2rem;
+  --font-size-countdown-fluid: clamp(1.6rem, 3vw, 2.35rem);
+  --font-size-hero-fluid: clamp(2.75rem, 6vw, 4rem);
+  --font-size-display-md: 2.25rem;
+  --font-size-display-lg: 3rem;
+  --line-height-nano: 0.875rem;
+  --line-height-tiny: 1rem;
+  --line-height-detail: 1.15rem;
+  --line-height-ui: 1.25rem;
+  --line-height-title: 1.4rem;
+  --line-height-action: 1.5rem;
+  --line-height-body-lg: 1.7rem;
+  --line-height-heading-md: 2rem;
+  --line-height-countdown: 2.25rem;
+  --line-height-display-md: 2.5rem;
+  --line-height-display-lg: 3.25rem;
+  --line-height-none: 1;
+  --line-height-base: 1.3;
+  --line-height-tight: 1.25;
+  --line-height-snug: 1.375;
+  --line-height-normal: 1.5;
+  --line-height-relaxed: 1.5;
+  --line-height-comfortable: 1.625;
+  --line-height-loose: 2;
+  --line-height-copy: 1.6;
+  --letter-spacing-badge: 0.06em;
+  --letter-spacing-badge-wide: 0.12em;
+  --letter-spacing-caps: 0.05em;
+  --letter-spacing-label: 0.08em;
+  --letter-spacing-display: -0.03em;
+  --letter-spacing-display-tight: -0.045em;
+  --letter-spacing-ui-tight: -0.01em;
+  --spacing-xs: calc(var(--lego-default-padding) / 8);
+  --spacing-sm: calc(var(--lego-default-padding) / 4);
+  --spacing-md: calc(var(--lego-default-padding) / 2);
+  --spacing-lg: calc(var(--lego-default-padding) * 3 / 4);
+  --spacing-xl: var(--lego-default-padding);
+  --spacing-2xl: calc(var(--lego-default-padding) * 5 / 4);
+  --spacing-3xl: calc(var(--lego-default-padding) * 3 / 2);
+  --spacing-4xl: calc(var(--lego-default-padding) * 2);
+  --spacing-5xl: calc(var(--lego-default-padding) * 5 / 2);
+  --spacing-6xl: calc(var(--lego-default-padding) * 3);
+  --spacing-7xl: calc(var(--lego-default-padding) * 4);
+  --border-width-default: 1px;
+  --border-width-emphasis: 1.5px;
+  --border-width-strong: 2px;
+  --focus-ring-width: 3px;
+  --focus-ring-offset: 2px;
+  --border-radius-pill: 999px;
+  --navigation-height: 5rem;
+  --navigation-logo-width: 8.75rem;
+  --navigation-layer: 100;
+  --viewport-min-height: 100dvh;
+  --page-min-height: calc(
+    var(--viewport-min-height) - var(--navigation-height)
+  );
+  --content-sticky-offset: calc(var(--navigation-height) + var(--spacing-lg));
+  --content-width-readable: 44rem;
+  --content-width-xs: 20rem;
+  --content-width-short: 31.25rem;
+  --content-width-compact: 24rem;
+  --content-width-md: 28rem;
+  --content-width-lg: 32rem;
+  --content-width-xl: 36rem;
+  --content-width-narrow: 18.75rem;
+  --content-width-form: 50rem;
+  --content-width-wide: 72rem;
+  --content-width-prose: 65ch;
+  --admin-sidebar-width: 17.5rem;
+  --schedule-page-max-width: 90rem;
+  --schedule-sidebar-width: 20.5rem;
+  --schedule-settings-column-min-width: 21rem;
+  --schedule-preview-label-width: 7rem;
+  --management-sidebar-width: 16rem;
+  --group-editor-min-height: 10rem;
+  --application-table-min-width: 73.75rem;
+  --schedule-table-min-width: 36rem;
+  --control-min-width: 13.75rem;
+  --control-height-sm: 2.25rem;
+  --control-height-md: 2.75rem;
+  --control-padding-block: calc(var(--spacing-md) * 3 / 4);
+  --control-width-short: 6rem;
+  --form-control-width: 20rem;
+  --form-toggle-width: 18.75rem;
+  --form-textarea-min-height: 7.5rem;
+  --table-header-layer: 1;
+  --content-raised-layer: 10;
+  --popover-layer: 30;
+  --modal-layer: 200;
+  --drawer-layer: 210;
+  --toast-layer: 300;
+  --avatar-size-lg: 3.5rem;
+  --avatar-size-md: 3.125rem;
+  --avatar-size-sm: 2.5rem;
+  --group-toggle-size-sm: var(--avatar-size-sm);
+  --opacity-unselected: 0.2;
+  --opacity-hidden: 0;
+  --opacity-minimal: 0.05;
+  --opacity-soft: 0.1;
+  --opacity-low: 0.3;
+  --opacity-faint: 0.4;
+  --opacity-disabled: 0.5;
+  --opacity-medium: 0.55;
+  --opacity-muted: 0.6;
+  --opacity-subtle: 0.7;
+  --opacity-hover: 0.8;
+  --opacity-visible: 1;
+  --application-logo-size: 2.8125rem;
+  --error-illustration-size: 6.25rem;
+  --error-state-min-height: 50vh;
+  --group-card-min-width: 21.875rem;
+  --layout-card-min-sm: 8.75rem;
+  --layout-card-min-md: 11.25rem;
+  --layout-card-min-lg: 13.75rem;
+  --schedule-label-width: 6.25rem;
+  --schedule-name-width: 8.75rem;
+  --schedule-progress-height: 0.375rem;
+  --motion-distance-sm: 0.375rem;
+  --motion-pulse-radius: 0.875rem;
+  --backdrop-blur-sm: 4px;
+  --animation-duration-spin: 1s;
+  --animation-duration-pulse: 2s;
+  --decorative-line-thickness: 5px;
+  --decorative-line-min-length: 10px;
+  --underline-inset: 0.75rem;
+  --underline-inset-tight: 0.5rem;
+  --underline-offset: 0.5rem;
+  --underline-thickness: 0.125rem;
+  --transition-base: var(--easing-fast);
+  --transition-duration-fast: 100ms;
+  --transition-duration-standard: 150ms;
+  --transition-duration-medium: 200ms;
+  --transition-duration-progress: 500ms;
+  --color-brand: var(--lego-red-color);
+
+  --color-brand-hover: var(--lego-red-color-hover);
+  --color-brand-dark: var(--color-red-7);
+  --color-brand-pressed: var(--color-red-8);
+  --color-brand-input: color-mix(in srgb, var(--color-brand) 40%, transparent);
+  --color-brand-ring: color-mix(in srgb, var(--color-brand) 18%, transparent);
+  --color-brand-ring-soft: color-mix(
+    in srgb,
+    var(--color-brand) 8%,
+    transparent
+  );
+  --color-brand-soft: color-mix(in srgb, var(--color-brand) 4%, transparent);
+  --color-brand-subtle: color-mix(in srgb, var(--color-brand) 6%, transparent);
+  --color-brand-muted: color-mix(in srgb, var(--color-brand) 8%, transparent);
+  --color-brand-tint: color-mix(in srgb, var(--color-brand) 10%, transparent);
+  --color-brand-badge: var(--color-brand-tint);
+  --color-brand-fill: color-mix(in srgb, var(--color-brand) 14%, transparent);
+  --color-brand-border: var(--color-brand-ring);
+  --color-brand-strong-border: color-mix(
+    in srgb,
+    var(--color-brand) 28%,
+    transparent
+  );
+  --color-brand-panel-border: color-mix(
+    in srgb,
+    var(--color-brand) 32%,
+    transparent
+  );
+  --color-brand-active-border: color-mix(
+    in srgb,
+    var(--color-brand) 38%,
+    transparent
+  );
+  --color-brand-focus: color-mix(in srgb, var(--color-brand) 45%, transparent);
+  --color-success: var(--color-green-7);
+  --color-success-bg: var(--color-green-2);
+  --color-success-bg-soft: color-mix(
+    in srgb,
+    var(--color-success-bg) 60%,
+    transparent
+  );
+  --color-success-border: var(--color-green-7);
+  --color-coverage-low: color-mix(
+    in srgb,
+    var(--color-blue-6) 8%,
+    var(--color-surface-base)
+  );
+  --color-coverage-low-border: color-mix(
+    in srgb,
+    var(--color-blue-6) 22%,
+    var(--color-border-soft)
+  );
+  --color-coverage-medium: color-mix(
+    in srgb,
+    var(--color-blue-6) 18%,
+    var(--color-surface-base)
+  );
+  --color-coverage-medium-border: color-mix(
+    in srgb,
+    var(--color-blue-6) 42%,
+    var(--color-border-soft)
+  );
+  --color-coverage-text: var(--color-blue-8);
+  --color-danger: var(--color-red-6);
+  --color-danger-bg: var(--color-red-1);
+  --color-danger-border: var(--color-red-6);
+
+  --color-overlay: color-mix(in srgb, var(--lego-font-color) 45%, transparent);
+  --color-surface-base: var(--lego-card-color);
+  --color-surface-page: var(--lego-background-color);
+  --color-surface-soft: var(--lego-background-color);
+  --color-surface-subtle: var(--color-gray-1);
+  --color-surface-muted: var(--color-gray-1);
+  --color-surface-muted-soft: color-mix(
+    in srgb,
+    var(--color-surface-muted) 40%,
+    transparent
+  );
+  --color-surface-translucent: color-mix(
+    in srgb,
+    var(--color-surface-base) 55%,
+    transparent
+  );
+  --color-surface-hover: var(--lego-background-color);
+  --color-surface-neutral: var(--color-gray-2);
+  --color-surface-disabled: var(--color-gray-2);
+  --color-border-default: var(--border-gray);
+  --color-border: var(--border-gray);
+  --color-border-soft: var(--color-gray-2);
+  --color-border-muted: var(--color-gray-3);
+  --color-border-muted-soft: color-mix(
+    in srgb,
+    var(--color-border-muted) 30%,
+    transparent
+  );
+  --color-border-muted-medium: color-mix(
+    in srgb,
+    var(--color-border-muted) 50%,
+    transparent
+  );
+  --color-border-quiet: var(--color-gray-4);
+  --color-border-faint: var(--color-gray-2);
+  --color-text-primary: var(--lego-font-color);
+  --color-text-strong: var(--lego-font-color);
+  --color-text-accent: var(--color-gray-8);
+  --color-text-body: var(--color-gray-7);
+  --color-text-soft: var(--secondary-font-color);
+  --color-text-secondary: var(--color-gray-6);
+  --color-text-muted: var(--color-gray-7);
+  --color-text-subtle: var(--color-gray-5);
+  --color-text-faded: var(--color-gray-4);
+  --color-text-disabled: var(--color-gray-4);
+  --color-on-dark-muted: color-mix(
+    in srgb,
+    var(--color-absolute-white) 55%,
+    transparent
+  );
+  --color-on-dark-strong: color-mix(
+    in srgb,
+    var(--color-absolute-white) 92%,
+    transparent
+  );
+  --pattern-unavailable: repeating-linear-gradient(
+    135deg,
+    var(--color-on-dark-strong) 0 3px,
+    transparent 3px 7px
+  );
+  --shadow-panel: var(--shadow-sm);
+  --shadow-panel-hover: var(--shadow-sm);
+  --shadow-drawer-left: -8px 0 24px
+    color-mix(in srgb, var(--color-gray-6) 12%, transparent);
+  --shadow-modal: var(--shadow-lg);
+  --shadow-tint-sm: var(--shadow-sm);
+  --shadow-action: none;
+  --shadow-toggle: none;
+  --color-brand-pulse-start: var(--color-brand-focus);
+  --color-brand-pulse-end: transparent;
+  --gradient-toggle-active: none;
+}
 
 html {
   box-sizing: border-box;
-  font-size: 1rem;
+  font-size: var(--font-size-md);
   height: 100%;
 }
 
@@ -13,50 +309,139 @@ html {
 *::after {
   box-sizing: inherit;
   -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 body {
   margin: 0;
-  line-height: 1.8;
+  line-height: var(--line-height-base);
   background: var(--lego-background-color);
   color: var(--lego-font-color);
+  font-family: var(--font-family), sans-serif;
   position: relative;
+}
+
+#root {
+  min-height: var(--viewport-min-height);
+}
+
+@keyframes timeline-pulse {
+  0% {
+    box-shadow: 0 0 0 0 var(--color-brand-pulse-start);
+  }
+
+  70% {
+    box-shadow: 0 0 0 var(--motion-pulse-radius) var(--color-brand-pulse-end);
+  }
+
+  100% {
+    box-shadow: 0 0 0 0 var(--color-brand-pulse-end);
+  }
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(var(--motion-distance-sm));
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes slide-in-right {
+  from {
+    transform: translateX(100%);
+  }
+
+  to {
+    transform: translateX(0);
+  }
+}
+
+@keyframes overlay-fade-in {
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes solver-barberpole {
+  from {
+    background-position: 0 0;
+  }
+
+  to {
+    background-position: 16px 0;
+  }
+}
+
+.solver-barberpole-progress {
+  background-image: linear-gradient(
+    45deg,
+    rgb(255 255 255 / 35%) 25%,
+    transparent 25%,
+    transparent 50%,
+    rgb(255 255 255 / 35%) 50%,
+    rgb(255 255 255 / 35%) 75%,
+    transparent 75%,
+    transparent
+  );
+  background-size: 16px 16px;
+  animation: solver-barberpole 1.1s linear infinite;
 }
 
 h1,
 h2,
 h3,
 h4 {
-  font-weight: 400;
+  font-family: var(--font-display);
+  font-weight: var(--font-weight-semibold);
+  color: var(--lego-font-color);
+  line-height: var(--line-height-base);
+  text-wrap: balance;
 }
 
 h1 {
-  font-size: 3rem;
-  text-align: center;
-  margin: 0.2em 0 0;
-  line-height: 1.2em;
-}
-
-h2 {
+  margin: var(--spacing-xl) 0;
   font-size: var(--font-size-xl);
 }
 
+h2 {
+  margin: var(--spacing-md) 0;
+  font-size: var(--font-size-heading-md);
+}
+
 h3 {
-  font-size: var(--font-size-lg);
+  margin: var(--spacing-md) 0;
+  font-size: var(--font-size-heading-sm);
+}
+
+p {
+  text-wrap: pretty;
+  margin-bottom: var(--spacing-sm);
+  line-height: var(--line-height-base);
 }
 
 a {
-  color: var(--lego-link-color);
+  color: var(--lego-link-color, var(--color-brand));
   cursor: pointer;
   text-decoration: none;
+  transition: color var(--transition-base);
+}
+
+a:hover {
+  color: var(--color-brand-hover);
 }
 
 a[disabled] {
   pointer-events: none;
-}
-
-p {
-  margin-bottom: 10px;
+  opacity: var(--opacity-disabled);
 }
 
 ul {
@@ -67,32 +452,87 @@ ul {
 
 table {
   border-collapse: collapse;
+  width: 100%;
 }
 
 th {
-  padding: 5px 0;
-  border-top: 1px solid #aaa;
-  border-bottom: 1px solid #aaa !important;
-  font-weight: 400;
+  padding: var(--spacing-sm);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-gray-7);
+  background: var(--color-gray-2);
 }
 
 th,
 td {
   font-size: var(--font-size-sm);
-  padding-left: 7px;
-  width: 140px;
-  border-bottom: 1px dashed #aaa;
+  padding: var(--spacing-sm);
   text-align: left;
-  display: table-cell;
-  word-break: break-all;
-  hyphens: auto;
 }
 
-th:first-child,
+th:first-child {
+  border-radius: var(--border-radius-pill) 0 0 var(--border-radius-pill);
+}
+
 th:last-child {
-  border-radius: 0;
+  border-radius: 0 var(--border-radius-pill) var(--border-radius-pill) 0;
 }
 
-tr:last-of-type > td {
-  border-bottom: 0;
+tbody tr:nth-child(even) {
+  background: var(--additive-background);
+}
+
+.slide-underline {
+  position: relative;
+  overflow: hidden;
+}
+
+.slide-underline::after {
+  content: "";
+  position: absolute;
+  left: var(--underline-inset);
+  right: var(--underline-inset);
+  bottom: var(--underline-offset);
+  height: var(--underline-thickness);
+  background-color: var(--color-brand);
+  transform: scaleX(0);
+  transform-origin: left;
+  transition:
+    transform var(--easing-medium),
+    background-color var(--easing-medium);
+}
+
+.slide-underline:hover::after,
+.slide-underline:focus::after {
+  transform: scaleX(1);
+  background-color: var(--additive-background);
+}
+
+.slide-underline-tight::after {
+  left: var(--underline-inset-tight);
+  right: var(--underline-inset-tight);
+}
+
+.slide-underline:focus-visible::after {
+  transform: scaleX(1);
+  box-shadow: 0 0 0 var(--spacing-sm) var(--color-brand-ring-soft);
+}
+
+.slide-underline-on-dark::after {
+  background-color: var(--color-on-dark-muted);
+}
+
+.slide-underline-on-dark:hover::after,
+.slide-underline-on-dark:focus::after {
+  background-color: var(--color-on-dark-strong);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }

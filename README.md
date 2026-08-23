@@ -7,6 +7,7 @@ Recruitment for [Abakus](https://abakus.no/).
 - [Environments](#environments)
 - [Local development](#local-development)
 - [Creating admissions](#creating-admissions)
+- [Interview scheduling worker](#interview-scheduling-worker)
 - [Permissions](#permissions)
 - [Run tests](#run-tests)
 - [Code style](#code-style)
@@ -78,9 +79,11 @@ $ docker-compose up -d
 
 The `.env` file with secret keys is not included, but an [`example.env`](./admissions/settings/example.env) file has been provided in `./admissions/settings`, so that you can simply rename the file and fill in the values.
 
-`example.env` is setup to connect to an Oauth2 application already configured in LEGO, so if you don't need anything special you are good to go with that one.
+Create a local OAuth2 application in LEGO and put its client ID and secret in your copied `.env` file. Never commit real OAuth credentials.
 
-If you want to configure another one, go to the OAuth2 tab in the user settings [menu](http://localhost:3000/users/me/settings/oauth2) in the running dev version of lego-webapp. Open or create an application, and enter the values you find into your .env file. If you are creating a new OAuth2 application, enter `http://127.0.0.1:5000/complete/lego/` as the redirect url.
+Credential-shaped OAuth values have existed in this repository's history. Treat any matching LEGO application credentials as compromised: revoke them in LEGO, create a replacement client, and update the deployment secret store. Removing a value from the current tree or rewriting Git history does not replace credential rotation.
+
+If you want to configure another one, go to the OAuth2 tab in the user settings [menu](http://127.0.0.1:3000/users/me/settings/oauth2) in the running dev version of lego-webapp. Open or create an application, and enter the values you find into your .env file. If you are creating a new OAuth2 application, enter `http://127.0.0.1:5002/complete/lego/` as the redirect URL.
 
 ```sh
 # Create a copy of the example env file (run from the root of the project)
@@ -89,20 +92,30 @@ $ cp admissions/settings/example.env admissions/settings/.env
 # Edit the file and change the KEY and SECRET
 AUTH_LEGO_KEY="Client ID from OAuth2"
 AUTH_LEGO_SECRET="Client Secret from OAuth2"
-AUTH_LEGO_API_URL="http://localhost:8000/"
+AUTH_LEGO_API_URL="http://127.0.0.1:8000/"
 ```
 
-After creating and configuring your ./admissions/settings/.env file you are ready to migrate the database and run the server.
+After creating and configuring your ./admissions/settings/.env file you are ready to initialize the local development data and run the server.
 
 ```sh
-# Migrate the database migrations
-$ poetry run python manage.py migrate
+# Start PostgreSQL, apply migrations, and load Admissions development fixtures
+$ make initialize_development
 
-# Run the Django server
-$ poetry run python manage.py runserver
+# Run the Django server and interview-scheduling worker together
+$ make dev
 ```
 
-> If coding over long periods of time, or you want to flush the database, run `poetry run python manage.py flush` to flush it, and run the server again with `poetry run python manage.py runserver`.
+The command is safe to repeat for local development.
+It refreshes the known Admissions fixture rows without flushing the database.
+It initializes Admissions only.
+The existing fixture loader also normalizes admission dates for all local
+Admissions, including custom Admissions created during development.
+To populate LEGO users and events, run LEGO's `initialize_development` management
+command from the LEGO checkout after its services are running.
+
+> If coding over long periods of time, or you want to flush the database, stop
+> `make dev`, run `poetry run python manage.py flush`, and start `make dev`
+> again.
 
 ### Terminal 4
 
@@ -116,11 +129,11 @@ $ yarn
 $ yarn dev
 ```
 
-> Finally, you can go to [127.0.0.1:5000](http://127.0.0.1:5000/) and view the admissions page.
+> Finally, you can go to [127.0.0.1:5002](http://127.0.0.1:5002/) and view the admissions page.
 
 **NB: The project has to be accessed through 127.0.0.1, and NOT localhost.** This is because accessing both LEGO and admissions from the same hostname creates a conflict some session storage, so the login will not work.
 
-To create an admission, first, open [127.0.0.1:5000](http://127.0.0.1:5000/) and click the "Logg inn" button at the bottom of the page to authorize as a user with [permission to create admissions](#permissions). Then, click "Administrer opptak" and create an admission. Phew, now you are ready to start developing!
+To create an admission, first, open [127.0.0.1:5002](http://127.0.0.1:5002/) and click the "Logg inn" button at the bottom of the page to authorize as a user with [permission to create admissions](#permissions). Then, click "Administrer opptak" and create an admission. Phew, now you are ready to start developing!
 
 &nbsp;
 
@@ -130,7 +143,7 @@ To create an admission, first, open [127.0.0.1:5000](http://127.0.0.1:5000/) and
 
 The simplest way to create an admission is through the GUI.
 
-1. Navigate to [127.0.0.1:5000](http://127.0.0.1:5000/)
+1. Navigate to [127.0.0.1:5002](http://127.0.0.1:5002/)
 2. Log in as a user with permission to create admissions.
 3. Click "Administrer opptak" at the bottom of the screen
 4. Success
@@ -157,17 +170,53 @@ $ poetry run python manage.py shell_plus
 
 &nbsp;
 
+## Interview scheduling worker
+
+Interview schedules are produced by a constraint solver that can take a while on
+large admissions, so solving runs in a **separate worker process** instead of
+the web request. The frontend enqueues a `SolveJob`, the worker picks up pending
+jobs and runs them, and the frontend polls for the result.
+
+Each solve may search for up to five minutes. Easy cases still return as soon
+as an optimal plan is found; the limit only gives harder cases more time. Queue
+time is tracked separately and does not consume this search budget.
+
+`make dev` starts the worker together with Django. If Django is started directly
+with `manage.py runserver`, you must also run the worker — without it, solve jobs
+stay `PENDING` forever.
+
+```sh
+# Only needed when Django was started without `make dev`
+$ poetry run python manage.py run_solver_worker
+```
+
+In production, run this as a long-lived process/container next to the web server.
+A single instance is enough; jobs are claimed with row locks, so you can run more
+than one safely.
+
+&nbsp;
+
 ## Permissions
 
 The project gives permissions based on group memberships imported from LEGO.
+The local membership snapshot is replaced atomically at OAuth login. LEGO role
+changes are therefore not live within an existing session; for an urgent
+revocation, invalidate that user's admissions session in addition to changing
+the LEGO role. Production sessions expire after the configured
+`SESSION_COOKIE_AGE` (one hour by default).
+
+Candidate applications do not currently have an automatic post-admission
+retention deadline. A deployment must define an approved retention period and
+deletion procedure before treating storage cleanup as automatic. Solver jobs
+are cleaned separately and are not a substitute for deleting applications.
 
 | Model                   | Action        | Requirement                                                                                                               |
 | :---------------------- | ------------- | ------------------------------------------------------------------------------------------------------------------------- |
-| Admission               | CREATE        | Either (1) any member of Webkom, (2) leader of Abakus OR (3) leader of RevyStyret. <br/> (1,2,3) `user.is_staff`          |
-| Admission               | EDIT          | Either (1) member of Webkom OR (2) creator of admission. <br/>(1) `user.is_member_of_webkom`, (2) `admission.created_by`. |
-| All applications        | VIEW & DELETE | Member of a group in `admission.admin_groups`                                                                             |
-| Applications to a group | VIEW & DELETE | Member of a group in `admission.groups` WITH role LEADER or RERUITING                                                     |
-| Group                   | EDIT          | Member of a group in `admission.groups` WITH role LEADER or RERUITING                                                     |
+| Admission               | CREATE        | Active Webkom member, or a staff user whose active LEGO role grants admission-management access                           |
+| Admission               | EDIT          | Active Webkom member, or the admission creator when that creator is still a staff user                                    |
+| All applications        | VIEW & DELETE | Active LEADER or RECRUITING member of a group in `admission.admin_groups`                                                  |
+| Applications to a group | VIEW & DELETE | Active member of a group in `admission.groups` with role LEADER or RECRUITING                                             |
+| Group                   | EDIT          | Active LEADER or RECRUITING member of an admission admin group, or of the group itself                                     |
 
 &nbsp;
 
@@ -186,6 +235,8 @@ $ DATABASE_PORT=5433 poetry run tox -e tests
 This codebase uses the PEP 8 code style. We enforce this with isort, black & flake8.
 In addition to the standards outlined in PEP 8, we have a few guidelines
 (see `setup.cfg` for more info):
+
+Frontend colors, spacing, typography, control dimensions, and responsive breakpoints must use the shared tokens in `frontend/src/styles/globals.css`, `frontend/src/styles/designTokens.ts`, and `tailwind.config.ts`. Raw values are reserved for data-dependent grid arithmetic, one-pixel hairlines, intrinsic asset dimensions, and constraints that cannot consume CSS variables, such as media-query declarations. Reusable values must be promoted to a named token instead of repeated locally.
 
 Format the code with black & isort
 

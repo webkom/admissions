@@ -41,8 +41,12 @@ const ToggleGroups: React.FC<ToggleGroupsProps> = ({
     <Wrapper>
       <Title>Endre dine valg</Title>
       <Tooltip>
-        Klikk på logoene til {isRevy ? "gruppene" : "komiteene"} for å legge
-        til/fjerne dem fra søknaden.
+        Klikk på symbolene til {isRevy ? "gruppene" : "komiteene"} for å legge
+        til/fjerne dem fra søknaden. Hvis du fjerner en{" "}
+        {isRevy ? "gruppe" : "komité"} du allerede har sendt inn søknad til,
+        skjer det først når du sender inn på nytt — teksten slettes da permanent
+        for den {isRevy ? "gruppen" : "komiteen"}, og de får beskjed anonymt om
+        at du trakk deg.
       </Tooltip>
       <IconsWrapper>{ChooseGroupsItems}</IconsWrapper>
       <LinkToOverview to={`/${admissionSlug}/velg-grupper`}>
@@ -57,60 +61,60 @@ export default ToggleGroups;
 /** Styles **/
 
 const Wrapper = styled.div`
-  border: 2px solid #ece3e3;
-  border-radius: 13px;
-  padding: 2rem;
-  max-width: 290px;
+  border: var(--border-width-strong) solid var(--color-border-soft);
+  border-radius: var(--border-radius-lg);
+  padding: var(--spacing-xl);
+  max-width: var(--form-toggle-width);
 
   ${media.portrait`
     max-width: 100%;
-    padding: 1.5rem 2rem;
+    padding: var(--spacing-lg) var(--spacing-xl);
 
   `};
 
   ${media.handheld`
      margin: auto;
-     max-width: 290px;
+     max-width: var(--form-toggle-width);
   `};
 `;
 
 const Title = styled.h4`
-  color: rgba(57, 75, 89, 0.75);
+  color: var(--color-text-muted);
   margin: 0;
 `;
 
 const Tooltip = styled.p`
-  color: rgba(57, 75, 89, 0.45);
+  color: var(--color-text-subtle);
   margin-top: 0;
-  margin-bottom: 1rem;
-  font-size: 0.8rem;
-  line-height: 1rem;
+  margin-bottom: var(--spacing-md);
+  font-size: var(--font-size-detail);
+  line-height: var(--line-height-tiny);
 `;
 
 const IconsWrapper = styled.div`
   grid-area: togglegroups;
   display: grid;
-  grid-template-columns: repeat(4, 40px);
+  grid-template-columns: repeat(4, var(--avatar-size-sm));
   grid-template-rows: auto;
-  grid-gap: 5px 10px;
-  padding: 5px 10px;
+  gap: var(--spacing-xs) var(--spacing-sm);
+  padding: var(--spacing-xs) var(--spacing-sm);
 
   ${media.portrait`
-    grid-template-columns: repeat(8, 40px);
+    grid-template-columns: repeat(8, var(--avatar-size-sm));
   `};
 
   ${media.handheld`
-    grid-template-columns: repeat(4, 40px);
+    grid-template-columns: repeat(4, var(--avatar-size-sm));
   `};
 `;
 
 const LinkToOverview = styled(Link)`
-  margin-top: 1rem;
+  margin-top: var(--spacing-md);
   display: inline-block;
-  line-height: 1rem;
+  line-height: var(--line-height-tiny);
   text-decoration: underline;
-  font-size: 0.8rem;
+  font-size: var(--font-size-detail);
   text-align: center;
-  font-weight: 500;
+  font-weight: var(--font-weight-medium);
   width: 100%;
 `;

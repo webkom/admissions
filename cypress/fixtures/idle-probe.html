@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="nb">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>useIsWindowIdle test harness</title>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module">
+      import React from "react";
+      import { createRoot } from "react-dom/client";
+      import { useIsWindowIdle } from "/static/frontend/src/utils/useIsWindowIdle.ts";
+
+      const search = new URLSearchParams(window.location.search);
+      const idleAfterMs = Number(search.get("idleAfterMs") ?? "1000");
+
+      const Harness = () => {
+        const isIdle = useIsWindowIdle(idleAfterMs);
+        return React.createElement(
+          "div",
+          { "data-cy": "idle-probe" },
+          String(isIdle),
+        );
+      };
+
+      const root = document.getElementById("root");
+      createRoot(root).render(React.createElement(Harness));
+    </script>
+  </body>
+</html>

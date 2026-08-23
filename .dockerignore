@@ -1,6 +1,11 @@
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
+/.git
+/.venv
+/.agents
+/.claude
+/members
 
 # C extensions
 *.so
@@ -61,10 +66,14 @@ target/
 *.swp
 
 .env
+*.env
+!admissions/settings/example.env
+admissions/settings/local.py
 admissions/files
-main.js
-bundles/
-webpack-stats.json
+/assets
+/cypress/screenshots
+/cypress/videos
+/.cypress-fixture-credentials.json
 
 # See https://help.github.com/ignore-files/ for more about ignoring files.
 

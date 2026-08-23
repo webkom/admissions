@@ -3,12 +3,20 @@ export type DjangoConfig = {
   RELEASE?: string;
   ENVIRONMENT?: string;
   API_URL: string;
+  CSRF_COOKIE_NAME?: string;
+  /** ISO expiry of the current session; empty when signed out. */
+  SESSION_EXPIRES_AT?: string;
 };
 const defaultConfig: DjangoConfig = {
-  API_URL: "http://127.0.0.1:5000/api",
+  API_URL: "/api",
 };
-const config = window.__CONFIG__
-  ? { ...defaultConfig, ...window.__CONFIG__ }
-  : defaultConfig;
+const serialized = document.getElementById("frontend-config")?.textContent;
+let embedded: DjangoConfig | undefined;
+try {
+  embedded = serialized ? (JSON.parse(serialized) as DjangoConfig) : undefined;
+} catch {
+  embedded = undefined;
+}
+const config = { ...defaultConfig, ...(embedded ?? window.__CONFIG__) };
 
 export default config;

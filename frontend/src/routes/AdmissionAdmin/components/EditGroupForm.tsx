@@ -9,7 +9,7 @@ import TextAreaField from "src/components/TextAreaField";
 import CSRFToken from "./csrftoken";
 import { EditGroupFormWrapper, FormWrapper } from "./styles";
 import { Group } from "src/types";
-import { Button } from "@webkom/lego-bricks";
+import { StyledButton } from "src/components/LinkButton";
 
 const signupSchema = Yup.object().shape({
   description: Yup.string()
@@ -74,9 +74,15 @@ const EditGroupForm: React.FC<EditGroupFormProps> = ({
               );
             },
             onError: (error) => {
+              const data = (error.response?.data ?? {}) as Record<
+                string,
+                string[] | undefined
+              >;
               setErrors({
-                description: error.response?.data.description[0],
-                response_label: error.response?.data.response_label[0],
+                description:
+                  data.description?.[0] ??
+                  "Kunne ikke lagre. Prøv igjen senere.",
+                response_label: data.response_label?.[0],
               });
             },
           },
@@ -122,13 +128,13 @@ const InnerForm: React.FC<InnerFormProps> = ({
             placeholder="Skriv hva gruppa ønsker å vite om søkeren..."
           />
         </EditGroupFormWrapper>
-        <Button
+        <StyledButton
           submit
           onClick={submitForm}
           disabled={!isValid || updateGroupMutation.isPending}
         >
           Lagre
-        </Button>
+        </StyledButton>
         {updateGroupMutation.isSuccess && <p>Lagret!</p>}
       </FormWrapper>
     </Form>

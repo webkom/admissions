@@ -1,9 +1,9 @@
 import re
 from enum import Enum
-from typing import Dict, List, Literal, Union
+from typing import Dict, List, Literal, Self, Union
 from uuid import uuid4
 
-from pydantic import BaseModel, ConfigDict, Field, RootModel
+from pydantic import BaseModel, ConfigDict, Field, RootModel, model_validator
 from typing_extensions import Annotated
 
 """
@@ -19,6 +19,7 @@ class DataType(str, Enum):
     TEXTAREA = "textarea"
     NUMBERINPUT = "numberinput"
     PHONEINPUT = "phoneinput"
+    CHECKBOX = "checkbox"
 
 
 ####################################
@@ -34,7 +35,7 @@ class TextModel(BaseModel):
 class BaseInputModel(BaseModel):
     model_config = ConfigDict(strict=True)
 
-    id: str = Field(default_factory=lambda: uuid4().hex, frozen=True)
+    id: str = Field(default_factory=lambda: uuid4().hex, min_length=1, frozen=True)
     title: str = Field(min_length=5)
     label: str
     placeholder: str
@@ -57,20 +58,38 @@ class PhoneInputModel(BaseInputModel):
     type: Literal[DataType.PHONEINPUT]
 
 
+class CheckboxInputModel(BaseInputModel):
+    type: Literal[DataType.CHECKBOX]
+
+
 InputModelUnion = Union[
-    TextModel, TextInputModel, TextAreaModel, NumberInputModel, PhoneInputModel
+    TextModel,
+    TextInputModel,
+    TextAreaModel,
+    NumberInputModel,
+    PhoneInputModel,
+    CheckboxInputModel,
 ]
 
 
 class InputModelList(RootModel):
     root: List[Annotated[InputModelUnion, Field(discriminator="type")]]
 
+    @model_validator(mode="after")
+    def validate_unique_input_ids(self) -> Self:
+        input_ids = [
+            field.id for field in self.root if isinstance(field, BaseInputModel)
+        ]
+        if len(input_ids) != len(set(input_ids)):
+            raise ValueError("Input field IDs must be unique")
+        return self
+
 
 ####################################
 ##      INPUT RESPONSE MODEL      ##
 ####################################
 class InputResponseModel(RootModel):
-    root: Dict[str, str]
+    root: Dict[str, Union[str, bool]]
 
 
 ####################################
@@ -90,4 +109,13 @@ class PhoneNumberValidator(Validator):
             raise ValueError("Invalid UUID")
 
 
-validators = {DataType.PHONEINPUT: [PhoneNumberValidator]}
+class CheckboxValidator(Validator):
+    def validate(self, model, value):
+        if not isinstance(value, bool):
+            raise ValueError("Expected boolean value.")
+
+
+validators = {
+    DataType.PHONEINPUT: [PhoneNumberValidator],
+    DataType.CHECKBOX: [CheckboxValidator],
+}
