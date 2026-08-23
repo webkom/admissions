@@ -56,7 +56,7 @@ COURSES_LONG = ((DATA_LONG, DATA_LONG), (KOMTEK_LONG, KOMTEK_LONG))
 
 # Groups that give privileges to their leaders
 STAFF_LEADER_GROUPS = ["backup", "Hovedstyret", "RevyStyret"]
-""" Members of this group with role leader should attain the is_staff attribute and be able to manage admissions """
+""" Members of these groups with role leader attain the is_staff attribute and can manage admissions. Matched against the LEGO login payload's group names - no local Group row is needed. """
 WEBKOM_GROUPNAME = "Webkom"
 """ Group name of Webkom """
 

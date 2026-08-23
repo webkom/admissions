@@ -236,7 +236,6 @@ def update_custom_user_details(strategy, details, user=None, *args, **kwargs):
 
     with transaction.atomic():
         Membership.objects.filter(user=user).delete()
-        user.is_staff = False
         roles_by_group = {}
         ambiguous_groups = set()
         for group, membership in group_data:
@@ -257,16 +256,20 @@ def update_custom_user_details(strategy, details, user=None, *args, **kwargs):
             else:
                 roles_by_group[local_group.pk] = (local_group, role)
 
+        # Staff comes straight from the LEGO payload, not from a local Group
+        # row: the staff groups (Hovedstyret in particular) have no reason to
+        # exist in the local table, so requiring a row here silently revoked
+        # the Abakus leader's access on their first login.
+        user.is_staff = any(
+            group.get("name") in constants.STAFF_LEADER_GROUPS
+            and membership.get("role") == constants.LEADER
+            for group, membership in group_data
+        )
+
         memberships = []
-        user.is_staff = False
         for group_id, (local_group, role) in roles_by_group.items():
             if group_id in ambiguous_groups:
                 continue
-            if (
-                local_group.name in constants.STAFF_LEADER_GROUPS
-                and role == constants.LEADER
-            ):
-                user.is_staff = True
             memberships.append(Membership(user=user, group=local_group, role=role))
 
         Membership.objects.bulk_create(memberships)
