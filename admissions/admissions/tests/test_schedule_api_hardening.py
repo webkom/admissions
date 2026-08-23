@@ -4166,6 +4166,94 @@ class CanonicalSolverInputTestCase(APITestCase):
         )
 
 
+class GroupRemovalDisclosureTestCase(APITestCase):
+    """Removing a committee from the admission must revoke its disclosure.
+
+    SavedSchedule points at Group, not the AdmissionGroup through-row, so
+    removal used to leave the published, name-revealed schedule row intact -
+    and a later re-add served it straight back to the whole committee with
+    no re-approval and no audit event.
+    """
+
+    def setUp(self):
+        self.staff_user = LegoUser.objects.create(
+            username="disclosure-staff", lego_id=940, is_staff=True
+        )
+        self.admission = create_admission(
+            created_by=self.staff_user, slug="disclosure-opptak"
+        )
+        self.admin_group = Group.objects.create(name="Disclosure admins", lego_id=941)
+        self.committee = Group.objects.create(name="Disclosure committee", lego_id=942)
+        self.other_committee = Group.objects.create(
+            name="Disclosure other committee", lego_id=943
+        )
+        self.admission.admin_groups.add(self.admin_group)
+        self.admission.groups.add(self.committee, self.other_committee)
+        self.saved = SavedSchedule.objects.create(
+            admission=self.admission,
+            group=self.committee,
+            schedule=[
+                {
+                    "candidate_id": str(uuid.uuid4()),
+                    "candidate": "Kandidat",
+                    "time": 540,
+                    "panel": [],
+                }
+            ],
+            start_date="2026-04-20",
+            is_distributed=True,
+            name_visibility="committee",
+        )
+        self.url = reverse(
+            "manage-admission-detail", kwargs={"slug": self.admission.slug}
+        )
+        self.client.force_authenticate(user=self.staff_user)
+
+    def _edit(self, groups):
+        return self.client.patch(
+            self.url,
+            {
+                "title": self.admission.title,
+                "open_from": self.admission.open_from,
+                "public_deadline": self.admission.public_deadline,
+                "closed_from": self.admission.closed_from,
+                "admin_groups": [str(self.admin_group.pk)],
+                "groups": [str(group.pk) for group in groups],
+            },
+            format="json",
+        )
+
+    def test_removing_a_group_revokes_its_published_disclosure(self):
+        res = self._edit([self.other_committee])
+
+        self.assertEqual(res.status_code, status.HTTP_200_OK, res.data)
+        self.saved.refresh_from_db()
+        self.assertFalse(self.saved.is_distributed)
+        self.assertEqual(self.saved.name_visibility, "hidden")
+        audit_event = NameVisibilityAuditEvent.objects.get(group=self.committee)
+        self.assertEqual(audit_event.action, NameVisibilityAuditEvent.ACTION_HIDDEN)
+        self.assertEqual(audit_event.actor, self.staff_user)
+
+    def test_removing_and_readding_group_does_not_restore_disclosure(self):
+        self._edit([self.other_committee])
+
+        res = self._edit([self.committee, self.other_committee])
+
+        self.assertEqual(res.status_code, status.HTTP_200_OK, res.data)
+        self.saved.refresh_from_db()
+        self.assertFalse(self.saved.is_distributed)
+        self.assertEqual(self.saved.name_visibility, "hidden")
+
+    def test_keeping_the_group_leaves_disclosure_untouched(self):
+        res = self._edit([self.committee, self.other_committee])
+
+        self.assertEqual(res.status_code, status.HTTP_200_OK, res.data)
+        self.saved.refresh_from_db()
+        self.assertTrue(self.saved.is_distributed)
+        self.assertEqual(self.saved.name_visibility, "committee")
+        self.assertFalse(NameVisibilityAuditEvent.objects.exists())
+
+
 class CandidateWithdrawalPrivacyTestCase(TestCase):
     def test_withdrawal_purges_denormalized_candidate_data(self):
         admin = LegoUser.objects.create(username="purge-admin", lego_id=980)

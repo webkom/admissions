@@ -10,6 +10,7 @@ from admissions.admissions import constants
 from admissions.admissions.admission_access import (
     APPLICATION_VIEW_MODE_NONE,
     get_application_view_mode,
+    revoke_removed_group_disclosures,
 )
 from admissions.admissions.json_models import InputModelList
 from admissions.admissions.models import (
@@ -282,6 +283,12 @@ class AdminCreateUpdateAdmissionSerializer(serializers.HyperlinkedModelSerialize
         if input_admin_groups is not None:
             admission.admin_groups.set(input_admin_groups)
         if input_groups is not None:
+            request = self.context.get("request")
+            revoke_removed_group_disclosures(
+                admission,
+                input_groups,
+                getattr(request, "user", None),
+            )
             admission.groups.set(input_groups)
         if input_group_questions is not None:
             for group_id, fields in input_group_questions.items():

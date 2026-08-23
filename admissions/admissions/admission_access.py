@@ -4,6 +4,7 @@ from admissions.admissions import constants
 from admissions.admissions.models import (
     Admission,
     Membership,
+    NameVisibilityAuditEvent,
     SavedSchedule,
     UserApplication,
 )
@@ -153,6 +154,44 @@ def schedule_response_context(admission, saved_schedule, is_interview_admin):
         "include_deviation_review": is_interview_admin,
         "publication_boundary": publication_boundary,
     }
+
+
+def revoke_removed_group_disclosures(admission, next_groups, actor):
+    """Unpublish and hide the schedule of any group leaving the admission.
+
+    SavedSchedule points at Group, not at the AdmissionGroup through-row, so
+    removing a committee from the admission left its published,
+    name-revealed schedule row fully intact - and re-adding the committee
+    later served it straight back to every member, with no re-approval and
+    no audit trail. Disclosure is revoked at the moment of removal instead:
+    restoring it after a re-add is a deliberate publish, like any other.
+    """
+
+    next_group_ids = {group.pk for group in next_groups}
+    removed_schedules = SavedSchedule.objects.select_for_update().filter(
+        admission=admission
+    ).exclude(group_id__in=next_group_ids)
+    for saved in removed_schedules:
+        was_visible = (
+            saved.name_visibility == SavedSchedule.NAME_VISIBILITY_COMMITTEE
+        )
+        if saved.distributed_through is None and not was_visible:
+            continue
+        saved.distributed_through = None
+        saved.name_visibility = SavedSchedule.NAME_VISIBILITY_HIDDEN
+        saved.save(
+            update_fields=["distributed_through", "name_visibility", "updated_at"]
+        )
+        if was_visible:
+            NameVisibilityAuditEvent.objects.create(
+                admission=admission,
+                saved_schedule=saved,
+                group=saved.group,
+                group_name=saved.group.name,
+                actor=actor,
+                actor_username=actor.username if actor is not None else "system",
+                action=NameVisibilityAuditEvent.ACTION_HIDDEN,
+            )
 
 
 def user_is_privileged(admission_slug, user):
