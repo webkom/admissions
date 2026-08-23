@@ -11,7 +11,7 @@ const LandingPageNoAdmission = () => {
       </h2>
       <div className="mb-8 flex max-w-md handheld:mx-4">
         <DecorativeLine $vertical />
-        <p className="mb-0 py-2 text-body-lg leading-7 handheld:text-base handheld:leading-6 [&_a]:whitespace-nowrap">
+        <p className="mb-0 py-2 text-body-lg leading-7 handheld:text-base handheld:leading-6 [&_a]:whitespace-nowrap ml-2">
           Opptak til{" "}
           <a href="https://abakus.no/pages/grupper/104-revyen">revyen</a> og{" "}
           <a href="https://abakus.no/pages/komiteer/4">komiteene</a> skjer
@@ -35,10 +35,8 @@ const LandingPageNoAdmission = () => {
         </p>
       </div>
       <LinkButton
-        className="slide-underline"
         to="https://abakus.no"
         external
-        secondary
       >
         Gå til abakus.no
       </LinkButton>

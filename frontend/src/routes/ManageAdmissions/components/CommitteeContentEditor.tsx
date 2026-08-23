@@ -27,7 +27,7 @@ const contentFields: Array<{
     field: "committee_info",
     label: "Kort presentasjon",
     help: "Vises på komitékortet når søkeren sammenligner komiteer.",
-    placeholder: "Beskriv komiteen, miljøet og hva dere jobber med.",
+    placeholder: "Vår komité har ansvar for… \n\nVi er opptatt av...",
     maxLength: 350,
     rows: 4,
   },
@@ -36,7 +36,7 @@ const contentFields: Array<{
     label: "Søkerinformasjon",
     help: "Hjelp søkeren å forstå hva de bør skrive om i søknaden og hva intervjuet innebærer.",
     placeholder:
-      "Fortell hva søkeren bør fremheve i søknaden, og hva de kan forvente på intervjuet.",
+      "Skriv litt om hvorfor...\n\nSkriv litt om hvordan...\n\nSkriv litt om når...",
     maxLength: 600,
     rows: 5,
   },
@@ -139,7 +139,6 @@ const CommitteeContentEditor: React.FC<CommitteeContentEditorProps> = ({
         <strong>
           {completedGroups} av {groups.length} komiteer utfylt
         </strong>
-        <span>Fyll ut informasjonen slik den møter søkeren.</span>
       </EditorSummary>
       <EditorLayout>
         <CommitteeList aria-label="Velg komité">

@@ -62,6 +62,8 @@ class LegoOAuth2(BaseOAuth2):
     ]
 
     LEGO_GROUP_NAMES = [
+        # Central admission administration
+        "Hovedstyret",
         # Committee admissions
         "Abakus-leder",
         "Arrkom",
@@ -144,11 +146,28 @@ class LegoOAuth2(BaseOAuth2):
         url = urljoin(self.api_url(), "api/v1/users/oauth2_userdata/")
         return self.get_json(url, headers={"AUTHORIZATION": "Bearer %s" % access_token})
 
-    def _create_initial_groups(self, access_token):
+    def _fetch_all_lego_groups(self, access_token):
+        """Walk every page of the group list.
+
+        The endpoint is paginated, so reading only the first page made the
+        import silently depend on LEGO's page size being larger than the
+        list below.
+        """
         url = urljoin(self.api_url(), "api/v1/groups/")
-        data = self.get_json(url, headers={"AUTHORIZATION": "Bearer %s" % access_token})
+        headers = {"AUTHORIZATION": "Bearer %s" % access_token}
+        results = []
+        seen_urls = set()
+        while url and url not in seen_urls:
+            seen_urls.add(url)
+            page = self.get_json(url, headers=headers)
+            results.extend(page.get("results") or [])
+            url = page.get("next")
+        return results
+
+    def _create_initial_groups(self, access_token):
+        results = self._fetch_all_lego_groups(access_token)
         with transaction.atomic():
-            for group in data["results"]:
+            for group in results:
                 name = group["name"]
                 if name not in self.LEGO_GROUP_NAMES:
                     continue
@@ -165,10 +184,13 @@ class LegoOAuth2(BaseOAuth2):
                     detail_link=detail_link,
                     logo=logo,
                 )
-        if len(self.LEGO_GROUP_NAMES) != Group.objects.count():
+        missing = sorted(
+            set(self.LEGO_GROUP_NAMES)
+            - set(Group.objects.values_list("name", flat=True))
+        )
+        if missing:
             raise ImportError(
-                "All %s groups were not fetched from the api"
-                % len(self.LEGO_GROUP_NAMES)
+                "These groups were not fetched from the api: %s" % ", ".join(missing)
             )
 
 

@@ -179,6 +179,12 @@ interface ScheduleSelectableBlockCellProps extends ScheduleBlockCellProps {
   activeCount: number;
   totalCount: number;
   fills: number[];
+  /**
+   * Parallel to `fills`: entries that are 1 mark the slot as chosen but
+   * discouraged, rendered with a distinct pattern instead of the solid
+   * brand fill.
+   */
+  discouragedFills?: number[];
   selectable?: boolean;
   trackStyle?: React.CSSProperties;
   trackDataCy?: string;
@@ -207,6 +213,7 @@ export const ScheduleSelectableBlockCell = React.forwardRef<
       activeCount,
       totalCount,
       fills,
+      discouragedFills,
       selectable = true,
       trackStyle,
       trackDataCy,
@@ -287,6 +294,7 @@ export const ScheduleSelectableBlockCell = React.forwardRef<
                   hideTrackWhenUnavailable
                 }
                 fills={fills}
+                discouragedFills={discouragedFills}
               />
             </div>
           </div>
@@ -330,6 +338,8 @@ ScheduleSelectableBlockCell.displayName = "ScheduleSelectableBlockCell";
 
 interface ScheduleSlotSegmentsProps {
   fills: number[];
+  /** Parallel to fills: entries with 1 render a discouraged / "helst ikke" pattern. */
+  discouragedFills?: number[];
   closed?: boolean;
   className?: string;
   hideWhenClosed?: boolean;
@@ -338,6 +348,7 @@ interface ScheduleSlotSegmentsProps {
 /** Small per-slot tracks shared by every block mode. Fill is normalized 0–1. */
 export const ScheduleSlotSegments: React.FC<ScheduleSlotSegmentsProps> = ({
   fills,
+  discouragedFills,
   closed = false,
   className,
   hideWhenClosed = false,
@@ -349,25 +360,33 @@ export const ScheduleSlotSegments: React.FC<ScheduleSlotSegmentsProps> = ({
       aria-hidden="true"
       className={cn("flex h-1.5 w-full items-center gap-1", className)}
     >
-      {fills.map((fill, index) => (
-        <span
-          key={index}
-          data-schedule-slot-segment=""
-          className="relative h-full flex-1 overflow-hidden rounded-full bg-border-faint"
-        >
+      {fills.map((fill, index) => {
+        const isDiscouraged = discouragedFills?.[index] === 1;
+        return (
           <span
+            key={index}
+            data-schedule-slot-segment=""
             className={cn(
-              "absolute inset-y-0 left-0 rounded-full transition-[width,opacity] duration-150 motion-reduce:transition-none",
-              closed
-                ? "bg-border-mutedSoft opacity-70"
-                : "bg-brand-activeBorder",
+              "relative h-full flex-1 overflow-hidden rounded-full bg-border-faint",
+              isDiscouraged && "border border-dashed border-warning-border bg-warning-bg",
             )}
-            style={{
-              width: `${Math.round(Math.max(0, Math.min(1, fill)) * 100)}%`,
-            }}
-          />
-        </span>
-      ))}
+          >
+            <span
+              className={cn(
+                "absolute inset-y-0 left-0 rounded-full transition-[width,opacity] duration-150 motion-reduce:transition-none",
+                closed
+                  ? "bg-border-mutedSoft opacity-70"
+                  : isDiscouraged
+                    ? "bg-warning-border opacity-70"
+                    : "bg-brand-activeBorder",
+              )}
+              style={{
+                width: `${Math.round(Math.max(0, Math.min(1, fill)) * 100)}%`,
+              }}
+            />
+          </span>
+        );
+      })}
     </div>
   );
 };

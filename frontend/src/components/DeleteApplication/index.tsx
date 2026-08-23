@@ -13,8 +13,6 @@ const DeleteWrapper = styled.div`
   display: flex;
   flex-direction: column;
   gap: var(--spacing-sm);
-  align-items: stretch;
-  min-width: 0;
 `;
 
 interface DeleteApplicationProps {

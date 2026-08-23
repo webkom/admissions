@@ -423,6 +423,9 @@ class AdminApplicationViewSet(
 
         group_id = request.query_params.get("groupId", None)
         user_is_admin = user_is_admission_admin(admission, self.request.user)
+        # An admin group that also competes in this admission is confined to
+        # its own committee (see get_application_view_mode), so admin standing
+        # alone is not enough to delete a whole application here.
         is_committee_minimal = view_mode == APPLICATION_VIEW_MODE_COMMITTEE_MINIMAL
 
         # Only admins can delete UserApplication objects
@@ -493,6 +496,8 @@ class TerminateCommitteeApplicationsView(APIView):
 
         if not user_is_admission_admin(admission, request.user):
             return Response(status=status.HTTP_403_FORBIDDEN)
+        # An admin group that also competes here may only terminate its own
+        # committee - never a rival's (see get_application_view_mode).
         if (
             get_application_view_mode(admission, request.user)
             == APPLICATION_VIEW_MODE_COMMITTEE_MINIMAL

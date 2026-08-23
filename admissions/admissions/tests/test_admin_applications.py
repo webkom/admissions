@@ -116,7 +116,6 @@ class AdminAdmissionPrivacyTestCase(APITestCase):
     def test_priority_text_is_visible_to_leadership_only(self):
         """Every admin_full viewer sees the application - only leader/co-leader
         see the applicant's note to "central admission officers"."""
-        co_leader_admin = self.co_leader_admin
         UserApplication.objects.filter(
             admission=self.admission, user=self.candidate
         ).update(text="private central comment")
@@ -125,7 +124,7 @@ class AdminAdmissionPrivacyTestCase(APITestCase):
             kwargs={"admission_slug": self.admission.slug},
         )
 
-        for admin in (self.leader_admin, co_leader_admin):
+        for admin in (self.leader_admin, self.co_leader_admin):
             with self.subTest(role=admin.username):
                 self.client.force_authenticate(user=admin)
                 response = self.client.get(url)
@@ -527,6 +526,8 @@ class ListApplicationsTestCase(APITestCase):
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(admission_response.status_code, status.HTTP_200_OK)
+        # is_admin stays true - the grant is real - but a competing admin
+        # group is still confined to its own committee's applicants.
         self.assertTrue(admission_response.data["userdata"]["is_admin"])
         self.assertEqual(
             admission_response.data["userdata"]["application_view_mode"],
@@ -1204,6 +1205,54 @@ class DeleteGroupApplicationsTestCase(APITestCase):
             kwargs={"admission_slug": self.admission_slug, "pk": application.pk},
         )
         self.client.force_authenticate(user=self.webkom_leader)
+
+        # webkom_leader leads the admin group *and* one competing committee,
+        # so admin standing does not extend past their own committee here.
+        whole_response = self.client.delete(url)
+        hidden_group_response = self.client.delete(f"{url}?groupId={self.arrkom.pk}")
+
+        self.assertEqual(whole_response.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(
+            hidden_group_response.status_code,
+            status.HTTP_403_FORBIDDEN,
+        )
+        self.assertTrue(UserApplication.objects.filter(pk=application.pk).exists())
+        self.assertTrue(
+            GroupApplication.objects.filter(pk=webkom_application.pk).exists()
+        )
+        self.assertTrue(
+            GroupApplication.objects.filter(pk=arrkom_application.pk).exists()
+        )
+
+    def test_committee_recruiter_without_admin_standing_still_cannot_delete(self):
+        """The dual-role guard moved to admin_groups membership, so a plain
+        committee recruiter must still be confined to its own committee."""
+        plain_recruiter = LegoUser.objects.create(
+            username="plain-recruiter", lego_id=11
+        )
+        Membership.objects.create(
+            user=plain_recruiter, role=RECRUITING, group=self.webkom
+        )
+        application = UserApplication.objects.create(
+            user=self.pleb,
+            admission=self.admission,
+            phone_number="12345678",
+        )
+        webkom_application = GroupApplication.objects.create(
+            application=application,
+            group=self.webkom,
+            text="private Webkom application",
+        )
+        arrkom_application = GroupApplication.objects.create(
+            application=application,
+            group=self.arrkom,
+            text="private Arrkom application",
+        )
+        url = reverse(
+            "admin-userapplication-detail",
+            kwargs={"admission_slug": self.admission_slug, "pk": application.pk},
+        )
+        self.client.force_authenticate(user=plain_recruiter)
 
         whole_response = self.client.delete(url)
         hidden_group_response = self.client.delete(f"{url}?groupId={self.arrkom.pk}")
