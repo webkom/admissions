@@ -58,14 +58,6 @@ from admissions.admissions.serializers import (
 from admissions.admissions.session_renewal import renew_session, session_expires_at
 from admissions.utils.email import send_message
 
-
-def _isoformat_or_blank(value):
-    """Empty string, not None: the template context feeds a JSON blob the
-    client reads as a plain optional string."""
-
-    return value.isoformat() if value else ""
-
-
 from .authentication import SessionAuthentication
 from .permissions import (
     AdminAdmissionPermissions,
@@ -78,6 +70,13 @@ from .permissions import (
 )
 
 log = get_logger()
+
+
+def _isoformat_or_blank(value):
+    """Empty string, not None: the template context feeds a JSON blob the
+    client reads as a plain optional string."""
+
+    return value.isoformat() if value else ""
 
 
 @method_decorator(ensure_csrf_cookie, name="dispatch")
