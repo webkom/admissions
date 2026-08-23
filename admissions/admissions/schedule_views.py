@@ -58,7 +58,13 @@ class SavedScheduleView(SchedulerFeatureGateMixin, APIView):
         user.__class__ = LegoUser
 
         is_admin = user_is_admission_admin(admission, user)
-        representing_groups = get_representing_groups(admission, user)
+        # Scoped to the URL's own group, like availability_views and
+        # solve_views: representing some OTHER committee in this admission
+        # must grant nothing here, or a recruiter of X could read Y's
+        # schedule and flip Y's name_visibility.
+        representing_groups = get_representing_groups(admission, user).filter(
+            pk=group.pk
+        )
         is_recruiter = representing_groups.exists()
 
         is_interview_admin = user_is_interview_admin(admission, group, user)

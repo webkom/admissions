@@ -2253,6 +2253,61 @@ class SavedScheduleVisibilityTestCase(APITestCase):
         defaults.update(overrides)
         return SavedSchedule.objects.create(**defaults)
 
+    def _other_committee_recruiter(self):
+        other_group = Group.objects.create(name="Bedkom", lego_id=705)
+        self.admission.groups.add(other_group)
+        recruiter = LegoUser.objects.create(username="vis-other-recruiter", lego_id=706)
+        Membership.objects.create(user=recruiter, role=RECRUITING, group=other_group)
+        return recruiter
+
+    def test_cross_committee_recruiter_cannot_read_the_schedule(self):
+        """Representing committee X grants nothing on committee Y's schedule.
+
+        is_recruiter was derived admission-wide here (unlike the sibling
+        availability/solve views), so a recruiter of Bedkom passed the gate
+        for Arrkom's schedule and, when it was distributed with committee
+        name visibility, read Arrkom's candidate names.
+        """
+        self._create_saved(name_visibility="committee")
+        self.client.force_authenticate(user=self._other_committee_recruiter())
+
+        res = self.client.get(self.url)
+
+        self.assertEqual(res.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_cross_committee_recruiter_cannot_flip_name_visibility(self):
+        saved = self._create_saved(name_visibility="hidden")
+        self.client.force_authenticate(user=self._other_committee_recruiter())
+
+        res = self.client.post(
+            self.url,
+            {"name_visibility": "committee"},
+            format="json",
+        )
+
+        self.assertEqual(res.status_code, status.HTTP_403_FORBIDDEN)
+        saved.refresh_from_db()
+        self.assertEqual(saved.name_visibility, "hidden")
+        self.assertFalse(NameVisibilityAuditEvent.objects.exists())
+
+    def test_own_committee_recruiter_still_flips_name_visibility(self):
+        saved = self._create_saved(name_visibility="hidden")
+        recruiter = LegoUser.objects.create(username="vis-own-recruiter", lego_id=707)
+        Membership.objects.create(
+            user=recruiter, role=RECRUITING, group=self.committee_group
+        )
+        self.client.force_authenticate(user=recruiter)
+
+        res = self.client.post(
+            self.url,
+            {"name_visibility": "committee"},
+            format="json",
+        )
+
+        self.assertEqual(res.status_code, status.HTTP_200_OK, res.data)
+        saved.refresh_from_db()
+        self.assertEqual(saved.name_visibility, "committee")
+
     def test_committee_member_sees_only_config_until_distributed(self):
         self._create_saved(is_distributed=False)
         self.client.force_authenticate(user=self.member_user)
