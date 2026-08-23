@@ -591,6 +591,14 @@ class InterviewAvailability(models.Model):
         related_name="interview_availabilities",
     )
     slots = models.JSONField(default=list, blank=True)
+    # Slots the interviewer can make but would rather not - a lecture they
+    # would have to skip, say. Kept disjoint from `slots` and outside it, so
+    # `slots` keeps meaning "freely available"; the schedulable set is the
+    # union of the two (see interviewer_availability_slots). The solver may
+    # use these, at a penalty, which is the point: it reserves a plain
+    # non-answer for "genuinely cannot attend" instead of pushing people to
+    # mark a slot unavailable when they merely prefer not to.
+    discouraged_slots = models.JSONField(default=list, blank=True)
     conflicts = models.JSONField(default=list, blank=True)
     reviewed_candidate_ids = models.JSONField(default=list, blank=True)
     # A separate namespace from the two fields above (tokens look like

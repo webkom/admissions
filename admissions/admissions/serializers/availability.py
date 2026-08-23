@@ -36,6 +36,14 @@ class SaveInterviewAvailabilitySerializer(serializers.Serializer):
         required=False,
         max_length=constants.MAX_SCHEDULE_SLOTS,
     )
+    # "Helst ikke": submitted alongside slots and validated against the same
+    # grid. Sent as its own list rather than a flag inside slots so a client
+    # that knows nothing about it still round-trips availability unchanged.
+    discouraged_slots = serializers.ListField(
+        child=serializers.CharField(),
+        required=False,
+        max_length=constants.MAX_SCHEDULE_SLOTS,
+    )
     conflicts = serializers.ListField(
         child=serializers.CharField(), required=False, max_length=500
     )
@@ -89,6 +97,9 @@ class InterviewAvailabilityParticipantSerializer(serializers.Serializer):
         choices=InterviewAvailability.EXPERIENCE_LEVEL_CHOICES
     )
     slots = serializers.ListField(child=serializers.CharField(), default=list)
+    discouraged_slots = serializers.ListField(
+        child=serializers.CharField(), default=list
+    )
     conflicts = serializers.ListField(child=serializers.CharField(), default=list)
     # Admin-only, never on non-admin responses: implied by a fadderbarn
     # declaration matching an applicant, so showing it to the declaring

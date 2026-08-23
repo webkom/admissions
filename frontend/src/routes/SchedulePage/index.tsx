@@ -569,6 +569,8 @@ const LoadedScheduleView: React.FC<LoadedScheduleViewProps> = ({
   const {
     selectedSlots: mySelectedSlots,
     setSelectedSlots: setMySelectedSlots,
+    discouragedSlots: myDiscouragedSlots,
+    setDiscouragedSlots: setMyDiscouragedSlots,
     currentParticipant: myAvailabilityParticipant,
     saveAvailability,
     saveConflictReview,
@@ -763,13 +765,17 @@ const LoadedScheduleView: React.FC<LoadedScheduleViewProps> = ({
                   enabledSlots={enabledSlots}
                   selectedSlots={mySelectedSlots}
                   onSlotsChange={setMySelectedSlots}
+                  discouragedSlots={myDiscouragedSlots}
+                  onDiscouragedChange={setMyDiscouragedSlots}
                   dates={dates}
                   sessionDuration={sessionDuration}
                   chunkSize={chunkSize}
                   chunkBreakMinutes={chunkBreakMinutes}
                   dayStartMinute={dayStartMinute}
                   dayEndMinute={dayEndMinute}
-                  onSave={(slots) => saveAvailability(slots, fadderbarn)}
+                  onSave={(slots, discouraged) =>
+                    saveAvailability(slots, fadderbarn, discouraged)
+                  }
                   extraSection={
                     <FadderbarnPicker
                       admissionSlug={admissionSlug ?? ""}
@@ -844,13 +850,17 @@ const LoadedScheduleView: React.FC<LoadedScheduleViewProps> = ({
                   enabledSlots={enabledSlots}
                   selectedSlots={mySelectedSlots}
                   onSlotsChange={setMySelectedSlots}
+                  discouragedSlots={myDiscouragedSlots}
+                  onDiscouragedChange={setMyDiscouragedSlots}
                   dates={dates}
                   sessionDuration={sessionDuration}
                   chunkSize={chunkSize}
                   chunkBreakMinutes={chunkBreakMinutes}
                   dayStartMinute={dayStartMinute}
                   dayEndMinute={dayEndMinute}
-                  onSave={(slots) => saveAvailability(slots, fadderbarn)}
+                  onSave={(slots, discouraged) =>
+                    saveAvailability(slots, fadderbarn, discouraged)
+                  }
                   onSaveSuccess={() => openFoundationWorkspace("coverage")}
                   extraSection={
                     <FadderbarnPicker

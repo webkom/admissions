@@ -2,6 +2,7 @@ import * as React from "react";
 import { CalendarRange, UserMinus } from "lucide-react";
 import { iconSizes } from "src/styles/designTokens";
 import type { InterviewerParticipation } from "src/types";
+import cn from "src/utils/cn";
 import {
   buildBlockTimeChunks,
   formatDateHeader,
@@ -29,11 +30,18 @@ interface TimeSchedulerProps {
   enabledSlots?: Set<string>;
   selectedSlots?: Set<string>;
   onSlotsChange?: (slots: Set<string>) => void;
+  /**
+   * "Helst ikke" slots, disjoint from selectedSlots. Passing this (with
+   * onDiscouragedChange) turns the grid tri-state; omitting it leaves the
+   * plain available/unavailable behaviour untouched.
+   */
+  discouragedSlots?: Set<string>;
+  onDiscouragedChange?: (slots: Set<string>) => void;
   dayStartMinute: number;
   dayEndMinute: number;
   chunkSize: number;
   chunkBreakMinutes: number;
-  onSave?: (slots: Set<string>) => Promise<void>;
+  onSave?: (slots: Set<string>, discouraged: Set<string>) => Promise<void>;
   onSaveSuccess?: () => void;
   sessionDuration: number;
   dates: string[];
@@ -52,6 +60,8 @@ const TimeScheduler: React.FC<TimeSchedulerProps> = ({
   enabledSlots,
   selectedSlots: externalSelectedSlots,
   onSlotsChange,
+  discouragedSlots,
+  onDiscouragedChange,
   dayStartMinute,
   dayEndMinute,
   chunkSize,
@@ -73,6 +83,23 @@ const TimeScheduler: React.FC<TimeSchedulerProps> = ({
   >(new Set());
   const selectedSlots = externalSelectedSlots ?? internalSelectedSlots;
   const setSelectedSlots = onSlotsChange ?? setInternalSelectedSlots;
+  const supportsDiscouraged = Boolean(discouragedSlots && onDiscouragedChange);
+  const discouraged = React.useMemo(
+    () => discouragedSlots ?? new Set<string>(),
+    [discouragedSlots],
+  );
+  // Which of the two answers a drag paints. The grid itself stays a plain
+  // binary selection; the mode decides which set a newly painted slot lands
+  // in, so no existing drag/keyboard behaviour has to change.
+  const [paintMode, setPaintMode] = React.useState<"available" | "discouraged">(
+    "available",
+  );
+  // What the grid renders as "on" is both answers together, so painting in
+  // one mode visibly deselects in the other.
+  const gridActiveSlots = React.useMemo(
+    () => new Set([...selectedSlots, ...discouraged]),
+    [selectedSlots, discouraged],
+  );
 
   const [isSaving, setIsSaving] = React.useState(false);
   const [saveTick, setSaveTick] = React.useState(0);
@@ -127,10 +154,39 @@ const TimeScheduler: React.FC<TimeSchedulerProps> = ({
 
   const handleGridChange = React.useCallback(
     (nextSlots: Set<string>) => {
-      setSelectedSlots(nextSlots);
+      if (!supportsDiscouraged) {
+        setSelectedSlots(nextSlots);
+        setDirtySinceSave(true);
+        return;
+      }
+      // The grid hands back the combined selection. Split it by the active
+      // mode: newly painted slots join that mode's set, and each slot lives
+      // in exactly one of the two.
+      const nextAvailable = new Set<string>();
+      const nextDiscouraged = new Set<string>();
+      nextSlots.forEach((slot) => {
+        const wasAvailable = selectedSlots.has(slot);
+        const wasDiscouraged = discouraged.has(slot);
+        if (!wasAvailable && !wasDiscouraged) {
+          if (paintMode === "discouraged") nextDiscouraged.add(slot);
+          else nextAvailable.add(slot);
+          return;
+        }
+        if (wasDiscouraged) nextDiscouraged.add(slot);
+        else nextAvailable.add(slot);
+      });
+      setSelectedSlots(nextAvailable);
+      onDiscouragedChange?.(nextDiscouraged);
       setDirtySinceSave(true);
     },
-    [setSelectedSlots],
+    [
+      discouraged,
+      onDiscouragedChange,
+      paintMode,
+      selectedSlots,
+      setSelectedSlots,
+      supportsDiscouraged,
+    ],
   );
 
   React.useEffect(() => {
@@ -157,9 +213,15 @@ const TimeScheduler: React.FC<TimeSchedulerProps> = ({
       });
     });
     if (normalized.size !== selectedSlots.size) setSelectedSlots(normalized);
+    // Whole-block normalisation above can pull a discouraged minute into the
+    // available set; keep the two disjoint so the server never sees a slot
+    // claimed by both.
+    const normalizedDiscouraged = new Set(
+      [...discouraged].filter((slot) => !normalized.has(slot)),
+    );
     setIsSaving(true);
     try {
-      await onSave(normalized);
+      await onSave(normalized, normalizedDiscouraged);
       setDirtySinceSave(false);
       setSaveTick((tick) => tick + 1);
       onSaveSuccess?.();
@@ -252,6 +314,12 @@ const TimeScheduler: React.FC<TimeSchedulerProps> = ({
               swatchClassName="border-border bg-surface-base"
               swatchStyle={scheduleOpenLegendStyle}
             />
+            {supportsDiscouraged && (
+              <ScheduleGridLegendItem
+                label="Helst ikke"
+                swatchClassName="border-dashed border-warning-border bg-warning-bg"
+              />
+            )}
             <ScheduleGridLegendItem
               label="Ikke valgt"
               swatchClassName="border-border-soft bg-surface-neutral"
@@ -264,12 +332,56 @@ const TimeScheduler: React.FC<TimeSchedulerProps> = ({
         }
       />
       <SchedulePanelBody>
+        {supportsDiscouraged && (
+          <div
+            data-cy="availability-paint-mode"
+            className="mb-4 rounded-md border border-border-soft bg-surface-subtle px-3 py-2"
+          >
+            <p className="m-0 text-detail text-text-muted">
+              Marker tidene du kan. Bruk <strong>Helst ikke</strong> for tider
+              du kan møte, men helst vil slippe — for eksempel en forelesning.
+              Lar du en tid stå umarkert, betyr det at du ikke kan.
+            </p>
+            <div
+              role="radiogroup"
+              aria-label="Hva markeringen betyr"
+              className="mt-2 flex flex-wrap gap-1.5"
+            >
+              {(
+                [
+                  ["available", "Kan"],
+                  ["discouraged", "Helst ikke"],
+                ] as const
+              ).map(([mode, label]) => (
+                <button
+                  key={mode}
+                  type="button"
+                  role="radio"
+                  aria-checked={paintMode === mode}
+                  data-cy={`paint-mode-${mode}`}
+                  onClick={() => setPaintMode(mode)}
+                  className={cn(
+                    "rounded-md border px-2.5 py-1 text-detail font-semibold",
+                    keyboardFocusRingClass,
+                    paintMode === mode
+                      ? "border-brand-activeBorder bg-brand-soft text-text-primary"
+                      : "border-border-soft bg-surface-base text-text-muted",
+                  )}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
         <SelectableScheduleGrid
           dates={dates}
           chunks={chunks}
           sessionDuration={sessionDuration}
           selectableSlots={enabledSlots}
-          activeSlots={selectedSlots}
+          activeSlots={supportsDiscouraged ? gridActiveSlots : selectedSlots}
+          secondarySlots={supportsDiscouraged ? discouraged : undefined}
+          secondaryLabel={supportsDiscouraged ? "helst ikke" : undefined}
           onChangeActiveSlots={handleGridChange}
           labels={{
             grid: "Min tilgjengelighet per intervjublokk",

@@ -76,6 +76,8 @@ class SolverProblem:
     locked_assignments: list[dict]
     previous_schedule: list[dict]
     availability: dict[str, set[int]]
+    # Subset of `availability` the interviewer would rather not be used.
+    discouraged: dict[str, set[int]]
     candidate_map: dict[str, Candidate]
     interviewer_map: dict[str, Interviewer]
     unplaceable_reason: dict[str, tuple[str, str]]
@@ -283,6 +285,13 @@ def _normalize_problem(
             interviewer_id: slots.intersection(all_slots_set)
             for interviewer_id, slots in availability.items()
         }
+    # Intersected with the (already grid-restricted) availability so a
+    # discouraged time can never widen what the solver may use.
+    discouraged = {
+        interviewer.id: set(interviewer.discouraged)
+        & availability.get(interviewer.id, set())
+        for interviewer in interviewers
+    }
     gender_data_available = any(
         interviewer.gender in {"M", "F"} for interviewer in interviewers
     )
@@ -614,6 +623,7 @@ def _normalize_problem(
             locked_assignments=normalized_locks,
             previous_schedule=list(previous_schedule_data or []),
             availability=availability,
+            discouraged=discouraged,
             candidate_map=candidate_map,
             interviewer_map=interviewer_map,
             unplaceable_reason=unplaceable_reason,
@@ -1057,6 +1067,11 @@ def _build_model(
         for (interviewer_id, interview_time), panel_var in panel.items()
         if interview_time not in problem.availability[interviewer_id]
     ]
+    discouraged_vars = [
+        panel_var
+        for (interviewer_id, interview_time), panel_var in panel.items()
+        if interview_time in problem.discouraged.get(interviewer_id, ())
+    ]
     extra_experienced = 0
     maximum_extra_experienced = 0
     if problem.options.require_experienced_panel:
@@ -1066,16 +1081,25 @@ def _build_model(
         maximum_extra_experienced = max(
             0, (problem.panel_size - 1) * len(problem.sorted_slots)
         )
+    discouraged_cost = problem.options.discouraged_weight * _linear_sum(
+        discouraged_vars
+    )
+    maximum_discouraged_cost = problem.options.discouraged_weight * len(
+        discouraged_vars
+    )
     structure = (
         problem.options.load_balance_weight
         * (max_load + load_spread + experienced_load_spread)
         + continuity_cost
+        + discouraged_cost
     )
     maximum_structure = (
-        2 + int(has_experienced_load_spread)
-    ) * problem.options.load_balance_weight * len(
-        problem.candidates
-    ) + maximum_continuity_cost
+        (2 + int(has_experienced_load_spread))
+        * problem.options.load_balance_weight
+        * len(problem.candidates)
+        + maximum_continuity_cost
+        + maximum_discouraged_cost
+    )
     maximum_earliness = len(problem.candidates) * max(0, len(problem.sorted_slots) - 1)
     panel_stability_cost = _linear_sum(panel_break_vars)
     previous_stability = (

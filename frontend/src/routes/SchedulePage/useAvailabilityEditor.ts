@@ -13,6 +13,17 @@ type Notify = (message: string, tone?: StatusToastState["tone"]) => void;
 const serializeSlots = (slots: Iterable<string>) =>
   Array.from(slots).sort().join("\n");
 
+// Both halves of the answer, not just the available ones. Keying the
+// server-sync below on slots alone meant a remote change that touched only
+// discouraged_slots - an admin editing on someone's behalf, say - looked
+// identical to no change at all and was never picked up. It also has to
+// cover the local-edit guard, so that someone who has only marked "helst
+// ikke" slots still counts as having unsaved work worth protecting.
+const serializeAnswer = (
+  slots: Iterable<string>,
+  discouraged: Iterable<string>,
+) => `${serializeSlots(slots)}\u0000${serializeSlots(discouraged)}`;
+
 interface AvailabilityEditorParams {
   admissionSlug: string;
   groupId: string;
@@ -31,7 +42,10 @@ export const useAvailabilityEditor = ({
     groupId,
   );
   const [selectedSlots, setSelectedSlots] = useState<Set<string>>(new Set());
-  const lastAppliedServerSlotsRef = useRef<string | null>(null);
+  const [discouragedSlots, setDiscouragedSlots] = useState<Set<string>>(
+    new Set(),
+  );
+  const lastAppliedServerAnswerRef = useRef<string | null>(null);
   const lastAppliedGenerationRef = useRef<number | null>(null);
   const currentParticipant = participants?.find(
     (participant) => participant.is_me,
@@ -40,18 +54,22 @@ export const useAvailabilityEditor = ({
   useEffect(() => {
     if (!currentParticipant) return;
 
-    const localKey = serializeSlots(selectedSlots);
-    const baselineKey = lastAppliedServerSlotsRef.current ?? "";
+    const localKey = serializeAnswer(selectedSlots, discouragedSlots);
+    const baselineKey = lastAppliedServerAnswerRef.current ?? "";
     if (localKey !== baselineKey) return;
 
-    const serverKey = serializeSlots(currentParticipant.slots);
-    if (serverKey !== lastAppliedServerSlotsRef.current) {
+    const serverKey = serializeAnswer(
+      currentParticipant.slots,
+      currentParticipant.discouraged_slots ?? [],
+    );
+    if (serverKey !== lastAppliedServerAnswerRef.current) {
       setSelectedSlots(new Set(currentParticipant.slots));
-      lastAppliedServerSlotsRef.current = serverKey;
+      setDiscouragedSlots(new Set(currentParticipant.discouraged_slots ?? []));
+      lastAppliedServerAnswerRef.current = serverKey;
     }
     lastAppliedGenerationRef.current =
       currentParticipant.availability_generation;
-  }, [currentParticipant, selectedSlots]);
+  }, [currentParticipant, discouragedSlots, selectedSlots]);
 
   const saveAvailability = async (
     slots: Set<string>,
@@ -59,16 +77,26 @@ export const useAvailabilityEditor = ({
     // not a second thing to remember. Omitted entirely when the caller has
     // nothing to say, so a plain slot save never clears existing declarations.
     fadderbarn?: Fadderbarn[],
+    // Defaults to the editor's current "helst ikke" set so callers that only
+    // deal in available slots keep it intact rather than silently clearing it.
+    discouraged: Set<string> = discouragedSlots,
   ) => {
     try {
       const saved = await saveInterviewAvailability.mutateAsync({
         slots: Array.from(slots),
+        discouraged_slots: Array.from(discouraged).filter(
+          (slot) => !slots.has(slot),
+        ),
         ...(fadderbarn ? { fadderbarn } : {}),
         expected_availability_generation:
           lastAppliedGenerationRef.current ?? undefined,
       });
-      lastAppliedServerSlotsRef.current = serializeSlots(slots);
+      lastAppliedServerAnswerRef.current = serializeAnswer(
+        slots,
+        saved.discouraged_slots ?? [],
+      );
       lastAppliedGenerationRef.current = saved.availability_generation;
+      setDiscouragedSlots(new Set(saved.discouraged_slots ?? []));
       notify("Tilgjengelighet lagret.");
     } catch (error) {
       if (isSensitiveAuthorityChangedError(error)) throw error;
@@ -111,7 +139,8 @@ export const useAvailabilityEditor = ({
       });
       if (!userId || userId === currentParticipant?.user_id) {
         setSelectedSlots(new Set());
-        lastAppliedServerSlotsRef.current = "";
+        setDiscouragedSlots(new Set());
+        lastAppliedServerAnswerRef.current = serializeAnswer([], []);
       }
       notify(
         participation === "not_participating"
@@ -145,6 +174,8 @@ export const useAvailabilityEditor = ({
   return {
     selectedSlots,
     setSelectedSlots,
+    discouragedSlots,
+    setDiscouragedSlots,
     currentParticipant,
     saveAvailability,
     saveConflictReview,

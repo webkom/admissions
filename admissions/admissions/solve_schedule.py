@@ -24,6 +24,10 @@ class Candidate:
 @dataclass
 class Interviewer(Candidate):
     availability: List[int] = field(default_factory=list)
+    # Times inside `availability` that the interviewer would rather not be
+    # used for ("helst ikke"). Schedulable, and never a deviation, but the
+    # solver pays discouraged_weight for each one it uses.
+    discouraged: List[int] = field(default_factory=list)
     biased: List[str] = field(default_factory=list)
     experience_level: str = "unknown"
 
@@ -42,6 +46,12 @@ class SolveOptions:
     overtime_weight: int = 40
     load_balance_weight: int = 4
     continuity_weight: int = 12
+    # Cost of using a "helst ikke" slot. Sits in the same weighted tier as
+    # load balancing and continuity so it trades off against them rather
+    # than overriding them outright: high enough that the solver reaches for
+    # a freely-available interviewer first, low enough that it will still
+    # use a discouraged slot instead of leaving a candidate unplaced.
+    discouraged_weight: int = 20
     max_solver_seconds: float = constants.DEFAULT_SOLVER_SECONDS
     policy_version: int | None = None
     panel_stability: str | None = None
@@ -205,6 +215,11 @@ def solve_schedule_v1(
     model = cp_model.CpModel()
 
     avail_set = {i.id: set(i.availability) for i in interviewers}
+    # Intersected with availability so a discouraged time can never widen
+    # what the solver may use - it only marks part of it as costly.
+    discouraged_set = {
+        i.id: set(i.discouraged) & set(i.availability) for i in interviewers
+    }
     bias_set = {i.id: set(i.biased) for i in interviewers}
     iview_map = {i.id: i for i in interviewers}
     candidate_map = {c.id: c for c in candidates}
@@ -413,6 +428,7 @@ def solve_schedule_v1(
     iview_time_vars = {}
     iview_all_vars = {i.id: [] for i in interviewers}
     overtime_vars = []
+    discouraged_vars = []
 
     for c in candidates:
         for t in sorted_slots:
@@ -438,6 +454,8 @@ def solve_schedule_v1(
 
                 if t not in avail_set[i.id]:
                     overtime_vars.append(var)
+                elif t in discouraged_set[i.id]:
+                    discouraged_vars.append(var)
 
             valid_for[(c.id, t)] = v_ids
 
@@ -825,7 +843,11 @@ def solve_schedule_v1(
     max_consecutive_block_penalties = len(consecutive_block_violation_vars)
     max_earliness = len(candidates) * max(0, len(sorted_slots) - 1)
     max_load_objective = 2 * options.load_balance_weight * len(candidates)
-    max_structure_objective = max_load_objective + max_continuity_cost
+    discouraged_cost = options.discouraged_weight * sum(discouraged_vars)
+    max_discouraged_cost = options.discouraged_weight * len(discouraged_vars)
+    max_structure_objective = (
+        max_load_objective + max_continuity_cost + max_discouraged_cost
+    )
     max_stability_tie_cost = (previous_panel_member_count + 1) * len(
         prev_time_by_candidate
     ) + previous_panel_member_count
@@ -849,7 +871,8 @@ def solve_schedule_v1(
             ObjectiveTier(
                 "load_and_continuity",
                 options.load_balance_weight * (max_load + load_spread)
-                + continuity_cost,
+                + continuity_cost
+                + discouraged_cost,
                 max_structure_objective,
             ),
             ObjectiveTier("earliness", earliness_sum, max_earliness),
@@ -888,7 +911,8 @@ def solve_schedule_v1(
             ObjectiveTier(
                 "load_and_continuity",
                 options.load_balance_weight * (max_load + load_spread)
-                + continuity_cost,
+                + continuity_cost
+                + discouraged_cost,
                 max_structure_objective,
             ),
             ObjectiveTier("earliness", earliness_sum, max_earliness),
