@@ -173,6 +173,30 @@ class OAuthMembershipSyncTestCase(TestCase):
         self.assertFalse(Membership.objects.filter(user=self.user).exists())
         self.assertFalse(self.user.is_staff)
 
+    def _hovedstyret_response(self, role):
+        # Deliberately NOT a local Group: Hovedstyret has no reason to exist
+        # in the local table, and staff must not depend on it doing so.
+        return {
+            "memberships": [{"abakusGroup": 92100, "role": role}],
+            "abakusGroups": [{"id": 92100, "name": "Hovedstyret"}],
+        }
+
+    def test_hovedstyret_leader_gets_staff_without_a_local_group_row(self):
+        self.user.is_staff = False
+        self.user.save(update_fields=["is_staff"])
+
+        self.sync(self._hovedstyret_response("leader"))
+
+        self.assertTrue(self.user.is_staff)
+        self.assertFalse(Membership.objects.filter(user=self.user).exists())
+
+    def test_hovedstyret_non_leader_roles_do_not_get_staff(self):
+        for role in ("member", "co-leader"):
+            with self.subTest(role=role):
+                self.sync(self._hovedstyret_response(role))
+
+                self.assertFalse(self.user.is_staff)
+
     def test_conflicting_roles_for_one_group_fail_closed(self):
         other_group = Group.objects.create(name="other", lego_id=92003)
         response = {
