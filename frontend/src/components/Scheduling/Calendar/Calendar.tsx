@@ -407,7 +407,9 @@ const TimeScheduler: React.FC<TimeSchedulerProps> = ({
         )}
       </SchedulePanelBody>
 
-      <SchedulePanelFooter className="bg-surface-base">
+      {/* The panel runs !overflow-visible (the grid needs to escape it), so it
+          cannot clip this corner for us. */}
+      <SchedulePanelFooter className="rounded-b-panel bg-surface-base">
         <div className="flex flex-wrap items-center gap-5">
           <MetaValue label="Intervjublokker" value={selectedBlockCount} />
           <MetaValue label="Intervjutider" value={selectedSlots.size} />
