@@ -4228,6 +4228,135 @@ class CandidateWithdrawalPrivacyTestCase(TestCase):
         self.assertIsNone(audit_event.actor)
         self.assertEqual(audit_event.actor_username, "system")
 
+    def _withdrawal_fixture(self, slug, lego_base):
+        admin = LegoUser.objects.create(
+            username=f"{slug}-admin", lego_id=lego_base
+        )
+        withdrawing = LegoUser.objects.create(
+            username=f"{slug}-withdrawing", lego_id=lego_base + 1
+        )
+        scheduled = LegoUser.objects.create(
+            username=f"{slug}-scheduled", lego_id=lego_base + 2
+        )
+        admission = create_admission(created_by=admin, slug=slug)
+        committee = Group.objects.create(
+            name=f"{slug} committee", lego_id=lego_base + 3
+        )
+        admission.groups.add(committee)
+        withdrawing_application = UserApplication.objects.create(
+            admission=admission, user=withdrawing
+        )
+        GroupApplication.objects.create(
+            application=withdrawing_application, group=committee, text="Withdraws"
+        )
+        scheduled_application = UserApplication.objects.create(
+            admission=admission, user=scheduled
+        )
+        GroupApplication.objects.create(
+            application=scheduled_application, group=committee, text="Stays"
+        )
+        saved = SavedSchedule.objects.create(
+            admission=admission,
+            group=committee,
+            schedule=[
+                {
+                    "candidate_id": str(scheduled_application.pk),
+                    "candidate": scheduled.username,
+                    "time": 540,
+                    "panel": [],
+                }
+            ],
+            start_date="2026-04-20",
+            is_distributed=True,
+            name_visibility="committee",
+        )
+        return withdrawing_application, saved
+
+    def test_full_withdrawal_leaves_untouched_published_plans_alone(self):
+        """Withdrawing an application the plan never scheduled must not unpublish it.
+
+        The old full-withdrawal guard checked whether the parent
+        UserApplication row still existed - but the delete Collector fires
+        GroupApplication's post_delete while the parent row is still present,
+        so the handler ran for every full withdrawal and tore down published
+        plans the withdrawal never touched.
+        """
+        withdrawing_application, saved = self._withdrawal_fixture(
+            "untouched-purge", 960
+        )
+
+        withdrawing_application.delete()
+
+        saved.refresh_from_db()
+        self.assertTrue(saved.is_distributed)
+        self.assertEqual(saved.name_visibility, "committee")
+        self.assertEqual(len(saved.schedule), 1)
+        self.assertFalse(NameVisibilityAuditEvent.objects.exists())
+
+    def test_partial_withdrawal_of_unscheduled_candidate_keeps_the_plan_published(
+        self,
+    ):
+        withdrawing_application, saved = self._withdrawal_fixture(
+            "partial-unscheduled", 966
+        )
+
+        withdrawing_application.group_applications.first().delete()
+
+        saved.refresh_from_db()
+        self.assertTrue(saved.is_distributed)
+        self.assertEqual(saved.name_visibility, "committee")
+
+    def test_partial_withdrawal_of_scheduled_candidate_still_unpublishes(self):
+        withdrawing_application, saved = self._withdrawal_fixture(
+            "partial-scheduled", 972
+        )
+        saved.schedule = saved.schedule + [
+            {
+                "candidate_id": str(withdrawing_application.pk),
+                "candidate": "withdrawing",
+                "time": 600,
+                "panel": [],
+            }
+        ]
+        saved.save(update_fields=["schedule"])
+
+        withdrawing_application.group_applications.first().delete()
+
+        saved.refresh_from_db()
+        self.assertFalse(saved.is_distributed)
+        self.assertEqual(saved.name_visibility, "hidden")
+        # The interview row itself stays: the candidate still exists, only
+        # the committee-panel pairing needs the admin's attention.
+        self.assertEqual(len(saved.schedule), 2)
+        audit_event = NameVisibilityAuditEvent.objects.get()
+        self.assertEqual(audit_event.action, NameVisibilityAuditEvent.ACTION_HIDDEN)
+
+    def test_full_withdrawal_prunes_review_list_snapshots(self):
+        """Readiness must not keep demanding review of a withdrawn candidate.
+
+        The snapshot rows are the review scope; a withdrawn candidate left in
+        them could neither be seen nor submitted by any interviewer, so
+        publication deadlocked with no recovery action.
+        """
+        withdrawing_application, saved = self._withdrawal_fixture(
+            "review-prune", 978
+        )
+        reviewer = LegoUser.objects.create(username="review-prune-reviewer", lego_id=989)
+        other_id = str(uuid.uuid4())
+        review_list = ConflictReviewList.objects.create(
+            saved_schedule=saved,
+            revision=uuid.uuid4(),
+            interviewer=reviewer,
+            own_candidate_ids=[str(withdrawing_application.pk), other_id],
+            swap_candidate_ids=[str(withdrawing_application.pk)],
+        )
+
+        withdrawing_application.delete()
+
+        review_list.refresh_from_db()
+        self.assertEqual(review_list.own_candidate_ids, [other_id])
+        self.assertEqual(review_list.swap_candidate_ids, [])
+
     def test_withdrawal_clears_legacy_name_only_schedule(self):
         admin = LegoUser.objects.create(username="legacy-admin", lego_id=982)
         candidate = LegoUser.objects.create(username="legacy-candidate", lego_id=983)
