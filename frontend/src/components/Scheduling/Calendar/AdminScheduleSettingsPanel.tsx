@@ -598,7 +598,15 @@ const AdminScheduleSettingsPanel: React.FC<AdminScheduleSettingsPanelProps> = ({
         <ConfigStep
           number={2}
           title="Hvor lange er intervjuene?"
-          description="Lengden inkluderer pause mellom intervju for evaluering."
+          description={
+            <>
+              Lengden{" "}
+              <strong className="font-semibold">
+                inkluderer pause mellom intervju
+              </strong>{" "}
+              for evaluering.
+            </>
+          }
         >
           <section aria-label="Blokkoppsett">
             <div className="grid min-w-0 gap-7">

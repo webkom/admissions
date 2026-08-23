@@ -14,7 +14,7 @@ export const ConfigStepList: React.FC<ConfigStepListProps> = ({
 interface ConfigStepProps {
   number: number;
   title: string;
-  description?: string;
+  description?: React.ReactNode;
   children: React.ReactNode;
   /** Omits the connector running down to the next step. */
   last?: boolean;
