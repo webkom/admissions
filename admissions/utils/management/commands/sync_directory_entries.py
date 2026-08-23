@@ -113,7 +113,6 @@ def _fetch_first_year_members(api_url, access_token):
                         continue
                     members[lego_user_id] = {
                         "username": member.get("username") or "",
-                        # LEGO camelCases the wire to fullName.
                         "full_name": member.get("fullName")
                         or member.get("full_name")
                         or "",
