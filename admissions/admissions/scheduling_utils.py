@@ -1,6 +1,6 @@
 import random
 import uuid
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from django.conf import settings
 
@@ -190,11 +190,12 @@ def get_conflict_review_readiness(admission, group, saved_schedule=None, schedul
             continue
         # Confirmation must cover everything they were shown, not just their
         # own panel: an unreviewed swap partner is exactly the pair a repair
-        # would move onto them.
+        # would move onto them. A union, not a replacement: an edit-and-
+        # publish POST carries pairings the snapshot has never seen.
         if saved_schedule is not None:
             proposed_candidate_ids = (
                 conflict_review_scope(saved_schedule, interviewer_id)
-                or proposed_candidate_ids
+                | proposed_candidate_ids
             )
         participant = participants.get(interviewer_id)
         required_participant_ids.append(
@@ -229,6 +230,60 @@ def get_conflict_review_readiness(admission, group, saved_schedule=None, schedul
     }
 
 
+def _as_date(value):
+    if isinstance(value, str):
+        return datetime.strptime(value, "%Y-%m-%d").date()
+    return value
+
+
+def published_candidate_ids(saved_schedule):
+    """Candidate ids on rows at or before the published boundary.
+
+    Must agree with the row filter (SavedScheduleSerializer's
+    publication_boundary): withheld rows mean withheld identities.
+    """
+
+    if saved_schedule is None or saved_schedule.distributed_through is None:
+        return set()
+    start_date = _as_date(saved_schedule.start_date)
+    boundary = _as_date(saved_schedule.distributed_through)
+    if start_date is None:
+        return set()
+    published = set()
+    for entry in saved_schedule.schedule or []:
+        if not isinstance(entry, dict):
+            continue
+        time_value = entry.get("time")
+        candidate_id = entry.get("candidate_id")
+        if not isinstance(time_value, int) or candidate_id is None:
+            continue
+        entry_date = start_date + timedelta(days=time_value // (24 * 60))
+        if entry_date <= boundary:
+            published.add(str(candidate_id))
+    return published
+
+
+def publication_withholds_rows(saved_schedule):
+    """Whether distributed_through leaves scheduled rows unpublished.
+
+    Decided by the schedule's content, not by comparing boundaries: an empty
+    or legacy plan has no full boundary to compare against.
+    """
+
+    if saved_schedule is None or saved_schedule.distributed_through is None:
+        return False
+    start_date = _as_date(saved_schedule.start_date)
+    boundary = _as_date(saved_schedule.distributed_through)
+    if start_date is None:
+        return False
+    for entry in saved_schedule.schedule or []:
+        if not isinstance(entry, dict) or not isinstance(entry.get("time"), int):
+            continue
+        if start_date + timedelta(days=entry["time"] // (24 * 60)) > boundary:
+            return True
+    return False
+
+
 def conflict_review_scope(saved_schedule, user_id):
     """The candidate ids one interviewer is asked to check.
 
@@ -259,7 +314,7 @@ def conflict_review_scope(saved_schedule, user_id):
 
 
 def decoy_review_scope(saved_schedule, user_id):
-    """This interviewer's filler entries: [{"token": "d:...", "name": ...}].
+    """This interviewer's filler entries: [{"token": "<uuid4>", "name": ...}].
 
     Same snapshot as conflict_review_scope (the same ConflictReviewList row),
     so a filler always appears and disappears in lockstep with the real
@@ -424,10 +479,13 @@ def build_conflict_review_lists(saved_schedule, swap_size=5):
         candidates.sort()
         swap = [candidate_id for _, candidate_id in candidates[:swap_size]]
         decoy_count = min(swap_size, len(decoy_pool))
+        # A bare uuid4, the same shape as a real UserApplication pk - fillers
+        # are told apart by membership in this row's stored decoys, never by
+        # a visible format marker.
         decoys = (
             [
                 {
-                    "token": f"d:{uuid.uuid4()}",
+                    "token": str(uuid.uuid4()),
                     "name": entry.full_name or entry.username,
                 }
                 for entry in random.sample(decoy_pool, decoy_count)

@@ -601,11 +601,10 @@ class InterviewAvailability(models.Model):
     discouraged_slots = models.JSONField(default=list, blank=True)
     conflicts = models.JSONField(default=list, blank=True)
     reviewed_candidate_ids = models.JSONField(default=list, blank=True)
-    # A separate namespace from the two fields above (tokens look like
-    # "d:<uuid4>", never a UserApplication pk) so a filler mark can never be
-    # confused with - or accidentally echo back as - a real one. Kept apart
-    # rather than mixed into conflicts/reviewed_candidate_ids so those two
-    # fields stay a pure, uncontaminated read of real candidate state.
+    # A separate namespace from the two fields above, split by membership in
+    # the owning ConflictReviewList row's decoys - deliberately not by a
+    # visible format marker, which would let a viewer separate fillers from
+    # real candidates.
     decoy_conflicts = models.JSONField(default=list, blank=True)
     decoy_reviewed_ids = models.JSONField(default=list, blank=True)
     participation = models.CharField(

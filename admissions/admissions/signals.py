@@ -4,6 +4,7 @@ from django.dispatch import receiver
 
 from admissions.admissions.models import (
     Admission,
+    ConflictReviewList,
     GroupApplication,
     InterviewAvailability,
     NameVisibilityAuditEvent,
@@ -78,6 +79,34 @@ def purge_withdrawn_candidate(sender, instance, **kwargs):
                         action=NameVisibilityAuditEvent.ACTION_HIDDEN,
                     )
 
+        # Readiness demands review of every snapshotted id, and nobody can
+        # see or submit a withdrawn one - left in place it blocks publication
+        # permanently.
+        changed_review_lists = []
+        for review_list in ConflictReviewList.objects.filter(
+            saved_schedule__admission_id=instance.admission_id
+        ):
+            own = [
+                value
+                for value in (review_list.own_candidate_ids or [])
+                if str(value) != candidate_id
+            ]
+            swap = [
+                value
+                for value in (review_list.swap_candidate_ids or [])
+                if str(value) != candidate_id
+            ]
+            if own != (review_list.own_candidate_ids or []) or swap != (
+                review_list.swap_candidate_ids or []
+            ):
+                review_list.own_candidate_ids = own
+                review_list.swap_candidate_ids = swap
+                changed_review_lists.append(review_list)
+        if changed_review_lists:
+            ConflictReviewList.objects.bulk_update(
+                changed_review_lists, ["own_candidate_ids", "swap_candidate_ids"]
+            )
+
         changed_availability = []
         for availability in InterviewAvailability.objects.filter(
             admission_id=instance.admission_id
@@ -113,12 +142,10 @@ def flag_schedule_after_partial_withdrawal(sender, instance, **kwargs):
     """
 
     with transaction.atomic():
-        # UserApplication.delete() cascades here too. That case belongs to
-        # purge_withdrawn_candidate, which has already run its pre_delete.
-        if not UserApplication.objects.filter(pk=instance.application_id).exists():
+        application = UserApplication.objects.filter(pk=instance.application_id).first()
+        if application is None:
             return
 
-        application = UserApplication.objects.get(pk=instance.application_id)
         # Scoped to the committee actually dropped: each committee's schedule
         # is independent now, so dropping Bedkom must never touch Webkom's.
         saved = (
@@ -130,6 +157,18 @@ def flag_schedule_after_partial_withdrawal(sender, instance, **kwargs):
             .first()
         )
         if saved is None or not saved.is_distributed:
+            return
+
+        # Only a candidate actually scheduled in this published plan is worth
+        # flagging. This also keeps full-withdrawal cascades out: a parent-row
+        # existence check cannot (the Collector deletes children while the
+        # parent still exists), but purge_withdrawn_candidate has already
+        # stripped the candidate from every schedule by the time this fires.
+        candidate_id = str(instance.application_id)
+        if not any(
+            isinstance(item, dict) and str(item.get("candidate_id")) == candidate_id
+            for item in saved.schedule or []
+        ):
             return
 
         admission = Admission.objects.get(pk=application.admission_id)

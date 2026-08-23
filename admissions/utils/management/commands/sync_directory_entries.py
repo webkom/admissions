@@ -57,6 +57,18 @@ def _access_token(api_url, client_id, client_secret):
     return token
 
 
+def _result_list(payload):
+    """An unpaginated LEGO viewset (like /api/v1/groups/) returns a bare JSON
+    array; a paginated one wraps it in {"results": [...]}."""
+
+    if isinstance(payload, list):
+        return payload
+    if isinstance(payload, dict):
+        results = payload.get("results")
+        return results if isinstance(results, list) else []
+    return []
+
+
 def _fetch_first_year_members(api_url, access_token):
     headers = {"Authorization": f"Bearer {access_token}"}
     # A single combined query isn't guaranteed to be supported, so each
@@ -75,9 +87,13 @@ def _fetch_first_year_members(api_url, access_token):
             )
         groups = [
             group
-            for group in response.json().get("results", [])
-            if group.get("name") == group_name
+            for group in _result_list(response.json())
+            if isinstance(group, dict) and group.get("name") == group_name
         ]
+        if not groups:
+            # The hardcoded names are school-year specific; a rename must
+            # surface loudly, not as a quietly shrinking roster.
+            log.warning("roster_sync_group_missing", group=group_name)
         for group in groups:
             url = urljoin(api_url, f"/api/v1/groups/{group['id']}/memberships/")
             while url:
@@ -90,16 +106,18 @@ def _fetch_first_year_members(api_url, access_token):
                         f"listing memberships for '{group_name}'"
                     )
                 payload = membership_response.json()
-                for membership in payload.get("results", []):
+                for membership in _result_list(payload):
                     member = membership.get("user") or {}
                     lego_user_id = member.get("id")
                     if not isinstance(lego_user_id, int):
                         continue
                     members[lego_user_id] = {
                         "username": member.get("username") or "",
-                        "full_name": member.get("fullName") or "",
+                        "full_name": member.get("fullName")
+                        or member.get("full_name")
+                        or "",
                     }
-                url = payload.get("next")
+                url = payload.get("next") if isinstance(payload, dict) else None
     return members
 
 
@@ -125,6 +143,15 @@ class Command(BaseCommand):
             members = _fetch_first_year_members(api_url, access_token)
         except (RosterSyncUnavailable, requests.RequestException) as error:
             log.error("roster_sync_failed", error=str(error))
+            return
+
+        if not members:
+            # An empty result is far more likely a renamed group than a year
+            # with no students - keep the existing roster.
+            log.warning(
+                "roster_sync_empty",
+                reason="sync returned no members; keeping the existing roster",
+            )
             return
 
         seen_ids = set(members)

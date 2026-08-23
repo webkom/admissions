@@ -43,12 +43,14 @@ class SyncDirectoryEntriesTestCase(TestCase):
             status_code=200, json=lambda: {"access_token": "a-token"}
         )
 
+        # Real wire shapes: /api/v1/groups/ is an unpaginated bare array, and
+        # LEGO camelCases user fields to fullName.
         def fake_get(url, **kwargs):
             if url.endswith("/api/v1/groups/"):
                 name = kwargs["params"]["name"]
                 return MagicMock(
                     status_code=200,
-                    json=lambda: {"results": [{"id": 1, "name": name}]},
+                    json=lambda: [{"id": 1, "name": name}],
                 )
             return MagicMock(
                 status_code=200,
@@ -89,12 +91,16 @@ class SyncDirectoryEntriesTestCase(TestCase):
             status_code=200, json=lambda: {"access_token": "a-token"}
         )
 
+        # The real wire shapes: /api/v1/groups/ is unpaginated and returns a
+        # bare JSON array, and LEGO's renderer camelCases user fields to
+        # fullName. The old mocks used snake_case dict envelopes for both,
+        # which is exactly how three sync bugs stayed green in CI.
         def fake_get(url, **kwargs):
             if url.endswith("/api/v1/groups/"):
                 name = kwargs["params"]["name"]
                 return MagicMock(
                     status_code=200,
-                    json=lambda: {"results": [{"id": 1, "name": name}]},
+                    json=lambda: [{"id": 1, "name": name}],
                 )
             return MagicMock(
                 status_code=200,
@@ -119,6 +125,26 @@ class SyncDirectoryEntriesTestCase(TestCase):
 
         self.assertFalse(DirectoryEntry.objects.filter(lego_user_id=8000).exists())
         self.assertTrue(DirectoryEntry.objects.filter(lego_user_id=9001).exists())
+
+    @override_settings(
+        ADMISSIONS_ROSTER_SYNC_CLIENT_ID="a-client-id",
+        ADMISSIONS_ROSTER_SYNC_CLIENT_SECRET="a-secret",
+        SOCIAL_AUTH_LEGO_API_URL="https://lego.example.com",
+    )
+    @patch("admissions.utils.management.commands.sync_directory_entries.requests")
+    def test_a_zero_member_sync_never_wipes_the_roster(self, mock_requests):
+        DirectoryEntry.objects.create(
+            lego_user_id=8000, username="kept", full_name="Kept Entry"
+        )
+        mock_requests.post.return_value = MagicMock(
+            status_code=200, json=lambda: {"access_token": "a-token"}
+        )
+        mock_requests.get.return_value = MagicMock(status_code=200, json=lambda: [])
+        mock_requests.RequestException = Exception
+
+        call_command(COMMAND)
+
+        self.assertTrue(DirectoryEntry.objects.filter(lego_user_id=8000).exists())
 
     @override_settings(
         ADMISSIONS_ROSTER_SYNC_CLIENT_ID="a-client-id",

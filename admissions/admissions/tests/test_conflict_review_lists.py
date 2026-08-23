@@ -1,3 +1,5 @@
+from uuid import UUID
+
 from django.test import TestCase, override_settings
 
 from admissions.admissions.models import (
@@ -140,7 +142,9 @@ class ConflictReviewListTestCase(TestCase):
         names = {decoy["name"] for decoy in decoys}
         self.assertEqual({"Filler One", "Filler Two"}, names)
         for decoy in decoys:
-            self.assertTrue(decoy["token"].startswith("d:"))
+            # Indistinguishable from a real candidate id: a bare uuid4, with
+            # no format marker a viewer could filter on.
+            self.assertEqual(decoy["token"], str(UUID(decoy["token"])))
         # Each generation mints fresh tokens - never a real candidate pk.
         real_ids = {str(ours.pk)}
         self.assertFalse(real_ids & {decoy["token"] for decoy in decoys})

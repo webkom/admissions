@@ -501,6 +501,113 @@ class SavedSchedulePublishSemanticsTestCase(APITestCase):
             SavedSchedule.objects.get(admission=self.admission).is_distributed
         )
 
+    def _second_application(self):
+        second_candidate = LegoUser.objects.create(
+            username="hardening-candidate-2", lego_id=603
+        )
+        second_application = UserApplication.objects.create(
+            admission=self.admission, user=second_candidate
+        )
+        GroupApplication.objects.create(
+            application=second_application,
+            group=self.admin_group,
+            text="Second hardening application",
+        )
+        return second_application
+
+    def test_row_edit_of_partially_published_plan_keeps_the_boundary(self):
+        """A row edit echoing `is_distributed: true` must not widen a partial publish."""
+        second_application = self._second_application()
+        second_entry = self._schedule(time=2 * 24 * 60 + 540)
+        second_entry[0]["candidate_id"] = str(second_application.pk)
+        self._create_saved(
+            is_distributed=False,
+            schedule=self._schedule(time=540) + second_entry,
+            enabled_slots=["2026-04-20|540", "2026-04-20|600", "2026-04-22|540"],
+            distributed_through="2026-04-21",
+        )
+        self._mark_reviewed(self.application, second_application)
+
+        edited_second = self._schedule(time=2 * 24 * 60 + 540)
+        edited_second[0]["candidate_id"] = str(second_application.pk)
+        res = self.client.post(
+            self.url,
+            {
+                "schedule": self._schedule(time=600) + edited_second,
+                "is_distributed": True,
+            },
+            format="json",
+        )
+
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        saved = SavedSchedule.objects.get(admission=self.admission)
+        self.assertEqual(saved.distributed_through.isoformat(), "2026-04-21")
+
+    def test_republish_after_unlock_still_computes_the_full_boundary(self):
+        self._create_saved(is_distributed=False)
+        self._mark_reviewed(self.application)
+
+        res = self.client.post(self.url, {"is_distributed": True}, format="json")
+
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.assertTrue(res.data["is_distributed"])
+        self.assertIsNotNone(
+            SavedSchedule.objects.get(admission=self.admission).distributed_through
+        )
+
+    def test_updating_the_schedule_regenerates_conflict_review_lists(self):
+        """The update path must re-snapshot review lists, not just creation."""
+        saved = self._create_saved(is_distributed=False, schedule=[])
+        ConflictReviewList.objects.filter(saved_schedule=saved).delete()
+
+        res = self.client.post(
+            self.url,
+            {"schedule": self._schedule(time=540)},
+            format="json",
+        )
+
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        rows = list(ConflictReviewList.objects.filter(saved_schedule=saved))
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0].own_candidate_ids, [str(self.application.pk)])
+
+        # And a byte-identical re-save must keep the snapshot untouched.
+        revision_before = rows[0].revision
+        res = self.client.post(
+            self.url,
+            {"schedule": self._schedule(time=540)},
+            format="json",
+        )
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.assertEqual(
+            ConflictReviewList.objects.get(saved_schedule=saved).revision,
+            revision_before,
+        )
+
+    def test_publish_with_schedule_change_requires_review_of_the_new_pairing(self):
+        """Readiness must cover the incoming schedule, not the old snapshot."""
+        second_application = self._second_application()
+        self._create_saved(is_distributed=False, schedule=self._schedule(time=540))
+        self._mark_reviewed(self.application)
+
+        second_entry = self._schedule(time=600)
+        second_entry[0]["candidate_id"] = str(second_application.pk)
+        res = self.client.post(
+            self.url,
+            {
+                "schedule": self._schedule(time=540) + second_entry,
+                "is_distributed": True,
+            },
+            format="json",
+        )
+
+        self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("schedule", res.data)
+        self.assertIn("kontrollere", res.data["schedule"][0])
+        self.assertFalse(
+            SavedSchedule.objects.get(admission=self.admission).is_distributed
+        )
+
     def test_manual_publish_enforces_same_gender(self):
         self.candidate_user.gender = "male"
         self.candidate_user.save(update_fields=["gender"])
@@ -2128,6 +2235,55 @@ class SavedScheduleVisibilityTestCase(APITestCase):
         }
         defaults.update(overrides)
         return SavedSchedule.objects.create(**defaults)
+
+    def _other_committee_recruiter(self):
+        other_group = Group.objects.create(name="Bedkom", lego_id=705)
+        self.admission.groups.add(other_group)
+        recruiter = LegoUser.objects.create(username="vis-other-recruiter", lego_id=706)
+        Membership.objects.create(user=recruiter, role=RECRUITING, group=other_group)
+        return recruiter
+
+    def test_cross_committee_recruiter_cannot_read_the_schedule(self):
+        """Representing committee X grants nothing on committee Y's schedule."""
+        self._create_saved(name_visibility="committee")
+        self.client.force_authenticate(user=self._other_committee_recruiter())
+
+        res = self.client.get(self.url)
+
+        self.assertEqual(res.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_cross_committee_recruiter_cannot_flip_name_visibility(self):
+        saved = self._create_saved(name_visibility="hidden")
+        self.client.force_authenticate(user=self._other_committee_recruiter())
+
+        res = self.client.post(
+            self.url,
+            {"name_visibility": "committee"},
+            format="json",
+        )
+
+        self.assertEqual(res.status_code, status.HTTP_403_FORBIDDEN)
+        saved.refresh_from_db()
+        self.assertEqual(saved.name_visibility, "hidden")
+        self.assertFalse(NameVisibilityAuditEvent.objects.exists())
+
+    def test_own_committee_recruiter_still_flips_name_visibility(self):
+        saved = self._create_saved(name_visibility="hidden")
+        recruiter = LegoUser.objects.create(username="vis-own-recruiter", lego_id=707)
+        Membership.objects.create(
+            user=recruiter, role=RECRUITING, group=self.committee_group
+        )
+        self.client.force_authenticate(user=recruiter)
+
+        res = self.client.post(
+            self.url,
+            {"name_visibility": "committee"},
+            format="json",
+        )
+
+        self.assertEqual(res.status_code, status.HTTP_200_OK, res.data)
+        saved.refresh_from_db()
+        self.assertEqual(saved.name_visibility, "committee")
 
     def test_committee_member_sees_only_config_until_distributed(self):
         self._create_saved(is_distributed=False)
@@ -3987,6 +4143,88 @@ class CanonicalSolverInputTestCase(APITestCase):
         )
 
 
+class GroupRemovalDisclosureTestCase(APITestCase):
+    """Removing a committee from the admission must revoke its disclosure."""
+
+    def setUp(self):
+        self.staff_user = LegoUser.objects.create(
+            username="disclosure-staff", lego_id=940, is_staff=True
+        )
+        self.admission = create_admission(
+            created_by=self.staff_user, slug="disclosure-opptak"
+        )
+        self.admin_group = Group.objects.create(name="Disclosure admins", lego_id=941)
+        self.committee = Group.objects.create(name="Disclosure committee", lego_id=942)
+        self.other_committee = Group.objects.create(
+            name="Disclosure other committee", lego_id=943
+        )
+        self.admission.admin_groups.add(self.admin_group)
+        self.admission.groups.add(self.committee, self.other_committee)
+        self.saved = SavedSchedule.objects.create(
+            admission=self.admission,
+            group=self.committee,
+            schedule=[
+                {
+                    "candidate_id": str(uuid.uuid4()),
+                    "candidate": "Kandidat",
+                    "time": 540,
+                    "panel": [],
+                }
+            ],
+            start_date="2026-04-20",
+            is_distributed=True,
+            name_visibility="committee",
+        )
+        self.url = reverse(
+            "manage-admission-detail", kwargs={"slug": self.admission.slug}
+        )
+        self.client.force_authenticate(user=self.staff_user)
+
+    def _edit(self, groups):
+        return self.client.patch(
+            self.url,
+            {
+                "title": self.admission.title,
+                "open_from": self.admission.open_from,
+                "public_deadline": self.admission.public_deadline,
+                "closed_from": self.admission.closed_from,
+                "admin_groups": [str(self.admin_group.pk)],
+                "groups": [str(group.pk) for group in groups],
+            },
+            format="json",
+        )
+
+    def test_removing_a_group_revokes_its_published_disclosure(self):
+        res = self._edit([self.other_committee])
+
+        self.assertEqual(res.status_code, status.HTTP_200_OK, res.data)
+        self.saved.refresh_from_db()
+        self.assertFalse(self.saved.is_distributed)
+        self.assertEqual(self.saved.name_visibility, "hidden")
+        audit_event = NameVisibilityAuditEvent.objects.get(group=self.committee)
+        self.assertEqual(audit_event.action, NameVisibilityAuditEvent.ACTION_HIDDEN)
+        self.assertEqual(audit_event.actor, self.staff_user)
+
+    def test_removing_and_readding_group_does_not_restore_disclosure(self):
+        self._edit([self.other_committee])
+
+        res = self._edit([self.committee, self.other_committee])
+
+        self.assertEqual(res.status_code, status.HTTP_200_OK, res.data)
+        self.saved.refresh_from_db()
+        self.assertFalse(self.saved.is_distributed)
+        self.assertEqual(self.saved.name_visibility, "hidden")
+
+    def test_keeping_the_group_leaves_disclosure_untouched(self):
+        res = self._edit([self.committee, self.other_committee])
+
+        self.assertEqual(res.status_code, status.HTTP_200_OK, res.data)
+        self.saved.refresh_from_db()
+        self.assertTrue(self.saved.is_distributed)
+        self.assertEqual(self.saved.name_visibility, "committee")
+        self.assertFalse(NameVisibilityAuditEvent.objects.exists())
+
+
 class CandidateWithdrawalPrivacyTestCase(TestCase):
     def test_withdrawal_purges_denormalized_candidate_data(self):
         admin = LegoUser.objects.create(username="purge-admin", lego_id=980)
@@ -4048,6 +4286,121 @@ class CandidateWithdrawalPrivacyTestCase(TestCase):
         self.assertEqual(audit_event.action, NameVisibilityAuditEvent.ACTION_HIDDEN)
         self.assertIsNone(audit_event.actor)
         self.assertEqual(audit_event.actor_username, "system")
+
+    def _withdrawal_fixture(self, slug, lego_base):
+        admin = LegoUser.objects.create(username=f"{slug}-admin", lego_id=lego_base)
+        withdrawing = LegoUser.objects.create(
+            username=f"{slug}-withdrawing", lego_id=lego_base + 1
+        )
+        scheduled = LegoUser.objects.create(
+            username=f"{slug}-scheduled", lego_id=lego_base + 2
+        )
+        admission = create_admission(created_by=admin, slug=slug)
+        committee = Group.objects.create(
+            name=f"{slug} committee", lego_id=lego_base + 3
+        )
+        admission.groups.add(committee)
+        withdrawing_application = UserApplication.objects.create(
+            admission=admission, user=withdrawing
+        )
+        GroupApplication.objects.create(
+            application=withdrawing_application, group=committee, text="Withdraws"
+        )
+        scheduled_application = UserApplication.objects.create(
+            admission=admission, user=scheduled
+        )
+        GroupApplication.objects.create(
+            application=scheduled_application, group=committee, text="Stays"
+        )
+        saved = SavedSchedule.objects.create(
+            admission=admission,
+            group=committee,
+            schedule=[
+                {
+                    "candidate_id": str(scheduled_application.pk),
+                    "candidate": scheduled.username,
+                    "time": 540,
+                    "panel": [],
+                }
+            ],
+            start_date="2026-04-20",
+            is_distributed=True,
+            name_visibility="committee",
+        )
+        return withdrawing_application, saved
+
+    def test_full_withdrawal_leaves_untouched_published_plans_alone(self):
+        """Withdrawing an application the plan never scheduled must not unpublish it."""
+        withdrawing_application, saved = self._withdrawal_fixture(
+            "untouched-purge", 960
+        )
+
+        withdrawing_application.delete()
+
+        saved.refresh_from_db()
+        self.assertTrue(saved.is_distributed)
+        self.assertEqual(saved.name_visibility, "committee")
+        self.assertEqual(len(saved.schedule), 1)
+        self.assertFalse(NameVisibilityAuditEvent.objects.exists())
+
+    def test_partial_withdrawal_of_unscheduled_candidate_keeps_the_plan_published(
+        self,
+    ):
+        withdrawing_application, saved = self._withdrawal_fixture(
+            "partial-unscheduled", 966
+        )
+
+        withdrawing_application.group_applications.first().delete()
+
+        saved.refresh_from_db()
+        self.assertTrue(saved.is_distributed)
+        self.assertEqual(saved.name_visibility, "committee")
+
+    def test_partial_withdrawal_of_scheduled_candidate_still_unpublishes(self):
+        withdrawing_application, saved = self._withdrawal_fixture(
+            "partial-scheduled", 972
+        )
+        saved.schedule = saved.schedule + [
+            {
+                "candidate_id": str(withdrawing_application.pk),
+                "candidate": "withdrawing",
+                "time": 600,
+                "panel": [],
+            }
+        ]
+        saved.save(update_fields=["schedule"])
+
+        withdrawing_application.group_applications.first().delete()
+
+        saved.refresh_from_db()
+        self.assertFalse(saved.is_distributed)
+        self.assertEqual(saved.name_visibility, "hidden")
+        # The interview row itself stays: the candidate still exists, only
+        # the committee-panel pairing needs the admin's attention.
+        self.assertEqual(len(saved.schedule), 2)
+        audit_event = NameVisibilityAuditEvent.objects.get()
+        self.assertEqual(audit_event.action, NameVisibilityAuditEvent.ACTION_HIDDEN)
+
+    def test_full_withdrawal_prunes_review_list_snapshots(self):
+        """Readiness must not keep demanding review of a withdrawn candidate."""
+        withdrawing_application, saved = self._withdrawal_fixture("review-prune", 978)
+        reviewer = LegoUser.objects.create(
+            username="review-prune-reviewer", lego_id=989
+        )
+        other_id = str(uuid.uuid4())
+        review_list = ConflictReviewList.objects.create(
+            saved_schedule=saved,
+            revision=uuid.uuid4(),
+            interviewer=reviewer,
+            own_candidate_ids=[str(withdrawing_application.pk), other_id],
+            swap_candidate_ids=[str(withdrawing_application.pk)],
+        )
+
+        withdrawing_application.delete()
+
+        review_list.refresh_from_db()
+        self.assertEqual(review_list.own_candidate_ids, [other_id])
+        self.assertEqual(review_list.swap_candidate_ids, [])
 
     def test_withdrawal_clears_legacy_name_only_schedule(self):
         admin = LegoUser.objects.create(username="legacy-admin", lego_id=982)
