@@ -97,7 +97,7 @@ def _fetch_first_year_members(api_url, access_token):
                         continue
                     members[lego_user_id] = {
                         "username": member.get("username") or "",
-                        "full_name": member.get("full_name") or "",
+                        "full_name": member.get("fullName") or "",
                     }
                 url = payload.get("next")
     return members

@@ -59,7 +59,7 @@ class SyncDirectoryEntriesTestCase(TestCase):
                             "user": {
                                 "id": 9001,
                                 "username": "kari",
-                                "full_name": "Kari Nordmann",
+                                "fullName": "Kari Nordmann",
                             }
                         }
                     ],
@@ -105,7 +105,7 @@ class SyncDirectoryEntriesTestCase(TestCase):
                             "user": {
                                 "id": 9001,
                                 "username": "kari",
-                                "full_name": "Kari Nordmann",
+                                "fullName": "Kari Nordmann",
                             }
                         }
                     ],
