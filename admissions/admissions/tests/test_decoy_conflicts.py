@@ -150,13 +150,7 @@ class DecoyConflictRoundTripTestCase(APITestCase):
         self.assertIn(self.decoy_token, mine["reviewed_candidate_ids"])
 
     def test_the_saves_echo_matches_the_next_get(self):
-        """Diffing a save's response against a poll must reveal nothing.
-
-        The echo used to strip decoy marks (they reappeared on the next GET)
-        and to return the real proposed panel instead of the blended review
-        scope - either diff separated fillers from real candidates and leaked
-        the draft panel the GET deliberately hides.
-        """
+        """Diffing a save's echo against the next GET must reveal nothing."""
         post_res = self.client.post(
             self.availability_url,
             {
@@ -244,8 +238,6 @@ class DecoyOrderingAndOperatorScopeTestCase(APITestCase):
         )
 
     def test_decoys_interleave_with_real_candidates_by_name(self):
-        """Appending fillers after the name-sorted reals put every filler at
-        the tail of the list, which was as good as labelling them."""
         self.client.force_authenticate(user=self.interviewer)
 
         res = self.client.get(self.candidates_url)
@@ -258,9 +250,6 @@ class DecoyOrderingAndOperatorScopeTestCase(APITestCase):
         self.assertEqual(res.data[1]["id"], str(self.kari_application.pk))
 
     def test_the_committees_own_operator_keeps_the_full_candidate_list(self):
-        """The solve payload is built from this list, so collapsing it for
-        the committee's own recruiter locked them out of solving exactly
-        while conflict review ran."""
         self.client.force_authenticate(user=self.recruiter)
 
         res = self.client.get(self.candidates_url)
@@ -332,16 +321,12 @@ class PartialPublishIdentityTestCase(APITestCase):
         )
 
     def test_partial_publish_reveals_only_published_candidates(self):
-        """The whole point of publishing "til og med" a date is that the
-        rest of the plan - names included - is still subject to change."""
         self._saved("2026-04-22")
 
         res = self.client.get(self.candidates_url)
 
         self.assertEqual(res.status_code, status.HTTP_200_OK)
-        self.assertEqual(
-            [entry["id"] for entry in res.data], [str(self.early.pk)]
-        )
+        self.assertEqual([entry["id"] for entry in res.data], [str(self.early.pk)])
 
     def test_full_publish_still_reveals_the_committee_pool(self):
         self._saved("2026-04-24")

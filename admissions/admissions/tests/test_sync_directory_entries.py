@@ -43,10 +43,8 @@ class SyncDirectoryEntriesTestCase(TestCase):
             status_code=200, json=lambda: {"access_token": "a-token"}
         )
 
-        # The real wire shapes: /api/v1/groups/ is unpaginated and returns a
-        # bare JSON array, and LEGO's renderer camelCases user fields to
-        # fullName. The old mocks used snake_case dict envelopes for both,
-        # which is exactly how three sync bugs stayed green in CI.
+        # Real wire shapes: /api/v1/groups/ is an unpaginated bare array, and
+        # LEGO camelCases user fields to fullName.
         def fake_get(url, **kwargs):
             if url.endswith("/api/v1/groups/"):
                 name = kwargs["params"]["name"]
@@ -135,8 +133,6 @@ class SyncDirectoryEntriesTestCase(TestCase):
     )
     @patch("admissions.utils.management.commands.sync_directory_entries.requests")
     def test_a_zero_member_sync_never_wipes_the_roster(self, mock_requests):
-        """A renamed group (the hardcoded names are school-year specific)
-        must not silently empty the decoy pool for the whole admission."""
         DirectoryEntry.objects.create(
             lego_user_id=8000, username="kept", full_name="Kept Entry"
         )

@@ -159,22 +159,19 @@ def schedule_response_context(admission, saved_schedule, is_interview_admin):
 def revoke_removed_group_disclosures(admission, next_groups, actor):
     """Unpublish and hide the schedule of any group leaving the admission.
 
-    SavedSchedule points at Group, not at the AdmissionGroup through-row, so
-    removing a committee from the admission left its published,
-    name-revealed schedule row fully intact - and re-adding the committee
-    later served it straight back to every member, with no re-approval and
-    no audit trail. Disclosure is revoked at the moment of removal instead:
-    restoring it after a re-add is a deliberate publish, like any other.
+    SavedSchedule points at Group, not the AdmissionGroup through-row, so
+    without this a re-added committee gets its old revealed plan straight
+    back with no re-approval.
     """
 
     next_group_ids = {group.pk for group in next_groups}
-    removed_schedules = SavedSchedule.objects.select_for_update().filter(
-        admission=admission
-    ).exclude(group_id__in=next_group_ids)
+    removed_schedules = (
+        SavedSchedule.objects.select_for_update()
+        .filter(admission=admission)
+        .exclude(group_id__in=next_group_ids)
+    )
     for saved in removed_schedules:
-        was_visible = (
-            saved.name_visibility == SavedSchedule.NAME_VISIBILITY_COMMITTEE
-        )
+        was_visible = saved.name_visibility == SavedSchedule.NAME_VISIBILITY_COMMITTEE
         if saved.distributed_through is None and not was_visible:
             continue
         saved.distributed_through = None

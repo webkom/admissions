@@ -59,9 +59,7 @@ class SavedScheduleView(SchedulerFeatureGateMixin, APIView):
 
         is_admin = user_is_admission_admin(admission, user)
         # Scoped to the URL's own group, like availability_views and
-        # solve_views: representing some OTHER committee in this admission
-        # must grant nothing here, or a recruiter of X could read Y's
-        # schedule and flip Y's name_visibility.
+        # solve_views: representing another committee grants nothing here.
         representing_groups = get_representing_groups(admission, user).filter(
             pk=group.pk
         )

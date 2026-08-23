@@ -708,11 +708,9 @@ def _resolve_schedule_state(
         if not data["is_distributed"]:
             distributed_through = None
         elif existing is not None and existing.distributed_through is not None:
-            # `is_distributed: true` on an already-published plan means "stay
-            # published", not "publish everything": the row-edit save echoes
-            # it back on every edit, so recomputing the full boundary here
-            # silently converted a partial publish into a full one. Widening
-            # is an explicit act and must arrive as `distributed_through`.
+            # On an already-published plan this flag means "stay published";
+            # widening must arrive as an explicit distributed_through, or a
+            # row edit silently converts a partial publish into a full one.
             distributed_through = existing.distributed_through
         else:
             distributed_through = _full_publish_boundary(
@@ -991,10 +989,8 @@ def _persist_schedule(
         else SavedSchedule.NAME_VISIBILITY_HIDDEN
     )
     # Snapshotted before the setattr loop below, like the two fields above:
-    # `saved` aliases `existing`, so once the loop runs, existing.schedule IS
-    # the new schedule and every old-vs-new comparison silently degenerates
-    # to new-vs-new - which is how review-list regeneration ended up never
-    # firing on updates.
+    # `saved` aliases `existing`, so after the loop every old-vs-new schedule
+    # comparison degenerates to new-vs-new.
     previous_schedule = existing.schedule if existing is not None else None
     with transaction.atomic():
         desired_fields = {

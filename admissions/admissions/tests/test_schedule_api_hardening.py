@@ -516,13 +516,7 @@ class SavedSchedulePublishSemanticsTestCase(APITestCase):
         return second_application
 
     def test_row_edit_of_partially_published_plan_keeps_the_boundary(self):
-        """`is_distributed: true` on a partial publish must not widen it.
-
-        The row-edit save echoes the generated is_distributed column back on
-        every edit; recomputing the full boundary from that echo silently
-        published the withheld days (and their names, when committee-visible)
-        the first time an admin adjusted a single interview.
-        """
+        """A row edit echoing `is_distributed: true` must not widen a partial publish."""
         second_application = self._second_application()
         second_entry = self._schedule(time=2 * 24 * 60 + 540)
         second_entry[0]["candidate_id"] = str(second_application.pk)
@@ -562,13 +556,7 @@ class SavedSchedulePublishSemanticsTestCase(APITestCase):
         )
 
     def test_updating_the_schedule_regenerates_conflict_review_lists(self):
-        """The update path must re-snapshot review lists, not just creation.
-
-        `_persist_schedule` mutates the row it also compares against, so the
-        old-vs-new schedule comparison degenerated to new-vs-new and review
-        lists were never built for the row-create-then-fill lifecycle every
-        real plan goes through.
-        """
+        """The update path must re-snapshot review lists, not just creation."""
         saved = self._create_saved(is_distributed=False, schedule=[])
         ConflictReviewList.objects.filter(saved_schedule=saved).delete()
 
@@ -597,12 +585,7 @@ class SavedSchedulePublishSemanticsTestCase(APITestCase):
         )
 
     def test_publish_with_schedule_change_requires_review_of_the_new_pairing(self):
-        """Readiness must cover the incoming schedule, not the old snapshot.
-
-        The check runs before persistence, and or-replacing the new pairs with
-        the snapshotted scope let a save that both added a candidate and
-        published ship that never-reviewed pairing in one POST.
-        """
+        """Readiness must cover the incoming schedule, not the old snapshot."""
         second_application = self._second_application()
         self._create_saved(is_distributed=False, schedule=self._schedule(time=540))
         self._mark_reviewed(self.application)
@@ -2261,13 +2244,7 @@ class SavedScheduleVisibilityTestCase(APITestCase):
         return recruiter
 
     def test_cross_committee_recruiter_cannot_read_the_schedule(self):
-        """Representing committee X grants nothing on committee Y's schedule.
-
-        is_recruiter was derived admission-wide here (unlike the sibling
-        availability/solve views), so a recruiter of Bedkom passed the gate
-        for Arrkom's schedule and, when it was distributed with committee
-        name visibility, read Arrkom's candidate names.
-        """
+        """Representing committee X grants nothing on committee Y's schedule."""
         self._create_saved(name_visibility="committee")
         self.client.force_authenticate(user=self._other_committee_recruiter())
 
@@ -4167,13 +4144,7 @@ class CanonicalSolverInputTestCase(APITestCase):
 
 
 class GroupRemovalDisclosureTestCase(APITestCase):
-    """Removing a committee from the admission must revoke its disclosure.
-
-    SavedSchedule points at Group, not the AdmissionGroup through-row, so
-    removal used to leave the published, name-revealed schedule row intact -
-    and a later re-add served it straight back to the whole committee with
-    no re-approval and no audit event.
-    """
+    """Removing a committee from the admission must revoke its disclosure."""
 
     def setUp(self):
         self.staff_user = LegoUser.objects.create(
@@ -4317,9 +4288,7 @@ class CandidateWithdrawalPrivacyTestCase(TestCase):
         self.assertEqual(audit_event.actor_username, "system")
 
     def _withdrawal_fixture(self, slug, lego_base):
-        admin = LegoUser.objects.create(
-            username=f"{slug}-admin", lego_id=lego_base
-        )
+        admin = LegoUser.objects.create(username=f"{slug}-admin", lego_id=lego_base)
         withdrawing = LegoUser.objects.create(
             username=f"{slug}-withdrawing", lego_id=lego_base + 1
         )
@@ -4361,14 +4330,7 @@ class CandidateWithdrawalPrivacyTestCase(TestCase):
         return withdrawing_application, saved
 
     def test_full_withdrawal_leaves_untouched_published_plans_alone(self):
-        """Withdrawing an application the plan never scheduled must not unpublish it.
-
-        The old full-withdrawal guard checked whether the parent
-        UserApplication row still existed - but the delete Collector fires
-        GroupApplication's post_delete while the parent row is still present,
-        so the handler ran for every full withdrawal and tore down published
-        plans the withdrawal never touched.
-        """
+        """Withdrawing an application the plan never scheduled must not unpublish it."""
         withdrawing_application, saved = self._withdrawal_fixture(
             "untouched-purge", 960
         )
@@ -4420,16 +4382,11 @@ class CandidateWithdrawalPrivacyTestCase(TestCase):
         self.assertEqual(audit_event.action, NameVisibilityAuditEvent.ACTION_HIDDEN)
 
     def test_full_withdrawal_prunes_review_list_snapshots(self):
-        """Readiness must not keep demanding review of a withdrawn candidate.
-
-        The snapshot rows are the review scope; a withdrawn candidate left in
-        them could neither be seen nor submitted by any interviewer, so
-        publication deadlocked with no recovery action.
-        """
-        withdrawing_application, saved = self._withdrawal_fixture(
-            "review-prune", 978
+        """Readiness must not keep demanding review of a withdrawn candidate."""
+        withdrawing_application, saved = self._withdrawal_fixture("review-prune", 978)
+        reviewer = LegoUser.objects.create(
+            username="review-prune-reviewer", lego_id=989
         )
-        reviewer = LegoUser.objects.create(username="review-prune-reviewer", lego_id=989)
         other_id = str(uuid.uuid4())
         review_list = ConflictReviewList.objects.create(
             saved_schedule=saved,

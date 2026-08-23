@@ -190,10 +190,8 @@ def get_conflict_review_readiness(admission, group, saved_schedule=None, schedul
             continue
         # Confirmation must cover everything they were shown, not just their
         # own panel: an unreviewed swap partner is exactly the pair a repair
-        # would move onto them. A union rather than a replacement: when the
-        # readiness check runs against an incoming schedule that differs from
-        # the snapshotted one (a save that edits and publishes in one POST),
-        # the snapshot alone would vouch for pairings it has never seen.
+        # would move onto them. A union, not a replacement: an edit-and-
+        # publish POST carries pairings the snapshot has never seen.
         if saved_schedule is not None:
             proposed_candidate_ids = (
                 conflict_review_scope(saved_schedule, interviewer_id)
@@ -241,12 +239,8 @@ def _as_date(value):
 def published_candidate_ids(saved_schedule):
     """Candidate ids on rows at or before the published boundary.
 
-    The identity gates must agree with the row filter
-    (SavedScheduleSerializer's publication_boundary): a partial publish
-    withholds the later days' rows, so it must withhold those candidates'
-    identities too - the whole point of publishing "til og med" a date is
-    that the rest of the plan, names included, is still subject to change.
-    Empty when nothing is published.
+    Must agree with the row filter (SavedScheduleSerializer's
+    publication_boundary): withheld rows mean withheld identities.
     """
 
     if saved_schedule is None or saved_schedule.distributed_through is None:
@@ -272,11 +266,8 @@ def published_candidate_ids(saved_schedule):
 def publication_withholds_rows(saved_schedule):
     """Whether distributed_through leaves scheduled rows unpublished.
 
-    A full publish keeps the committee-wide visibility rules exactly as they
-    were; only a genuinely partial publish narrows identity to the published
-    rows, so the two cases must be told apart by the schedule's content, not
-    by comparing boundaries (an empty or legacy plan has no full boundary to
-    compare against).
+    Decided by the schedule's content, not by comparing boundaries: an empty
+    or legacy plan has no full boundary to compare against.
     """
 
     if saved_schedule is None or saved_schedule.distributed_through is None:
@@ -488,11 +479,9 @@ def build_conflict_review_lists(saved_schedule, swap_size=5):
         candidates.sort()
         swap = [candidate_id for _, candidate_id in candidates[:swap_size]]
         decoy_count = min(swap_size, len(decoy_pool))
-        # A bare uuid4, exactly the shape of a real UserApplication pk: a
-        # visible prefix (the old "d:" namespace) let anyone with devtools
-        # separate fillers from real candidates, which defeats the reason
-        # fillers exist. Telling them apart is done by membership in this
-        # row's stored decoys, never by inspecting the token itself.
+        # A bare uuid4, the same shape as a real UserApplication pk - fillers
+        # are told apart by membership in this row's stored decoys, never by
+        # a visible format marker.
         decoys = (
             [
                 {

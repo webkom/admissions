@@ -58,10 +58,8 @@ def _access_token(api_url, client_id, client_secret):
 
 
 def _result_list(payload):
-    """LEGO is inconsistent here: an unpaginated viewset (like /api/v1/groups/)
-    returns a bare JSON array, a paginated one wraps it in {"results": [...]}.
-    Assuming the envelope crashed every run with AttributeError on the bare
-    array, so both shapes are accepted."""
+    """An unpaginated LEGO viewset (like /api/v1/groups/) returns a bare JSON
+    array; a paginated one wraps it in {"results": [...]}."""
 
     if isinstance(payload, list):
         return payload
@@ -93,8 +91,8 @@ def _fetch_first_year_members(api_url, access_token):
             if isinstance(group, dict) and group.get("name") == group_name
         ]
         if not groups:
-            # The hardcoded names are school-year specific; the first rename
-            # must surface loudly rather than as a quietly shrinking roster.
+            # The hardcoded names are school-year specific; a rename must
+            # surface loudly, not as a quietly shrinking roster.
             log.warning("roster_sync_group_missing", group=group_name)
         for group in groups:
             url = urljoin(api_url, f"/api/v1/groups/{group['id']}/memberships/")
@@ -115,11 +113,7 @@ def _fetch_first_year_members(api_url, access_token):
                         continue
                     members[lego_user_id] = {
                         "username": member.get("username") or "",
-                        # LEGO's renderer camelCases every field name, so the
-                        # wire carries fullName; the snake_case fallback keeps
-                        # a non-camelizing deployment from storing "" - a
-                        # roster of bare usernames next to real candidates'
-                        # full names would itself give the fillers away.
+                        # LEGO camelCases the wire to fullName.
                         "full_name": member.get("fullName")
                         or member.get("full_name")
                         or "",
@@ -153,10 +147,8 @@ class Command(BaseCommand):
             return
 
         if not members:
-            # A wiped roster silently degrades every review list to zero
-            # decoys; an empty result is far more likely a renamed group or
-            # an upstream hiccup than an actual year with no students, so
-            # keep what we have and say so.
+            # An empty result is far more likely a renamed group than a year
+            # with no students - keep the existing roster.
             log.warning(
                 "roster_sync_empty",
                 reason="sync returned no members; keeping the existing roster",

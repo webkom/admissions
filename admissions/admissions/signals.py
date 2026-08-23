@@ -79,10 +79,9 @@ def purge_withdrawn_candidate(sender, instance, **kwargs):
                         action=NameVisibilityAuditEvent.ACTION_HIDDEN,
                     )
 
-        # The review-list snapshots must forget the candidate too: readiness
-        # demands review of every snapshotted id, and interviewers can no
-        # longer see or submit a withdrawn one - leaving it in place blocks
-        # publication permanently with no action anyone can take.
+        # Readiness demands review of every snapshotted id, and nobody can
+        # see or submit a withdrawn one - left in place it blocks publication
+        # permanently.
         changed_review_lists = []
         for review_list in ConflictReviewList.objects.filter(
             saved_schedule__admission_id=instance.admission_id
@@ -160,14 +159,11 @@ def flag_schedule_after_partial_withdrawal(sender, instance, **kwargs):
         if saved is None or not saved.is_distributed:
             return
 
-        # Only when the candidate actually holds an interview in this
-        # published plan is there anything to flag. This is also what keeps
-        # full withdrawals out of here: a parent-row existence check cannot
-        # tell a cascade apart (the Collector deletes children while the
-        # parent row still exists), but purge_withdrawn_candidate has already
-        # run by then - pre_delete signals all fire before any deletion - and
-        # stripped the candidate from every schedule, so this check is False
-        # exactly when the whole application is going away.
+        # Only a candidate actually scheduled in this published plan is worth
+        # flagging. This also keeps full-withdrawal cascades out: a parent-row
+        # existence check cannot (the Collector deletes children while the
+        # parent still exists), but purge_withdrawn_candidate has already
+        # stripped the candidate from every schedule by the time this fires.
         candidate_id = str(instance.application_id)
         if not any(
             isinstance(item, dict) and str(item.get("candidate_id")) == candidate_id

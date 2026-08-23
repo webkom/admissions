@@ -120,11 +120,9 @@ class InterviewCandidatesView(SchedulerFeatureGateMixin, APIView):
         applications = UserApplication.objects.filter(
             admission=admission, group_applications__group=group
         ).distinct()
-        # Workflow operators (admission admins AND this committee's own
-        # leader/recruiter) always work against the full pool - they see it
-        # before review opens and after publish, and the solve payload is
-        # built from this list, so collapsing it mid-review locked the
-        # committee's own operator out of solving exactly while review ran.
+        # Workflow operators always keep the full pool: the solve payload is
+        # built from this list, and they see the pool before review opens and
+        # after publish anyway.
         collapsed_to_review_scope = (
             conflict_review_open and not is_admin and not is_interview_admin
         )
@@ -137,9 +135,8 @@ class InterviewCandidatesView(SchedulerFeatureGateMixin, APIView):
                 )
             elif committee_revealed:
                 if publication_withholds_rows(saved):
-                    # Identity follows the rows the viewer can actually see:
-                    # a partial publish withholds the later days' interviews,
-                    # so it must withhold those candidates' names too.
+                    # A partial publish withholds rows, so it withholds those
+                    # candidates' names too.
                     applications = applications.filter(
                         pk__in=published_candidate_ids(saved)
                     )
@@ -168,9 +165,8 @@ class InterviewCandidatesView(SchedulerFeatureGateMixin, APIView):
                     {"id": entry["token"], "name": entry["name"]}
                     for entry in decoy_review_scope(saved, user.id)
                 ]
-                # One combined ordering: appending fillers after the
-                # name-sorted reals put every filler at the tail, which was
-                # as good as labelling them.
+                # One combined ordering - fillers clustered at the tail would
+                # label themselves.
                 payload.sort(key=lambda entry: (entry["name"].casefold(), entry["id"]))
 
         return Response(payload, status=status.HTTP_200_OK)
