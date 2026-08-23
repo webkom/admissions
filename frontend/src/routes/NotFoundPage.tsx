@@ -7,7 +7,7 @@ const NotFoundPage = () => {
     <DIV>
       <div>
         <AbakusLogo />
-        <H1>404 This Page Does Not Exist</H1>
+        <H1>404 – siden finnes ikke</H1>
       </div>
     </DIV>
   );
@@ -24,7 +24,7 @@ const DIV = styled.div`
   flex-direction: column;
   justify-content: center;
   align-items: center;
-  height: 100vh;
+  min-height: var(--viewport-min-height);
 `;
 
 export default NotFoundPage;

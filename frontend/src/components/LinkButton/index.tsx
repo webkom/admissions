@@ -1,25 +1,56 @@
 import React from "react";
-import { Button } from "@webkom/lego-bricks";
 import { useNavigate } from "react-router-dom";
-import Icon from "../Icon";
+import { Button } from "@webkom/lego-bricks";
+import cn from "src/utils/cn";
 
 type LinkButtonProps = {
   to: string;
   external?: boolean;
-  icon?: string;
-  iconPrefix?: string;
+  fullWidth?: boolean;
+  className?: string;
 };
+
+type StyledButtonProps = React.ComponentProps<typeof Button> & {
+  $fullWidth?: boolean;
+};
+
+export const StyledButton: React.FC<StyledButtonProps> = ({
+  $fullWidth = false,
+  className,
+  children,
+  ...props
+}) => (
+  <Button
+    className={cn(
+      "!box-border !flex !items-center !justify-center !gap-2.5",
+      $fullWidth ? "!w-full" : "!w-fit",
+      className,
+    )}
+    {...props}
+  >
+    {children}
+  </Button>
+);
 
 const LinkButton: React.FC<
   LinkButtonProps & React.ComponentProps<typeof Button>
-> = ({ to, external = false, children, icon, iconPrefix, ...props }) => {
+> = ({
+  to,
+  external = false,
+  children,
+  fullWidth = false,
+  className,
+  ...props
+}) => {
   const navigate = useNavigate();
 
   return (
-    <Button
+    <StyledButton
+      $fullWidth={fullWidth}
+      className={className}
       onClick={(e) => {
         if (external) {
-          (window as Window).location = to;
+          window.location.assign(to);
           e.preventDefault();
         } else {
           navigate(to);
@@ -28,8 +59,7 @@ const LinkButton: React.FC<
       {...props}
     >
       {children}
-      {icon && <Icon name={icon} prefix={iconPrefix} />}
-    </Button>
+    </StyledButton>
   );
 };
 

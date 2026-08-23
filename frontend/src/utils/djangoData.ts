@@ -1,4 +1,5 @@
 export type DjangoUserData = {
+  id?: string;
   profile_picture?: string;
   full_name?: string;
   representative_of_group?: string;
@@ -11,9 +12,14 @@ export type DjangoData = {
 };
 
 const defaultConfig: DjangoData = { user: {} };
-const config = window.__DJANGO__
-  ? { ...defaultConfig, ...window.__DJANGO__ }
-  : defaultConfig;
+const serialized = document.getElementById("django-data")?.textContent;
+let embedded: DjangoData | undefined;
+try {
+  embedded = serialized ? (JSON.parse(serialized) as DjangoData) : undefined;
+} catch {
+  embedded = undefined;
+}
+const config = { ...defaultConfig, ...(embedded ?? window.__DJANGO__) };
 
 export default config;
 

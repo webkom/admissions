@@ -9,32 +9,42 @@ import {
 import readmeIfy from "src/components/ReadmeLogo";
 import useDebouncedState from "src/utils/useDebouncedState";
 import { saveApplicationTextDraft } from "src/utils/draftHelper";
+import { useDraftWritesAllowed } from "src/utils/draftWriteGate";
 import { Group } from "src/types";
 import { FieldInputProps, FormikProps } from "formik";
 import { FormValues } from "src/routes/ApplicationForm";
+import JsonFieldEditor from "src/components/JsonFieldEditor";
+import { FieldModel } from "src/utils/jsonFields";
 
 type FieldValue = string;
 
 export interface ApplicationProps {
   responseLabel: string;
+  interviewDescription?: string | null;
   group: Group;
   field: FieldInputProps<FieldValue>;
   form: FormikProps<FormValues>;
   disabled: boolean;
+  questionFields?: FieldModel[];
 }
 
 const Application: React.FC<ApplicationProps> = ({
   responseLabel,
+  interviewDescription,
   group,
   field: { name, onChange, value },
   form: { touched, errors, handleBlur },
   disabled,
+  questionFields,
 }) => {
   const debouncedValue = useDebouncedState(value);
 
+  const draftWritesAllowed = useDraftWritesAllowed();
+
   useEffect(() => {
+    if (!draftWritesAllowed) return;
     saveApplicationTextDraft([group.name, value]);
-  }, [debouncedValue]);
+  }, [draftWritesAllowed, debouncedValue]);
 
   const error =
     touched.groups && touched.groups[name]
@@ -44,7 +54,13 @@ const Application: React.FC<ApplicationProps> = ({
   return (
     <Container>
       <LogoNameWrapper>
-        <Logo src={group.logo} />
+        {group.logo ? (
+          <Logo src={group.logo} alt="" aria-hidden="true" />
+        ) : (
+          <LogoFallback aria-hidden="true">
+            {getGroupInitials(group.name)}
+          </LogoFallback>
+        )}
         <Name>{readmeIfy(group.name)}</Name>
       </LogoNameWrapper>
       {responseLabel && (
@@ -72,6 +88,17 @@ const Application: React.FC<ApplicationProps> = ({
           disabled={disabled}
         />
         <InputValidationFeedback error={error} />
+        <JsonFieldEditor
+          sectionName={`groupAnswers.${group.name.toLowerCase()}`}
+          fields={questionFields}
+          disabled={disabled}
+        />
+        {interviewDescription && (
+          <InterviewDescription>
+            <strong>Om intervjuet</strong>
+            <span>{readmeIfy(interviewDescription, true)}</span>
+          </InterviewDescription>
+        )}
       </InputWrapper>
     </Container>
   );
@@ -87,11 +114,11 @@ const Container = styled.div`
     "logoname"
     "responselabel"
     "input";
-  grid-gap: 0.7rem;
+  gap: var(--spacing-md);
   align-items: center;
-  margin: 2rem 0rem;
-  padding-bottom: 2rem;
-  border-bottom: 1px solid var(--color-gray-3);
+  margin: var(--spacing-xl) 0;
+  padding-bottom: var(--spacing-xl);
+  border-bottom: var(--border-width-default) solid var(--color-border-muted);
 
   &:last-of-type {
     border-bottom: 0;
@@ -99,7 +126,7 @@ const Container = styled.div`
   }
 
   ${media.portrait`
-    margin: 1em 0;
+    margin: var(--spacing-md) 0;
     `};
 `;
 
@@ -112,13 +139,12 @@ const LogoNameWrapper = styled.div`
 const Name = styled.h3`
   grid-area: name;
   margin: 0;
-  font-size: 1.5rem;
-  line-height: 2rem;
-  letter-spacing: 0.7px;
+  font-size: var(--font-size-heading-md);
+  line-height: var(--line-height-heading-md);
 
   ${media.portrait`
-    font-size: 1.3rem;
-    padding: 0
+    font-size: var(--font-size-heading-xs);
+    padding: 0;
     text-align: left;
     align-self: center;
     `};
@@ -128,31 +154,70 @@ const Logo = styled.img`
   grid-area: logo;
   justify-self: start;
   object-fit: scale-down;
-  max-width: 45px;
-  margin-right: 1rem;
+  max-width: var(--application-logo-size);
+  margin-right: var(--spacing-md);
 `;
+
+const LogoFallback = styled.span`
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  width: var(--application-logo-size);
+  height: var(--application-logo-size);
+  margin-right: var(--spacing-md);
+  border-radius: var(--border-radius-pill);
+  background: var(--color-brand-soft);
+  color: var(--color-brand);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-bold);
+`;
+
+const getGroupInitials = (name: string) => {
+  const initials = name
+    .trim()
+    .split(/\s+/)
+    .map((part) => part[0])
+    .join("")
+    .slice(0, 2);
+  return initials || "?";
+};
 
 const ResponseLabel = styled.div`
   grid-area: responselabel;
   background: linear-gradient(
     180deg,
-    rgba(234, 233, 232, 0.76) 0%,
-    rgba(218, 218, 218, 0.56) 100%
+    var(--color-surface-subtle) 0%,
+    var(--color-border-soft) 100%
   );
   background-repeat: repeat;
-  border: 1px solid rgba(53, 138, 204, 0.22);
-  border-radius: 13px;
-  padding: 1rem;
-  font-size: 0.8rem;
-  line-height: 1rem;
-  color: rgba(57, 75, 89, 0.8);
+  border: var(--border-width-default) solid var(--color-blue-2);
+  border-radius: var(--border-radius-lg);
+  padding: var(--spacing-md);
+  font-size: var(--font-size-detail);
+  line-height: var(--line-height-tiny);
+  color: var(--color-text-muted);
 `;
 
 const InputWrapper = styled.div`
   grid-area: input;
-  font-size: 1rem;
+  font-size: var(--font-size-md);
 `;
 
 const InputArea = styled(StyledTextAreaField)`
-  min-height: 10rem;
+  min-height: var(--group-editor-min-height);
+`;
+
+const InterviewDescription = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-xs);
+  margin-top: var(--spacing-lg);
+  color: var(--color-text-muted);
+  font-size: var(--font-size-detail);
+  line-height: var(--line-height-copy);
+
+  strong {
+    color: var(--color-text-primary);
+  }
 `;

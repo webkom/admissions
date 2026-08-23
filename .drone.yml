@@ -128,12 +128,13 @@ steps:
       DATABASE: database
       FRONTEND_URL: "https://localhost:5000"
       API_URL: "/api"
+      ALLOW_CYPRESS_FIXTURES: "true"
     commands:
     - make ci_settings
     - poetry install
     - poetry run python manage.py collectstatic --noinput
     - poetry run python manage.py migrate
-    - poetry run python manage.py load_fixtures
+    - poetry run python manage.py load_fixtures --cypress
     - poetry run python manage.py runserver 0.0.0.0:5000
 
   - name: cypress
@@ -148,8 +149,28 @@ steps:
       CYPRESS_RECORD_KEY:
         from_secret: cypress_record_key
     commands:
-      - ./wait-for-it.sh -t 420 cypress-backend:5000
-      - yarn cypress:run --record
+      - |
+        set -eu
+        ./node_modules/.bin/vite --host 0.0.0.0 >/tmp/cypress-fixture-vite.log 2>&1 &
+        vite_pid=$!
+        cleanup() {
+          exit_status=$?
+          trap - EXIT INT TERM HUP
+          kill "$vite_pid" 2>/dev/null || true
+          wait "$vite_pid" 2>/dev/null || true
+          rm -f .cypress-fixture-credentials.json
+          exit "$exit_status"
+        }
+        trap cleanup EXIT
+        trap 'exit 130' INT
+        trap 'exit 143' TERM HUP
+
+        ./wait-for-it.sh -t 420 cypress-backend:5000
+        if ! ./wait-for-it.sh -t 60 localhost:5001; then
+          cat /tmp/cypress-fixture-vite.log
+          exit 1
+        fi
+        yarn cypress:run --record
   
   - name: docker
     image: plugins/docker

@@ -1,58 +1,53 @@
 import { CSVLink } from "react-csv";
 import styled from "styled-components";
 
-interface SmallDescriptionWrapperProps {
-  $smallerMargin?: boolean;
-}
-
-export const StatisticsWrapper = styled.div<SmallDescriptionWrapperProps>`
-  display: inline-flex;
-  flex-direction: column;
-  gap: 0.25rem;
-  margin: ${(props) => (props.$smallerMargin ? "0 0.5em 1em 1em" : "1em")};
-
-  justify-content: flex-start;
-  line-height: 1;
-  align-items: center;
+export const SectionTitle = styled.h2`
+  margin: 0;
+  font-size: var(--font-size-lg);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-primary);
 `;
 
-interface SmallDescriptionProps {
-  $capitalize?: boolean;
-}
-
-export const StatisticsName = styled.span<SmallDescriptionProps>`
+export const SectionDescription = styled.p`
+  margin: var(--spacing-md) 0 0;
+  max-width: var(--content-width-readable);
+  color: var(--color-text-muted);
   font-size: var(--font-size-sm);
-  font-weight: 600;
-  text-transform: ${(props) => (props.$capitalize ? "capitalize" : "normal")};
-`;
-
-export const StatisticsGroupLogo = styled.img`
-  object-fit: scale-down;
-  max-height: 2em;
-  margin: 0.3em 0;
-`;
-
-export const Statistics = styled.div`
-  padding: 0.5em;
-  display: flex;
-  justify-content: center;
-  width: 100%;
-  flex-wrap: wrap;
+  line-height: var(--line-height-base);
 `;
 
 export const TableWrapper = styled.div`
   max-width: 100%;
   width: 100%;
+  overflow: auto;
+  border-radius: var(--border-radius-lg);
+  border: var(--border-width-emphasis) solid var(--color-border-soft);
+  background: var(--color-surface-base);
+  box-shadow: var(--shadow-sm);
 `;
 
 // eslint-disable-next-line
 //@ts-ignore
 export const CSVExport = styled(CSVLink)`
-  padding: 1em 0;
-  display: block;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--spacing-xs);
+  min-height: var(--control-height-md);
+  padding: 0 var(--spacing-xl);
+  border-radius: var(--border-radius-pill);
+  background: var(--color-red-6);
+  color: var(--color-absolute-white);
+  font-size: var(--font-size-sm);
   text-align: center;
-  border-top: 5px solid #c0392b;
-  border-bottom: 1px solid #c0392b;
-  width: 100%;
-  font-weight: bold;
+  font-weight: var(--font-weight-semibold);
+  text-decoration: none;
+  transition: background var(--easing-fast);
+  border: var(--border-width-emphasis) solid var(--color-red-6);
+
+  &:hover {
+    background: var(--color-red-7);
+    border-color: var(--color-red-7);
+    color: var(--color-absolute-white);
+  }
 `;

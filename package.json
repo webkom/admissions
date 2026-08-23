@@ -2,7 +2,6 @@
   "name": "admissions",
   "version": "1.0.0",
   "description": "Admission system for Abakus",
-  "main": "index.js",
   "repository": "git@github.com:webkom/admissions.git",
   "author": "Webkom <webkom@abakus.no>",
   "license": "MIT",
@@ -21,21 +20,22 @@
     "knip": "knip --files --exports"
   },
   "dependencies": {
-    "@babel/polyfill": "^7.0.0",
-    "@sentry/browser": "^7.101.1",
-    "@tanstack/react-query": "^5.37.1",
-    "@tanstack/react-table": "^8.17.3",
-    "@webkom/lego-bricks": "^1.2.1",
-    "axios": "^1.7.2",
-    "formik": "^2.4.6",
-    "js-cookie": "^3.0.5",
-    "luxon": "^3.4.4",
+    "@sentry/browser": "7.119.1",
+    "@tanstack/react-query": "5.37.1",
+    "@tanstack/react-table": "8.17.3",
+    "@webkom/lego-bricks": "1.2.1",
+    "axios": "^1.18.1",
+    "formik": "2.4.6",
+    "gsap": "^3.15.0",
+    "js-cookie": "3.0.7",
+    "lucide-react": "1.8.0",
+    "luxon": "3.4.4",
     "react": "^18.3.1",
     "react-csv": "^2.2.2",
     "react-dom": "^18.2.0",
-    "react-router-dom": "6.23.1",
-    "react-textarea-autosize": "^8.5.3",
-    "styled-components": "6.1.11"
+    "react-router-dom": "6.30.4",
+    "react-textarea-autosize": "8.5.3",
+    "styled-components": "6.4.3"
   },
   "devDependencies": {
     "@types/js-cookie": "^3.0.6",
@@ -44,27 +44,58 @@
     "@types/react": "^18.3.3",
     "@types/react-csv": "^1.1.10",
     "@types/react-dom": "^18.2.19",
-    "@types/styled-components": "^5.1.26",
     "@typescript-eslint/eslint-plugin": "^5.62.0",
     "@typescript-eslint/parser": "^5.62.0",
     "@vitejs/plugin-react": "^4.3.1",
-    "cypress": "^13.13.3",
+    "autoprefixer": "^10.4.20",
+    "cypress": "15.18.1",
     "eslint": "^8.57.0",
     "eslint-plugin-react": "^7.35.0",
-    "knip": "^5.27.3",
+    "knip": "5.88.1",
+    "postcss": "8.5.18",
     "prettier": "3.3.3",
     "stylelint": "^16.8.2",
     "stylelint-config-standard": "^36.0.1",
-    "typescript": "^5.5.4",
-    "vite": "^4.5.3",
-    "yup": "^1.4.0"
+    "tailwindcss": "^3.4.17",
+    "typescript": "5.5.4",
+    "vite": "6.4.3",
+    "yup": "1.4.0"
   },
   "prettier": {
     "singleQuote": false
   },
+  "resolutions": {
+    "@babel/runtime": "7.26.10",
+    "cross-spawn": "7.0.6",
+    "eslint/**/ajv": "6.15.0",
+    "eslint/**/brace-expansion": "1.1.16",
+    "eslint/**/flatted": "3.4.2",
+    "eslint/**/js-yaml": "4.2.0",
+    "eslint/**/minimatch": "3.1.5",
+    "knip/picomatch": "4.0.5",
+    "lodash": "4.18.1",
+    "lodash-es": "4.18.1",
+    "micromatch": "4.0.8",
+    "**/micromatch/picomatch": "2.3.2",
+    "path-to-regexp": "1.9.0",
+    "**/table/ajv": "8.20.0"
+  },
   "stylelint": {
     "extends": "stylelint-config-standard",
     "rules": {
+      "at-rule-no-unknown": [
+        true,
+        {
+          "ignoreAtRules": [
+            "tailwind",
+            "apply",
+            "layer",
+            "variants",
+            "responsive",
+            "screen"
+          ]
+        }
+      ],
       "custom-property-empty-line-before": null,
       "property-no-unknown": null,
       "selector-pseudo-class-no-unknown": [

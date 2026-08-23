@@ -1,207 +1,320 @@
-import React, { useEffect, useState } from "react";
-import styled from "styled-components";
-import FormatTime from "src/components/Time/FormatTime";
-
-import LoadingBall from "src/components/LoadingBall";
-import GroupStatistics from "./components/GroupStatistics";
-import { replaceQuotationMarks } from "src/utils/methods";
-import { useAdmission, useAdminApplications } from "src/query/hooks";
+import React, { useMemo, useState } from "react";
 import { useParams } from "react-router-dom";
+import { EyeOff, FileDown, Info, Search } from "lucide-react";
 
+import { StyledButton } from "src/components/LinkButton";
+import LoadingBall from "src/components/LoadingBall";
 import AdmissionsContainer from "src/containers/AdmissionsContainer";
-import { Application } from "src/types";
+import { useAdmission, useAdminApplications } from "src/query/hooks";
 import {
-  Statistics,
-  StatisticsName,
-  StatisticsWrapper,
-} from "./components/StyledElements";
-import djangoData from "src/utils/djangoData";
-import { InputFieldModel } from "src/utils/jsonFields";
-import CSVExportHandler, {
-  CompleteCsvData,
-} from "./components/CSVExportHandler";
+  getApplicationScopeKey,
+  isCommitteeMinimalView,
+} from "src/utils/applicationAccess";
+import { CustomSelect, MultiSelect } from "src/components/ui";
+import {
+  actionButtonBase,
+  actionButtonNeutral,
+} from "src/components/Scheduling/ui";
+import { interviewStatusOptions } from "src/utils/interviewStatus";
+import cn from "src/utils/cn";
+import { iconSizes } from "src/styles/designTokens";
+import { getApiErrorMessage } from "src/utils/apiErrors";
+import type { Group } from "src/types";
+
+import { useApplicationScope } from "./useApplicationScope";
+import { useApplicationFilters } from "./useApplicationFilters";
+import { useApplicationsCsvExport } from "./useApplicationsCsvExport";
+import CandidatePrivacyPreview from "./components/CandidatePrivacyPreview";
+import CSVExportHandler from "./components/CSVExportHandler";
+import TerminateCommitteeZone from "./components/TerminateCommitteeZone";
+import {
+  PageWrapper,
+  ErrorState,
+  Header,
+  Title,
+  ResultMeta,
+  HeaderControls,
+  FilterSection,
+  SearchField,
+  FilterControl,
+  ResetFilters,
+  EmptyResults,
+} from "./ViewApplications.styles";
+
+const filterSelectionSummary = (selected: { label: string }[]): string => {
+  if (selected.length === 0) return "Alle";
+  if (selected.length === 1)
+    return selected[0].label.replace(/\s*\(\d+\)$/, "");
+  return `${selected.length} valgt`;
+};
+
+const resolveTerminationGroup = (
+  availableGroups: Group[],
+  scopedGroup: Group | undefined,
+  selectedGroupIds: string[],
+): Group | undefined => {
+  if (scopedGroup) return scopedGroup;
+  if (availableGroups.length === 1) return availableGroups[0];
+  if (selectedGroupIds.length === 1) {
+    return availableGroups.find((group) => group.pk === selectedGroupIds[0]);
+  }
+  return undefined;
+};
 
 const ViewApplications = () => {
   const { admissionSlug } = useParams();
-  const [sortedApplications, setSortedApplications] = useState<Application[]>(
-    [],
-  );
-  const [selectedGroups, setSelectedGroups] = useState<string[]>([]);
-  const [filteredApplications, setFilteredApplications] = useState<
-    Application[]
-  >([]);
-  const [csvData, setCsvData] = useState<CompleteCsvData[]>([]);
+  const [showCandidates, setShowCandidates] = useState(false);
+  const [showCsvExport, setShowCsvExport] = useState(false);
+
+  const {
+    data: admission,
+    error: admissionError,
+    isLoading: admissionIsLoading,
+    refetch: refetchAdmission,
+  } = useAdmission(admissionSlug ?? "");
+  const applicationScopeKey = getApplicationScopeKey(admission);
+  const applicationViewMode = admission?.userdata.application_view_mode;
+  const isCommitteeMinimal = isCommitteeMinimalView(applicationViewMode);
 
   const {
     data: applications,
     error: applicationsError,
-    isFetching: applicationsIsFetching,
-  } = useAdminApplications(admissionSlug ?? "");
+    isLoading: applicationsIsLoading,
+    refetch: refetchApplications,
+  } = useAdminApplications(
+    admissionSlug ?? "",
+    applicationScopeKey,
+    applicationViewMode,
+    admission?.userdata.represented_groups ?? [],
+  );
+
+  const { availableGroups, scopedGroup } = useApplicationScope(
+    admission,
+    isCommitteeMinimal,
+  );
+
+  const sortedApplications = useMemo(
+    () =>
+      [...(applications ?? [])].sort((a, b) =>
+        a.user.full_name.localeCompare(b.user.full_name, "nb"),
+      ),
+    [applications],
+  );
+
   const {
-    data: admission,
-    error: admissionError,
-    isFetching: admissionIsFetching,
-  } = useAdmission(admissionSlug ?? "");
-  const { groups } = admission ?? {};
-
-  const csvHeaders = [
-    { label: "Fullt Navn", key: "name" },
-    { label: "Prioriteringer", key: "priorityText" },
-    ...(admission?.userdata.is_admin
-      ? (admission?.header_fields as InputFieldModel[])
-          .filter((headerField) => "id" in headerField)
-          .map((headerField) => ({
-            label: headerField.title,
-            key: headerField.id,
-          }))
-      : []),
-    { label: "Gruppe", key: "group" },
-    { label: "Søknadstekst", key: "groupApplicationText" },
-    { label: "E-post", key: "email" },
-    { label: "Mobilnummer", key: "phoneNumber" },
-    { label: "Brukernavn", key: "username" },
-    { label: "Søkt innen frist", key: "appliedWithinDeadline" },
-    { label: "Tid sendt", key: "createdAt" },
-    { label: "Tid oppdatert", key: "updatedAt" },
-  ];
-
-  useEffect(() => {
-    if (!applications) return;
-    setSortedApplications(
-      [...applications].sort((a, b) =>
-        a.user.full_name.localeCompare(b.user.full_name),
-      ),
-    );
-  }, [applications]);
-
-  useEffect(() => {
-    setFilteredApplications(
-      sortedApplications.filter(
-        (application) =>
-          selectedGroups.length === 0 ||
-          application.group_applications.find((groupApplication) =>
-            selectedGroups.includes(groupApplication.group.name),
-          ),
-      ),
-    );
-  }, [sortedApplications, selectedGroups]);
-
-  useEffect(() => {
-    // Push all the individual applications into csvData with the right format
-    const updatedCsvData: CompleteCsvData[] = [];
-    filteredApplications.forEach((application) => {
-      application.group_applications.forEach((groupApplication) => {
-        updatedCsvData.push({
-          name: application.user.full_name,
-          priorityText:
-            application.text !== ""
-              ? replaceQuotationMarks(application.text ?? "")
-              : "Ingen prioriteringer",
-          ...application.header_fields_response,
-          group: groupApplication.group.name,
-          groupApplicationText: replaceQuotationMarks(groupApplication.text),
-          email: application.user.email,
-          phoneNumber: application.phone_number,
-          username: application.user.username,
-          appliedWithinDeadline: application.applied_within_deadline,
-          createdAt: application.created_at,
-          updatedAt: application.updated_at,
-        });
-      });
-    });
-    setCsvData(updatedCsvData);
-  }, [filteredApplications]);
-
-  const numApplicants = sortedApplications.length;
-
-  let numApplications = 0;
-  sortedApplications.forEach((application) => {
-    numApplications += application.group_applications.length;
+    searchTerm,
+    setSearchTerm,
+    selectedInterviewStatus,
+    setSelectedInterviewStatus,
+    selectedGroupIds,
+    setSelectedGroupIds,
+    filteredApplications,
+    groupApplicationCounts,
+    activeGroupIds,
+    filtersAreActive,
+    resetFilters,
+  } = useApplicationFilters({
+    sortedApplications,
+    availableGroups,
+    scopedGroup,
   });
 
-  if (applicationsError || admissionError) {
-    return (
-      <div>
-        Error: {applicationsError?.message}
-        {admissionError?.message}
-      </div>
-    );
-  } else if (applicationsIsFetching || admissionIsFetching) {
-    return <LoadingBall />;
-  } else if (!admission) {
-    return <p>Opptak {admissionSlug} ble ikke funnet i systemet.</p>;
-  } else {
-    return (
-      <PageWrapper>
-        <Statistics>
-          <StatisticsWrapper>
-            <StatisticsName>Søknader åpner</StatisticsName>
-            <FormatTime format="HH:mm:ss EEEE d. MMMM">
-              {admission.open_from}
-            </FormatTime>
-          </StatisticsWrapper>
-          <StatisticsWrapper>
-            <StatisticsName>Søknadsfrist</StatisticsName>
-            <FormatTime format="HH:mm:ss EEEE d. MMMM">
-              {admission.public_deadline}
-            </FormatTime>
-          </StatisticsWrapper>
-          <StatisticsWrapper>
-            <StatisticsName>Redigeringsfrist</StatisticsName>
-            <FormatTime format="HH:mm:ss EEEE d. MMMM">
-              {admission.closed_from}
-            </FormatTime>
-          </StatisticsWrapper>
-        </Statistics>
-        <Statistics>
-          <StatisticsWrapper $smallerMargin>
-            <StatisticsName>Antall søkere</StatisticsName>
-            {numApplicants} {numApplicants == 1 ? "søker" : "søkere"}
-          </StatisticsWrapper>
-          <StatisticsWrapper $smallerMargin>
-            <StatisticsName>Totalt antall søknader</StatisticsName>
-            {numApplications} {numApplications == 1 ? "søknad" : "søknader"}
-          </StatisticsWrapper>
+  const { showGroupColumn, csvHeaders, exportCsvData, exportFilename } =
+    useApplicationsCsvExport({
+      filteredApplications,
+      admission,
+      isCommitteeMinimal,
+      activeGroupIds,
+      availableGroups,
+    });
 
-          <Statistics>
-            {(groups !== undefined ? [...groups] : [])
-              .filter(
-                (group) =>
-                  admission.userdata.is_admin ||
-                  group.name === djangoData.user.representative_of_group,
-              )
-              .sort((a, b) => a.name.localeCompare(b.name))
-              .map((group) => (
-                <GroupStatistics
-                  key={group.pk}
-                  applications={sortedApplications}
-                  groupName={group.name}
-                  groupLogo={group.logo}
-                  selectedGroups={selectedGroups}
-                  setSelectedGroups={setSelectedGroups}
+  const showGroupFilter = !scopedGroup && availableGroups.length > 1;
+  const terminationGroup = useMemo(
+    () =>
+      resolveTerminationGroup(availableGroups, scopedGroup, selectedGroupIds),
+    [availableGroups, scopedGroup, selectedGroupIds],
+  );
+
+  const revealCandidates = () => setShowCandidates(true);
+  const hideCandidates = () => {
+    setShowCandidates(false);
+    setShowCsvExport(false);
+  };
+
+  if (applicationsError || admissionError) {
+    const requestError = applicationsError ?? admissionError;
+    return (
+      <ErrorState role="alert">
+        <h2>Kunne ikke laste søknadene</h2>
+        <p>
+          {requestError
+            ? getApiErrorMessage(requestError, "Prøv å laste siden på nytt.")
+            : "Prøv å laste siden på nytt."}
+        </p>
+        <StyledButton
+          type="button"
+          onClick={() => {
+            void refetchApplications();
+            void refetchAdmission();
+          }}
+        >
+          Prøv igjen
+        </StyledButton>
+      </ErrorState>
+    );
+  }
+  if (applicationsIsLoading || admissionIsLoading) {
+    return <LoadingBall />;
+  }
+  if (!admission) {
+    return <p>Opptak {admissionSlug} ble ikke funnet i systemet.</p>;
+  }
+
+  return (
+    <PageWrapper>
+      <Header>
+        <div>
+          <Title>Søknader</Title>
+        </div>
+        {showCandidates && (
+          <HeaderControls>
+            <button
+              type="button"
+              aria-expanded={showCsvExport}
+              onClick={() => setShowCsvExport((current) => !current)}
+              className={cn(actionButtonBase, actionButtonNeutral, "px-3 py-2")}
+            >
+              <FileDown size={iconSizes.control} aria-hidden="true" />
+              Eksporter CSV
+            </button>
+            <button
+              type="button"
+              aria-pressed={showCandidates}
+              onClick={hideCandidates}
+              className={cn(actionButtonBase, actionButtonNeutral, "px-3 py-2")}
+            >
+              <EyeOff size={iconSizes.control} aria-hidden="true" />
+              Skjul kandidatdata
+            </button>
+          </HeaderControls>
+        )}
+      </Header>
+
+      {isCommitteeMinimal && (
+        <div
+          role="status"
+          data-cy="committee-scope-notice"
+          className="flex items-start gap-2 rounded-lg border border-border-soft bg-surface-subtle px-3 py-2 text-detail text-text-muted"
+        >
+          <Info
+            size={iconSizes.control}
+            aria-hidden="true"
+            className="mt-0.5 flex-none text-text-subtle"
+          />
+          <p className="m-0">
+            Dette opptaket har flere komiteer. Du ser bare søkere til{" "}
+            {admission.userdata.represented_groups.join(", ")} — de komiteene du
+            selv har en rolle i. Arbeid som gjelder hele opptaket (planlegging,
+            publisering) må gjøres av en admin uten komitérolle i opptaket.
+          </p>
+        </div>
+      )}
+
+      {showCandidates ? (
+        <>
+          <FilterSection aria-label="Søk og filtrer søknader">
+            <ResultMeta aria-live="polite">
+              Viser {filteredApplications.length} av {sortedApplications.length}{" "}
+              {sortedApplications.length === 1 ? "søker" : "søkere"}
+            </ResultMeta>
+            <SearchField>
+              <Search size={iconSizes.control} aria-hidden="true" />
+              <input
+                type="search"
+                value={searchTerm}
+                onChange={(event) => setSearchTerm(event.target.value)}
+                placeholder="Søk etter navn, brukernavn, e-post eller telefon"
+                aria-label="Søk etter navn, brukernavn, e-post eller telefon"
+              />
+            </SearchField>
+            <FilterControl>
+              <span>Status</span>
+              <CustomSelect
+                value={selectedInterviewStatus}
+                onChange={setSelectedInterviewStatus}
+                options={[
+                  { value: "", label: "Alle" },
+                  ...interviewStatusOptions,
+                ]}
+                aria-label="Filtrer på intervjustatus"
+              />
+            </FilterControl>
+            {showGroupFilter && (
+              <FilterControl>
+                <span>Gruppe</span>
+                <MultiSelect
+                  values={selectedGroupIds}
+                  onChange={setSelectedGroupIds}
+                  options={availableGroups.map((group) => ({
+                    value: group.pk,
+                    label: `${group.name} (${groupApplicationCounts[group.pk] ?? 0})`,
+                  }))}
+                  getSelectionLabel={filterSelectionSummary}
+                  clearAllLabel="Alle grupper"
+                  aria-label="Filtrer på gruppe"
                 />
-              ))}
-          </Statistics>
-        </Statistics>
-        <CSVExportHandler csvData={csvData} csvHeaders={csvHeaders} />
+              </FilterControl>
+            )}
+            {filtersAreActive && (
+              <ResetFilters
+                type="button"
+                onClick={resetFilters}
+                aria-label="Nullstill søk og filtre"
+              >
+                Nullstill
+              </ResetFilters>
+            )}
+          </FilterSection>
+          {showCsvExport && (
+            <CSVExportHandler
+              csvData={exportCsvData}
+              csvHeaders={csvHeaders}
+              filename={exportFilename}
+            />
+          )}
+        </>
+      ) : (
+        <CandidatePrivacyPreview onReveal={revealCandidates} />
+      )}
+      {showCandidates && filteredApplications.length > 0 && (
         <AdmissionsContainer
           admission={admission}
           applications={filteredApplications}
+          showGroupColumn={showGroupColumn}
+          applicationScopeKey={applicationScopeKey}
         />
-      </PageWrapper>
-    );
-  }
+      )}
+      {showCandidates && filteredApplications.length === 0 && (
+        <EmptyResults>
+          <strong>Ingen søkere samsvarer med filtrene.</strong>
+          <span>Prøv et annet søk eller nullstill filtrene.</span>
+          {filtersAreActive && (
+            <button type="button" onClick={resetFilters}>
+              Nullstill filtre
+            </button>
+          )}
+        </EmptyResults>
+      )}
+      {showCandidates && (
+        <TerminateCommitteeZone
+          admissionSlug={admissionSlug ?? ""}
+          terminationGroup={terminationGroup}
+          isAdmin={admission.userdata.is_admin}
+          isCommitteeMinimal={isCommitteeMinimal}
+        />
+      )}
+    </PageWrapper>
+  );
 };
 
 export default ViewApplications;
-
-/** Styles **/
-
-const PageWrapper = styled.div`
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  margin: 1em;
-  border: 1px solid rgba(0, 0, 0, 0.09);
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.04);
-`;

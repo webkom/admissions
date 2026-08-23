@@ -1,7 +1,6 @@
 import React from "react";
 import styled from "styled-components";
 import { NavLink, useMatch } from "react-router-dom";
-import DecorativeLine from "src/components/DecorativeLine";
 
 interface NavItemProps {
   to: string;
@@ -11,9 +10,8 @@ interface NavItemProps {
 const NavItem: React.FC<NavItemProps> = ({ to, text }) => {
   const match = useMatch(to + "/*");
   return (
-    <Container>
+    <Container $active={!!match}>
       <Item to={to}>{text}</Item>
-      <DecorativeLine $red={!!match} />
     </Container>
   );
 };
@@ -23,11 +21,37 @@ export default NavItem;
 /** Styles **/
 
 const Item = styled(NavLink)`
-  color: var(--lego-font-color);
+  color: var(--color-text-accent);
+  font-weight: var(--font-weight-medium);
+  font-size: var(--font-size-ui);
+  letter-spacing: var(--letter-spacing-ui-tight);
+  transition: var(--transition-base);
+
+  &:hover {
+    color: var(--color-brand);
+  }
 `;
 
-const Container = styled.li`
-  &:nth-child(2n) {
-    margin-left: 2rem;
+const Container = styled.li<{ $active: boolean }>`
+  position: relative;
+  padding: var(--spacing-sm) 0;
+
+  &::after {
+    content: "";
+    position: absolute;
+    bottom: calc(-1 * var(--border-width-default));
+    left: 0;
+    width: 100%;
+    height: var(--underline-thickness);
+    background-color: var(--color-brand);
+    transform: ${(props) => (props.$active ? "scaleX(1)" : "scaleX(0)")};
+    transform-origin: left;
+    transition: var(--transition-base);
+  }
+
+  &:hover::after {
+    transform: scaleX(1);
+    background-color: var(--color-border-muted);
+    ${(props) => props.$active && `background-color: var(--color-brand);`}
   }
 `;

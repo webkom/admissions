@@ -1,0 +1,9 @@
+{% extends "base.txt" %}
+
+{% block content %}
+En søker har trukket søknaden sin til {{ group }} i opptak {{ admission_title }}.
+
+Søkeren har fortsatt en aktiv søknad til andre komiteer i opptaket.
+
+Se oppdatert søkerliste på opptakssiden: https://opptak.abakus.no/.
+{% endblock %}

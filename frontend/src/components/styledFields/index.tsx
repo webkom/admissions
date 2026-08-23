@@ -9,66 +9,76 @@ interface StyledFieldProps {
 
 export const StyledField = styled(Field)<StyledFieldProps>`
   display: block;
-  width: 20em;
-  overflow: hidden;
-  padding: 0.5rem 1rem;
-  margin-top: 4px;
-  font-size: 0.9rem;
-  color: var(--lego-font-color);
-  border: 2px solid
+  width: 100%;
+  max-width: var(--form-control-width);
+  padding: var(--control-padding-block) var(--spacing-md);
+  margin-top: var(--spacing-sm);
+  font-size: var(--font-size-ui);
+  color: var(--color-text-primary);
+  border: var(--border-width-default) solid
     ${(props) =>
-      props.error ? "var(--lego-red-color)" : "var(--color-gray-3)"};
-  border-radius: 13px;
-  box-shadow: inset 0px 4px 4px rgba(129, 129, 129, 0.1);
-  resize: none;
+      props.error ? "var(--lego-red-color)" : "var(--color-border-muted)"};
+  border-radius: var(--border-radius-md);
+  background-color: var(--color-surface-base);
+  transition: var(--transition-base);
+
+  &::placeholder {
+    color: var(--color-text-subtle);
+  }
 
   &:focus {
-    border: 2px solid #52b0eccc;
-    box-shadow:
-      0 1px 1px #52b0ec13 inset,
-      0 0 4px #52b0ec99;
-    outline: 0 none;
+    border-color: var(--color-brand);
+    box-shadow: 0 0 0 var(--focus-ring-width) var(--color-brand-ring);
+    outline: none;
   }
 
   &:disabled {
-    background: var(--color-gray-2);
+    background-color: var(--color-surface-disabled);
+    color: var(--color-text-disabled);
+    cursor: not-allowed;
   }
 `;
 
 export const StyledTextAreaField = styled(Textarea)<StyledFieldProps>`
+  display: block;
   width: 100%;
-  min-height: 8rem;
-  padding: 1rem;
-  margin-top: 4px;
-  font-size: 0.9rem;
-  color: var(--lego-font-color);
-  border: 2px solid
+  min-height: var(--group-editor-min-height);
+  padding: var(--spacing-md);
+  margin-top: var(--spacing-sm);
+  font-size: var(--font-size-ui);
+  color: var(--color-text-primary);
+  line-height: var(--line-height-copy);
+  border: var(--border-width-default) solid
     ${({ $error }) =>
-      $error ? "var(--lego-red-color)" : "var(--color-gray-3)"};
-  border-radius: 13px;
-  box-shadow: inset 0px 4px 4px rgba(129, 129, 129, 0.1);
-  overflow: hidden;
-  resize: none;
+      $error ? "var(--lego-red-color)" : "var(--color-border-muted)"};
+  border-radius: var(--border-radius-md);
+  background-color: var(--color-surface-base);
+  transition: var(--transition-base);
+  resize: vertical;
+
+  &::placeholder {
+    color: var(--color-text-subtle);
+  }
 
   &:focus {
-    border: 2px solid #52b0eccc;
-    box-shadow:
-      0 1px 1px #52b0ec13 inset,
-      0 0 4px #52b0ec99,
-      inset 0px 4px 4px rgba(129, 129, 129, 0.05);
-    outline: 0 none;
+    border-color: var(--color-brand);
+    box-shadow: 0 0 0 var(--focus-ring-width) var(--color-brand-ring);
+    outline: none;
   }
 
   &:disabled {
-    background: var(--color-gray-2);
+    background-color: var(--color-surface-disabled);
+    color: var(--color-text-disabled);
+    cursor: not-allowed;
   }
 `;
 
 export const FieldLabel = styled.label`
-  font-weight: 500;
-  font-size: 0.95rem;
-  line-height: 1.2rem;
-  display: inline-block;
+  font-weight: var(--font-weight-semibold);
+  font-size: var(--font-size-sm);
+  color: var(--color-text-body);
+  display: block;
+  margin-bottom: var(--spacing-xs);
 `;
 
 interface InputValidationFeedbackProps {
@@ -81,6 +91,6 @@ export const InputValidationFeedback: React.FC<
 
 const ValidationError = styled.div`
   color: var(--lego-red-color);
-  font-weight: 500;
-  font-size: 0.9rem;
+  font-weight: var(--font-weight-medium);
+  font-size: var(--font-size-ui);
 `;

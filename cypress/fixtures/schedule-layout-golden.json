@@ -1,0 +1,28 @@
+[
+  {
+    "name": "partial standard block and opened pause",
+    "dates": ["2026-04-20"],
+    "chunks": [
+      [540, 570],
+      [630, 660]
+    ],
+    "session_duration": 30,
+    "enabled_slots": ["2026-04-20|540", "2026-04-20|600"],
+    "slot_overrides": [
+      { "slot": "2026-04-20|600", "open": true },
+      { "slot": "2026-04-20|570", "open": false }
+    ],
+    "expected": {
+      "base_slots": ["2026-04-20|540", "2026-04-20|570"],
+      "slot_overrides": [
+        { "slot": "2026-04-20|570", "open": false },
+        { "slot": "2026-04-20|600", "open": true }
+      ],
+      "resolved_blocks": [
+        { "slots": ["2026-04-20|540", "2026-04-20|570"] },
+        { "slots": ["2026-04-20|600"] },
+        { "slots": ["2026-04-20|630", "2026-04-20|660"] }
+      ]
+    }
+  }
+]

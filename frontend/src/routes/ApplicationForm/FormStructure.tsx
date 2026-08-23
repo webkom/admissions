@@ -1,8 +1,9 @@
 import React, { ReactNode } from "react";
 import { Form, Field, FormikValues } from "formik";
 import FormatTime from "src/components/Time/FormatTime";
-import Icon from "src/components/Icon";
+import { Info } from "lucide-react";
 import PhoneNumberField from "./PhoneNumberField";
+import PriorityTextField from "./PriorityTextField";
 import ToggleGroups from "./ToggleGroups";
 import ErrorFocus from "./ErrorFocus";
 import { useMyApplication } from "src/query/hooks";
@@ -29,10 +30,7 @@ import {
 } from "./FormStructureStyle";
 import { Admission, Group } from "src/types";
 import { SelectedGroups } from ".";
-import JsonFieldEditor from "src/components/JsonFieldEditor";
-import { Button } from "@webkom/lego-bricks";
-import LinkButton from "src/components/LinkButton";
-import PriorityTextField from "./PriorityTextField";
+import LinkButton, { StyledButton } from "src/components/LinkButton";
 
 interface FormStructureProps extends FormikValues {
   admission?: Admission;
@@ -66,9 +64,10 @@ const FormStructure: React.FC<FormStructureProps> = ({
         <Title>Skriv din søknad og send inn!</Title>
         {myApplication && (
           <CancelButtonContainer>
-            <Button onClick={onCancel} disabled={!isValid}>
-              Avbryt
-            </Button>
+            {/* Never gated on validity: cancel discards nothing, and gating
+                the escape hatch on the form being valid is what stranded
+                applicants with no way back to their receipt. */}
+            <StyledButton onClick={onCancel}>Avbryt</StyledButton>
           </CancelButtonContainer>
         )}
       </FormHeader>
@@ -80,14 +79,9 @@ const FormStructure: React.FC<FormStructureProps> = ({
               <SectionHeader>Informasjon</SectionHeader>
               <InfoText>
                 Aller først - tusen takk for din interesse for å søke backup!
-                Absolutt alle kan søke uavhengig om man har hatt tidligere verv
-                eller ikke. For å søke må du være tilgjengelig i Trondheim det
-                kommende høstsemesteret. Søkere som blir værende hele det neste
-                året vil bli prioritert, men søknader fra de som kun er borte et
-                halvt år vil likevel bli vurdert. Lurer du på mer om oss kan du
-                lese{" "}
+                Lurer du på mer om oss kan du lese{" "}
                 <a
-                  href="https://abakus.no/articles/595-backup-apner-for-opptak"
+                  href="https://abakus.no/articles/553-backup-har-opptak"
                   target="_blank"
                   rel="noreferrer"
                 >
@@ -96,34 +90,38 @@ const FormStructure: React.FC<FormStructureProps> = ({
                 .
               </InfoText>
               <InfoText>
-                Vi ønsker at søknaden gir oss et bilde av hvem du er, dine
-                erfaringer, og din motivasjon til å bli en del av backup. Vi
-                setter pris på at du svarer på følgende:
+                Kriteriet for å søke er at du har interesse for Abakus og har
+                vært medlem i Abakus i minst 3 måneder. Absolutt alle kan søke
+                uavhengig om man har hatt tidligere verv eller ikke. For å søke
+                må du være i Trondheim det påfølgende høstsemesteret. Søkere som
+                blir værende hele det neste året vil bli prioritert, men
+                søknader fra de som kun er borte et halvt år vil likevel bli
+                vurdert.
+              </InfoText>
+              <InfoText>
+                Planen videre:
                 <ul>
-                  <li>Hvilken linje og trinn går du?</li>
+                  <li>05. mars kl. 23:59: Søknadsfrist</li>
+                  <li>27. februar - 07. mars: Kaffeprat*</li>
                   <li>
-                    Hvilke tidligere erfaringer har du? (verv, idrett, forsvaret
-                    etc.){" "}
+                    10/11. mars: Du får svar på om du kommer med eller ikke.{" "}
+                    <br />
+                    Kommer du ikke med i år anbefaler vi deg å søke til neste år
+                    igjen! Hold gjerne av ettermiddagen 12. mars i tilfelle du
+                    blir tatt opp.
                   </li>
-                  <li>
-                    Kan du fortelle om et prosjekt/verv/arrangement du har vært
-                    motivert for å jobbe for, og hvorfor?
-                  </li>
-                  <li>Hva motiverer deg til å søke backup?</li>
-                  <li>
-                    Hvilke oppgaver eller områder du kunne tenke deg å jobbe med
-                    i backup?
-                  </li>
-                  <li>
-                    Skal du på utveksling i løpet av det kommende høst- og/eller
-                    vårsemsteret?
-                  </li>
-                  <li>Noe annet du mener det er relevant for oss å vite?</li>
                 </ul>
               </InfoText>
               <InfoText>
-                Dersom du har noen spørsmål eller innspill til prosessen kan
-                dette gjøres ved å sende en e-post til{" "}
+                *Dette er en lavterskelsamtale for at du skal bli bedre kjent
+                med oss og vi blir bedre kjent med deg. Dersom du er på
+                utveksling vil samtalene foregå over Zoom. Du vil bli kontaktet
+                av to backupere for å finne tid som passer:)
+              </InfoText>
+              <InfoText>
+                Vi håper du er motivert for å søke og ønsker deg lykke til i
+                prosessen. Dersom du har noen spørsmål eller innspill til
+                prosessen kan dette gjøres ved å sende en e-post til{" "}
                 <a href="mailto:backup-rekruttering@abakus.no">
                   backup-rekruttering@abakus.no
                 </a>
@@ -136,38 +134,23 @@ const FormStructure: React.FC<FormStructureProps> = ({
         <GeneralInfoSection>
           <SectionHeader>Generelt</SectionHeader>
           <HelpText>
-            <Icon name="information-circle-outline" />
+            <Info aria-hidden="true" />
             Mobilnummeret vil bli brukt til å kalle deg inn på intervju.
           </HelpText>
           <Field name="phoneNumber" component={PhoneNumberField} />
           {!isSingleGroupAdmission && (
             <>
               <HelpText>
-                {!(isRevy || isRevyBoard) && (
-                  <>
-                    <Icon name="information-circle-outline" />
-                    Kun leder og nestleder av Abakus kan se det du skriver inn i
-                    prioriterings- og kommentarfeltet.
-                  </>
-                )}
-                <Icon name="information-circle-outline" />
-                Prioriteringslisten vil bli tatt hensyn til så langt det lar seg
-                gjøre, men garanterer ingenting. Ikke søk på en{" "}
-                {isRevy ? "gruppe" : isRevyBoard ? "stilling" : "komité"} du
-                ikke ønsker å bli med i.
+                <Info aria-hidden="true" />
+                Ranger komiteene du har valgt med pilene under, og legg gjerne
+                ved kommentarer til opptakets leder og nestleder.
               </HelpText>
-              <Field
-                name="priorityText"
-                component={PriorityTextField}
-                label="Prioriteringer, og andre kommentarer"
-                optional
+              <PriorityTextField
+                groups={groups}
+                selectedGroups={selectedGroups}
               />
             </>
           )}
-          <JsonFieldEditor
-            sectionName="headerFields"
-            fields={admission?.header_fields}
-          />
         </GeneralInfoSection>
         <SeparatorLine />
         <GroupsSection $isSingleGroupAdmission={isSingleGroupAdmission}>
@@ -178,7 +161,7 @@ const FormStructure: React.FC<FormStructureProps> = ({
                   {isRevy ? "Grupper" : isRevyBoard ? "Stillinger" : "Komiteer"}
                 </SectionHeader>
                 <HelpText>
-                  <Icon name="information-circle-outline" />
+                  <Info aria-hidden="true" />
                   {isRevy
                     ? "Her skriver du søknaden til gruppen(e) du har valgt."
                     : isRevyBoard
@@ -186,7 +169,7 @@ const FormStructure: React.FC<FormStructureProps> = ({
                       : "Her skriver du søknaden til komiteen(e) du har valgt. Hver komité kan kun se søknaden til sin egen komité."}
                 </HelpText>
                 <HelpText>
-                  <Icon name="information-circle-outline" />
+                  <Info aria-hidden="true" />
                   Søknadene vil brukes i opptaksprosessen, men alle søkere vil
                   bli kalt inn til intervju.
                 </HelpText>
@@ -255,20 +238,24 @@ const FormStructure: React.FC<FormStructureProps> = ({
                 ? "Søknaden din kan kun ses av revystyret."
                 : isBackup
                   ? "Søknaden din kan kun ses av medlemmer av backup."
-                  : "Din søknad til hver komité kan kun ses av den aktuelle komiteen og leder av Abakus."}{" "}
-              All søknadsinformasjon slettes etter opptaket er gjennomført.
+                  : "Søknaden kan ses av komiteene du søker, sentrale opptaksansvarlige som koordinerer intervjuer, og leder av Abakus."}{" "}
+              Opplysningene skal bare brukes til å gjennomføre opptaket.
             </SubmitInfo>
-            <SubmitInfo>Du kan når som helst trekke søknaden din.</SubmitInfo>
+            <SubmitInfo>
+              Du kan når som helst trekke deg fra en komité du har søkt til —
+              teksten slettes da permanent, og komiteen får beskjed anonymt.
+              Søknadene dine til andre komiteer påvirkes ikke.
+            </SubmitInfo>
           </div>
           {hasSelected && (
             <div>
-              <Button
+              <StyledButton
                 onClick={handleSubmit}
                 disabled={isSubmitting || !isValid}
                 success
               >
                 Send inn søknad
-              </Button>
+              </StyledButton>
             </div>
           )}
         </SubmitSection>

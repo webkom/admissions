@@ -1,9 +1,9 @@
 import React, { useMemo } from "react";
-import { Link } from "react-router-dom";
-import Icon from "src/components/Icon";
+import { Link, NavLink as RouterNavLink } from "react-router-dom";
 import { Admission } from "src/types";
-import djangoData from "src/utils/djangoData";
 import styled from "styled-components";
+import { ArrowLeft } from "lucide-react";
+import { iconSizes } from "src/styles/designTokens";
 
 interface Props {
   admission?: Admission;
@@ -15,34 +15,47 @@ const NavBar: React.FC<Props> = ({ admission }) => {
       admission?.groups.filter(
         (group) =>
           admission?.userdata.is_admin ||
-          group.name === djangoData.user.representative_of_group,
+          admission?.userdata.represented_groups.includes(group.name),
       ),
     [admission],
   );
 
   return (
     <Wrapper>
-      <Link to={"/"}>
-        <Icon name="arrow-back" size={22} /> Gå tilbake til forsiden
-      </Link>
+      <BackLink to={"/"}>
+        <ArrowLeft size={iconSizes.feature} aria-hidden="true" /> Til forsiden
+      </BackLink>
 
-      <NavHeader>Administrer opptak</NavHeader>
-      <NavLink to={"../admin/"}>Se søknader</NavLink>
-      <NavHeader>Administrer grupper</NavHeader>
-      {administrateGroups?.length !== 0 ? (
-        administrateGroups?.map((administrateGroup) => (
-          <NavLink
-            key={administrateGroup.pk}
-            to={"./groups/" + administrateGroup.pk}
-          >
-            {administrateGroup.name}
-          </NavLink>
-        ))
-      ) : (
-        <p>
-          Du har ikke tilgang til å redigere noen av gruppene i dette opptaket.
-        </p>
-      )}
+      <PanelSection>
+        <SectionEyebrow>Opptaksadmin</SectionEyebrow>
+        <NavHeader>{admission?.title ?? "Administrer opptak"}</NavHeader>
+        <NavDescription>
+          Bytt mellom søknadsoversikten og gruppeinnstillingene uten å lete i
+          flere paneler.
+        </NavDescription>
+        <NavLink to={"../admin/"} end>
+          Se søknader
+        </NavLink>
+      </PanelSection>
+
+      <PanelSection>
+        <SectionEyebrow>Grupper</SectionEyebrow>
+        {administrateGroups?.length !== 0 ? (
+          administrateGroups?.map((administrateGroup) => (
+            <NavLink
+              key={administrateGroup.pk}
+              to={"./groups/" + administrateGroup.pk}
+            >
+              {administrateGroup.name}
+            </NavLink>
+          ))
+        ) : (
+          <NavEmptyState>
+            Du har ikke tilgang til å redigere noen av gruppene i dette
+            opptaket.
+          </NavEmptyState>
+        )}
+      </PanelSection>
     </Wrapper>
   );
 };
@@ -50,28 +63,88 @@ const NavBar: React.FC<Props> = ({ admission }) => {
 export default NavBar;
 
 const Wrapper = styled.div`
-  padding: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-lg);
+`;
 
-  h2,
-  h3 {
-    margin-bottom: 0.3em;
-    margin-top: 0.7em;
-  }
+const PanelSection = styled.section`
+  padding: var(--spacing-md);
+  border: var(--border-width-emphasis) solid var(--color-border);
+  border-radius: var(--border-radius-lg);
+  background: var(--color-surface-base);
+  box-shadow: var(--shadow-sm);
+`;
 
-  p {
-    margin: 0;
-  }
+const SectionEyebrow = styled.span`
+  display: inline-block;
+  margin-bottom: var(--spacing-md);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text-muted);
 `;
 
 const NavHeader = styled.h3`
-  display: block;
   margin: 0;
-  line-height: 1.4;
+  font-size: var(--font-size-ui);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-primary);
 `;
 
-const NavLink = styled(Link)`
-  display: block;
-  line-height: 1.4;
-  padding: 0.3rem 0;
-  font-weight: 500;
+const NavDescription = styled.p`
+  display: none;
+`;
+
+const BackLink = styled(Link)`
+  display: inline-flex;
+  align-items: center;
+  gap: var(--spacing-md);
+  width: fit-content;
+  padding: var(--spacing-md) var(--spacing-lg);
+  border: var(--border-width-emphasis) solid var(--color-border-soft);
+  border-radius: var(--border-radius-pill);
+  background: var(--color-surface-base);
+  color: var(--color-text-muted);
+  font-size: var(--font-size-detail);
+  font-weight: var(--font-weight-semibold);
+  text-decoration: none;
+  transition: color var(--easing-fast);
+
+  &:hover {
+    border-color: var(--color-brand-strong-border);
+    color: var(--color-brand);
+  }
+`;
+
+const NavLink = styled(RouterNavLink)`
+  display: flex;
+  align-items: center;
+  height: var(--control-height-sm);
+  padding: 0 var(--spacing-lg);
+  border-radius: var(--border-radius-md);
+  margin-top: var(--spacing-sm);
+  color: var(--color-text-muted);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+  text-decoration: none;
+  transition:
+    background var(--easing-fast),
+    color var(--easing-fast);
+
+  &:hover {
+    background: var(--color-surface-subtle);
+    color: var(--color-text-primary);
+  }
+
+  &.active {
+    background: var(--color-brand);
+    color: var(--color-absolute-white);
+  }
+`;
+
+const NavEmptyState = styled.p`
+  margin: var(--spacing-md) 0 0;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-detail);
+  line-height: var(--line-height-base);
 `;

@@ -18,6 +18,20 @@ from django.conf import settings
 from django.urls import include, path, re_path
 from rest_framework import routers
 
+from admissions.admissions.availability_views import InterviewAvailabilityView
+from admissions.admissions.candidate_views import (
+    InterviewCandidatesView,
+    NameVisibilityAuditView,
+)
+from admissions.admissions.directory_views import MemberSearchView
+from admissions.admissions.schedule_views import SavedScheduleView
+from admissions.admissions.session_views import SessionStatusView
+from admissions.admissions.solve_views import (
+    LatestSolveJobView,
+    SolveJobApplyView,
+    SolveJobStatusView,
+    SolveScheduleView,
+)
 from admissions.admissions.views import (
     AdminAdmissionViewSet,
     AdminApplicationViewSet,
@@ -27,6 +41,7 @@ from admissions.admissions.views import (
     ManageGroupViewSet,
     PublicAdmissionViewSet,
     PublicApplicationViewSet,
+    TerminateCommitteeApplicationsView,
     logout,
 )
 
@@ -56,6 +71,53 @@ urlpatterns = [
     path("api/manage/", include(manageRouter.urls)),
     path("api-auth/", include("rest_framework.urls", namespace="rest_framework")),
     path("api/", include(publicRouter.urls)),
+    path("api/session/", SessionStatusView.as_view(), name="session-status"),
+    path("api/solve/", SolveScheduleView.as_view(), name="solve-schedule"),
+    path(
+        "api/solve/latest/",
+        LatestSolveJobView.as_view(),
+        name="latest-solve-job",
+    ),
+    path(
+        "api/solve/<uuid:job_id>/",
+        SolveJobStatusView.as_view(),
+        name="solve-job",
+    ),
+    path(
+        "api/solve/<uuid:job_id>/apply/",
+        SolveJobApplyView.as_view(),
+        name="solve-job-apply",
+    ),
+    path(
+        "api/admin/admission/<slug:admission_slug>/group/<uuid:group_id>/schedule/",
+        SavedScheduleView.as_view(),
+        name="saved-schedule",
+    ),
+    path(
+        "api/admin/admission/<slug:admission_slug>/group/<uuid:group_id>/availability/",
+        InterviewAvailabilityView.as_view(),
+        name="interview-availability",
+    ),
+    path(
+        "api/admin/admission/<slug:admission_slug>/group/<uuid:group_id>/candidates/",
+        InterviewCandidatesView.as_view(),
+        name="interview-candidates",
+    ),
+    path(
+        "api/admin/admission/<slug:admission_slug>/member-search/",
+        MemberSearchView.as_view(),
+        name="member-search",
+    ),
+    path(
+        "api/admin/admission/<slug:admission_slug>/group/<uuid:group_id>/name-visibility-audit/",
+        NameVisibilityAuditView.as_view(),
+        name="name-visibility-audit",
+    ),
+    path(
+        "api/admin/admission/<slug:admission_slug>/group/<uuid:group_id>/terminate/",
+        TerminateCommitteeApplicationsView.as_view(),
+        name="terminate-committee-applications",
+    ),
     re_path("", include("social_django.urls", namespace="social")),
     re_path(r"^$", AppView.as_view(), name="home"),
 ]

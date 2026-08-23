@@ -1,101 +1,180 @@
 import React from "react";
 import { createColumnHelper } from "@tanstack/react-table";
-import Icon from "src/components/Icon";
-import FormatTime from "src/components/Time/FormatTime";
 import { ApplicationTableRow } from ".";
-import { InnerTableValues } from "./InnerTable";
-import DeleteApplication from "src/components/DeleteApplication";
+import { ChevronDown, ChevronRight, MessageCircle, Phone } from "lucide-react";
+import InterviewStatusControl, {
+  compareInterviewStatuses,
+} from "./InterviewStatusControl";
+import {
+  applicationTableColumnWidths,
+  iconSizes,
+} from "src/styles/designTokens";
+import { encodeSmsAddress } from "src/utils/emailLinks";
+import { getApplicationDeadlineStatus } from "src/utils/applicationAccess";
 
 const columnHelper = createColumnHelper<ApplicationTableRow>();
+
+const formatGroupNames = (groupNames: string[]): string => {
+  if (groupNames.length <= 2) return groupNames.join(", ");
+  return `${groupNames.slice(0, 2).join(", ")} +${groupNames.length - 2}`;
+};
 
 export const columns = [
   columnHelper.display({
     id: "expander",
     header: ({ table }) => (
-      <span onClick={table.getToggleAllRowsExpandedHandler()}>
-        {table.getIsAllRowsExpanded() ? "▼" : "►"}
-      </span>
+      <button
+        type="button"
+        aria-label={
+          table.getIsAllRowsExpanded()
+            ? "Skjul alle søknadsdetaljer"
+            : "Vis alle søknadsdetaljer"
+        }
+        aria-expanded={table.getIsAllRowsExpanded()}
+        onClick={table.getToggleAllRowsExpandedHandler()}
+        title={
+          table.getIsAllRowsExpanded()
+            ? "Skjul alle søknadsdetaljer"
+            : "Vis alle søknadsdetaljer"
+        }
+        className="rounded-sm p-1 text-text-muted transition-colors hover:text-text-primary focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-brand-ringSoft"
+      >
+        {table.getIsAllRowsExpanded() ? (
+          <ChevronDown size={iconSizes.medium} />
+        ) : (
+          <ChevronRight size={iconSizes.medium} />
+        )}
+      </button>
     ),
-    size: 1,
+    size: applicationTableColumnWidths.expander,
     cell: ({ row }) => (
-      <span onClick={() => row.toggleExpanded()}>
-        {row.getIsExpanded() ? "▼" : "►"}
-      </span>
+      <button
+        type="button"
+        aria-label={
+          row.getIsExpanded() ? "Skjul søknadsdetaljer" : "Vis søknadsdetaljer"
+        }
+        aria-expanded={row.getIsExpanded()}
+        onClick={() => row.toggleExpanded()}
+        className="rounded-sm p-1 text-text-muted transition-colors hover:bg-surface-muted hover:text-text-primary focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-brand-ringSoft"
+      >
+        {row.getIsExpanded() ? (
+          <ChevronDown size={iconSizes.medium} />
+        ) : (
+          <ChevronRight size={iconSizes.medium} />
+        )}
+      </button>
     ),
-  }),
-  columnHelper.accessor("username", {
-    header: "Brukernavn",
-    size: 120,
   }),
   columnHelper.accessor("fullname", {
-    header: "Fullt navn",
+    header: "Søker",
+    enableSorting: false,
+    size: applicationTableColumnWidths.identity,
+    cell: ({ row }) => (
+      <div className="flex min-w-0 flex-col gap-0.5">
+        <span className="font-semibold text-text-primary">
+          {row.original.fullname}
+        </span>
+        {row.original.username && (
+          <span className="text-detail text-text-muted">
+            @{row.original.username}
+          </span>
+        )}
+      </div>
+    ),
   }),
   columnHelper.accessor("phoneNumber", {
-    header: "Tlf.",
-    size: 100,
+    header: "Kontakt",
+    size: applicationTableColumnWidths.contact,
+    cell: ({ getValue, row }) => {
+      const phoneNumber = getValue().trim();
+      const phoneRecipient = encodeSmsAddress(phoneNumber);
+      if (!phoneRecipient) return "—";
+
+      return (
+        <div className="flex items-center gap-2">
+          <span className="truncate font-semibold text-text-primary">
+            {phoneNumber}
+          </span>
+          <a
+            href={`tel:${phoneRecipient}`}
+            aria-label={`Ring ${row.original.fullname}`}
+            title={`Ring ${row.original.fullname}`}
+            className="inline-flex size-7 shrink-0 items-center justify-center rounded-md border border-border-soft text-text-primary hover:border-brand hover:text-brand focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-brand-ringSoft"
+          >
+            <Phone size={iconSizes.compact} aria-hidden="true" />
+          </a>
+          <a
+            href={`sms:${phoneRecipient}`}
+            aria-label={`Send melding til ${row.original.fullname}`}
+            title={`Send melding til ${row.original.fullname}`}
+            className="inline-flex size-7 shrink-0 items-center justify-center rounded-md border border-border-soft text-text-primary hover:border-brand hover:text-brand focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-brand-ringSoft"
+          >
+            <MessageCircle size={iconSizes.compact} aria-hidden="true" />
+          </a>
+        </div>
+      );
+    },
   }),
-  columnHelper.accessor("email", {
-    header: "E-post",
+  columnHelper.accessor("groupNames", {
+    id: "groupNames",
+    header: "Søker til",
+    size: applicationTableColumnWidths.group,
+    sortingFn: (firstRow, secondRow) =>
+      firstRow.original.groupNames
+        .join(" ")
+        .localeCompare(secondRow.original.groupNames.join(" "), "nb"),
+    cell: ({ getValue }) => {
+      const groupNames = getValue();
+      return (
+        <span
+          className="block max-w-44 text-ui text-text-primary"
+          title={groupNames.join(", ")}
+        >
+          {formatGroupNames(groupNames)}
+        </span>
+      );
+    },
+  }),
+  columnHelper.accessor("interviewStatus", {
+    header: "Intervju",
+    size: applicationTableColumnWidths.status,
+    sortingFn: (firstRow, secondRow) =>
+      compareInterviewStatuses(
+        firstRow.original.interviewStatus,
+        secondRow.original.interviewStatus,
+      ),
+    cell: ({ row, getValue }) => (
+      <InterviewStatusControl
+        admissionSlug={row.original.admissionSlug}
+        applicationScopeKey={row.original.applicationScopeKey}
+        applicationId={row.original.id}
+        candidateName={row.original.fullname}
+        status={getValue()}
+        statusUpdatedAt={row.original.interviewStatusUpdatedAt}
+        statusUpdatedBy={row.original.interviewStatusUpdatedBy ?? ""}
+        canEdit={row.original.canUpdateInterviewStatus}
+        compact
+      />
+    ),
   }),
   columnHelper.accessor("createdAt", {
     header: "Sendt",
-    size: 170,
-    cell: (info) => (
-      <>
-        <FormatTime format="EEEE d. MMMM, kl. HH:mm ">
-          {info.row.original.createdAt}
-        </FormatTime>
-        {!info.row.original.appliedWithinDeadline && (
-          <Icon
-            name="stopwatch"
-            prefix="ios"
-            size="1.5rem"
-            title="Søkte etter fristen"
-            color="#c0392b"
-            padding="0 10px 0 0"
-          />
-        )}
-      </>
-    ),
-  }),
-  columnHelper.accessor("updatedAt", {
-    header: "Oppdatert",
-    size: 170,
-    cell: (info) => (
-      <>
-        <FormatTime format="EEEE d. MMMM, kl. HH:mm">
-          {info.row.original.updatedAt}
-        </FormatTime>
-      </>
-    ),
-  }),
-  columnHelper.accessor("numApplications", {
-    header: "Søknader",
-    size: 70,
-    cell: (info) => info.row.original.numApplications,
-  }),
-];
-
-const innerColumnHelper = createColumnHelper<InnerTableValues>();
-
-export const innerColumns = [
-  innerColumnHelper.accessor("groupName", {
-    header: "Gruppe",
-    size: 100,
-  }),
-  innerColumnHelper.accessor("text", {
-    header: "Søknadstekst",
-    size: 800,
-  }),
-  innerColumnHelper.display({
-    id: "actions",
-    header: () => "Handlinger",
-    cell: ({ row }) => (
-      <DeleteApplication
-        applicationId={row.original.applicationId}
-        groupId={row.original.groupId}
-      />
-    ),
-    size: 160,
+    size: applicationTableColumnWidths.timestamp,
+    cell: (info) =>
+      info.row.original.createdAt ? (
+        <span
+          data-cy="application-sent-time"
+          data-late={!info.row.original.appliedWithinDeadline}
+          className={`tabular-nums whitespace-nowrap text-sm ${
+            info.row.original.appliedWithinDeadline
+              ? "text-success"
+              : "text-orange-500"
+          }`}
+        >
+          {getApplicationDeadlineStatus(
+            info.row.original.appliedWithinDeadline,
+          )}
+        </span>
+      ) : null,
   }),
 ];
