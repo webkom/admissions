@@ -475,6 +475,21 @@ const LoadedScheduleView: React.FC<LoadedScheduleViewProps> = ({
   const [fadderbarn, setFadderbarn] = useState<Fadderbarn[]>([]);
   // Hydrate once per identity, so a poll cannot overwrite an in-progress edit.
   const hydratedFadderbarnFor = React.useRef<string | null>(null);
+  // Declarations ride along on a save only when edited here - sending local
+  // state unconditionally let a pre-hydration or stale-tab save wipe them.
+  const [fadderbarnDirty, setFadderbarnDirty] = useState(false);
+  const editFadderbarn = (next: Fadderbarn[]) => {
+    setFadderbarn(next);
+    setFadderbarnDirty(true);
+  };
+  const fadderbarnToSave = fadderbarnDirty ? fadderbarn : undefined;
+  const saveAvailabilityWithFadderbarn = async (
+    slots: Set<string>,
+    discouraged: Set<string>,
+  ) => {
+    await saveAvailability(slots, fadderbarnToSave, discouraged);
+    setFadderbarnDirty(false);
+  };
   const [foundationWorkspace, setFoundationWorkspace] =
     useState<FoundationWorkspace>("framework");
   const foundationWorkspaceChosen = React.useRef(false);
@@ -662,6 +677,7 @@ const LoadedScheduleView: React.FC<LoadedScheduleViewProps> = ({
     if (!userId || hydratedFadderbarnFor.current === userId) return;
     hydratedFadderbarnFor.current = userId;
     setFadderbarn(myAvailabilityParticipant?.fadderbarn ?? []);
+    setFadderbarnDirty(false);
   }, [myAvailabilityParticipant]);
 
   const conflictReviewReachable = Boolean(
@@ -773,14 +789,13 @@ const LoadedScheduleView: React.FC<LoadedScheduleViewProps> = ({
                   chunkBreakMinutes={chunkBreakMinutes}
                   dayStartMinute={dayStartMinute}
                   dayEndMinute={dayEndMinute}
-                  onSave={(slots, discouraged) =>
-                    saveAvailability(slots, fadderbarn, discouraged)
-                  }
+                  onSave={saveAvailabilityWithFadderbarn}
+                  extraDirty={fadderbarnDirty}
                   extraSection={
                     <FadderbarnPicker
                       admissionSlug={admissionSlug ?? ""}
                       value={fadderbarn}
-                      onChange={setFadderbarn}
+                      onChange={editFadderbarn}
                     />
                   }
                   participation={myAvailabilityParticipant?.participation}
@@ -858,15 +873,14 @@ const LoadedScheduleView: React.FC<LoadedScheduleViewProps> = ({
                   chunkBreakMinutes={chunkBreakMinutes}
                   dayStartMinute={dayStartMinute}
                   dayEndMinute={dayEndMinute}
-                  onSave={(slots, discouraged) =>
-                    saveAvailability(slots, fadderbarn, discouraged)
-                  }
+                  onSave={saveAvailabilityWithFadderbarn}
                   onSaveSuccess={() => openFoundationWorkspace("coverage")}
+                  extraDirty={fadderbarnDirty}
                   extraSection={
                     <FadderbarnPicker
                       admissionSlug={admissionSlug ?? ""}
                       value={fadderbarn}
-                      onChange={setFadderbarn}
+                      onChange={editFadderbarn}
                     />
                   }
                   participation={myAvailabilityParticipant?.participation}

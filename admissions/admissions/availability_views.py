@@ -133,10 +133,8 @@ class InterviewAvailabilityView(SchedulerFeatureGateMixin, APIView):
             if not committee_revealed:
                 return set()
             if publication_withholds_rows(saved_schedule):
-                # Identity follows the published rows: a partial publish
-                # withholds the later days' interviews, so an ordinary
-                # member's visible-candidate scope must stop at the same
-                # boundary.
+                # A partial publish withholds rows, so an ordinary member's
+                # visible-candidate scope stops at the same boundary.
                 return published_candidate_ids(saved_schedule)
         return {
             str(pk)
@@ -803,26 +801,48 @@ class InterviewAvailabilityView(SchedulerFeatureGateMixin, APIView):
                 defaults["decoy_reviewed_ids"] = sorted(next_decoy_reviewed)
         if "fadderbarn" in serializer.validated_data:
             # Full replacement, and stamped so "none declared" is
-            # distinguishable from "not answered yet".
-            declared = serializer.validated_data["fadderbarn"]
-            FadderbarnDeclaration.objects.filter(
-                admission=admission, interviewer=target_user
-            ).delete()
-            FadderbarnDeclaration.objects.bulk_create(
-                [
-                    FadderbarnDeclaration(
-                        admission=admission,
-                        interviewer=target_user,
-                        lego_user_id=entry["lego_user_id"],
-                        username=entry.get("username", ""),
-                        full_name=entry.get("full_name", ""),
-                    )
-                    for entry in {
-                        entry["lego_user_id"]: entry for entry in declared
-                    }.values()
-                ]
+            # distinguishable from "not answered yet". An identical
+            # resubmission is left alone (except a first-ever confirmation,
+            # which still needs its stamp).
+            declared = list(
+                {
+                    entry["lego_user_id"]: entry
+                    for entry in serializer.validated_data["fadderbarn"]
+                }.values()
             )
-            defaults["fadderbarn_confirmed_at"] = timezone.now()
+            incoming = {
+                (
+                    entry["lego_user_id"],
+                    entry.get("username", ""),
+                    entry.get("full_name", ""),
+                )
+                for entry in declared
+            }
+            stored = {
+                (row.lego_user_id, row.username, row.full_name)
+                for row in FadderbarnDeclaration.objects.filter(
+                    admission=admission, interviewer=target_user
+                )
+            }
+            if incoming != stored:
+                FadderbarnDeclaration.objects.filter(
+                    admission=admission, interviewer=target_user
+                ).delete()
+                FadderbarnDeclaration.objects.bulk_create(
+                    [
+                        FadderbarnDeclaration(
+                            admission=admission,
+                            interviewer=target_user,
+                            lego_user_id=entry["lego_user_id"],
+                            username=entry.get("username", ""),
+                            full_name=entry.get("full_name", ""),
+                        )
+                        for entry in declared
+                    ]
+                )
+                defaults["fadderbarn_confirmed_at"] = timezone.now()
+            elif existing is None or existing.fadderbarn_confirmed_at is None:
+                defaults["fadderbarn_confirmed_at"] = timezone.now()
 
         saved, _ = InterviewAvailability.objects.update_or_create(
             admission=admission,
@@ -868,15 +888,12 @@ class InterviewAvailabilityView(SchedulerFeatureGateMixin, APIView):
         can_view_assignment_scope = is_admin or (
             target_user.id == user.id and conflict_review_open
         )
-        # Mirror of the GET projection for this row - same decoy merge, same
-        # filter, same review scope - so diffing a save's echo against the
-        # next poll can never expose which entries were fillers, which panel
-        # is really proposed, or a different completeness verdict.
+        # Mirror of the GET projection for this row - diffing a save's echo
+        # against the next poll must never separate fillers from reals or
+        # leak the real proposed panel.
         is_own_unfiltered_row = target_user.id == user.id and not is_admin
         echo_decoy_tokens = (
-            own_decoy_scope
-            if is_own_unfiltered_row and conflict_review_open
-            else set()
+            own_decoy_scope if is_own_unfiltered_row and conflict_review_open else set()
         )
         echo_filter = (
             (visible_candidate_ids or set()) | echo_decoy_tokens

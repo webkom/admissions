@@ -100,9 +100,13 @@ export const useDistributedPlanActions = ({
   ) => {
     if (!savedSchedule) return false;
     try {
+      // The exact current boundary, not the is_distributed echo: a row edit
+      // means "keep the publish state as it is", never "publish everything".
       await saveSchedule.mutateAsync({
         schedule,
-        is_distributed: savedSchedule.is_distributed,
+        ...(savedSchedule.distributed_through
+          ? { distributed_through: savedSchedule.distributed_through }
+          : { is_distributed: false }),
         expected_updated_at: savedSchedule.updated_at,
       });
       if (areSensitiveAdmissionCacheWritesBlocked(scope)) return false;

@@ -73,9 +73,9 @@ export const useAvailabilityEditor = ({
 
   const saveAvailability = async (
     slots: Set<string>,
-    // Sent alongside the slots so declaring a fadderbarn is part of answering,
-    // not a second thing to remember. Omitted entirely when the caller has
-    // nothing to say, so a plain slot save never clears existing declarations.
+    // Omitted entirely when the caller has nothing to say, so a plain slot
+    // save never clears existing declarations. Checked against undefined,
+    // not truthiness: an empty array is a real answer ("confirmed none").
     fadderbarn?: Fadderbarn[],
     // Defaults to the editor's current "helst ikke" set so callers that only
     // deal in available slots keep it intact rather than silently clearing it.
@@ -87,7 +87,7 @@ export const useAvailabilityEditor = ({
         discouraged_slots: Array.from(discouraged).filter(
           (slot) => !slots.has(slot),
         ),
-        ...(fadderbarn ? { fadderbarn } : {}),
+        ...(fadderbarn !== undefined ? { fadderbarn } : {}),
         expected_availability_generation:
           lastAppliedGenerationRef.current ?? undefined,
       });

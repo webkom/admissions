@@ -102,6 +102,21 @@ class FadderbarnDeclarationTestCase(APITestCase):
             ).fadderbarn_confirmed_at
         )
 
+    def test_resubmitting_the_same_list_keeps_the_original_stamp(self):
+        self.client.post(
+            self.url, {"fadderbarn": [{"lego_user_id": 5001}]}, format="json"
+        )
+        row = self.interviewer.interview_availabilities.get(admission=self.admission)
+        first_stamp = row.fadderbarn_confirmed_at
+
+        res = self.client.post(
+            self.url, {"fadderbarn": [{"lego_user_id": 5001}]}, format="json"
+        )
+
+        self.assertEqual(status.HTTP_200_OK, res.status_code)
+        row.refresh_from_db()
+        self.assertEqual(first_stamp, row.fadderbarn_confirmed_at)
+
     def test_the_declaring_interviewer_is_never_told_who_applied(self):
         """The privacy property the whole design rests on.
 

@@ -43,6 +43,9 @@ interface TimeSchedulerProps {
   chunkBreakMinutes: number;
   onSave?: (slots: Set<string>, discouraged: Set<string>) => Promise<void>;
   onSaveSuccess?: () => void;
+  /** Unsaved work outside the grid (e.g. fadderbarn), sharing the grid's
+   * unsaved-changes hint and beforeunload guard. */
+  extraDirty?: boolean;
   sessionDuration: number;
   dates: string[];
   participation?: InterviewerParticipation;
@@ -68,6 +71,7 @@ const TimeScheduler: React.FC<TimeSchedulerProps> = ({
   chunkBreakMinutes,
   onSave,
   onSaveSuccess,
+  extraDirty,
   sessionDuration,
   dates,
   participation,
@@ -189,15 +193,17 @@ const TimeScheduler: React.FC<TimeSchedulerProps> = ({
     ],
   );
 
+  const hasUnsavedWork = dirtySinceSave || Boolean(extraDirty);
+
   React.useEffect(() => {
-    if (!dirtySinceSave) return;
+    if (!hasUnsavedWork) return;
     const warnBeforeUnload = (event: BeforeUnloadEvent) => {
       event.preventDefault();
       event.returnValue = "";
     };
     window.addEventListener("beforeunload", warnBeforeUnload);
     return () => window.removeEventListener("beforeunload", warnBeforeUnload);
-  }, [dirtySinceSave]);
+  }, [hasUnsavedWork]);
 
   const handleSave = async () => {
     if (!onSave) return;
@@ -445,7 +451,7 @@ const TimeScheduler: React.FC<TimeSchedulerProps> = ({
               </button>
             </span>
           )}
-          {dirtySinceSave && (
+          {hasUnsavedWork && (
             <span className="text-detail font-semibold text-text-muted">
               Ulagrede endringer
             </span>
