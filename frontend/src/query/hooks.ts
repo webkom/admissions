@@ -17,6 +17,7 @@ import {
   SavedSchedule,
 } from "src/types";
 import { apiClient } from "src/utils/callApi";
+import { useIsWindowIdle } from "src/utils/useIsWindowIdle";
 import {
   admissionGroupScope,
   areSensitiveAdmissionCacheWritesBlocked,
@@ -41,26 +42,41 @@ interface SaveScheduleOptions {
 const accessFailureStatus = (error: unknown) =>
   isAxiosError(error) ? (error.response?.status ?? 0) : 0;
 
-const sensitiveQueryOptions = (admissionSlug: string) => ({
-  retry: false,
-  refetchInterval: (query: { state: { error: unknown } }) =>
-    areSensitiveAdmissionCacheWritesBlocked(admissionSlug) ||
-    [401, 403, 404].includes(accessFailureStatus(query.state.error))
-      ? false
-      : 5000,
-  refetchIntervalInBackground: false,
-  refetchOnMount: () =>
-    areSensitiveAdmissionCacheWritesBlocked(admissionSlug)
-      ? false
-      : ("always" as const),
-  refetchOnWindowFocus: () =>
-    areSensitiveAdmissionCacheWritesBlocked(admissionSlug)
-      ? false
-      : ("always" as const),
-  staleTime: 0,
-  gcTime: 0,
-  meta: { sensitive: true },
-});
+// How long with no mouse/keyboard/scroll activity before a live poll backs
+// off. Without this, a tab left open for the bulk of a multi-week
+// recruitment period polled exactly as hard as one being actively watched -
+// see useIsWindowIdle for the activity tracking itself.
+const IDLE_AFTER_MS = 3 * 60 * 1000;
+const ADMIN_POLL_ACTIVE_MS = 5000;
+const ADMIN_POLL_IDLE_MS = 60000;
+const ADMISSION_POLL_ACTIVE_MS = 15000;
+const ADMISSION_POLL_IDLE_MS = 120000;
+
+const useSensitiveQueryOptions = (admissionSlug: string) => {
+  const isIdle = useIsWindowIdle(IDLE_AFTER_MS);
+  return {
+    retry: false,
+    refetchInterval: (query: { state: { error: unknown } }) =>
+      areSensitiveAdmissionCacheWritesBlocked(admissionSlug) ||
+      [401, 403, 404].includes(accessFailureStatus(query.state.error))
+        ? false
+        : isIdle
+          ? ADMIN_POLL_IDLE_MS
+          : ADMIN_POLL_ACTIVE_MS,
+    refetchIntervalInBackground: false,
+    refetchOnMount: () =>
+      areSensitiveAdmissionCacheWritesBlocked(admissionSlug)
+        ? false
+        : ("always" as const),
+    refetchOnWindowFocus: () =>
+      areSensitiveAdmissionCacheWritesBlocked(admissionSlug)
+        ? false
+        : ("always" as const),
+    staleTime: 0,
+    gcTime: 0,
+    meta: { sensitive: true },
+  };
+};
 
 const admissionSensitiveQueryMeta = (
   admissionSlug: string,
@@ -97,6 +113,7 @@ export const useAdmissions = () => {
 };
 
 export const useAdmission = (slug: string) => {
+  const isIdle = useIsWindowIdle(IDLE_AFTER_MS);
   const query = useQuery<Admission, AxiosError>({
     queryKey: [`/admission/${slug}/`],
     enabled: Boolean(slug) && !areSensitiveAdmissionCacheWritesBlocked(slug),
@@ -104,7 +121,9 @@ export const useAdmission = (slug: string) => {
       areSensitiveAdmissionCacheWritesBlocked(slug) ||
       [401, 403, 404].includes(accessFailureStatus(query.state.error))
         ? false
-        : 15000,
+        : isIdle
+          ? ADMISSION_POLL_IDLE_MS
+          : ADMISSION_POLL_ACTIVE_MS,
     refetchOnWindowFocus: () =>
       areSensitiveAdmissionCacheWritesBlocked(slug) ? false : "always",
     staleTime: 0,
@@ -168,7 +187,7 @@ export const useAdminApplications = (
         expectedMode,
         representedGroups,
       ),
-    ...sensitiveQueryOptions(admissionSlug),
+    ...useSensitiveQueryOptions(admissionSlug),
     meta: admissionSensitiveQueryMeta(admissionSlug, true),
   });
   return hideDataAfterSensitiveQueryFailure(query);
@@ -182,7 +201,7 @@ export const useInterviewCandidates = (slug: string, groupId: string) => {
       Boolean(slug) &&
       Boolean(groupId) &&
       !areSensitiveAdmissionCacheWritesBlocked(scope),
-    ...sensitiveQueryOptions(scope),
+    ...useSensitiveQueryOptions(scope),
     meta: admissionSensitiveQueryMeta(scope, true),
   });
   return hideDataAfterSensitiveQueryFailure(query);
@@ -196,7 +215,7 @@ export const useSavedSchedule = (slug: string, groupId: string) => {
       Boolean(slug) &&
       Boolean(groupId) &&
       !areSensitiveAdmissionCacheWritesBlocked(scope),
-    ...sensitiveQueryOptions(scope),
+    ...useSensitiveQueryOptions(scope),
     meta: admissionSensitiveQueryMeta(scope, false),
   });
   return hideDataAfterSensitiveQueryFailure(query);
@@ -269,7 +288,7 @@ export const useInterviewAvailability = (slug: string, groupId: string) => {
       Boolean(slug) &&
       Boolean(groupId) &&
       !areSensitiveAdmissionCacheWritesBlocked(scope),
-    ...sensitiveQueryOptions(scope),
+    ...useSensitiveQueryOptions(scope),
     meta: admissionSensitiveQueryMeta(scope, true),
   });
   return hideDataAfterSensitiveQueryFailure(query);
