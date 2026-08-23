@@ -25,14 +25,20 @@ describe("submit application spec", () => {
     cy.contains("Søknadstekst").type("Hei jeg vil gjerne søke");
     cy.contains("Send inn søknad").click();
     cy.contains("h1", "Søknad sendt!").should("be.visible");
-    cy.contains("Slett søknad").click();
+    cy.contains("button", "Slett søknad").click();
     cy.get("[role='dialog']")
       .should("have.attr", "aria-modal", "true")
       .within(() => {
-        cy.contains("Er du sikker på at du vil slette søknaden din?").should(
-          "be.visible",
-        );
-        cy.contains("button", "Bekreft").click();
+        // The richer ConfirmDialog replaced the old one-line browser-style
+        // confirm, so the copy now spells out what the delete destroys
+        // instead of asking "Er du sikker ...", and the confirm button is
+        // labelled "Slett søknad" rather than "Bekreft" - the same label as
+        // the trigger that opened it, which is why this stays scoped to the
+        // dialog.
+        cy.get("[data-cy=delete-application-confirm]")
+          .should("be.visible")
+          .and("contain.text", "Dette sletter hele søknaden din");
+        cy.contains("button", "Slett søknad").click();
       });
     cy.contains("Skriv din søknad og send inn!").should("be.visible");
   });
