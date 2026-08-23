@@ -705,11 +705,19 @@ def _resolve_schedule_state(
                     }
                 )
     elif "is_distributed" in data:
-        distributed_through = (
-            _full_publish_boundary(configuration["start_date"], schedule)
-            if data["is_distributed"]
-            else None
-        )
+        if not data["is_distributed"]:
+            distributed_through = None
+        elif existing is not None and existing.distributed_through is not None:
+            # `is_distributed: true` on an already-published plan means "stay
+            # published", not "publish everything": the row-edit save echoes
+            # it back on every edit, so recomputing the full boundary here
+            # silently converted a partial publish into a full one. Widening
+            # is an explicit act and must arrive as `distributed_through`.
+            distributed_through = existing.distributed_through
+        else:
+            distributed_through = _full_publish_boundary(
+                configuration["start_date"], schedule
+            )
     elif schedule_changed:
         distributed_through = None
     else:
@@ -982,6 +990,12 @@ def _persist_schedule(
         if existing is not None
         else SavedSchedule.NAME_VISIBILITY_HIDDEN
     )
+    # Snapshotted before the setattr loop below, like the two fields above:
+    # `saved` aliases `existing`, so once the loop runs, existing.schedule IS
+    # the new schedule and every old-vs-new comparison silently degenerates
+    # to new-vs-new - which is how review-list regeneration ended up never
+    # firing on updates.
+    previous_schedule = existing.schedule if existing is not None else None
     with transaction.atomic():
         desired_fields = {
             "schedule": schedule,
@@ -1070,7 +1084,7 @@ def _persist_schedule(
             _project_interview_availability(
                 admission=admission,
                 group=group,
-                existing_schedule=existing.schedule,
+                existing_schedule=previous_schedule,
                 next_schedule=schedule,
                 enabled_slots=enabled_slots,
                 state=state,
@@ -1078,7 +1092,7 @@ def _persist_schedule(
 
         _refresh_conflict_review_lists(
             saved,
-            existing is None or existing.schedule != schedule,
+            existing is None or previous_schedule != schedule,
         )
 
     return saved

@@ -190,11 +190,14 @@ def get_conflict_review_readiness(admission, group, saved_schedule=None, schedul
             continue
         # Confirmation must cover everything they were shown, not just their
         # own panel: an unreviewed swap partner is exactly the pair a repair
-        # would move onto them.
+        # would move onto them. A union rather than a replacement: when the
+        # readiness check runs against an incoming schedule that differs from
+        # the snapshotted one (a save that edits and publishes in one POST),
+        # the snapshot alone would vouch for pairings it has never seen.
         if saved_schedule is not None:
             proposed_candidate_ids = (
                 conflict_review_scope(saved_schedule, interviewer_id)
-                or proposed_candidate_ids
+                | proposed_candidate_ids
             )
         participant = participants.get(interviewer_id)
         required_participant_ids.append(

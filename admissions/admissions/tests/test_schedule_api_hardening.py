@@ -501,6 +501,130 @@ class SavedSchedulePublishSemanticsTestCase(APITestCase):
             SavedSchedule.objects.get(admission=self.admission).is_distributed
         )
 
+    def _second_application(self):
+        second_candidate = LegoUser.objects.create(
+            username="hardening-candidate-2", lego_id=603
+        )
+        second_application = UserApplication.objects.create(
+            admission=self.admission, user=second_candidate
+        )
+        GroupApplication.objects.create(
+            application=second_application,
+            group=self.admin_group,
+            text="Second hardening application",
+        )
+        return second_application
+
+    def test_row_edit_of_partially_published_plan_keeps_the_boundary(self):
+        """`is_distributed: true` on a partial publish must not widen it.
+
+        The row-edit save echoes the generated is_distributed column back on
+        every edit; recomputing the full boundary from that echo silently
+        published the withheld days (and their names, when committee-visible)
+        the first time an admin adjusted a single interview.
+        """
+        second_application = self._second_application()
+        second_entry = self._schedule(time=2 * 24 * 60 + 540)
+        second_entry[0]["candidate_id"] = str(second_application.pk)
+        self._create_saved(
+            is_distributed=False,
+            schedule=self._schedule(time=540) + second_entry,
+            enabled_slots=["2026-04-20|540", "2026-04-20|600", "2026-04-22|540"],
+            distributed_through="2026-04-21",
+        )
+        self._mark_reviewed(self.application, second_application)
+
+        edited_second = self._schedule(time=2 * 24 * 60 + 540)
+        edited_second[0]["candidate_id"] = str(second_application.pk)
+        res = self.client.post(
+            self.url,
+            {
+                "schedule": self._schedule(time=600) + edited_second,
+                "is_distributed": True,
+            },
+            format="json",
+        )
+
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        saved = SavedSchedule.objects.get(admission=self.admission)
+        self.assertEqual(saved.distributed_through.isoformat(), "2026-04-21")
+
+    def test_republish_after_unlock_still_computes_the_full_boundary(self):
+        self._create_saved(is_distributed=False)
+        self._mark_reviewed(self.application)
+
+        res = self.client.post(self.url, {"is_distributed": True}, format="json")
+
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.assertTrue(res.data["is_distributed"])
+        self.assertIsNotNone(
+            SavedSchedule.objects.get(admission=self.admission).distributed_through
+        )
+
+    def test_updating_the_schedule_regenerates_conflict_review_lists(self):
+        """The update path must re-snapshot review lists, not just creation.
+
+        `_persist_schedule` mutates the row it also compares against, so the
+        old-vs-new schedule comparison degenerated to new-vs-new and review
+        lists were never built for the row-create-then-fill lifecycle every
+        real plan goes through.
+        """
+        saved = self._create_saved(is_distributed=False, schedule=[])
+        ConflictReviewList.objects.filter(saved_schedule=saved).delete()
+
+        res = self.client.post(
+            self.url,
+            {"schedule": self._schedule(time=540)},
+            format="json",
+        )
+
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        rows = list(ConflictReviewList.objects.filter(saved_schedule=saved))
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0].own_candidate_ids, [str(self.application.pk)])
+
+        # And a byte-identical re-save must keep the snapshot untouched.
+        revision_before = rows[0].revision
+        res = self.client.post(
+            self.url,
+            {"schedule": self._schedule(time=540)},
+            format="json",
+        )
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.assertEqual(
+            ConflictReviewList.objects.get(saved_schedule=saved).revision,
+            revision_before,
+        )
+
+    def test_publish_with_schedule_change_requires_review_of_the_new_pairing(self):
+        """Readiness must cover the incoming schedule, not the old snapshot.
+
+        The check runs before persistence, and or-replacing the new pairs with
+        the snapshotted scope let a save that both added a candidate and
+        published ship that never-reviewed pairing in one POST.
+        """
+        second_application = self._second_application()
+        self._create_saved(is_distributed=False, schedule=self._schedule(time=540))
+        self._mark_reviewed(self.application)
+
+        second_entry = self._schedule(time=600)
+        second_entry[0]["candidate_id"] = str(second_application.pk)
+        res = self.client.post(
+            self.url,
+            {
+                "schedule": self._schedule(time=540) + second_entry,
+                "is_distributed": True,
+            },
+            format="json",
+        )
+
+        self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("schedule", res.data)
+        self.assertIn("kontrollere", res.data["schedule"][0])
+        self.assertFalse(
+            SavedSchedule.objects.get(admission=self.admission).is_distributed
+        )
+
     def test_manual_publish_enforces_same_gender(self):
         self.candidate_user.gender = "male"
         self.candidate_user.save(update_fields=["gender"])
