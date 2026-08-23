@@ -84,15 +84,25 @@ export const SchedulePanelHeader: React.FC<SchedulePanelHeaderProps> = ({
 }) => (
   <header
     className={cn(
-      "flex flex-wrap items-start justify-between gap-4 px-5 py-4 handheld:px-4",
+      "flex flex-wrap items-start justify-between gap-4 px-12 py-4 handheld:px-6",
+      // A header carrying a subtitle opens a section, so it gets more room
+      // above it than a plain sub-panel header.
+      description && "pt-8",
       bordered && "border-b border-border-soft",
       className,
     )}
   >
     <div className="flex min-w-0 flex-1 items-start gap-3">
       {Icon && (
-        <span className="mt-0.5 inline-flex h-7 w-7 flex-none items-center justify-center text-brand">
-          <Icon size={iconSizes.standard} />
+        <span
+          className={cn(
+            "inline-flex flex-none items-center justify-center text-brand",
+            // Sized to the text block beside it: a lone title, or a title
+            // stacked on a subtitle.
+            description ? "h-11 w-11" : "mt-0.5 h-7 w-7",
+          )}
+        >
+          <Icon size={description ? iconSizes.hero : iconSizes.standard} />
         </span>
       )}
       <div className="min-w-0">
@@ -106,14 +116,19 @@ export const SchedulePanelHeader: React.FC<SchedulePanelHeaderProps> = ({
             ref={headingRef}
             tabIndex={-1}
             data-cy={headingDataCy}
-            className="m-0 rounded-sm text-title font-semibold leading-tight text-text-primary focus:outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-focus"
+            className={cn(
+              "m-0 rounded-sm leading-tight text-text-primary focus:outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-focus",
+              // A header carrying a subtitle heads a whole section, so it
+              // renders a step up from the plain sub-panel headers.
+              description ? "text-xl font-bold" : "text-title font-semibold",
+            )}
           >
             {title}
           </h2>
           {chips}
         </div>
         {description && (
-          <p className="m-0 mt-1 max-w-prose text-ui text-text-muted">
+          <p className="m-0 mt-1 max-w-prose text-detail text-text-muted">
             {description}
           </p>
         )}
@@ -142,7 +157,7 @@ export const SchedulePanelBody: React.FC<SchedulePanelBodyProps> = ({
 }) => (
   <div
     id={id}
-    className={cn(!noPadding && "px-5 py-4 handheld:px-4", className)}
+    className={cn(!noPadding && "px-12 py-4 handheld:px-6", className)}
   >
     {children}
   </div>
@@ -162,7 +177,7 @@ export const SchedulePanelFooter: React.FC<SchedulePanelFooterProps> = ({
   <div
     data-cy={dataCy}
     className={cn(
-      "flex flex-wrap items-center justify-between gap-3 border-t border-border-soft px-5 py-4 handheld:px-4 handheld:py-3",
+      "flex flex-wrap items-center justify-between gap-3 border-t border-border-soft px-12 py-4 handheld:px-6 handheld:py-3",
       className,
     )}
   >

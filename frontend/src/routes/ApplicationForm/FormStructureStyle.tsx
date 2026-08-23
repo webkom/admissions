@@ -18,7 +18,7 @@ export const PageWrapper = styled.div`
   width: 100%;
   padding: var(--spacing-4xl) var(--spacing-xl);
   margin: 0 auto;
-  max-width: var(--lego-max-width);
+  max-width: var(--content-width-page);
   min-height: var(--page-min-height);
   display: flex;
   flex-direction: column;
@@ -60,12 +60,11 @@ export const FormHeader = styled.div`
   align-items: flex-start;
   width: 100%;
   max-width: var(--content-width-form);
-  margin-bottom: var(--spacing-3xl);
+  margin-bottom: 0;
 
   ${media.handheld`
     flex-direction: column;
     gap: var(--spacing-lg);
-    margin-bottom: var(--spacing-xl);
   `};
 `;
 

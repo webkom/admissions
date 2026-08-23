@@ -7,6 +7,8 @@ import {
   Pencil,
 } from "lucide-react";
 import { iconSizes } from "src/styles/designTokens";
+import cn from "src/utils/cn";
+import { ConfigStep, ConfigStepList } from "../ConfigStep";
 import { buildBlockTimeChunks } from "../scheduleUtils";
 import {
   CustomValueSegmentedControl,
@@ -110,19 +112,19 @@ interface AdminScheduleSettingsPanelProps {
   onEdit?: () => void;
 }
 
-const ControlLabel: React.FC<{ children: React.ReactNode }> = ({
-  children,
-}) => (
-  <span className="block text-ui font-medium text-text-muted">{children}</span>
-);
-
-const SettingField: React.FC<{
+/** Label beside its control, as the block settings are laid out in the design. */
+const InlineSettingField: React.FC<{
   label: string;
   children: React.ReactNode;
-}> = ({ label, children }) => (
-  <div className="min-w-0 space-y-2">
-    <ControlLabel>{label}</ControlLabel>
-    <div className="min-w-0">{children}</div>
+  /** Let the control take the rest of the row. */
+  stretch?: boolean;
+  className?: string;
+}> = ({ label, children, stretch = false, className }) => (
+  <div className={cn("flex min-w-0 flex-wrap items-center gap-3", className)}>
+    <span className="flex-none text-ui font-medium text-text-body">
+      {label}
+    </span>
+    <div className={stretch ? "min-w-0 flex-1" : "min-w-0"}>{children}</div>
   </div>
 );
 
@@ -137,6 +139,7 @@ const CompactPresetControl: React.FC<{
   max: number;
   step: number;
   formatValue?: (value: number) => string;
+  fullWidth?: boolean;
 }> = ({
   label,
   presets,
@@ -145,6 +148,7 @@ const CompactPresetControl: React.FC<{
   max,
   step,
   formatValue = (value) => `${value} min`,
+  fullWidth = false,
 }) => {
   return (
     <CustomValueSegmentedControl
@@ -156,6 +160,7 @@ const CompactPresetControl: React.FC<{
       max={max}
       step={step}
       formatValue={formatValue}
+      fullWidth={fullWidth}
       onSelectPreset={settings.onSelectPreset}
       onCommitCustomValue={settings.onCommitCustomValue}
     />
@@ -507,160 +512,163 @@ const AdminScheduleSettingsPanel: React.FC<AdminScheduleSettingsPanelProps> = ({
   );
 
   const fields = (
-    <div
-      className="min-w-0 space-y-6 py-1"
-      aria-label="Innstillinger for tidsrammer"
-    >
-      <section
-        aria-label="Intervjuperiode og daglig tidsrom"
-        className="grid min-w-0 gap-5 tablet:grid-cols-[minmax(var(--schedule-settings-column-min-width),1.15fr)_minmax(18rem,0.85fr)] tablet:items-start"
-      >
-        <SettingField label="Intervjuperiode">
-          <div>
-            <InterviewPeriodPicker
-              startDate={period.startDate}
-              endDate={period.endDate}
-              maxDays={MAX_RANGE_DAYS}
-              invalid={!period.isValid}
-              describedBy={period.isValid ? undefined : "period-input-error"}
-              onChangeStartDate={period.onChangeStartDate}
-              onChangeEndDate={period.onChangeEndDate}
-            />
-            {!period.isValid && (
-              <span
-                id="period-input-error"
-                aria-live="polite"
-                className="mt-1 block text-xs font-semibold text-danger"
-              >
-                {period.isTooLong
-                  ? `Maks ${MAX_RANGE_DAYS} dager`
-                  : "Ugyldig periode"}
-              </span>
-            )}
-          </div>
-        </SettingField>
-
-        <SettingField label="Daglig tidsrom">
-          <div
-            data-cy="daily-time-setting"
-            className="min-h-[6.5rem] handheld:min-h-[9rem]"
+    <div className="min-w-0 pt-1" aria-label="Innstillinger for tidsrammer">
+      <ConfigStepList>
+        <ConfigStep number={1} title="Når skal intervjuene holdes?">
+          <section
+            aria-label="Intervjuperiode og daglig tidsrom"
+            className="flex min-w-0 flex-wrap items-stretch gap-3"
           >
-            <div
-              className={`${rangeControlClass} w-full grid-cols-[minmax(0,1fr)_1px_minmax(0,1fr)]`}
-            >
-              <div className="flex min-w-0 flex-col justify-center py-1.5 pl-3 pr-2">
-                <span className="text-tiny font-medium text-text-subtle">
-                  Fra
-                </span>
-                <TimeSegmentInput
-                  id="start-time"
-                  aria-label="Starttid per dag"
-                  aria-invalid={dailyTime.isInvalid}
-                  aria-describedby={
-                    dailyTime.isInvalid ? "daily-time-error" : undefined
-                  }
-                  value={dailyTime.start}
-                  onChange={dailyTime.onChangeStart}
-                  bare
-                  className="justify-start"
-                />
-              </div>
-              <span
-                className="my-2 h-6 w-px flex-none bg-border-soft"
-                aria-hidden="true"
+            <div className="min-w-[17.5rem]">
+              <InterviewPeriodPicker
+                startDate={period.startDate}
+                endDate={period.endDate}
+                maxDays={MAX_RANGE_DAYS}
+                invalid={!period.isValid}
+                describedBy={period.isValid ? undefined : "period-input-error"}
+                onChangeStartDate={period.onChangeStartDate}
+                onChangeEndDate={period.onChangeEndDate}
               />
-              <div className="flex min-w-0 flex-col justify-center py-1.5 pl-3 pr-2">
-                <span className="text-tiny font-medium text-text-subtle">
-                  Til
+              {!period.isValid && (
+                <span
+                  id="period-input-error"
+                  aria-live="polite"
+                  className="mt-1 block text-xs font-semibold text-danger"
+                >
+                  {period.isTooLong
+                    ? `Maks ${MAX_RANGE_DAYS} dager`
+                    : "Ugyldig periode"}
                 </span>
-                <TimeSegmentInput
-                  aria-label="Sluttid per dag"
-                  aria-invalid={dailyTime.isInvalid}
-                  aria-describedby={
-                    dailyTime.isInvalid ? "daily-time-error" : undefined
-                  }
-                  allowEndOfDay
-                  value={dailyTime.end}
-                  onChange={dailyTime.onChangeEnd}
-                  bare
-                  className="justify-start"
-                />
-              </div>
-              <FinalBlockSnapFooter
-                snap={finalBlockSnap}
-                onChangeEnd={dailyTime.onChangeEnd}
-              />
+              )}
             </div>
-            {dailyTime.isInvalid && (
-              <span
-                id="daily-time-error"
-                aria-live="polite"
-                className="mt-1 block text-xs font-semibold text-danger"
+
+            <div data-cy="daily-time-setting" className="flex flex-col">
+              <div className={`${rangeControlClass} h-full`}>
+                <div className="flex min-w-0 items-center gap-2 px-3.5 py-2">
+                  <span className="flex-none text-tiny font-medium text-text-subtle">
+                    Daglig
+                  </span>
+                  <TimeSegmentInput
+                    id="start-time"
+                    aria-label="Starttid per dag"
+                    aria-invalid={dailyTime.isInvalid}
+                    aria-describedby={
+                      dailyTime.isInvalid ? "daily-time-error" : undefined
+                    }
+                    value={dailyTime.start}
+                    onChange={dailyTime.onChangeStart}
+                    bare
+                  />
+                  <span
+                    className="flex-none text-text-subtle"
+                    aria-hidden="true"
+                  >
+                    –
+                  </span>
+                  <TimeSegmentInput
+                    aria-label="Sluttid per dag"
+                    aria-invalid={dailyTime.isInvalid}
+                    aria-describedby={
+                      dailyTime.isInvalid ? "daily-time-error" : undefined
+                    }
+                    allowEndOfDay
+                    value={dailyTime.end}
+                    onChange={dailyTime.onChangeEnd}
+                    bare
+                  />
+                </div>
+                <FinalBlockSnapFooter
+                  snap={finalBlockSnap}
+                  onChangeEnd={dailyTime.onChangeEnd}
+                />
+              </div>
+              {dailyTime.isInvalid && (
+                <span
+                  id="daily-time-error"
+                  aria-live="polite"
+                  className="mt-1 block text-xs font-semibold text-danger"
+                >
+                  Ugyldig tidsrom
+                </span>
+              )}
+            </div>
+          </section>
+        </ConfigStep>
+
+        <ConfigStep
+          number={2}
+          title="Hvor lange er intervjuene?"
+          description="Lengden inkluderer pause mellom intervju for evaluering."
+        >
+          <section aria-label="Blokkoppsett">
+            <div className="grid min-w-0 gap-7">
+              <div data-cy="block-settings-grid" className="grid min-w-0 gap-5">
+                <InlineSettingField label="Intervjulengde" stretch>
+                  <CompactPresetControl
+                    label="Intervjulengde"
+                    presets={DURATION_PRESETS}
+                    settings={duration}
+                    min={SESSION_DURATION_LIMITS.min}
+                    max={SESSION_DURATION_LIMITS.max}
+                    step={SESSION_DURATION_LIMITS.step}
+                    fullWidth
+                  />
+                </InlineSettingField>
+
+                <div className="flex min-w-0 flex-wrap items-center gap-x-8 gap-y-5">
+                  <InlineSettingField
+                    label="Intervjuer per blokk"
+                    className="min-w-[13rem] flex-[1_1_14rem]"
+                    stretch
+                  >
+                    <Stepper
+                      fullWidth
+                      value={block.size}
+                      min={CHUNK_SIZE_LIMITS.min}
+                      max={CHUNK_SIZE_LIMITS.max}
+                      step={CHUNK_SIZE_LIMITS.step}
+                      onStep={block.onChangeSize}
+                      aria-label="Antall intervjuer per blokk"
+                    />
+                  </InlineSettingField>
+
+                  <InlineSettingField
+                    label="Pause mellom blokker"
+                    className="min-w-[20rem] flex-[2_1_26rem]"
+                    stretch
+                  >
+                    <CompactPresetControl
+                      fullWidth
+                      label="Pause mellom blokker"
+                      presets={PAUSE_PRESETS}
+                      settings={block.pause}
+                      min={CHUNK_BREAK_LIMITS.min}
+                      max={CHUNK_BREAK_LIMITS.max}
+                      step={CHUNK_BREAK_LIMITS.step}
+                      formatValue={(value) =>
+                        value === 0 ? "Ingen" : `${value} min`
+                      }
+                    />
+                  </InlineSettingField>
+                </div>
+              </div>
+
+              <aside
+                data-cy="standard-block-preview-region"
+                className="min-w-0"
+                aria-label="Forhåndsvisning av intervjublokk"
               >
-                Ugyldig tidsrom
-              </span>
-            )}
-          </div>
-        </SettingField>
-      </section>
-
-      <section
-        className="border-t border-border-soft pt-6"
-        aria-label="Blokkoppsett"
-      >
-        <div className="grid min-w-0 gap-7 tablet:grid-cols-[minmax(var(--schedule-settings-column-min-width),0.85fr)_minmax(0,1.15fr)] tablet:items-start">
-          <div data-cy="block-settings-grid" className="grid min-w-0 gap-5">
-            <SettingField label="Intervjulengde (inkludert pause mellom intervju for evaluering)">
-              <CompactPresetControl
-                label="Intervjulengde"
-                presets={DURATION_PRESETS}
-                settings={duration}
-                min={SESSION_DURATION_LIMITS.min}
-                max={SESSION_DURATION_LIMITS.max}
-                step={SESSION_DURATION_LIMITS.step}
-              />
-            </SettingField>
-
-            <SettingField label="Antall intervjuer per blokk">
-              <Stepper
-                value={block.size}
-                min={CHUNK_SIZE_LIMITS.min}
-                max={CHUNK_SIZE_LIMITS.max}
-                step={CHUNK_SIZE_LIMITS.step}
-                onStep={block.onChangeSize}
-                aria-label="Antall intervjuer per blokk"
-              />
-            </SettingField>
-
-            <SettingField label="Pause mellom blokker (for å f.eks skifte intervjuere)">
-              <CompactPresetControl
-                label="Pause mellom blokker"
-                presets={PAUSE_PRESETS}
-                settings={block.pause}
-                min={CHUNK_BREAK_LIMITS.min}
-                max={CHUNK_BREAK_LIMITS.max}
-                step={CHUNK_BREAK_LIMITS.step}
-                formatValue={(value) =>
-                  value === 0 ? "Ingen" : `${value} min`
-                }
-              />
-            </SettingField>
-          </div>
-
-          <aside
-            data-cy="standard-block-preview-region"
-            className="min-w-0 border-t border-border-soft pt-6 tablet:border-l tablet:border-t-0 tablet:pl-7 tablet:pt-0"
-            aria-label="Forhåndsvisning av intervjublokk"
-          >
-            <StandardBlockPreview
-              startMinute={startMinute}
-              interviewDuration={duration.value}
-              interviewCount={block.size}
-              pauseMinutes={block.pause.value}
-            />
-          </aside>
-        </div>
-      </section>
+                <StandardBlockPreview
+                  startMinute={startMinute}
+                  interviewDuration={duration.value}
+                  interviewCount={block.size}
+                  pauseMinutes={block.pause.value}
+                />
+              </aside>
+            </div>
+          </section>
+        </ConfigStep>
+      </ConfigStepList>
     </div>
   );
 

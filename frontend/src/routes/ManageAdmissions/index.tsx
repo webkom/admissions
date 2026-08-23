@@ -109,7 +109,7 @@ const HeaderInner = styled.div`
   align-items: flex-end;
   justify-content: space-between;
   gap: var(--spacing-xl);
-  max-width: var(--content-width-wide);
+  max-width: var(--content-width-page);
   margin: 0 auto;
 
   @media screen and (max-width: ${breakpoints.handheld}) {
@@ -142,7 +142,7 @@ const Main = styled.main`
   display: grid;
   grid-template-columns: var(--management-sidebar-width) minmax(0, 1fr);
   gap: var(--spacing-xl);
-  max-width: var(--content-width-wide);
+  max-width: var(--content-width-page);
   margin: 0 auto;
   padding: var(--spacing-2xl) 0;
 

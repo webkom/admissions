@@ -36,7 +36,7 @@ const chooseInterviewPeriod = (startDate: string, endDate: string) => {
 };
 
 describe("inline schedule settings and standard-block preview", () => {
-  it("keeps settings and the visual block preview side by side", () => {
+  it("stacks the visual block preview under the settings", () => {
     cy.viewport(1280, 900);
     mountSettings();
 
@@ -44,13 +44,16 @@ describe("inline schedule settings and standard-block preview", () => {
       cy.get("[data-cy=standard-block-preview-region]").then(($preview) => {
         const settingsRect = $settings[0].getBoundingClientRect();
         const previewRect = $preview[0].getBoundingClientRect();
-        expect(settingsRect.right).to.be.at.most(previewRect.left);
-        expect(Math.abs(settingsRect.top - previewRect.top)).to.be.lessThan(2);
+        expect(settingsRect.bottom).to.be.at.most(previewRect.top);
+        expect(Math.abs(settingsRect.left - previewRect.left)).to.be.lessThan(
+          2,
+        );
       });
     });
-    cy.get("[data-cy=standard-block-preview]")
-      .should("contain.text", "Pause, 30 min")
-      .and("contain.text", "… neste blokk");
+    cy.get("[data-cy=standard-block-preview]").should(
+      "contain.text",
+      "Pause, 30 min",
+    );
     cy.get("[data-cy=standard-block-preview]")
       .should("not.contain.text", "Slik blir én intervjublokk")
       .and("not.contain.text", "Intervjutidene hører sammen");

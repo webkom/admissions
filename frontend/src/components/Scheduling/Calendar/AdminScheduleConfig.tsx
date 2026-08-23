@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
-import { LayoutPanelTop } from "lucide-react";
 import cn from "src/utils/cn";
+import { ConfigStep, ConfigStepList } from "../ConfigStep";
 import {
   buildBlockTimeChunks,
   dateRangeDates,
@@ -751,70 +751,73 @@ const AdminScheduleConfig: React.FC<AdminScheduleConfigProps> = ({
       >
         {foundationNav}
         <SchedulePanelHeader
-          icon={LayoutPanelTop}
           title={foundationFrameworkPresentation.title}
+          description={foundationFrameworkPresentation.subtitle}
+          bordered={false}
         />
-        <SchedulePanelBody className="space-y-6">
+        <SchedulePanelBody>
           {settings}
-          <section
-            id="interview-blocks"
-            aria-labelledby="interview-blocks-heading"
-            className="scroll-mt-4 border-t border-border-soft pt-6"
-          >
-            <div className="mb-4">
-              <h3
-                id="interview-blocks-heading"
-                className="m-0 text-base font-bold text-text-primary"
+          <ConfigStepList>
+            <ConfigStep
+              number={3}
+              title="Hvilke tider er åpne?"
+              description="Klikk en tid for å stenge den. Alle er åpne fra start."
+              titleId="interview-blocks-heading"
+              last
+            >
+              <section
+                id="interview-blocks"
+                aria-labelledby="interview-blocks-heading"
+                className="scroll-mt-4"
               >
-                Intervjutider
-              </h3>
-            </div>
-            {layoutVersion < 2 && !layoutResetRequested && (
-              <div className="mb-4 rounded-md border border-warning-border bg-warning-bg px-4 py-3 text-detail text-text-muted">
-                <p className="m-0 font-semibold text-text-primary">
-                  Eldre blokkoppsett
-                </p>
-                <p className="m-0 mt-1">
-                  Oppsettet kan brukes av løseren, men må tilbakestilles før
-                  intervjutidene kan endres.
-                </p>
-                <button
-                  type="button"
-                  className={cn(
-                    actionButtonBase,
-                    actionButtonGhost,
-                    "mt-2 px-0 py-1",
-                  )}
-                  onClick={handleResetLegacyLayout}
-                >
-                  Tilbakestill til dagens blokkmønster
-                </button>
-              </div>
-            )}
-            <AdminAvailabilityGrid
-              dates={dates}
-              chunks={chunks}
-              blockSize={pendingChunkSize}
-              enabledSlots={draftSlots}
-              sessionDuration={pendingDuration}
-              view={editorView}
-              customizationCount={draftOverrides.length}
-              fineTuningDisabled={legacyLayoutLocked}
-              editingDisabled={legacyLayoutLocked}
-              onChangeView={setEditorView}
-              onResetCustomizations={handleResetCustomizations}
-              onSetBlock={handleSetBlock}
-              onToggleSlot={handleToggleSlot}
-              onOpenAllBlocks={handleOpenAllBlocks}
-              onCloseAllCapacity={handleCloseAllCapacity}
-              onToggleDayBlocks={handleToggleDayBlocks}
-            />
-          </section>
+                {layoutVersion < 2 && !layoutResetRequested && (
+                  <div className="mb-4 rounded-md border border-warning-border bg-warning-bg px-4 py-3 text-detail text-text-muted">
+                    <p className="m-0 font-semibold text-text-primary">
+                      Eldre blokkoppsett
+                    </p>
+                    <p className="m-0 mt-1">
+                      Oppsettet kan brukes av løseren, men må tilbakestilles før
+                      intervjutidene kan endres.
+                    </p>
+                    <button
+                      type="button"
+                      className={cn(
+                        actionButtonBase,
+                        actionButtonGhost,
+                        "mt-2 px-0 py-1",
+                      )}
+                      onClick={handleResetLegacyLayout}
+                    >
+                      Tilbakestill til dagens blokkmønster
+                    </button>
+                  </div>
+                )}
+                <AdminAvailabilityGrid
+                  dates={dates}
+                  chunks={chunks}
+                  blockSize={pendingChunkSize}
+                  enabledSlots={draftSlots}
+                  sessionDuration={pendingDuration}
+                  view={editorView}
+                  customizationCount={draftOverrides.length}
+                  fineTuningDisabled={legacyLayoutLocked}
+                  editingDisabled={legacyLayoutLocked}
+                  onChangeView={setEditorView}
+                  onResetCustomizations={handleResetCustomizations}
+                  onSetBlock={handleSetBlock}
+                  onToggleSlot={handleToggleSlot}
+                  onOpenAllBlocks={handleOpenAllBlocks}
+                  onCloseAllCapacity={handleCloseAllCapacity}
+                  onToggleDayBlocks={handleToggleDayBlocks}
+                />
+              </section>
+            </ConfigStep>
+          </ConfigStepList>
         </SchedulePanelBody>
         <AdminScheduleConfigFooter
           saveStatus={saveStatus}
           actionLabel="Lagre oppsett"
-          className="sticky bottom-0 z-10 bg-surface-base"
+          className="sticky bottom-0 z-10 rounded-b-panel bg-surface-base"
         />
       </SchedulePanel>
     </div>

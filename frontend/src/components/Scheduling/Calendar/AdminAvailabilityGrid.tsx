@@ -90,8 +90,8 @@ const AdminAvailabilityGrid: React.FC<AdminAvailabilityGridProps> = ({
   };
 
   return (
-    <section className="border-t border-border-soft">
-      <div className="grid gap-3 px-5 py-3 handheld:px-4 tablet:grid-cols-[minmax(0,1fr)_auto] tablet:items-center">
+    <section>
+      <div className="px-5 py-3 handheld:px-4">
         <div className="min-w-0">
           <div
             data-cy="schedule-grid-legend"
@@ -114,22 +114,6 @@ const AdminAvailabilityGrid: React.FC<AdminAvailabilityGridProps> = ({
             )}
           </div>
         </div>
-        <SegmentedControl<EditingMode>
-          value={view}
-          onChange={onChangeView}
-          aria-label="Redigeringsnivå for intervjutider"
-          items={[
-            { key: "blocks", label: "Hele blokker" },
-            {
-              key: "slots",
-              label: "Enkelttider",
-              disabled: fineTuningDisabled,
-              title: fineTuningDisabled
-                ? "Tilbakestill eldre blokkoppsett før du åpner enkelttider"
-                : undefined,
-            },
-          ]}
-        />
       </div>
 
       {fineTuningDisabled && (
@@ -159,23 +143,41 @@ const AdminAvailabilityGrid: React.FC<AdminAvailabilityGridProps> = ({
         </div>
       )}
 
-      <div className="flex flex-wrap items-center justify-end gap-2 px-5 pb-3 handheld:px-4">
-        <button
-          type="button"
-          className={cn(actionButtonBase, actionButtonGhost, "px-3 py-1.5")}
-          disabled={editingDisabled}
-          onClick={onOpenAllBlocks}
-        >
-          Åpne alle blokker
-        </button>
-        <button
-          type="button"
-          className={cn(actionButtonBase, actionButtonGhost, "px-3 py-1.5")}
-          disabled={editingDisabled}
-          onClick={handleCloseAllCapacity}
-        >
-          Steng alle tider
-        </button>
+      <div className="flex flex-wrap items-center justify-between gap-3 px-5 pb-3 handheld:px-4">
+        <SegmentedControl<EditingMode>
+          value={view}
+          onChange={onChangeView}
+          aria-label="Redigeringsnivå for intervjutider"
+          items={[
+            { key: "blocks", label: "Hele blokker" },
+            {
+              key: "slots",
+              label: "Enkelttider",
+              disabled: fineTuningDisabled,
+              title: fineTuningDisabled
+                ? "Tilbakestill eldre blokkoppsett før du åpner enkelttider"
+                : undefined,
+            },
+          ]}
+        />
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            className={cn(actionButtonBase, actionButtonGhost, "px-3 py-1.5")}
+            disabled={editingDisabled}
+            onClick={onOpenAllBlocks}
+          >
+            Åpne alle blokker
+          </button>
+          <button
+            type="button"
+            className={cn(actionButtonBase, actionButtonGhost, "px-3 py-1.5")}
+            disabled={editingDisabled}
+            onClick={handleCloseAllCapacity}
+          >
+            Steng alle tider
+          </button>
+        </div>
       </div>
 
       <div className="select-none px-5 pb-5 handheld:px-4 handheld:pb-4">

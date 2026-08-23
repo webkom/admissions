@@ -40,7 +40,7 @@ const PageWrapper = styled.div`
 `;
 
 const Wrapper = styled.div<{ $withSideNav: boolean }>`
-  max-width: var(--lego-max-width);
+  max-width: var(--content-width-page);
   width: 100%;
   margin: 0 auto;
   padding: var(--spacing-lg);

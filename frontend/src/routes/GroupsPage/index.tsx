@@ -81,7 +81,7 @@ export default GroupsPage;
 const PageWrapper = styled.div`
   width: 100%;
   padding: var(--spacing-7xl) var(--spacing-4xl);
-  max-width: var(--lego-max-width);
+  max-width: var(--content-width-page);
   margin: 0 auto;
   min-height: var(--page-min-height);
   display: flex;

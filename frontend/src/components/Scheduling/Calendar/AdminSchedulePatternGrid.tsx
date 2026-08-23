@@ -203,7 +203,7 @@ const SlotEditorPopover: React.FC<{
                 "flex min-h-10 items-center justify-between rounded-md border px-3 text-detail font-semibold tabular-nums transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-brand-focus",
                 active
                   ? "border-brand-border bg-brand-soft text-brand-dark"
-                  : "border-border-soft bg-surface-neutral text-text-muted hover:border-brand-border hover:bg-surface-base",
+                  : "border-border-soft bg-surface-neutral text-text-muted [background-image:var(--pattern-unavailable)] hover:border-brand-border hover:bg-surface-base hover:[background-image:none]",
               )}
               onClick={() => onToggleSlot(state.date, minute)}
             >
