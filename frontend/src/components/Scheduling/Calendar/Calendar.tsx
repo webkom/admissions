@@ -407,7 +407,7 @@ const TimeScheduler: React.FC<TimeSchedulerProps> = ({
         )}
       </SchedulePanelBody>
 
-      <SchedulePanelFooter className="sticky bottom-0 z-20 bg-surface-base">
+      <SchedulePanelFooter className="bg-surface-base">
         <div className="flex flex-wrap items-center gap-5">
           <MetaValue label="Intervjublokker" value={selectedBlockCount} />
           <MetaValue label="Intervjutider" value={selectedSlots.size} />
