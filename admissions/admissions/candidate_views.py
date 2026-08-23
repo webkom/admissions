@@ -27,6 +27,8 @@ from admissions.admissions.scheduling_utils import (
     get_eligible_interviewer_ids,
     get_interviewer_participation,
     get_proposed_candidate_ids_by_interviewer,
+    publication_withholds_rows,
+    published_candidate_ids,
     user_has_interview_availability,
 )
 from admissions.admissions.serializers import NameVisibilityAuditEventSerializer
@@ -118,14 +120,30 @@ class InterviewCandidatesView(SchedulerFeatureGateMixin, APIView):
         applications = UserApplication.objects.filter(
             admission=admission, group_applications__group=group
         ).distinct()
-        if not is_admin:
+        # Workflow operators (admission admins AND this committee's own
+        # leader/recruiter) always work against the full pool - they see it
+        # before review opens and after publish, and the solve payload is
+        # built from this list, so collapsing it mid-review locked the
+        # committee's own operator out of solving exactly while review ran.
+        collapsed_to_review_scope = (
+            conflict_review_open and not is_admin and not is_interview_admin
+        )
+        if not is_admin and not is_interview_admin:
             if conflict_review_open:
                 # The names shown must match the list they are asked to
                 # confirm, or a swap partner appears as an unknown candidate.
                 applications = applications.filter(
                     pk__in=conflict_review_scope(saved, user.id)
                 )
-            elif not is_interview_admin and not committee_revealed:
+            elif committee_revealed:
+                if publication_withholds_rows(saved):
+                    # Identity follows the rows the viewer can actually see:
+                    # a partial publish withholds the later days' interviews,
+                    # so it must withhold those candidates' names too.
+                    applications = applications.filter(
+                        pk__in=published_candidate_ids(saved)
+                    )
+            else:
                 applications = applications.none()
         applications = applications.select_related("user").order_by(
             "user__first_name", "user__last_name", "user__username"
@@ -133,16 +151,8 @@ class InterviewCandidatesView(SchedulerFeatureGateMixin, APIView):
         if hide_identity:
             payload = []
         else:
-            decoy_entries = []
-            if not is_admin:
-                if conflict_review_open:
-                    self._audit_conflict_review_access(admission, saved, user)
-                    # Same list, same request: a filler that only shows up on
-                    # a separate call would be distinguishable by timing.
-                    decoy_entries = [
-                        {"id": entry["token"], "name": entry["name"]}
-                        for entry in decoy_review_scope(saved, user.id)
-                    ]
+            if not is_admin and conflict_review_open:
+                self._audit_conflict_review_access(admission, saved, user)
             payload = [
                 {
                     "id": str(application.pk),
@@ -150,7 +160,18 @@ class InterviewCandidatesView(SchedulerFeatureGateMixin, APIView):
                     or application.user.username,
                 }
                 for application in applications
-            ] + decoy_entries
+            ]
+            if collapsed_to_review_scope:
+                # Same list, same request: a filler that only shows up on
+                # a separate call would be distinguishable by timing.
+                payload += [
+                    {"id": entry["token"], "name": entry["name"]}
+                    for entry in decoy_review_scope(saved, user.id)
+                ]
+                # One combined ordering: appending fillers after the
+                # name-sorted reals put every filler at the tail, which was
+                # as good as labelling them.
+                payload.sort(key=lambda entry: (entry["name"].casefold(), entry["id"]))
 
         return Response(payload, status=status.HTTP_200_OK)
 

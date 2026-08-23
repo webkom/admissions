@@ -39,6 +39,8 @@ from admissions.admissions.scheduling_utils import (
     get_eligible_interviewer_ids,
     get_proposed_candidate_ids_by_interviewer,
     panel_gender_code,
+    publication_withholds_rows,
+    published_candidate_ids,
     user_has_interview_availability,
 )
 from admissions.admissions.serializers import (
@@ -127,8 +129,15 @@ class InterviewAvailabilityView(SchedulerFeatureGateMixin, APIView):
             and saved_schedule.name_visibility
             == SavedSchedule.NAME_VISIBILITY_COMMITTEE
         )
-        if not user_represents_group(admission, group, user) and not committee_revealed:
-            return set()
+        if not user_represents_group(admission, group, user):
+            if not committee_revealed:
+                return set()
+            if publication_withholds_rows(saved_schedule):
+                # Identity follows the published rows: a partial publish
+                # withholds the later days' interviews, so an ordinary
+                # member's visible-candidate scope must stop at the same
+                # boundary.
+                return published_candidate_ids(saved_schedule)
         return {
             str(pk)
             for pk in UserApplication.objects.filter(
@@ -859,8 +868,40 @@ class InterviewAvailabilityView(SchedulerFeatureGateMixin, APIView):
         can_view_assignment_scope = is_admin or (
             target_user.id == user.id and conflict_review_open
         )
+        # Mirror of the GET projection for this row - same decoy merge, same
+        # filter, same review scope - so diffing a save's echo against the
+        # next poll can never expose which entries were fillers, which panel
+        # is really proposed, or a different completeness verdict.
+        is_own_unfiltered_row = target_user.id == user.id and not is_admin
+        echo_decoy_tokens = (
+            own_decoy_scope
+            if is_own_unfiltered_row and conflict_review_open
+            else set()
+        )
+        echo_filter = (
+            (visible_candidate_ids or set()) | echo_decoy_tokens
+            if is_own_unfiltered_row
+            else visible_candidate_ids
+        )
+        echo_conflicts = (
+            list(saved.conflicts or []) + list(saved.decoy_conflicts or [])
+            if is_own_unfiltered_row
+            else list(saved.conflicts or [])
+        )
+        echo_reviewed = (
+            list(saved.reviewed_candidate_ids or [])
+            + list(saved.decoy_reviewed_ids or [])
+            if is_own_unfiltered_row
+            else list(saved.reviewed_candidate_ids or [])
+        )
         visible_proposed_candidate_ids = (
-            proposed_candidate_ids if can_view_assignment_scope else set()
+            proposed_candidate_ids
+            if is_admin
+            else (
+                self._review_scope(saved_schedule, user.id) | echo_decoy_tokens
+                if target_user.id == user.id and conflict_review_open
+                else set()
+            )
         )
         current_generation = (
             saved_schedule.availability_generation if saved_schedule is not None else 1
@@ -888,16 +929,16 @@ class InterviewAvailabilityView(SchedulerFeatureGateMixin, APIView):
                 "slots": saved.slots,
                 "discouraged_slots": saved.discouraged_slots,
                 "conflicts": self._visible_conflicts(
-                    saved.conflicts,
-                    visible_candidate_ids,
+                    echo_conflicts,
+                    echo_filter,
                 ),
                 "reviewed_candidate_ids": self._visible_conflicts(
-                    saved.reviewed_candidate_ids,
-                    visible_candidate_ids,
+                    echo_reviewed,
+                    echo_filter,
                 ),
                 "proposed_candidate_ids": sorted(visible_proposed_candidate_ids),
                 "conflict_review_complete": self._conflict_review_complete(
-                    saved.reviewed_candidate_ids,
+                    echo_reviewed,
                     visible_proposed_candidate_ids,
                 ),
                 "has_submitted": (
