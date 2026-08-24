@@ -447,7 +447,10 @@ const AdminScheduleSettingsPanel: React.FC<AdminScheduleSettingsPanelProps> = ({
               className="flex w-[42rem] max-w-full flex-none flex-col"
             >
               <div
-                className={`${rangeControlClass} h-full h-[3.75rem] grid-cols-[auto_24rem] items-stretch`}
+                // A fixed height, not a content height: the snap footer's
+                // contents come and go, and the row must not resize under the
+                // settings below it when they do.
+                className={`${rangeControlClass} h-[3.75rem] grid-cols-[auto_24rem] items-stretch`}
               >
                 <div className="flex min-w-0 items-center gap-2 px-3.5 py-2">
                   <span className="flex-none text-tiny font-medium text-text-subtle">

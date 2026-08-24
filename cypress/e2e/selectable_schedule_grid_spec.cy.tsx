@@ -28,10 +28,13 @@ describe("shared selectable schedule grid", () => {
           .and("have.class", "p-3");
       });
 
+    // Personal availability paints its own "Kan" surface; setup keeps the
+    // neutral selected treatment.
     cell("personal", "2026-07-21", 480)
       .should("have.class", "rounded-md")
-      .and("have.class", "border-border")
-      .and("have.class", "bg-surface-base")
+      .and("have.class", "border-solid")
+      .and("have.class", "border-brand")
+      .and("have.class", "bg-brand-tint")
       .and(
         "not.have.class",
         "shadow-[inset_3px_0_0_var(--color-danger-border)]",

@@ -59,7 +59,7 @@ export const SchedulePanel: React.FC<SchedulePanelProps> = ({
 
 interface SchedulePanelHeaderProps {
   title: string;
-  description?: string;
+  description?: React.ReactNode;
   eyebrow?: string;
   icon?: React.ComponentType<{ size?: number | string; className?: string }>;
   chips?: React.ReactNode;
