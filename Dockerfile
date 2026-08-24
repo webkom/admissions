@@ -3,7 +3,7 @@ FROM node:22 AS frontend-builder
 RUN mkdir /app
 WORKDIR /app
 COPY package.json yarn.lock /app/
-RUN yarn install --frozen-lockfile
+RUN yarn install --frozen-lockfile --network-timeout 600000
 
 COPY . /app
 
