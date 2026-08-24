@@ -26,7 +26,7 @@ const CommitteePicker: React.FC<CommitteePickerProps> = ({
   );
 
   return (
-    <div className="mx-auto w-full max-w-6xl px-5 pb-20 pt-8 handheld:px-4">
+    <div className="mx-auto w-full max-w-page px-5 pb-20 pt-8 handheld:px-4">
       <header className="mb-8 border-b border-border-soft pb-5">
         <h1 className="m-0 text-display-sm font-semibold text-text-primary">
           {admissionTitle}

@@ -75,30 +75,32 @@ const AdmissionTimeline: React.FC<AdmissionTimelineProps> = ({ items }) => {
                 isPast && "opacity-55",
               )}
             >
-              <h4
-                className={cn(
-                  "m-0 text-base font-bold",
-                  isCurrent
-                    ? "text-brand"
-                    : isPast
-                      ? "text-text-muted"
-                      : "text-text-primary",
-                )}
-              >
-                {item.title}
-              </h4>
-              <p
-                className={cn(
-                  "m-0 mt-1 text-sm font-semibold tabular-nums",
-                  isCurrent
-                    ? "text-text-secondary"
-                    : isPast
-                      ? "text-text-faded"
-                      : "text-text-muted",
-                )}
-              >
-                {formatDate(item.dateString)}
-              </p>
+              <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+                <h4
+                  className={cn(
+                    "m-0 text-base font-bold",
+                    isCurrent
+                      ? "text-brand"
+                      : isPast
+                        ? "text-text-muted"
+                        : "text-text-primary",
+                  )}
+                >
+                  {item.title}
+                </h4>
+                <p
+                  className={cn(
+                    "m-0 text-sm font-semibold tabular-nums",
+                    isCurrent
+                      ? "text-text-secondary"
+                      : isPast
+                        ? "text-text-faded"
+                        : "text-text-muted",
+                  )}
+                >
+                  {formatDate(item.dateString)}
+                </p>
+              </div>
               {item.details && item.details.length > 0 && (
                 <ul
                   className={cn(

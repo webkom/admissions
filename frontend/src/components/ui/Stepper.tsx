@@ -10,6 +10,8 @@ interface StepperProps {
   unit?: string;
   onStep: (next: number) => void;
   "aria-label"?: string;
+  /** Stretch to the available width instead of sizing to the controls. */
+  fullWidth?: boolean;
 }
 
 export const Stepper: React.FC<StepperProps> = ({
@@ -20,6 +22,7 @@ export const Stepper: React.FC<StepperProps> = ({
   unit,
   onStep,
   "aria-label": ariaLabel,
+  fullWidth = false,
 }) => {
   const clamp = (next: number) => {
     let result = next;
@@ -33,7 +36,9 @@ export const Stepper: React.FC<StepperProps> = ({
 
   return (
     <div
-      className="inline-flex h-control-md items-center gap-1 rounded-md border border-border-soft bg-surface-base px-1"
+      className={`h-control-md items-center gap-1 rounded-md border border-border-soft bg-surface-base px-1 ${
+        fullWidth ? "flex w-full justify-between" : "inline-flex"
+      }`}
       role="group"
       aria-label={ariaLabel}
     >

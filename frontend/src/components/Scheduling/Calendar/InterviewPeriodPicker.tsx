@@ -397,23 +397,25 @@ const InterviewPeriodPicker: React.FC<InterviewPeriodPickerProps> = ({
         aria-describedby={describedBy}
         onClick={openPicker}
         className={cn(
-          "group flex min-h-control-md w-full min-w-0 items-center gap-3 rounded-md border bg-surface-base px-3 py-2 text-left transition-[border-color,box-shadow,background-color] duration-150 hover:border-brand-strongBorder hover:bg-surface-subtle focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-brand-ringSoft",
+          // border-solid is explicit: lego-bricks resets `button { border: none }`,
+          // and a width-only utility renders nothing against border-style: none.
+          "group flex min-h-control-md w-full min-w-0 items-center gap-3 rounded-md border border-solid bg-surface-base px-3.5 py-2.5 text-left transition-[border-color,box-shadow,background-color] duration-150 hover:border-brand-strongBorder hover:bg-surface-subtle focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-brand-ringSoft",
           invalid ? "border-danger" : "border-border-soft",
         )}
       >
-        <span className="flex h-8 w-8 flex-none items-center justify-center rounded-md bg-brand-soft text-brand transition-colors group-hover:bg-brand-tint">
+        <span className="flex flex-none items-center justify-center text-brand">
           <CalendarDays size={iconSizes.standard} aria-hidden="true" />
         </span>
         <span className="min-w-0 flex-1">
           <span className="block text-tiny font-medium text-text-subtle">
-            Fra og med – til og med
+            Intervjuperiode
           </span>
           <span className="mt-0.5 block truncate text-sm font-bold text-text-primary">
             {formatRange(startDate, endDate)}
           </span>
         </span>
         {committedDayCount > 0 && (
-          <span className="flex-none rounded-full border border-brand-border bg-brand-soft px-2 py-1 text-detail font-semibold tabular-nums text-brand-dark">
+          <span className="ml-2 flex-none rounded-full bg-brand-soft px-2.5 py-1 text-detail font-semibold tabular-nums text-brand-dark">
             {committedDayCount} {committedDayCount === 1 ? "dag" : "dager"}
           </span>
         )}

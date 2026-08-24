@@ -6,7 +6,7 @@ import LinkButton from "src/components/LinkButton";
 const LandingPageNoAdmission = () => {
   return (
     <LandingPageSkeleton>
-      <h2 className="mb-2 text-display-md font-medium text-text-gray7 handheld:mt-8 handheld:text-center handheld:text-display-sm handheld:leading-8">
+      <h2 className="mb-2 text-display-md font-medium text-text-gray7 handheld:mt-8 handheld:px-4 handheld:text-center handheld:text-display-sm handheld:leading-8">
         Ingen åpne opptak for øyeblikket
       </h2>
       <div className="mb-8 flex max-w-md handheld:mx-4">

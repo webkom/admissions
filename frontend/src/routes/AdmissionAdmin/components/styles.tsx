@@ -3,7 +3,7 @@ import { media } from "src/styles/mediaQueries";
 
 export const Wrapper = styled.div`
   width: 100%;
-  max-width: var(--lego-max-width);
+  max-width: var(--content-width-page);
   min-height: var(--group-editor-min-height);
   padding: 0;
   border-radius: var(--border-radius-lg);

@@ -127,6 +127,15 @@ export const scheduleInteractiveCellMotionClass =
 export const scheduleSelectedCellClass =
   "border-border bg-surface-base text-text-primary hover:border-brand-border hover:bg-brand-soft";
 
+// The two personal-availability answers. A paint-mode button renders its own
+// swatch from the same constant as the cell it paints, so the sample beside
+// the button is literally the surface the click produces.
+export const scheduleAvailableSurfaceClass =
+  "border-solid border-brand bg-brand-tint";
+
+export const scheduleDiscouragedSurfaceClass =
+  "border-dashed border-border-strong bg-surface-base";
+
 export const scheduleAvailableCellClass =
   "border-border bg-surface-base hover:border-brand-border hover:bg-brand-soft";
 
@@ -176,6 +185,13 @@ interface ScheduleSelectableBlockCellProps extends ScheduleBlockCellProps {
   statusText?: React.ReactNode;
   distinguishUnavailable?: boolean;
   hideTrackWhenUnavailable?: boolean;
+  /**
+   * Replaces the default selected treatment. Availability paints two distinct
+   * answers, and passing the surface in beats appending an override class:
+   * `cn` has no tailwind-merge, so two competing `bg-*` utilities would be
+   * decided by the generated stylesheet's order rather than by this call.
+   */
+  activeClassName?: string;
 }
 
 /**
@@ -197,6 +213,7 @@ export const ScheduleSelectableBlockCell = React.forwardRef<
       statusText,
       distinguishUnavailable = false,
       hideTrackWhenUnavailable = false,
+      activeClassName,
       className,
       ...props
     },
@@ -231,7 +248,8 @@ export const ScheduleSelectableBlockCell = React.forwardRef<
             : distinguishUnavailable
               ? "cursor-not-allowed"
               : "cursor-default",
-          (isActive || isPartial) && scheduleSelectedCellClass,
+          (isActive || isPartial) &&
+            (activeClassName ?? scheduleSelectedCellClass),
           isVisuallyClosed &&
             "border-border-soft bg-surface-neutral text-text-disabled",
           selectable &&

@@ -1,6 +1,5 @@
 import React, { useLayoutEffect, useRef, useState } from "react";
 import { gsap } from "gsap";
-import { ScheduleSlotSegments } from "./ScheduleGridFrame";
 import {
   buildStandardBlockPreviewLayout,
   formatClockMinute,
@@ -21,97 +20,64 @@ const PREVIEW_TRANSITION_SECONDS = EXPAND_CONTRACT_MOTION.durationSeconds;
 const TIMESTAMP_PHASE_SECONDS = PREVIEW_TRANSITION_SECONDS / 2;
 const REDUCED_MOTION_QUERY = EXPAND_CONTRACT_MOTION.reducedMotionQuery;
 
-const blockHeightForDuration = (minutes: number) =>
-  Math.max(66, Math.min(124, 48 + minutes * 0.4));
-
 const pauseHeightForDuration = (minutes: number) =>
   minutes <= 0 ? 0 : Math.max(30, Math.min(58, 20 + minutes * 0.4));
 
-const PreviewTimeLabel: React.FC<{
-  startMinute: number;
-  endMinute?: number;
-  children?: React.ReactNode;
-}> = ({ startMinute, endMinute, children }) => (
-  <div className="flex min-w-0 flex-col items-end justify-center pr-3 text-right">
-    <span
-      data-preview-time
-      className="text-label font-semibold tabular-nums text-text-subtle"
-    >
-      {formatClockMinute(startMinute)}
-    </span>
-    {endMinute !== undefined && (
-      <span
-        data-preview-time
-        className="text-nano font-medium leading-none tabular-nums text-text-disabled"
-      >
-        til {formatClockMinute(endMinute)}
-      </span>
-    )}
-    {children}
-  </div>
-);
-
 const InterviewBlockShell: React.FC<{
   interviews: StandardBlockPreviewLayout["interviews"];
-  duration: number;
-  startMinute: number;
-  endMinute: number;
   density: PreviewDensity;
-}> = ({ interviews, duration, startMinute, endMinute, density }) => (
+  children?: React.ReactNode;
+}> = ({ interviews, density, children }) => (
   <div
     data-cy="interview-block-shell"
     data-layout-id="interview-block-shell"
     data-motion="expand-contract"
-    className="grid min-w-0 grid-cols-[4.75rem_minmax(0,1fr)]"
-    style={{ height: blockHeightForDuration(duration) }}
+    className="min-w-0 rounded-md border border-border-soft bg-surface-subtle px-4 py-3.5"
     aria-hidden="true"
   >
-    <PreviewTimeLabel startMinute={startMinute} endMinute={endMinute} />
-    <div className="flex min-w-0 flex-col justify-center gap-3 overflow-hidden rounded-md border border-brand-border bg-surface-base px-3 shadow-sm">
-      <ScheduleSlotSegments
-        fills={interviews.map(() => 1)}
-        className="h-schedule-progress"
-      />
-      {density === "narrow" && interviews.length > 6 ? (
-        <span className="text-center text-detail font-bold text-text-primary">
-          {interviews.length} intervjutider
-        </span>
-      ) : (
-        <div
-          className="grid min-w-0 gap-1"
-          style={{
-            gridTemplateColumns: `repeat(${interviews.length}, minmax(0, 1fr))`,
-          }}
-        >
-          {interviews.map((interview) => (
-            <div
-              key={interview.id}
-              data-cy="interview-slot"
-              data-layout-id={interview.id}
-              className="min-w-0 text-center"
-              title={`Intervju ${interview.number}: ${formatClockMinute(
-                interview.startMinute,
-              )}–${formatClockMinute(interview.endMinute)}`}
-            >
-              <span className="block max-w-full truncate text-detail font-bold text-text-primary">
-                {density === "narrow"
-                  ? interview.number
-                  : `Intervju ${interview.number}`}
+    <span className="mb-2.5 block text-label font-semibold uppercase tracking-label text-text-muted">
+      Én blokk blir slik
+    </span>
+    {density === "narrow" && interviews.length > 6 ? (
+      <span className="block text-center text-detail font-bold text-text-primary">
+        {interviews.length} intervjutider
+      </span>
+    ) : (
+      <div
+        className="grid min-w-0 gap-2"
+        style={{
+          gridTemplateColumns: `repeat(${interviews.length}, minmax(0, 1fr))`,
+        }}
+      >
+        {interviews.map((interview) => (
+          <div
+            key={interview.id}
+            data-cy="interview-slot"
+            data-layout-id={interview.id}
+            className="min-w-0 rounded-md border border-brand-border bg-brand-soft px-3 py-2.5"
+            title={`Intervju ${interview.number}: ${formatClockMinute(
+              interview.startMinute,
+            )}–${formatClockMinute(interview.endMinute)}`}
+          >
+            <span className="block max-w-full truncate text-detail font-semibold text-text-primary">
+              {density === "narrow"
+                ? interview.number
+                : `Intervju ${interview.number}`}
+            </span>
+            {density === "wide" && (
+              <span
+                data-preview-time
+                className="mt-0.5 block max-w-full truncate text-tiny font-medium tabular-nums text-text-muted"
+              >
+                {formatClockMinute(interview.startMinute)}–
+                {formatClockMinute(interview.endMinute)}
               </span>
-              {density === "wide" && (
-                <span
-                  data-preview-time
-                  className="mt-0.5 block max-w-full truncate text-tiny font-medium tabular-nums text-text-muted"
-                >
-                  {formatClockMinute(interview.startMinute)}–
-                  {formatClockMinute(interview.endMinute)}
-                </span>
-              )}
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
+            )}
+          </div>
+        ))}
+      </div>
+    )}
+    {children}
   </div>
 );
 
@@ -125,34 +91,16 @@ const SchedulePause: React.FC<{
     data-layout-id="pause"
     data-motion="expand-contract-down"
     data-exiting={exiting || undefined}
-    className="grid min-w-0 origin-top grid-cols-[4.75rem_minmax(0,1fr)] overflow-hidden"
+    className="mt-2.5 grid min-w-0 origin-top overflow-hidden"
     style={{ height: pauseHeightForDuration(visualPauseMinutes) }}
     aria-hidden="true"
   >
-    <div aria-hidden="true" />
-    <div className="flex min-w-0 items-center gap-2 overflow-hidden rounded-md border border-dashed border-border-muted bg-surface-muted px-3 text-text-muted">
-      <span className="h-px min-w-3 flex-1 border-t border-dashed border-border-muted" />
-      <span className="flex-none whitespace-nowrap text-detail font-bold">
+    <div className="flex min-w-0 items-center gap-2 overflow-hidden px-1 text-text-subtle">
+      <span className="h-px min-w-3 flex-1 border-t border-dashed border-border-soft" />
+      <span className="flex-none whitespace-nowrap text-tiny font-medium">
         Pause{density === "narrow" ? "" : `, ${visualPauseMinutes} min`}
       </span>
-      <span className="h-px min-w-3 flex-1 border-t border-dashed border-border-muted" />
-    </div>
-  </div>
-);
-
-const ScheduleContinuation: React.FC<{
-  nextBlockStartMinute: number;
-}> = ({ nextBlockStartMinute }) => (
-  <div
-    data-cy="schedule-continuation"
-    className="mt-2 grid min-w-0 grid-cols-[4.75rem_minmax(0,1fr)]"
-    aria-hidden="true"
-  >
-    <PreviewTimeLabel startMinute={nextBlockStartMinute} />
-    <div className="flex min-w-0 items-center gap-2 py-2 text-tiny font-semibold text-text-subtle">
-      <span className="h-px flex-1 border-t border-dashed border-border-muted" />
-      <span>… neste blokk</span>
-      <span className="h-px flex-1 border-t border-dashed border-border-muted" />
+      <span className="h-px min-w-3 flex-1 border-t border-dashed border-border-soft" />
     </div>
   </div>
 );
@@ -179,9 +127,6 @@ const StandardBlockPreview: React.FC<StandardBlockPreviewProps> = (input) => {
   const [visualPauseMinutes, setVisualPauseMinutes] = useState(
     layout.pauseMinutes,
   );
-  const [visualBlockDuration, setVisualBlockDuration] = useState(
-    layout.blockDuration,
-  );
   const [visualBlockEndMinute, setVisualBlockEndMinute] = useState(
     layout.blockEndMinute,
   );
@@ -190,16 +135,13 @@ const StandardBlockPreview: React.FC<StandardBlockPreviewProps> = (input) => {
   );
   const visualPauseRef = useRef(layout.pauseMinutes);
   const requestedPauseRef = useRef(layout.pauseMinutes);
-  const requestedBlockDurationRef = useRef(layout.blockDuration);
   const visualBlockEndRef = useRef(layout.blockEndMinute);
   const visualNextBlockStartRef = useRef(layout.nextBlockStartMinute);
   const requestedBlockEndRef = useRef(layout.blockEndMinute);
   const requestedNextBlockStartRef = useRef(layout.nextBlockStartMinute);
   const animationRef = useRef<gsap.core.Animation | null>(null);
-  const blockAnimationRef = useRef<gsap.core.Animation | null>(null);
   const timestampAnimationRef = useRef<gsap.core.Animation | null>(null);
   const mountedRef = useRef(false);
-  const blockMountedRef = useRef(false);
   const timestampMountedRef = useRef(false);
   const descriptionId = React.useId();
 
@@ -306,54 +248,6 @@ const StandardBlockPreview: React.FC<StandardBlockPreviewProps> = (input) => {
     }
     return undefined;
   }, [layout.pauseMinutes, prefersReducedMotion]);
-
-  useLayoutEffect(() => {
-    const preview = previewRef.current;
-    if (!preview) return undefined;
-
-    const shell = preview.querySelector<HTMLElement>(
-      '[data-cy="interview-block-shell"]',
-    );
-    if (!shell) return undefined;
-
-    const requestedDuration = layout.blockDuration;
-    requestedBlockDurationRef.current = requestedDuration;
-    const currentHeight = Number(gsap.getProperty(shell, "height"));
-    const requestedHeight = blockHeightForDuration(requestedDuration);
-
-    blockAnimationRef.current?.kill();
-    blockAnimationRef.current = null;
-    gsap.killTweensOf(shell);
-
-    if (!blockMountedRef.current || prefersReducedMotion) {
-      blockMountedRef.current = true;
-      setVisualBlockDuration(requestedDuration);
-      gsap.set(shell, { height: requestedHeight });
-      return undefined;
-    }
-
-    if (Math.abs(currentHeight - requestedHeight) < 0.01) {
-      setVisualBlockDuration(requestedDuration);
-      return undefined;
-    }
-
-    blockAnimationRef.current = gsap.fromTo(
-      shell,
-      { height: currentHeight },
-      {
-        height: requestedHeight,
-        duration: PREVIEW_TRANSITION_SECONDS,
-        ease: "power2.inOut",
-        overwrite: true,
-        onComplete: () => {
-          if (requestedBlockDurationRef.current !== requestedDuration) return;
-          setVisualBlockDuration(requestedDuration);
-        },
-      },
-    );
-
-    return undefined;
-  }, [layout.blockDuration, prefersReducedMotion]);
 
   useLayoutEffect(() => {
     const preview = previewRef.current;
@@ -468,7 +362,6 @@ const StandardBlockPreview: React.FC<StandardBlockPreviewProps> = (input) => {
   useLayoutEffect(
     () => () => {
       animationRef.current?.kill();
-      blockAnimationRef.current?.kill();
       timestampAnimationRef.current?.kill();
       if (!previewRef.current) return;
       const pause = previewRef.current.querySelector<HTMLElement>(
@@ -509,25 +402,20 @@ const StandardBlockPreview: React.FC<StandardBlockPreviewProps> = (input) => {
           >
             <InterviewBlockShell
               interviews={layout.interviews}
-              duration={visualBlockDuration}
-              startMinute={layout.startMinute}
-              endMinute={visualBlockEndMinute}
               density={density}
-            />
+            >
+              {visualPauseMinutes > 0 && (
+                <SchedulePause
+                  density={density}
+                  visualPauseMinutes={visualPauseMinutes}
+                  exiting={layout.pauseMinutes === 0}
+                />
+              )}
+            </InterviewBlockShell>
           </div>
-          {visualPauseMinutes > 0 && (
-            <SchedulePause
-              density={density}
-              visualPauseMinutes={visualPauseMinutes}
-              exiting={layout.pauseMinutes === 0}
-            />
-          )}
           <span data-cy="next-block-time" data-time-value className="sr-only">
             {formatClockMinute(visualNextBlockStartMinute)}
           </span>
-          <ScheduleContinuation
-            nextBlockStartMinute={visualNextBlockStartMinute}
-          />
         </div>
       </figure>
     </div>

@@ -243,7 +243,7 @@ describe("scheduler release acceptance", () => {
       .as("wizard")
       .should("be.visible")
       .within(() => {
-        cy.get('[aria-live="polite"]').should("contain.text", "Steg 1 av 4");
+        cy.get('[aria-live="polite"]').should("contain.text", "Steg 0 av 3");
         cy.get(".animate-fade-in").then(($animated) => {
           const style = getComputedStyle($animated[0]);
           expect(style.animationName).to.equal("none");
@@ -263,7 +263,7 @@ describe("scheduler release acceptance", () => {
         cy.get("@lastWizardButton").should("be.focused");
 
         cy.press(Cypress.Keyboard.Keys.RIGHT);
-        cy.get('[aria-live="polite"]').should("contain.text", "Steg 2 av 4");
+        cy.get('[aria-live="polite"]').should("contain.text", "Steg 1 av 3");
         cy.contains("h2", "Sett rammene og samle tilgjengelighet").should(
           "be.visible",
         );

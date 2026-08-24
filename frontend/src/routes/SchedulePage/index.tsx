@@ -159,7 +159,7 @@ const SchedulePage: React.FC = () => {
       admissionError?.response?.status ?? 0,
     );
     return (
-      <div className="mx-auto w-full max-w-6xl px-5 pb-20 pt-8 handheld:px-4">
+      <div className="mx-auto w-full max-w-page px-5 pb-20 pt-8 handheld:px-4">
         <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-danger-border bg-danger-bg px-4 py-3">
           <p className="m-0 text-ui font-semibold text-danger">
             {accessDenied
@@ -223,7 +223,7 @@ const SchedulePage: React.FC = () => {
 
   if (!admission) {
     return (
-      <div className="mx-auto w-full max-w-6xl px-5 pb-20 pt-8 handheld:px-4">
+      <div className="mx-auto w-full max-w-page px-5 pb-20 pt-8 handheld:px-4">
         <div
           role="status"
           className="flex items-center justify-center gap-3 rounded-panel border border-border bg-surface-base px-6 py-16 shadow-sm"
@@ -240,7 +240,7 @@ const SchedulePage: React.FC = () => {
 
   if (sensitiveScopeChangePending) {
     return (
-      <div className="mx-auto w-full max-w-6xl px-5 pb-20 pt-8 handheld:px-4">
+      <div className="mx-auto w-full max-w-page px-5 pb-20 pt-8 handheld:px-4">
         <div
           role="status"
           className="flex items-center justify-center gap-3 rounded-panel border border-border bg-surface-base px-6 py-16 shadow-sm"
@@ -360,7 +360,7 @@ const CommonScheduleView: React.FC<CommonScheduleViewProps> = (props) => {
 
   if (accessDenied || admissionUnavailable) {
     return (
-      <div className="mx-auto w-full max-w-6xl px-5 py-16 handheld:px-4">
+      <div className="mx-auto w-full max-w-page px-5 py-16 handheld:px-4">
         <div
           role="alert"
           className="rounded-xl border border-danger-border bg-danger-bg px-5 py-4 text-ui font-semibold text-danger"
@@ -394,7 +394,7 @@ const CommonScheduleView: React.FC<CommonScheduleViewProps> = (props) => {
 
   if (dataHealth.kind === "initial_error") {
     return (
-      <div className="mx-auto w-full max-w-6xl px-5 py-16 handheld:px-4">
+      <div className="mx-auto w-full max-w-page px-5 py-16 handheld:px-4">
         <div
           role="alert"
           className="flex flex-wrap items-center justify-between gap-3 rounded-panel border border-danger-border bg-danger-bg px-5 py-4"
@@ -711,7 +711,7 @@ const LoadedScheduleView: React.FC<LoadedScheduleViewProps> = ({
   const currentUserName = djangoData.user?.full_name ?? "";
 
   return (
-    <div className="mx-auto w-full max-w-6xl px-5 pb-20 pt-8 handheld:px-4">
+    <div className="mx-auto w-full max-w-page px-5 pb-20 pt-8 handheld:px-4">
       <header className="mb-8 flex flex-wrap items-center justify-between gap-6 border-b border-border-soft pb-5">
         <div className="min-w-0 flex-1">
           <h1 className="m-0 text-left text-display-sm font-semibold text-text-primary">
@@ -761,7 +761,7 @@ const LoadedScheduleView: React.FC<LoadedScheduleViewProps> = ({
       <div
         data-cy="workflow-phase"
         data-phase={workflowPhase}
-        className="border-b border-border bg-surface-base"
+        className="rounded-panel border border-border bg-surface-base"
       >
         <WorkflowStepper
           steps={workflowSteps}

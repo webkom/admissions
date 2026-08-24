@@ -20,30 +20,32 @@ const NavBar: React.FC<NavBarProps> = ({ isEditing }) => {
 
   return (
     <Container>
-      <BrandContainer>
-        <AbakusLogo />
-      </BrandContainer>
-      <NavItemsContainer>
-        {params["*"]?.substring(0, 5) !== "admin" && (
-          <>
-            {!isSingleGroupAdmission &&
-              (!admission?.userdata.has_application || isEditing) && (
-                <NavItem
-                  to={`/${admissionSlug}/velg-grupper`}
-                  text={
-                    isRevy
-                      ? "Velg grupper"
-                      : isRevyBoard
-                        ? "Velg stillinger"
-                        : "Velg komiteer"
-                  }
-                />
-              )}
-            <NavItem to={`/${admissionSlug}/min-soknad`} text="Min søknad" />
-          </>
-        )}
-      </NavItemsContainer>
-      <UserInfo />
+      <Inner>
+        <BrandContainer>
+          <AbakusLogo />
+        </BrandContainer>
+        <NavItemsContainer>
+          {params["*"]?.substring(0, 5) !== "admin" && (
+            <>
+              {!isSingleGroupAdmission &&
+                (!admission?.userdata.has_application || isEditing) && (
+                  <NavItem
+                    to={`/${admissionSlug}/velg-grupper`}
+                    text={
+                      isRevy
+                        ? "Velg grupper"
+                        : isRevyBoard
+                          ? "Velg stillinger"
+                          : "Velg komiteer"
+                    }
+                  />
+                )}
+              <NavItem to={`/${admissionSlug}/min-soknad`} text="Min søknad" />
+            </>
+          )}
+        </NavItemsContainer>
+        <UserInfo />
+      </Inner>
     </Container>
   );
 };
@@ -51,25 +53,36 @@ const NavBar: React.FC<NavBarProps> = ({ isEditing }) => {
 export default NavBar;
 
 const Container = styled.nav`
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
   background: var(--color-surface-base);
   width: 100%;
   height: var(--navigation-height);
   border-bottom: var(--border-width-default) solid var(--color-border-soft);
   box-shadow: var(--shadow-sm);
-  padding: 0 var(--spacing-7xl);
   position: sticky;
   top: 0;
   z-index: var(--navigation-layer);
   backdrop-filter: saturate(140%) blur(var(--motion-distance-sm));
 
-  ${media.handheld`        
+  ${media.handheld`
+    height: auto;
+    position: relative;
+  `}
+`;
+
+const Inner = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  max-width: var(--content-width-page);
+  height: 100%;
+  margin: 0 auto;
+  padding: 0 var(--page-gutter);
+
+  ${media.handheld`
     flex-direction: column;
     height: auto;
     padding: var(--spacing-md);
-    position: relative;
   `}
 `;
 

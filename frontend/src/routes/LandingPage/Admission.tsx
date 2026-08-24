@@ -19,12 +19,12 @@ const baseActionButtonClass =
 
 const primaryActionButtonClass = cn(
   baseActionButtonClass,
-  "slide-underline slide-underline-on-dark !min-h-16 !border-2 !border-brand !bg-brand !text-action !text-white active:!translate-y-0 disabled:!cursor-not-allowed disabled:!opacity-50",
+  "!min-h-16 !border !border-solid !border-brand-outline !bg-brand !text-action !text-white hover:!bg-brand-hover active:!translate-y-0 disabled:!cursor-not-allowed disabled:!opacity-50 disabled:hover:!bg-brand",
 );
 
 const secondaryActionButtonClass = cn(
   baseActionButtonClass,
-  "slide-underline slide-underline-tight !border-2 !border-border-muted !bg-surface-base !text-sm !text-text-primary hover:!text-brand",
+  "!border !border-solid !border-border-strong !bg-surface-base !text-sm !text-text-primary hover:!bg-surface-neutral",
 );
 
 const Admission: React.FC<AdmissionProps> = ({ admission }) => {
@@ -80,10 +80,10 @@ const Admission: React.FC<AdmissionProps> = ({ admission }) => {
   })();
 
   return (
-    <div className="mt-10 w-full max-w-6xl rounded-panel border border-border bg-surface-base p-10 shadow-panel transition-shadow duration-200 hover:shadow-panel-hover narrow:p-8 handheld:mt-6 handheld:p-5">
+    <div className="mt-10 w-full max-w-page rounded-panel border border-border bg-surface-base p-12 shadow-panel transition-shadow duration-200 hover:shadow-panel-hover narrow:p-10 handheld:mt-6 handheld:rounded-none handheld:border-x-0 handheld:p-6">
       <div className="mb-8 grid grid-cols-admission-overview gap-10 narrow:grid-cols-1 narrow:gap-8">
         <div>
-          <h2 className="mb-3 text-display-lg font-extrabold tracking-display-tight text-text-strong text-balance handheld:text-display-md">
+          <h2 className="m-0 mb-3 text-display-lg font-extrabold tracking-display-tight text-text-strong text-balance handheld:text-display-md">
             {admission.title}
           </h2>
           {admission.description && (
@@ -134,23 +134,6 @@ const Admission: React.FC<AdmissionProps> = ({ admission }) => {
             )}
 
             <div className="flex w-full flex-col items-stretch gap-2">
-              {isPrivileged && (
-                <LinkButton
-                  className={secondaryActionButtonClass}
-                  fullWidth
-                  to={adminPanelPath}
-                >
-                  <ActionButtonContent
-                    icon={
-                      <Settings size={iconSizes.standard} aria-hidden="true" />
-                    }
-                    label="Admin panel"
-                  />
-                </LinkButton>
-              )}
-            </div>
-
-            <div className="flex w-full flex-col items-stretch gap-2">
               {(isAdmissionMember || isPrivileged) && (
                 <LinkButton
                   className={secondaryActionButtonClass}
@@ -162,6 +145,23 @@ const Admission: React.FC<AdmissionProps> = ({ admission }) => {
                       <Calendar size={iconSizes.standard} aria-hidden="true" />
                     }
                     label="Velg intervjutider"
+                  />
+                </LinkButton>
+              )}
+            </div>
+
+            <div className="flex w-full flex-col items-stretch gap-2">
+              {isPrivileged && (
+                <LinkButton
+                  className={secondaryActionButtonClass}
+                  fullWidth
+                  to={adminPanelPath}
+                >
+                  <ActionButtonContent
+                    icon={
+                      <Settings size={iconSizes.standard} aria-hidden="true" />
+                    }
+                    label="Admin panel"
                   />
                 </LinkButton>
               )}

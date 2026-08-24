@@ -24,6 +24,14 @@ const serializeAnswer = (
   discouraged: Iterable<string>,
 ) => `${serializeSlots(slots)}\u0000${serializeSlots(discouraged)}`;
 
+// What the editor holds before any server answer has been applied. It is not
+// the empty string: serializeAnswer always joins its two halves, so the empty
+// answer carries the separator. Comparing the baseline against "" instead made
+// the sync effect below bail on its very first run - every run, for everyone -
+// leaving both the saved answer and the generation stamp unadopted, so a save
+// omitted expected_availability_generation and the server rejected it.
+const EMPTY_ANSWER = serializeAnswer([], []);
+
 interface AvailabilityEditorParams {
   admissionSlug: string;
   groupId: string;
@@ -55,7 +63,7 @@ export const useAvailabilityEditor = ({
     if (!currentParticipant) return;
 
     const localKey = serializeAnswer(selectedSlots, discouragedSlots);
-    const baselineKey = lastAppliedServerAnswerRef.current ?? "";
+    const baselineKey = lastAppliedServerAnswerRef.current ?? EMPTY_ANSWER;
     if (localKey !== baselineKey) return;
 
     const serverKey = serializeAnswer(

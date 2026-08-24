@@ -1,5 +1,5 @@
 import * as React from "react";
-import { CalendarRange, UserMinus } from "lucide-react";
+import { UserMinus } from "lucide-react";
 import { iconSizes } from "src/styles/designTokens";
 import type { InterviewerParticipation } from "src/types";
 import cn from "src/utils/cn";
@@ -22,7 +22,8 @@ import {
 } from "../ui";
 import {
   ScheduleGridLegendItem,
-  scheduleOpenLegendStyle,
+  scheduleAvailableSurfaceClass,
+  scheduleDiscouragedSurfaceClass,
 } from "./ScheduleGridFrame";
 import SelectableScheduleGrid from "./SelectableScheduleGrid";
 
@@ -58,6 +59,13 @@ interface TimeSchedulerProps {
    *  same action as the availability itself. */
   extraSection?: React.ReactNode;
 }
+
+// Row geometry shared by the two paint-mode buttons and the static
+// "Kan ikke" key beside them, so all three line up.
+const paintModeItemClass =
+  "inline-flex items-center gap-2 rounded-md px-2.5 py-1 text-detail font-semibold";
+
+const paintModeSwatchClass = "h-3.5 w-5 flex-none rounded-sm border";
 
 const TimeScheduler: React.FC<TimeSchedulerProps> = ({
   enabledSlots,
@@ -310,55 +318,53 @@ const TimeScheduler: React.FC<TimeSchedulerProps> = ({
     >
       {foundationNav}
       <SchedulePanelHeader
-        icon={CalendarRange}
+        bordered={false}
         title="Når kan du intervjue?"
-        description="Velg hele intervjublokker, eller juster enkelttider."
+        description={
+          <>
+            Marker tidene du kan. Bruk <strong>Helst ikke</strong> for tider du
+            kan møte, men helst vil slippe - for eksempel en forelesning. Lar du
+            en tid stå umarkert, betyr det at du ikke kan.
+          </>
+        }
+        // With paint modes on, every state is spelled out in the row above
+        // the grid, so the header carries a legend only without them.
         actions={
-          <div className="flex flex-wrap gap-1.5">
-            <ScheduleGridLegendItem
-              label="Valgt"
-              swatchClassName="border-border bg-surface-base"
-              swatchStyle={scheduleOpenLegendStyle}
-            />
-            {supportsDiscouraged && (
+          supportsDiscouraged ? undefined : (
+            <div className="flex flex-wrap gap-1.5">
               <ScheduleGridLegendItem
-                label="Helst ikke"
-                swatchClassName="border-dashed border-warning-border bg-warning-bg"
+                label="Valgt"
+                swatchClassName={scheduleAvailableSurfaceClass}
               />
-            )}
-            <ScheduleGridLegendItem
-              label="Ikke valgt"
-              swatchClassName="border-border-soft bg-surface-neutral"
-            />
-            <ScheduleGridLegendItem
-              label="Utilgjengelig"
-              swatchClassName="border-border-soft bg-surface-muted [background-image:repeating-linear-gradient(135deg,var(--color-border-muted)_0_5px,transparent_5px_11px,var(--color-border-muted)_11px_15px,transparent_15px_21px)] [background-size:16px_16px]"
-            />
-          </div>
+              <ScheduleGridLegendItem
+                label="Kan ikke"
+                swatchClassName="border-border-soft bg-surface-neutral"
+              />
+            </div>
+          )
         }
       />
       <SchedulePanelBody>
         {supportsDiscouraged && (
           <div
             data-cy="availability-paint-mode"
-            className="mb-4 rounded-md border border-border-soft bg-surface-subtle px-3 py-2"
+            className="mb-4 flex flex-wrap items-center gap-1.5"
           >
-            <p className="m-0 text-detail text-text-muted">
-              Marker tidene du kan. Bruk <strong>Helst ikke</strong> for tider
-              du kan møte, men helst vil slippe — for eksempel en forelesning.
-              Lar du en tid stå umarkert, betyr det at du ikke kan.
-            </p>
             <div
               role="radiogroup"
               aria-label="Hva markeringen betyr"
-              className="mt-2 flex flex-wrap gap-1.5"
+              className="flex flex-wrap items-center gap-1.5"
             >
               {(
                 [
-                  ["available", "Kan"],
-                  ["discouraged", "Helst ikke"],
+                  ["available", "Kan", scheduleAvailableSurfaceClass],
+                  [
+                    "discouraged",
+                    "Helst ikke",
+                    scheduleDiscouragedSurfaceClass,
+                  ],
                 ] as const
-              ).map(([mode, label]) => (
+              ).map(([mode, label, surfaceClass]) => (
                 <button
                   key={mode}
                   type="button"
@@ -367,17 +373,39 @@ const TimeScheduler: React.FC<TimeSchedulerProps> = ({
                   data-cy={`paint-mode-${mode}`}
                   onClick={() => setPaintMode(mode)}
                   className={cn(
-                    "rounded-md border px-2.5 py-1 text-detail font-semibold",
+                    paintModeItemClass,
+                    "border",
+                    // lego-bricks resets `button { border: 0 }`, which also
+                    // clears border-style, so the width-only utility above
+                    // renders nothing until the style is named outright.
+                    mode === "discouraged" ? "border-dashed" : "border-solid",
                     keyboardFocusRingClass,
                     paintMode === mode
                       ? "border-brand-activeBorder bg-brand-soft text-text-primary"
                       : "border-border-soft bg-surface-base text-text-muted",
                   )}
                 >
+                  <span
+                    aria-hidden="true"
+                    className={cn(paintModeSwatchClass, surfaceClass)}
+                  />
                   {label}
                 </button>
               ))}
             </div>
+            {/* A key, not a control: nothing paints this state, since a
+                block means "kan ikke" precisely when it is left unmarked.
+                Borderless so it does not read as a third button. */}
+            <span className={cn(paintModeItemClass, "text-text-muted")}>
+              <span
+                aria-hidden="true"
+                className={cn(
+                  paintModeSwatchClass,
+                  "border-solid border-border-soft bg-surface-neutral",
+                )}
+              />
+              Kan ikke
+            </span>
           </div>
         )}
         <SelectableScheduleGrid
@@ -407,7 +435,9 @@ const TimeScheduler: React.FC<TimeSchedulerProps> = ({
         )}
       </SchedulePanelBody>
 
-      <SchedulePanelFooter className="sticky bottom-0 z-20 bg-surface-base">
+      {/* The panel runs !overflow-visible (the grid needs to escape it), so it
+          cannot clip this corner for us. */}
+      <SchedulePanelFooter className="rounded-b-panel bg-surface-base">
         <div className="flex flex-wrap items-center gap-5">
           <MetaValue label="Intervjublokker" value={selectedBlockCount} />
           <MetaValue label="Intervjutider" value={selectedSlots.size} />
