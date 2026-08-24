@@ -8,6 +8,13 @@ interface MultiSelectOption {
   value: string;
   label: string;
   disabled?: boolean;
+  /**
+   * Heading this option belongs under. Options are rendered in the order they
+   * are passed, and a heading is drawn whenever this changes - so the caller
+   * decides both the grouping and the order of the groups. Leave it off
+   * everywhere for a flat list.
+   */
+  group?: string;
 }
 
 interface MultiSelectProps {
@@ -74,11 +81,6 @@ export const MultiSelect: React.FC<MultiSelectProps> = ({
     (option) => !option.disabled,
   );
   const filteredSelectedCount = filteredSelectableOptions.filter((option) =>
-    values.includes(option.value),
-  ).length;
-
-  const selectableOptions = options.filter((option) => !option.disabled);
-  const selectedSelectableCount = selectableOptions.filter((option) =>
     values.includes(option.value),
   ).length;
 
@@ -240,9 +242,7 @@ export const MultiSelect: React.FC<MultiSelectProps> = ({
     }
   };
 
-  const handleListKeyDown = (
-    event: React.KeyboardEvent<HTMLDivElement>,
-  ) => {
+  const handleListKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
     switch (event.key) {
       case "ArrowDown":
         event.preventDefault();
@@ -299,11 +299,16 @@ export const MultiSelect: React.FC<MultiSelectProps> = ({
       const selectedIdx = filteredOptions.findIndex(
         (o) => values.includes(o.value) && !o.disabled,
       );
-      setActiveIndex(selectedIdx >= 0 ? selectedIdx : (enabledIndexes[0] ?? -1));
+      setActiveIndex(
+        selectedIdx >= 0 ? selectedIdx : (enabledIndexes[0] ?? -1),
+      );
     } else {
       setActiveIndex(-1);
     }
-  }, [search, open]); // eslint-disable-line react-hooks/exhaustive-deps
+    // Deliberately not tracking every setter this reads: the point is to
+    // reset the highlight when the search or the open state changes, not
+    // whenever anything else in scope does.
+  }, [search, open]);
 
   // Focus search input when dropdown opens
   React.useEffect(() => {
@@ -442,47 +447,68 @@ export const MultiSelect: React.FC<MultiSelectProps> = ({
                   {filteredOptions.map((option, index) => {
                     const isSelected = values.includes(option.value);
                     const isActive = index === activeIndex;
+                    // Headings are drawn inline rather than by nesting the
+                    // options inside per-group lists, so `index` stays the
+                    // flat position every keyboard handler above is written
+                    // against. Filtering by search can empty a group out
+                    // entirely; comparing with the previous surviving option
+                    // means its heading disappears with it.
+                    const heading =
+                      option.group &&
+                      option.group !== filteredOptions[index - 1]?.group
+                        ? option.group
+                        : null;
                     return (
-                      <li key={option.value} role="none">
-                        <button
-                          id={optionId(index)}
-                          type="button"
-                          tabIndex={-1}
-                          disabled={option.disabled}
-                          role="option"
-                          aria-selected={isSelected}
-                          onClick={() => toggleOption(option)}
-                          onMouseEnter={() => {
-                            if (!option.disabled) setActiveIndex(index);
-                          }}
-                          className={cn(
-                            "flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm font-semibold transition-colors",
-                            option.disabled
-                              ? "cursor-not-allowed text-text-faded"
-                              : isActive
-                                ? "bg-surface-subtle text-text-primary"
-                                : "text-text-primary hover:bg-surface-subtle",
-                          )}
-                        >
-                          <span
-                            aria-hidden="true"
+                      <React.Fragment key={option.value}>
+                        {heading && (
+                          <li
+                            role="presentation"
+                            className="px-3 pb-1 pt-3 text-tiny font-semibold uppercase tracking-wide text-text-muted first:pt-1"
+                          >
+                            {heading}
+                          </li>
+                        )}
+                        <li role="none">
+                          <button
+                            id={optionId(index)}
+                            type="button"
+                            tabIndex={-1}
+                            disabled={option.disabled}
+                            role="option"
+                            aria-selected={isSelected}
+                            onClick={() => toggleOption(option)}
+                            onMouseEnter={() => {
+                              if (!option.disabled) setActiveIndex(index);
+                            }}
                             className={cn(
-                              "flex h-4 w-4 flex-none items-center justify-center rounded border transition-colors",
-                              isSelected
-                                ? "border-brand bg-brand text-white"
-                                : "border-border-muted bg-surface-base",
+                              "flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm font-semibold transition-colors",
+                              option.disabled
+                                ? "cursor-not-allowed text-text-faded"
+                                : isActive
+                                  ? "bg-surface-subtle text-text-primary"
+                                  : "text-text-primary hover:bg-surface-subtle",
                             )}
                           >
-                            {isSelected && (
-                              <Check
-                                size={iconSizes.micro}
-                                strokeWidth={iconStrokeWidths.emphasis}
-                              />
-                            )}
-                          </span>
-                          <span className="truncate">{option.label}</span>
-                        </button>
-                      </li>
+                            <span
+                              aria-hidden="true"
+                              className={cn(
+                                "flex h-4 w-4 flex-none items-center justify-center rounded border transition-colors",
+                                isSelected
+                                  ? "border-brand bg-brand text-white"
+                                  : "border-border-muted bg-surface-base",
+                              )}
+                            >
+                              {isSelected && (
+                                <Check
+                                  size={iconSizes.micro}
+                                  strokeWidth={iconStrokeWidths.emphasis}
+                                />
+                              )}
+                            </span>
+                            <span className="truncate">{option.label}</span>
+                          </button>
+                        </li>
+                      </React.Fragment>
                     );
                   })}
                 </ul>

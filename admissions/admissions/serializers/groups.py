@@ -11,6 +11,7 @@ from typing import Any, Optional
 from django.core.validators import MinLengthValidator
 from rest_framework import serializers
 
+from admissions.admissions import constants
 from admissions.admissions.models import (
     Admission,
     AdmissionGroup,
@@ -22,6 +23,9 @@ from admissions.admissions.models import (
 class GroupSerializer(serializers.HyperlinkedModelSerializer):
     description = serializers.CharField(validators=[MinLengthValidator(30)])
     response_label = serializers.CharField(validators=[MinLengthValidator(30)])
+    # Committee / revue / other, so a picker listing every group at once can
+    # sort them into the split the person choosing actually thinks in.
+    category = serializers.SerializerMethodField()
 
     class Meta:
         model = Group
@@ -32,11 +36,15 @@ class GroupSerializer(serializers.HyperlinkedModelSerializer):
             "response_label",
             "detail_link",
             "logo",
+            "category",
         )
         # name/detail_link/logo mirror the upstream Lego group — keep them
         # read-only so a recruiter can't repoint logo/detail_link at a phishing
         # URL shown to applicants. Only description/response_label are editable.
         read_only_fields = ("name", "detail_link", "logo")
+
+    def get_category(self, obj):
+        return constants.group_category(obj.name)
 
     def create(self, validated_data):
         group, created = Group.objects.update_or_create(

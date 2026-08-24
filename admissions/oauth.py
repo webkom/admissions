@@ -61,35 +61,11 @@ class LegoOAuth2(BaseOAuth2):
         ("refresh_token", "refresh_token"),
     ]
 
-    LEGO_GROUP_NAMES = [
-        # Central admission administration
-        "Hovedstyret",
-        # Committee admissions
-        "Abakus-leder",
-        "Arrkom",
-        "Bankkom",
-        "Bedkom",
-        "Fagkom",
-        "Koskom",
-        "LaBamba",
-        "readme",
-        "PR",
-        "Webkom",
-        # Revue admissions
-        "RevyStyret",
-        "Band",
-        "Dans",
-        "Kostyme",
-        "Manus",
-        "PR-revy",
-        "Scene",
-        "Skuespill",
-        "Sosial",
-        "Teknikk",
-        "Arring",
-        # backup admissions
-        "backup",
-    ]
+    # Derived, not repeated: the same list also decides which category a group
+    # is offered under when an opptak is set up, and a group that is importable
+    # but uncategorised (or the reverse) is the kind of drift nobody notices
+    # until a revy group turns up under "Komiteer".
+    LEGO_GROUP_NAMES = constants.LEGO_GROUP_NAMES
 
     def get_scope(self):
         if not Group.objects.all().exists():
