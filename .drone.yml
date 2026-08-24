@@ -14,7 +14,11 @@ steps:
     when:
       event: [push]
     commands:
-      - yarn
+      # registry.yarnpkg.com times out on this host often enough to have
+      # failed two deploys (5923, 5934), always on the same large tarball,
+      # and yarn's four retries each inherit the same 30s default. Give a
+      # request room to finish instead of failing the build on a slow one.
+      - yarn --network-timeout 600000
   
   - name: lint-frontend
     image: node:22
