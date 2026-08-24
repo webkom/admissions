@@ -11,6 +11,7 @@ from admissions.admissions.admission_access import (
     APPLICATION_VIEW_MODE_NONE,
     get_application_view_mode,
     revoke_removed_group_disclosures,
+    user_is_admission_admin,
 )
 from admissions.admissions.json_models import InputModelList
 from admissions.admissions.models import (
@@ -129,13 +130,12 @@ class AdmissionListPublicSerializer(serializers.HyperlinkedModelSerializer):
         elif is_committee_member:
             res["committee_role"] = constants.MEMBER
 
-        if (
-            Membership.objects.filter(
-                user=request.user.pk, group__in=obj.admin_groups.all()
-            )
-            .filter(role__in=(constants.LEADER, constants.RECRUITING))
-            .exists()
-        ):
+        # Defer to the same check the permission classes use. This repeated
+        # the query inline and omitted CO_LEADER, so an admin-group co-leader
+        # was served by every admin endpoint while userdata reported them
+        # unprivileged - the frontend gates the admin actions on exactly this
+        # flag, so they saw neither "Admin panel" nor "Velg intervjutider".
+        if user_is_admission_admin(obj, request.user):
             res["is_privileged"] = True
             res["is_admin"] = True
         res["application_view_mode"] = get_application_view_mode(obj, request.user)
@@ -368,14 +368,12 @@ class AdminAdmissionSerializer(serializers.ModelSerializer):
                 .exists()
             ):
                 res["is_privileged"] = True
-        for group in obj.admin_groups.all():
-            if (
-                Membership.objects.filter(user=request.user.pk, group=group.pk)
-                .filter(role__in=(constants.LEADER, constants.RECRUITING))
-                .exists()
-            ):
-                res["is_privileged"] = True
-                res["is_admin"] = True
+        # Same shared check as the public serializer, and for the same reason:
+        # this loop omitted CO_LEADER, so an admin-group co-leader was served
+        # by this very endpoint while being told they were not an admin.
+        if user_is_admission_admin(obj, request.user):
+            res["is_privileged"] = True
+            res["is_admin"] = True
         res["application_view_mode"] = get_application_view_mode(obj, request.user)
         return res
 

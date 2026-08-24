@@ -43,6 +43,9 @@ class AdminAdmissionPrivacyTestCase(APITestCase):
         self.recruiting_admin = LegoUser.objects.create(
             username="recruiting-admin", lego_id=26
         )
+        self.co_leader_admin = LegoUser.objects.create(
+            username="co-leader-admin", lego_id=30
+        )
         self.staff_without_admission_role = LegoUser.objects.create(
             username="staff-without-admission-role",
             lego_id=29,
@@ -59,6 +62,11 @@ class AdminAdmissionPrivacyTestCase(APITestCase):
             user=self.recruiting_admin,
             group=self.admin_group,
             role=RECRUITING,
+        )
+        Membership.objects.create(
+            user=self.co_leader_admin,
+            group=self.admin_group,
+            role=CO_LEADER,
         )
         UserApplication.objects.create(
             admission=self.admission,
@@ -108,12 +116,7 @@ class AdminAdmissionPrivacyTestCase(APITestCase):
     def test_priority_text_is_visible_to_leadership_only(self):
         """Every admin_full viewer sees the application - only leader/co-leader
         see the applicant's note to "central admission officers"."""
-        co_leader_admin = LegoUser.objects.create(
-            username="co-leader-admin", lego_id=27
-        )
-        Membership.objects.create(
-            user=co_leader_admin, group=self.admin_group, role=CO_LEADER
-        )
+        co_leader_admin = self.co_leader_admin
         UserApplication.objects.filter(
             admission=self.admission, user=self.candidate
         ).update(text="private central comment")
@@ -151,7 +154,12 @@ class AdminAdmissionPrivacyTestCase(APITestCase):
         )
 
     def test_active_admin_group_roles_are_reported_as_administrators(self):
-        for admin in (self.leader_admin, self.recruiting_admin):
+        # Every role user_is_admission_admin() accepts. Leaving co-leader out
+        # is what let the serializer and that check drift apart: the API
+        # granted a co-leader admin access while userdata reported them
+        # unprivileged, so the frontend hid the admin actions from someone the
+        # backend was happy to serve.
+        for admin in (self.leader_admin, self.co_leader_admin, self.recruiting_admin):
             with self.subTest(role=admin.username):
                 self.client.force_authenticate(user=admin)
 
