@@ -50,7 +50,9 @@ describe("admin schedule configuration toggles", () => {
     ).should("be.visible");
     cy.contains("Intervjuvindu").should("not.exist");
     cy.contains("Intervjuperiode").should("be.visible");
-    cy.contains("Daglig tidsrom").should("be.visible");
+    // The control kept its job but lost its long label when the daily row
+    // became a single line, so this anchors on the hook, not the wording.
+    cy.get("[data-cy=daily-time-setting]").should("be.visible");
     cy.contains("Slik blir én intervjublokk").should("not.exist");
     cy.contains("Hvilke tider er åpne?").should("be.visible");
   });
