@@ -18,7 +18,21 @@ DUGNAD_ADMIN = "dugnad_admin"
 TRIP_ADMIN = "trip_admin"
 SPONSOR_ADMIN = "sponsor_admin"
 SOCIAL_ADMIN = "social_admin"
+MERCH_ADMIN = "merch_admin"
+HS_REPRESENTATIVE = "hs_representative"
+CUDDLING_MANAGER = "cuddling_manager"
+PHOTO_FILM_ADMIN = "photo_admin"
+GRAPHIC_ADMIN = "graphic_admin"
+SOCIAL_MEDIA_ADMIN = "social_media_admin"
+BOOKING_ADMIN = "booking_admin"
+PURCHASING_MANAGER = "purchasing_manager"
+EVENT_MANAGER = "event_manager"
+SNACKOVERFLOW_MANAGER = "snackoverflow_manager"
 
+# Mirrors lego/apps/users/constants.py. None of these grant any privilege here
+# - that is decided by LEADER/CO_LEADER/RECRUITING alone - but every role LEGO
+# can send has to be listed, because a membership carrying an unlisted one used
+# to be rejected and took the rest of the payload down with it.
 ROLES = (
     (MEMBER, MEMBER),
     (LEADER, LEADER),
@@ -40,6 +54,16 @@ ROLES = (
     (TRIP_ADMIN, TRIP_ADMIN),
     (SPONSOR_ADMIN, SPONSOR_ADMIN),
     (SOCIAL_ADMIN, SOCIAL_ADMIN),
+    (MERCH_ADMIN, MERCH_ADMIN),
+    (HS_REPRESENTATIVE, HS_REPRESENTATIVE),
+    (CUDDLING_MANAGER, CUDDLING_MANAGER),
+    (PHOTO_FILM_ADMIN, PHOTO_FILM_ADMIN),
+    (GRAPHIC_ADMIN, GRAPHIC_ADMIN),
+    (SOCIAL_MEDIA_ADMIN, SOCIAL_MEDIA_ADMIN),
+    (BOOKING_ADMIN, BOOKING_ADMIN),
+    (PURCHASING_MANAGER, PURCHASING_MANAGER),
+    (EVENT_MANAGER, EVENT_MANAGER),
+    (SNACKOVERFLOW_MANAGER, SNACKOVERFLOW_MANAGER),
 )
 
 INACTIVE_MEMBERSHIP_ROLES = (RETIREE, ALUMNI, RETIREE_EMAIL)

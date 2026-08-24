@@ -1,8 +1,14 @@
 from django.test import TestCase, override_settings
 from django.urls import reverse
+from rest_framework.test import APITestCase
 
 from admissions.admissions.models import Group, LegoUser, Membership
-from admissions.oauth import update_custom_user_details, use_existing_lego_user
+from admissions.admissions.tests.utils import create_admission
+from admissions.oauth import (
+    VALID_MEMBERSHIP_ROLES,
+    update_custom_user_details,
+    use_existing_lego_user,
+)
 
 
 class OAuthMembershipSyncTestCase(TestCase):
@@ -97,6 +103,56 @@ class OAuthMembershipSyncTestCase(TestCase):
 
         self.assertFalse(Membership.objects.filter(user=self.user).exists())
         self.assertFalse(self.user.is_staff)
+
+    def test_unmodelled_role_elsewhere_keeps_the_real_memberships(self):
+        """One role LEGO has and this app does not must not de-authorise a user.
+
+        An opptaksansvarlig who also held, say, photo_admin in another group
+        was logged in with every membership deleted: the payload parse vetoed
+        the whole response, the caller substituted an empty list, and the sync
+        wiped the rows it was meant to refresh. They then belonged to no
+        committee at all, so the landing page hid both admin actions.
+        """
+        committee = Group.objects.create(name="Webkom", lego_id=92010)
+        other = Group.objects.create(name="Fotokom", lego_id=92011)
+        response = {
+            "memberships": [
+                {"abakusGroup": committee.lego_id, "role": "recruiting"},
+                {"abakusGroup": other.lego_id, "role": "photo_admin"},
+            ],
+            "abakusGroups": [
+                {"id": committee.lego_id, "name": committee.name},
+                {"id": other.lego_id, "name": other.name},
+            ],
+        }
+
+        self.sync(response)
+
+        self.assertEqual(
+            sorted(
+                Membership.objects.filter(user=self.user).values_list(
+                    "group__name", "role"
+                )
+            ),
+            [("Fotokom", "photo_admin"), ("Webkom", "recruiting")],
+        )
+
+    def test_every_lego_role_is_modelled(self):
+        """Drift here silently strips memberships, so it is asserted directly."""
+        for role in (
+            "merch_admin",
+            "hs_representative",
+            "cuddling_manager",
+            "photo_admin",
+            "graphic_admin",
+            "social_media_admin",
+            "booking_admin",
+            "purchasing_manager",
+            "event_manager",
+            "snackoverflow_manager",
+        ):
+            with self.subTest(role=role):
+                self.assertIn(role, VALID_MEMBERSHIP_ROLES)
 
     def test_missing_group_details_cannot_preserve_stale_access(self):
         Membership.objects.create(
@@ -215,3 +271,117 @@ class OAuthMembershipSyncTestCase(TestCase):
 
         self.assertFalse(Membership.objects.filter(user=self.user).exists())
         self.assertFalse(self.user.is_staff)
+
+
+class CommitteeRecruiterAccessTestCase(APITestCase):
+    """The landing page's two admin actions, end to end from the LEGO payload.
+
+    "Velg intervjutider" is gated on committee membership and "Admin panel" on
+    is_privileged, and both are derived from Membership rows this app only ever
+    learns about at login. A recruiter who holds an unmodelled role in some
+    unrelated group used to arrive here with no rows at all, so both buttons
+    vanished for a reason nothing in the admission code could explain.
+    """
+
+    def setUp(self):
+        self.admission = create_admission()
+        self.committee = Group.objects.create(name="Webkom", lego_id=94001)
+        self.admission.groups.add(self.committee)
+        # An Abakus group that is nothing to do with this admission.
+        self.unrelated = Group.objects.create(name="Fotokom", lego_id=94002)
+        self.user = LegoUser.objects.create(username="viljen", lego_id=94000)
+
+    def sync_and_read_userdata(self, memberships):
+        update_custom_user_details(
+            None,
+            {},
+            user=self.user,
+            response={
+                "memberships": memberships,
+                "abakusGroups": [
+                    {"id": self.committee.lego_id, "name": self.committee.name},
+                    {"id": self.unrelated.lego_id, "name": self.unrelated.name},
+                ],
+            },
+        )
+        self.client.force_authenticate(user=self.user)
+        response = self.client.get(
+            reverse("admission-detail", kwargs={"slug": self.admission.slug})
+        )
+        self.assertEqual(response.status_code, 200)
+        return response.data["userdata"]
+
+    def test_committee_recruiter_can_see_both_admin_actions(self):
+        userdata = self.sync_and_read_userdata(
+            [{"abakusGroup": self.committee.lego_id, "role": "recruiting"}]
+        )
+
+        # "Velg intervjutider"
+        self.assertEqual(userdata["committee_groups"], ["Webkom"])
+        # "Admin panel"
+        self.assertTrue(userdata["is_privileged"])
+        self.assertEqual(userdata["committee_role"], "recruiting")
+        self.assertEqual(userdata["represented_groups"], ["Webkom"])
+
+    def test_a_role_lego_already_had_is_recorded_not_merely_survived(self):
+        """Guards the role list itself.
+
+        The parse fix alone would let this membership be skipped and access
+        would still look right, so asserting on the userdata flags here would
+        prove nothing. The role list is what decides whether the row exists,
+        so that is what is asserted.
+        """
+        userdata = self.sync_and_read_userdata(
+            [
+                {"abakusGroup": self.committee.lego_id, "role": "recruiting"},
+                {"abakusGroup": self.unrelated.lego_id, "role": "photo_admin"},
+            ]
+        )
+
+        self.assertEqual(userdata["committee_groups"], ["Webkom"])
+        self.assertTrue(userdata["is_privileged"])
+        self.assertEqual(
+            sorted(
+                Membership.objects.filter(user=self.user).values_list(
+                    "group__name", "role"
+                )
+            ),
+            [("Fotokom", "photo_admin"), ("Webkom", "recruiting")],
+        )
+
+    def test_recruiter_keeps_both_actions_when_lego_adds_an_unknown_role(self):
+        """Guards the parse: a role we do not model yet must not de-authorise.
+
+        Deliberately a role that is in no list anywhere, standing in for
+        whatever LEGO adds next. Listing the ten known roles fixes today; this
+        is what stops the same outage happening again on the eleventh.
+        """
+        userdata = self.sync_and_read_userdata(
+            [
+                {"abakusGroup": self.committee.lego_id, "role": "recruiting"},
+                {
+                    "abakusGroup": self.unrelated.lego_id,
+                    "role": "a_role_from_the_future",
+                },
+            ]
+        )
+
+        self.assertEqual(userdata["committee_groups"], ["Webkom"])
+        self.assertTrue(userdata["is_privileged"])
+        self.assertEqual(userdata["committee_role"], "recruiting")
+
+    def test_committee_leader_is_equivalent_to_a_recruiter_here(self):
+        userdata = self.sync_and_read_userdata(
+            [{"abakusGroup": self.committee.lego_id, "role": "leader"}]
+        )
+
+        self.assertEqual(userdata["committee_groups"], ["Webkom"])
+        self.assertTrue(userdata["is_privileged"])
+
+    def test_plain_committee_member_gets_the_schedule_but_not_the_admin_panel(self):
+        userdata = self.sync_and_read_userdata(
+            [{"abakusGroup": self.committee.lego_id, "role": "member"}]
+        )
+
+        self.assertEqual(userdata["committee_groups"], ["Webkom"])
+        self.assertFalse(userdata["is_privileged"])
