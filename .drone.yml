@@ -101,7 +101,9 @@ steps:
   - name: cypress-install
     image: node:22
     when:
-      event: [push]
+      # TEMPORARILY DISABLED: runs only on a manually triggered custom build.
+      # Restore by changing `custom` back to `push`. See the note above `docker`.
+      event: [custom]
     depends_on:
       - lint-frontend
       - typescript
@@ -120,7 +122,9 @@ steps:
     image: abakus/lego-testbase:python3.12poetry1.8.5
     detach: true
     when:
-      event: [push]
+      # TEMPORARILY DISABLED: runs only on a manually triggered custom build.
+      # Restore by changing `custom` back to `push`. See the note above `docker`.
+      event: [custom]
     depends_on:
       - build-frontend
     environment:
@@ -140,7 +144,9 @@ steps:
   - name: cypress
     image: cypress/browsers:node-20.9.0-chrome-118.0.5993.88-1-ff-118.0.2-edge-118.0.2088.46-1
     when:
-      event: [push]
+      # TEMPORARILY DISABLED: runs only on a manually triggered custom build.
+      # Restore by changing `custom` back to `push`. See the note above `docker`.
+      event: [custom]
     depends_on:
       - cypress-install
     environment:
@@ -172,6 +178,11 @@ steps:
         fi
         yarn cypress:run --record
   
+  # NOTE: the cypress steps above are temporarily switched to `event: [custom]`
+  # to shorten the pipeline, so nothing here may depend on them - a step that
+  # does not run on push would block the deploy. `docker` waits on the same
+  # gates cypress-install used to. Re-enabling cypress means flipping those
+  # three steps back to `event: [push]` and adding `- cypress` below again.
   - name: docker
     image: plugins/docker
     when:
@@ -181,7 +192,14 @@ steps:
       status: [success]
       event: [push]
     depends_on:
-      - cypress
+      - lint-frontend
+      - typescript
+      - build-frontend
+      - check-unused
+      - missing-migrations
+      - coverage
+      - isort
+      - black
     settings:
       registry: https://registry.webkom.dev
       repo: registry.webkom.dev/webkom/admissions
