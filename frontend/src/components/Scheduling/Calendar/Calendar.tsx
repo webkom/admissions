@@ -61,7 +61,7 @@ interface TimeSchedulerProps {
 }
 
 // Row geometry shared by the two paint-mode buttons and the static
-// "Utilgjengelig" key beside them, so all three line up.
+// "Kan ikke" key beside them, so all three line up.
 const paintModeItemClass =
   "inline-flex items-center gap-2 rounded-md px-2.5 py-1 text-detail font-semibold";
 
@@ -324,7 +324,7 @@ const TimeScheduler: React.FC<TimeSchedulerProps> = ({
           <>
             Marker tidene du kan. Bruk <strong>Helst ikke</strong> for tider du
             kan møte, men helst vil slippe - for eksempel en forelesning. Lar du
-            en tid stå umarkert, betyr det at du er utilgjengelig.
+            en tid stå umarkert, betyr det at du ikke kan.
           </>
         }
         // With paint modes on, every state is spelled out in the row above
@@ -337,7 +337,7 @@ const TimeScheduler: React.FC<TimeSchedulerProps> = ({
                 swatchClassName={scheduleAvailableSurfaceClass}
               />
               <ScheduleGridLegendItem
-                label="Utilgjengelig"
+                label="Kan ikke"
                 swatchClassName="border-border-soft bg-surface-neutral"
               />
             </div>
@@ -393,9 +393,9 @@ const TimeScheduler: React.FC<TimeSchedulerProps> = ({
                 </button>
               ))}
             </div>
-            {/* A key, not a control: nothing paints this state, since a block
-                is utilgjengelig precisely when it is left unmarked. Borderless
-                so it does not read as a third button. */}
+            {/* A key, not a control: nothing paints this state, since a
+                block means "kan ikke" precisely when it is left unmarked.
+                Borderless so it does not read as a third button. */}
             <span className={cn(paintModeItemClass, "text-text-muted")}>
               <span
                 aria-hidden="true"
@@ -404,7 +404,7 @@ const TimeScheduler: React.FC<TimeSchedulerProps> = ({
                   "border-solid border-border-soft bg-surface-neutral",
                 )}
               />
-              Utilgjengelig
+              Kan ikke
             </span>
           </div>
         )}
