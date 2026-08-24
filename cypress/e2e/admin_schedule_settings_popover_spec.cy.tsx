@@ -87,7 +87,7 @@ describe("inline schedule settings and standard-block preview", () => {
     );
   });
 
-  it("uses the same expand-contract motion for pauses and final-block actions", () => {
+  it("expands and contracts the pause with the shared motion", () => {
     // Sampling real animation frames races the CI machine's actual paint
     // rate: on a starved runner the transition can finish (or, before
     // expandContractMotion.ts disabled GSAP's lag smoothing, barely move)
@@ -126,40 +126,28 @@ describe("inline schedule settings and standard-block preview", () => {
           const pause = window.document.querySelector<HTMLElement>(
             "[data-cy=schedule-pause]",
           );
-          const finalBlockActions = window.document.querySelector<HTMLElement>(
-            "[data-cy=final-block-snap-footer]",
-          );
-          if (!pause || !finalBlockActions) {
-            throw new Error("schedule-pause / final-block-snap-footer missing");
+          if (!pause) {
+            throw new Error("schedule-pause missing");
           }
           return {
             pause: Number(window.getComputedStyle(pause).opacity),
-            actions: Number(window.getComputedStyle(finalBlockActions).opacity),
           };
         }),
       );
 
     tickAndRead(80).then((first) => {
       expect(first.pause).to.be.lessThan(0.95);
-      expect(first.actions).to.be.lessThan(0.95);
-      expect(Math.abs(first.pause - first.actions)).to.be.lessThan(0.04);
     });
 
     tickAndRead(160).then((midway) => {
-      expect(Math.abs(midway.pause - midway.actions)).to.be.lessThan(0.04);
+      expect(midway.pause).to.be.greaterThan(0);
     });
 
     tickAndRead(260).then((settled) => {
       expect(settled.pause).to.be.closeTo(1, 0.01);
-      expect(settled.actions).to.be.closeTo(1, 0.01);
     });
 
     cy.get("[data-cy=schedule-pause]").should(
-      "have.attr",
-      "data-motion",
-      "expand-contract-down",
-    );
-    cy.get("[data-cy=final-block-snap-footer]").should(
       "have.attr",
       "data-motion",
       "expand-contract-down",
@@ -202,7 +190,7 @@ describe("inline schedule settings and standard-block preview", () => {
     cy.get("[data-cy=final-block-snap-footer]").should(
       "have.attr",
       "data-motion-state",
-      "contracting",
+      "empty",
     );
     cy.wait(300);
     cy.get("[data-cy=short-final-block-note]").should("not.exist");

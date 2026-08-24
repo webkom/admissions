@@ -59,7 +59,7 @@ export const ConfigStep: React.FC<ConfigStepProps> = ({
           {description}
         </p>
       )}
-      <div className="mt-4">{children}</div>
+      <div className="mt-5">{children}</div>
     </div>
   </li>
 );
