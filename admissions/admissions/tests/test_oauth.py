@@ -2,7 +2,11 @@ from django.test import TestCase, override_settings
 from django.urls import reverse
 
 from admissions.admissions.models import Group, LegoUser, Membership
-from admissions.oauth import update_custom_user_details, use_existing_lego_user
+from admissions.oauth import (
+    VALID_MEMBERSHIP_ROLES,
+    update_custom_user_details,
+    use_existing_lego_user,
+)
 
 
 class OAuthMembershipSyncTestCase(TestCase):
@@ -97,6 +101,56 @@ class OAuthMembershipSyncTestCase(TestCase):
 
         self.assertFalse(Membership.objects.filter(user=self.user).exists())
         self.assertFalse(self.user.is_staff)
+
+    def test_unmodelled_role_elsewhere_keeps_the_real_memberships(self):
+        """One role LEGO has and this app does not must not de-authorise a user.
+
+        An opptaksansvarlig who also held, say, photo_admin in another group
+        was logged in with every membership deleted: the payload parse vetoed
+        the whole response, the caller substituted an empty list, and the sync
+        wiped the rows it was meant to refresh. They then belonged to no
+        committee at all, so the landing page hid both admin actions.
+        """
+        committee = Group.objects.create(name="Webkom", lego_id=92010)
+        other = Group.objects.create(name="Fotokom", lego_id=92011)
+        response = {
+            "memberships": [
+                {"abakusGroup": committee.lego_id, "role": "recruiting"},
+                {"abakusGroup": other.lego_id, "role": "photo_admin"},
+            ],
+            "abakusGroups": [
+                {"id": committee.lego_id, "name": committee.name},
+                {"id": other.lego_id, "name": other.name},
+            ],
+        }
+
+        self.sync(response)
+
+        self.assertEqual(
+            sorted(
+                Membership.objects.filter(user=self.user).values_list(
+                    "group__name", "role"
+                )
+            ),
+            [("Fotokom", "photo_admin"), ("Webkom", "recruiting")],
+        )
+
+    def test_every_lego_role_is_modelled(self):
+        """Drift here silently strips memberships, so it is asserted directly."""
+        for role in (
+            "merch_admin",
+            "hs_representative",
+            "cuddling_manager",
+            "photo_admin",
+            "graphic_admin",
+            "social_media_admin",
+            "booking_admin",
+            "purchasing_manager",
+            "event_manager",
+            "snackoverflow_manager",
+        ):
+            with self.subTest(role=role):
+                self.assertIn(role, VALID_MEMBERSHIP_ROLES)
 
     def test_missing_group_details_cannot_preserve_stale_access(self):
         Membership.objects.create(

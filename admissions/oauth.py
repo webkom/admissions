@@ -1,3 +1,5 @@
+import logging
+
 from django.db import transaction
 
 from six.moves.urllib.parse import urljoin
@@ -6,6 +8,8 @@ from social_core.backends.oauth import BaseOAuth2
 from admissions.admissions import constants
 from admissions.admissions.models import Group, LegoUser, Membership
 from admissions.admissions.session_renewal import stamp_session_start
+
+logger = logging.getLogger(__name__)
 
 VALID_MEMBERSHIP_ROLES = frozenset(role for role, _label in constants.ROLES)
 
@@ -192,8 +196,20 @@ def _parse_group_data(response):
         if not isinstance(membership, dict):
             return None
         role = membership.get("role")
-        if role not in VALID_MEMBERSHIP_ROLES:
+        if not isinstance(role, str) or not role:
+            # No role at all is a malformed entry, not an unfamiliar one, and
+            # a malformed payload still fails closed.
             return None
+        if role not in VALID_MEMBERSHIP_ROLES:
+            # A role LEGO models and this app does not: skip the membership,
+            # do not veto the payload. The sync below
+            # already refuses to act on a role it does not model, so rejecting
+            # everything here bought no safety - it just meant one unmodelled
+            # role in any Abakus group deleted every membership the user had,
+            # silently removing them from their own committee. LEGO adds roles
+            # we do not carry yet; that must not de-authorise anyone.
+            logger.warning("Ignoring membership with unmodelled LEGO role %r", role)
+            continue
         group_id = _parse_lego_id(membership.get("abakusGroup"))
         group = groups_by_id.get(group_id)
         if group is None:
