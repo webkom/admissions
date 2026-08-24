@@ -139,18 +139,14 @@ def schedule_response_context(admission, saved_schedule, is_interview_admin):
             == SavedSchedule.NAME_VISIBILITY_COMMITTEE
         )
         contact_candidate_ids = set()
-        visible_candidate_ids = (
-            set()
-            if hide_identity
-            else set(
-                str(candidate_id)
-                for candidate_id in UserApplication.objects.filter(
-                    admission=admission,
-                    group_applications__group_id=saved_schedule.group_id,
-                )
-                .values_list("pk", flat=True)
-                .distinct()
+        visible_candidate_ids = set(
+            str(candidate_id)
+            for candidate_id in UserApplication.objects.filter(
+                admission=admission,
+                group_applications__group_id=saved_schedule.group_id,
             )
+            .values_list("pk", flat=True)
+            .distinct()
         )
         effective_name_visibility = (
             SavedSchedule.NAME_VISIBILITY_COMMITTEE

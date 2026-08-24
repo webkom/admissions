@@ -434,9 +434,7 @@ class SavedScheduleSerializer(serializers.ModelSerializer):
         if self.context.get("hide_schedule"):
             data["schedule"] = []
             return data
-        if self.context.get("hide_candidate_identity"):
-            data["schedule"] = []
-            return data
+        hide_candidate_identity = self.context.get("hide_candidate_identity")
         visible_candidate_ids = self.context.get("visible_candidate_ids")
 
         raw_schedule = data.get("schedule")
@@ -521,6 +519,16 @@ class SavedScheduleSerializer(serializers.ModelSerializer):
             for user in LegoUser.objects.filter(pk__in=panel_ids & eligible_panel_ids)
         }
 
+        # Assign stable placeholder names when identity is hidden so
+        # committee members can still see their interview times.
+        anonymize = hide_candidate_identity
+        placeholder_by_id = {}
+        if anonymize and candidate_details:
+            sorted_ids = sorted(candidate_details)
+            placeholder_by_id = {
+                cid: f"Kandidat {i + 1}" for i, cid in enumerate(sorted_ids)
+            }
+
         visible_schedule = []
         for entry in raw_schedule:
             if not isinstance(entry, Mapping):
@@ -535,16 +543,24 @@ class SavedScheduleSerializer(serializers.ModelSerializer):
             safe_entry = dict(item.validated_data)
             safe_entry["candidate_id"] = candidate_id
             candidate_detail = candidate_details[candidate_id]
-            safe_entry["candidate"] = candidate_detail["name"]
-            safe_entry["interview_status"] = candidate_detail["interview_status"]
-            safe_entry["interview_status_updated_at"] = candidate_detail[
-                "interview_status_updated_at"
-            ]
-            safe_entry["interview_status_updated_by"] = candidate_detail[
-                "interview_status_updated_by"
-            ]
-            if candidate_detail["phone"]:
-                safe_entry["candidate_phone"] = candidate_detail["phone"]
+
+            if anonymize:
+                safe_entry["candidate"] = placeholder_by_id[candidate_id]
+                # Strip status info — the candidate has not consented to
+                # the committee seeing whether they confirmed.
+                safe_entry.pop("candidate_id", None)
+            else:
+                safe_entry["candidate"] = candidate_detail["name"]
+                safe_entry["interview_status"] = candidate_detail["interview_status"]
+                safe_entry["interview_status_updated_at"] = candidate_detail[
+                    "interview_status_updated_at"
+                ]
+                safe_entry["interview_status_updated_by"] = candidate_detail[
+                    "interview_status_updated_by"
+                ]
+                if candidate_detail["phone"]:
+                    safe_entry["candidate_phone"] = candidate_detail["phone"]
+
             safe_panel = []
             for member in safe_entry["panel"]:
                 panel_id = canonical_uuid(member.get("id"))

@@ -2323,7 +2323,12 @@ class SavedScheduleVisibilityTestCase(APITestCase):
         res = self.client.get(self.url)
 
         self.assertEqual(res.status_code, status.HTTP_200_OK)
-        self.assertEqual(res.data["schedule"], [])
+        schedule = res.data["schedule"]
+        self.assertTrue(len(schedule) > 0)
+        # Placeholder names, no real identity leaked.
+        self.assertEqual(schedule[0]["candidate"], "Kandidat 1")
+        self.assertNotIn("candidate_id", schedule[0])
+        self.assertNotIn("candidate_phone", schedule[0])
 
     def test_committee_member_sees_names_when_visibility_committee(self):
         self._create_saved(is_distributed=True, name_visibility="committee")
@@ -2602,7 +2607,9 @@ class SavedScheduleVisibilityTestCase(APITestCase):
             )
         )
 
-        self.assertEqual(member_schedule.data["schedule"], [])
+        schedule = member_schedule.data["schedule"]
+        self.assertTrue(len(schedule) > 0)
+        self.assertEqual(schedule[0]["candidate"], "Kandidat 1")
         self.assertEqual(member_candidates.data, [])
 
         self.client.force_authenticate(user=self.admin_user)
@@ -2806,7 +2813,9 @@ class SavedScheduleVisibilityTestCase(APITestCase):
                 },
             )
         )
-        self.assertEqual(own_schedule.data["schedule"], [])
+        schedule = own_schedule.data["schedule"]
+        self.assertTrue(len(schedule) > 0)
+        self.assertEqual(schedule[0]["candidate"], "Kandidat 1")
         self.assertEqual(own_candidates.data, [])
 
         # other_member belongs to Bedkom, not Arrkom - a fully unrelated
