@@ -2243,6 +2243,67 @@ class SavedScheduleVisibilityTestCase(APITestCase):
         Membership.objects.create(user=recruiter, role=RECRUITING, group=other_group)
         return recruiter
 
+    def _extra_candidate(self, username, lego_id, time):
+        """Another candidate for this committee, scheduled at `time`."""
+
+        user = LegoUser.objects.create(username=username, lego_id=lego_id)
+        application = UserApplication.objects.create(
+            admission=self.admission, user=user
+        )
+        GroupApplication.objects.create(
+            application=application,
+            group=self.committee_group,
+            text="Arrkom application",
+        )
+        return {
+            "candidate": username,
+            "candidate_id": str(application.pk),
+            "time": time,
+            "panel": [],
+        }
+
+    def test_placeholder_names_survive_publishing_another_day(self):
+        """A member who notes down "Kandidat 3, tirsdag 10:00" must still find
+        the same person there after an admin extends the publication.
+
+        Numbering over the rows in the response renumbered everybody whenever
+        the published pool grew, so the label silently came to mean somebody
+        else at the same time.
+        """
+
+        day_two = self._extra_candidate("vis-second", 760, 8 + 24 * 60)
+        day_two_extra = self._extra_candidate("vis-third", 761, 9 + 24 * 60)
+        saved = self._create_saved(
+            schedule=[
+                {
+                    "candidate": "Ada",
+                    "candidate_id": str(self.application.pk),
+                    "time": 8,
+                    "panel": [],
+                },
+                day_two,
+                day_two_extra,
+            ],
+            distributed_through="2026-04-20",
+        )
+        self.client.force_authenticate(user=self.member_user)
+
+        first_day_only = self.client.get(self.url).data["schedule"]
+        # Only day one is published, so that is all a member may see.
+        self.assertEqual(1, len(first_day_only))
+        label_before = first_day_only[0]["candidate"]
+
+        saved.distributed_through = "2026-04-21"
+        saved.save(update_fields=["distributed_through"])
+        after_extending = self.client.get(self.url).data["schedule"]
+
+        self.assertEqual(3, len(after_extending))
+        same_row = next(row for row in after_extending if row["time"] == 8)
+        self.assertEqual(label_before, same_row["candidate"])
+        # And every row still gets a distinct label.
+        labels = [row["candidate"] for row in after_extending]
+        self.assertEqual(len(labels), len(set(labels)))
+
     def test_cross_committee_recruiter_cannot_read_the_schedule(self):
         """Representing committee X grants nothing on committee Y's schedule."""
         self._create_saved(name_visibility="committee")

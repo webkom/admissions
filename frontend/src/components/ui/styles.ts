@@ -16,7 +16,7 @@ export const actionButtonGhost =
   "border-transparent bg-transparent text-text-muted shadow-none hover:border-border hover:bg-surface-subtle hover:text-text-primary";
 
 export const actionButtonActive =
-  "border-brand bg-brand text-white hover:border-brand-hover hover:bg-brand-hover";
+  "border-brand bg-brand text-white hover:border-brand-hover hover:bg-brand-hover active:bg-brand-pressed active:border-brand-pressed";
 
 export const actionButtonDanger =
   "border-danger-border bg-danger-bg text-danger hover:border-danger hover:bg-danger hover:text-white font-bold";

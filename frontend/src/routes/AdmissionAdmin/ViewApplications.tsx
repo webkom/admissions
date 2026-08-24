@@ -7,7 +7,11 @@ import { StyledButton } from "src/components/LinkButton";
 import LoadingBall from "src/components/LoadingBall";
 import CommitteeContentEditor from "src/routes/ManageAdmissions/components/CommitteeContentEditor";
 import AdmissionsContainer from "src/containers/AdmissionsContainer";
-import { useAdmission, useAdminApplications, useAdmissionGroupContent } from "src/query/hooks";
+import {
+  useAdmission,
+  useAdminApplications,
+  useAdmissionGroupContent,
+} from "src/query/hooks";
 import {
   useUpdateAdmissionGroupContentMutation,
   type CommitteeContent,
@@ -142,9 +146,7 @@ const ViewApplications = () => {
     return undefined;
   }, [availableGroups, scopedGroup]);
 
-  const {
-    data: admissionContent,
-  } = useAdmissionGroupContent(
+  const { data: admissionContent } = useAdmissionGroupContent(
     admissionSlug ?? "",
     contentGroup?.pk ?? "",
   );

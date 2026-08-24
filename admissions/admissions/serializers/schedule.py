@@ -519,14 +519,28 @@ class SavedScheduleSerializer(serializers.ModelSerializer):
             for user in LegoUser.objects.filter(pk__in=panel_ids & eligible_panel_ids)
         }
 
-        # Assign stable placeholder names when identity is hidden so
-        # committee members can still see their interview times.
+        # Placeholder names, so committee members can still see when they are
+        # interviewing while identities stay hidden.
+        #
+        # Numbered over every candidate the committee has, NOT over the rows in
+        # this response. candidate_details is scoped to publication_boundary
+        # above, so numbering from it renumbered everybody each time an admin
+        # published another day: the person a member had written down as
+        # "Kandidat 3" silently became Kandidat 6, at the same time, once the
+        # pool grew. The label has to name the same person for as long as it is
+        # shown. Gaps in the sequence are the acceptable cost, and leak less
+        # than a dense 1..N did - that counted the published rows exactly.
         anonymize = hide_candidate_identity
         placeholder_by_id = {}
-        if anonymize and candidate_details:
-            sorted_ids = sorted(candidate_details)
+        if anonymize:
+            numbering_pool = (
+                visible_candidate_ids
+                if visible_candidate_ids is not None
+                else set(candidate_details)
+            )
             placeholder_by_id = {
-                cid: f"Kandidat {i + 1}" for i, cid in enumerate(sorted_ids)
+                candidate: f"Kandidat {index + 1}"
+                for index, candidate in enumerate(sorted(numbering_pool))
             }
 
         visible_schedule = []
@@ -545,7 +559,9 @@ class SavedScheduleSerializer(serializers.ModelSerializer):
             candidate_detail = candidate_details[candidate_id]
 
             if anonymize:
-                safe_entry["candidate"] = placeholder_by_id[candidate_id]
+                safe_entry["candidate"] = placeholder_by_id.get(
+                    candidate_id, "Kandidat"
+                )
                 # Strip status info — the candidate has not consented to
                 # the committee seeing whether they confirmed.
                 safe_entry.pop("candidate_id", None)

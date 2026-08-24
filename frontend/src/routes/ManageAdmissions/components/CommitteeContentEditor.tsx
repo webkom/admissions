@@ -28,7 +28,7 @@ const contentFields: Array<{
     label: "Kort presentasjon",
     help: "Vises på komitékortet når søkeren sammenligner komiteer.",
     placeholder: "Vår komité har ansvar for… \n\nVi er opptatt av...",
-    maxLength: 350,
+    maxLength: 600,
     rows: 4,
   },
   {

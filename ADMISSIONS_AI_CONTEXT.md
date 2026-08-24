@@ -67,9 +67,16 @@ Important access rules:
   candidate or every schedule row.
 - Recruiters always have the candidate scope needed to recruit for their own
   represented groups. Ordinary members acquire scope only through a reveal.
-- Server responses omit unauthorized rows entirely. Redacting names in an
-  otherwise complete response is not acceptable because the time, panel, and
-  counts still leak sensitive information.
+- Server responses omit rows outside the caller's scope entirely - rows past the
+  publication boundary, and other committees' rows. Time, panel, and counts leak,
+  so an out-of-scope row is dropped rather than blanked.
+- Inside a committee's own published plan the rule is different: an ordinary
+  member sees every row even while identities are hidden, because a member who
+  cannot see when they interview cannot show up. Those rows carry a placeholder
+  ("Kandidat N") and nothing else about the candidate - no id, status, or phone.
+  Placeholders are numbered over the committee's whole candidate set, never over
+  the rows in one response, so extending the publication cannot renumber someone
+  a member already wrote down.
 - Candidate email and phone in schedule payloads are limited to admission
   administrators and recruiters. They are used to prefill `mailto:`/`sms:`
   drafts; the app does not send a message directly.
@@ -262,6 +269,20 @@ limits, not mere frontend suggestions.
 
 ### Who becomes an interviewer
 
+The roster is the union of two sources. `Membership` is written only by the
+OAuth login pipeline, so on its own it lists just the people who have already
+signed in - which is the wrong half of a committee when the question is "who
+has not answered yet". `CommitteeRosterEntry`, mirrored from LEGO by
+`sync_committee_rosters`, covers the rest. A mirrored person gets a local
+`LegoUser` row (unusable password, no `Membership`) so the app can name,
+chase, and schedule them; they gain no access until they sign in for real.
+
+`get_eligible_interviewer_ids` returns that union and decides display, write-
+on-behalf, and panel eligibility. `get_responding_interviewer_ids` returns the
+`Membership` half alone and decides one thing only: whose answer publication
+may wait for. Do not collapse them - requiring an answer from someone who has
+never opened the app deadlocks the publish.
+
 Eligible interviewers are all active members of participating groups, plus an
 admission-admin member who has submitted availability. This avoids implicitly
 including every administrator while allowing an administrator who opts in to
@@ -285,6 +306,16 @@ conflicts are not trusted.
 The worker is mandatory. Starting Django directly without it makes jobs remain
 `PENDING`; `make dev` starts both. Multiple workers are safe because job claims
 use locks, although one worker is normally enough.
+
+The same worker loop also carries the two LEGO syncs (committee rosters and the
+decoy directory), throttled to `ADMISSIONS_LEGO_SYNC_INTERVAL_SECONDS`, default
+six hours. They ride the worker rather than a cron entry because the worker
+already has to exist wherever the scheduler is on, and both degrade silently
+when unscheduled - an empty decoy pool means review lists made only of real
+applicants. Both are no-ops without `ADMISSIONS_ROSTER_SYNC_CLIENT_ID`/`_SECRET`,
+and both can be run by hand as management commands. The service credential must
+never be used to serve a request: it is more privileged than any person using
+the app.
 
 ### Solver inputs and hard constraints
 
@@ -382,6 +413,8 @@ All APIs use session authentication and CSRF-protected browser requests.
 | CP-SAT model | `admissions/admissions/solve_schedule.py` |
 | Job enqueue/cancel lifecycle | `admissions/admissions/solve_jobs.py` |
 | Long-lived worker | `admissions/utils/management/commands/run_solver_worker.py` |
+| LEGO service-credential HTTP | `admissions/utils/lego_service.py` |
+| Committee roster / decoy pool syncs | `admissions/utils/management/commands/sync_committee_rosters.py`, `sync_directory_entries.py` |
 | URLs | `admissions/urls.py` |
 
 ## Non-negotiable implementation guidance for another AI

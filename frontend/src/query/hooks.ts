@@ -401,10 +401,7 @@ export interface AdmissionGroupContent {
   interview_description: string | null;
 }
 
-export const useAdmissionGroupContent = (
-  slug: string,
-  groupId: string,
-) => {
+export const useAdmissionGroupContent = (slug: string, groupId: string) => {
   const scope = admissionGroupScope(slug, groupId);
   const query = useQuery<AdmissionGroupContent, AxiosError>({
     queryKey: [`/admin/admission/${slug}/group/${groupId}/content/`],

@@ -18,6 +18,10 @@
 - **Solve job**: an asynchronous request to create a complete admission schedule.
   Admission administrators enqueue and inspect these jobs; the worker owns their
   execution lifecycle.
+- **Committee roster mirror**: LEGO's own list of who is in a participating
+  committee, synced ahead of time. It exists so the availability roster can
+  name the members who have never signed in, and is display scope only - never
+  an authorization source.
 - **Candidate disclosure**: the decision to reveal candidate identities to a
   committee after a plan is distributed. Recruiters always have the access needed
   to recruit for their represented committees. Other active committee members gain
@@ -31,10 +35,31 @@
 - An OAuth membership refresh replaces the local membership snapshot atomically.
   Missing, malformed, or unknown membership data must fail closed rather than
   retaining or creating privileges.
+- Membership is written by the login pipeline and nothing else. The LEGO roster
+  mirror widens who is listed, chased, and schedulable; it never widens who may
+  do anything, and every permission check reads Membership directly.
+- Only someone the app has actually seen sign in can be required to answer.
+  Publication waits on their availability or opt-out; a mirrored member who has
+  never signed in is shown as awaiting but cannot hold the plan hostage.
+- Conflict-review filler names are drawn from a pool at least as wide as the
+  real applicant population, and from a cohort bounded to roughly the size of
+  the real candidate pool so fillers recur at the rate real candidates do. A
+  narrower pool identifies real applicants by elimination; an unbounded one
+  identifies them to any two interviewers who compare lists.
 - Committee access is the union of represented committees and ordinary active
   memberships whose candidate identities have been revealed.
-- Schedule responses omit unauthorized rows entirely. Redacting candidate fields
-  is not sufficient because time, panel, and row counts are also sensitive.
+- Schedule responses omit rows outside the caller's scope entirely: rows past
+  the publication boundary, and any row belonging to another committee. Time,
+  panel, and row counts are sensitive, so an unauthorized row is dropped rather
+  than blanked.
+- Within a committee's own published plan, an ordinary member sees every row
+  even before identities are revealed - a member who cannot see when they are
+  interviewing cannot turn up. Those rows carry a placeholder name and nothing
+  else about the candidate: no candidate id, no interview status, no phone.
+- A placeholder names the same person for as long as it is shown. It is
+  numbered over the committee's whole candidate set, never over the rows in one
+  response, or extending the publication would renumber people who had already
+  been written down. Gaps in the sequence are expected.
 - Candidate identities remain hidden from ordinary committee members until an
   authorized reveal, and every reveal or hide action is audited with actor,
   committee, action, and timestamp.
@@ -67,6 +92,8 @@
 ## Module boundaries
 
 - `admission_access.py` owns membership, disclosure, and response-scope policy.
+- `utils/lego_service.py` owns server-to-server LEGO reads on the service
+  credential, and is never reachable from a request.
 - `interview_workflow.py` owns concurrency-safe interview-status transitions.
 - `solve_jobs.py` owns solve-job lifecycle operations.
 - `candidate_views.py`, `availability_views.py`, `solve_views.py`, and
