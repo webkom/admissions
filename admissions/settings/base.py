@@ -36,13 +36,26 @@ ADMISSIONS_SCHEDULER_ENABLED = True
 ADMISSIONS_CONFLICT_REVIEW_V2 = True
 
 # A narrow, read-only LEGO service credential (OAuth2 client-credentials
-# grant) used only by the sync_directory_entries management command, never
-# in the request path. Empty by default - the command logs why and exits
-# cleanly rather than failing when unset, so this is safe to leave
-# unconfigured indefinitely (decoys just stay empty). Provisioning the actual
-# credential in LEGO is an operational step outside this codebase.
+# grant) used only by the sync_directory_entries and sync_committee_rosters
+# management commands and the solver worker's maintenance cycle, never in the
+# request path. Empty by default - the syncs log why and exit cleanly rather
+# than failing when unset, so this is safe to leave unconfigured indefinitely
+# (decoys stay empty and the availability roster falls back to whoever has
+# signed in). Provisioning the actual credential in LEGO is an operational step
+# outside this codebase.
 ADMISSIONS_ROSTER_SYNC_CLIENT_ID = ""
 ADMISSIONS_ROSTER_SYNC_CLIENT_SECRET = ""
+
+# How often the solver worker refreshes both LEGO-sourced tables. Neither
+# changes faster than people join and leave committees.
+ADMISSIONS_LEGO_SYNC_INTERVAL_SECONDS = 6 * 60 * 60
+
+# LEGO groups the decoy pool is drawn from. Every grade group, because a decoy
+# is only cover if a real applicant could plausibly have been drawn in its
+# place: while the pool was first-years only, any older student named in a
+# review list was necessarily a real applicant. None falls back to the
+# command's own defaults.
+ADMISSIONS_DECOY_POOL_GROUPS = None
 
 # GENERAL CONFIGURATION ======================================================
 BASE_PROJECT_DIR = environ.Path(__file__) - 3  # manage.py level

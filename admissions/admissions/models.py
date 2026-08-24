@@ -825,15 +825,59 @@ class ConflictReviewList(models.Model):
         return f"Review list for {self.interviewer} ({self.revision})"
 
 
-class DirectoryEntry(models.Model):
-    """A first-year student, synced nightly from LEGO for decoy filler names.
+class CommitteeRosterEntry(models.Model):
+    """One committee membership mirrored from LEGO, for roster display only.
 
-    Populated by a management command using a narrow, read-only service
-    credential kept out of the request path entirely - never by anything
-    an interviewer's own request triggers. Deliberately holds nothing but
-    what a filler name needs to display; if this table is empty (no sync has
-    run, e.g. no credential provisioned yet), decoys are simply omitted
-    rather than synthesised - see build_conflict_review_lists.
+    Deliberately not an authorization source. `Membership` stays the atomic
+    snapshot taken from the person's own OAuth payload at login, and every
+    permission check reads that and only that. This table answers a different
+    question - who LEGO says the committee contains, including the people who
+    have never opened admissions and so have no Membership row at all.
+
+    Without it, "who has not answered yet" could only ever list the members who
+    had already turned up to be asked, which is the wrong half of the committee:
+    the ones an admin needs to chase are exactly the ones who never signed in.
+    """
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    group = models.ForeignKey(
+        Group, related_name="roster_entries", on_delete=models.CASCADE
+    )
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        related_name="roster_entries",
+        on_delete=models.CASCADE,
+    )
+    role = models.CharField(
+        max_length=30, choices=constants.ROLES, default=constants.MEMBER
+    )
+    synced_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["group", "user"], name="unique_roster_group_user"
+            )
+        ]
+
+    def __str__(self):
+        return f"{self.user} is listed in {self.group} by LEGO"
+
+
+class DirectoryEntry(models.Model):
+    """A student synced from LEGO, drawn on for decoy filler names.
+
+
+    Populated by a management command (and the solver worker's maintenance
+    cycle) using a narrow, read-only service credential kept out of the request
+    path entirely - never by anything an interviewer's own request triggers.
+    Deliberately holds nothing but what a filler name needs to display; if this
+    table is empty (no sync has run, e.g. no credential provisioned yet),
+    decoys are simply omitted rather than synthesised - see
+    build_conflict_review_lists.
+
+    Covers every grade group, not just the first years: a decoy is only cover
+    if a real applicant could plausibly have been drawn in its place.
     """
 
     lego_user_id = models.IntegerField(unique=True)

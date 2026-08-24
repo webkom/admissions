@@ -72,6 +72,13 @@ const AvailabilityResponseRoster: React.FC<AvailabilityResponseRosterProps> = ({
   const copyableAddresses = missing
     .map((participant) => participant.email)
     .filter((email): email is string => Boolean(email));
+  // Split out rather than merely labelled: these two need different things
+  // from the person chasing them. One has an account and has not filled in
+  // their times; the other has never opened opptak at all, and appears here
+  // only because LEGO says they are in the committee.
+  const neverSignedIn = missing.filter(
+    (participant) => participant.has_signed_in === false,
+  );
 
   const copyMissingAddresses = async () => {
     try {
@@ -137,6 +144,18 @@ const AvailabilityResponseRoster: React.FC<AvailabilityResponseRosterProps> = ({
             missing,
             "warning",
             "availability-missing",
+          )}
+          {neverSignedIn.length > 0 && (
+            <p
+              className="m-0 text-detail text-text-muted"
+              data-cy="availability-never-signed-in"
+            >
+              {neverSignedIn.length === 1
+                ? "1 av disse har aldri logget inn i opptak."
+                : `${neverSignedIn.length} av disse har aldri logget inn i opptak.`}{" "}
+              De er hentet fra komiteen i LEGO, så be dem logge inn – eller
+              marker dem som «deltar ikke».
+            </p>
           )}
           {copyableAddresses.length > 0 && (
             <div className="flex flex-wrap items-center gap-2">

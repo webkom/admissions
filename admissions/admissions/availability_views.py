@@ -38,6 +38,7 @@ from admissions.admissions.scheduling_utils import (
     get_declared_conflict_candidate_ids,
     get_eligible_interviewer_ids,
     get_proposed_candidate_ids_by_interviewer,
+    get_responding_interviewer_ids,
     panel_gender_code,
     publication_withholds_rows,
     published_candidate_ids,
@@ -213,6 +214,12 @@ class InterviewAvailabilityView(SchedulerFeatureGateMixin, APIView):
             users = LegoUser.objects.filter(id__in=all_ids).order_by(
                 "first_name", "last_name", "username"
             )
+            # Membership is written only by the OAuth login pipeline, so its
+            # absence is exactly "we have never seen this person here". Worth
+            # telling apart from an ordinary missing answer: one needs a
+            # reminder to fill in their times, the other has never heard of
+            # the tool and needs a reminder to sign in at all.
+            signed_in_ids = get_responding_interviewer_ids(admission, group)
         elif is_recruiter:
             member_ids = (
                 Membership.objects.filter(group__in=representing_groups)
@@ -223,8 +230,10 @@ class InterviewAvailabilityView(SchedulerFeatureGateMixin, APIView):
             users = LegoUser.objects.filter(id__in=member_ids).order_by(
                 "first_name", "last_name", "username"
             )
+            signed_in_ids = None
         else:
             users = LegoUser.objects.filter(id=user.id)
+            signed_in_ids = None
 
         saved_items = InterviewAvailability.objects.filter(
             admission=admission,
@@ -408,6 +417,11 @@ class InterviewAvailabilityView(SchedulerFeatureGateMixin, APIView):
                     else 0
                 ),
                 "is_me": person.id == user.id,
+                # Only meaningful to whoever chases the missing answers, and
+                # only they are served the full roster in the first place.
+                "has_signed_in": (
+                    True if signed_in_ids is None else person.id in signed_in_ids
+                ),
                 # Only ever your own: a declaration names people who may not
                 # have applied, so it is nobody else's business.
                 "fadderbarn": (

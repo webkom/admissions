@@ -35,11 +35,21 @@ from admissions.admissions.schedule_workflow import (
     update_saved_schedule,
 )
 from admissions.admissions.solve_schedule import solve_schedule
+from admissions.utils.management.commands.sync_committee_rosters import (
+    sync_committee_rosters,
+)
+from admissions.utils.management.commands.sync_directory_entries import (
+    sync_directory_entries,
+)
 
 log = get_logger()
 
 WRITE_BACK_ATTEMPTS = 3
 WRITE_BACK_RETRY_SECONDS = 1.0
+# Six hours. Committee rosters and the decoy directory change on the scale of
+# people joining a committee, not minutes, and both syncs walk every page of
+# a LEGO endpoint - so this is deliberately slow enough to be invisible.
+DEFAULT_LEGO_SYNC_INTERVAL_SECONDS = 6 * 60 * 60
 
 
 def _refresh_db_connection():
@@ -79,11 +89,13 @@ class Command(BaseCommand):
             )
         poll_interval = options["poll_interval"]
         run_once = options["once"]
+        self._last_lego_sync = None
         log.info("solver_worker_started", poll_interval=poll_interval)
         while True:
             try:
                 self._reap_stale_jobs()
                 self._cleanup_old_jobs()
+                self._sync_from_lego()
                 processed = self._claim_and_run()
                 if run_once:
                     return
@@ -146,6 +158,47 @@ class Command(BaseCommand):
         ).delete()
         if deleted:
             log.info("solve_jobs_cleaned", count=deleted)
+
+    def _sync_from_lego(self):
+        """Refresh the committee rosters and the decoy directory from LEGO.
+
+        Carried by the worker rather than a cron entry because the worker is
+        already a mandatory, always-running part of any deployment that has the
+        scheduler switched on, while a cron schedule is one more thing that can
+        quietly not exist - and a decoy pool that is quietly empty means review
+        lists made of real applicants only, which is the failure this data
+        exists to prevent.
+
+        Still off the request path, which is the constraint that matters: the
+        service credential is more privileged than any person using the app, so
+        nothing it fetches may ever be gathered while serving somebody's
+        request.
+        """
+
+        interval = getattr(
+            settings,
+            "ADMISSIONS_LEGO_SYNC_INTERVAL_SECONDS",
+            DEFAULT_LEGO_SYNC_INTERVAL_SECONDS,
+        )
+        now = timezone.now()
+        if (
+            self._last_lego_sync is not None
+            and (now - self._last_lego_sync).total_seconds() < interval
+        ):
+            return False
+        # Stamped before the work, not after: a sync that fails must wait out
+        # the same interval as one that succeeds, or an unreachable LEGO turns
+        # every poll into a fresh connection attempt.
+        self._last_lego_sync = now
+        try:
+            sync_committee_rosters()
+            sync_directory_entries()
+        except Exception:
+            # Both syncs already swallow their own expected failures; this is
+            # the backstop that keeps an unexpected one from taking down a
+            # worker whose actual job is solving schedules.
+            log.exception("lego_sync_cycle_failed")
+        return True
 
     def _claim_and_run(self):
         """Claim the oldest pending job and run it. Returns True if one ran.

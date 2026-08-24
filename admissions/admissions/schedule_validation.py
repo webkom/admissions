@@ -21,6 +21,7 @@ from admissions.admissions.scheduling_utils import (
     get_declared_conflict_candidate_ids,
     get_eligible_interviewer_ids,
     get_interviewer_participation,
+    get_responding_interviewer_ids,
 )
 
 MINUTES_PER_DAY = 24 * 60
@@ -203,10 +204,18 @@ def canonicalize_solver_payload(admission, saved, data, request_user):
         ).select_related("user")
     )
     participation = get_interviewer_participation(admission, group, saved)
+    # Scoped to the people who can actually answer. The roster now also carries
+    # committee members mirrored from LEGO who have never signed in here; they
+    # show up as awaiting so an admin can see who to chase, but they can
+    # neither submit availability nor opt out on their own, so requiring their
+    # answer would hold the publish hostage to someone who will never give one.
+    # An admin who has chased them can still record the answer on their behalf.
+    can_respond = get_responding_interviewer_ids(admission, group)
     unresolved_ids = {
         user_id
         for user_id, state in participation.items()
         if state == InterviewAvailability.PARTICIPATION_AWAITING
+        and user_id in can_respond
     }
     if unresolved_ids:
         raise ScheduleValidationError(

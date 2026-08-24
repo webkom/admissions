@@ -168,6 +168,72 @@ class ConflictReviewListTestCase(TestCase):
         names = {decoy["name"] for decoy in lists[str(self.mine.id)]["decoys"]}
         self.assertEqual({"Filler Three"}, names)
 
+    def test_the_filler_cohort_is_bounded_by_the_real_candidate_pool(self):
+        """Drawing each list straight out of the full student directory is
+        what would give the game away. With thousands of names to draw from,
+        two interviewers comparing lists would find that every name they both
+        hold is a real applicant, and every name only one of them holds is a
+        filler. A cohort about the size of the real pool makes fillers recur
+        at roughly the rate real candidates do, so the comparison says
+        nothing."""
+
+        for lego_id in range(9100, 9200):
+            DirectoryEntry.objects.create(
+                lego_user_id=lego_id,
+                username=f"filler{lego_id}",
+                full_name=f"Filler {lego_id}",
+            )
+        ours = self._candidate("ada", 8001)
+        theirs = self._candidate("eirik", 8002)
+        saved = self._plan(
+            [
+                self._row(ours, 540, self.mine),
+                self._row(theirs, 600, self.other),
+            ],
+            my_slots=["2026-04-21:540", "2026-04-21:600"],
+        )
+        InterviewAvailability.objects.create(
+            admission=self.admission,
+            group=self.group,
+            user=self.other,
+            slots=["2026-04-21:540", "2026-04-21:600"],
+        )
+
+        lists = build_conflict_review_lists(saved)
+
+        cohort = {
+            decoy["name"] for entry in lists.values() for decoy in entry["decoys"]
+        }
+        # Two interviewers drawing five fillers each: if the draw were
+        # unbounded they would share almost nothing out of a hundred names.
+        self.assertLessEqual(len(cohort), 5)
+        self.assertEqual(5, len(lists[str(self.mine.id)]["decoys"]))
+
+    def test_the_filler_cohort_is_stable_across_rebuilds(self):
+        """Re-saving a draft must not rotate a fresh cast of fillers through
+        the review lists: a name that shows up once and never again stands out
+        exactly as much as one that never recurs."""
+
+        for lego_id in range(9100, 9200):
+            DirectoryEntry.objects.create(
+                lego_user_id=lego_id,
+                username=f"filler{lego_id}",
+                full_name=f"Filler {lego_id}",
+            )
+        ours = self._candidate("ada", 8001)
+        saved = self._plan(
+            [self._row(ours, 540, self.mine)], my_slots=["2026-04-21:540"]
+        )
+
+        def cohort():
+            return {
+                decoy["name"]
+                for entry in build_conflict_review_lists(saved).values()
+                for decoy in entry["decoys"]
+            }
+
+        self.assertEqual(cohort(), cohort())
+
     def test_the_scope_falls_back_when_no_snapshot_exists(self):
         """Plans saved before review lists existed must still be reviewable."""
         ours = self._candidate("ada", 8001)
