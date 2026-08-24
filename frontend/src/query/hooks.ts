@@ -394,3 +394,26 @@ export const useMemberSearch = (slug: string, query: string) =>
     gcTime: 0,
     meta: { sensitive: true },
   });
+
+export interface AdmissionGroupContent {
+  committee_info: string | null;
+  application_guidance: string | null;
+  interview_description: string | null;
+}
+
+export const useAdmissionGroupContent = (
+  slug: string,
+  groupId: string,
+) => {
+  const scope = admissionGroupScope(slug, groupId);
+  const query = useQuery<AdmissionGroupContent, AxiosError>({
+    queryKey: [`/admin/admission/${slug}/group/${groupId}/content/`],
+    enabled:
+      Boolean(slug) &&
+      Boolean(groupId) &&
+      !areSensitiveAdmissionCacheWritesBlocked(scope),
+    ...useSensitiveQueryOptions(scope),
+    meta: admissionSensitiveQueryMeta(scope, false),
+  });
+  return hideDataAfterSensitiveQueryFailure(query);
+};

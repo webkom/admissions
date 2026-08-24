@@ -114,6 +114,25 @@ export const useAdminUpdateGroupMutation = () =>
       apiClient.patch(`/admin/group/${groupPrimaryKey}/`, updatedGroupData),
   });
 
+export const useUpdateAdmissionGroupContentMutation = (
+  admissionSlug: string,
+  groupId: string,
+) =>
+  useMutation<
+    unknown,
+    SensitiveAdmissionMutationError,
+    { content: Partial<CommitteeContent> }
+  >({
+    ...sensitiveAdmissionMutationOptions(admissionSlug),
+    mutationFn: ({ content }) =>
+      runSensitiveAdmissionMutation(admissionSlug, () =>
+        apiClient.patch(
+          `/admin/admission/${admissionSlug}/group/${groupId}/content/`,
+          content,
+        ),
+      ),
+  });
+
 interface DeleteGroupApplicationProps {
   applicationId: string;
   groupId?: string;

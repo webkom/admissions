@@ -1,11 +1,17 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { useParams } from "react-router-dom";
+import styled from "styled-components";
 import { EyeOff, FileDown, Info, Search } from "lucide-react";
 
 import { StyledButton } from "src/components/LinkButton";
 import LoadingBall from "src/components/LoadingBall";
+import CommitteeContentEditor from "src/routes/ManageAdmissions/components/CommitteeContentEditor";
 import AdmissionsContainer from "src/containers/AdmissionsContainer";
-import { useAdmission, useAdminApplications } from "src/query/hooks";
+import { useAdmission, useAdminApplications, useAdmissionGroupContent } from "src/query/hooks";
+import {
+  useUpdateAdmissionGroupContentMutation,
+  type CommitteeContent,
+} from "src/query/mutations";
 import {
   getApplicationScopeKey,
   isCommitteeMinimalView,
@@ -127,6 +133,57 @@ const ViewApplications = () => {
       activeGroupIds,
       availableGroups,
     });
+
+  // --- Committee content editor (between candidates and fare-sone) ---
+
+  const contentGroup = useMemo(() => {
+    if (scopedGroup) return scopedGroup;
+    if (availableGroups.length === 1) return availableGroups[0];
+    return undefined;
+  }, [availableGroups, scopedGroup]);
+
+  const {
+    data: admissionContent,
+  } = useAdmissionGroupContent(
+    admissionSlug ?? "",
+    contentGroup?.pk ?? "",
+  );
+
+  const updateContentMutation = useUpdateAdmissionGroupContentMutation(
+    admissionSlug ?? "",
+    contentGroup?.pk ?? "",
+  );
+
+  const [draftContent, setDraftContent] = useState<CommitteeContent>({
+    committee_info: null,
+    application_guidance: null,
+    interview_description: null,
+  });
+  const [hasDraft, setHasDraft] = useState(false);
+  const [contentSaved, setContentSaved] = useState(false);
+
+  useEffect(() => {
+    if (!contentGroup) return;
+    setDraftContent({
+      committee_info:
+        admissionContent?.committee_info ?? contentGroup.committee_info ?? null,
+      application_guidance:
+        admissionContent?.application_guidance ??
+        contentGroup.application_guidance ??
+        null,
+      interview_description:
+        admissionContent?.interview_description ??
+        contentGroup.interview_description ??
+        null,
+    });
+    setHasDraft(false);
+    setContentSaved(false);
+  }, [
+    contentGroup,
+    admissionContent?.committee_info,
+    admissionContent?.application_guidance,
+    admissionContent?.interview_description,
+  ]);
 
   const showGroupFilter = !scopedGroup && availableGroups.length > 1;
   const terminationGroup = useMemo(
@@ -305,6 +362,51 @@ const ViewApplications = () => {
           )}
         </EmptyResults>
       )}
+      {contentGroup && (
+        <CollapsibleSection>
+          <CollapseSummary>
+            {contentGroup.name} — Opptakstekster
+          </CollapseSummary>
+          <CollapseBody>
+            <SectionDescription>
+              Tekstene som vises for søkerne <em>i dette opptaket</em>. Det som
+              fylles inn her overstyrer den globale beskrivelsen, men bare for
+              akkurat dette opptaket.
+            </SectionDescription>
+            <CommitteeContentEditor
+              groups={[contentGroup]}
+              value={{ [contentGroup.pk]: draftContent }}
+              onChange={(_groupId, content) => {
+                setDraftContent(content);
+                setHasDraft(true);
+                setContentSaved(false);
+              }}
+            />
+            <SaveRow>
+              <StyledButton
+                onClick={() => {
+                  updateContentMutation.mutate(
+                    { content: draftContent },
+                    {
+                      onSuccess: () => {
+                        setHasDraft(false);
+                        setContentSaved(true);
+                        setTimeout(() => setContentSaved(false), 2000);
+                      },
+                    },
+                  );
+                }}
+                disabled={updateContentMutation.isPending || !hasDraft}
+              >
+                {updateContentMutation.isPending
+                  ? "Lagrer…"
+                  : "Lagre opptakstekster"}
+              </StyledButton>
+              {contentSaved && <SaveConfirmation>Lagret!</SaveConfirmation>}
+            </SaveRow>
+          </CollapseBody>
+        </CollapsibleSection>
+      )}
       {showCandidates && (
         <TerminateCommitteeZone
           admissionSlug={admissionSlug ?? ""}
@@ -318,3 +420,47 @@ const ViewApplications = () => {
 };
 
 export default ViewApplications;
+
+const CollapsibleSection = styled.details`
+  border-top: var(--border-width-default) solid var(--color-border-soft);
+`;
+
+const CollapseSummary = styled.summary`
+  padding: var(--spacing-lg) 0;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+
+  &:hover {
+    color: var(--color-text-primary);
+  }
+`;
+
+const CollapseBody = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-md);
+  padding-bottom: var(--spacing-lg);
+`;
+
+const SectionDescription = styled.p`
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-sm);
+  line-height: var(--line-height-copy);
+`;
+
+const SaveRow = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--spacing-md);
+  margin-top: var(--spacing-md);
+`;
+
+const SaveConfirmation = styled.span`
+  color: var(--color-success);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+`;

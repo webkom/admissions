@@ -26,6 +26,7 @@ from admissions.admissions.admission_access import (
     get_representing_groups,
     user_is_admission_admin,
     user_is_admission_leadership,
+    user_represents_group,
 )
 from admissions.admissions.interview_workflow import (
     InterviewStatusConflict,
@@ -34,6 +35,7 @@ from admissions.admissions.interview_workflow import (
 )
 from admissions.admissions.models import (
     Admission,
+    AdmissionGroup,
     Group,
     GroupApplication,
     LegoUser,
@@ -45,6 +47,7 @@ from admissions.admissions.serializers import (
     AdminAdmissionSerializer,
     AdminCreateUpdateAdmissionSerializer,
     AdminUserApplicationSerializer,
+    AdmissionGroupContentSerializer,
     AdmissionListPublicSerializer,
     AdmissionPublicSerializer,
     ApplicationCreateUpdateSerializer,
@@ -544,6 +547,67 @@ class TerminateCommitteeApplicationsView(APIView):
                     application.delete()
 
         return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+class AdmissionGroupContentView(APIView):
+    """Read or write one committee's admission-scoped info text.
+
+    Committee leaders and recruiters can set the text their applicants see
+    without needing the global manage-admissions privilege. The endpoint is
+    narrow: it writes only the three AdvisoryGroup content fields, and only
+    for the one group named in the URL.
+    """
+
+    authentication_classes = [SessionAuthentication]
+    permission_classes = [permissions.IsAuthenticated]
+
+    def initial(self, request, admission_slug, group_id):
+        super().initial(request, admission_slug, group_id)
+        self.admission = get_object_or_404(Admission, slug=admission_slug)
+        self.group = get_object_or_404(self.admission.groups, pk=group_id)
+        if not user_is_admission_admin(
+            self.admission, request.user
+        ) and not user_represents_group(self.admission, self.group, request.user):
+            raise NotFound()
+
+    def get(self, request, admission_slug, group_id):
+        admission_group = AdmissionGroup.objects.filter(
+            admission=self.admission, group=self.group
+        ).first()
+        return Response(
+            {
+                "committee_info": (
+                    admission_group.committee_info if admission_group else None
+                ),
+                "application_guidance": (
+                    admission_group.application_guidance if admission_group else None
+                ),
+                "interview_description": (
+                    admission_group.interview_description if admission_group else None
+                ),
+            }
+        )
+
+    def patch(self, request, admission_slug, group_id):
+        serializer = AdmissionGroupContentSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        validated = serializer.validated_data
+        # build the update dict from whichever fields were sent
+        update_fields = {}
+        for field in (
+            "committee_info",
+            "application_guidance",
+            "interview_description",
+        ):
+            if field in validated:
+                update_fields[field] = validated[field]
+        if update_fields:
+            AdmissionGroup.objects.update_or_create(
+                admission=self.admission,
+                group=self.group,
+                defaults=update_fields,
+            )
+        return self.get(request, admission_slug, group_id)
 
 
 ##################################################
