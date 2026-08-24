@@ -45,7 +45,7 @@ const ADMIN_STEPS: WizardStep[] = [
   },
   {
     icon: LayoutPanelTop,
-    label: "Grunnlag",
+    label: "1. Grunnlag",
     title: "Sett rammene og samle tilgjengelighet",
     description:
       "Velg intervjutider og følg opp hvem som har svart. Tilgjengelighet er det eneste som må være klart før første planutkast.",
@@ -53,7 +53,7 @@ const ADMIN_STEPS: WizardStep[] = [
   },
   {
     icon: Sparkles,
-    label: "Planutkast",
+    label: "2. Planutkast",
     title: "Generer først, kontroller etterpå",
     description:
       "Lag et internt forslag. Intervjuerne ser bare kandidatene de er foreslått til, og solveren reparerer eventuelle inhabiliteter med færrest mulig endringer.",
@@ -61,7 +61,7 @@ const ADMIN_STEPS: WizardStep[] = [
   },
   {
     icon: CalendarCheck,
-    label: "Publisering",
+    label: "3. Publisering",
     title: "Publiser først når kontrollen er ferdig",
     description:
       "Se over utkastet og publiser endelige tider. Etterpå bruker du samme side til invitasjoner og oppfølging.",
@@ -116,6 +116,11 @@ export default function WizardTour({
   onNavigate,
 }: WizardTourProps) {
   const steps = isAdmin ? ADMIN_STEPS : MEMBER_STEPS;
+  // The admin tour opens on a role intro that is not one of the three numbered
+  // workflow steps, so it counts from 0 and the rest line up with the stepper.
+  // The member tour has no such intro, so it counts from 1.
+  const stepOffset = isAdmin ? 0 : 1;
+  const stepTotal = steps.length - 1 + stepOffset;
   const [step, setStep] = useState(0);
   const [visible, setVisible] = useState(false);
   const [dontShow, setDontShow] = useState(false);
@@ -203,7 +208,7 @@ export default function WizardTour({
         className="relative z-10 flex w-full max-w-lg flex-col overflow-hidden rounded-panel border border-border bg-surface-base shadow-modal focus:outline-none"
       >
         <p className="sr-only" aria-live="polite" aria-atomic="true">
-          Steg {step + 1} av {steps.length}: {current.title}
+          Steg {step + stepOffset} av {stepTotal}: {current.title}
         </p>
         <div className="flex items-center justify-between border-b border-border-soft px-5 py-3">
           <div className="flex min-w-0 items-center gap-2">
@@ -212,7 +217,7 @@ export default function WizardTour({
             </span>
             <span className="h-1 w-1 rounded-full bg-text-faded" />
             <span className="text-detail font-bold text-text-muted">
-              Steg {step + 1} av {steps.length}
+              Steg {step + stepOffset} av {stepTotal}
             </span>
           </div>
 
@@ -223,7 +228,7 @@ export default function WizardTour({
                   key={i}
                   type="button"
                   onClick={() => go(i)}
-                  aria-label={`Steg ${i + 1}`}
+                  aria-label={`Steg ${i + stepOffset}`}
                   aria-current={i === step ? "step" : undefined}
                   className={cn(
                     "rounded-full transition-[width,background] duration-200 motion-reduce:transition-none",

@@ -718,7 +718,7 @@ const SolverSetupPanel = ({
           data-cy={
             hasProposal ? "regeneration-settings" : "generation-settings"
           }
-          className="mx-auto w-full max-w-6xl scroll-mt-4"
+          className="mx-auto w-full max-w-page scroll-mt-4"
         >
           <SchedulePanel
             dataCy="generation-status"

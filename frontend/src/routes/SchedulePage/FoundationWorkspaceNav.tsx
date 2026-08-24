@@ -46,7 +46,7 @@ const FoundationWorkspaceNav: React.FC<FoundationWorkspaceNavProps> = ({
 }) => (
   <nav
     aria-label="Delsteg i Grunnlag"
-    className="border-b border-border-soft px-5 pt-4 handheld:px-4"
+    className="border-b border-border-soft px-12 pt-4 handheld:px-6"
     data-cy="foundation-stage-nav"
   >
     <div

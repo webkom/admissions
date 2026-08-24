@@ -91,6 +91,11 @@
   --content-width-narrow: 18.75rem;
   --content-width-form: 50rem;
   --content-width-wide: 72rem;
+  --content-width-page: 80rem;
+
+  /* Horizontal gutter inside --content-width-page, so the navbar's contents
+     line up with the page shells that sit under it. */
+  --page-gutter: 1.25rem;
   --content-width-prose: 65ch;
   --admin-sidebar-width: 17.5rem;
   --schedule-page-max-width: 90rem;
@@ -161,6 +166,7 @@
 
   --color-brand-hover: var(--lego-red-color-hover);
   --color-brand-dark: var(--color-red-7);
+  --color-brand-outline: color-mix(in srgb, var(--color-brand) 78%, black);
   --color-brand-pressed: var(--color-red-8);
   --color-brand-input: color-mix(in srgb, var(--color-brand) 40%, transparent);
   --color-brand-ring: color-mix(in srgb, var(--color-brand) 18%, transparent);
@@ -248,6 +254,7 @@
   --color-border: var(--border-gray);
   --color-border-soft: var(--color-gray-2);
   --color-border-muted: var(--color-gray-3);
+  --color-border-strong: var(--color-gray-4);
   --color-border-muted-soft: color-mix(
     in srgb,
     var(--color-border-muted) 30%,

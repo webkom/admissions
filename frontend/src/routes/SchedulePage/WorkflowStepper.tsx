@@ -17,7 +17,7 @@ const WorkflowStepper: React.FC<WorkflowStepperProps> = ({
 }) => (
   <nav
     aria-label="Steg i intervjuplanleggingen"
-    className="w-full bg-surface-base px-2 py-3"
+    className="w-full rounded-panel bg-surface-base px-10 py-3 handheld:px-4"
   >
     <ol className="m-0 flex list-none flex-col gap-2 p-0 sm:flex-row sm:gap-0">
       {steps.map((step, idx) => {
@@ -25,7 +25,10 @@ const WorkflowStepper: React.FC<WorkflowStepperProps> = ({
         return (
           <li
             key={step.key}
-            className="flex min-w-0 flex-1 items-start sm:items-center"
+            className={cn(
+              "flex min-w-0 items-start sm:items-center",
+              idx < steps.length - 1 ? "flex-1" : "sm:flex-none",
+            )}
           >
             <button
               type="button"
@@ -60,15 +63,15 @@ const WorkflowStepper: React.FC<WorkflowStepperProps> = ({
                     strokeWidth={iconStrokeWidths.emphasis}
                     aria-hidden="true"
                   />
-                ) : step.locked ? (
-                  <Lock size={iconSizes.tiny} aria-hidden="true" />
                 ) : (
-                  idx + 1
+                  step.locked && (
+                    <Lock size={iconSizes.tiny} aria-hidden="true" />
+                  )
                 )}
               </span>
               <span className="min-w-0">
                 <span className="block text-sm font-semibold leading-tight">
-                  {step.title}
+                  {idx + 1}. {step.title}
                 </span>
                 <span
                   className={cn(

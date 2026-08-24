@@ -1,6 +1,11 @@
 import React from "react";
+import cn from "src/utils/cn";
 import { makeSlotKey } from "../scheduleUtils";
-import { ScheduleSelectableBlockCell } from "./ScheduleGridFrame";
+import {
+  ScheduleSelectableBlockCell,
+  scheduleAvailableSurfaceClass,
+  scheduleDiscouragedSurfaceClass,
+} from "./ScheduleGridFrame";
 import ScheduleCalendarGrid from "./ScheduleCalendarGrid";
 import {
   isScheduleGridToggleKey,
@@ -286,11 +291,15 @@ const SelectableScheduleGrid: React.FC<SelectableScheduleGridProps> = ({
             onKeyDown={(event) =>
               handleCellKeyDown(event, date, chunk, chunkIndex)
             }
-            className={
+            activeClassName={cn(
               secondaryCount
-                ? "border-dashed border-warning-border bg-warning-bg"
-                : undefined
-            }
+                ? scheduleDiscouragedSurfaceClass
+                : scheduleAvailableSurfaceClass,
+              "text-text-primary",
+              secondaryCount
+                ? "hover:bg-surface-subtle"
+                : "hover:bg-brand-fill",
+            )}
           />
         );
       }}

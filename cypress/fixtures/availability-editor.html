@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="nb">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Availability editor harness</title>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module">
+      import React from "react";
+      import { createRoot } from "react-dom/client";
+      import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+      import { useAvailabilityEditor } from "/static/frontend/src/routes/SchedulePage/useAvailabilityEditor.ts";
+
+      const params = new URLSearchParams(window.location.search);
+      const generation = Number(params.get("generation") ?? "6");
+      // The saved answer the server hands back for "me". Defaults to the empty
+      // answer, which is the state a first-time interviewer is in.
+      const savedSlots = (params.get("saved") ?? "").split(",").filter(Boolean);
+
+      const participants = [
+        {
+          user_id: "me",
+          username: "webkom",
+          full_name: "Webkom",
+          is_me: true,
+          slots: savedSlots,
+          discouraged_slots: [],
+          conflicts: [],
+          derived_conflicts: [],
+          reviewed_candidate_ids: [],
+          proposed_candidate_ids: [],
+          conflict_review_complete: false,
+          has_submitted: false,
+          participation: "participating",
+          needs_review: false,
+          affected_assignment_count: 0,
+          availability_generation: generation,
+          experience_level: "unknown",
+          availability_updated_at: null,
+          gender: "",
+          email: "",
+          fadderbarn: [],
+        },
+      ];
+
+      const Harness = () => {
+        const [status, setStatus] = React.useState("idle");
+        const editor = useAvailabilityEditor({
+          admissionSlug: "webkom-open",
+          groupId: "group-1",
+          participants,
+          notify: (message, tone) =>
+            setStatus((tone === "error" ? "error: " : "ok: ") + message),
+        });
+
+        return React.createElement(
+          "div",
+          { "data-cy": "availability-editor-harness" },
+          React.createElement("output", { "data-cy": "editor-status" }, status),
+          React.createElement(
+            "output",
+            { "data-cy": "editor-selected" },
+            Array.from(editor.selectedSlots).sort().join(",") || "none",
+          ),
+          React.createElement(
+            "button",
+            {
+              type: "button",
+              "data-cy": "save-availability",
+              onClick: () =>
+                editor
+                  .saveAvailability(new Set(["2026-08-26|480"]))
+                  .catch(() => {}),
+            },
+            "Lagre",
+          ),
+        );
+      };
+
+      createRoot(document.getElementById("root")).render(
+        React.createElement(
+          QueryClientProvider,
+          {
+            client: new QueryClient({
+              defaultOptions: { mutations: { retry: false } },
+            }),
+          },
+          React.createElement(Harness),
+        ),
+      );
+    </script>
+  </body>
+</html>

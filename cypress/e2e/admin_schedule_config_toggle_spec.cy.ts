@@ -52,7 +52,7 @@ describe("admin schedule configuration toggles", () => {
     cy.contains("Intervjuperiode").should("be.visible");
     cy.contains("Daglig tidsrom").should("be.visible");
     cy.contains("Slik blir én intervjublokk").should("not.exist");
-    cy.contains("Intervjutider").should("be.visible");
+    cy.contains("Hvilke tider er åpne?").should("be.visible");
   });
 
   it("keeps a block off after changing the pause and rendering again", () => {

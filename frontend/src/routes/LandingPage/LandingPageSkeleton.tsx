@@ -9,13 +9,10 @@ const LandingPageSkeleton: React.FC<PropsWithChildren> = ({ children }) => {
   const queryClient = useQueryClient();
 
   return (
-    <div className="mx-auto flex min-h-viewport w-full max-w-6xl flex-col items-center px-8 py-16 handheld:px-4 handheld:py-8">
+    <div className="mx-auto flex min-h-viewport w-full max-w-page flex-col items-center px-8 py-16 handheld:px-0 handheld:py-8">
       <div className="mb-8 max-w-44 handheld:max-w-36">
         <AbakusLogo />
       </div>
-      <h1 className="mb-4 text-center text-[length:var(--font-size-hero-fluid)] font-extrabold tracking-display-tight text-text-strong handheld:text-display-lg">
-        Opptak
-      </h1>
       {children}
       {isManager() && (
         <div className="mt-16">

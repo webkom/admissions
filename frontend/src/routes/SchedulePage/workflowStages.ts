@@ -14,6 +14,7 @@ type FoundationStage =
 
 export const foundationFrameworkPresentation = {
   title: "Sett rammene for intervjuene",
+  subtitle: "Tre steg. Du kan endre alt senere.",
 } as const;
 
 export const deriveFoundationStage = ({
@@ -30,7 +31,7 @@ export const deriveFoundationStage = ({
   if (!hasConfiguredAvailabilityWindows) {
     return {
       kind: "framework",
-      ...foundationFrameworkPresentation,
+      title: foundationFrameworkPresentation.title,
       description: "",
     };
   }

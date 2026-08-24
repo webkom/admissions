@@ -1,5 +1,4 @@
 import React from "react";
-import { gsap } from "gsap";
 import {
   ArrowLeftToLine,
   ArrowRightToLine,
@@ -7,6 +6,8 @@ import {
   Pencil,
 } from "lucide-react";
 import { iconSizes } from "src/styles/designTokens";
+import cn from "src/utils/cn";
+import { ConfigStep, ConfigStepList } from "../ConfigStep";
 import { buildBlockTimeChunks } from "../scheduleUtils";
 import {
   CustomValueSegmentedControl,
@@ -28,13 +29,6 @@ import {
   PAUSE_PRESETS,
   SESSION_DURATION_LIMITS,
 } from "./adminScheduleConfigModel";
-import {
-  EXPAND_CONTRACT_MOTION,
-  animateContractedElement,
-  animateExpandedElementOnNextFrame,
-  readExpandContractState,
-  setExpandedElement,
-} from "./expandContractMotion";
 import InterviewPeriodPicker from "./InterviewPeriodPicker";
 import { ScheduleSlotSegments } from "./ScheduleGridFrame";
 import StandardBlockPreview from "./StandardBlockPreview";
@@ -110,19 +104,19 @@ interface AdminScheduleSettingsPanelProps {
   onEdit?: () => void;
 }
 
-const ControlLabel: React.FC<{ children: React.ReactNode }> = ({
-  children,
-}) => (
-  <span className="block text-ui font-medium text-text-muted">{children}</span>
-);
-
-const SettingField: React.FC<{
+/** Label beside its control, as the block settings are laid out in the design. */
+const InlineSettingField: React.FC<{
   label: string;
   children: React.ReactNode;
-}> = ({ label, children }) => (
-  <div className="min-w-0 space-y-2">
-    <ControlLabel>{label}</ControlLabel>
-    <div className="min-w-0">{children}</div>
+  /** Let the control take the rest of the row. */
+  stretch?: boolean;
+  className?: string;
+}> = ({ label, children, stretch = false, className }) => (
+  <div className={cn("flex min-w-0 flex-wrap items-center gap-3", className)}>
+    <span className="flex-none text-ui font-medium text-text-body">
+      {label}
+    </span>
+    <div className={stretch ? "min-w-0 flex-1" : "min-w-0"}>{children}</div>
   </div>
 );
 
@@ -137,6 +131,7 @@ const CompactPresetControl: React.FC<{
   max: number;
   step: number;
   formatValue?: (value: number) => string;
+  fullWidth?: boolean;
 }> = ({
   label,
   presets,
@@ -145,6 +140,7 @@ const CompactPresetControl: React.FC<{
   max,
   step,
   formatValue = (value) => `${value} min`,
+  fullWidth = false,
 }) => {
   return (
     <CustomValueSegmentedControl
@@ -156,6 +152,7 @@ const CompactPresetControl: React.FC<{
       max={max}
       step={step}
       formatValue={formatValue}
+      fullWidth={fullWidth}
       onSelectPreset={settings.onSelectPreset}
       onCommitCustomValue={settings.onCommitCustomValue}
     />
@@ -191,190 +188,98 @@ const FinalBlockSnapFooter: React.FC<{
   snap: FinalBlockSnap | null;
   onChangeEnd: (value: TimeValue) => void;
 }> = ({ snap, onChangeEnd }) => {
-  const footerRef = React.useRef<HTMLDivElement>(null);
-  const animationRef = React.useRef<gsap.core.Tween | null>(null);
-  const isOpenRef = React.useRef(snap !== null);
-  const hasRenderedFooterRef = React.useRef(snap !== null);
-  const hasMountedRef = React.useRef(false);
-  const [renderedSnap, setRenderedSnap] = React.useState(snap);
-  const [prefersReducedMotion, setPrefersReducedMotion] = React.useState(
-    () =>
-      typeof window !== "undefined" &&
-      window.matchMedia(EXPAND_CONTRACT_MOTION.reducedMotionQuery).matches,
-  );
-  const isOpen = snap !== null;
-  const hasRenderedSnap = renderedSnap !== null;
-
-  React.useEffect(() => {
-    hasMountedRef.current = true;
-    const mediaQuery = window.matchMedia(
-      EXPAND_CONTRACT_MOTION.reducedMotionQuery,
-    );
-    const handleChange = (event: MediaQueryListEvent) => {
-      setPrefersReducedMotion(event.matches);
-    };
-    mediaQuery.addEventListener("change", handleChange);
-    return () => mediaQuery.removeEventListener("change", handleChange);
-  }, []);
-
-  React.useLayoutEffect(() => {
-    if (snap) setRenderedSnap(snap);
-  }, [snap]);
-
-  React.useLayoutEffect(() => {
-    const footer = footerRef.current;
-    if (!footer || !hasRenderedSnap) return undefined;
-
-    animationRef.current?.kill();
-    animationRef.current = null;
-    gsap.killTweensOf(footer);
-
-    const currentState =
-      isOpen && !isOpenRef.current && !hasRenderedFooterRef.current
-        ? readExpandContractState(null)
-        : readExpandContractState(footer);
-    hasRenderedFooterRef.current = true;
-
-    if (!hasMountedRef.current || prefersReducedMotion) {
-      isOpenRef.current = isOpen;
-      if (isOpen) {
-        setExpandedElement(footer, footer.scrollHeight, true);
-      } else {
-        hasRenderedFooterRef.current = false;
-        setRenderedSnap(null);
-      }
-      return undefined;
-    }
-
-    let cancelScheduledExpansion: (() => void) | undefined;
-    if (isOpen) {
-      const targetHeight = footer.scrollHeight;
-      const isAlreadyExpanded =
-        currentState.opacity >= 0.999 &&
-        currentState.scaleY >= 0.999 &&
-        Math.abs(currentState.height - targetHeight) < 1;
-      cancelScheduledExpansion = animateExpandedElementOnNextFrame({
-        resolveElement: () => footerRef.current,
-        from: currentState,
-        height: targetHeight,
-        durationSeconds: isAlreadyExpanded
-          ? 0
-          : EXPAND_CONTRACT_MOTION.durationSeconds,
-        clearHeightOnComplete: true,
-        onStart: (animation) => {
-          animationRef.current = animation;
-        },
-      });
-    } else {
-      animationRef.current = animateContractedElement({
-        element: footer,
-        from: currentState,
-        onComplete: () => {
-          if (!isOpenRef.current) {
-            hasRenderedFooterRef.current = false;
-            setRenderedSnap(null);
-          }
-        },
-      });
-    }
-    isOpenRef.current = isOpen;
-
-    return () => {
-      cancelScheduledExpansion?.();
-      animationRef.current?.kill();
-    };
-  }, [hasRenderedSnap, isOpen, prefersReducedMotion]);
-
-  React.useLayoutEffect(
-    () => () => {
-      animationRef.current?.kill();
-      if (footerRef.current) gsap.killTweensOf(footerRef.current);
-    },
-    [],
-  );
-
-  if (!renderedSnap) return null;
-  const { blockSize, completeEndMinute, slotCount, trimEndMinute } =
-    renderedSnap;
+  const { blockSize, completeEndMinute, slotCount, trimEndMinute } = snap ?? {
+    blockSize: 0,
+    completeEndMinute: undefined,
+    slotCount: 0,
+    trimEndMinute: undefined,
+  };
 
   return (
     <div
-      ref={footerRef}
       data-cy="final-block-snap-footer"
-      data-motion="expand-contract-down"
-      data-motion-state={isOpen ? "expanded" : "contracting"}
-      aria-hidden={isOpen ? undefined : true}
-      className="col-[1/-1] min-h-0 origin-top overflow-hidden"
+      data-motion-state={snap ? "expanded" : "empty"}
+      aria-hidden={snap ? undefined : true}
+      className="min-h-0 overflow-hidden"
     >
-      <div className="flex flex-wrap items-center justify-between gap-2 border-t border-border-soft bg-surface-muted px-3 py-2">
-        <div
-          data-cy="short-final-block-note"
-          aria-label={
-            "Siste blokk: " + slotCount + " av " + blockSize + " intervjutider"
-          }
-          className="flex min-w-0 items-center gap-2 text-nano font-semibold text-text-muted"
-        >
-          <span className="whitespace-nowrap">Siste blokk</span>
-          <ScheduleSlotSegments
-            fills={Array.from({ length: blockSize }, (_, index) =>
-              index < slotCount ? 1 : 0,
-            )}
-            className="w-14 flex-none"
-          />
-          <span className="tabular-nums">
-            {slotCount}/{blockSize}
-          </span>
-        </div>
-        <div
-          role="group"
-          aria-label="Juster sluttid til hel blokk"
-          className="inline-flex items-center rounded-md border border-border-soft bg-surface-base p-1"
-        >
-          {trimEndMinute !== undefined && (
-            <button
-              type="button"
-              disabled={!isOpen}
-              tabIndex={isOpen ? 0 : -1}
-              data-cy="trim-final-block"
+      <div className="flex h-full flex-nowrap items-center justify-between gap-4 whitespace-nowrap border-l border-border-soft bg-surface-muted px-3 py-2">
+        {snap && (
+          <>
+            <div
+              data-cy="short-final-block-note"
               aria-label={
-                "Forkort sluttid til " +
-                formatTime(timeValueFromMinute(trimEndMinute))
+                "Siste blokk: " +
+                slotCount +
+                " av " +
+                blockSize +
+                " intervjutider"
               }
-              title={
-                "Forkort sluttid til " +
-                formatTime(timeValueFromMinute(trimEndMinute))
-              }
-              className="inline-flex min-h-7 items-center gap-1 rounded px-2 text-detail font-semibold text-text-muted transition-colors hover:bg-brand-soft hover:text-brand focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-brand-focus disabled:pointer-events-none"
-              onClick={() => onChangeEnd(timeValueFromMinute(trimEndMinute))}
+              className="flex flex-none items-center gap-2 text-nano font-semibold text-text-muted"
             >
-              <ArrowLeftToLine size={iconSizes.detail} aria-hidden="true" />
-              {formatTime(timeValueFromMinute(trimEndMinute))}
-            </button>
-          )}
-          {completeEndMinute !== undefined && (
-            <button
-              type="button"
-              disabled={!isOpen}
-              tabIndex={isOpen ? 0 : -1}
-              data-cy="complete-final-block"
-              aria-label={
-                "Utvid sluttid til " +
-                formatTime(timeValueFromMinute(completeEndMinute))
-              }
-              title={
-                "Utvid sluttid til " +
-                formatTime(timeValueFromMinute(completeEndMinute))
-              }
-              className="inline-flex min-h-7 items-center gap-1 rounded px-2 text-detail font-semibold text-text-muted transition-colors hover:bg-brand-soft hover:text-brand focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-brand-focus disabled:pointer-events-none"
-              onClick={() =>
-                onChangeEnd(timeValueFromMinute(completeEndMinute))
-              }
+              <span className="whitespace-nowrap">Siste blokk</span>
+              <ScheduleSlotSegments
+                fills={Array.from({ length: blockSize }, (_, index) =>
+                  index < slotCount ? 1 : 0,
+                )}
+                className="w-14 flex-none"
+              />
+              <span className="tabular-nums">
+                {slotCount}/{blockSize}
+              </span>
+            </div>
+            <div
+              role="group"
+              aria-label="Juster sluttid til hel blokk"
+              className="inline-flex items-center rounded-md border border-border-soft bg-surface-base p-1"
             >
-              {formatTime(timeValueFromMinute(completeEndMinute))}
-              <ArrowRightToLine size={iconSizes.detail} aria-hidden="true" />
-            </button>
-          )}
-        </div>
+              {trimEndMinute !== undefined && (
+                <button
+                  type="button"
+                  data-cy="trim-final-block"
+                  aria-label={
+                    "Forkort sluttid til " +
+                    formatTime(timeValueFromMinute(trimEndMinute))
+                  }
+                  title={
+                    "Forkort sluttid til " +
+                    formatTime(timeValueFromMinute(trimEndMinute))
+                  }
+                  className="inline-flex min-h-7 items-center gap-1 rounded px-2 text-detail font-semibold text-text-muted transition-colors hover:bg-brand-soft hover:text-brand focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-brand-focus disabled:pointer-events-none"
+                  onClick={() =>
+                    onChangeEnd(timeValueFromMinute(trimEndMinute))
+                  }
+                >
+                  <ArrowLeftToLine size={iconSizes.detail} aria-hidden="true" />
+                  {formatTime(timeValueFromMinute(trimEndMinute))}
+                </button>
+              )}
+              {completeEndMinute !== undefined && (
+                <button
+                  type="button"
+                  data-cy="complete-final-block"
+                  aria-label={
+                    "Utvid sluttid til " +
+                    formatTime(timeValueFromMinute(completeEndMinute))
+                  }
+                  title={
+                    "Utvid sluttid til " +
+                    formatTime(timeValueFromMinute(completeEndMinute))
+                  }
+                  className="inline-flex min-h-7 items-center gap-1 rounded px-2 text-detail font-semibold text-text-muted transition-colors hover:bg-brand-soft hover:text-brand focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-brand-focus disabled:pointer-events-none"
+                  onClick={() =>
+                    onChangeEnd(timeValueFromMinute(completeEndMinute))
+                  }
+                >
+                  {formatTime(timeValueFromMinute(completeEndMinute))}
+                  <ArrowRightToLine
+                    size={iconSizes.detail}
+                    aria-hidden="true"
+                  />
+                </button>
+              )}
+            </div>
+          </>
+        )}
       </div>
     </div>
   );
@@ -507,160 +412,179 @@ const AdminScheduleSettingsPanel: React.FC<AdminScheduleSettingsPanelProps> = ({
   );
 
   const fields = (
-    <div
-      className="min-w-0 space-y-6 py-1"
-      aria-label="Innstillinger for tidsrammer"
-    >
-      <section
-        aria-label="Intervjuperiode og daglig tidsrom"
-        className="grid min-w-0 gap-5 tablet:grid-cols-[minmax(var(--schedule-settings-column-min-width),1.15fr)_minmax(18rem,0.85fr)] tablet:items-start"
-      >
-        <SettingField label="Intervjuperiode">
-          <div>
-            <InterviewPeriodPicker
-              startDate={period.startDate}
-              endDate={period.endDate}
-              maxDays={MAX_RANGE_DAYS}
-              invalid={!period.isValid}
-              describedBy={period.isValid ? undefined : "period-input-error"}
-              onChangeStartDate={period.onChangeStartDate}
-              onChangeEndDate={period.onChangeEndDate}
-            />
-            {!period.isValid && (
-              <span
-                id="period-input-error"
-                aria-live="polite"
-                className="mt-1 block text-xs font-semibold text-danger"
-              >
-                {period.isTooLong
-                  ? `Maks ${MAX_RANGE_DAYS} dager`
-                  : "Ugyldig periode"}
-              </span>
-            )}
-          </div>
-        </SettingField>
-
-        <SettingField label="Daglig tidsrom">
-          <div
-            data-cy="daily-time-setting"
-            className="min-h-[6.5rem] handheld:min-h-[9rem]"
+    <div className="min-w-0 pt-1" aria-label="Innstillinger for tidsrammer">
+      <ConfigStepList>
+        <ConfigStep number={1} title="Når skal intervjuene holdes?">
+          <section
+            aria-label="Intervjuperiode og daglig tidsrom"
+            className="flex min-w-0 flex-wrap items-stretch gap-x-3 gap-y-4"
           >
-            <div
-              className={`${rangeControlClass} w-full grid-cols-[minmax(0,1fr)_1px_minmax(0,1fr)]`}
-            >
-              <div className="flex min-w-0 flex-col justify-center py-1.5 pl-3 pr-2">
-                <span className="text-tiny font-medium text-text-subtle">
-                  Fra
-                </span>
-                <TimeSegmentInput
-                  id="start-time"
-                  aria-label="Starttid per dag"
-                  aria-invalid={dailyTime.isInvalid}
-                  aria-describedby={
-                    dailyTime.isInvalid ? "daily-time-error" : undefined
-                  }
-                  value={dailyTime.start}
-                  onChange={dailyTime.onChangeStart}
-                  bare
-                  className="justify-start"
-                />
-              </div>
-              <span
-                className="my-2 h-6 w-px flex-none bg-border-soft"
-                aria-hidden="true"
+            <div className="min-w-[17.5rem] flex-1">
+              <InterviewPeriodPicker
+                startDate={period.startDate}
+                endDate={period.endDate}
+                maxDays={MAX_RANGE_DAYS}
+                invalid={!period.isValid}
+                describedBy={period.isValid ? undefined : "period-input-error"}
+                onChangeStartDate={period.onChangeStartDate}
+                onChangeEndDate={period.onChangeEndDate}
               />
-              <div className="flex min-w-0 flex-col justify-center py-1.5 pl-3 pr-2">
-                <span className="text-tiny font-medium text-text-subtle">
-                  Til
+              {!period.isValid && (
+                <span
+                  id="period-input-error"
+                  aria-live="polite"
+                  className="mt-1 block text-xs font-semibold text-danger"
+                >
+                  {period.isTooLong
+                    ? `Maks ${MAX_RANGE_DAYS} dager`
+                    : "Ugyldig periode"}
                 </span>
-                <TimeSegmentInput
-                  aria-label="Sluttid per dag"
-                  aria-invalid={dailyTime.isInvalid}
-                  aria-describedby={
-                    dailyTime.isInvalid ? "daily-time-error" : undefined
-                  }
-                  allowEndOfDay
-                  value={dailyTime.end}
-                  onChange={dailyTime.onChangeEnd}
-                  bare
-                  className="justify-start"
-                />
-              </div>
-              <FinalBlockSnapFooter
-                snap={finalBlockSnap}
-                onChangeEnd={dailyTime.onChangeEnd}
-              />
+              )}
             </div>
-            {dailyTime.isInvalid && (
-              <span
-                id="daily-time-error"
-                aria-live="polite"
-                className="mt-1 block text-xs font-semibold text-danger"
+
+            <div
+              data-cy="daily-time-setting"
+              className="flex w-[42rem] max-w-full flex-none flex-col"
+            >
+              <div
+                // A fixed height, not a content height: the snap footer's
+                // contents come and go, and the row must not resize under the
+                // settings below it when they do.
+                className={`${rangeControlClass} h-[3.75rem] grid-cols-[auto_24rem] items-stretch`}
               >
-                Ugyldig tidsrom
-              </span>
-            )}
-          </div>
-        </SettingField>
-      </section>
+                <div className="flex min-w-0 items-center gap-2 px-3.5 py-2">
+                  <span className="flex-none text-tiny font-medium text-text-subtle">
+                    Daglig
+                  </span>
+                  <TimeSegmentInput
+                    id="start-time"
+                    aria-label="Starttid per dag"
+                    aria-invalid={dailyTime.isInvalid}
+                    aria-describedby={
+                      dailyTime.isInvalid ? "daily-time-error" : undefined
+                    }
+                    value={dailyTime.start}
+                    onChange={dailyTime.onChangeStart}
+                    bare
+                  />
+                  <span
+                    className="flex-none text-text-subtle"
+                    aria-hidden="true"
+                  >
+                    –
+                  </span>
+                  <TimeSegmentInput
+                    aria-label="Sluttid per dag"
+                    aria-invalid={dailyTime.isInvalid}
+                    aria-describedby={
+                      dailyTime.isInvalid ? "daily-time-error" : undefined
+                    }
+                    allowEndOfDay
+                    value={dailyTime.end}
+                    onChange={dailyTime.onChangeEnd}
+                    bare
+                  />
+                </div>
+                <FinalBlockSnapFooter
+                  snap={finalBlockSnap}
+                  onChangeEnd={dailyTime.onChangeEnd}
+                />
+              </div>
+              {dailyTime.isInvalid && (
+                <span
+                  id="daily-time-error"
+                  aria-live="polite"
+                  className="mt-1 block text-xs font-semibold text-danger"
+                >
+                  Ugyldig tidsrom
+                </span>
+              )}
+            </div>
+          </section>
+        </ConfigStep>
 
-      <section
-        className="border-t border-border-soft pt-6"
-        aria-label="Blokkoppsett"
-      >
-        <div className="grid min-w-0 gap-7 tablet:grid-cols-[minmax(var(--schedule-settings-column-min-width),0.85fr)_minmax(0,1.15fr)] tablet:items-start">
-          <div data-cy="block-settings-grid" className="grid min-w-0 gap-5">
-            <SettingField label="Intervjulengde (inkludert pause mellom intervju for evaluering)">
-              <CompactPresetControl
-                label="Intervjulengde"
-                presets={DURATION_PRESETS}
-                settings={duration}
-                min={SESSION_DURATION_LIMITS.min}
-                max={SESSION_DURATION_LIMITS.max}
-                step={SESSION_DURATION_LIMITS.step}
-              />
-            </SettingField>
+        <ConfigStep
+          number={2}
+          title="Hvor lange er intervjuene?"
+          description={
+            <>
+              Lengden{" "}
+              <strong className="font-semibold">
+                inkluderer pause mellom intervju
+              </strong>
+              .
+            </>
+          }
+        >
+          <section aria-label="Blokkoppsett">
+            <div className="grid min-w-0 gap-8">
+              <div data-cy="block-settings-grid" className="grid min-w-0 gap-6">
+                <InlineSettingField label="Intervjulengde" stretch>
+                  <CompactPresetControl
+                    label="Intervjulengde"
+                    presets={DURATION_PRESETS}
+                    settings={duration}
+                    min={SESSION_DURATION_LIMITS.min}
+                    max={SESSION_DURATION_LIMITS.max}
+                    step={SESSION_DURATION_LIMITS.step}
+                    fullWidth
+                  />
+                </InlineSettingField>
 
-            <SettingField label="Antall intervjuer per blokk">
-              <Stepper
-                value={block.size}
-                min={CHUNK_SIZE_LIMITS.min}
-                max={CHUNK_SIZE_LIMITS.max}
-                step={CHUNK_SIZE_LIMITS.step}
-                onStep={block.onChangeSize}
-                aria-label="Antall intervjuer per blokk"
-              />
-            </SettingField>
+                <div className="flex min-w-0 flex-wrap items-center gap-x-8 gap-y-6">
+                  <InlineSettingField
+                    label="Intervjuer per blokk"
+                    className="min-w-[13rem] flex-[1_1_14rem]"
+                    stretch
+                  >
+                    <Stepper
+                      fullWidth
+                      value={block.size}
+                      min={CHUNK_SIZE_LIMITS.min}
+                      max={CHUNK_SIZE_LIMITS.max}
+                      step={CHUNK_SIZE_LIMITS.step}
+                      onStep={block.onChangeSize}
+                      aria-label="Antall intervjuer per blokk"
+                    />
+                  </InlineSettingField>
 
-            <SettingField label="Pause mellom blokker (for å f.eks skifte intervjuere)">
-              <CompactPresetControl
-                label="Pause mellom blokker"
-                presets={PAUSE_PRESETS}
-                settings={block.pause}
-                min={CHUNK_BREAK_LIMITS.min}
-                max={CHUNK_BREAK_LIMITS.max}
-                step={CHUNK_BREAK_LIMITS.step}
-                formatValue={(value) =>
-                  value === 0 ? "Ingen" : `${value} min`
-                }
-              />
-            </SettingField>
-          </div>
+                  <InlineSettingField
+                    label="Pause mellom blokker"
+                    className="min-w-[20rem] flex-[2_1_26rem]"
+                    stretch
+                  >
+                    <CompactPresetControl
+                      fullWidth
+                      label="Pause mellom blokker"
+                      presets={PAUSE_PRESETS}
+                      settings={block.pause}
+                      min={CHUNK_BREAK_LIMITS.min}
+                      max={CHUNK_BREAK_LIMITS.max}
+                      step={CHUNK_BREAK_LIMITS.step}
+                      formatValue={(value) =>
+                        value === 0 ? "Ingen" : `${value} min`
+                      }
+                    />
+                  </InlineSettingField>
+                </div>
+              </div>
 
-          <aside
-            data-cy="standard-block-preview-region"
-            className="min-w-0 border-t border-border-soft pt-6 tablet:border-l tablet:border-t-0 tablet:pl-7 tablet:pt-0"
-            aria-label="Forhåndsvisning av intervjublokk"
-          >
-            <StandardBlockPreview
-              startMinute={startMinute}
-              interviewDuration={duration.value}
-              interviewCount={block.size}
-              pauseMinutes={block.pause.value}
-            />
-          </aside>
-        </div>
-      </section>
+              <aside
+                data-cy="standard-block-preview-region"
+                className="min-w-0"
+                aria-label="Forhåndsvisning av intervjublokk"
+              >
+                <StandardBlockPreview
+                  startMinute={startMinute}
+                  interviewDuration={duration.value}
+                  interviewCount={block.size}
+                  pauseMinutes={block.pause.value}
+                />
+              </aside>
+            </div>
+          </section>
+        </ConfigStep>
+      </ConfigStepList>
     </div>
   );
 
