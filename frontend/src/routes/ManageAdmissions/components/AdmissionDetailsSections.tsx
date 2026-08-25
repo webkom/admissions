@@ -368,7 +368,10 @@ const FieldGrid = styled.div<{ $min?: string }>`
   display: grid;
   grid-template-columns: repeat(
     auto-fit,
-    minmax(min(${(props) => props.$min ?? "var(--form-control-width)"}, 100%), 1fr)
+    minmax(
+      min(${(props) => props.$min ?? "var(--form-control-width)"}, 100%),
+      1fr
+    )
   );
   gap: var(--spacing-xl);
 `;

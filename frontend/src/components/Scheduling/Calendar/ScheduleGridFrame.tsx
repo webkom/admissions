@@ -368,7 +368,8 @@ export const ScheduleSlotSegments: React.FC<ScheduleSlotSegmentsProps> = ({
             data-schedule-slot-segment=""
             className={cn(
               "relative h-full flex-1 overflow-hidden rounded-full bg-border-faint",
-              isDiscouraged && "border border-dashed border-warning-border bg-warning-bg",
+              isDiscouraged &&
+                "border border-dashed border-warning-border bg-warning-bg",
             )}
           >
             <span

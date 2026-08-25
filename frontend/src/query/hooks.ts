@@ -395,7 +395,10 @@ export const useMemberSearch = (slug: string, query: string) =>
     meta: { sensitive: true },
   });
 
-export interface AdmissionGroupContent {
+// Local to this module: the mutation side has its own CommitteeContent, and
+// callers import that one. Exporting this made it dead surface that knip
+// (check-unused in CI) fails the build on.
+interface AdmissionGroupContent {
   committee_info: string | null;
   application_guidance: string | null;
   interview_description: string | null;
