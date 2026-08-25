@@ -132,51 +132,59 @@ const CommitteeContentEditor: React.FC<CommitteeContentEditorProps> = ({
       getCompletedFieldCount(value[group.pk] ?? emptyContent) ===
       contentFields.length,
   ).length;
+  // A picker and a "3 av 5 utfylt" tally exist to help someone choose between
+  // several committees. With exactly one there is nothing to choose and
+  // nothing to tally - the fields below already show whether it's filled in.
+  const showCommitteeNav = groups.length > 1;
 
   return (
     <Editor data-admission-field="group_content" aria-invalid={Boolean(error)}>
-      <EditorSummary>
-        <strong>
-          {completedGroups} av {groups.length} komiteer utfylt
-        </strong>
-      </EditorSummary>
-      <EditorLayout>
-        <CommitteeList aria-label="Velg komité">
-          <CommitteeListTitle>Komiteer</CommitteeListTitle>
-          {groups.map((group) => {
-            const completion = getCompletedFieldCount(
-              value[group.pk] ?? emptyContent,
-            );
-            const isSelected = group.pk === activeGroup.pk;
-            return (
-              <CommitteeButton
-                key={group.pk}
-                type="button"
-                data-group-name={group.name}
-                aria-current={isSelected ? "true" : undefined}
-                onClick={() => setActiveGroupId(group.pk)}
-              >
-                {group.logo ? (
-                  <CommitteeLogo src={group.logo} alt="" />
-                ) : (
-                  <CommitteeFallback aria-hidden="true">
-                    {group.name.slice(0, 1)}
-                  </CommitteeFallback>
-                )}
-                <CommitteeName>{group.name}</CommitteeName>
-                <Completion
-                  aria-label={`${completion} av ${contentFields.length} felt fylt ut`}
+      {showCommitteeNav && (
+        <EditorSummary>
+          <strong>
+            {completedGroups} av {groups.length} komiteer utfylt
+          </strong>
+        </EditorSummary>
+      )}
+      <EditorLayout $singleCommittee={!showCommitteeNav}>
+        {showCommitteeNav && (
+          <CommitteeList aria-label="Velg komité">
+            <CommitteeListTitle>Komiteer</CommitteeListTitle>
+            {groups.map((group) => {
+              const completion = getCompletedFieldCount(
+                value[group.pk] ?? emptyContent,
+              );
+              const isSelected = group.pk === activeGroup.pk;
+              return (
+                <CommitteeButton
+                  key={group.pk}
+                  type="button"
+                  data-group-name={group.name}
+                  aria-current={isSelected ? "true" : undefined}
+                  onClick={() => setActiveGroupId(group.pk)}
                 >
-                  {completion === contentFields.length ? (
-                    <CheckCircle size={16} />
+                  {group.logo ? (
+                    <CommitteeLogo src={group.logo} alt="" />
                   ) : (
-                    `${completion}/${contentFields.length}`
+                    <CommitteeFallback aria-hidden="true">
+                      {group.name.slice(0, 1)}
+                    </CommitteeFallback>
                   )}
-                </Completion>
-              </CommitteeButton>
-            );
-          })}
-        </CommitteeList>
+                  <CommitteeName>{group.name}</CommitteeName>
+                  <Completion
+                    aria-label={`${completion} av ${contentFields.length} felt fylt ut`}
+                  >
+                    {completion === contentFields.length ? (
+                      <CheckCircle size={16} />
+                    ) : (
+                      `${completion}/${contentFields.length}`
+                    )}
+                  </Completion>
+                </CommitteeButton>
+              );
+            })}
+          </CommitteeList>
+        )}
 
         <DetailPanel>
           <DetailHeading>
@@ -417,16 +425,17 @@ const EditorSummary = styled.p`
     color: var(--color-text-primary);
   }
 `;
-const EditorLayout = styled.div`
+const EditorLayout = styled.div<{ $singleCommittee?: boolean }>`
   display: grid;
-  grid-template-columns: minmax(11rem, 0.72fr) minmax(0, 2fr) minmax(
-      15rem,
-      0.9fr
-    );
+  grid-template-columns: ${({ $singleCommittee }) =>
+    $singleCommittee
+      ? "minmax(0, 1fr) minmax(17rem, 20rem)"
+      : "minmax(11rem, 0.72fr) minmax(0, 2fr) minmax(15rem, 0.9fr)"};
   gap: var(--spacing-xl);
   align-items: start;
   @media (max-width: 1050px) {
-    grid-template-columns: minmax(11rem, 0.65fr) minmax(0, 1.35fr);
+    grid-template-columns: ${({ $singleCommittee }) =>
+      $singleCommittee ? "1fr" : "minmax(11rem, 0.65fr) minmax(0, 1.35fr)"};
     ${""} > section {
       grid-column: 1 / -1;
     }
@@ -587,12 +596,19 @@ const TextArea = styled.textarea`
   color: var(--color-text-primary);
   font: inherit;
   line-height: var(--line-height-copy);
+  transition:
+    border-color 120ms ease,
+    box-shadow 120ms ease;
+  &:hover {
+    border-color: var(--color-border-strong);
+  }
   &[aria-invalid="true"] {
     border-color: var(--color-danger-border);
   }
   &:focus-visible {
-    outline: 2px solid var(--color-brand-ring);
-    outline-offset: 2px;
+    outline: none;
+    border-color: var(--color-brand-input);
+    box-shadow: 0 0 0 3px var(--color-brand-ring-soft);
   }
 `;
 const FieldMeta = styled.div`
@@ -648,6 +664,7 @@ const Preview = styled.section`
   border-left: var(--border-width-emphasis) solid var(--color-brand);
   border-radius: var(--border-radius-md);
   background: var(--color-surface-subtle);
+  box-shadow: var(--shadow-panel);
   @media (max-width: 1050px) {
     position: static;
   }
@@ -659,8 +676,11 @@ const PreviewHeader = styled.div`
 `;
 const PreviewTitle = styled.h4`
   margin: 0;
-  color: var(--color-text-primary);
-  font-size: var(--font-size-md);
+  color: var(--color-text-muted);
+  font-size: var(--font-size-detail);
+  font-weight: var(--font-weight-semibold);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
 `;
 const PreviewTabs = styled.div`
   display: flex;
@@ -668,15 +688,23 @@ const PreviewTabs = styled.div`
 `;
 const PreviewTab = styled.button`
   padding: var(--spacing-xs) var(--spacing-sm);
-  border: var(--border-width-default) solid var(--color-border-muted);
+  border: var(--border-width-default) solid transparent;
   border-radius: var(--border-radius-pill);
-  background: var(--color-surface-base);
+  background: transparent;
   color: var(--color-text-muted);
   font: inherit;
   font-size: var(--font-size-detail);
   cursor: pointer;
+  transition:
+    background-color 120ms ease,
+    color 120ms ease,
+    border-color 120ms ease;
+  &:hover {
+    background: var(--color-surface-base);
+  }
   &[aria-pressed="true"] {
     border-color: var(--color-brand);
+    background: var(--color-surface-base);
     color: var(--color-brand);
     font-weight: var(--font-weight-semibold);
   }
@@ -689,6 +717,7 @@ const ApplicantCard = styled.div`
   border: var(--border-width-default) solid var(--color-border-soft);
   border-radius: var(--border-radius-md);
   background: var(--color-surface-base);
+  box-shadow: var(--shadow-panel);
 `;
 const ApplicantApplication = styled(ApplicantCard)`
   gap: var(--spacing-sm);
