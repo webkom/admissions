@@ -186,6 +186,11 @@ export interface SolverOptions {
   availability_fallback: AvailabilityFallback;
   enforce_same_gender: boolean;
   require_experienced_panel: boolean;
+  /**
+   * Candidates per session: 1 is a normal interview; 2+ means one shared
+   * panel meets that many candidates together in the same slot.
+   */
+  candidates_per_session: number;
   allow_overtime: boolean;
   prioritize_continuity: boolean;
   same_panel_per_block: boolean;

@@ -89,7 +89,7 @@ export const buildWorkflowSteps = ({
     hasConfiguredAvailabilityWindows &&
     myAvailabilitySaved &&
     availabilityComplete;
-  const planDraftLocked = !foundationReady && !hasDistributedPlan;
+  const planLocked = !foundationReady && !hasDistributedPlan;
   const draftReadyForPublish = publicationReadiness.ready;
 
   return [
@@ -103,42 +103,29 @@ export const buildWorkflowSteps = ({
       complete: availabilityComplete || hasDistributedPlan,
     },
     {
+      // Draft and publish are one step: generate, review, publish - and after
+      // a partial publish, keep planning the remaining days in the same place.
       key: "solver",
-      title: "Planutkast",
-      description: "Generer, kontroller kandidater og løs avvik.",
+      keys: ["solver", "plan"],
+      title: "Plan",
+      description: hasDistributedPlan
+        ? "Publisert. Utvid publiseringen eller planlegg resten her."
+        : "Lag planutkastet, kontroller det og publiser.",
       icon: Sparkles,
-      status: planDraftLocked
+      status: planLocked
         ? "Låst"
         : hasDistributedPlan || draftReadyForPublish
-          ? "Ferdig"
+          ? hasDistributedPlan
+            ? "Publisert"
+            : "Klar til å publisere"
           : "Pågår",
-      tone: planDraftLocked
+      tone: planLocked
         ? "locked"
         : hasDistributedPlan || draftReadyForPublish
           ? "success"
           : "muted",
-      complete: draftReadyForPublish || hasDistributedPlan,
-      locked: planDraftLocked,
-    },
-    {
-      key: "plan",
-      title: hasDistributedPlan ? "Gjennomføring" : "Publisering",
-      description: hasDistributedPlan
-        ? "Inviter, eksporter og følg opp intervjuene."
-        : "Se over utkastet og publiser endelige tider.",
-      icon: CalendarCheck,
-      status: hasDistributedPlan
-        ? "Ferdig"
-        : draftReadyForPublish
-          ? "Pågår"
-          : "Låst",
-      tone: hasDistributedPlan
-        ? "success"
-        : draftReadyForPublish
-          ? "muted"
-          : "locked",
       complete: hasDistributedPlan,
-      locked: !draftReadyForPublish && !hasDistributedPlan,
+      locked: planLocked,
     },
   ];
 };

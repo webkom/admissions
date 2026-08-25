@@ -53,19 +53,11 @@ const ADMIN_STEPS: WizardStep[] = [
   },
   {
     icon: Sparkles,
-    label: "2. Planutkast",
-    title: "Generer først, kontroller etterpå",
+    label: "2. Plan",
+    title: "Lag, kontroller og publiser i ett flyt",
     description:
-      "Lag et internt forslag. Intervjuerne ser bare kandidatene de er foreslått til, og solveren reparerer eventuelle inhabiliteter med færrest mulig endringer.",
+      "Solveren lager et internt forslag og reparerer eventuelle inhabiliteter. Publiser alt på én gang, eller slipp planen dag for dag – publiserte dager låses, og du kan planlegge resten senere uten å endre dem.",
     target: "solver",
-  },
-  {
-    icon: CalendarCheck,
-    label: "3. Publisering",
-    title: "Publiser først når kontrollen er ferdig",
-    description:
-      "Se over utkastet og publiser endelige tider. Etterpå bruker du samme side til invitasjoner og oppfølging.",
-    target: "plan",
   },
 ];
 
@@ -116,7 +108,7 @@ export default function WizardTour({
   onNavigate,
 }: WizardTourProps) {
   const steps = isAdmin ? ADMIN_STEPS : MEMBER_STEPS;
-  // The admin tour opens on a role intro that is not one of the three numbered
+  // The admin tour opens on a role intro that is not one of the numbered
   // workflow steps, so it counts from 0 and the rest line up with the stepper.
   // The member tour has no such intro, so it counts from 1.
   const stepOffset = isAdmin ? 0 : 1;

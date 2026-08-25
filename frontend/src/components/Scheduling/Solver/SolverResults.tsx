@@ -177,6 +177,19 @@ const SolverResults = ({
     () => new Set(presentation.sortedSchedule.map((item) => item.time)),
     [presentation.sortedSchedule],
   );
+  // Times hosting more than one candidate are joint interviews (one shared
+  // panel meeting two candidates).
+  const jointTimes = useMemo(() => {
+    const counts = new Map<number, number>();
+    presentation.sortedSchedule.forEach((item) => {
+      counts.set(item.time, (counts.get(item.time) ?? 0) + 1);
+    });
+    return new Set(
+      Array.from(counts.entries())
+        .filter(([, count]) => count > 1)
+        .map(([time]) => time),
+    );
+  }, [presentation.sortedSchedule]);
   const formatSlotTime = (time: number) =>
     formatSlotLabel(time, dates, sessionDuration);
   const blockSummaryByScheduleIndex = useMemo(() => {
@@ -749,7 +762,14 @@ const SolverResults = ({
                                   )}
                                 </td>
                                 <td className="px-4 py-3 text-sm font-semibold text-text-primary">
-                                  {presentation.displayCandidate(item)}
+                                  <div className="flex flex-wrap items-center gap-2">
+                                    {presentation.displayCandidate(item)}
+                                    {jointTimes.has(item.time) && (
+                                      <span className="rounded bg-brand-soft px-1.5 py-0.5 text-label font-semibold text-brand">
+                                        Fellesintervju
+                                      </span>
+                                    )}
+                                  </div>
                                 </td>
                                 <td className="px-4 py-3 text-sm">
                                   <div className="flex flex-wrap gap-1.5">
@@ -863,6 +883,11 @@ const SolverResults = ({
                           <span className="truncate">
                             {displayItem.candidate}
                           </span>
+                          {jointTimes.has(item.time) && (
+                            <span className="rounded bg-brand-soft px-1.5 py-0.5 text-label font-semibold text-brand">
+                              Felles
+                            </span>
+                          )}
                         </div>
                       </div>
                       {canEditDraft && (

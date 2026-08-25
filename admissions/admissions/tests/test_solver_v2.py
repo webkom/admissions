@@ -616,6 +616,143 @@ class FactorizedSolverV2TestCase(SimpleTestCase):
 
         self.assertGreaterEqual(primary_reduction, 0.80)
         self.assertGreaterEqual(total_reduction, 0.60)
+    def test_joint_interviews_packs_two_candidates_per_slot(self):
+        slots = list(range(6))
+        candidates = [
+            {"id": f"c{index}", "name": f"Candidate {index}", "gender": "M"}
+            for index in range(4)
+        ]
+        # Panel of 3 available for every slot. With joint, the solver
+        # can place 2 candidates in one slot with that shared panel.
+        interviewers = [
+            interviewer(f"i{index}", slots)
+            for index in range(3)
+        ]
+        options = {
+            "policy_version": 2,
+            "panel_stability": "flexible",
+            "availability_fallback": "stop",
+            "require_experienced_panel": False,
+            "candidates_per_session": 2,
+            "max_solver_seconds": 5,
+        }
+        common = {
+            "candidates_data": candidates,
+            "interviewers_data": interviewers,
+            "panel_size": 3,
+            "all_slots_data": slots,
+            "options_data": options,
+            "include_metrics": True,
+        }
+
+        result = solve_schedule(**common)
+        self.assertIn(result["status"], ("SUCCESS", "PARTIAL"))
+        schedule = result["schedule"]
+        # All 4 candidates placed.
+        candidate_ids = {row["candidate_id"] for row in schedule}
+        self.assertEqual(candidate_ids, {c["id"] for c in candidates})
+
+        # With 3 interviewers and panel_size=3, only one panel can sit at
+        # a time. Joint mode is exact: 4 candidates form 2 sessions of 2.
+        times = {row["time"] for row in schedule}
+        self.assertEqual(len(times), 2, f"Joint packed into {len(times)} slots")
+        for interview_time in times:
+            self.assertEqual(
+                sum(1 for row in schedule if row["time"] == interview_time),
+                2,
+            )
+
+        # Both rows at a shared time carry the identical panel.
+        for interview_time in times:
+            rows = [row for row in schedule if row["time"] == interview_time]
+            panels = {
+                frozenset(m["id"] for m in row["panel"]) for row in rows
+            }
+            self.assertEqual(len(panels), 1, f"Mismatched panels at {interview_time}")
+            self.assertLessEqual(len(rows), 2)
+
+        # Validation accepts the joint result.
+        problem, early = solver_v2_module._normalize_problem(
+            candidates_data=common["candidates_data"],
+            interviewers_data=common["interviewers_data"],
+            panel_size=common["panel_size"],
+            options_data=common["options_data"],
+            locked_assignments_data=None,
+            all_slots_data=common["all_slots_data"],
+            blocks_data=None,
+            block_metadata_data=None,
+            previous_schedule_data=None,
+        )
+        self.assertIsNone(early)
+        issues = validate_schedule_result(
+            schedule=schedule,
+            candidates=problem.candidates,
+            interviewers=problem.interviewers,
+            panel_size=problem.panel_size,
+            all_slots=problem.sorted_slots,
+            allow_overtime=problem.options.allow_overtime,
+            enforce_same_gender=problem.options.enforce_same_gender,
+            require_experienced_panel=problem.options.require_experienced_panel,
+            requires_stable_panel=problem.policy.requires_stable_panel,
+            blocks=problem.canonical_blocks,
+            locked_assignments=problem.locked_assignments,
+            require_all_candidates=True,
+            candidates_per_session=2,
+        )
+        self.assertEqual(issues, [])
+
+        # With joint disabled the same schedule would be rejected.
+        issues_no_joint = validate_schedule_result(
+            schedule=schedule,
+            candidates=problem.candidates,
+            interviewers=problem.interviewers,
+            panel_size=problem.panel_size,
+            all_slots=problem.sorted_slots,
+            allow_overtime=problem.options.allow_overtime,
+            enforce_same_gender=problem.options.enforce_same_gender,
+            require_experienced_panel=problem.options.require_experienced_panel,
+            requires_stable_panel=problem.policy.requires_stable_panel,
+            blocks=problem.canonical_blocks,
+            locked_assignments=problem.locked_assignments,
+            require_all_candidates=True,
+            candidates_per_session=1,
+        )
+        duplicate_issues = [
+            issue for issue in issues_no_joint if issue.code == "duplicate_time"
+        ]
+        self.assertTrue(duplicate_issues)
+    def test_joint_interviews_leave_an_odd_candidate_unplaced(self):
+        slots = list(range(6))
+        candidates = [
+            {"id": f"c{index}", "name": f"Candidate {index}", "gender": "M"}
+            for index in range(5)
+        ]
+        interviewers = [
+            interviewer(f"i{index}", slots) for index in range(3)
+        ]
+        options = {
+            "policy_version": 2,
+            "panel_stability": "flexible",
+            "availability_fallback": "stop",
+            "require_experienced_panel": False,
+            "candidates_per_session": 2,
+            "max_solver_seconds": 5,
+        }
+        result = solve_schedule(
+            candidates_data=candidates,
+            interviewers_data=interviewers,
+            panel_size=3,
+            all_slots_data=slots,
+            options_data=options,
+        )
+        # 5 candidates cannot form complete pairs: 4 are placed across two
+        # full sessions, one is left unplaced.
+        self.assertEqual(result["status"], "PARTIAL")
+        schedule = result["schedule"]
+        times = {row["time"] for row in schedule}
+        self.assertEqual(len(times), 2)
+        self.assertEqual(len(schedule), 4)
+        self.assertEqual(len(result["unplaceable"]), 1)
 
 
 class IndependentSolverResultTestCase(SimpleTestCase):

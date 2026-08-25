@@ -35,6 +35,10 @@ class ObjectiveVector:
     changed_rows: int
     changed_panel_members: int
     panel_breaks: int
+    # Number of interview sessions (distinct occupied slots). With joint
+    # interviews two candidates share one session, so this is smaller than
+    # the candidate count; minimizing it packs candidates into joint panels.
+    joint_sessions: int
     adjacent_block_rest: int
     extra_experienced: int
     max_load: int
@@ -85,6 +89,7 @@ def validate_schedule_result(
     blocks: Sequence[Any],
     locked_assignments: Sequence[dict],
     require_all_candidates: bool = False,
+    candidates_per_session: int = 1,
 ) -> list[ValidationIssue]:
     """Validate a reconstructed result without consulting CP-SAT or the DB."""
 
@@ -100,7 +105,8 @@ def validate_schedule_result(
         _value(interviewer, "gender") in {"M", "F"} for interviewer in interviewers
     )
     seen_candidates: set[str] = set()
-    seen_times: set[int] = set()
+    count_by_time: dict[int, int] = {}
+    panel_by_time: dict[int, frozenset[str]] = {}
     row_by_candidate: dict[str, dict] = {}
 
     for row in schedule:
@@ -135,7 +141,7 @@ def validate_schedule_result(
                     time=interview_time if isinstance(interview_time, int) else None,
                 )
             )
-        elif interview_time in seen_times:
+        elif interview_time in count_by_time and candidates_per_session <= 1:
             issues.append(
                 ValidationIssue(
                     "duplicate_time",
@@ -247,8 +253,31 @@ def validate_schedule_result(
             )
 
         seen_candidates.add(candidate_id)
-        if isinstance(interview_time, int):
-            seen_times.add(interview_time)
+        if isinstance(interview_time, int) and interview_time in allowed_slots:
+            previous_count = count_by_time.get(interview_time, 0)
+            if previous_count > 0 and candidates_per_session > 1:
+                if previous_count >= candidates_per_session:
+                    issues.append(
+                        ValidationIssue(
+                            "joint_capacity",
+                            "Et fellesintervju kan ikke ha flere enn "
+                            f"{candidates_per_session} kandidater.",
+                            candidate_id=candidate_id,
+                            time=interview_time,
+                        )
+                    )
+                elif panel_by_time[interview_time] != frozenset(panel_ids):
+                    issues.append(
+                        ValidationIssue(
+                            "joint_panel_mismatch",
+                            "Kandidatene i et fellesintervju må dele samme panel.",
+                            candidate_id=candidate_id,
+                            time=interview_time,
+                        )
+                    )
+            count_by_time[interview_time] = previous_count + 1
+            if previous_count == 0:
+                panel_by_time[interview_time] = frozenset(panel_ids)
         row_by_candidate[candidate_id] = row
 
     if require_all_candidates:
@@ -262,15 +291,15 @@ def validate_schedule_result(
             )
 
     if requires_stable_panel:
-        row_by_time = {
-            row.get("time"): row for row in schedule if isinstance(row.get("time"), int)
-        }
+        rows_by_time: dict[int, list[dict]] = {}
+        for row in schedule:
+            if isinstance(row.get("time"), int):
+                rows_by_time.setdefault(row["time"], []).append(row)
         for block in blocks:
             block_panels = {
                 frozenset(str(member.get("id") or "") for member in row["panel"])
                 for interview_time in _block_slots(block)
-                for row in [row_by_time.get(interview_time)]
-                if row is not None
+                for row in rows_by_time.get(interview_time, [])
             }
             if len(block_panels) > 1:
                 issues.append(
@@ -352,6 +381,7 @@ def evaluate_objective_vector(
     previous_schedule: Sequence[dict],
     panel_size: int,
     require_experienced_panel: bool,
+    candidates_per_session: int = 1,
 ) -> ObjectiveVector:
     candidate_ids = {str(_value(candidate, "id")) for candidate in candidates}
     interviewer_map = {
@@ -363,10 +393,23 @@ def evaluate_objective_vector(
     extra_experienced = 0
     loads = Counter()
 
+    # Interviewer workload is per session, not per candidate: a joint panel
+    # that meets two candidates counts as one interview for each member.
+    sessions: dict[int, list[list]] = {}
+    loose_rows: list[dict] = []
     for row in schedule:
         interview_time = row.get("time")
+        if not isinstance(interview_time, int):
+            loose_rows.append(row)
+            continue
+        sessions.setdefault(interview_time, []).append(row.get("panel") or [])
+
+    for interview_time, panels in sessions.items():
+        members = panels[0] if candidates_per_session > 1 else [
+            member for panel in panels for member in panel
+        ]
         experienced_count = 0
-        for member in row.get("panel") or []:
+        for member in members:
             interviewer_id = str(member.get("id") or "")
             interviewer = interviewer_map.get(interviewer_id)
             if interviewer is None:
@@ -381,6 +424,17 @@ def evaluate_objective_vector(
                 experienced_count += 1
         if require_experienced_panel:
             extra_experienced += max(0, experienced_count - 1)
+
+    for row in loose_rows:
+        interview_time = row.get("time")
+        for member in row.get("panel") or []:
+            interviewer_id = str(member.get("id") or "")
+            interviewer = interviewer_map.get(interviewer_id)
+            if interviewer is None:
+                continue
+            loads[interviewer_id] += 1
+            if interview_time not in set(_value(interviewer, "availability", ()) or ()):
+                overtime += 1
 
     previous_by_candidate = {
         str(row.get("candidate_id") or ""): row
@@ -459,7 +513,7 @@ def evaluate_objective_vector(
         else 0
     )
 
-    occupied = {row.get("time") for row in schedule}
+    occupied = set(sessions.keys()) | {row.get("time") for row in loose_rows}
     latest_rank = max((slot_rank[slot] for slot in occupied), default=0)
     sequences = [list(_block_slots(block)) for block in blocks if _block_slots(block)]
     covered_slots = {slot for sequence in sequences for slot in sequence}
@@ -481,18 +535,37 @@ def evaluate_objective_vector(
         interviewer_id: rank
         for rank, interviewer_id in enumerate(sorted(interviewer_map))
     }
-    canonical_tie = sum(
+    candidate_tie = sum(
         candidate_rank[str(row.get("candidate_id") or "")]
         * (len(sorted_slots) - 1 - slot_rank.get(row.get("time"), 0))
         for row in schedule
         if str(row.get("candidate_id") or "") in candidate_rank
-    ) + sum(
-        interviewer_rank[str(member.get("id") or "")]
-        * (len(sorted_slots) - slot_rank.get(row.get("time"), 0))
-        for row in schedule
-        for member in row.get("panel") or []
-        if str(member.get("id") or "") in interviewer_rank
     )
+    if candidates_per_session > 1:
+        # The panel tier of the tie-breaker mirrors the model: one entry per
+        # session, not per candidate row.
+        interviewer_tie = sum(
+            interviewer_rank[str(member.get("id") or "")]
+            * (len(sorted_slots) - slot_rank.get(interview_time, 0))
+            for interview_time, panels in sessions.items()
+            for member in panels[0]
+            if str(member.get("id") or "") in interviewer_rank
+        ) + sum(
+            interviewer_rank[str(member.get("id") or "")]
+            * (len(sorted_slots) - slot_rank.get(row.get("time"), 0))
+            for row in loose_rows
+            for member in row.get("panel") or []
+            if str(member.get("id") or "") in interviewer_rank
+        )
+    else:
+        interviewer_tie = sum(
+            interviewer_rank[str(member.get("id") or "")]
+            * (len(sorted_slots) - slot_rank.get(row.get("time"), 0))
+            for row in schedule
+            for member in row.get("panel") or []
+            if str(member.get("id") or "") in interviewer_rank
+        )
+    canonical_tie = candidate_tie + interviewer_tie
 
     return ObjectiveVector(
         unplaced=max(0, len(candidates) - len(row_by_candidate)),
@@ -501,6 +574,7 @@ def evaluate_objective_vector(
         changed_rows=changed_rows,
         changed_panel_members=changed_panel_members,
         panel_breaks=_panel_break_count(schedule, blocks, panel_size),
+        joint_sessions=len(sessions),
         adjacent_block_rest=adjacent_rest,
         extra_experienced=extra_experienced,
         max_load=max_load,
@@ -508,7 +582,10 @@ def evaluate_objective_vector(
         experienced_load_spread=experienced_load_spread,
         continuity_latest_rank=latest_rank,
         continuity_runs=continuity_runs,
-        earliness=sum(slot_rank.get(row.get("time"), 0) for row in schedule),
+        earliness=sum(
+            slot_rank.get(interview_time, 0) for interview_time in sessions
+        )
+        + sum(slot_rank.get(row.get("time"), 0) for row in loose_rows),
         canonical_tie=canonical_tie,
     )
 
@@ -523,13 +600,18 @@ def objective_key(
     load_balance_weight: int,
     continuity_weight: int,
     previous_panel_member_count: int,
+    candidates_per_session: int = 1,
+    has_previous_schedule: bool = False,
 ) -> tuple[int, ...]:
     structure = load_balance_weight * (
         vector.max_load + vector.load_spread + vector.experienced_load_spread
     ) + continuity_weight * candidate_count * (
         vector.continuity_latest_rank + vector.continuity_runs
     )
-    if repair_mode:
+    # Mirrors the model's tier list: repair cost only applies when repairing
+    # a real previous schedule, and the joint-session tier only when joint
+    # interviews are enabled and not in that repair-with-previous mode.
+    if repair_mode and has_previous_schedule:
         profile = REPAIR_PROFILES.get(repair_strategy, REPAIR_PROFILES["balanced"])
         repair = (
             profile["time"] * vector.changed_times
@@ -553,6 +635,7 @@ def objective_key(
         vector.unplaced,
         vector.overtime,
         vector.panel_breaks if prefers_stable_panel else 0,
+        *((vector.joint_sessions,) if candidates_per_session > 1 else ()),
         vector.adjacent_block_rest,
         vector.extra_experienced,
         structure,

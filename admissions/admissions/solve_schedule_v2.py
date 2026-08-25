@@ -65,6 +65,9 @@ class SolverProblem:
     interviewers: list[Interviewer]
     panel_size: int
     options: SolveOptions
+    # Max candidates one shared panel may interview in the same slot
+    # (1 = normal interviews, 2+ = joint sessions).
+    candidates_per_session: int
     policy: Any
     sorted_slots: list[int]
     canonical_blocks: list[CanonicalBlock]
@@ -315,6 +318,10 @@ def _normalize_problem(
 
     locked_by_candidate: dict[str, dict] = {}
     locked_times: set[int] = set()
+    # Per-time bookkeeping so joint interviews may place two locked
+    # candidates (with one shared panel) while single sessions stay strict.
+    locked_time_counts: dict[int, int] = {}
+    locked_panels_by_time: dict[int, frozenset[str]] = {}
     normalized_locks: list[dict] = []
     locked_panel_masks: dict[str, int] = {}
     for assignment in locked_assignments:
@@ -340,11 +347,28 @@ def _normalize_problem(
                 assignment,
             )
         if locked_time in locked_times:
-            return None, _locked_conflict(
-                "duplicate_time",
-                "Multiple locked interviews share one time.",
-                assignment,
-            )
+            if options.candidates_per_session <= 1:
+                return None, _locked_conflict(
+                    "duplicate_time",
+                    "Multiple locked interviews share one time.",
+                    assignment,
+                )
+            if (
+                locked_time_counts[locked_time]
+                >= options.candidates_per_session
+            ):
+                return None, _locked_conflict(
+                    "joint_capacity",
+                    f"A joint slot can hold at most "
+                    f"{options.candidates_per_session} candidates.",
+                    assignment,
+                )
+            if locked_panels_by_time[locked_time] != frozenset(panel_ids):
+                return None, _locked_conflict(
+                    "joint_panel_mismatch",
+                    "Locked joint interviews must share one panel.",
+                    assignment,
+                )
         panel_ids = []
         for member in assignment.get("panel", []):
             interviewer_id = member.get("id") or interviewer_id_by_name.get(
@@ -415,6 +439,10 @@ def _normalize_problem(
             interviewer_bits[interviewer_id] for interviewer_id in panel_ids
         )
         locked_times.add(locked_time)
+        locked_time_counts[locked_time] = (
+            locked_time_counts.get(locked_time, 0) + 1
+        )
+        locked_panels_by_time.setdefault(locked_time, frozenset(panel_ids))
         normalized_locks.append(
             {
                 "candidate_id": candidate_id,
@@ -583,10 +611,17 @@ def _normalize_problem(
                     "Ikke nok intervjukapasitet i de åpne tidslukene.",
                 )
         else:
-            unplaceable_reason[candidate.id] = (
-                "panel_capacity",
-                "Ikke nok intervjukapasitet i de åpne tidslukene.",
-            )
+            if options.candidates_per_session > 1:
+                unplaceable_reason[candidate.id] = (
+                    "joint_capacity",
+                    f"Kandidaten kan ikke plasseres i et fellesintervju med "
+                    f"{options.candidates_per_session} kandidater per intervju.",
+                )
+            else:
+                unplaceable_reason[candidate.id] = (
+                    "panel_capacity",
+                    "Ikke nok intervjukapasitet i de åpne tidslukene.",
+                )
 
     base_var_bound = (
         len(eligibility)
@@ -606,6 +641,7 @@ def _normalize_problem(
             interviewers=interviewers,
             panel_size=panel_size,
             options=options,
+            candidates_per_session=max(1, int(options.candidates_per_session)),
             policy=policy,
             sorted_slots=sorted_slots,
             canonical_blocks=canonical_blocks,
@@ -665,10 +701,31 @@ def _build_model(
     panel = {
         key: model.NewBoolVar(f"p_{key[0]}_{key[1]}") for key in problem.panel_pairs
     }
-    occupied = {
-        interview_time: model.NewBoolVar(f"occ_{interview_time}")
-        for interview_time in problem.sorted_slots
-    }
+    if problem.candidates_per_session > 1:
+        occupied = {
+            interview_time: model.NewIntVar(
+                0,
+                problem.candidates_per_session,
+                f"occ_{interview_time}",
+            )
+            for interview_time in problem.sorted_slots
+        }
+        panel_active = {
+            interview_time: model.NewBoolVar(f"active_{interview_time}")
+            for interview_time in problem.sorted_slots
+        }
+        for interview_time in problem.sorted_slots:
+            model.AddMinEquality(
+                panel_active[interview_time],
+                [occupied[interview_time], 1],
+            )
+        session_active = panel_active
+    else:
+        occupied = {
+            interview_time: model.NewBoolVar(f"occ_{interview_time}")
+            for interview_time in problem.sorted_slots
+        }
+        session_active = occupied
 
     for candidate in problem.candidates:
         candidate_vars = [
@@ -699,8 +756,26 @@ def _build_model(
             if (interviewer.id, interview_time) in panel
         ]
         model.Add(
-            _linear_sum(panel_vars) == problem.panel_size * occupied[interview_time]
+            _linear_sum(panel_vars)
+            == problem.panel_size * session_active[interview_time]
         )
+
+    if problem.candidates_per_session > 1:
+        # Joint mode is exact, not "pack when possible": every session has
+        # precisely N candidates sharing one panel. Slots holding locked
+        # assignments are exempt - a previously published single interview
+        # stays as it is while the remaining days are planned.
+        locked_times = {
+            locked["time"] for locked in problem.locked_by_candidate.values()
+        }
+        for interview_time in problem.sorted_slots:
+            if interview_time in locked_times:
+                continue
+            model.Add(
+                occupied[interview_time]
+                == problem.candidates_per_session
+                * session_active[interview_time]
+            )
 
     # Aggregate every candidate conflict into one row per interviewer/slot.
     # The one-candidate-per-slot invariant makes this exact.
@@ -739,7 +814,9 @@ def _build_model(
                 if interviewer.experience_level == "experienced"
                 and (interviewer.id, interview_time) in panel
             ]
-            model.Add(_linear_sum(experienced) >= occupied[interview_time])
+            model.Add(
+                _linear_sum(experienced) >= session_active[interview_time]
+            )
             experienced_panel_vars.extend(experienced)
 
     for candidate_id, locked in problem.locked_by_candidate.items():
@@ -827,7 +904,7 @@ def _build_model(
             block_occupied = model.NewBoolVar(f"block_occupied_{block.index}")
             model.AddMaxEquality(
                 block_occupied,
-                [occupied[interview_time] for interview_time in block_slots],
+                [session_active[interview_time] for interview_time in block_slots],
             )
             possible_ids = sorted(
                 {
@@ -865,7 +942,7 @@ def _build_model(
             block_occupied = model.NewBoolVar(f"reference_occupied_{block.index}")
             model.AddMaxEquality(
                 block_occupied,
-                [occupied[interview_time] for interview_time in block_slots],
+                [session_active[interview_time] for interview_time in block_slots],
             )
             possible_ids = sorted(
                 {
@@ -991,7 +1068,8 @@ def _build_model(
         )
         for interview_time in problem.sorted_slots:
             model.Add(
-                latest_rank >= slot_rank[interview_time] * occupied[interview_time]
+                latest_rank
+                >= slot_rank[interview_time] * session_active[interview_time]
             )
         sequences = [
             list(block.usable_slots)
@@ -1015,7 +1093,7 @@ def _build_model(
         for sequence_index, sequence in enumerate(sequences):
             previous = None
             for position, interview_time in enumerate(sequence):
-                current = occupied[interview_time]
+                current = session_active[interview_time]
                 if previous is None:
                     run_starts.append(current)
                 else:
@@ -1076,7 +1154,7 @@ def _build_model(
     maximum_extra_experienced = 0
     if problem.options.require_experienced_panel:
         extra_experienced = _linear_sum(experienced_panel_vars) - _linear_sum(
-            occupied.values()
+            session_active.values()
         )
         maximum_extra_experienced = max(
             0, (problem.panel_size - 1) * len(problem.sorted_slots)
@@ -1153,6 +1231,20 @@ def _build_model(
                 "panel_stability",
                 panel_stability_cost,
                 len(panel_break_vars),
+            )
+        )
+    # With joint interviews the solver packs two candidates into one shared
+    # panel whenever it can: fewer sessions means the panel does one joint
+    # interview instead of two separate ones. Skipped in repair mode so a
+    # minimal-change repair is never forced to pair candidates up.
+    if problem.candidates_per_session > 1 and not (
+        problem.options.repair_mode and previous_by_candidate
+    ):
+        tiers.append(
+            ObjectiveTier(
+                "joint_sessions",
+                _linear_sum(session_active.values()),
+                len(session_active),
             )
         )
     tiers.extend(
@@ -1389,6 +1481,7 @@ def _evaluate_phase(
         blocks=problem.canonical_blocks,
         locked_assignments=problem.locked_assignments,
         require_all_candidates=built.full_placement,
+        candidates_per_session=problem.options.candidates_per_session,
     )
     vector = None
     key = None
@@ -1402,6 +1495,7 @@ def _evaluate_phase(
             previous_schedule=problem.previous_schedule,
             panel_size=problem.panel_size,
             require_experienced_panel=problem.options.require_experienced_panel,
+            candidates_per_session=problem.options.candidates_per_session,
         )
         key = objective_key(
             vector,
@@ -1412,6 +1506,8 @@ def _evaluate_phase(
             load_balance_weight=problem.options.load_balance_weight,
             continuity_weight=problem.options.continuity_weight,
             previous_panel_member_count=built.previous_panel_member_count,
+            candidates_per_session=problem.options.candidates_per_session,
+            has_previous_schedule=bool(problem.previous_schedule),
         )
     return PhaseResult(
         name=name,
@@ -1501,8 +1597,7 @@ def _repair_neighborhood_problem(problem: SolverProblem) -> SolverProblem | None
     }
     previous_rows: dict[str, tuple[int, frozenset[str], dict]] = {}
     duplicate_candidates: set[str] = set()
-    duplicate_times: set[int] = set()
-    seen_times: set[int] = set()
+    rows_by_time: dict[int, list[tuple[frozenset[str], str]]] = {}
     for row in problem.previous_schedule:
         candidate_id = row.get("candidate_id") or candidate_id_by_name.get(
             row.get("candidate")
@@ -1516,11 +1611,27 @@ def _repair_neighborhood_problem(problem: SolverProblem) -> SolverProblem | None
         if candidate_id in previous_rows:
             duplicate_candidates.add(candidate_id)
         if isinstance(interview_time, int):
-            if interview_time in seen_times:
-                duplicate_times.add(interview_time)
-            seen_times.add(interview_time)
+            rows_by_time.setdefault(interview_time, []).append(
+                (panel_ids, candidate_id)
+            )
         if candidate_id in problem.candidate_map and isinstance(interview_time, int):
             previous_rows[candidate_id] = (interview_time, panel_ids, row)
+
+    # A joint session (two candidates, one shared panel) is not a duplicate
+    # time: both rows may be frozen together. Anything else sharing a time is
+    # ambiguous and stays movable.
+    duplicate_times: set[int] = set()
+    for interview_time, entries in rows_by_time.items():
+        if len(entries) > problem.candidates_per_session:
+            duplicate_times.add(interview_time)
+            continue
+        if len(entries) == 1:
+            continue
+        panels = {panel_ids for panel_ids, _candidate_id in entries}
+        if (
+            problem.candidates_per_session <= 1 or len(panels) > 1
+        ):
+            duplicate_times.add(interview_time)
 
     invalid_required_blocks: set[int] = set()
     if problem.policy.requires_stable_panel:

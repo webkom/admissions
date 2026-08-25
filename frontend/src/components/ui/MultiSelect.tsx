@@ -100,6 +100,13 @@ export const MultiSelect: React.FC<MultiSelectProps> = ({
 
     const rect = trigger.getBoundingClientRect();
     const viewportPadding = 12;
+    // The menu renders at min-w-64 (256px), which can be wider than the
+    // trigger. Position by the menu's real width or the right edge escapes
+    // the viewport even though `left` itself looks clamped.
+    const menuWidth = Math.min(
+      Math.max(rect.width, 256),
+      window.innerWidth - viewportPadding * 2,
+    );
     const spaceBelow = window.innerHeight - rect.bottom;
     const spaceAbove = rect.top;
     const openUpwards = spaceBelow < 320 && spaceAbove > spaceBelow;
@@ -111,9 +118,9 @@ export const MultiSelect: React.FC<MultiSelectProps> = ({
     setMenuPosition({
       left: Math.max(
         viewportPadding,
-        Math.min(rect.left, window.innerWidth - rect.width - viewportPadding),
+        Math.min(rect.left, window.innerWidth - menuWidth - viewportPadding),
       ),
-      width: rect.width,
+      width: menuWidth,
       top: openUpwards ? undefined : rect.bottom + 6,
       bottom: openUpwards ? window.innerHeight - rect.top + 6 : undefined,
       maxHeight: availableHeight,
