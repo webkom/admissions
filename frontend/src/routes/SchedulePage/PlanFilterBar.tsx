@@ -44,6 +44,11 @@ const PlanFilterBar: React.FC<PlanFilterBarProps> = ({
         type="button"
         onClick={onToggleMyInterviews}
         aria-pressed={myInterviewsOnly}
+        title={
+          myInterviewsOnly
+            ? "Viser bare intervjuene du selv sitter i. Klikk for å se hele planen."
+            : "Vis bare intervjuene du selv sitter i."
+        }
         className={cn(
           actionButtonBase,
           myInterviewsOnly ? actionButtonActive : actionButtonNeutral,
@@ -52,7 +57,18 @@ const PlanFilterBar: React.FC<PlanFilterBarProps> = ({
       >
         Mine intervjuer
         {myInterviewsCount > 0 && (
-          <span className="ml-1 rounded-full bg-surface-subtle px-1.5 py-0.5 text-tiny font-bold tabular-nums">
+          <span
+            className={cn(
+              "ml-1 rounded-full px-1.5 py-0.5 text-tiny font-bold tabular-nums transition-colors duration-100",
+              // The count carries its own colours in both states, inverting
+              // with the button. A single neutral fill disappeared twice
+              // over: on the selected (brand-red) button it inherited white
+              // text on a near-white pill - 1.12:1, unreadable - and on the
+              // unselected button the pill was the exact same fill as the
+              // button itself, so no pill was visible at all.
+              myInterviewsOnly ? "bg-white text-brand" : "bg-brand text-white",
+            )}
+          >
             {myInterviewsCount}
           </span>
         )}

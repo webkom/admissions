@@ -434,9 +434,7 @@ class SavedScheduleSerializer(serializers.ModelSerializer):
         if self.context.get("hide_schedule"):
             data["schedule"] = []
             return data
-        if self.context.get("hide_candidate_identity"):
-            data["schedule"] = []
-            return data
+        hide_candidate_identity = self.context.get("hide_candidate_identity")
         visible_candidate_ids = self.context.get("visible_candidate_ids")
 
         raw_schedule = data.get("schedule")
@@ -521,6 +519,30 @@ class SavedScheduleSerializer(serializers.ModelSerializer):
             for user in LegoUser.objects.filter(pk__in=panel_ids & eligible_panel_ids)
         }
 
+        # Placeholder names, so committee members can still see when they are
+        # interviewing while identities stay hidden.
+        #
+        # Numbered over every candidate the committee has, NOT over the rows in
+        # this response. candidate_details is scoped to publication_boundary
+        # above, so numbering from it renumbered everybody each time an admin
+        # published another day: the person a member had written down as
+        # "Kandidat 3" silently became Kandidat 6, at the same time, once the
+        # pool grew. The label has to name the same person for as long as it is
+        # shown. Gaps in the sequence are the acceptable cost, and leak less
+        # than a dense 1..N did - that counted the published rows exactly.
+        anonymize = hide_candidate_identity
+        placeholder_by_id = {}
+        if anonymize:
+            numbering_pool = (
+                visible_candidate_ids
+                if visible_candidate_ids is not None
+                else set(candidate_details)
+            )
+            placeholder_by_id = {
+                candidate: f"Kandidat {index + 1}"
+                for index, candidate in enumerate(sorted(numbering_pool))
+            }
+
         visible_schedule = []
         for entry in raw_schedule:
             if not isinstance(entry, Mapping):
@@ -535,16 +557,26 @@ class SavedScheduleSerializer(serializers.ModelSerializer):
             safe_entry = dict(item.validated_data)
             safe_entry["candidate_id"] = candidate_id
             candidate_detail = candidate_details[candidate_id]
-            safe_entry["candidate"] = candidate_detail["name"]
-            safe_entry["interview_status"] = candidate_detail["interview_status"]
-            safe_entry["interview_status_updated_at"] = candidate_detail[
-                "interview_status_updated_at"
-            ]
-            safe_entry["interview_status_updated_by"] = candidate_detail[
-                "interview_status_updated_by"
-            ]
-            if candidate_detail["phone"]:
-                safe_entry["candidate_phone"] = candidate_detail["phone"]
+
+            if anonymize:
+                safe_entry["candidate"] = placeholder_by_id.get(
+                    candidate_id, "Kandidat"
+                )
+                # Strip status info — the candidate has not consented to
+                # the committee seeing whether they confirmed.
+                safe_entry.pop("candidate_id", None)
+            else:
+                safe_entry["candidate"] = candidate_detail["name"]
+                safe_entry["interview_status"] = candidate_detail["interview_status"]
+                safe_entry["interview_status_updated_at"] = candidate_detail[
+                    "interview_status_updated_at"
+                ]
+                safe_entry["interview_status_updated_by"] = candidate_detail[
+                    "interview_status_updated_by"
+                ]
+                if candidate_detail["phone"]:
+                    safe_entry["candidate_phone"] = candidate_detail["phone"]
+
             safe_panel = []
             for member in safe_entry["panel"]:
                 panel_id = canonical_uuid(member.get("id"))

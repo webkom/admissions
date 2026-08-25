@@ -119,6 +119,9 @@ ADMISSIONS_ROSTER_SYNC_CLIENT_ID = env("ADMISSIONS_ROSTER_SYNC_CLIENT_ID", defau
 ADMISSIONS_ROSTER_SYNC_CLIENT_SECRET = env(
     "ADMISSIONS_ROSTER_SYNC_CLIENT_SECRET", default=""
 )
+ADMISSIONS_LEGO_SYNC_INTERVAL_SECONDS = env.int(
+    "ADMISSIONS_LEGO_SYNC_INTERVAL_SECONDS", default=6 * 60 * 60
+)
 
 SESSION_COOKIE_AGE = env.int("SESSION_COOKIE_AGE", default=8 * 60 * 60)
 # Sessions slide forward on real activity (see admissions.session_renewal) but

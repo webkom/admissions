@@ -77,11 +77,8 @@ const AdmissionDetailsContent = ({
     });
 
     void formik.setFieldTouched("groups", true, false);
-    void formik.setValues({
-      ...formik.values,
-      groups,
-      group_content: groupContent,
-    });
+    void formik.setFieldValue("groups", groups);
+    void formik.setFieldValue("group_content", groupContent);
   };
 
   return (
@@ -176,7 +173,7 @@ const AdmissionDetailsContent = ({
         title="Datoer"
         description="Alle tider vises i norsk tid."
       >
-        <FieldGrid>
+        <DateGrid>
           <DateField
             id="open_from"
             label="Opptaket åpner"
@@ -219,7 +216,7 @@ const AdmissionDetailsContent = ({
               void formik.setFieldValue("closed_from", value);
             }}
           />
-        </FieldGrid>
+        </DateGrid>
       </FormSection>
 
       <FormSection
@@ -347,7 +344,7 @@ const DateField = ({
   onBlur,
   onChange,
 }: DateFieldProps) => (
-  <FieldBlock>
+  <DateFieldBlock>
     <FieldLabel htmlFor={id}>{label}</FieldLabel>
     <InputDescription id={`${id}-description`}>{description}</InputDescription>
     <AdmissionDateTimePicker
@@ -362,18 +359,36 @@ const DateField = ({
       invalid={Boolean(error)}
       error={error}
     />
-  </FieldBlock>
+  </DateFieldBlock>
 );
 
 export default AdmissionDetailsSections;
 
-const FieldGrid = styled.div`
+const FieldGrid = styled.div<{ $min?: string }>`
   display: grid;
   grid-template-columns: repeat(
     auto-fit,
-    minmax(min(var(--form-control-width), 100%), 1fr)
+    minmax(
+      min(${(props) => props.$min ?? "var(--form-control-width)"}, 100%),
+      1fr
+    )
   );
   gap: var(--spacing-xl);
+`;
+
+const DateGrid = styled.div`
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(18rem, 1fr));
+  grid-template-rows: auto auto auto;
+  gap: var(--spacing-xl);
+`;
+
+const DateFieldBlock = styled.div`
+  display: grid;
+  grid-template-rows: subgrid;
+  grid-row: span 3;
+  gap: var(--spacing-sm);
+  min-width: 0;
 `;
 
 const FieldStack = styled.div`

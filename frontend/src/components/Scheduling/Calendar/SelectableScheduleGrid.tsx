@@ -235,6 +235,20 @@ const SelectableScheduleGrid: React.FC<SelectableScheduleGridProps> = ({
               secondarySlots.has(makeSlotKey(date, minute)),
             ).length
           : 0;
+        const fills = chunk.map((minute) =>
+          isSlotSelectable(date, minute) &&
+          activeSlots.has(makeSlotKey(date, minute))
+            ? 1
+            : 0,
+        );
+        const discouragedFills = secondarySlots
+          ? chunk.map((minute) =>
+              isSlotSelectable(date, minute) &&
+              secondarySlots.has(makeSlotKey(date, minute))
+                ? 1
+                : 0,
+            )
+          : undefined;
         const cellKey = `${date}::${chunkIndex}`;
         const cellLabel = labels.cell({
           date,
@@ -254,12 +268,8 @@ const SelectableScheduleGrid: React.FC<SelectableScheduleGridProps> = ({
             selectable={isSelectable}
             distinguishUnavailable
             hideTrackWhenUnavailable
-            fills={chunk.map((minute) =>
-              isSlotSelectable(date, minute) &&
-              activeSlots.has(makeSlotKey(date, minute))
-                ? 1
-                : 0,
-            )}
+            fills={fills}
+            discouragedFills={discouragedFills}
             role="button"
             data-secondary-count={secondaryCount || undefined}
             tabIndex={isSelectable && cellKey === rovingCellKey ? 0 : -1}

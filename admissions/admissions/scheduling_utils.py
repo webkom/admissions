@@ -6,6 +6,7 @@ from django.conf import settings
 
 from admissions.admissions import constants
 from admissions.admissions.models import (
+    CommitteeRosterEntry,
     DirectoryEntry,
     FadderbarnDeclaration,
     InterviewAvailability,
@@ -27,7 +28,17 @@ def panel_gender_code(lego_gender):
     return constants.LEGO_GENDER_TO_PANEL_CODE.get(lego_gender or "", "")
 
 
-def get_eligible_interviewer_ids(admission, group):
+def get_responding_interviewer_ids(admission, group):
+    """Everyone whose answer the admission can actually wait for.
+
+    Membership only, which means: people who have signed in here at least once,
+    because signing in is the only thing that writes a Membership row. Kept
+    apart from the full roster below because this is the set publication may
+    demand a response from - someone who has never opened admissions can
+    neither submit availability nor opt out, so counting them here would
+    deadlock the publish behind people who will never answer.
+    """
+
     committee_ids = set(
         Membership.objects.filter(group=group).values_list("user_id", flat=True)
     )
@@ -46,6 +57,30 @@ def get_eligible_interviewer_ids(admission, group):
     # interviews, unlike ordinary committee members who are scoped to their
     # own committee.
     return committee_ids | admin_ids
+
+
+def get_eligible_interviewer_ids(admission, group):
+    """The committee as LEGO describes it, plus everyone Membership knows.
+
+    The union matters because the two sources are each incomplete on their own.
+    A Membership row exists only for people who have signed in, so by itself it
+    omits exactly the members an admin needs to chase. CommitteeRosterEntry,
+    mirrored from LEGO by sync_committee_rosters, covers those - but only for
+    participating committees and only as far as the last sync reached, so it
+    cannot replace Membership either.
+
+    Widening this set grants no authority: every permission check reads
+    Membership directly (see admission_access), never this function. What it
+    decides is who appears in the availability roster, who an admin may record
+    an answer on behalf of, and who may legitimately sit on a panel.
+    """
+
+    roster_ids = set(
+        CommitteeRosterEntry.objects.filter(group=group).values_list(
+            "user_id", flat=True
+        )
+    )
+    return get_responding_interviewer_ids(admission, group) | roster_ids
 
 
 def availability_submission_is_current(availability, saved_schedule):
@@ -363,6 +398,27 @@ def _block_index_by_minute(saved_schedule):
     return block_by_minute
 
 
+def _decoy_cohort(queryset, size, saved_schedule):
+    """A stable, bounded set of filler names for one schedule.
+
+    Stable across rebuilds of the same plan: the draw is seeded on the
+    schedule's own id, so re-saving a draft does not silently rotate a
+    different cast of fillers through the review lists. A name that appeared
+    once and never again would stand out exactly as much as a name that never
+    recurs at all.
+
+    Ordered by primary key before sampling so the seed alone decides the draw,
+    rather than whatever order the database felt like returning rows in.
+    """
+
+    pool = list(queryset.order_by("lego_user_id"))
+    if not pool:
+        return []
+    if len(pool) <= size:
+        return pool
+    return random.Random(str(saved_schedule.pk)).sample(pool, size)
+
+
 def build_conflict_review_lists(saved_schedule, swap_size=5):
     """Per-interviewer review lists: their own candidates plus swap partners.
 
@@ -422,8 +478,17 @@ def build_conflict_review_lists(saved_schedule, swap_size=5):
         .exclude(user__lego_id__isnull=True)
         .values_list("user__lego_id", flat=True)
     )
-    decoy_pool = list(
-        DirectoryEntry.objects.exclude(lego_user_id__in=applicant_lego_ids)
+    # Drawn once, then shared by every interviewer in this build. Sampling
+    # each list straight out of the full directory would defeat the point:
+    # with thousands of students to draw from, two interviewers comparing
+    # notes would find that every name they *both* hold is a real applicant
+    # and every name only one of them holds is a filler. Bounding the cohort
+    # to roughly the size of the real candidate pool makes fillers recur at
+    # about the rate real candidates do, so that comparison says nothing.
+    decoy_cohort = _decoy_cohort(
+        DirectoryEntry.objects.exclude(lego_user_id__in=applicant_lego_ids),
+        max(swap_size, len(time_by_candidate)),
+        saved_schedule,
     )
 
     lists = {}
@@ -478,7 +543,7 @@ def build_conflict_review_lists(saved_schedule, swap_size=5):
 
         candidates.sort()
         swap = [candidate_id for _, candidate_id in candidates[:swap_size]]
-        decoy_count = min(swap_size, len(decoy_pool))
+        decoy_count = min(swap_size, len(decoy_cohort))
         # A bare uuid4, the same shape as a real UserApplication pk - fillers
         # are told apart by membership in this row's stored decoys, never by
         # a visible format marker.
@@ -488,7 +553,7 @@ def build_conflict_review_lists(saved_schedule, swap_size=5):
                     "token": str(uuid.uuid4()),
                     "name": entry.full_name or entry.username,
                 }
-                for entry in random.sample(decoy_pool, decoy_count)
+                for entry in random.sample(decoy_cohort, decoy_count)
             ]
             if decoy_count
             else []

@@ -1,7 +1,7 @@
 import React from "react";
 import { MultiSelect } from "src/components/ui";
 import { useManageGroups } from "src/query/hooks";
-import { Group } from "src/types";
+import { Group, GroupCategory } from "src/types";
 import styled from "styled-components";
 
 interface GroupSelectorProps {
@@ -13,6 +13,14 @@ interface GroupSelectorProps {
   selectedLabel?: string;
   invalid?: boolean;
 }
+
+const CATEGORY_ORDER: GroupCategory[] = ["committee", "revue", "other"];
+
+const CATEGORY_LABELS: Record<GroupCategory, string> = {
+  committee: "Komiteer",
+  revue: "Revy",
+  other: "Annet",
+};
 
 const GroupSelector: React.FC<GroupSelectorProps> = ({
   id,
@@ -31,11 +39,18 @@ const GroupSelector: React.FC<GroupSelectorProps> = ({
     refetch,
   } = useManageGroups();
 
-  const availableOptions =
-    groups?.map((groupSuggestion) => ({
-      value: groupSuggestion.pk,
-      label: groupSuggestion.name,
-    })) ?? [];
+  // Ordered here rather than server-side: MultiSelect draws a heading wherever
+  // the group name changes, so the order options arrive in *is* the order the
+  // sections appear in.
+  const availableOptions = CATEGORY_ORDER.flatMap((category) =>
+    (groups ?? [])
+      .filter((group) => (group.category ?? "other") === category)
+      .map((group) => ({
+        value: group.pk,
+        label: group.name,
+        group: CATEGORY_LABELS[category],
+      })),
+  );
   const allGroupsSelected = groups
     ? groups.length > 0 && selectedGroups.length >= groups.length
     : false;

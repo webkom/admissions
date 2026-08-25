@@ -2243,6 +2243,67 @@ class SavedScheduleVisibilityTestCase(APITestCase):
         Membership.objects.create(user=recruiter, role=RECRUITING, group=other_group)
         return recruiter
 
+    def _extra_candidate(self, username, lego_id, time):
+        """Another candidate for this committee, scheduled at `time`."""
+
+        user = LegoUser.objects.create(username=username, lego_id=lego_id)
+        application = UserApplication.objects.create(
+            admission=self.admission, user=user
+        )
+        GroupApplication.objects.create(
+            application=application,
+            group=self.committee_group,
+            text="Arrkom application",
+        )
+        return {
+            "candidate": username,
+            "candidate_id": str(application.pk),
+            "time": time,
+            "panel": [],
+        }
+
+    def test_placeholder_names_survive_publishing_another_day(self):
+        """A member who notes down "Kandidat 3, tirsdag 10:00" must still find
+        the same person there after an admin extends the publication.
+
+        Numbering over the rows in the response renumbered everybody whenever
+        the published pool grew, so the label silently came to mean somebody
+        else at the same time.
+        """
+
+        day_two = self._extra_candidate("vis-second", 760, 8 + 24 * 60)
+        day_two_extra = self._extra_candidate("vis-third", 761, 9 + 24 * 60)
+        saved = self._create_saved(
+            schedule=[
+                {
+                    "candidate": "Ada",
+                    "candidate_id": str(self.application.pk),
+                    "time": 8,
+                    "panel": [],
+                },
+                day_two,
+                day_two_extra,
+            ],
+            distributed_through="2026-04-20",
+        )
+        self.client.force_authenticate(user=self.member_user)
+
+        first_day_only = self.client.get(self.url).data["schedule"]
+        # Only day one is published, so that is all a member may see.
+        self.assertEqual(1, len(first_day_only))
+        label_before = first_day_only[0]["candidate"]
+
+        saved.distributed_through = "2026-04-21"
+        saved.save(update_fields=["distributed_through"])
+        after_extending = self.client.get(self.url).data["schedule"]
+
+        self.assertEqual(3, len(after_extending))
+        same_row = next(row for row in after_extending if row["time"] == 8)
+        self.assertEqual(label_before, same_row["candidate"])
+        # And every row still gets a distinct label.
+        labels = [row["candidate"] for row in after_extending]
+        self.assertEqual(len(labels), len(set(labels)))
+
     def test_cross_committee_recruiter_cannot_read_the_schedule(self):
         """Representing committee X grants nothing on committee Y's schedule."""
         self._create_saved(name_visibility="committee")
@@ -2323,7 +2384,12 @@ class SavedScheduleVisibilityTestCase(APITestCase):
         res = self.client.get(self.url)
 
         self.assertEqual(res.status_code, status.HTTP_200_OK)
-        self.assertEqual(res.data["schedule"], [])
+        schedule = res.data["schedule"]
+        self.assertTrue(len(schedule) > 0)
+        # Placeholder names, no real identity leaked.
+        self.assertEqual(schedule[0]["candidate"], "Kandidat 1")
+        self.assertNotIn("candidate_id", schedule[0])
+        self.assertNotIn("candidate_phone", schedule[0])
 
     def test_committee_member_sees_names_when_visibility_committee(self):
         self._create_saved(is_distributed=True, name_visibility="committee")
@@ -2602,7 +2668,9 @@ class SavedScheduleVisibilityTestCase(APITestCase):
             )
         )
 
-        self.assertEqual(member_schedule.data["schedule"], [])
+        schedule = member_schedule.data["schedule"]
+        self.assertTrue(len(schedule) > 0)
+        self.assertEqual(schedule[0]["candidate"], "Kandidat 1")
         self.assertEqual(member_candidates.data, [])
 
         self.client.force_authenticate(user=self.admin_user)
@@ -2806,7 +2874,9 @@ class SavedScheduleVisibilityTestCase(APITestCase):
                 },
             )
         )
-        self.assertEqual(own_schedule.data["schedule"], [])
+        schedule = own_schedule.data["schedule"]
+        self.assertTrue(len(schedule) > 0)
+        self.assertEqual(schedule[0]["candidate"], "Kandidat 1")
         self.assertEqual(own_candidates.data, [])
 
         # other_member belongs to Bedkom, not Arrkom - a fully unrelated

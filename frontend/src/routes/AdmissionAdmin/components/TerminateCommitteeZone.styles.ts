@@ -66,6 +66,26 @@ const TerminateCommitteePanel = styled.section`
   }
 `;
 
+const TerminateText = styled.div`
+  min-width: 0;
+  flex: 1 1 auto;
+
+  h2 {
+    margin: 0;
+    color: var(--color-danger);
+    font-size: var(--font-size-md);
+    font-weight: var(--font-weight-semibold);
+  }
+
+  p {
+    margin: var(--spacing-xs) 0 0;
+    color: var(--color-text-muted);
+    font-size: var(--font-size-sm);
+    line-height: var(--line-height-copy);
+    max-width: 36rem;
+  }
+`;
+
 const TerminationStatus = styled.p`
   width: 100%;
   margin: 0;
@@ -119,6 +139,7 @@ export {
   DangerZone,
   DangerZoneContent,
   DialogTerminationError,
+  TerminateText,
   TerminationError,
   TerminationInput,
   TerminationScopeHint,

@@ -449,115 +449,123 @@ const AdmissionDateTimePicker: React.FC<AdmissionDateTimePickerProps> = ({
 
   return (
     <>
-      <div
-        className="grid w-full grid-cols-[minmax(0,1fr)_7.25rem] items-end gap-2"
-        data-cy={`datetime-control-${id}`}
-      >
-        <label className="min-w-0">
-          <span className="mb-1 block text-tiny font-semibold text-text-muted">
-            Dato
-          </span>
-          <button
-            ref={triggerRef}
-            id={id}
-            name={id}
-            type="button"
-            data-admission-field={id}
-            data-cy={`date-trigger-${id}`}
-            aria-haspopup="dialog"
-            aria-expanded={isOpen}
-            aria-invalid={dateInvalid}
-            aria-describedby={fieldDescribedBy}
-            onClick={openPicker}
-            className={cn(
-              "flex min-h-control-md w-full min-w-0 items-center gap-2 rounded-md border bg-surface-base px-3 text-left text-ui transition-[border-color,box-shadow,background-color] duration-150 hover:border-brand-strongBorder hover:bg-surface-subtle focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-brand-ringSoft",
-              dateInvalid ? "border-danger" : "border-border-soft",
-            )}
-          >
-            <CalendarDays
-              size={iconSizes.standard}
-              aria-hidden="true"
-              className="flex-none text-text-muted"
-            />
-            <span
+      {/* One element, not two siblings: the caller lays these fields out on a
+          three-row subgrid so the date controls line up across columns even
+          when the descriptions above them wrap to different heights. A subgrid
+          cannot grow a fourth row, so a loose error paragraph is clamped into
+          the last track and renders on top of the control it belongs to. */}
+      <div className="flex w-full flex-col gap-1">
+        <div
+          className="grid w-full grid-cols-[minmax(0,1fr)_7.25rem] items-end gap-2"
+          data-cy={`datetime-control-${id}`}
+        >
+          <label className="min-w-0">
+            <span className="mb-1 block text-tiny font-semibold text-text-muted">
+              Dato
+            </span>
+            <button
+              ref={triggerRef}
+              id={id}
+              name={id}
+              type="button"
+              data-admission-field={id}
+              data-cy={`date-trigger-${id}`}
+              aria-haspopup="dialog"
+              aria-expanded={isOpen}
+              aria-invalid={dateInvalid}
+              aria-describedby={fieldDescribedBy}
+              onClick={openPicker}
               className={cn(
-                "min-w-0 flex-1 truncate font-semibold",
-                selectedDate ? "text-text-primary" : "text-text-muted",
+                "flex min-h-control-md w-full min-w-0 items-center gap-2 rounded-md border bg-surface-base px-3 text-left text-ui transition-[border-color,box-shadow,background-color] duration-150 hover:border-brand-strongBorder hover:bg-surface-subtle focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-brand-ringSoft",
+                dateInvalid ? "border-danger" : "border-border-soft",
               )}
             >
-              {formatDate(selectedDate)}
+              <CalendarDays
+                size={iconSizes.standard}
+                aria-hidden="true"
+                className="flex-none text-text-muted"
+              />
+              <span
+                className={cn(
+                  "min-w-0 flex-1 truncate font-semibold",
+                  selectedDate ? "text-text-primary" : "text-text-muted",
+                )}
+              >
+                {formatDate(selectedDate)}
+              </span>
+              <ChevronDown
+                size={iconSizes.small}
+                aria-hidden="true"
+                className="flex-none text-text-subtle"
+              />
+            </button>
+          </label>
+
+          <label className="min-w-0">
+            <span className="mb-1 block text-tiny font-semibold text-text-muted">
+              Klokkeslett
             </span>
-            <ChevronDown
-              size={iconSizes.small}
-              aria-hidden="true"
-              className="flex-none text-text-subtle"
-            />
-          </button>
-        </label>
-
-        <label className="min-w-0">
-          <span className="mb-1 block text-tiny font-semibold text-text-muted">
-            Klokkeslett
-          </span>
-          <input
-            id={`${id}-time`}
-            name={`${id}-time`}
-            type="text"
-            inputMode="numeric"
-            autoComplete="off"
-            maxLength={5}
-            value={timeText}
-            placeholder={suggestedParts?.time ?? "--:--"}
-            aria-label={`${label}, klokkeslett`}
-            aria-invalid={dateInvalid}
-            aria-describedby={fieldDescribedBy}
-            onFocus={(event) => {
-              setIsEditingTime(true);
-              selectTimeSegment(event.currentTarget, 0);
-            }}
-            onClick={(event) =>
-              selectTimeSegment(
-                event.currentTarget,
-                event.nativeEvent.offsetX > event.currentTarget.clientWidth / 2
-                  ? 3
-                  : 0,
-              )
-            }
-            onChange={(event) => {
-              setTimeText(event.target.value);
-              setTimeError(null);
-              if (event.target.value !== committedParts?.time) onChange("");
-            }}
-            onBlur={() => {
-              setIsEditingTime(false);
-              commitTime();
-            }}
-            onKeyDown={(event) => {
-              if (event.key === "ArrowUp" || event.key === "ArrowDown") {
-                event.preventDefault();
-                stepTime(event.key === "ArrowUp" ? 1 : -1);
-              } else if (event.key === "Enter") {
-                event.preventDefault();
-                commitTime();
+            <input
+              id={`${id}-time`}
+              name={`${id}-time`}
+              type="text"
+              inputMode="numeric"
+              autoComplete="off"
+              maxLength={5}
+              value={timeText}
+              placeholder={suggestedParts?.time ?? "--:--"}
+              aria-label={`${label}, klokkeslett`}
+              aria-invalid={dateInvalid}
+              aria-describedby={fieldDescribedBy}
+              onFocus={(event) => {
+                setIsEditingTime(true);
+                selectTimeSegment(event.currentTarget, 0);
+              }}
+              onClick={(event) =>
+                selectTimeSegment(
+                  event.currentTarget,
+                  event.nativeEvent.offsetX >
+                    event.currentTarget.clientWidth / 2
+                    ? 3
+                    : 0,
+                )
               }
-            }}
-            className={cn(
-              "min-h-control-md w-full rounded-md border bg-surface-base px-3 text-center text-ui font-semibold tabular-nums text-text-primary transition-[border-color,box-shadow] placeholder:text-text-disabled focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-brand-ringSoft",
-              dateInvalid ? "border-danger" : "border-border-soft",
-            )}
-          />
-        </label>
-      </div>
+              onChange={(event) => {
+                setTimeText(event.target.value);
+                setTimeError(null);
+                if (event.target.value !== committedParts?.time) onChange("");
+              }}
+              onBlur={() => {
+                setIsEditingTime(false);
+                commitTime();
+              }}
+              onKeyDown={(event) => {
+                if (event.key === "ArrowUp" || event.key === "ArrowDown") {
+                  event.preventDefault();
+                  stepTime(event.key === "ArrowUp" ? 1 : -1);
+                } else if (event.key === "Enter") {
+                  event.preventDefault();
+                  commitTime();
+                }
+              }}
+              className={cn(
+                "min-h-control-md w-full rounded-md border bg-surface-base px-3 text-center text-ui font-semibold tabular-nums text-text-primary transition-[border-color,box-shadow] placeholder:text-text-disabled focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-brand-ringSoft",
+                dateInvalid ? "border-danger" : "border-border-soft",
+              )}
+            />
+          </label>
+        </div>
 
-      {displayedError && (
-        <p
-          id={errorId}
-          role="alert"
-          className="m-0 text-detail font-semibold text-danger"
-        >
-          {displayedError}
-        </p>
-      )}
+        {displayedError && (
+          <p
+            id={errorId}
+            role="alert"
+            className="m-0 text-detail font-semibold text-danger"
+          >
+            {displayedError}
+          </p>
+        )}
+      </div>
 
       {isOpen &&
         typeof document !== "undefined" &&

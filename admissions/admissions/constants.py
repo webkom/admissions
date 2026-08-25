@@ -78,11 +78,122 @@ KOMTEK_LONG = "Kommunikasjonsteknologi"
 
 COURSES_LONG = ((DATA_LONG, DATA_LONG), (KOMTEK_LONG, KOMTEK_LONG))
 
+GROUP_CATEGORY_COMMITTEE = "committee"
+GROUP_CATEGORY_REVUE = "revue"
+GROUP_CATEGORY_OTHER = "other"
+
+ADMISSION_GROUP_CATEGORIES = (
+    (
+        GROUP_CATEGORY_COMMITTEE,
+        (
+            "Arrkom",
+            "Bankkom",
+            "Bedkom",
+            "Fagkom",
+            "Koskom",
+            "LaBamba",
+            "PR",
+            "readme",
+            "Webkom",
+        ),
+    ),
+    (
+        GROUP_CATEGORY_REVUE,
+        (
+            "RevyStyret",
+            "Arring",
+            "Band",
+            "Dans",
+            "Kor",
+            "Kostyme",
+            "Manus",
+            "PR-revy",
+            "Regi",
+            "Scene",
+            "Skuespill",
+            "Sosial",
+            "Teknikk",
+        ),
+    ),
+    (
+        # Neither a committee nor a revue group as far as an opptak is
+        # concerned. Hovedstyret and Abakus-leder recruit for a position rather
+        # than for a group, and backup - which LEGO does type as a komite -
+        # does not belong in a list of komite-opptak.
+        GROUP_CATEGORY_OTHER,
+        ("Abakus-leder", "backup", "Hovedstyret"),
+    ),
+)
+""" How the groups an opptak can be run for are split up for the person
+choosing between them.
+
+Matches LEGO's own group `type` everywhere except the three in `other`, which
+is the whole reason this is written out rather than derived: LEGO types backup
+as a komite and Abakus-leder as `annen`, neither of which is the split an
+opptak organiser has in mind. Deliberately a superset of LEGO_GROUP_NAMES, so a
+group that becomes importable later is already filed correctly.
+"""
+
+LEGO_GROUP_NAMES = [
+    # Central admission administration
+    "Hovedstyret",
+    # Committee admissions
+    "Abakus-leder",
+    "Arrkom",
+    "Bankkom",
+    "Bedkom",
+    "Fagkom",
+    "Koskom",
+    "LaBamba",
+    "readme",
+    "PR",
+    "Webkom",
+    # Revue admissions
+    "RevyStyret",
+    "Band",
+    "Dans",
+    "Kostyme",
+    "Manus",
+    "PR-revy",
+    "Scene",
+    "Skuespill",
+    "Sosial",
+    "Teknikk",
+    "Arring",
+    # backup admissions
+    "backup",
+]
+""" Every LEGO group admissions imports on a first, empty-database login.
+
+Narrower than the categories above on purpose: importing a name LEGO does not
+have raises ImportError and fails that login outright, so this list only grows
+once a group is known to exist upstream under exactly this name.
+"""
+
+
+def group_category(name):
+    for category, names in ADMISSION_GROUP_CATEGORIES:
+        if name in names:
+            return category
+    # A group nobody has filed yet: still selectable, just not claimed by
+    # either split.
+    return GROUP_CATEGORY_OTHER
+
+
 # Groups that give privileges to their leaders
 STAFF_LEADER_GROUPS = ["backup", "Hovedstyret", "RevyStyret"]
 """ Members of these groups with role leader attain the is_staff attribute and can manage admissions. Matched against the LEGO login payload's group names - no local Group row is needed. """
 WEBKOM_GROUPNAME = "Webkom"
 """ Group name of Webkom """
+
+ADMISSION_ADMIN_ROLES = (LEADER, CO_LEADER, RECRUITING)
+""" Roles in an admission's admin_groups that grant admission-wide admin.
+
+Kept in one place because the permission check and the serialised userdata have
+to agree - while they disagreed, a co-leader of an admin group passed every
+backend permission check but got is_admin=False, so the UI hid controls the API
+would have allowed.
+"""
 
 LEGO_GENDER_MALE = "male"
 LEGO_GENDER_FEMALE = "female"

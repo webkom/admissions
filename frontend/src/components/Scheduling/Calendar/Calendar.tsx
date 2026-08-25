@@ -382,7 +382,7 @@ const TimeScheduler: React.FC<TimeSchedulerProps> = ({
                     keyboardFocusRingClass,
                     paintMode === mode
                       ? "border-brand-activeBorder bg-brand-soft text-text-primary"
-                      : "border-border-soft bg-surface-base text-text-muted",
+                      : "border-border-soft bg-surface-base text-text-muted hover:bg-surface-subtle",
                   )}
                 >
                   <span

@@ -15,6 +15,7 @@ import {
   DangerZone,
   DangerZoneContent,
   DialogTerminationError,
+  TerminateText,
   TerminationError,
   TerminationInput,
   TerminationScopeHint,
@@ -115,16 +116,13 @@ const TerminateCommitteeZone: React.FC<TerminateCommitteeZoneProps> = ({
           )}
           {terminationGroup && (
             <TerminateCommitteePanel aria-labelledby="terminate-committee-title">
-              <div>
+              <TerminateText>
                 <h2 id="terminate-committee-title">Slett alle søknader</h2>
                 <p>
-                  Dette sletter alle søknader til komiteen i dette opptaket.
-                  Handlingen kan ikke angres. Bruk denne funksjonen først når
-                  opptaket er ferdigbehandlet og søknadene ikke lenger skal
-                  oppbevares. Webkom sletter søknadsdataene automatisk etter en
-                  tid, men her kan du slette dem umiddelbart.
+                  Sletter alle søknader til {terminationGroup.name} i dette
+                  opptaket permanent. Kan ikke angres.
                 </p>
-              </div>
+              </TerminateText>
               <button
                 type="button"
                 className={cn(actionButtonBase, actionButtonDanger)}

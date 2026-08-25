@@ -1,8 +1,12 @@
 import { FieldModel, InputResponseModel } from "src/utils/jsonFields";
 
+export type GroupCategory = "committee" | "revue" | "other";
+
 export interface Group {
   pk: string;
   name: string;
+  /** Which split this group is offered under. Server-assigned; see constants.py. */
+  category?: GroupCategory;
   description: string;
   logo: string | null;
   response_label: string;
@@ -310,6 +314,12 @@ export interface InterviewAvailabilityParticipant {
   affected_assignment_count: number;
   availability_generation: number;
   is_me: boolean;
+  /**
+   * False only on the full roster an admin or recruiter is served: someone
+   * LEGO lists in the committee who has never signed in to admissions, so
+   * there is nobody to remind about their times - only about signing in.
+   */
+  has_signed_in?: boolean;
   /** Your own declarations only; always empty on other people's rows. */
   fadderbarn?: {
     lego_user_id: number;

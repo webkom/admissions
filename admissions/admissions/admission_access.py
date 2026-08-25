@@ -18,7 +18,7 @@ APPLICATION_VIEW_MODE_COMMITTEE_MINIMAL = "committee_minimal"
 def user_is_admission_admin(admission, user):
     return (
         Membership.objects.filter(user=user.pk, group__in=admission.admin_groups.all())
-        .filter(role__in=(constants.LEADER, constants.CO_LEADER, constants.RECRUITING))
+        .filter(role__in=constants.ADMISSION_ADMIN_ROLES)
         .exists()
     )
 
@@ -76,6 +76,19 @@ def user_is_group_member(group, user):
 
 
 def get_application_view_mode(admission, user):
+    """Resolve how much of an application this user may read.
+
+    Committee representation is checked BEFORE admin standing, and that
+    order is load-bearing: a group that both administers an admission and
+    competes in it - Webkom running the shared tool while also recruiting -
+    must not read a rival committee's answers. Being named in admin_groups
+    therefore grants the full view only to a group that is not itself taking
+    part, which is why the central admin group should be a non-competing one
+    (Hovedstyret / Abakus-leder) rather than a committee.
+
+    Do not "simplify" this by hoisting the admin check: that hands every
+    competing admin group the other committees' private application text.
+    """
     represented_groups = get_representing_groups(admission, user)
     if admission.groups.count() > 1 and represented_groups.exists():
         return APPLICATION_VIEW_MODE_COMMITTEE_MINIMAL
@@ -126,18 +139,14 @@ def schedule_response_context(admission, saved_schedule, is_interview_admin):
             == SavedSchedule.NAME_VISIBILITY_COMMITTEE
         )
         contact_candidate_ids = set()
-        visible_candidate_ids = (
-            set()
-            if hide_identity
-            else set(
-                str(candidate_id)
-                for candidate_id in UserApplication.objects.filter(
-                    admission=admission,
-                    group_applications__group_id=saved_schedule.group_id,
-                )
-                .values_list("pk", flat=True)
-                .distinct()
+        visible_candidate_ids = set(
+            str(candidate_id)
+            for candidate_id in UserApplication.objects.filter(
+                admission=admission,
+                group_applications__group_id=saved_schedule.group_id,
             )
+            .values_list("pk", flat=True)
+            .distinct()
         )
         effective_name_visibility = (
             SavedSchedule.NAME_VISIBILITY_COMMITTEE
