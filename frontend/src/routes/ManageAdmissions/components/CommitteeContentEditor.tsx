@@ -13,6 +13,18 @@ interface CommitteeContentEditorProps {
   value: MutationAdmission["group_content"];
   onChange: (groupId: string, content: CommitteeContent) => void;
   error?: string;
+  /**
+   * Whether "Bruk felles standardtekst" can be trusted here. It works by
+   * clearing the field so getFieldValue falls back to group.description -
+   * which is only the true shared default when `groups` came from the raw
+   * Group list (the manage page's useManageGroups). On the admin page,
+   * `groups` comes from the admission-scoped serializer, where `description`
+   * is already resolved to any admission-specific override - so the
+   * "fallback" is whatever text is already showing, and the button silently
+   * does nothing. Default true so existing (manage-page) callers keep the
+   * working button without every call site having to know this distinction.
+   */
+  canResetToDefault?: boolean;
 }
 
 const contentFields: Array<{
@@ -103,6 +115,7 @@ const CommitteeContentEditor: React.FC<CommitteeContentEditorProps> = ({
   value,
   onChange,
   error,
+  canResetToDefault = true,
 }) => {
   const [activeGroupId, setActiveGroupId] = useState(groups[0]?.pk ?? "");
   const [previewDestination, setPreviewDestination] =
@@ -211,6 +224,7 @@ const CommitteeContentEditor: React.FC<CommitteeContentEditorProps> = ({
                 error={error}
                 onChange={onChange}
                 onFocus={() => setPreviewDestination("card")}
+                canResetToDefault={canResetToDefault}
               />
             </FieldGroup>
             <FieldGroup>
@@ -222,6 +236,7 @@ const CommitteeContentEditor: React.FC<CommitteeContentEditorProps> = ({
                 error={error}
                 onChange={onChange}
                 onFocus={() => setPreviewDestination("application")}
+                canResetToDefault={canResetToDefault}
               />
             </FieldGroup>
           </FieldGroups>
@@ -250,6 +265,7 @@ interface ContentFieldEditorProps {
   error?: string;
   onChange: CommitteeContentEditorProps["onChange"];
   onFocus: () => void;
+  canResetToDefault: boolean;
 }
 
 const ContentFieldEditor: React.FC<ContentFieldEditorProps> = ({
@@ -259,6 +275,7 @@ const ContentFieldEditor: React.FC<ContentFieldEditorProps> = ({
   error,
   onChange,
   onFocus,
+  canResetToDefault,
 }) => {
   const fieldValue =
     field.field === "application_guidance"
@@ -266,10 +283,11 @@ const ContentFieldEditor: React.FC<ContentFieldEditorProps> = ({
       : getFieldValue(group, content, field.field);
   const usesDefaultText = content[field.field] === null;
   const hasDefaultText =
-    field.field === "committee_info"
+    canResetToDefault &&
+    (field.field === "committee_info"
       ? Boolean(group.description?.trim())
       : field.field === "application_guidance" &&
-        Boolean(group.response_label?.trim());
+        Boolean(group.response_label?.trim()));
   const id = `committee-content-${group.pk}-${field.field}`;
 
   return (
@@ -431,7 +449,7 @@ const EditorLayout = styled.div<{ $singleCommittee?: boolean }>`
     $singleCommittee
       ? "minmax(0, 1fr) minmax(17rem, 20rem)"
       : "minmax(11rem, 0.72fr) minmax(0, 2fr) minmax(15rem, 0.9fr)"};
-  gap: var(--spacing-xl);
+  gap: var(--spacing-3xl);
   align-items: start;
   @media (max-width: 1050px) {
     grid-template-columns: ${({ $singleCommittee }) =>
@@ -656,7 +674,7 @@ const FieldError = styled.p`
 `;
 const Preview = styled.section`
   position: sticky;
-  top: var(--spacing-lg);
+  top: var(--content-sticky-offset);
   display: flex;
   flex-direction: column;
   gap: var(--spacing-md);

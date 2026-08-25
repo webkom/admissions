@@ -378,6 +378,12 @@ const ViewApplications = () => {
                 setHasDraft(true);
                 setContentSaved(false);
               }}
+              // contentGroup comes from the admission-scoped serializer, whose
+              // description/response_label are already resolved to any
+              // admission-specific override - not the true shared default -
+              // so "reset to shared default" has nothing real to fall back
+              // to here. See canResetToDefault's doc comment.
+              canResetToDefault={false}
             />
             <SaveRow>
               <StyledButton
