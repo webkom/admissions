@@ -370,11 +370,6 @@ const ViewApplications = () => {
             {contentGroup.name} — Opptakstekster
           </CollapseSummary>
           <CollapseBody>
-            <SectionDescription>
-              Tekstene som vises for søkerne <em>i dette opptaket</em>. Det som
-              fylles inn her overstyrer den globale beskrivelsen, men bare for
-              akkurat dette opptaket.
-            </SectionDescription>
             <CommitteeContentEditor
               groups={[contentGroup]}
               value={{ [contentGroup.pk]: draftContent }}
@@ -383,6 +378,12 @@ const ViewApplications = () => {
                 setHasDraft(true);
                 setContentSaved(false);
               }}
+              // contentGroup comes from the admission-scoped serializer, whose
+              // description/response_label are already resolved to any
+              // admission-specific override - not the true shared default -
+              // so "reset to shared default" has nothing real to fall back
+              // to here. See canResetToDefault's doc comment.
+              canResetToDefault={false}
             />
             <SaveRow>
               <StyledButton
@@ -444,13 +445,6 @@ const CollapseBody = styled.div`
   flex-direction: column;
   gap: var(--spacing-md);
   padding-bottom: var(--spacing-lg);
-`;
-
-const SectionDescription = styled.p`
-  margin: 0;
-  color: var(--color-text-muted);
-  font-size: var(--font-size-sm);
-  line-height: var(--line-height-copy);
 `;
 
 const SaveRow = styled.div`
