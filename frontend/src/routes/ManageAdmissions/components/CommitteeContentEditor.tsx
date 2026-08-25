@@ -30,7 +30,6 @@ interface CommitteeContentEditorProps {
 const contentFields: Array<{
   field: ContentField;
   label: string;
-  help: string;
   placeholder: string;
   maxLength: number;
   rows: number;
@@ -38,7 +37,6 @@ const contentFields: Array<{
   {
     field: "committee_info",
     label: "Kort presentasjon",
-    help: "Vises på komitékortet når søkeren sammenligner komiteer.",
     placeholder: "Vår komité har ansvar for… \n\nVi er opptatt av...",
     maxLength: 600,
     rows: 4,
@@ -46,9 +44,8 @@ const contentFields: Array<{
   {
     field: "application_guidance",
     label: "Søkerinformasjon",
-    help: "Hjelp søkeren å forstå hva de bør skrive om i søknaden og hva intervjuet innebærer.",
     placeholder:
-      "Skriv litt om hvorfor...\n\nSkriv litt om hvordan...\n\nSkriv litt om når...",
+      "Skriv litt om hvorfor...\n\nPå intervjuet treffer du 4 av oss som...\n\nFortell om en gang...",
     maxLength: 600,
     rows: 5,
   },
@@ -293,7 +290,6 @@ const ContentFieldEditor: React.FC<ContentFieldEditorProps> = ({
   return (
     <FieldBlock>
       <FieldLabel htmlFor={id}>{field.label}</FieldLabel>
-      <FieldHelp id={`${id}-help`}>{field.help}</FieldHelp>
       <TextArea
         id={id}
         name={`group_content.${group.pk}.${field.field}`}
@@ -301,7 +297,7 @@ const ContentFieldEditor: React.FC<ContentFieldEditorProps> = ({
         maxLength={field.maxLength}
         rows={field.rows}
         placeholder={field.placeholder}
-        aria-describedby={`${id}-help${error ? " committee-content-error" : ""}`}
+        aria-describedby={error ? "committee-content-error" : undefined}
         aria-invalid={Boolean(error)}
         onFocus={onFocus}
         onChange={(event) =>
@@ -596,12 +592,6 @@ const FieldLabel = styled.label`
   color: var(--color-text-primary);
   font-size: var(--font-size-md);
   font-weight: var(--font-weight-semibold);
-`;
-const FieldHelp = styled.p`
-  margin: 0;
-  color: var(--color-text-muted);
-  font-size: var(--font-size-sm);
-  line-height: var(--line-height-copy);
 `;
 const TextArea = styled.textarea`
   width: 100%;
