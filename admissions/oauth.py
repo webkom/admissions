@@ -184,12 +184,15 @@ def _parse_group_data(response):
         group_id = _parse_lego_id(group.get("id"))
         if group_id is None:
             return None
-        if group_id in groups_by_id:
-            return None
-        groups_by_id[group_id] = group
+        # A repeated group is not a malformed payload. LEGO's memberships are
+        # unique per (user, group, ROLE), so somebody who is both a member and
+        # the recruiter of one committee legitimately appears under that group
+        # twice, and the M2M behind abakusGroups repeats the group once per
+        # membership row. Vetoing the payload over it deleted every membership
+        # the user had and locked a recruiter out of their own committee.
+        groups_by_id.setdefault(group_id, group)
 
     group_data = []
-    roles_by_group = {}
     for membership in raw_memberships:
         if not isinstance(membership, dict):
             return None
@@ -212,10 +215,10 @@ def _parse_group_data(response):
         group = groups_by_id.get(group_id)
         if group is None:
             return None
-        previous_role = roles_by_group.get(group_id)
-        if previous_role is not None and previous_role != role:
-            return None
-        roles_by_group[group_id] = role
+        # Every role LEGO reports is kept, including several in one group.
+        # Both this app's Membership and LEGO's are unique per
+        # (user, group, role), and the serialised userdata already reads a
+        # *set* of roles per group - collapsing them here was the odd one out.
         group_data.append((group, membership))
     return group_data
 
@@ -250,8 +253,12 @@ def update_custom_user_details(strategy, details, user=None, *args, **kwargs):
 
     with transaction.atomic():
         Membership.objects.filter(user=user).delete()
+        # Keyed on (group, role), the same grain LEGO and this app both make
+        # unique. Holding two roles in one committee is ordinary upstream, and
+        # the previous "ambiguous, keep neither" rule dropped the group
+        # outright - so a recruiter who was also a plain member ended up with
+        # no membership at all rather than both.
         roles_by_group = {}
-        ambiguous_groups = set()
         for group, membership in group_data:
             role = membership.get("role")
             if role not in VALID_MEMBERSHIP_ROLES:
@@ -264,11 +271,7 @@ def update_custom_user_details(strategy, details, user=None, *args, **kwargs):
             if local_group is None:
                 continue
 
-            previous_membership = roles_by_group.get(local_group.pk)
-            if previous_membership is not None and previous_membership[1] != role:
-                ambiguous_groups.add(local_group.pk)
-            else:
-                roles_by_group[local_group.pk] = (local_group, role)
+            roles_by_group[(local_group.pk, role)] = (local_group, role)
 
         # Staff comes straight from the LEGO payload, not from a local Group
         # row: the staff groups (Hovedstyret in particular) have no reason to
@@ -280,11 +283,10 @@ def update_custom_user_details(strategy, details, user=None, *args, **kwargs):
             for group, membership in group_data
         )
 
-        memberships = []
-        for group_id, (local_group, role) in roles_by_group.items():
-            if group_id in ambiguous_groups:
-                continue
-            memberships.append(Membership(user=user, group=local_group, role=role))
+        memberships = [
+            Membership(user=user, group=local_group, role=role)
+            for local_group, role in roles_by_group.values()
+        ]
 
         Membership.objects.bulk_create(memberships)
         profile_picture = response.get("profilePicture")

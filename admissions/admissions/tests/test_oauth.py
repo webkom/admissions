@@ -183,6 +183,8 @@ class OAuthMembershipSyncTestCase(TestCase):
 
         self.sync(response)
 
+        # Same group AND same role twice is a true duplicate, and both this
+        # app and LEGO make that pair unique - so it collapses to one row.
         self.assertEqual(Membership.objects.filter(user=self.user).count(), 1)
 
     def test_malformed_response_revokes_access_without_raising(self):
@@ -253,7 +255,12 @@ class OAuthMembershipSyncTestCase(TestCase):
 
                 self.assertFalse(self.user.is_staff)
 
-    def test_conflicting_roles_for_one_group_fail_closed(self):
+    def test_two_roles_in_one_group_are_both_kept(self):
+        """LEGO makes memberships unique per (user, group, ROLE), so holding
+        two roles in one committee is ordinary upstream, not a corrupt payload.
+        Treating it as ambiguous dropped the group entirely and left a
+        recruiter who was also a plain member with no membership at all."""
+
         other_group = Group.objects.create(name="other", lego_id=92003)
         response = {
             "memberships": [
@@ -269,8 +276,44 @@ class OAuthMembershipSyncTestCase(TestCase):
 
         self.sync(response)
 
-        self.assertFalse(Membership.objects.filter(user=self.user).exists())
-        self.assertFalse(self.user.is_staff)
+        self.assertEqual(
+            {("backup", "member"), ("backup", "leader"), ("other", "member")},
+            {
+                (m.group.name, m.role)
+                for m in Membership.objects.filter(user=self.user).select_related(
+                    "group"
+                )
+            },
+        )
+
+    def test_a_group_repeated_in_the_payload_does_not_revoke_everything(self):
+        """abakusGroups is the M2M behind those memberships, so it repeats the
+        group once per membership row. Vetoing the payload over the repeat
+        deleted every membership the user had - a Bedkom recruiter who was
+        also a Bedkom member arrived with no access to anything."""
+
+        response = {
+            "memberships": [
+                {"abakusGroup": self.group.lego_id, "role": "member"},
+                {"abakusGroup": self.group.lego_id, "role": "recruiting"},
+            ],
+            # The same group, twice, exactly as LEGO sends it.
+            "abakusGroups": [
+                {"id": self.group.lego_id, "name": self.group.name},
+                {"id": self.group.lego_id, "name": self.group.name},
+            ],
+        }
+
+        self.sync(response)
+
+        self.assertEqual(
+            {"member", "recruiting"},
+            set(
+                Membership.objects.filter(user=self.user, group=self.group).values_list(
+                    "role", flat=True
+                )
+            ),
+        )
 
 
 class CommitteeRecruiterAccessTestCase(APITestCase):
@@ -347,6 +390,53 @@ class CommitteeRecruiterAccessTestCase(APITestCase):
                 )
             ),
             [("Fotokom", "photo_admin"), ("Webkom", "recruiting")],
+        )
+
+    def test_recruiter_who_is_also_a_member_of_the_same_committee(self):
+        """The exact shape LEGO sends for somebody holding two roles in one
+        committee: two membership rows, and abakusGroups - the M2M behind them
+        - repeating that group once per row.
+
+        This used to arrive as no memberships at all. The repeated group
+        vetoed the whole payload, and even past that the two roles were called
+        ambiguous and the group dropped, so a Bedkom recruiter got neither the
+        admin panel nor the scheduler for their own committee.
+        """
+
+        update_custom_user_details(
+            None,
+            {},
+            user=self.user,
+            response={
+                "memberships": [
+                    {"abakusGroup": self.committee.lego_id, "role": "member"},
+                    {"abakusGroup": self.committee.lego_id, "role": "recruiting"},
+                ],
+                "abakusGroups": [
+                    {"id": self.committee.lego_id, "name": self.committee.name},
+                    {"id": self.committee.lego_id, "name": self.committee.name},
+                ],
+            },
+        )
+        self.client.force_authenticate(user=self.user)
+        response = self.client.get(
+            reverse("admission-detail", kwargs={"slug": self.admission.slug})
+        )
+        userdata = response.data["userdata"]
+
+        # "Velg intervjutider"
+        self.assertEqual(userdata["committee_groups"], ["Webkom"])
+        # "Admin panel"
+        self.assertTrue(userdata["is_privileged"])
+        self.assertTrue(userdata["is_recruiter"])
+        self.assertEqual(userdata["represented_groups"], ["Webkom"])
+        # The recruiting role wins the summary, both rows are kept.
+        self.assertEqual(userdata["committee_role"], "recruiting")
+        self.assertEqual(
+            {"member", "recruiting"},
+            set(
+                Membership.objects.filter(user=self.user).values_list("role", flat=True)
+            ),
         )
 
     def test_recruiter_keeps_both_actions_when_lego_adds_an_unknown_role(self):
