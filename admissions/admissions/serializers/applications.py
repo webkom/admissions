@@ -379,11 +379,17 @@ class ApplicationCreateUpdateSerializer(serializers.HyperlinkedModelSerializer):
             # Best effort: a mail outage must never roll back or 500 the
             # application write.
             for group in removed_groups:
-                group_recruiters = Membership.objects.filter(
-                    Q(role=constants.RECRUITING) | Q(role=constants.LEADER),
-                    group=group.pk,
+                # Distinct addresses, not rows - see the same query in
+                # views.py: a leader who is also the recruiter has two
+                # membership rows and must still be mailed once.
+                recruiters = list(
+                    Membership.objects.filter(
+                        Q(role=constants.RECRUITING) | Q(role=constants.LEADER),
+                        group=group.pk,
+                    )
+                    .values_list("user__email", flat=True)
+                    .distinct()
                 )
-                recruiters = [recruiter.user.email for recruiter in group_recruiters]
 
                 def notify(group=group, recruiters=recruiters):
                     try:

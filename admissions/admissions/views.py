@@ -224,13 +224,18 @@ class PublicApplicationViewSet(mixins.CreateModelMixin, viewsets.GenericViewSet)
                 ]
                 recruiters = {}
                 for group_pk, group_name in applied_groups:
-                    group_recruiters = Membership.objects.filter(
-                        Q(role=constants.RECRUITING) | Q(role=constants.LEADER),
-                        group=group_pk,
+                    # Distinct addresses, not rows: memberships are unique per
+                    # (user, group, ROLE), so somebody who is both leader and
+                    # recruiter of a committee has two rows and would otherwise
+                    # be mailed twice about the same withdrawal.
+                    recruiters[group_name] = list(
+                        Membership.objects.filter(
+                            Q(role=constants.RECRUITING) | Q(role=constants.LEADER),
+                            group=group_pk,
+                        )
+                        .values_list("user__email", flat=True)
+                        .distinct()
                     )
-                    recruiters[group_name] = [
-                        recruiter.user.email for recruiter in group_recruiters
-                    ]
 
                 admission = get_object_or_404(Admission, slug=admission_slug)
                 admission_title = admission.title

@@ -475,3 +475,67 @@ class CommitteeRecruiterAccessTestCase(APITestCase):
 
         self.assertEqual(userdata["committee_groups"], ["Webkom"])
         self.assertFalse(userdata["is_privileged"])
+
+
+class MultiRoleMembershipSideEffectsTestCase(TestCase):
+    """Holding two roles in one committee is now stored as two rows, so
+    anything that iterates memberships has to stay per-person."""
+
+    def setUp(self):
+        self.group = Group.objects.create(name="Bedkom", lego_id=95001)
+        self.user = LegoUser.objects.create(
+            username="leader-and-recruiter", lego_id=95000, email="both@example.com"
+        )
+        Membership.objects.create(user=self.user, group=self.group, role="leader")
+        Membership.objects.create(user=self.user, group=self.group, role="recruiting")
+
+    def test_a_leader_who_is_also_recruiter_is_notified_once(self):
+        """Two rows, one person, one mail. Counting rows would tell them about
+        the same withdrawal twice."""
+
+        from django.db.models import Q
+
+        from admissions.admissions import constants
+
+        recipients = list(
+            Membership.objects.filter(
+                Q(role=constants.RECRUITING) | Q(role=constants.LEADER),
+                group=self.group.pk,
+            )
+            .values_list("user__email", flat=True)
+            .distinct()
+        )
+
+        self.assertEqual(["both@example.com"], recipients)
+
+    def test_the_privileged_role_still_decides_access(self):
+        admission = create_admission(slug="multirole-opptak")
+        admission.groups.add(self.group)
+
+        from admissions.admissions.admission_access import (
+            get_representing_groups,
+            user_is_group_member,
+        )
+
+        self.assertEqual(
+            ["Bedkom"], [g.name for g in get_representing_groups(admission, self.user)]
+        )
+        self.assertTrue(user_is_group_member(self.group, self.user))
+
+    def test_an_extra_plain_membership_grants_nothing_on_its_own(self):
+        """The widening must not turn a member into a recruiter anywhere."""
+
+        admission = create_admission(slug="plain-opptak")
+        other = Group.objects.create(name="Arrkom", lego_id=95002)
+        admission.groups.add(other)
+        plain = LegoUser.objects.create(username="plain", lego_id=95003)
+        Membership.objects.create(user=plain, group=other, role="member")
+        Membership.objects.create(user=plain, group=other, role="treasurer")
+
+        from admissions.admissions.admission_access import (
+            get_representing_groups,
+            user_is_admission_admin,
+        )
+
+        self.assertEqual([], list(get_representing_groups(admission, plain)))
+        self.assertFalse(user_is_admission_admin(admission, plain))
