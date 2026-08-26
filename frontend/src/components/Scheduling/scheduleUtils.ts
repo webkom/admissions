@@ -323,10 +323,18 @@ export const buildSolveBlocks = ({
   );
 };
 
+const scheduleDateForItem = (itemTime: number, startDate: string): string => {
+  const dayIndex = Math.floor(itemTime / MINUTES_PER_DAY);
+  const date = new Date(`${startDate}T00:00:00`);
+  date.setDate(date.getDate() + dayIndex);
+  return date.toISOString().slice(0, 10);
+};
+
 export const buildLockedAssignments = (
   schedule: ScheduleItem[],
   candidates: Candidate[],
   interviewers: Interviewer[],
+  { includeUnlockedItems = false }: { includeUnlockedItems?: boolean } = {},
 ): Array<{
   candidate_id?: string;
   candidate: string;
@@ -349,7 +357,7 @@ export const buildLockedAssignments = (
   const candidateIdByName = uniqueIdByName(candidates);
   const interviewerIdByName = uniqueIdByName(interviewers);
   return schedule
-    .filter((item) => item.locked)
+    .filter((item) => includeUnlockedItems || item.locked)
     .map((item) => ({
       candidate_id: item.candidate_id ?? candidateIdByName.get(item.candidate),
       candidate: item.candidate,
@@ -360,6 +368,33 @@ export const buildLockedAssignments = (
       })),
     }));
 };
+
+/**
+ * Locks for a phased release: every placement on or before the published
+ * boundary date is pinned (candidate, time and panel), so a later solve keeps
+ * the already-released days untouched while filling in the rest.
+ */
+export const buildPublishedDayLocks = ({
+  schedule,
+  startDate,
+  throughDate,
+  candidates,
+  interviewers,
+}: {
+  schedule: ScheduleItem[];
+  startDate: string;
+  throughDate: string;
+  candidates: Candidate[];
+  interviewers: Interviewer[];
+}) =>
+  buildLockedAssignments(
+    schedule.filter(
+      (item) => scheduleDateForItem(item.time, startDate) <= throughDate,
+    ),
+    candidates,
+    interviewers,
+    { includeUnlockedItems: true },
+  );
 
 const formatIcsLocal = (date: Date): string =>
   `${date.getFullYear()}${pad(date.getMonth() + 1)}${pad(date.getDate())}T${pad(

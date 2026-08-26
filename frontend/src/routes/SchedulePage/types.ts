@@ -9,6 +9,12 @@ export type TabType =
 
 export interface WorkflowStepDefinition {
   key: TabType;
+  /**
+   * Sections this step covers in the page body. Defaults to [key]. A step
+   * that spans several sections (the merged Plan step covers the draft
+   * workspace and the published plan) is active while any of them is.
+   */
+  keys?: TabType[];
   title: string;
   description: string;
   icon: React.ComponentType<{ size?: number | string; className?: string }>;

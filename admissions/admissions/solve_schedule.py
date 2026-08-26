@@ -36,6 +36,12 @@ class Interviewer(Candidate):
 class SolveOptions:
     enforce_same_gender: bool = False
     require_experienced_panel: bool = False
+    # Candidates per session: 1 is a normal interview; 2+ means one shared
+    # panel meets that many candidates together in a single slot (joint
+    # interview). The panel is shared - every candidate in the session must
+    # be compatible with every panel member. Single-candidate sessions
+    # remain allowed so odd counts and hard pairings stay feasible.
+    candidates_per_session: int = 1
     allow_overtime: bool = True
     prioritize_continuity: bool = True
     same_panel_per_block: bool = True

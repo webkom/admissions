@@ -5,7 +5,7 @@ import React, {
   useRef,
   useState,
 } from "react";
-import { ArrowRight, Sparkles } from "lucide-react";
+import { ArrowRight, Lock, Sparkles } from "lucide-react";
 
 import type {
   Candidate,
@@ -18,7 +18,9 @@ import type {
   SlotOverride,
 } from "../types";
 import {
+  buildPublishedDayLocks,
   buildSolveBlocks,
+  formatAccessibleDate,
   manualBlocksToSolverBlocks,
   slotsToSolverAvailability,
 } from "../scheduleUtils";
@@ -304,6 +306,49 @@ export default function SolverView({
       block.filter((slot) => openSlots.has(slot)),
     );
   }, [canonicalBlocks, enabledSlots, sessionDuration]);
+  const savedScheduleIsDistributed = Boolean(
+    session.savedSchedule?.is_distributed,
+  );
+  const distributedThroughDate =
+    session.savedSchedule?.distributed_through ?? null;
+  const isPartiallyDistributed = Boolean(
+    distributedThroughDate &&
+      dates.some((date) => date > distributedThroughDate),
+  );
+  const publishedDayLocks = useMemo(() => {
+    if (
+      !isPartiallyDistributed ||
+      !distributedThroughDate ||
+      !session.savedSchedule
+    ) {
+      return null;
+    }
+    return buildPublishedDayLocks({
+      schedule: session.savedSchedule.schedule,
+      startDate: session.savedSchedule.start_date,
+      throughDate: distributedThroughDate,
+      candidates,
+      interviewers,
+    });
+  }, [
+    candidates,
+    distributedThroughDate,
+    interviewers,
+    isPartiallyDistributed,
+    session.savedSchedule,
+  ]);
+  const unplannedCandidateCount = useMemo(() => {
+    if (!isPartiallyDistributed || !session.scopedResult) return null;
+    const placedKeys = new Set(
+      session.scopedResult.schedule.map(
+        (item) => item.candidate_id ?? item.candidate,
+      ),
+    );
+    return candidates.filter(
+      (candidate) =>
+        !placedKeys.has(candidate.id) && !placedKeys.has(candidate.name),
+    ).length;
+  }, [candidates, isPartiallyDistributed, session.scopedResult]);
   const repairBaseline = session.scopedResult?.schedule ?? [];
   const repairInputFingerprint = useMemo(
     () =>
@@ -335,10 +380,13 @@ export default function SolverView({
   }, [repairBaselineKey]);
 
   const solvePlan = () => {
-    void session.solvePlan(draft.lockedAssignments);
+    // While part of the plan is already released, every placement up to the
+    // published boundary replaces the draft's own lock marks: released days
+    // stay exactly as published, everything else is free to reschedule.
+    void session.solvePlan(publishedDayLocks ?? draft.lockedAssignments);
   };
   const retryWithAvailabilityDeviation = () => {
-    void session.solvePlan(draft.lockedAssignments, {
+    void session.solvePlan(publishedDayLocks ?? draft.lockedAssignments, {
       availabilityFallback: "propose",
     });
   };
@@ -516,7 +564,7 @@ export default function SolverView({
     unplaceableCandidates.length,
   ]);
   const planDraftStage = derivePlanDraftStage({
-    isPublished: Boolean(session.savedSchedule?.is_distributed),
+    isPublished: savedScheduleIsDistributed && !isPartiallyDistributed,
     currentReviewRequired,
     currentReviewComplete,
     hasPendingProposal: Boolean(pendingProposal),
@@ -600,7 +648,7 @@ export default function SolverView({
     />
   );
 
-  if (session.savedSchedule?.is_distributed) {
+  if (savedScheduleIsDistributed && !isPartiallyDistributed) {
     return (
       <PublishedPlanNotice
         stage={planDraftStage.kind}
@@ -611,194 +659,240 @@ export default function SolverView({
     );
   }
 
-  if (backgroundMode) {
-    return hasProposal ? renderDraftCanvas(true) : null;
-  }
-
-  if (pendingProposal) {
-    return (
-      <DraftTaskLayout
-        stage={planDraftStage.kind}
-        draft={renderDraftCanvas(true)}
-      >
-        <ProposalDecisionPanel
-          proposal={pendingProposal}
-          stage={planDraftStage.kind}
-          title={planDraftStage.title}
-          description={planDraftStage.description}
-          dates={dates}
-          sessionDuration={sessionDuration}
-          currentScheduleCount={draft.presentation.sortedSchedule.length}
-          currentUnplacedCount={currentUnplaced}
-          currentOutsideAvailabilityCount={currentOutsideAvailability}
-          proposedUnplacedCount={pendingUnplaced}
-          proposedOutsideAvailabilityCount={pendingOutsideAvailability}
-          expiryLabel={pendingProposalExpiry}
-          isStale={pendingProposalIsStale}
-          hasExpired={pendingProposalHasExpired}
-          detailsOpen={proposalDetailsOpen}
-          actionLoading={session.proposalActionLoading}
-          headingRef={proposalHeadingRef}
-          comparisonTriggerRef={proposalComparisonTriggerRef}
-          comparisonHeadingRef={proposalComparisonHeadingRef}
-          onToggleDetails={() => setProposalDetailsOpen((open) => !open)}
-          onCloseComparison={closeProposalComparison}
-          onKeepCurrent={() => void keepCurrentDraft()}
-          onAdjust={() => void adjustPendingProposal()}
-          onApply={() => void applyPendingProposal()}
-        />
-      </DraftTaskLayout>
-    );
-  }
-
-  if (repairAvailable && repairOpen) {
-    return (
-      <DraftTaskLayout draft={renderDraftCanvas(true)}>
-        <RepairScenarioPanel
-          open
-          openRequestKey={repairFocusRequest}
-          onClose={() => setRepairOpen(false)}
-          conflictCount={assignmentConflicts.assignmentCount}
-          selectedStrategy={selectedRepairStrategy}
-          onSelectedStrategyChange={selectRepairStrategy}
-          scenarios={repairScenarios}
-          selectedScenario={selectedRepairScenario}
-          onSelectScenario={selectRepairScenario}
-          onPreview={(strategy) => void previewRepairStrategy(strategy)}
-          onCompare={() => void compareRepairStrategies()}
-          onApply={applyRepairScenario}
-          loading={session.loading}
-          runningStrategy={runningRepairStrategy}
-          error={repairError || session.error}
-          dates={dates}
-          sessionDuration={sessionDuration}
-        />
-      </DraftTaskLayout>
-    );
-  }
-
-  if (!hasProposal || regenerationOpen) {
-    const setupPanel = (
-      <SolverSetupPanel
-        interviewerCount={interviewers.length}
-        experiencedInterviewerCount={
-          interviewers.filter(
-            (interviewer) => interviewer.experience_level === "experienced",
-          ).length
-        }
-        interviewers={interviewers}
-        solverOptions={session.solverOptions}
-        onSolverOptionsChange={session.setSolverOptions}
-        onExperienceLevelChange={onExperienceLevelChange}
-        panelSize={session.panelSize}
-        onPanelSizeChange={session.setPanelSize}
-        openBlockCount={solveBlocks.length}
-        interviewSlotCount={session.readiness.enabledSlotCount}
-        readiness={session.readiness}
-        availabilityReady={availabilityReady}
-        loading={session.loading}
-        error={session.error}
-        elapsedMs={session.elapsedMs}
-        jobStatus={session.jobStatus}
-        estimatedSeconds={session.estimatedSeconds}
-        lockedCount={draft.presentation.lockedCount}
-        hasProposal={hasProposal}
-        changeableInterviewCount={Math.max(
-          (session.scopedResult?.schedule.length ?? 0) -
-            draft.presentation.lockedCount,
-          0,
-        )}
-        currentDraftReady={
-          !hasProposal ||
-          (persistence.isSaved &&
-            !persistence.isSaving &&
-            !persistence.hasConflict)
-        }
-        candidateScopeResolved={candidateScopeResolved}
-        regenerationOpen={regenerationOpen}
-        onCloseRegeneration={closeRegeneration}
-        onSolve={solvePlan}
-        onCancel={() => void session.cancel()}
-        onOpenAvailability={onOpenAvailability}
-        onOpenFramework={onOpenFramework}
-        onOpenConflictReview={onOpenConflictReview}
-        conflictReviewReachable={conflictReviewReachable}
-      />
-    );
-
-    if (!hasProposal) {
-      return setupPanel;
+  // A partially published plan keeps the full planning workspace available:
+  // the released days are locked (see publishedDayLocks) and the rest can be
+  // planned and released later without touching them.
+  const renderWorkspace = () => {
+    if (backgroundMode) {
+      return hasProposal ? renderDraftCanvas(true) : null;
     }
 
-    return (
-      <DraftTaskLayout draft={renderDraftCanvas(true)}>
-        {setupPanel}
-      </DraftTaskLayout>
-    );
-  }
-
-  if (unplaceableCandidates.length > 0 && !placementStageDismissed) {
-    return (
-      <DraftTaskLayout
-        stage="missing_placements"
-        draft={renderDraftCanvas(true)}
-      >
-        <SchedulePanel
-          dataCy="missing-placements-stage"
-          stage="missing_placements"
-          className="mx-auto w-full max-w-3xl"
+    if (pendingProposal) {
+      return (
+        <DraftTaskLayout
+          stage={planDraftStage.kind}
+          draft={renderDraftCanvas(true)}
         >
-          <SchedulePanelHeader
-            icon={Sparkles}
-            headingRef={placementHeadingRef}
-            headingDataCy="schedule-stage-heading"
+          <ProposalDecisionPanel
+            proposal={pendingProposal}
+            stage={planDraftStage.kind}
             title={planDraftStage.title}
             description={planDraftStage.description}
+            dates={dates}
+            sessionDuration={sessionDuration}
+            currentScheduleCount={draft.presentation.sortedSchedule.length}
+            currentUnplacedCount={currentUnplaced}
+            currentOutsideAvailabilityCount={currentOutsideAvailability}
+            proposedUnplacedCount={pendingUnplaced}
+            proposedOutsideAvailabilityCount={pendingOutsideAvailability}
+            expiryLabel={pendingProposalExpiry}
+            isStale={pendingProposalIsStale}
+            hasExpired={pendingProposalHasExpired}
+            detailsOpen={proposalDetailsOpen}
+            actionLoading={session.proposalActionLoading}
+            headingRef={proposalHeadingRef}
+            comparisonTriggerRef={proposalComparisonTriggerRef}
+            comparisonHeadingRef={proposalComparisonHeadingRef}
+            onToggleDetails={() => setProposalDetailsOpen((open) => !open)}
+            onCloseComparison={closeProposalComparison}
+            onKeepCurrent={() => void keepCurrentDraft()}
+            onAdjust={() => void adjustPendingProposal()}
+            onApply={() => void applyPendingProposal()}
           />
-          <SchedulePanelBody>
-            <ul className="m-0 divide-y divide-border-soft p-0">
-              {unplaceableCandidates.map((candidate) => (
-                <li
-                  key={candidate.candidate_id ?? candidate.candidate}
-                  className="list-none py-3 first:pt-0 last:pb-0"
-                >
-                  <p className="m-0 text-ui font-semibold text-text-primary">
-                    {candidate.candidate}
-                  </p>
-                  <p className="m-0 mt-1 text-detail text-text-muted">
-                    {candidate.reason}
-                  </p>
-                </li>
-              ))}
-            </ul>
-          </SchedulePanelBody>
-          <SchedulePanelFooter className="sticky bottom-0 z-10 bg-surface-base">
-            <span className="text-detail font-semibold text-text-muted">
-              Resten av utkastet er beholdt.
-            </span>
-            <div className="flex flex-wrap items-center justify-end gap-2">
-              <button
-                type="button"
-                onClick={() => setPlacementStageDismissed(true)}
-                className={cn(actionButtonBase, actionButtonNeutral)}
-              >
-                Se resten av utkastet
-              </button>
-              <button
-                type="button"
-                onClick={() => setRegenerationOpen(true)}
-                data-cy="schedule-stage-primary-action"
-                className={cn(actionButtonBase, actionButtonPrimary)}
-              >
-                Juster og prøv igjen
-                <ArrowRight size={iconSizes.medium} aria-hidden="true" />
-              </button>
-            </div>
-          </SchedulePanelFooter>
-        </SchedulePanel>
-      </DraftTaskLayout>
-    );
-  }
+        </DraftTaskLayout>
+      );
+    }
 
-  return renderDraftCanvas();
+    if (repairAvailable && repairOpen) {
+      return (
+        <DraftTaskLayout draft={renderDraftCanvas(true)}>
+          <RepairScenarioPanel
+            open
+            openRequestKey={repairFocusRequest}
+            onClose={() => setRepairOpen(false)}
+            conflictCount={assignmentConflicts.assignmentCount}
+            selectedStrategy={selectedRepairStrategy}
+            onSelectedStrategyChange={selectRepairStrategy}
+            scenarios={repairScenarios}
+            selectedScenario={selectedRepairScenario}
+            onSelectScenario={selectRepairScenario}
+            onPreview={(strategy) => void previewRepairStrategy(strategy)}
+            onCompare={() => void compareRepairStrategies()}
+            onApply={applyRepairScenario}
+            loading={session.loading}
+            runningStrategy={runningRepairStrategy}
+            error={repairError || session.error}
+            dates={dates}
+            sessionDuration={sessionDuration}
+          />
+        </DraftTaskLayout>
+      );
+    }
+
+    if (!hasProposal || regenerationOpen) {
+      const setupPanel = (
+        <SolverSetupPanel
+          interviewerCount={interviewers.length}
+          experiencedInterviewerCount={
+            interviewers.filter(
+              (interviewer) => interviewer.experience_level === "experienced",
+            ).length
+          }
+          interviewers={interviewers}
+          solverOptions={session.solverOptions}
+          onSolverOptionsChange={session.setSolverOptions}
+          onExperienceLevelChange={onExperienceLevelChange}
+          panelSize={session.panelSize}
+          onPanelSizeChange={session.setPanelSize}
+          openBlockCount={solveBlocks.length}
+          interviewSlotCount={session.readiness.enabledSlotCount}
+          readiness={session.readiness}
+          availabilityReady={availabilityReady}
+          loading={session.loading}
+          error={session.error}
+          elapsedMs={session.elapsedMs}
+          jobStatus={session.jobStatus}
+          estimatedSeconds={session.estimatedSeconds}
+          lockedCount={draft.presentation.lockedCount}
+          hasProposal={hasProposal}
+          changeableInterviewCount={Math.max(
+            (session.scopedResult?.schedule.length ?? 0) -
+              draft.presentation.lockedCount,
+            0,
+          )}
+          currentDraftReady={
+            !hasProposal ||
+            (persistence.isSaved &&
+              !persistence.isSaving &&
+              !persistence.hasConflict)
+          }
+          candidateScopeResolved={candidateScopeResolved}
+          regenerationOpen={regenerationOpen}
+          onCloseRegeneration={closeRegeneration}
+          onSolve={solvePlan}
+          onCancel={() => void session.cancel()}
+          onOpenAvailability={onOpenAvailability}
+          onOpenFramework={onOpenFramework}
+          onOpenConflictReview={onOpenConflictReview}
+          conflictReviewReachable={conflictReviewReachable}
+        />
+      );
+
+      if (!hasProposal) {
+        return setupPanel;
+      }
+
+      return (
+        <DraftTaskLayout draft={renderDraftCanvas(true)}>
+          {setupPanel}
+        </DraftTaskLayout>
+      );
+    }
+
+    if (unplaceableCandidates.length > 0 && !placementStageDismissed) {
+      return (
+        <DraftTaskLayout
+          stage="missing_placements"
+          draft={renderDraftCanvas(true)}
+        >
+          <SchedulePanel
+            dataCy="missing-placements-stage"
+            stage="missing_placements"
+            className="mx-auto w-full max-w-3xl"
+          >
+            <SchedulePanelHeader
+              icon={Sparkles}
+              headingRef={placementHeadingRef}
+              headingDataCy="schedule-stage-heading"
+              title={planDraftStage.title}
+              description={planDraftStage.description}
+            />
+            <SchedulePanelBody>
+              <ul className="m-0 divide-y divide-border-soft p-0">
+                {unplaceableCandidates.map((candidate) => (
+                  <li
+                    key={candidate.candidate_id ?? candidate.candidate}
+                    className="list-none py-3 first:pt-0 last:pb-0"
+                  >
+                    <p className="m-0 text-ui font-semibold text-text-primary">
+                      {candidate.candidate}
+                    </p>
+                    <p className="m-0 mt-1 text-detail text-text-muted">
+                      {candidate.reason}
+                    </p>
+                  </li>
+                ))}
+              </ul>
+            </SchedulePanelBody>
+            <SchedulePanelFooter className="sticky bottom-0 z-10 bg-surface-base">
+              <span className="text-detail font-semibold text-text-muted">
+                Resten av utkastet er beholdt.
+              </span>
+              <div className="flex flex-wrap items-center justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setPlacementStageDismissed(true)}
+                  className={cn(actionButtonBase, actionButtonNeutral)}
+                >
+                  Se resten av utkastet
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setRegenerationOpen(true)}
+                  data-cy="schedule-stage-primary-action"
+                  className={cn(actionButtonBase, actionButtonPrimary)}
+                >
+                  Juster og prøv igjen
+                  <ArrowRight size={iconSizes.medium} aria-hidden="true" />
+                </button>
+              </div>
+            </SchedulePanelFooter>
+          </SchedulePanel>
+        </DraftTaskLayout>
+      );
+    }
+
+    return renderDraftCanvas();
+  };
+
+  const partialPublishBanner =
+    isPartiallyDistributed && distributedThroughDate ? (
+      <div
+        data-cy="partial-publish-banner"
+        className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border bg-surface-subtle px-4 py-3"
+      >
+        <div className="min-w-0">
+          <p className="m-0 flex items-center gap-2 text-ui font-semibold text-text-primary">
+            <Lock size={iconSizes.small} aria-hidden="true" />
+            Publisert t.o.m. {formatAccessibleDate(distributedThroughDate)}
+            {publishedDayLocks?.length
+              ? ` – ${publishedDayLocks.length} intervjuer er låst.`
+              : "."}
+          </p>
+          <p className="m-0 mt-1 text-detail leading-relaxed text-text-muted">
+            {unplannedCandidateCount === null
+              ? "Kjør planleggingen på nytt for å plassere de resterende kandidatene – de publiserte dagene flyttes ikke."
+              : `${unplannedCandidateCount} ${
+                  unplannedCandidateCount === 1
+                    ? "kandidat venter"
+                    : "kandidater venter"
+                } på intervju. Planlegg resten når du er klar – de publiserte dagene holdes uendret.`}
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={onOpenPlan}
+          className={cn(actionButtonBase, actionButtonNeutral)}
+        >
+          Se publisert plan
+        </button>
+      </div>
+    ) : null;
+
+  return (
+    <div className="flex flex-col gap-3">
+      {partialPublishBanner}
+      {renderWorkspace()}
+    </div>
+  );
 }

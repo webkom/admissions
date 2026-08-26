@@ -224,7 +224,7 @@ describe("admin applications review", () => {
     cy.contains("Sent den").should("be.visible");
   });
 
-  it("filters by normalized phone number, status, and multiple groups", () => {
+  it("filters by normalized phone number, status, and committee", () => {
     visitApplications();
     cy.contains("button", "Vis kandidatdata").click();
 
@@ -239,14 +239,16 @@ describe("admin applications review", () => {
     cy.contains("Ida Nordmann").should("not.exist");
     cy.contains("button", "Nullstill").click();
 
-    // The group filter used to be a details/summary with checkbox labels; it is
-    // a MultiSelect now, so the trigger is a button and the entries are options.
-    cy.get('button[aria-label^="Filtrer på gruppe"]').click();
+    // Admins get a plain committee dropdown next to Status (the old
+    // checkbox MultiSelect remains only for scoped committee users).
+    cy.get('[aria-label="Filtrer på komité"]').click();
     cy.contains('[role="option"]', "Fagkom").should("contain", "1").click();
     cy.contains("Ida Nordmann").should("be.visible");
     cy.contains("Olav Hansen").should("not.exist");
+
+    cy.get('[aria-label="Filtrer på komité"]').click();
     cy.contains('[role="option"]', "Webkom").click();
-    cy.contains("Ida Nordmann").should("be.visible");
+    cy.contains("Ida Nordmann").should("not.exist");
     cy.contains("Olav Hansen").should("be.visible");
 
     cy.get('input[type="search"]').type("finnes-ikke");

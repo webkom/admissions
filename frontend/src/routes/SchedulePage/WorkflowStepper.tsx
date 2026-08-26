@@ -21,7 +21,8 @@ const WorkflowStepper: React.FC<WorkflowStepperProps> = ({
   >
     <ol className="m-0 flex list-none flex-col gap-2 p-0 sm:flex-row sm:gap-0">
       {steps.map((step, idx) => {
-        const active = activeKey === step.key;
+        const stepKeys = step.keys ?? [step.key];
+        const active = stepKeys.includes(activeKey);
         return (
           <li
             key={step.key}
@@ -34,7 +35,7 @@ const WorkflowStepper: React.FC<WorkflowStepperProps> = ({
               type="button"
               disabled={step.locked}
               aria-current={active ? "step" : undefined}
-              onClick={() => onChange(step.key)}
+              onClick={() => onChange(stepKeys[0])}
               className={cn(
                 "group flex min-h-12 min-w-0 items-center gap-3 rounded-md px-2 py-2 text-left transition-colors duration-150",
                 "focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-focus",

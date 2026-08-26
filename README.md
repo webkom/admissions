@@ -214,7 +214,7 @@ are cleaned separately and are not a substitute for deleting applications.
 | :---------------------- | ------------- | ------------------------------------------------------------------------------------------------------------------------- |
 | Admission               | CREATE        | Active Webkom member, or a staff user whose active LEGO role grants admission-management access                           |
 | Admission               | EDIT          | Active Webkom member, or the admission creator when that creator is still a staff user                                    |
-| All applications        | VIEW & DELETE | Active LEADER or RECRUITING member of a group in `admission.admin_groups`                                                  |
+| All applications        | VIEW & DELETE | Active LEADER or RECRUITING member of a group in `admission.admin_groups`, or the Hovedstyret leader/co-leader in any admission                                                   |
 | Applications to a group | VIEW & DELETE | Active member of a group in `admission.groups` with role LEADER or RECRUITING                                             |
 | Group                   | EDIT          | Active LEADER or RECRUITING member of an admission admin group, or of the group itself                                     |
 

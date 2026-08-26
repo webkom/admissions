@@ -367,6 +367,37 @@ const AdvancedSolverSettings = ({
           </section>
 
           <section className="border-t border-border-soft pt-5">
+            <p className={sectionLabelClass}>Intervjuform</p>
+            <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
+              <div>
+                <p className="m-0 text-ui font-semibold text-text-primary">
+                  Kandidater per intervju
+                </p>
+                <p className="m-0 mt-1 text-detail text-text-muted">
+                  1 er et vanlig intervju. Velg 2 eller flere for at ett panel
+                  intervjuer akkurat det antallet kandidater sammen i samme
+                  tidsluke. Kandidater som ikke kan plasseres i et fullt
+                  fellesintervju, blir stående uten intervju.
+                </p>
+              </div>
+              <div data-cy="candidates-per-session">
+                <Stepper
+                  value={solverOptions.candidates_per_session}
+                  min={1}
+                  max={4}
+                  onStep={(value) =>
+                    onSolverOptionsChange((current) => ({
+                      ...current,
+                      candidates_per_session: value,
+                    }))
+                  }
+                  aria-label="Kandidater per intervju"
+                />
+              </div>
+            </div>
+          </section>
+
+          <section className="border-t border-border-soft pt-5">
             <p className={sectionLabelClass}>Prioritering</p>
             <AdvancedOptionRow
               title="Hvile mellom arbeidsblokker"

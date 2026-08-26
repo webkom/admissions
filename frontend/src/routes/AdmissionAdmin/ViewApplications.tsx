@@ -85,6 +85,10 @@ const ViewApplications = () => {
   const applicationScopeKey = getApplicationScopeKey(admission);
   const applicationViewMode = admission?.userdata.application_view_mode;
   const isCommitteeMinimal = isCommitteeMinimalView(applicationViewMode);
+  // Admins (including the admin group's leader/co-leader) see every
+  // participating committee, so they get a plain committee dropdown next to
+  // Status instead of the multi-select scoped users need.
+  const isAdminFull = applicationViewMode === "admin_full";
 
   const {
     data: applications,
@@ -308,22 +312,45 @@ const ViewApplications = () => {
                 aria-label="Filtrer på intervjustatus"
               />
             </FilterControl>
-            {showGroupFilter && (
-              <FilterControl>
-                <span>Gruppe</span>
-                <MultiSelect
-                  values={selectedGroupIds}
-                  onChange={setSelectedGroupIds}
-                  options={availableGroups.map((group) => ({
-                    value: group.pk,
-                    label: `${group.name} (${groupApplicationCounts[group.pk] ?? 0})`,
-                  }))}
-                  getSelectionLabel={filterSelectionSummary}
-                  clearAllLabel="Alle grupper"
-                  aria-label="Filtrer på gruppe"
-                />
-              </FilterControl>
-            )}
+            {isAdminFull
+              ? !scopedGroup &&
+                availableGroups.length > 1 && (
+                  <FilterControl>
+                    <span>Komité</span>
+                    <CustomSelect
+                      value={
+                        selectedGroupIds.length === 1 ? selectedGroupIds[0] : ""
+                      }
+                      onChange={(value) =>
+                        setSelectedGroupIds(value ? [value] : [])
+                      }
+                      options={[
+                        { value: "", label: "Alle" },
+                        ...availableGroups.map((group) => ({
+                          value: group.pk,
+                          label: `${group.name} (${groupApplicationCounts[group.pk] ?? 0})`,
+                        })),
+                      ]}
+                      aria-label="Filtrer på komité"
+                    />
+                  </FilterControl>
+                )
+              : showGroupFilter && (
+                  <FilterControl>
+                    <span>Gruppe</span>
+                    <MultiSelect
+                      values={selectedGroupIds}
+                      onChange={setSelectedGroupIds}
+                      options={availableGroups.map((group) => ({
+                        value: group.pk,
+                        label: `${group.name} (${groupApplicationCounts[group.pk] ?? 0})`,
+                      }))}
+                      getSelectionLabel={filterSelectionSummary}
+                      clearAllLabel="Alle grupper"
+                      aria-label="Filtrer på gruppe"
+                    />
+                  </FilterControl>
+                )}
             {filtersAreActive && (
               <ResetFilters
                 type="button"

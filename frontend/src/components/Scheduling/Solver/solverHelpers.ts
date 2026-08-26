@@ -127,6 +127,7 @@ export const DEFAULT_SOLVER_OPTIONS: SolverOptions = {
   availability_fallback: "stop",
   enforce_same_gender: false,
   require_experienced_panel: true,
+  candidates_per_session: 1,
   allow_overtime: false,
   prioritize_continuity: true,
   same_panel_per_block: false,
