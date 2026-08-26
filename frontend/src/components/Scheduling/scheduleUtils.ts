@@ -323,10 +323,7 @@ export const buildSolveBlocks = ({
   );
 };
 
-const scheduleDateForItem = (
-  itemTime: number,
-  startDate: string,
-): string => {
+const scheduleDateForItem = (itemTime: number, startDate: string): string => {
   const dayIndex = Math.floor(itemTime / MINUTES_PER_DAY);
   const date = new Date(`${startDate}T00:00:00`);
   date.setDate(date.getDate() + dayIndex);
