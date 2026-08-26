@@ -5,6 +5,7 @@ export type DjangoUserData = {
   representative_of_group?: string;
   is_staff?: boolean;
   is_member_of_webkom?: boolean;
+  is_org_leadership?: boolean;
 };
 
 export type DjangoData = {
@@ -26,4 +27,6 @@ export default config;
 export const isLoggedIn: () => boolean = () => !!config.user.full_name;
 
 export const isManager: () => boolean = () =>
-  !!config.user.is_staff || !!config.user.is_member_of_webkom;
+  !!config.user.is_staff ||
+  !!config.user.is_member_of_webkom ||
+  !!config.user.is_org_leadership;

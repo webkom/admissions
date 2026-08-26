@@ -26,6 +26,7 @@ from admissions.admissions.admission_access import (
     get_representing_groups,
     user_is_admission_admin,
     user_is_admission_leadership,
+    user_is_org_leadership,
     user_represents_group,
 )
 from admissions.admissions.interview_workflow import (
@@ -68,6 +69,7 @@ from .permissions import (
     ApplicationPermissions,
     GroupPermissions,
     IsCreatorOfObject,
+    IsOrgLeadership,
     IsStaff,
     IsWebkom,
 )
@@ -96,6 +98,7 @@ class AppView(TemplateView):
             "representative_of_group": "",
             "is_staff": False,
             "is_member_of_webkom": False,
+            "is_org_leadership": False,
         }
         if self.request.user.is_authenticated:
             self.request.user.__class__ = LegoUser
@@ -107,8 +110,12 @@ class AppView(TemplateView):
                 "representative_of_group": (
                     representative.name if representative else ""
                 ),
+                # is_staff is persisted at login, so it can be stale for a
+                # freshly-promoted co-leader until their next login; the live
+                # check below is what the manage page should actually key on.
                 "is_staff": self.request.user.is_staff,
                 "is_member_of_webkom": self.request.user.is_member_of_webkom,
+                "is_org_leadership": user_is_org_leadership(self.request.user),
             }
         context["django_data"] = {"user": user_data}
         context["frontend_config"] = {
@@ -624,7 +631,7 @@ class ManageAdmissionViewSet(viewsets.ModelViewSet):
     authentication_classes = [SessionAuthentication]
     permission_classes = [
         permissions.IsAuthenticated,
-        IsWebkom | (IsStaff & IsCreatorOfObject),
+        IsWebkom | IsOrgLeadership | (IsStaff & IsCreatorOfObject),
     ]
     http_method_names = ["get", "post", "patch", "delete"]
     lookup_field = "slug"
@@ -636,8 +643,15 @@ class ManageAdmissionViewSet(viewsets.ModelViewSet):
             return AdminCreateUpdateAdmissionSerializer
 
     def get_queryset(self):
+        # The organisation's own leadership oversees every admission just like
+        # the tool-admin committee does - a Hovedstyret leader who is not in
+        # Webkom must still see (and manage) every opptak, not only the ones
+        # they happened to create.
         qs = Admission.objects.all().order_by("title")
-        if not self.request.user.is_member_of_webkom:
+        if not (
+            self.request.user.is_member_of_webkom
+            or user_is_org_leadership(self.request.user)
+        ):
             return qs.filter(created_by=self.request.user)
         return qs
 

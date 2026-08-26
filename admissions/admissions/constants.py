@@ -183,6 +183,15 @@ def group_category(name):
 # Groups that give privileges to their leaders
 STAFF_LEADER_GROUPS = ["backup", "Hovedstyret", "RevyStyret"]
 """ Members of these groups with role leader attain the is_staff attribute and can manage admissions. Matched against the LEGO login payload's group names - no local Group row is needed. """
+
+# The organisation's own leadership positions: the leader and co-leader of
+# Hovedstyret. Either is an admission-wide admin in every opptak - they see
+# every application across every committee, regardless of how the admission's
+# admin_groups are configured - and both are staff for the manage-admissions
+# page. Kept apart from STAFF_LEADER_GROUPS because that only confers
+# is_staff, and only to the group's leader, not the co-leader.
+ORG_LEADERSHIP_GROUPS = ["Hovedstyret"]
+ORG_LEADERSHIP_ROLES = (LEADER, CO_LEADER)
 WEBKOM_GROUPNAME = "Webkom"
 """ Group name of Webkom """
 

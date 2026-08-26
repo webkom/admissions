@@ -4,6 +4,7 @@ from rest_framework import permissions
 from admissions.admissions import constants
 from admissions.admissions.admission_access import (
     user_is_admission_admin,
+    user_is_org_leadership,
     user_is_privileged,
 )
 
@@ -40,6 +41,22 @@ class IsWebkom(permissions.BasePermission):
 
     def has_object_permission(self, request, *_):
         return cast_as_lego_user(request.user).is_member_of_webkom
+
+
+class IsOrgLeadership(permissions.BasePermission):
+    """The Hovedstyret leader/co-leader: admission-wide admins everywhere.
+
+    Kept as its own class rather than folded into IsWebkom so a committee
+    that also administers the tool (Webkom) stays distinguishable from the
+    organisation's own leadership - they are the same privilege for
+    manage-admissions today, but the two can drift apart later.
+    """
+
+    def has_permission(self, request, *_):
+        return user_is_org_leadership(cast_as_lego_user(request.user))
+
+    def has_object_permission(self, request, *_):
+        return user_is_org_leadership(cast_as_lego_user(request.user))
 
 
 class IsCreatorOfObject(permissions.BasePermission):

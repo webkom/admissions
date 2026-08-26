@@ -233,10 +233,19 @@ class RosterWideningTestCase(TestCase):
         CommitteeRosterEntry.objects.create(
             group=self.group, user=self.never_signed_in, role=MEMBER
         )
+        # The admission's admin group, with a member who has nothing to do
+        # with this committee - the regression shape of "the roster listed a
+        # different group's people".
+        self.admin_group = Group.objects.create(name="Hovedstyret", lego_id=99)
+        self.admission.admin_groups.add(self.admin_group)
+        self.admin_outsider = LegoUser.objects.create(username="styret", lego_id=6002)
+        Membership.objects.create(
+            user=self.admin_outsider, group=self.admin_group, role=LEADER
+        )
 
     def test_the_roster_covers_both_sources(self):
         self.assertEqual(
-            {self.signed_in.pk, self.never_signed_in.pk},
+            {self.signed_in.pk, self.never_signed_in.pk, self.admin_outsider.pk},
             get_eligible_interviewer_ids(self.admission, self.group),
         )
 
@@ -244,6 +253,24 @@ class RosterWideningTestCase(TestCase):
         self.assertEqual(
             {self.signed_in.pk},
             get_responding_interviewer_ids(self.admission, self.group),
+        )
+
+    def test_an_admin_group_member_outside_the_committee_owes_no_answer(self):
+        """The admission's admin group is not part of this committee.
+
+        Its members stay panel-eligible (they may sit in on interviews), but
+        they appear on no roster of the committee's and can never be the ones
+        holding its publish hostage.
+        """
+
+        self.assertNotIn(
+            self.admin_outsider.pk,
+            get_responding_interviewer_ids(self.admission, self.group),
+        )
+        # Panel eligibility is wider than the roster on purpose.
+        self.assertIn(
+            self.admin_outsider.pk,
+            get_eligible_interviewer_ids(self.admission, self.group),
         )
 
 
@@ -291,6 +318,25 @@ class RosterInAvailabilityResponseTestCase(APITestCase):
         self.assertEqual(
             InterviewAvailability.PARTICIPATION_AWAITING, row["participation"]
         )
+
+    def test_the_roster_lists_no_one_outside_the_committee(self):
+        """An admission admin-group member who is not in this committee must
+        not appear in its "who has answered" list: they were never asked for
+        an answer, and listing them as perpetually missing one both buries the
+        people who actually owe it and reads as another group's roster."""
+
+        admin_group = Group.objects.create(name="Hovedstyret", lego_id=99)
+        self.admission.admin_groups.add(admin_group)
+        outsider = LegoUser.objects.create(
+            username="styret", lego_id=6002, first_name="Styret", last_name="Person"
+        )
+        Membership.objects.create(user=outsider, group=admin_group, role=LEADER)
+
+        res = self.client.get(self.url)
+
+        listed_ids = {item["user_id"] for item in res.data}
+        self.assertIn(str(self.absent.pk), listed_ids)
+        self.assertNotIn(str(outsider.pk), listed_ids)
 
     def test_an_admin_can_record_that_they_are_not_participating(self):
         """Otherwise the roster grows a permanent list of people nobody can
