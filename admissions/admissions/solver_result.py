@@ -405,9 +405,11 @@ def evaluate_objective_vector(
         sessions.setdefault(interview_time, []).append(row.get("panel") or [])
 
     for interview_time, panels in sessions.items():
-        members = panels[0] if candidates_per_session > 1 else [
-            member for panel in panels for member in panel
-        ]
+        members = (
+            panels[0]
+            if candidates_per_session > 1
+            else [member for panel in panels for member in panel]
+        )
         experienced_count = 0
         for member in members:
             interviewer_id = str(member.get("id") or "")
@@ -582,9 +584,7 @@ def evaluate_objective_vector(
         experienced_load_spread=experienced_load_spread,
         continuity_latest_rank=latest_rank,
         continuity_runs=continuity_runs,
-        earliness=sum(
-            slot_rank.get(interview_time, 0) for interview_time in sessions
-        )
+        earliness=sum(slot_rank.get(interview_time, 0) for interview_time in sessions)
         + sum(slot_rank.get(row.get("time"), 0) for row in loose_rows),
         canonical_tie=canonical_tie,
     )

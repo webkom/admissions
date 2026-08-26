@@ -323,7 +323,7 @@ export const buildSolveBlocks = ({
   );
 };
 
-export const scheduleDateForItem = (
+const scheduleDateForItem = (
   itemTime: number,
   startDate: string,
 ): string => {

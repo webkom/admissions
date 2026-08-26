@@ -616,6 +616,7 @@ class FactorizedSolverV2TestCase(SimpleTestCase):
 
         self.assertGreaterEqual(primary_reduction, 0.80)
         self.assertGreaterEqual(total_reduction, 0.60)
+
     def test_joint_interviews_packs_two_candidates_per_slot(self):
         slots = list(range(6))
         candidates = [
@@ -624,10 +625,7 @@ class FactorizedSolverV2TestCase(SimpleTestCase):
         ]
         # Panel of 3 available for every slot. With joint, the solver
         # can place 2 candidates in one slot with that shared panel.
-        interviewers = [
-            interviewer(f"i{index}", slots)
-            for index in range(3)
-        ]
+        interviewers = [interviewer(f"i{index}", slots) for index in range(3)]
         options = {
             "policy_version": 2,
             "panel_stability": "flexible",
@@ -665,9 +663,7 @@ class FactorizedSolverV2TestCase(SimpleTestCase):
         # Both rows at a shared time carry the identical panel.
         for interview_time in times:
             rows = [row for row in schedule if row["time"] == interview_time]
-            panels = {
-                frozenset(m["id"] for m in row["panel"]) for row in rows
-            }
+            panels = {frozenset(m["id"] for m in row["panel"]) for row in rows}
             self.assertEqual(len(panels), 1, f"Mismatched panels at {interview_time}")
             self.assertLessEqual(len(rows), 2)
 
@@ -721,15 +717,14 @@ class FactorizedSolverV2TestCase(SimpleTestCase):
             issue for issue in issues_no_joint if issue.code == "duplicate_time"
         ]
         self.assertTrue(duplicate_issues)
+
     def test_joint_interviews_leave_an_odd_candidate_unplaced(self):
         slots = list(range(6))
         candidates = [
             {"id": f"c{index}", "name": f"Candidate {index}", "gender": "M"}
             for index in range(5)
         ]
-        interviewers = [
-            interviewer(f"i{index}", slots) for index in range(3)
-        ]
+        interviewers = [interviewer(f"i{index}", slots) for index in range(3)]
         options = {
             "policy_version": 2,
             "panel_stability": "flexible",

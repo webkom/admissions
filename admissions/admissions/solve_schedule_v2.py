@@ -346,29 +346,9 @@ def _normalize_problem(
                 f"{candidate_map[candidate_id].name} is not an open slot.",
                 assignment,
             )
-        if locked_time in locked_times:
-            if options.candidates_per_session <= 1:
-                return None, _locked_conflict(
-                    "duplicate_time",
-                    "Multiple locked interviews share one time.",
-                    assignment,
-                )
-            if (
-                locked_time_counts[locked_time]
-                >= options.candidates_per_session
-            ):
-                return None, _locked_conflict(
-                    "joint_capacity",
-                    f"A joint slot can hold at most "
-                    f"{options.candidates_per_session} candidates.",
-                    assignment,
-                )
-            if locked_panels_by_time[locked_time] != frozenset(panel_ids):
-                return None, _locked_conflict(
-                    "joint_panel_mismatch",
-                    "Locked joint interviews must share one panel.",
-                    assignment,
-                )
+        # Parse the panel up front so the joint-panel check below can compare
+        # against it: the same locked time is shared by several candidates in
+        # joint mode, and each must carry the identical panel.
         panel_ids = []
         for member in assignment.get("panel", []):
             interviewer_id = member.get("id") or interviewer_id_by_name.get(
@@ -387,6 +367,26 @@ def _normalize_problem(
                 "Locked panel does not match panel size.",
                 assignment,
             )
+        if locked_time in locked_times:
+            if options.candidates_per_session <= 1:
+                return None, _locked_conflict(
+                    "duplicate_time",
+                    "Multiple locked interviews share one time.",
+                    assignment,
+                )
+            if locked_time_counts[locked_time] >= options.candidates_per_session:
+                return None, _locked_conflict(
+                    "joint_capacity",
+                    f"A joint slot can hold at most "
+                    f"{options.candidates_per_session} candidates.",
+                    assignment,
+                )
+            if locked_panels_by_time[locked_time] != frozenset(panel_ids):
+                return None, _locked_conflict(
+                    "joint_panel_mismatch",
+                    "Locked joint interviews must share one panel.",
+                    assignment,
+                )
 
         candidate = candidate_map[candidate_id]
         for interviewer_id in panel_ids:
@@ -439,9 +439,7 @@ def _normalize_problem(
             interviewer_bits[interviewer_id] for interviewer_id in panel_ids
         )
         locked_times.add(locked_time)
-        locked_time_counts[locked_time] = (
-            locked_time_counts.get(locked_time, 0) + 1
-        )
+        locked_time_counts[locked_time] = locked_time_counts.get(locked_time, 0) + 1
         locked_panels_by_time.setdefault(locked_time, frozenset(panel_ids))
         normalized_locks.append(
             {
@@ -773,8 +771,7 @@ def _build_model(
                 continue
             model.Add(
                 occupied[interview_time]
-                == problem.candidates_per_session
-                * session_active[interview_time]
+                == problem.candidates_per_session * session_active[interview_time]
             )
 
     # Aggregate every candidate conflict into one row per interviewer/slot.
@@ -814,9 +811,7 @@ def _build_model(
                 if interviewer.experience_level == "experienced"
                 and (interviewer.id, interview_time) in panel
             ]
-            model.Add(
-                _linear_sum(experienced) >= session_active[interview_time]
-            )
+            model.Add(_linear_sum(experienced) >= session_active[interview_time])
             experienced_panel_vars.extend(experienced)
 
     for candidate_id, locked in problem.locked_by_candidate.items():
@@ -1628,9 +1623,7 @@ def _repair_neighborhood_problem(problem: SolverProblem) -> SolverProblem | None
         if len(entries) == 1:
             continue
         panels = {panel_ids for panel_ids, _candidate_id in entries}
-        if (
-            problem.candidates_per_session <= 1 or len(panels) > 1
-        ):
+        if problem.candidates_per_session <= 1 or len(panels) > 1:
             duplicate_times.add(interview_time)
 
     invalid_required_blocks: set[int] = set()
