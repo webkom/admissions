@@ -461,7 +461,12 @@ class InterviewAvailabilityView(SchedulerFeatureGateMixin, APIView):
             pk=group.pk
         )
         is_recruiter = representing_groups.exists()
-        if not user_is_group_member(group, user) and not is_admin:
+        # Writing availability is interview-admin work only: members have no
+        # schedule access beyond the published plan, so recruiters record
+        # answers and reviews on their behalf. An admission admin who belongs
+        # to neither - org leadership / god users - cannot write another
+        # committee's schedule either.
+        if not is_interview_admin:
             return Response(status=status.HTTP_403_FORBIDDEN)
 
         serializer = SaveInterviewAvailabilitySerializer(data=request.data)

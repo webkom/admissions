@@ -16,28 +16,15 @@ APPLICATION_VIEW_MODE_COMMITTEE_MINIMAL = "committee_minimal"
 
 
 def user_is_org_leadership(user):
-    """The organisation's own leadership: leader/co-leader of Hovedstyret,
-    or an explicitly god-listed user.
+    """The organisation's own leadership, admission-wide admins.
 
-    The Abakus leader and co-leader are defined by their role in Hovedstyret
-    - the leader of Hovedstyret is the Abakus leader, the co-leader is the
-    Abakus co-leader. They oversee every admission regardless of how its
-    admin_groups were configured, so this is matched on the group name and
-    role, not on any admission relation: it must hold even when Hovedstyret
-    was never added to the admission.
-
-    GOD_LEGO_IDS widens the same set by explicit id, for people who need
-    full access but hold no leadership role (see constants.GOD_LEGO_IDS).
+    No group grants this anymore - org leadership is the explicit LEGO-id
+    allowlist in constants.GOD_LEGO_IDS (see the Hovedstyret removal).
+    Should be replaced with a proper role-based system, but this is a quick
+    temporary fix.
     """
 
-    return (
-        Membership.objects.filter(
-            user=user.pk,
-            group__name__in=constants.ORG_LEADERSHIP_GROUPS,
-            role__in=constants.ORG_LEADERSHIP_ROLES,
-        ).exists()
-        or user.lego_id in constants.GOD_LEGO_IDS
-    )
+    return user.lego_id in constants.GOD_LEGO_IDS
 
 
 def user_is_admission_admin(admission, user):
@@ -72,9 +59,15 @@ def user_is_interview_admin(admission, group, user):
     candidates and interviewers. Admission admin-group membership (Webkom
     running the shared admissions tool) still grants access to every
     committee's workflow; a committee's own leader/recruiter gets it only
-    for their own committee.
+    for their own committee. Org leadership / god-listed users are
+    deliberately NOT included: they see every applicant, but they do not
+    operate other committees' schedules.
     """
-    return user_is_admission_admin(admission, user) or user_represents_group(
+    return Membership.objects.filter(
+        user=user.pk, group__in=admission.admin_groups.all()
+    ).filter(
+        role__in=constants.ADMISSION_ADMIN_ROLES
+    ).exists() or user_represents_group(
         admission, group, user
     )
 
@@ -115,11 +108,11 @@ def get_application_view_mode(admission, user):
     competing admin group the other committees' private application text.
     """
     represented_groups = get_representing_groups(admission, user)
-    # Org leadership is exempt from this guard: a leader/co-leader of
-    # Hovedstyret oversees the whole admission and must not be narrowed to a
-    # single committee even if Hovedstyret itself participates. The guard
-    # still applies to a competing admin group (Webkom running the tool while
-    # also recruiting) - only org leadership bypasses it.
+    # Org leadership is exempt from this guard: the leader of Abakus-leder
+    # oversees the whole admission and must not be narrowed to a single
+    # committee even if the group itself participates. The guard still
+    # applies to a competing admin group (Webkom running the tool while also
+    # recruiting) - only org leadership bypasses it.
     if (
         admission.groups.count() > 1
         and represented_groups.exists()

@@ -643,10 +643,10 @@ class ManageAdmissionViewSet(viewsets.ModelViewSet):
             return AdminCreateUpdateAdmissionSerializer
 
     def get_queryset(self):
-        # The organisation's own leadership oversees every admission just like
-        # the tool-admin committee does - a Hovedstyret leader who is not in
-        # Webkom must still see (and manage) every opptak, not only the ones
-        # they happened to create.
+        # The organisation's own leadership (god-listed LEGO ids) oversees
+        # every admission just like the tool-admin committee does - someone
+        # who is not in Webkom must still see (and manage) every opptak, not
+        # only the ones they happened to create.
         qs = Admission.objects.all().order_by("title")
         if not (
             self.request.user.is_member_of_webkom

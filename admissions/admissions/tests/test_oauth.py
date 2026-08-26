@@ -246,40 +246,55 @@ class OAuthMembershipSyncTestCase(TestCase):
         self.assertFalse(Membership.objects.filter(user=self.user).exists())
         self.assertFalse(self.user.is_staff)
 
-    def _hovedstyret_response(self, role):
-        # Deliberately NOT a local Group: Hovedstyret has no reason to exist
+    def _abakus_leder_response(self, role):
+        # Deliberately NOT a local Group: Abakus-leder has no reason to exist
         # in the local table, and staff must not depend on it doing so.
         return {
-            "memberships": [{"abakusGroup": 92100, "role": role}],
-            "abakusGroups": [{"id": 92100, "name": "Hovedstyret"}],
+            "memberships": [{"abakusGroup": 10, "role": role}],
+            "abakusGroups": [{"id": 10, "name": "Abakus-leder"}],
         }
 
-    def test_hovedstyret_leader_gets_staff_without_a_local_group_row(self):
+    def test_abakus_leader_gets_staff_without_a_local_group_row(self):
         self.user.is_staff = False
         self.user.save(update_fields=["is_staff"])
 
-        self.sync(self._hovedstyret_response("leader"))
+        self.sync(self._abakus_leder_response("leader"))
 
         self.assertTrue(self.user.is_staff)
         self.assertFalse(Membership.objects.filter(user=self.user).exists())
 
-    def test_hovedstyret_leader_and_co_leader_get_staff(self):
-        """The Abakus leader and co-leader are the leader/co-leader of
-        Hovedstyret, and both are staff for the manage-admissions page."""
+    def test_abakus_leder_co_leader_does_not_get_staff(self):
+        """Only the leader role in Abakus-leder is staff; a co-leader holds
+        no work privileges."""
+        self.user.is_staff = False
+        self.user.save(update_fields=["is_staff"])
+
+        self.sync(self._abakus_leder_response("co-leader"))
+
+        self.assertFalse(self.user.is_staff)
+
+    def test_hovedstyret_grants_no_staff(self):
+        """Hovedstyret is not used for privileges: neither its leader nor
+        its co-leader becomes staff from that membership alone."""
         for role in ("leader", "co-leader"):
             with self.subTest(role=role):
                 self.user.is_staff = False
                 self.user.save(update_fields=["is_staff"])
 
-                self.sync(self._hovedstyret_response(role))
+                self.sync(
+                    {
+                        "memberships": [{"abakusGroup": 92100, "role": role}],
+                        "abakusGroups": [{"id": 92100, "name": "Hovedstyret"}],
+                    }
+                )
 
-                self.assertTrue(self.user.is_staff)
+                self.assertFalse(self.user.is_staff)
 
-    def test_hovedstyret_plain_member_does_not_get_staff(self):
+    def test_abakus_leder_plain_member_does_not_get_staff(self):
         self.user.is_staff = False
         self.user.save(update_fields=["is_staff"])
 
-        self.sync(self._hovedstyret_response("member"))
+        self.sync(self._abakus_leder_response("member"))
 
         self.assertFalse(self.user.is_staff)
 

@@ -44,7 +44,8 @@ class IsWebkom(permissions.BasePermission):
 
 
 class IsOrgLeadership(permissions.BasePermission):
-    """The Hovedstyret leader/co-leader: admission-wide admins everywhere.
+    """God-listed LEGO ids (constants.GOD_LEGO_IDS): admission-wide admins
+    everywhere.
 
     Kept as its own class rather than folded into IsWebkom so a committee
     that also administers the tool (Webkom) stays distinguishable from the

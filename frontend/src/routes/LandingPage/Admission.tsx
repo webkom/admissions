@@ -144,7 +144,9 @@ const Admission: React.FC<AdmissionProps> = ({ admission }) => {
                     icon={
                       <Calendar size={iconSizes.standard} aria-hidden="true" />
                     }
-                    label="Velg intervjutider"
+                    label={
+                      isPrivileged ? "Velg intervjutider" : "Se intervjuplan"
+                    }
                   />
                 </LinkButton>
               )}

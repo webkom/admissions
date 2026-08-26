@@ -895,8 +895,11 @@ class SavedScheduleViewTestCase(APITestCase):
 class InterviewAvailabilityViewTestCase(APITestCase):
     def setUp(self):
         self.group = Group.objects.create(name="Komite", lego_id=401)
-        self.user = LegoUser.objects.create(username="committee-member", lego_id=402)
-        Membership.objects.create(user=self.user, role=MEMBER, group=self.group)
+        # An interview admin (recruiter) records answers and reviews on the
+        # committee's behalf - plain members have no write access to the
+        # schedule.
+        self.user = LegoUser.objects.create(username="committee-recruiter", lego_id=402)
+        Membership.objects.create(user=self.user, role=RECRUITING, group=self.group)
         self.admission = create_admission(
             created_by=self.user, slug="availability-test"
         )
@@ -965,19 +968,12 @@ class InterviewAvailabilityViewTestCase(APITestCase):
         self.assertEqual(res.data["slots"], ["2026-04-21:540"])
         self.assertEqual(res.data["conflicts"], [str(application.pk)])
 
-    def test_member_conflicts_need_the_matching_review(self):
-        """An ordinary member's conflicts-only write has no declared scope.
-
-        Without this fence a stale save would replace inhabilitet across every
-        candidate the member can see, clearing another member's flag.
-        """
-        InterviewAvailability.objects.create(
-            admission=self.admission,
-            group=self.group,
-            user=self.user,
-            slots=["2026-04-21:540"],
-            conflicts=["real-candidate-ada"],
-        )
+    def test_a_plain_member_cannot_write_availability_at_all(self):
+        """Members have no schedule access beyond the published plan: their
+        write is 403, not validated."""
+        member = LegoUser.objects.create(username="plain-member", lego_id=404)
+        Membership.objects.create(user=member, role=MEMBER, group=self.group)
+        self.client.force_authenticate(user=member)
 
         res = self.client.post(
             self.url,
@@ -985,10 +981,11 @@ class InterviewAvailabilityViewTestCase(APITestCase):
             format="json",
         )
 
-        self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertIn("conflicts", res.data)
+        self.assertEqual(res.status_code, status.HTTP_403_FORBIDDEN)
 
-    def test_cannot_save_conflicts_before_names_are_visible(self):
+    def test_an_unknown_conflict_id_is_rejected_without_writing(self):
+        self.client.force_authenticate(user=self.user)
+
         res = self.client.post(
             self.url,
             {"conflicts": ["real-candidate-eirik"]},
@@ -996,6 +993,7 @@ class InterviewAvailabilityViewTestCase(APITestCase):
         )
 
         self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("conflicts", res.data)
         self.assertFalse(
             InterviewAvailability.objects.filter(
                 admission=self.admission,

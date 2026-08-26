@@ -1418,7 +1418,7 @@ class InterviewAvailabilityHardeningTestCase(APITestCase):
 
     def test_slot_outside_enabled_grid_is_rejected(self):
         self._create_saved_schedule(enabled_slots=["2026-04-21|540"])
-        self.client.force_authenticate(user=self.member)
+        self.client.force_authenticate(user=self.recruiter)
 
         res = self.client.post(self.url, {"slots": ["2026-04-21|600"]}, format="json")
 
@@ -1428,13 +1428,13 @@ class InterviewAvailabilityHardeningTestCase(APITestCase):
             InterviewAvailability.objects.filter(
                 admission=self.admission,
                 group=self.committee_group,
-                user=self.member,
+                user=self.recruiter,
             ).exists()
         )
 
     def test_legacy_colon_slot_key_is_stored_canonicalized(self):
         self._create_saved_schedule(enabled_slots=["2026-04-21|540"])
-        self.client.force_authenticate(user=self.member)
+        self.client.force_authenticate(user=self.recruiter)
 
         res = self.client.post(self.url, {"slots": ["2026-04-21:540"]}, format="json")
 
@@ -1442,13 +1442,13 @@ class InterviewAvailabilityHardeningTestCase(APITestCase):
         self.assertEqual(res.data["slots"], ["2026-04-21|540"])
         self.assertEqual(
             InterviewAvailability.objects.get(
-                admission=self.admission, user=self.member
+                admission=self.admission, user=self.recruiter
             ).slots,
             ["2026-04-21|540"],
         )
 
     def test_malformed_slot_key_is_rejected(self):
-        self.client.force_authenticate(user=self.member)
+        self.client.force_authenticate(user=self.recruiter)
 
         res = self.client.post(self.url, {"slots": ["not-a-slot"]}, format="json")
 
@@ -1550,7 +1550,7 @@ class InterviewAvailabilityHardeningTestCase(APITestCase):
         )
 
     def test_slot_with_out_of_range_minute_is_rejected(self):
-        self.client.force_authenticate(user=self.member)
+        self.client.force_authenticate(user=self.recruiter)
 
         res = self.client.post(self.url, {"slots": ["2026-04-21|1440"]}, format="json")
 
@@ -1559,7 +1559,7 @@ class InterviewAvailabilityHardeningTestCase(APITestCase):
 
     def test_unknown_conflict_id_is_rejected(self):
         self._create_saved_schedule(name_visibility="committee")
-        self.client.force_authenticate(user=self.member)
+        self.client.force_authenticate(user=self.recruiter)
 
         res = self.client.post(
             self.url,
@@ -1575,10 +1575,10 @@ class InterviewAvailabilityHardeningTestCase(APITestCase):
         InterviewAvailability.objects.create(
             admission=self.admission,
             group=self.committee_group,
-            user=self.member,
+            user=self.recruiter,
             slots=["2026-04-21|540"],
         )
-        self.client.force_authenticate(user=self.member)
+        self.client.force_authenticate(user=self.recruiter)
 
         res = self.client.post(
             self.url,
@@ -1589,9 +1589,10 @@ class InterviewAvailabilityHardeningTestCase(APITestCase):
         self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertIn("reviewed_candidate_ids", res.data)
 
-    def test_member_can_review_only_proposed_candidates_without_seeing_draft_times(
-        self,
-    ):
+    def test_member_review_attempt_is_forbidden(self):
+        """Members have no schedule access beyond the published plan: a
+        member review POST is 403, and the candidate pool stays empty even
+        with a review open."""
         other_group = Group.objects.create(name="Andre", lego_id=630)
         self.admission.groups.add(other_group)
         other_user = LegoUser.objects.create(username="other-review", lego_id=631)
@@ -1622,15 +1623,6 @@ class InterviewAvailabilityHardeningTestCase(APITestCase):
                 },
             )
         )
-        schedule_res = self.client.get(
-            reverse(
-                "saved-schedule",
-                kwargs={
-                    "admission_slug": self.admission.slug,
-                    "group_id": self.committee_group.pk,
-                },
-            )
-        )
         review_res = self.client.post(
             self.url,
             {
@@ -1644,29 +1636,8 @@ class InterviewAvailabilityHardeningTestCase(APITestCase):
         )
 
         self.assertEqual(candidates_res.status_code, status.HTTP_200_OK)
-        candidates_by_id = {item["id"]: item for item in candidates_res.data}
-        self.assertEqual(
-            set(candidates_by_id),
-            {str(self.application.pk)},
-        )
-        self.assertEqual(schedule_res.status_code, status.HTTP_200_OK)
-        self.assertTrue(schedule_res.data["conflict_review_open"])
-        self.assertEqual(schedule_res.data["schedule"], [])
-        self.assertEqual(review_res.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertIn("conflicts", review_res.data)
-        viewed_event = ConflictReviewAuditEvent.objects.get(
-            admission=self.admission,
-            actor=self.member,
-            action=ConflictReviewAuditEvent.ACTION_VIEWED,
-        )
-        self.assertEqual(viewed_event.saved_schedule_id, schedule_res.data["id"])
-        self.assertFalse(
-            ConflictReviewAuditEvent.objects.filter(
-                admission=self.admission,
-                actor=self.member,
-                action=ConflictReviewAuditEvent.ACTION_SUBMITTED,
-            ).exists()
-        )
+        self.assertEqual(candidates_res.data, [])
+        self.assertEqual(review_res.status_code, status.HTTP_403_FORBIDDEN)
 
     def test_draft_review_preserves_conflicts_outside_the_proposal_scope(self):
         other_group = Group.objects.create(name="Andre bevart", lego_id=638)
@@ -1688,11 +1659,11 @@ class InterviewAvailabilityHardeningTestCase(APITestCase):
         availability = InterviewAvailability.objects.create(
             admission=self.admission,
             group=self.committee_group,
-            user=self.member,
+            user=self.recruiter,
             slots=["2026-04-21|540"],
             conflicts=[str(other_application.pk)],
         )
-        self.client.force_authenticate(user=self.member)
+        self.client.force_authenticate(user=self.recruiter)
 
         response = self.client.post(
             self.url,
@@ -1703,7 +1674,10 @@ class InterviewAvailabilityHardeningTestCase(APITestCase):
             format="json",
         )
 
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        # The reviewer (recruiter) has no review scope here - the panel
+        # belongs to the member - so the out-of-scope conflict is rejected
+        # and the stored conflict survives untouched.
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         availability.refresh_from_db()
         self.assertEqual(availability.conflicts, [str(other_application.pk)])
 
@@ -1724,11 +1698,11 @@ class InterviewAvailabilityHardeningTestCase(APITestCase):
         InterviewAvailability.objects.create(
             admission=self.admission,
             group=self.committee_group,
-            user=self.member,
+            user=self.recruiter,
             slots=[],
             reviewed_candidate_ids=[str(self.application.pk)],
         )
-        self.client.force_authenticate(user=self.member)
+        self.client.force_authenticate(user=self.recruiter)
 
         candidates_res = self.client.get(
             reverse(
@@ -1752,7 +1726,10 @@ class InterviewAvailabilityHardeningTestCase(APITestCase):
         )
 
         self.assertEqual(candidates_res.status_code, status.HTTP_200_OK)
-        self.assertEqual(candidates_res.data, [])
+        self.assertEqual(
+            {item["id"] for item in candidates_res.data},
+            {str(self.application.pk)},
+        )
         self.assertEqual(availability_res.status_code, status.HTTP_200_OK)
         me = next(item for item in availability_res.data if item["is_me"])
         self.assertEqual(me["proposed_candidate_ids"], [])
@@ -1817,7 +1794,7 @@ class InterviewAvailabilityHardeningTestCase(APITestCase):
 
     def test_legacy_real_candidate_conflict_id_is_rejected(self):
         self._create_saved_schedule(name_visibility="committee")
-        self.client.force_authenticate(user=self.member)
+        self.client.force_authenticate(user=self.recruiter)
 
         res = self.client.post(
             self.url,
@@ -1914,8 +1891,7 @@ class InterviewAvailabilityHardeningTestCase(APITestCase):
             format="json",
         )
 
-        self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertIn("conflicts", res.data)
+        self.assertEqual(res.status_code, status.HTTP_403_FORBIDDEN)
         self.assertFalse(
             InterviewAvailability.objects.filter(
                 admission=self.admission,
@@ -1945,7 +1921,7 @@ class InterviewAvailabilityHardeningTestCase(APITestCase):
             format="json",
         )
 
-        self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(res.status_code, status.HTTP_403_FORBIDDEN)
         self.assertEqual(
             InterviewAvailability.objects.get(
                 admission=self.admission,
@@ -1959,17 +1935,17 @@ class InterviewAvailabilityHardeningTestCase(APITestCase):
         InterviewAvailability.objects.create(
             admission=self.admission,
             group=self.committee_group,
-            user=self.member,
+            user=self.recruiter,
             slots=["2026-04-21|540"],
             conflicts=[str(self.application.pk)],
         )
-        self.client.force_authenticate(user=self.member)
+        self.client.force_authenticate(user=self.recruiter)
 
         res = self.client.post(self.url, {"slots": ["2026-04-22|600"]}, format="json")
 
         self.assertEqual(res.status_code, status.HTTP_200_OK)
         saved = InterviewAvailability.objects.get(
-            admission=self.admission, user=self.member
+            admission=self.admission, user=self.recruiter
         )
         self.assertEqual(saved.slots, ["2026-04-22|600"])
         self.assertEqual(saved.conflicts, [str(self.application.pk)])
@@ -2019,19 +1995,12 @@ class InterviewAvailabilityHardeningTestCase(APITestCase):
         self.client.force_authenticate(user=self.member)
 
         get_response = self.client.get(self.url)
-        post_response = self.client.post(
-            self.url,
-            {"slots": ["2026-04-22|600"]},
-            format="json",
-        )
 
         self.assertEqual(get_response.status_code, status.HTTP_200_OK)
         self.assertEqual(get_response.data[0]["gender"], "")
-        self.assertEqual(post_response.status_code, status.HTTP_200_OK)
-        self.assertEqual(post_response.data["gender"], "")
 
     def test_slots_above_cap_are_rejected(self):
-        self.client.force_authenticate(user=self.member)
+        self.client.force_authenticate(user=self.recruiter)
 
         res = self.client.post(
             self.url,
@@ -2044,7 +2013,7 @@ class InterviewAvailabilityHardeningTestCase(APITestCase):
 
     def test_conflicts_above_cap_are_rejected(self):
         self._create_saved_schedule(name_visibility="committee")
-        self.client.force_authenticate(user=self.member)
+        self.client.force_authenticate(user=self.recruiter)
 
         res = self.client.post(
             self.url,
@@ -2055,23 +2024,23 @@ class InterviewAvailabilityHardeningTestCase(APITestCase):
         self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertIn("conflicts", res.data)
 
-    def test_empty_conflict_update_is_rejected_while_names_are_hidden(self):
+    def test_recruiter_can_clear_conflicts_while_names_are_hidden(self):
         self._create_saved_schedule(name_visibility="hidden")
         InterviewAvailability.objects.create(
             admission=self.admission,
             group=self.committee_group,
-            user=self.member,
+            user=self.recruiter,
             conflicts=[str(self.application.pk)],
         )
-        self.client.force_authenticate(user=self.member)
+        self.client.force_authenticate(user=self.recruiter)
 
         res = self.client.post(self.url, {"conflicts": []}, format="json")
 
-        self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
         saved = InterviewAvailability.objects.get(
-            admission=self.admission, user=self.member
+            admission=self.admission, user=self.recruiter
         )
-        self.assertEqual(saved.conflicts, [str(self.application.pk)])
+        self.assertEqual(saved.conflicts, [])
 
     def test_hidden_conflicts_are_redacted_from_member(self):
         self._create_saved_schedule(name_visibility="committee", is_distributed=False)
@@ -2090,7 +2059,7 @@ class InterviewAvailabilityHardeningTestCase(APITestCase):
 
     def test_saving_slots_marks_self_as_participating(self):
         self._create_saved_schedule(enabled_slots=["2026-04-21|540"])
-        self.client.force_authenticate(user=self.member)
+        self.client.force_authenticate(user=self.recruiter)
 
         response = self.client.post(
             self.url,
@@ -2358,7 +2327,10 @@ class SavedScheduleVisibilityTestCase(APITestCase):
         self.assertEqual(res.data["schedule"], [])
         self.assertEqual(res.data["start_date"], "2026-04-20")
 
-    def test_member_can_submit_availability_before_distribution(self):
+    def test_member_cannot_submit_availability_before_distribution(self):
+        """Members have no schedule access beyond the published plan: an
+        availability write before distribution is 403, not silently
+        accepted."""
         self._create_saved(
             is_distributed=False,
             enabled_slots=["2026-04-20|540"],
@@ -2377,7 +2349,7 @@ class SavedScheduleVisibilityTestCase(APITestCase):
             format="json",
         )
 
-        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.assertEqual(res.status_code, status.HTTP_403_FORBIDDEN)
 
     def test_committee_member_does_not_receive_schedule_rows_when_hidden(self):
         self._create_saved(is_distributed=True, name_visibility="hidden")
@@ -3276,8 +3248,9 @@ class InterviewGenderExposureTestCase(APITestCase):
         res = self.client.get(self.availability_url)
 
         self.assertEqual(res.status_code, status.HTTP_200_OK)
-        # The admin-group member is not in this committee, so they appear on
-        # no roster of it - the completion count is the committee's own.
+        # The committee's own people only: the admission admin-group member is
+        # panel-eligible here but sits on no roster of this committee, so the
+        # completion count is the committee's own.
         self.assertEqual(
             {row["username"] for row in res.data},
             {"g-member", "g-inactive"},

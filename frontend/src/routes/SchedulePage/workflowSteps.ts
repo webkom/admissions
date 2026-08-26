@@ -1,9 +1,4 @@
-import {
-  CalendarCheck,
-  CalendarRange,
-  LayoutPanelTop,
-  Sparkles,
-} from "lucide-react";
+import { CalendarCheck, LayoutPanelTop, Sparkles } from "lucide-react";
 
 import type {
   PublicationReadiness,
@@ -31,44 +26,15 @@ export const buildWorkflowSteps = ({
   isAdmin,
   hasConfiguredAvailabilityWindows,
   hasDistributedPlan,
-  myConflictReviewComplete,
-  myProposalCandidateCount,
-  hasScheduleDraft,
   myAvailabilitySaved,
   availabilityParticipantCount,
   submittedAvailabilityCount,
   publicationReadiness,
 }: WorkflowStepParams): WorkflowStepDefinition[] => {
   if (!isAdmin) {
-    const proposedCandidatesReady =
-      myProposalCandidateCount === 0 || myConflictReviewComplete;
-    const memberInputComplete =
-      hasDistributedPlan ||
-      (myAvailabilitySaved && hasScheduleDraft && proposedCandidatesReady);
+    // Members only ever see the published plan: nothing else in the
+    // schedule is for them.
     return [
-      {
-        key: "my-availability",
-        title: "Mine opplysninger",
-        description: hasConfiguredAvailabilityWindows
-          ? "Lagre tilgjengelighet og kontroller foreslåtte kandidater."
-          : "Vent til opptaksansvarlig åpner intervjutider.",
-        icon: CalendarRange,
-        status: hasDistributedPlan
-          ? "Ferdig"
-          : hasConfiguredAvailabilityWindows
-            ? memberInputComplete
-              ? "Ferdig"
-              : "Pågår"
-            : "Låst",
-        tone:
-          memberInputComplete || myAvailabilitySaved
-            ? "success"
-            : hasConfiguredAvailabilityWindows
-              ? "warning"
-              : "locked",
-        complete: memberInputComplete,
-        locked: !hasConfiguredAvailabilityWindows && !hasDistributedPlan,
-      },
       {
         key: "plan",
         title: "Intervjuplan",

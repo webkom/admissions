@@ -274,22 +274,17 @@ def update_custom_user_details(strategy, details, user=None, *args, **kwargs):
             roles_by_group[(local_group.pk, role)] = (local_group, role)
 
         # Staff comes straight from the LEGO payload, not from a local Group
-        # row: the staff groups (Hovedstyret in particular) have no reason to
-        # exist in the local table, so requiring a row here silently revoked
-        # the Abakus leader's access on their first login. The Abakus leader
-        # and co-leader are the leader/co-leader of Hovedstyret; a hard-coded
-        # god id (constants.GOD_LEGO_IDS) is staff too, so the manage page
-        # opens for them even before their next login refreshes the flag.
+        # row: the staff groups (backup / Abakus-leder / RevyStyret) have no
+        # reason to exist in the local table, so requiring a row here
+        # silently revoked their leaders' access on first login. Only the
+        # leader role of those groups counts - no other group grants staff,
+        # and Hovedstyret grants nothing at all. A hard-coded god id
+        # (constants.GOD_LEGO_IDS) is staff too, so the manage page opens for
+        # them even before their next login refreshes the flag.
         user.is_staff = (
             any(
-                (
-                    group.get("name") in constants.STAFF_LEADER_GROUPS
-                    and membership.get("role") == constants.LEADER
-                )
-                or (
-                    group.get("name") in constants.ORG_LEADERSHIP_GROUPS
-                    and membership.get("role") in constants.ORG_LEADERSHIP_ROLES
-                )
+                group.get("name") in constants.STAFF_LEADER_GROUPS
+                and membership.get("role") == constants.LEADER
                 for group, membership in group_data
             )
             or int(response.get("id") or 0) in constants.GOD_LEGO_IDS

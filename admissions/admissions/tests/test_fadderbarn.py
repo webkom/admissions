@@ -27,9 +27,11 @@ class FadderbarnDeclarationTestCase(APITestCase):
         self.admission = create_admission()
         self.group = Group.objects.create(name="Webkom", lego_id=13)
         self.admission.groups.add(self.group)
+        # An interview admin (recruiter) records answers on the committee's
+        # behalf - plain members have no write access to the schedule.
         self.interviewer = LegoUser.objects.create(username="interviewer", lego_id=4001)
         Membership.objects.create(
-            user=self.interviewer, group=self.group, role="member"
+            user=self.interviewer, group=self.group, role="recruiting"
         )
         self.client.force_authenticate(user=self.interviewer)
         self.url = reverse(
@@ -160,7 +162,7 @@ class FadderbarnDeclarationTestCase(APITestCase):
     def test_nobody_sees_another_interviewers_declarations(self):
         """A declaration names people who may never have applied."""
         other = LegoUser.objects.create(username="other", lego_id=4002)
-        Membership.objects.create(user=other, group=self.group, role="member")
+        Membership.objects.create(user=other, group=self.group, role="recruiting")
         self.client.post(
             self.url,
             {"fadderbarn": [{"lego_user_id": 5001, "full_name": "Kari Nordmann"}]},
