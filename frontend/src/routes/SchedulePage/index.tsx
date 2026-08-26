@@ -257,16 +257,19 @@ const SchedulePage: React.FC = () => {
     );
   }
 
-  const { is_admin, committee_group_details } = admission.userdata;
+  const { is_admin, is_org_leadership, committee_group_details } =
+    admission.userdata;
   // Every committee's schedule is independent now, so someone who belongs
   // to more than one has to say which before anything loads - but the
   // choice is their own committees, not every committee in the admission.
   // Being a full admin does not widen this list; it only means every
   // resolved committee below grants full (not just member) access. Only an
   // admin who belongs to no committee at all falls back to the full
-  // admission roster, so they are not locked out entirely.
+  // admission roster, so they are not locked out entirely - except org
+  // leadership / god users, who are applicant admins only and must not be
+  // offered committees they cannot open.
   const availableCommittees =
-    committee_group_details.length > 0 || !is_admin
+    committee_group_details.length > 0 || !is_admin || is_org_leadership
       ? committee_group_details
       : admission.groups;
 
@@ -633,7 +636,7 @@ const LoadedScheduleView: React.FC<LoadedScheduleViewProps> = ({
   };
   const openConflictReview = () => {
     setConflictReviewRequestKey((key) => key + 1);
-    handleSectionChange(isAdmin ? "solver" : "my-availability");
+    handleSectionChange("solver");
   };
   const closeAdminConflictReview = () => {
     setConflictReviewRequestKey(0);
@@ -771,54 +774,6 @@ const LoadedScheduleView: React.FC<LoadedScheduleViewProps> = ({
       </div>
 
       <main className="mt-3 flex flex-col gap-3">
-        {!isAdmin && visitedSections.has("my-availability") && (
-          <div className={activeSection === "my-availability" ? "" : "hidden"}>
-            {!isAdmin && !hasConfiguredAvailabilityWindows ? (
-              <MemberAvailabilityPending />
-            ) : (
-              <div className="flex flex-col gap-3">
-                <TimeScheduler
-                  enabledSlots={enabledSlots}
-                  selectedSlots={mySelectedSlots}
-                  onSlotsChange={setMySelectedSlots}
-                  discouragedSlots={myDiscouragedSlots}
-                  onDiscouragedChange={setMyDiscouragedSlots}
-                  dates={dates}
-                  sessionDuration={sessionDuration}
-                  chunkSize={chunkSize}
-                  chunkBreakMinutes={chunkBreakMinutes}
-                  dayStartMinute={dayStartMinute}
-                  dayEndMinute={dayEndMinute}
-                  onSave={saveAvailabilityWithFadderbarn}
-                  extraDirty={fadderbarnDirty}
-                  extraSection={
-                    <FadderbarnPicker
-                      admissionSlug={admissionSlug ?? ""}
-                      value={fadderbarn}
-                      onChange={editFadderbarn}
-                    />
-                  }
-                  participation={myAvailabilityParticipant?.participation}
-                  affectedAssignmentCount={
-                    myAvailabilityParticipant?.affected_assignment_count ?? 0
-                  }
-                  onOptOut={() => setParticipation("not_participating")}
-                  onRejoin={() => setParticipation("awaiting_response")}
-                />
-                {savedSchedule?.conflict_review_open &&
-                  (myAvailabilityParticipant?.slots.length ?? 0) > 0 && (
-                    <ConflictReviewView
-                      candidates={interviewCandidates}
-                      currentParticipant={myAvailabilityParticipant}
-                      onSaveReview={saveConflictReview}
-                      openRequestKey={conflictReviewRequestKey}
-                    />
-                  )}
-              </div>
-            )}
-          </div>
-        )}
-
         {isAdmin && visitedSections.has("config") && (
           <div className={activeSection === "config" ? "" : "hidden"}>
             <AdminScheduleConfig
@@ -1104,7 +1059,7 @@ const LoadedScheduleView: React.FC<LoadedScheduleViewProps> = ({
               interviewers={interviewers}
               enabledSlots={enabledSlots}
             />
-          ) : (
+          ) : isAdmin ? (
             <PublicationGate
               savedSchedule={savedSchedule}
               readiness={publicationReadiness}
@@ -1115,6 +1070,11 @@ const LoadedScheduleView: React.FC<LoadedScheduleViewProps> = ({
               onOpenDraft={() => handleSectionChange("solver")}
               onOpenOwnReview={openConflictReview}
               onPublish={handlePublishSchedule}
+            />
+          ) : (
+            <MemberAvailabilityPending
+              title="Planen er ikke publisert ennå"
+              description="Når opptaksansvarlig har publisert intervjuplanen, finner du dine intervjuer her."
             />
           ))}
       </main>

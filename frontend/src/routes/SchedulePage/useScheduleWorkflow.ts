@@ -37,7 +37,10 @@ export const useScheduleWorkflow = ({
   candidateScopeResolved,
   draftPersistenceReady,
 }: ScheduleWorkflowParams) => {
-  const initialSection: TabType = isAdmin ? "config" : "my-availability";
+  // Members only ever see the published plan - nothing else in the
+  // schedule is for them - so a member always lands on, and stays on,
+  // "plan".
+  const initialSection: TabType = isAdmin ? "config" : "plan";
   const [activeSection, setActiveSection] = useState<TabType>(initialSection);
   const [visitedSections, setVisitedSections] = useState<Set<TabType>>(
     () => new Set([initialSection]),
@@ -45,20 +48,8 @@ export const useScheduleWorkflow = ({
 
   useEffect(() => {
     if (isAdmin) return;
-    setActiveSection((current) =>
-      current === "config" || current === "heatmap" || current === "solver"
-        ? "my-availability"
-        : current,
-    );
-    setVisitedSections((current) => {
-      const next = new Set(
-        [...current].filter(
-          (section) => section === "my-availability" || section === "plan",
-        ),
-      );
-      next.add("my-availability");
-      return next;
-    });
+    setActiveSection("plan");
+    setVisitedSections(new Set<TabType>(["plan"]));
   }, [isAdmin]);
 
   const hasSavedConfig = Boolean(

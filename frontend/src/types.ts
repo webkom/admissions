@@ -90,6 +90,7 @@ interface AdmissionUserData {
   has_application: boolean;
   is_privileged: boolean;
   is_admin: boolean;
+  is_org_leadership: boolean;
   is_recruiter: boolean;
   committee_role: "leader" | "recruiting" | "member" | null;
   committee_groups: string[];

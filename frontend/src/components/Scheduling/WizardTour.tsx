@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import {
   CalendarCheck,
-  CalendarRange,
   Check,
   ChevronLeft,
   ChevronRight,
@@ -28,12 +27,7 @@ interface WizardStep {
   target?: WizardTarget;
 }
 
-type WizardTarget =
-  | "config"
-  | "my-availability"
-  | "heatmap"
-  | "solver"
-  | "plan";
+type WizardTarget = "config" | "heatmap" | "solver" | "plan";
 
 const ADMIN_STEPS: WizardStep[] = [
   {
@@ -62,14 +56,6 @@ const ADMIN_STEPS: WizardStep[] = [
 ];
 
 const MEMBER_STEPS: WizardStep[] = [
-  {
-    icon: CalendarRange,
-    label: "Mine opplysninger",
-    title: "Lagre tider, og kontroller en kort kandidatliste senere",
-    description:
-      "Først markerer du når du kan sitte i intervju. Når et internt utkast finnes, vises bare kandidatene som er foreslått til deg—uten tidspunkt.",
-    target: "my-availability",
-  },
   {
     icon: CalendarCheck,
     label: "Intervjuplan",

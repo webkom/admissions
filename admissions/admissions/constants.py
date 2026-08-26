@@ -117,17 +117,19 @@ ADMISSION_GROUP_CATEGORIES = (
     ),
     (
         # Neither a committee nor a revue group as far as an opptak is
-        # concerned. Hovedstyret and Abakus-leder recruit for a position rather
-        # than for a group, and backup - which LEGO does type as a komite -
-        # does not belong in a list of komite-opptak.
+        # concerned. Abakus-leder recruits for a position rather than for a
+        # group, and backup - which LEGO does type as a komite - does not
+        # belong in a list of komite-opptak. Hovedstyret is deliberately not
+        # here: its members hold no admission access, and central god access
+        # is handled by GOD_LEGO_IDS instead.
         GROUP_CATEGORY_OTHER,
-        ("Abakus-leder", "backup", "Hovedstyret"),
+        ("Abakus-leder", "backup"),
     ),
 )
 """ How the groups an opptak can be run for are split up for the person
 choosing between them.
 
-Matches LEGO's own group `type` everywhere except the three in `other`, which
+Matches LEGO's own group `type` everywhere except the two in `other`, which
 is the whole reason this is written out rather than derived: LEGO types backup
 as a komite and Abakus-leder as `annen`, neither of which is the split an
 opptak organiser has in mind. Deliberately a superset of LEGO_GROUP_NAMES, so a
@@ -135,8 +137,6 @@ group that becomes importable later is already filed correctly.
 """
 
 LEGO_GROUP_NAMES = [
-    # Central admission administration
-    "Hovedstyret",
     # Committee admissions
     "Abakus-leder",
     "Arrkom",
@@ -181,17 +181,10 @@ def group_category(name):
 
 
 # Groups that give privileges to their leaders
-STAFF_LEADER_GROUPS = ["backup", "Hovedstyret", "RevyStyret"]
+STAFF_LEADER_GROUPS = ["backup", "Abakus-leder", "RevyStyret"]
 """ Members of these groups with role leader attain the is_staff attribute and can manage admissions. Matched against the LEGO login payload's group names - no local Group row is needed. """
 
-# The organisation's own leadership positions: the leader and co-leader of
-# Hovedstyret. Either is an admission-wide admin in every opptak - they see
-# every application across every committee, regardless of how the admission's
-# admin_groups are configured - and both are staff for the manage-admissions
-# page. Kept apart from STAFF_LEADER_GROUPS because that only confers
-# is_staff, and only to the group's leader, not the co-leader.
-ORG_LEADERSHIP_GROUPS = ["Hovedstyret"]
-ORG_LEADERSHIP_ROLES = (LEADER, CO_LEADER)
+GOD_LEGO_IDS = [8810]
 WEBKOM_GROUPNAME = "Webkom"
 """ Group name of Webkom """
 

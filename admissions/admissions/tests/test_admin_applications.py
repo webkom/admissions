@@ -254,45 +254,53 @@ class AdminAdmissionPrivacyTestCase(APITestCase):
         )
 
 
-class OrgLeadershipAccessTestCase(APITestCase):
-    """The Abakus leader and co-leader are org-wide admins in every opptak.
+class GroupLeadershipGrantsNothingTestCase(APITestCase):
+    """No group membership confers org-wide admin.
 
-    They are the leader/co-leader of Hovedstyret, not a committee: they
-    oversee the whole admission, so they must see every application across
-    every group regardless of how the admission's admin_groups are
-    configured.
+    Not Hovedstyret, not Abakus-leder - not even their leader or co-leader.
+    The only way in is a god-listed LEGO id (constants.GOD_LEGO_IDS); see
+    GodUserAccessTestCase. A user who holds a leadership role in a group
+    that is not part of the opptak must get no admission-wide privilege from
+    it, and must not reach the applicants.
     """
 
     def setUp(self):
         self.admission = create_admission()
+        self.abakus_leder_group = Group.objects.create(name="Abakus-leder", lego_id=10)
         self.hovedstyret = Group.objects.create(name="Hovedstyret", lego_id=9)
-        # Deliberately NOT in admin_groups: the point is that org leadership
-        # must not depend on being added there.
+        # Deliberately NOT in admin_groups: the point is that no group
+        # membership may stand in for org leadership.
         self.first = Group.objects.create(name="Bedkom", lego_id=12)
         self.second = Group.objects.create(name="Webkom", lego_id=13)
         self.admission.groups.add(self.first, self.second)
 
-        # The Abakus leader — leader of Hovedstyret.
+        # Leaders of groups that are not part of this opptak at all.
+        self.hovedstyret_leader = LegoUser.objects.create(
+            username="hovedstyret-leader", lego_id=15
+        )
+        Membership.objects.create(
+            user=self.hovedstyret_leader, group=self.hovedstyret, role=LEADER
+        )
+        self.hovedstyret_co_leader = LegoUser.objects.create(
+            username="hovedstyret-co-leader", lego_id=16
+        )
+        Membership.objects.create(
+            user=self.hovedstyret_co_leader,
+            group=self.hovedstyret,
+            role=CO_LEADER,
+        )
         self.abakus_leader = LegoUser.objects.create(
             username="abakus-leader", lego_id=14
         )
         Membership.objects.create(
-            user=self.abakus_leader, group=self.hovedstyret, role=LEADER
+            user=self.abakus_leader, group=self.abakus_leder_group, role=LEADER
         )
 
-        # The Abakus co-leader — co-leader of Hovedstyret.
-        self.abakus_co_leader = LegoUser.objects.create(
-            username="abakus-co-leader", lego_id=15
-        )
-        Membership.objects.create(
-            user=self.abakus_co_leader, group=self.hovedstyret, role=CO_LEADER
-        )
+        # Someone with no membership at all - the check must be intentional,
+        # not just "everyone gets admin".
+        self.plain = LegoUser.objects.create(username="plain", lego_id=17)
 
-        # Someone who is NOT in the leadership group — used to prove the
-        # check is intentional, not just "everyone gets admin".
-        self.plain = LegoUser.objects.create(username="plain", lego_id=16)
-
-        candidate = LegoUser.objects.create(username="candidate", lego_id=17)
+        candidate = LegoUser.objects.create(username="candidate", lego_id=18)
         self.application = UserApplication.objects.create(
             admission=self.admission, user=candidate, phone_number="12345678"
         )
@@ -314,38 +322,36 @@ class OrgLeadershipAccessTestCase(APITestCase):
             )
         )
 
-    def test_abakus_leadership_is_admin_without_admin_groups(self):
-        for user in (self.abakus_leader, self.abakus_co_leader):
+    def test_no_group_leadership_gets_any_work_privilege(self):
+        """Leader or co-leader of Hovedstyret or Abakus-leder: no admin, no
+        privileged flag, no access to the applicants, no manage page."""
+        for user in (
+            self.hovedstyret_leader,
+            self.hovedstyret_co_leader,
+            self.abakus_leader,
+        ):
             with self.subTest(role=user.username):
                 userdata = self._userdata(user)
-                self.assertTrue(userdata["is_admin"])
-                self.assertTrue(userdata["is_privileged"])
-                self.assertEqual(userdata["application_view_mode"], "admin_full")
+                self.assertFalse(userdata["is_admin"])
+                self.assertFalse(userdata["is_privileged"])
+                self.assertEqual(userdata["application_view_mode"], "none")
 
-    def test_abakus_leadership_sees_every_applicant(self):
-        for user in (self.abakus_leader, self.abakus_co_leader):
-            with self.subTest(role=user.username):
                 response = self._list_applications(user)
-                self.assertEqual(response.status_code, status.HTTP_200_OK)
-                self.assertEqual(
-                    response.data[0]["application_view_mode"], "admin_full"
-                )
-                self.assertEqual(response.data[0]["pk"], str(self.application.pk))
+                self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
 
-    def test_other_hovedstyret_roles_grant_nothing_here(self):
-        """Only the leader and co-leader of Hovedstyret are org leadership.
-
-        A plain member, treasurer, or any other role in Hovedstyret gets no
-        admission-wide privilege from that membership alone - not admin,
-        not privileged. They only ever gain committee-scoped access if they
-        separately hold a role in a participating committee.
-        """
+    def test_other_abakus_leder_roles_grant_nothing_here(self):
+        """A plain member, treasurer, or any other role in Abakus-leder
+        gains no admission-wide privilege either - only god-listed ids do.
+        They only ever gain committee-scoped access if they separately hold
+        a role in a participating committee."""
         for role in (MEMBER, "treasurer", RECRUITING):
             with self.subTest(role=role):
                 user = LegoUser.objects.create(
-                    username=f"hs-{role}", lego_id=20 + len(role)
+                    username=f"leder-{role}", lego_id=30 + len(role)
                 )
-                Membership.objects.create(user=user, group=self.hovedstyret, role=role)
+                Membership.objects.create(
+                    user=user, group=self.abakus_leder_group, role=role
+                )
 
                 userdata = self._userdata(user)
                 self.assertFalse(userdata["is_admin"])
@@ -355,19 +361,17 @@ class OrgLeadershipAccessTestCase(APITestCase):
                 response = self._list_applications(user)
                 self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
 
-    def test_priority_text_stays_limited_to_leader_and_co_leader(self):
-        """The applicant's note to central officers is for the Abakus leader
-        and co-leader - no other Hovedstyret role may read it."""
+    def test_priority_text_is_unreachable_for_group_leadership(self):
+        """The applicant's note to central officers is reserved for god
+        users - no group leadership may read it."""
         UserApplication.objects.filter(pk=self.application.pk).update(
             text="note to central officers"
         )
 
-        for user in (self.abakus_leader, self.abakus_co_leader):
+        for user in (self.hovedstyret_leader, self.hovedstyret_co_leader):
             with self.subTest(role=user.username):
                 response = self._list_applications(user)
-                self.assertEqual(
-                    response.data[0]["priority_text"], "note to central officers"
-                )
+                self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
 
     def test_outsider_is_not_an_admission_admin(self):
         userdata = self._userdata(self.plain)
@@ -375,27 +379,34 @@ class OrgLeadershipAccessTestCase(APITestCase):
         self.assertFalse(userdata["is_privileged"])
         self.assertEqual(userdata["application_view_mode"], "none")
 
-    def test_org_leadership_manages_every_admission(self):
-        """The manage-admissions page is not Webkom-only: an Abakus leader or
-        co-leader who is not in Webkom still sees and manages every opptak,
-        not only the ones they created themselves."""
-        other = LegoUser.objects.create(username="other-admin", lego_id=18)
+    def test_group_leadership_does_not_manage_every_admission(self):
+        """The manage-admissions page is Webkom + god ids only: an
+        Abakus-leder leader is staff (like backup/revy leaders) but still
+        only sees the admissions they created themselves, and a Hovedstyret
+        leader is not even staff."""
         someone_elses = create_admission(
-            slug="someone-elses", created_by=other, title="Someone elses opptak"
+            slug="someone-elses", created_by=self.abakus_leader, title="Mitt opptak"
         )
 
-        for user in (self.abakus_leader, self.abakus_co_leader):
-            with self.subTest(role=user.username):
-                self.client.force_authenticate(user=user)
-                response = self.client.get(reverse("manage-admission-list"))
-                self.assertEqual(response.status_code, status.HTTP_200_OK)
-                slugs = {row["slug"] for row in response.data}
-                self.assertIn(self.admission.slug, slugs)
-                self.assertIn(someone_elses.slug, slugs)
+        # The login pipeline grants the Abakus-leder leader is_staff; a
+        # Hovedstyret leader gets nothing.
+        self.abakus_leader.is_staff = True
+        self.abakus_leader.save(update_fields=["is_staff"])
 
-    def test_staff_outside_webkom_and_leadership_only_manages_own(self):
-        """The Webkom-wide manage grant widens to org leadership and no
-        further: an ordinary staff member who is neither still only sees the
+        self.client.force_authenticate(user=self.abakus_leader)
+        response = self.client.get(reverse("manage-admission-list"))
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        slugs = {row["slug"] for row in response.data}
+        self.assertIn(someone_elses.slug, slugs)
+        self.assertNotIn(self.admission.slug, slugs)
+
+        self.client.force_authenticate(user=self.hovedstyret_leader)
+        response = self.client.get(reverse("manage-admission-list"))
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_staff_outside_webkom_and_god_ids_only_manages_own(self):
+        """The Webkom-wide manage grant widens to god ids and no further:
+        an ordinary staff member who is neither still only sees the
         admissions they created."""
         self.plain.is_staff = True
         self.plain.save(update_fields=["is_staff"])
@@ -410,6 +421,101 @@ class OrgLeadershipAccessTestCase(APITestCase):
         slugs = {row["slug"] for row in response.data}
         self.assertIn(someone_elses.slug, slugs)
         self.assertNotIn(self.admission.slug, slugs)
+
+
+@mock.patch("admissions.admissions.constants.GOD_LEGO_IDS", [91001])
+class GodUserAccessTestCase(APITestCase):
+    """Hard-coded LEGO ids get the same admission-wide admin as the
+    organisation's leadership, without holding any leadership role."""
+
+    def setUp(self):
+        self.admission = create_admission()
+        # Deliberately no admin_groups and no group membership: the
+        # hard-coded id alone must carry the access.
+        self.god = LegoUser.objects.create(username="deputy", lego_id=91001)
+        self.plain = LegoUser.objects.create(username="plain", lego_id=91002)
+        self.bedkom = Group.objects.create(name="Bedkom", lego_id=91003)
+        self.admission.groups.add(self.bedkom)
+        self.member = LegoUser.objects.create(username="member", lego_id=91004)
+        Membership.objects.create(user=self.member, group=self.bedkom, role=MEMBER)
+
+    def test_a_god_listed_user_is_admission_admin_everywhere(self):
+        self.client.force_authenticate(user=self.god)
+        response = self.client.get(
+            reverse("admission-detail", kwargs={"slug": self.admission.slug})
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        userdata = response.data["userdata"]
+        self.assertTrue(userdata["is_admin"])
+        self.assertTrue(userdata["is_privileged"])
+        self.assertEqual(userdata["application_view_mode"], "admin_full")
+
+    def test_a_god_listed_user_sees_every_admission_in_manage(self):
+        someone_elses = create_admission(
+            slug="someone-elses-god",
+            created_by=self.plain,
+            title="Someone elses opptak",
+        )
+        self.client.force_authenticate(user=self.god)
+        response = self.client.get(reverse("manage-admission-list"))
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        slugs = {row["slug"] for row in response.data}
+        self.assertIn(self.admission.slug, slugs)
+        self.assertIn(someone_elses.slug, slugs)
+
+    def test_a_non_listed_user_gains_nothing(self):
+        """Not on the hard-coded list: no admin, no manage access."""
+        self.client.force_authenticate(user=self.plain)
+        response = self.client.get(
+            reverse("admission-detail", kwargs={"slug": self.admission.slug})
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        userdata = response.data["userdata"]
+        self.assertFalse(userdata["is_admin"])
+        self.assertFalse(userdata["is_privileged"])
+        self.assertEqual(userdata["application_view_mode"], "none")
+
+    def test_a_god_listed_user_does_not_operate_other_committees_schedule(self):
+        """God ids are applicant admins, not schedule admins: opening a
+        committee's schedule, candidates, or availability they are not part
+        of is 403, even though they see every applicant."""
+        for url_name in (
+            "saved-schedule",
+            "interview-candidates",
+            "interview-availability",
+        ):
+            with self.subTest(url=url_name):
+                self.client.force_authenticate(user=self.god)
+                response = self.client.get(
+                    reverse(
+                        url_name,
+                        kwargs={
+                            "admission_slug": self.admission.slug,
+                            "group_id": self.bedkom.pk,
+                        },
+                    )
+                )
+                self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_a_god_listed_user_reads_priority_text(self):
+        """The applicant's note to central officers is visible to god ids
+        across every committee."""
+        application = UserApplication.objects.create(
+            admission=self.admission,
+            user=self.plain,
+            phone_number="12345678",
+            text="note to central officers",
+        )
+        self.client.force_authenticate(user=self.god)
+        response = self.client.get(
+            reverse(
+                "admin-userapplication-list",
+                kwargs={"admission_slug": self.admission.slug},
+            )
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data[0]["priority_text"], "note to central officers")
+        self.assertEqual(response.data[0]["pk"], str(application.pk))
 
 
 class ListApplicationsTestCase(APITestCase):

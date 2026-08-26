@@ -26,9 +26,11 @@ class DecoyConflictRoundTripTestCase(APITestCase):
         self.admission = create_admission()
         self.group = Group.objects.create(name="Webkom", lego_id=15)
         self.admission.groups.add(self.group)
+        # The reviewer is an interview admin (recruiter) now - plain members
+        # have no schedule access beyond the published plan.
         self.interviewer = LegoUser.objects.create(username="mine", lego_id=6001)
         Membership.objects.create(
-            user=self.interviewer, group=self.group, role="member"
+            user=self.interviewer, group=self.group, role="recruiting"
         )
         InterviewAvailability.objects.create(
             admission=self.admission,
@@ -69,10 +71,18 @@ class DecoyConflictRoundTripTestCase(APITestCase):
             },
         )
 
-    def test_the_decoy_appears_in_the_candidate_list(self):
-        res = self.client.get(self.candidates_url)
+    def test_the_reviewer_sees_the_decoy_in_their_availability_row(self):
+        """The decoy rides the availability response's proposed list, not the
+        candidate pool: an interview admin always keeps the real pool in the
+        candidate list, so the filler only ever shows up where the review
+        happens."""
+        candidates = self.client.get(self.candidates_url)
+        self.assertEqual(candidates.status_code, status.HTTP_200_OK)
+        self.assertEqual(candidates.data, [])
 
-        self.assertIn({"id": self.decoy_token, "name": "Filler One"}, res.data)
+        availability = self.client.get(self.availability_url)
+        mine = next(row for row in availability.data if row["is_me"])
+        self.assertIn(self.decoy_token, mine["proposed_candidate_ids"])
 
     def test_a_decoy_mark_round_trips_through_get_after_post(self):
         res = self.client.post(
@@ -185,7 +195,7 @@ class DecoyOrderingAndOperatorScopeTestCase(APITestCase):
         self.admission.groups.add(self.group)
         self.interviewer = LegoUser.objects.create(username="orderer", lego_id=6101)
         Membership.objects.create(
-            user=self.interviewer, group=self.group, role="member"
+            user=self.interviewer, group=self.group, role="recruiting"
         )
         self.recruiter = LegoUser.objects.create(username="operator", lego_id=6102)
         Membership.objects.create(
@@ -237,27 +247,21 @@ class DecoyOrderingAndOperatorScopeTestCase(APITestCase):
             },
         )
 
-    def test_decoys_interleave_with_real_candidates_by_name(self):
-        self.client.force_authenticate(user=self.interviewer)
+    def test_every_interview_admin_keeps_the_full_candidate_list(self):
+        """No one is handed a collapsed list with fillers anymore: members
+        never see candidates at all, and interview admins always keep the
+        real pool."""
+        for user in (self.interviewer, self.recruiter):
+            with self.subTest(role=user.username):
+                self.client.force_authenticate(user=user)
 
-        res = self.client.get(self.candidates_url)
+                res = self.client.get(self.candidates_url)
 
-        self.assertEqual(res.status_code, status.HTTP_200_OK)
-        self.assertEqual(
-            [entry["name"] for entry in res.data],
-            ["Anna Filler", "Kari Applicant", "Zora Filler"],
-        )
-        self.assertEqual(res.data[1]["id"], str(self.kari_application.pk))
-
-    def test_the_committees_own_operator_keeps_the_full_candidate_list(self):
-        self.client.force_authenticate(user=self.recruiter)
-
-        res = self.client.get(self.candidates_url)
-
-        self.assertEqual(res.status_code, status.HTTP_200_OK)
-        self.assertEqual(
-            [entry["id"] for entry in res.data], [str(self.kari_application.pk)]
-        )
+                self.assertEqual(res.status_code, status.HTTP_200_OK)
+                self.assertEqual(
+                    [entry["id"] for entry in res.data],
+                    [str(self.kari_application.pk)],
+                )
 
 
 class PartialPublishIdentityTestCase(APITestCase):

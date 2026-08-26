@@ -103,9 +103,11 @@ class DiscouragedAvailabilityApiTestCase(APITestCase):
         self.admission = create_admission()
         self.group = Group.objects.create(name="Webkom", lego_id=13)
         self.admission.groups.add(self.group)
+        # An interview admin (recruiter) records answers on the committee's
+        # behalf - plain members have no write access to the schedule.
         self.interviewer = LegoUser.objects.create(username="interviewer", lego_id=4001)
         Membership.objects.create(
-            user=self.interviewer, group=self.group, role="member"
+            user=self.interviewer, group=self.group, role="recruiting"
         )
         SavedSchedule.objects.create(
             admission=self.admission,

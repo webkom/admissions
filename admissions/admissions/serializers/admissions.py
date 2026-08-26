@@ -12,6 +12,7 @@ from admissions.admissions.admission_access import (
     get_application_view_mode,
     revoke_removed_group_disclosures,
     user_is_admission_admin,
+    user_is_org_leadership,
 )
 from admissions.admissions.json_models import InputModelList
 from admissions.admissions.models import (
@@ -58,6 +59,7 @@ class AdmissionListPublicSerializer(serializers.HyperlinkedModelSerializer):
             "has_application": False,
             "is_privileged": False,
             "is_admin": False,
+            "is_org_leadership": False,
             "is_recruiter": False,
             "committee_role": None,
             "committee_groups": [],
@@ -138,6 +140,12 @@ class AdmissionListPublicSerializer(serializers.HyperlinkedModelSerializer):
         if user_is_admission_admin(obj, request.user):
             res["is_privileged"] = True
             res["is_admin"] = True
+        # Admission admins split into two kinds: admin-group members, who
+        # also operate every committee's schedule, and org leadership / god
+        # users, who are applicant-wide admins only. The frontend needs the
+        # distinction so a god user is not offered committees they cannot
+        # open.
+        res["is_org_leadership"] = user_is_org_leadership(request.user)
         res["application_view_mode"] = get_application_view_mode(obj, request.user)
         return res
 
@@ -374,6 +382,7 @@ class AdminAdmissionSerializer(serializers.ModelSerializer):
         if user_is_admission_admin(obj, request.user):
             res["is_privileged"] = True
             res["is_admin"] = True
+        res["is_org_leadership"] = user_is_org_leadership(request.user)
         res["application_view_mode"] = get_application_view_mode(obj, request.user)
         return res
 
