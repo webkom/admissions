@@ -15,8 +15,28 @@ APPLICATION_VIEW_MODE_COMMITTEE_FULL = "committee_full"
 APPLICATION_VIEW_MODE_COMMITTEE_MINIMAL = "committee_minimal"
 
 
-def user_is_admission_admin(admission, user):
+def user_is_org_leadership(user):
+    """The organisation's own leadership: leader/co-leader of Hovedstyret.
+
+    The Abakus leader and co-leader are defined by their role in Hovedstyret
+    - the leader of Hovedstyret is the Abakus leader, the co-leader is the
+    Abakus co-leader. They oversee every admission regardless of how its
+    admin_groups were configured, so this is matched on the group name and
+    role, not on any admission relation: it must hold even when Hovedstyret
+    was never added to the admission.
+    """
+
     return (
+        Membership.objects.filter(
+            user=user.pk,
+            group__name__in=constants.ORG_LEADERSHIP_GROUPS,
+            role__in=constants.ORG_LEADERSHIP_ROLES,
+        ).exists()
+    )
+
+
+def user_is_admission_admin(admission, user):
+    return user_is_org_leadership(user) or (
         Membership.objects.filter(user=user.pk, group__in=admission.admin_groups.all())
         .filter(role__in=constants.ADMISSION_ADMIN_ROLES)
         .exists()
@@ -31,7 +51,7 @@ def user_is_admission_leadership(admission, user):
     for everything else, but this one field is reserved for the admin
     group's actual leadership.
     """
-    return (
+    return user_is_org_leadership(user) or (
         Membership.objects.filter(user=user.pk, group__in=admission.admin_groups.all())
         .filter(role__in=(constants.LEADER, constants.CO_LEADER))
         .exists()
@@ -90,7 +110,16 @@ def get_application_view_mode(admission, user):
     competing admin group the other committees' private application text.
     """
     represented_groups = get_representing_groups(admission, user)
-    if admission.groups.count() > 1 and represented_groups.exists():
+    # Org leadership is exempt from this guard: a leader/co-leader of
+    # Hovedstyret oversees the whole admission and must not be narrowed to a
+    # single committee even if Hovedstyret itself participates. The guard
+    # still applies to a competing admin group (Webkom running the tool while
+    # also recruiting) - only org leadership bypasses it.
+    if (
+        admission.groups.count() > 1
+        and represented_groups.exists()
+        and not user_is_org_leadership(user)
+    ):
         return APPLICATION_VIEW_MODE_COMMITTEE_MINIMAL
     if user_is_admission_admin(admission, user):
         return APPLICATION_VIEW_MODE_ADMIN_FULL

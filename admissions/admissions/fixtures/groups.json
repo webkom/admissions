@@ -1,6 +1,18 @@
 [
 {
   "model": "admissions.group",
+  "pk": "9f0d95c1-3c2e-4b4e-9a2a-000000000009",
+  "fields": {
+    "lego_id": 9,
+    "name": "Hovedstyret",
+    "logo": null,
+    "detail_link": "https://abakus.no/pages/komiteer/9",
+    "response_label": "",
+    "description": ""
+  }
+},
+{
+  "model": "admissions.group",
   "pk": "e32bda54-be23-42e4-9fb8-d90cb89ac1ef",
   "fields": {
     "lego_id": 10,
