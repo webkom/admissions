@@ -4,9 +4,7 @@
 
 - **Admission**: one recruitment period. It defines the participating committees
   (`groups`) and the committees whose active leaders or recruiting responsibles
-  administer the whole admission (`admin_groups`). On top of `admin_groups`, the
-  leader and co-leader of Hovedstyret administer every admission, because they
-  are the organisation's own leadership rather than a committee.
+  administer the whole admission (`admin_groups`).
 - **User application**: one candidate's application to an admission. Candidate
   identity, contact details, shared application text, and interview status belong
   here.
@@ -32,10 +30,8 @@
 ## Invariants
 
 - Admission-wide administration requires an active `leader` or `recruiting`
-  membership in one of the admission's admin groups, or a `leader`/`co-leader`
-  membership of Hovedstyret - the organisation's own leadership, matched on
-  the group name so it holds in every admission. Ordinary members of an admin
-  group do not receive admission-wide authority.
+  membership in one of the admission's admin groups. Ordinary members of an
+  admin group do not receive admission-wide authority.
 - An OAuth membership refresh replaces the local membership snapshot atomically.
   Missing, malformed, or unknown membership data must fail closed rather than
   retaining or creating privileges.

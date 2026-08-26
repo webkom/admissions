@@ -248,25 +248,12 @@ class OAuthMembershipSyncTestCase(TestCase):
         self.assertTrue(self.user.is_staff)
         self.assertFalse(Membership.objects.filter(user=self.user).exists())
 
-    def test_hovedstyret_leader_and_co_leader_get_staff(self):
-        """The Abakus leader and co-leader are the leader/co-leader of
-        Hovedstyret, and both are staff for the manage-admissions page."""
-        for role in ("leader", "co-leader"):
+    def test_hovedstyret_non_leader_roles_do_not_get_staff(self):
+        for role in ("member", "co-leader"):
             with self.subTest(role=role):
-                self.user.is_staff = False
-                self.user.save(update_fields=["is_staff"])
-
                 self.sync(self._hovedstyret_response(role))
 
-                self.assertTrue(self.user.is_staff)
-
-    def test_hovedstyret_plain_member_does_not_get_staff(self):
-        self.user.is_staff = False
-        self.user.save(update_fields=["is_staff"])
-
-        self.sync(self._hovedstyret_response("member"))
-
-        self.assertFalse(self.user.is_staff)
+                self.assertFalse(self.user.is_staff)
 
     def test_two_roles_in_one_group_are_both_kept(self):
         """LEGO makes memberships unique per (user, group, ROLE), so holding

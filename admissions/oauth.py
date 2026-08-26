@@ -276,17 +276,10 @@ def update_custom_user_details(strategy, details, user=None, *args, **kwargs):
         # Staff comes straight from the LEGO payload, not from a local Group
         # row: the staff groups (Hovedstyret in particular) have no reason to
         # exist in the local table, so requiring a row here silently revoked
-        # the Abakus leader's access on their first login. The Abakus leader
-        # and co-leader are the leader/co-leader of Hovedstyret.
+        # the Abakus leader's access on their first login.
         user.is_staff = any(
-            (
-                group.get("name") in constants.STAFF_LEADER_GROUPS
-                and membership.get("role") == constants.LEADER
-            )
-            or (
-                group.get("name") in constants.ORG_LEADERSHIP_GROUPS
-                and membership.get("role") in constants.ORG_LEADERSHIP_ROLES
-            )
+            group.get("name") in constants.STAFF_LEADER_GROUPS
+            and membership.get("role") == constants.LEADER
             for group, membership in group_data
         )
 
