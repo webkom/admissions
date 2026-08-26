@@ -1894,12 +1894,14 @@ class InterviewAvailabilityHardeningTestCase(APITestCase):
         res = self.client.get(self.url)
 
         self.assertEqual(res.status_code, status.HTTP_200_OK)
+        # The committee's own people only: the admission admin-group member is
+        # panel-eligible here but sits on no roster of this committee, and
+        # neither does the other committee's member.
         self.assertEqual(
             {row["username"] for row in res.data},
             {
                 "hardening-member",
                 "hardening-recruiter",
-                "hardening-availability-admin",
             },
         )
 
@@ -3274,11 +3276,13 @@ class InterviewGenderExposureTestCase(APITestCase):
         res = self.client.get(self.availability_url)
 
         self.assertEqual(res.status_code, status.HTTP_200_OK)
+        # The admin-group member is not in this committee, so they appear on
+        # no roster of it - the completion count is the committee's own.
         self.assertEqual(
             {row["username"] for row in res.data},
-            {"g-admin", "g-member", "g-inactive"},
+            {"g-member", "g-inactive"},
         )
-        self.assertEqual(sum(1 for row in res.data if row["has_submitted"]), 2)
+        self.assertEqual(sum(1 for row in res.data if row["has_submitted"]), 1)
         self.assertEqual(sum(1 for row in res.data if not row["has_submitted"]), 1)
 
     def test_unpublished_committee_visibility_does_not_release_names(self):
@@ -3310,7 +3314,6 @@ class InterviewGenderExposureTestCase(APITestCase):
 
         self.assertEqual(res.status_code, status.HTTP_200_OK)
         genders = {row["username"]: row["gender"] for row in res.data}
-        self.assertEqual(genders.get("g-admin"), "M")
         self.assertEqual(genders.get("g-member"), "F")
 
 
