@@ -35,6 +35,7 @@ from admissions.admissions.scheduling_utils import (
     canonicalize_slot_keys,
     conflict_review_scope,
     decoy_review_scope,
+    get_committee_interviewer_ids,
     get_declared_conflict_candidate_ids,
     get_eligible_interviewer_ids,
     get_proposed_candidate_ids_by_interviewer,
@@ -210,7 +211,12 @@ class InterviewAvailabilityView(SchedulerFeatureGateMixin, APIView):
             return Response(status=status.HTTP_403_FORBIDDEN)
 
         if is_interview_admin:
-            all_ids = get_eligible_interviewer_ids(admission, group)
+            # The "who has answered" roster is the committee's own people only.
+            # The eligible set would also pull in every admission admin-group
+            # member (panel eligibility), which would list people from a group
+            # this committee has nothing to do with as perpetually missing an
+            # answer they were never asked for.
+            all_ids = get_committee_interviewer_ids(group)
             users = LegoUser.objects.filter(id__in=all_ids).order_by(
                 "first_name", "last_name", "username"
             )

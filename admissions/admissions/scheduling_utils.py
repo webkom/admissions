@@ -28,59 +28,70 @@ def panel_gender_code(lego_gender):
     return constants.LEGO_GENDER_TO_PANEL_CODE.get(lego_gender or "", "")
 
 
-def get_responding_interviewer_ids(admission, group):
-    """Everyone whose answer the admission can actually wait for.
+def get_committee_interviewer_ids(group):
+    """The committee's own people: everyone Membership knows plus the LEGO
+    roster.
 
-    Membership only, which means: people who have signed in here at least once,
-    because signing in is the only thing that writes a Membership row. Kept
-    apart from the full roster below because this is the set publication may
-    demand a response from - someone who has never opened admissions can
-    neither submit availability nor opt out, so counting them here would
-    deadlock the publish behind people who will never answer.
+    Membership only covers people who have signed in here at least once,
+    because signing in is the only thing that writes a Membership row.
+    CommitteeRosterEntry, mirrored from LEGO by sync_committee_rosters, covers
+    the rest - but only for participating committees and only as far as the
+    last sync reached, so neither source is complete alone.
+
+    This is the roster that answers "who is in this committee": it is scoped
+    to the one committee, so nobody else's members can appear in it.
     """
 
-    committee_ids = set(
+    member_ids = set(
         Membership.objects.filter(group=group).values_list("user_id", flat=True)
     )
-    admin_ids = set(
-        Membership.objects.filter(group__in=admission.admin_groups.all()).values_list(
-            "user_id", flat=True
-        )
-    )
-    # Availability status must include every committee/admin member, even if
-    # their membership role is inactive. The response panel uses this roster to
-    # decide when "Alle har svart" is true, so excluding IR/retiree members
-    # would make the UI report completion too early.
-    #
-    # admin_ids stays admission-wide, not scoped to `group`: Webkom (the
-    # admin group running the shared tool) can sit in on any committee's
-    # interviews, unlike ordinary committee members who are scoped to their
-    # own committee.
-    return committee_ids | admin_ids
-
-
-def get_eligible_interviewer_ids(admission, group):
-    """The committee as LEGO describes it, plus everyone Membership knows.
-
-    The union matters because the two sources are each incomplete on their own.
-    A Membership row exists only for people who have signed in, so by itself it
-    omits exactly the members an admin needs to chase. CommitteeRosterEntry,
-    mirrored from LEGO by sync_committee_rosters, covers those - but only for
-    participating committees and only as far as the last sync reached, so it
-    cannot replace Membership either.
-
-    Widening this set grants no authority: every permission check reads
-    Membership directly (see admission_access), never this function. What it
-    decides is who appears in the availability roster, who an admin may record
-    an answer on behalf of, and who may legitimately sit on a panel.
-    """
-
     roster_ids = set(
         CommitteeRosterEntry.objects.filter(group=group).values_list(
             "user_id", flat=True
         )
     )
-    return get_responding_interviewer_ids(admission, group) | roster_ids
+    return member_ids | roster_ids
+
+
+def get_responding_interviewer_ids(admission, group):
+    """Everyone whose answer this committee can actually wait for: its own
+    signed-in members.
+
+    Kept apart from the wider sets around it because this is the set
+    publication may demand a response from. Someone mirrored from LEGO who has
+    never opened admissions can neither submit availability nor opt out, so
+    counting them here would deadlock the publish behind people who will never
+    answer - an admin records their answer on their behalf instead. The same
+    reasoning applies to admission admin-group members who are not in this
+    committee: they appear on none of its rosters, so requiring their answer
+    would block every committee's publish forever.
+    """
+
+    return set(Membership.objects.filter(group=group).values_list("user_id", flat=True))
+
+
+def get_eligible_interviewer_ids(admission, group):
+    """The committee's own people, plus the admission's admin groups.
+
+    The admin groups stay in deliberately: Webkom (the admin group running the
+    shared tool) may sit on any committee's panels and record answers on
+    behalf of its interviewers, so they must remain legitimate panel members
+    here even though they owe the committee no availability answer (see
+    get_responding_interviewer_ids) and appear on none of its rosters.
+
+    Widening this set grants no authority: every permission check reads
+    Membership directly (see admission_access), never this function. What it
+    decides is who may sit on a panel and who an admin may record an answer
+    on behalf of - the "who has not answered" display is the committee-scoped
+    set above.
+    """
+
+    admin_ids = set(
+        Membership.objects.filter(group__in=admission.admin_groups.all()).values_list(
+            "user_id", flat=True
+        )
+    )
+    return get_committee_interviewer_ids(group) | admin_ids
 
 
 def availability_submission_is_current(availability, saved_schedule):
