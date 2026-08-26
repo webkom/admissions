@@ -1,3 +1,5 @@
+from unittest.mock import patch
+
 from django.test import TestCase, override_settings
 from django.urls import reverse
 from rest_framework.test import APITestCase
@@ -53,6 +55,19 @@ class OAuthMembershipSyncTestCase(TestCase):
         self.assertIn("lego_state", self.client.session)
         self.assertIn("admissions_sessionid", response.cookies)
         self.assertIn("redirect_uri=http%3A%2F%2F127.0.0.1%3A5002", response.url)
+
+    @patch("admissions.admissions.constants.GOD_LEGO_IDS", [92000])
+    def test_a_god_listed_user_is_staff_after_login(self):
+        """A hard-coded god LEGO id gets staff even when the payload carries
+        no staff group - the manage page must open for them without waiting
+        on their role data."""
+        self.user.is_staff = False
+        self.user.save(update_fields=["is_staff"])
+
+        self.sync({"id": self.user.lego_id})
+
+        self.user.refresh_from_db()
+        self.assertTrue(self.user.is_staff)
 
     def test_empty_response_revokes_stale_memberships_and_staff_access(self):
         Membership.objects.create(

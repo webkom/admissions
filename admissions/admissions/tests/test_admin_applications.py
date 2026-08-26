@@ -412,6 +412,55 @@ class OrgLeadershipAccessTestCase(APITestCase):
         self.assertNotIn(self.admission.slug, slugs)
 
 
+@mock.patch("admissions.admissions.constants.GOD_LEGO_IDS", [91001])
+class GodUserAccessTestCase(APITestCase):
+    """Hard-coded LEGO ids get the same admission-wide admin as the
+    organisation's leadership, without holding any leadership role."""
+
+    def setUp(self):
+        self.admission = create_admission()
+        # Deliberately no admin_groups and no Hovedstyret membership: the
+        # hard-coded id alone must carry the access.
+        self.god = LegoUser.objects.create(username="deputy", lego_id=91001)
+        self.plain = LegoUser.objects.create(username="plain", lego_id=91002)
+
+    def test_a_god_listed_user_is_admission_admin_everywhere(self):
+        self.client.force_authenticate(user=self.god)
+        response = self.client.get(
+            reverse("admission-detail", kwargs={"slug": self.admission.slug})
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        userdata = response.data["userdata"]
+        self.assertTrue(userdata["is_admin"])
+        self.assertTrue(userdata["is_privileged"])
+        self.assertEqual(userdata["application_view_mode"], "admin_full")
+
+    def test_a_god_listed_user_sees_every_admission_in_manage(self):
+        someone_elses = create_admission(
+            slug="someone-elses-god",
+            created_by=self.plain,
+            title="Someone elses opptak",
+        )
+        self.client.force_authenticate(user=self.god)
+        response = self.client.get(reverse("manage-admission-list"))
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        slugs = {row["slug"] for row in response.data}
+        self.assertIn(self.admission.slug, slugs)
+        self.assertIn(someone_elses.slug, slugs)
+
+    def test_a_non_listed_user_gains_nothing(self):
+        """Not on the hard-coded list: no admin, no manage access."""
+        self.client.force_authenticate(user=self.plain)
+        response = self.client.get(
+            reverse("admission-detail", kwargs={"slug": self.admission.slug})
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        userdata = response.data["userdata"]
+        self.assertFalse(userdata["is_admin"])
+        self.assertFalse(userdata["is_privileged"])
+        self.assertEqual(userdata["application_view_mode"], "none")
+
+
 class ListApplicationsTestCase(APITestCase):
     def setUp(self):
         self.admission_slug = DEFAULT_ADMISSION_SLUG

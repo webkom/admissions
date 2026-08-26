@@ -192,6 +192,14 @@ STAFF_LEADER_GROUPS = ["backup", "Hovedstyret", "RevyStyret"]
 # is_staff, and only to the group's leader, not the co-leader.
 ORG_LEADERSHIP_GROUPS = ["Hovedstyret"]
 ORG_LEADERSHIP_ROLES = (LEADER, CO_LEADER)
+
+# Explicit escape hatch: LEGO ids that count as admission-wide admins in
+# every opptak, no role or admin_groups needed. For people who need full
+# access but hold no leadership position - a deputy, a previous leader still
+# wrapping up, an ops contact. Add an id here, deploy, done. Kept hard-coded
+# on purpose: this is a code-reviewed list, not something that can be edited
+# at runtime.
+GOD_LEGO_IDS = []
 WEBKOM_GROUPNAME = "Webkom"
 """ Group name of Webkom """
 
