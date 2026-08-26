@@ -375,6 +375,42 @@ class OrgLeadershipAccessTestCase(APITestCase):
         self.assertFalse(userdata["is_privileged"])
         self.assertEqual(userdata["application_view_mode"], "none")
 
+    def test_org_leadership_manages_every_admission(self):
+        """The manage-admissions page is not Webkom-only: an Abakus leader or
+        co-leader who is not in Webkom still sees and manages every opptak,
+        not only the ones they created themselves."""
+        other = LegoUser.objects.create(username="other-admin", lego_id=18)
+        someone_elses = create_admission(
+            slug="someone-elses", created_by=other, title="Someone elses opptak"
+        )
+
+        for user in (self.abakus_leader, self.abakus_co_leader):
+            with self.subTest(role=user.username):
+                self.client.force_authenticate(user=user)
+                response = self.client.get(reverse("manage-admission-list"))
+                self.assertEqual(response.status_code, status.HTTP_200_OK)
+                slugs = {row["slug"] for row in response.data}
+                self.assertIn(self.admission.slug, slugs)
+                self.assertIn(someone_elses.slug, slugs)
+
+    def test_staff_outside_webkom_and_leadership_only_manages_own(self):
+        """The Webkom-wide manage grant widens to org leadership and no
+        further: an ordinary staff member who is neither still only sees the
+        admissions they created."""
+        self.plain.is_staff = True
+        self.plain.save(update_fields=["is_staff"])
+        someone_elses = create_admission(
+            slug="someone-elses-2", created_by=self.plain, title="Mitt opptak"
+        )
+
+        self.client.force_authenticate(user=self.plain)
+        response = self.client.get(reverse("manage-admission-list"))
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        slugs = {row["slug"] for row in response.data}
+        self.assertIn(someone_elses.slug, slugs)
+        self.assertNotIn(self.admission.slug, slugs)
+
 
 class ListApplicationsTestCase(APITestCase):
     def setUp(self):
