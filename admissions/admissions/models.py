@@ -897,6 +897,7 @@ class GodUser(models.Model):
     ``user_is_org_leadership(user)`` reads from this table.
     """
 
+    id = models.AutoField(primary_key=True)
     lego_id = models.IntegerField(unique=True)
     note = models.CharField(max_length=200, blank=True, default="")
     added_by = models.ForeignKey(
