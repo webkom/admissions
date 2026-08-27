@@ -131,8 +131,9 @@ export const useAvailabilityEditor = ({
       notify("Tilgjengelighet lagret.");
     } catch (error) {
       if (isSensitiveAuthorityChangedError(error)) throw error;
-      const response = (error as { response?: { status?: number; data?: unknown } })
-        .response;
+      const response = (
+        error as { response?: { status?: number; data?: unknown } }
+      ).response;
       notify(
         response?.status === 409
           ? "Tidsoppsettet er endret. Last inn siden på nytt før du bekrefter."
@@ -158,8 +159,9 @@ export const useAvailabilityEditor = ({
       });
     } catch (error) {
       if (isSensitiveAuthorityChangedError(error)) throw error;
-      const response = (error as { response?: { status?: number; data?: unknown } })
-        .response;
+      const response = (
+        error as { response?: { status?: number; data?: unknown } }
+      ).response;
       notify(
         `Kunne ikke lagre inhabilitetssjekken${
           firstApiErrorMessage(response?.data)

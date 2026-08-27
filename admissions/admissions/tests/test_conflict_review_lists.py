@@ -287,9 +287,7 @@ class ConflictReviewListTestCase(TestCase):
 
         # The required/incomplete lists carry raw user ids, not strings.
         required = {str(value) for value in readiness["required_participant_ids"]}
-        incomplete = {
-            str(value) for value in readiness["incomplete_participant_ids"]
-        }
+        incomplete = {str(value) for value in readiness["incomplete_participant_ids"]}
         self.assertNotIn(str(self.other.id), required)
         self.assertNotIn(str(self.other.id), incomplete)
         # Mine still needs to confirm before the plan is ready.

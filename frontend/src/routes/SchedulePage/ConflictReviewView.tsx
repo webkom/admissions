@@ -60,9 +60,10 @@ const ConflictReviewView: React.FC<ConflictReviewViewProps> = ({
   const candidateById = useMemo(
     () =>
       new Map(
-        [...(candidates ?? []), ...(currentParticipant?.decoy_candidates ?? [])].map(
-          (candidate) => [candidate.id, candidate],
-        ),
+        [
+          ...(candidates ?? []),
+          ...(currentParticipant?.decoy_candidates ?? []),
+        ].map((candidate) => [candidate.id, candidate]),
       ),
     [candidates, currentParticipant?.decoy_candidates],
   );

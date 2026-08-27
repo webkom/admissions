@@ -13,11 +13,11 @@ committees' answers.
 
 from django.test import TestCase
 
-from admissions.admissions.constants import LEADER, RECRUITING
 from admissions.admissions.admission_access import (
     APPLICATION_VIEW_MODE_COMMITTEE_MINIMAL,
     get_application_view_mode,
 )
+from admissions.admissions.constants import LEADER, RECRUITING
 from admissions.admissions.models import (
     Group,
     GroupApplication,
@@ -73,9 +73,7 @@ class RecruiterSeesOwnCommitteeTestCase(TestCase):
 
         self.admission.admin_groups.add(self.bedkom)
         rec = self._make_recruiter(self.bedkom, RECRUITING, 103)
-        candidate = LegoUser.objects.create(
-            username="candidate", lego_id=200
-        )
+        candidate = LegoUser.objects.create(username="candidate", lego_id=200)
         candidate_user_app = UserApplication.objects.create(
             admission=self.admission,
             user=candidate,

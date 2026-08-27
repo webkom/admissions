@@ -187,9 +187,7 @@ class DecoyConflictRoundTripTestCase(APITestCase):
 
         get_res = self.client.get(self.availability_url)
         mine = next(row for row in get_res.data if row["is_me"])
-        self.assertEqual(
-            post_res.data["decoy_candidates"], mine["decoy_candidates"]
-        )
+        self.assertEqual(post_res.data["decoy_candidates"], mine["decoy_candidates"])
 
     def test_the_saves_echo_matches_the_next_get(self):
         """Diffing a save's echo against the next GET must reveal nothing."""

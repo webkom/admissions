@@ -57,19 +57,16 @@ class IsActiveAdminGroupMember(permissions.BasePermission):
             return False
         if user.is_member_of_webkom or user_is_org_leadership(user):
             return False
-        return (
-            Admission.objects.filter(
-                Q(
-                    admin_groups__membership__user=user,
-                    admin_groups__membership__role__in=constants.ADMISSION_ADMIN_ROLES,
-                )
-                | Q(
-                    groups__membership__user=user,
-                    groups__membership__role__in=constants.ADMISSION_ADMIN_ROLES,
-                )
+        return Admission.objects.filter(
+            Q(
+                admin_groups__membership__user=user,
+                admin_groups__membership__role__in=constants.ADMISSION_ADMIN_ROLES,
             )
-            .exists()
-        )
+            | Q(
+                groups__membership__user=user,
+                groups__membership__role__in=constants.ADMISSION_ADMIN_ROLES,
+            )
+        ).exists()
 
 
 class IsOrgLeadership(permissions.BasePermission):

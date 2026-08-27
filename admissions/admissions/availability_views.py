@@ -277,9 +277,7 @@ class InterviewAvailabilityView(SchedulerFeatureGateMixin, APIView):
         # what the shared bounded cohort exists to prevent. Within one's own
         # row the names reveal nothing the token already placed there - the
         # owner already sees the tokens in proposed_candidate_ids.
-        own_decoy_tokens = (
-            {entry["id"] for entry in own_decoy_entries}
-        )
+        own_decoy_tokens = {entry["id"] for entry in own_decoy_entries}
         visible_proposed_candidate_ids_map = (
             proposed_candidate_ids_map
             if is_admin
@@ -409,9 +407,7 @@ class InterviewAvailabilityView(SchedulerFeatureGateMixin, APIView):
                 "proposed_candidate_ids": sorted(
                     visible_proposed_candidate_ids_map.get(str(person.id), set())
                 ),
-                "decoy_candidates": (
-                    own_decoy_entries if person.id == user.id else []
-                ),
+                "decoy_candidates": (own_decoy_entries if person.id == user.id else []),
                 "conflict_review_complete": conflict_review_complete_map.get(
                     person.id, False
                 ),
