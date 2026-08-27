@@ -566,6 +566,124 @@ class ManageAdmissionValidationTestCase(APITestCase):
         )
 
 
+class AdministeredAdmissionListEndpointTestCase(APITestCase):
+    """The read-only ``GET /api/manage/admission-admin/`` endpoint.
+
+    Returns a minimal payload (slug, title, dates, userdata) of
+    admissions the user can read but cannot edit. Tight blast radius:
+    a custom permission class (not shared with the manage/edit
+    pipeline) gates this on active admin-group membership.
+    """
+
+    def setUp(self):
+        from admissions.admissions import constants as c
+
+        self.webkom = Group.objects.create(name="Webkom", lego_id=800)
+        self.admin_group_a = Group.objects.create(name="Hovedstyret", lego_id=801)
+        self.admin_group_b = Group.objects.create(name="RevyStyret", lego_id=802)
+        self.committee = Group.objects.create(name="Fagkom", lego_id=803)
+
+        self.webkom_user = LegoUser.objects.create(username="webkom", lego_id=810)
+        Membership.objects.create(
+            user=self.webkom_user, group=self.webkom, role=c.MEMBER
+        )
+        self.admin_a_user = LegoUser.objects.create(username="admin-a", lego_id=811)
+        Membership.objects.create(
+            user=self.admin_a_user, group=self.admin_group_a, role=c.MEMBER
+        )
+        self.admin_b_user = LegoUser.objects.create(username="admin-b", lego_id=812)
+        Membership.objects.create(
+            user=self.admin_b_user, group=self.admin_group_b, role=c.MEMBER
+        )
+        self.plain_user = LegoUser.objects.create(username="plain", lego_id=813)
+
+        self.admission_a = Admission.objects.create(
+            title="A-opptak",
+            slug="a-opptak",
+            open_from=timezone.now(),
+            public_deadline=timezone.now() + timedelta(days=7),
+            closed_from=timezone.now() + timedelta(days=8),
+        )
+        self.admission_a.admin_groups.add(self.admin_group_a)
+        self.admission_a.groups.add(self.committee)
+
+        self.admission_b = Admission.objects.create(
+            title="B-opptak",
+            slug="b-opptak",
+            open_from=timezone.now(),
+            public_deadline=timezone.now() + timedelta(days=7),
+            closed_from=timezone.now() + timedelta(days=8),
+        )
+        self.admission_b.admin_groups.add(self.admin_group_b)
+        self.admission_b.groups.add(self.committee)
+
+        self.url = reverse("manage-admission-admin-list")
+
+    def test_anonymous_gets_401(self):
+        res = self.client.get(self.url)
+        self.assertEqual(res.status_code, status.HTTP_401_UNAUTHORIZED)
+
+    def test_admin_group_member_sees_only_their_admission(self):
+        self.client.force_authenticate(user=self.admin_a_user)
+        res = self.client.get(self.url)
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.assertEqual(
+            [row["slug"] for row in res.data],
+            ["a-opptak"],
+        )
+
+    def test_admin_group_member_does_not_see_editable_fields(self):
+        """The payload exposes only read fields — never admin_groups,
+        groups, description, header_fields, group_content, or anything
+        that could be edited. The frontend can only link to the
+        per-admission admin panel.
+        """
+        self.client.force_authenticate(user=self.admin_a_user)
+        res = self.client.get(self.url)
+        row = res.data[0]
+        for forbidden in (
+            "admin_groups",
+            "groups",
+            "description",
+            "header_fields",
+            "group_content",
+        ):
+            self.assertNotIn(forbidden, row)
+        # userdata is present and read-only.
+        self.assertEqual(row["userdata"]["is_admin"], True)
+        self.assertEqual(row["userdata"]["is_privileged"], True)
+        self.assertEqual(row["userdata"]["can_manage"], False)
+
+    def test_webkom_member_is_forbidden(self):
+        """Webkom members use the manage page; this endpoint is gated to
+        active admin-group members only — even Webkom gets 403 because
+        the permission's gate is "is an active admin-group member", not
+        "has any kind of manage access".
+        """
+        self.client.force_authenticate(user=self.webkom_user)
+        res = self.client.get(self.url)
+        self.assertEqual(res.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_plain_user_is_forbidden(self):
+        """A user with no admin-group membership cannot even reach this
+        endpoint: the permission returns False, so DRF returns 403.
+        """
+        self.client.force_authenticate(user=self.plain_user)
+        res = self.client.get(self.url)
+        self.assertEqual(res.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_inactive_admin_group_membership_is_excluded(self):
+        """A retired/retiree/alumni role in an admin group does not
+        grant the read-only endpoint.
+        """
+        from admissions.admissions import constants as c
+
+        Membership.objects.filter(user=self.admin_a_user).update(role=c.RETIREE)
+        self.client.force_authenticate(user=self.admin_a_user)
+        res = self.client.get(self.url)
+        self.assertEqual(res.status_code, status.HTTP_403_FORBIDDEN)
+
+
 class AdmissionDateConstraintTestCase(TransactionTestCase):
     def test_database_rejects_an_impossible_date_order(self):
         opening = timezone.now() + timedelta(days=2)

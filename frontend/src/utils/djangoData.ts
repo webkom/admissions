@@ -30,3 +30,6 @@ export const isManager: () => boolean = () =>
   !!config.user.is_staff ||
   !!config.user.is_member_of_webkom ||
   !!config.user.is_org_leadership;
+
+export const isMemberOfWebkom: () => boolean = () =>
+  !!config.user.is_member_of_webkom;

@@ -36,8 +36,10 @@ from admissions.admissions.views import (
     AdminAdmissionViewSet,
     AdminApplicationViewSet,
     AdminGroupViewSet,
+    AdministeredAdmissionListView,
     AdmissionGroupContentView,
     AppView,
+    GodUserViewSet,
     ManageAdmissionViewSet,
     ManageGroupViewSet,
     PublicAdmissionViewSet,
@@ -64,12 +66,18 @@ adminRouter.register(r"group", AdminGroupViewSet, "admin-group")
 manageRouter = routers.DefaultRouter()
 manageRouter.register(r"admission", ManageAdmissionViewSet, "manage-admission")
 manageRouter.register(r"group", ManageGroupViewSet, "manage-group")
+manageRouter.register(r"god-user", GodUserViewSet, "manage-god-user")
 
 
 urlpatterns = [
     re_path(r"logout/$", logout, name="logout"),
     path("api/admin/", include(adminRouter.urls)),
     path("api/manage/", include(manageRouter.urls)),
+    path(
+        "api/manage/admission-admin/",
+        AdministeredAdmissionListView.as_view(),
+        name="manage-admission-admin-list",
+    ),
     path("api-auth/", include("rest_framework.urls", namespace="rest_framework")),
     path("api/", include(publicRouter.urls)),
     path("api/session/", SessionStatusView.as_view(), name="session-status"),

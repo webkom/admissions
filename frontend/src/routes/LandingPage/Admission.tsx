@@ -38,6 +38,9 @@ const Admission: React.FC<AdmissionProps> = ({ admission }) => {
   const isAdmissionMember =
     (admission.userdata.committee_groups?.length ?? 0) > 0;
   const isPrivileged = admission.userdata.is_privileged;
+  const isRecruiter = admission.userdata.is_recruiter;
+  const isAdmin = admission.userdata.is_admin;
+  const canAccessAdminPanel = isPrivileged || isAdmin || isRecruiter;
   const timelineItems: AdmissionTimelineItem[] = [
     {
       title: "Opptaket åpner",
@@ -134,7 +137,7 @@ const Admission: React.FC<AdmissionProps> = ({ admission }) => {
             )}
 
             <div className="flex w-full flex-col items-stretch gap-2">
-              {(isAdmissionMember || isPrivileged) && (
+              {isAdmissionMember && (
                 <LinkButton
                   className={secondaryActionButtonClass}
                   fullWidth
@@ -144,16 +147,14 @@ const Admission: React.FC<AdmissionProps> = ({ admission }) => {
                     icon={
                       <Calendar size={iconSizes.standard} aria-hidden="true" />
                     }
-                    label={
-                      isPrivileged ? "Velg intervjutider" : "Se intervjuplan"
-                    }
+                    label="Velg intervjutider"
                   />
                 </LinkButton>
               )}
             </div>
 
             <div className="flex w-full flex-col items-stretch gap-2">
-              {isPrivileged && (
+              {canAccessAdminPanel && (
                 <LinkButton
                   className={secondaryActionButtonClass}
                   fullWidth

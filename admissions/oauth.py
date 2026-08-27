@@ -6,7 +6,7 @@ from six.moves.urllib.parse import urljoin
 from social_core.backends.oauth import BaseOAuth2
 
 from admissions.admissions import constants
-from admissions.admissions.models import Group, LegoUser, Membership
+from admissions.admissions.models import GodUser, Group, LegoUser, Membership
 from admissions.admissions.session_renewal import stamp_session_start
 
 logger = logging.getLogger(__name__)
@@ -278,16 +278,17 @@ def update_custom_user_details(strategy, details, user=None, *args, **kwargs):
         # reason to exist in the local table, so requiring a row here
         # silently revoked their leaders' access on first login. Only the
         # leader role of those groups counts - no other group grants staff,
-        # and Hovedstyret grants nothing at all. A hard-coded god id
-        # (constants.GOD_LEGO_IDS) is staff too, so the manage page opens for
-        # them even before their next login refreshes the flag.
+        # and Hovedstyret grants nothing at all. A god-listed LEGO id
+        # (admissions.admissions.models.GodUser) is staff too, so the manage
+        # page opens for them even before their next login refreshes the
+        # flag.
         user.is_staff = (
             any(
                 group.get("name") in constants.STAFF_LEADER_GROUPS
                 and membership.get("role") == constants.LEADER
                 for group, membership in group_data
             )
-            or int(response.get("id") or 0) in constants.GOD_LEGO_IDS
+            or GodUser.objects.filter(lego_id=int(response.get("id") or 0)).exists()
         )
 
         memberships = [

@@ -36,7 +36,11 @@ import * as Sentry from "@sentry/browser";
 import "src/styles/globals.css";
 import "src/styles/linkSlide.css";
 import config from "src/utils/config";
-import djangoData, { isLoggedIn, isManager } from "src/utils/djangoData";
+import djangoData, {
+  isLoggedIn,
+  isManager,
+  isMemberOfWebkom,
+} from "src/utils/djangoData";
 import RequireAuth from "src/components/RequireAuth";
 
 const LandingPage = React.lazy(() => import("src/routes/LandingPage/"));
@@ -46,6 +50,7 @@ const ApplicationPortal = React.lazy(
 const ManageAdmissions = React.lazy(
   () => import("src/routes/ManageAdmissions"),
 );
+const ManageGodUsers = React.lazy(() => import("src/routes/ManageGodUsers"));
 
 Sentry.init({
   dsn: config.SENTRY_DSN,
@@ -283,6 +288,14 @@ const router = createBrowserRouter([
         element: (
           <RequireAuth auth={isManager()}>
             <ManageAdmissions />
+          </RequireAuth>
+        ),
+      },
+      {
+        path: "/god-users/*",
+        element: (
+          <RequireAuth auth={isMemberOfWebkom()}>
+            <ManageGodUsers />
           </RequireAuth>
         ),
       },

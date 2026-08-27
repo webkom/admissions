@@ -140,11 +140,6 @@ class AdmissionListPublicSerializer(serializers.HyperlinkedModelSerializer):
         if user_is_admission_admin(obj, request.user):
             res["is_privileged"] = True
             res["is_admin"] = True
-        # Admission admins split into two kinds: admin-group members, who
-        # also operate every committee's schedule, and org leadership / god
-        # users, who are applicant-wide admins only. The frontend needs the
-        # distinction so a god user is not offered committees they cannot
-        # open.
         res["is_org_leadership"] = user_is_org_leadership(request.user)
         res["application_view_mode"] = get_application_view_mode(obj, request.user)
         return res
@@ -356,6 +351,7 @@ class AdminAdmissionSerializer(serializers.ModelSerializer):
             "has_application": False,
             "is_privileged": False,
             "is_admin": False,
+            "is_org_leadership": False,
             "application_view_mode": APPLICATION_VIEW_MODE_NONE,
         }
         request = self.context.get("request")
@@ -389,3 +385,35 @@ class AdminAdmissionSerializer(serializers.ModelSerializer):
 
 class ManageAdmissionSerializer(AdminAdmissionSerializer):
     groups = ManageAdmissionGroupSerializer(many=True)
+
+
+class AdministeredAdmissionSerializer(serializers.ModelSerializer):
+    """Minimal admission payload for the auto-show read-only list.
+
+    Excludes admin_groups, groups, header_fields, group_content, and
+    every editable field. The frontend can only link to the per-admission
+    admin panel, never the edit form.
+    """
+
+    userdata = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Admission
+        fields = (
+            "slug",
+            "title",
+            "open_from",
+            "public_deadline",
+            "closed_from",
+            "is_open",
+            "is_closed",
+            "userdata",
+        )
+        read_only_fields = fields
+
+    def get_userdata(self, obj):
+        return {
+            "is_admin": True,
+            "is_privileged": True,
+            "can_manage": False,  # never editable from this list
+        }

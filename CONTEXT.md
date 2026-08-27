@@ -3,10 +3,24 @@
 ## Core concepts
 
 - **Admission**: one recruitment period. It defines the participating committees
-  (`groups`) and the committees whose active leaders or recruiting responsibles
-  administer the whole admission (`admin_groups`). On top of `admin_groups`, the
-  leader and co-leader of Hovedstyret administer every admission, because they
-  are the organisation's own leadership rather than a committee.
+  (`groups`) and the overseeing bodies (`admin_groups`). All active members of an
+  admin group are equal admission administrators (they read all applications and
+  priority text). In addition, God users (`constants.GOD_LEGO_IDS`) are
+  admission-wide administrators for every admission.
+- **Roles in an admission**:
+  1. **God Users (`constants.GOD_LEGO_IDS`)**: Central org leadership. Admin for
+     all applications across all admissions (including priority text). Never operates
+     committee interview schedules unless holding a committee recruiter role.
+  2. **Admin Group Members (`admission.admin_groups`)**: All active members are
+     equal. Full access to all applications in `admin_full` mode (including
+     priority text). Do not operate committee interview schedules.
+  3. **Committee Leaders / Recruiters (`leader` / `recruiting` in `admission.groups`)**:
+     Full authority over their own committee only (`committee_full` mode, own
+     schedule, solver, and publishing).
+  4. **Committee Members (`member` in `admission.groups`)**: Submit own availability
+     timeslots and fadderbarn declarations. View own committee's published plan
+     (name + status when revealed). No access to application texts or recruiter metadata.
+  5. **Applicants / Outsiders**: Apply to committees and manage own application.
 - **User application**: one candidate's application to an admission. Candidate
   identity, contact details, shared application text, and interview status belong
   here.
@@ -14,11 +28,11 @@
   A candidate may have several group applications while still having one interview
   workflow for the admission.
 - **Saved schedule**: the canonical interview plan and its scheduling configuration.
-  Draft schedule rows are visible only to admission administrators. A distributed
-  plan may be read by participating committee members, filtered to rows they are
-  authorized to see.
-- **Solve job**: an asynchronous request to create a complete admission schedule.
-  Admission administrators enqueue and inspect these jobs; the worker owns their
+  Draft schedule rows are visible only to that committee's own interview admins
+  (leaders/recruiters). A distributed plan may be read by participating committee
+  members, filtered to rows they are authorized to see.
+- **Solve job**: an asynchronous request to create a complete committee schedule.
+  Committee recruiters enqueue and inspect these jobs; the worker owns their
   execution lifecycle.
 - **Committee roster mirror**: LEGO's own list of who is in a participating
   committee, synced ahead of time. It exists so the availability roster can
@@ -31,11 +45,10 @@
 
 ## Invariants
 
-- Admission-wide administration requires an active `leader` or `recruiting`
-  membership in one of the admission's admin groups, or a `leader`/`co-leader`
-  membership of Hovedstyret - the organisation's own leadership, matched on
-  the group name so it holds in every admission. Ordinary members of an admin
-  group do not receive admission-wide authority.
+- Admission-wide administration requires an active membership in one of the
+  admission's admin groups, or a God-listed LEGO id (`constants.GOD_LEGO_IDS`).
+  All active members of an admin group are equal admission administrators. Admin
+  groups do not manage committee interview schedules.
 - An OAuth membership refresh replaces the local membership snapshot atomically.
   Missing, malformed, or unknown membership data must fail closed rather than
   retaining or creating privileges.
@@ -59,7 +72,13 @@
 - Within a committee's own published plan, an ordinary member sees every row
   even before identities are revealed - a member who cannot see when they are
   interviewing cannot turn up. Those rows carry a placeholder name and nothing
-  else about the candidate: no candidate id, no interview status, no phone.
+  else about the candidate: no candidate id, no phone.
+- After an authorized name reveal, ordinary committee members see the candidate's
+  real name and the interview status (the value) but not the recruiter-side
+  metadata - not who last changed the status, not when. Those fields are
+  workflow information reserved for interview admins. The status itself stays
+  visible so members can see whether the candidate has confirmed; only the
+  provenance is hidden.
 - A placeholder names the same person for as long as it is shown. It is
   numbered over the committee's whole candidate set, never over the rows in one
   response, or extending the publication would renumber people who had already

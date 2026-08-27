@@ -18,58 +18,45 @@ APPLICATION_VIEW_MODE_COMMITTEE_MINIMAL = "committee_minimal"
 def user_is_org_leadership(user):
     """The organisation's own leadership, admission-wide admins.
 
-    No group grants this anymore - org leadership is the explicit LEGO-id
-    allowlist in constants.GOD_LEGO_IDS (see the Hovedstyret removal).
-    Should be replaced with a proper role-based system, but this is a quick
-    temporary fix.
+    Membership in the GodUser table grants admission-wide org-leadership
+    privileges across every admission (read all applications, including
+    priority_text). The list is managed by Webkom members via
+    ``/api/manage/god-user/``.
     """
+    lego_id = getattr(user, "lego_id", None)
+    if not lego_id:
+        return False
+    from admissions.admissions.models import GodUser
 
-    return user.lego_id in constants.GOD_LEGO_IDS
+    return GodUser.objects.filter(lego_id=lego_id).exists()
 
 
 def user_is_admission_admin(admission, user):
+    """Any active member of an admin group, plus God users (constants.GOD_LEGO_IDS).
+
+    All active members of an admin group are completely equal: they see all
+    applications for the admission in admin_full mode, including priority_text.
+    """
     return user_is_org_leadership(user) or (
         Membership.objects.filter(user=user.pk, group__in=admission.admin_groups.all())
-        .filter(role__in=constants.ADMISSION_ADMIN_ROLES)
+        .exclude(role__in=constants.INACTIVE_MEMBERSHIP_ROLES)
         .exists()
     )
 
 
 def user_is_admission_leadership(admission, user):
-    """Narrower than user_is_admission_admin: leader/co-leader only, not recruiting.
-
-    Gates the applicant's free-text note to "central admission officers"
-    (priority_text) - a recruiting-role admin is still an admin_full viewer
-    for everything else, but this one field is reserved for the admin
-    group's actual leadership.
-    """
-    return user_is_org_leadership(user) or (
-        Membership.objects.filter(user=user.pk, group__in=admission.admin_groups.all())
-        .filter(role__in=(constants.LEADER, constants.CO_LEADER))
-        .exists()
-    )
+    """All admission admins (God users and any active member of admin_groups) read priority_text."""
+    return user_is_admission_admin(admission, user)
 
 
 def user_is_interview_admin(admission, group, user):
     """Whether the user may operate this committee's interview workflow.
 
-    Each committee runs its own independent schedule, so this is scoped to
-    the one committee being operated on - not "any committee in this
-    admission", which would leak visibility into every other committee's
-    candidates and interviewers. Admission admin-group membership (Webkom
-    running the shared admissions tool) still grants access to every
-    committee's workflow; a committee's own leader/recruiter gets it only
-    for their own committee. Org leadership / god-listed users are
-    deliberately NOT included: they see every applicant, but they do not
-    operate other committees' schedules.
+    Each committee runs its own independent schedule. Only this committee's
+    own leader/recruiter may operate its interview workflow. Admin groups and
+    God users do NOT operate committee schedules.
     """
-    return Membership.objects.filter(
-        user=user.pk, group__in=admission.admin_groups.all()
-    ).filter(
-        role__in=constants.ADMISSION_ADMIN_ROLES
-    ).exists() or user_represents_group(
-        admission, group, user
-    )
+    return user_represents_group(admission, group, user)
 
 
 def get_representing_groups(admission, user):
@@ -189,6 +176,10 @@ def schedule_response_context(admission, saved_schedule, is_interview_admin):
         "effective_name_visibility": effective_name_visibility,
         "include_deviation_review": is_interview_admin,
         "publication_boundary": publication_boundary,
+        # Members see the interview status (the value) but not the recruiter
+        # metadata (who last changed it, when) - those are workflow fields,
+        # not part of the committee's read view. Interview admins see both.
+        "include_interview_status_metadata": is_interview_admin,
     }
 
 

@@ -314,12 +314,14 @@ class InterviewAvailabilityView(SchedulerFeatureGateMixin, APIView):
             )
             for item in saved_items
         }
-        # Admin-only: revealing this on a non-admin's own row would tell them
+        # Interview admin or admission admin: revealing this on a non-admin's own row would tell them
         # exactly which of their fadderbarn declarations matched an
         # applicant, which is precisely what get_declared_conflict_candidate_ids
         # exists to avoid ever writing back to InterviewAvailability itself.
         declared_conflicts_map = (
-            get_declared_conflict_candidate_ids(admission, group) if is_admin else {}
+            get_declared_conflict_candidate_ids(admission, group)
+            if is_interview_admin or is_admin
+            else {}
         )
         reviewed_candidates_map = {
             item.user_id: self._visible_conflicts(
@@ -387,7 +389,7 @@ class InterviewAvailabilityView(SchedulerFeatureGateMixin, APIView):
                         sorted(declared_conflicts_map.get(str(person.id), set())),
                         visible_candidate_ids,
                     )
-                    if is_admin
+                    if is_admin or (is_interview_admin and person.id != user.id)
                     else []
                 ),
                 "reviewed_candidate_ids": reviewed_candidates_map.get(person.id, []),
@@ -418,7 +420,8 @@ class InterviewAvailabilityView(SchedulerFeatureGateMixin, APIView):
                 "availability_generation": availability_generation,
                 "affected_assignment_count": (
                     self._affected_assignment_count(saved_schedule, person.id)
-                    if is_admin
+                    if is_interview_admin
+                    or is_admin
                     or (requester_review_scope_open and person.id == user.id)
                     else 0
                 ),
@@ -461,18 +464,32 @@ class InterviewAvailabilityView(SchedulerFeatureGateMixin, APIView):
             pk=group.pk
         )
         is_recruiter = representing_groups.exists()
-        # Writing availability is interview-admin work only: members have no
-        # schedule access beyond the published plan, so recruiters record
-        # answers and reviews on their behalf. An admission admin who belongs
-        # to neither - org leadership / god users - cannot write another
-        # committee's schedule either.
-        if not is_interview_admin:
+        # A committee's own members record their own availability - the
+        # framework (which interview windows exist) is handed to them by the
+        # recruiter, and submitting their times is exactly the member side of
+        # the workflow. Everything beyond that is interview-admin work:
+        # saving on someone else's behalf, review fields, and experience
+        # level. Org leadership / god users, who belong to neither this
+        # committee nor an admin group, cannot write its schedule either.
+        if not user_is_group_member(group, user) and not is_interview_admin:
             return Response(status=status.HTTP_403_FORBIDDEN)
 
         serializer = SaveInterviewAvailabilitySerializer(data=request.data)
         if not serializer.is_valid():
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
         if "experience_level" in serializer.validated_data and not is_interview_admin:
+            return Response(status=status.HTTP_403_FORBIDDEN)
+        # Members never touch applicant data: marking inhabilitet and
+        # confirming reviews references candidates, which is why it is
+        # interview-admin work only (recruiters record reviews on a member's
+        # behalf by posting that member's user_id).
+        if (
+            any(
+                field in serializer.validated_data
+                for field in ("conflicts", "reviewed_candidate_ids")
+            )
+            and not is_interview_admin
+        ):
             return Response(status=status.HTTP_403_FORBIDDEN)
         admission = Admission.objects.select_for_update().get(pk=admission.pk)
 
@@ -910,8 +927,10 @@ class InterviewAvailabilityView(SchedulerFeatureGateMixin, APIView):
         proposed_candidate_ids = get_proposed_candidate_ids_by_interviewer(
             saved_schedule
         ).get(str(target_user.id), set())
-        can_view_assignment_scope = is_admin or (
-            target_user.id == user.id and conflict_review_open
+        can_view_assignment_scope = (
+            is_interview_admin
+            or is_admin
+            or (target_user.id == user.id and conflict_review_open)
         )
         # Mirror of the GET projection for this row - diffing a save's echo
         # against the next poll must never separate fillers from reals or

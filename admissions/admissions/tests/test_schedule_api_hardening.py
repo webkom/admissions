@@ -1473,7 +1473,7 @@ class InterviewAvailabilityHardeningTestCase(APITestCase):
             ).exists()
         )
 
-        self.client.force_authenticate(user=self.admin_user)
+        self.client.force_authenticate(user=self.recruiter)
         allowed = self.client.post(
             self.url,
             {
@@ -1507,7 +1507,7 @@ class InterviewAvailabilityHardeningTestCase(APITestCase):
         self.assertEqual(member_response.status_code, status.HTTP_200_OK)
         self.assertEqual(member_response.data[0]["experience_level"], "unknown")
 
-        self.client.force_authenticate(user=self.admin_user)
+        self.client.force_authenticate(user=self.recruiter)
         admin_response = self.client.get(self.url)
 
         self.assertEqual(admin_response.status_code, status.HTTP_200_OK)
@@ -1522,8 +1522,8 @@ class InterviewAvailabilityHardeningTestCase(APITestCase):
         approval = ScheduleDeviationApproval.objects.create(
             admission=self.admission,
             saved_schedule=saved_schedule,
-            actor=self.admin_user,
-            actor_username=self.admin_user.username,
+            actor=self.recruiter,
+            actor_username=self.recruiter.username,
             schedule_fingerprint="a" * 64,
             deviation_fingerprint="b" * 64,
             policy_snapshot={},
@@ -1531,7 +1531,7 @@ class InterviewAvailabilityHardeningTestCase(APITestCase):
             layout_version=saved_schedule.layout_version,
         )
         previous_revision = saved_schedule.updated_at
-        self.client.force_authenticate(user=self.admin_user)
+        self.client.force_authenticate(user=self.recruiter)
 
         response = self.client.post(
             self.url,
@@ -1805,7 +1805,9 @@ class InterviewAvailabilityHardeningTestCase(APITestCase):
         self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertIn("conflicts", res.data)
 
-    def test_admin_can_save_conflicts_before_names_released(self):
+    def test_admin_cannot_save_conflicts_for_unrepresented_committee(self):
+        """Admin group members do not operate committee availability: an admin
+        who is not a recruiter for this committee gets 403."""
         self.client.force_authenticate(user=self.admin_user)
 
         res = self.client.post(
@@ -1814,8 +1816,7 @@ class InterviewAvailabilityHardeningTestCase(APITestCase):
             format="json",
         )
 
-        self.assertEqual(res.status_code, status.HTTP_200_OK)
-        self.assertEqual(res.data["conflicts"], [str(self.application.pk)])
+        self.assertEqual(res.status_code, status.HTTP_403_FORBIDDEN)
 
     def test_recruiter_can_save_conflicts_before_names_released(self):
         self.client.force_authenticate(user=self.recruiter)
@@ -2105,7 +2106,7 @@ class InterviewAvailabilityHardeningTestCase(APITestCase):
         )
         original_schedule = saved.schedule
         original_revision = saved.updated_at
-        self.client.force_authenticate(user=self.admin_user)
+        self.client.force_authenticate(user=self.recruiter)
 
         response = self.client.post(
             self.url,
@@ -2129,7 +2130,7 @@ class InterviewAvailabilityHardeningTestCase(APITestCase):
             username="availability-outsider",
             lego_id=629,
         )
-        self.client.force_authenticate(user=self.admin_user)
+        self.client.force_authenticate(user=self.recruiter)
 
         response = self.client.post(
             self.url,
@@ -2152,6 +2153,9 @@ class SavedScheduleVisibilityTestCase(APITestCase):
         self.admin_group = Group.objects.create(name="Webkom", lego_id=700)
         self.committee_group = Group.objects.create(name="Arrkom", lego_id=701)
         self.admin_user = LegoUser.objects.create(username="vis-admin", lego_id=702)
+        Membership.objects.create(
+            user=self.admin_user, role=RECRUITING, group=self.committee_group
+        )
         Membership.objects.create(
             user=self.admin_user, role=RECRUITING, group=self.admin_group
         )
@@ -2327,10 +2331,11 @@ class SavedScheduleVisibilityTestCase(APITestCase):
         self.assertEqual(res.data["schedule"], [])
         self.assertEqual(res.data["start_date"], "2026-04-20")
 
-    def test_member_cannot_submit_availability_before_distribution(self):
-        """Members have no schedule access beyond the published plan: an
-        availability write before distribution is 403, not silently
-        accepted."""
+    def test_member_can_submit_availability_before_distribution(self):
+        """Members record their own availability as soon as the recruiter
+        has opened the interview windows - they do not wait for the
+        published plan. Only their own row is writable: no user_id, no
+        review fields, no experience level."""
         self._create_saved(
             is_distributed=False,
             enabled_slots=["2026-04-20|540"],
@@ -2349,7 +2354,13 @@ class SavedScheduleVisibilityTestCase(APITestCase):
             format="json",
         )
 
-        self.assertEqual(res.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        saved = InterviewAvailability.objects.get(
+            admission=self.admission,
+            group=self.committee_group,
+            user=self.member_user,
+        )
+        self.assertEqual(saved.slots, ["2026-04-20|540"])
 
     def test_committee_member_does_not_receive_schedule_rows_when_hidden(self):
         self._create_saved(is_distributed=True, name_visibility="hidden")
@@ -2504,12 +2515,7 @@ class SavedScheduleVisibilityTestCase(APITestCase):
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         workflow_fields = {
-            key: response.data["schedule"][0].pop(key)
-            for key in (
-                "interview_status",
-                "interview_status_updated_at",
-                "interview_status_updated_by",
-            )
+            key: response.data["schedule"][0].pop(key) for key in ("interview_status",)
         }
         self.assertEqual(
             response.data["schedule"],
@@ -2530,11 +2536,70 @@ class SavedScheduleVisibilityTestCase(APITestCase):
             ],
         )
         self.assertEqual(workflow_fields["interview_status"], "not_invited")
-        self.assertTrue(workflow_fields["interview_status_updated_at"])
-        self.assertEqual(workflow_fields["interview_status_updated_by"], "")
+        self.assertNotIn("interview_status_updated_at", response.data["schedule"][0])
+        self.assertNotIn("interview_status_updated_by", response.data["schedule"][0])
         self.assertNotIn("candidate_email", response.data["schedule"][0])
         self.assertNotIn("candidate_phone", response.data["schedule"][0])
         self.assertNotContains(response, private_marker)
+
+    def test_member_sees_status_but_not_recruiter_metadata_on_revealed_plan(self):
+        """H4 regression: a committee member viewing a revealed published plan
+        sees the candidate's interview_status value but not the recruiter-side
+        metadata (who last changed it, when). The recruiter's identity is
+        workflow information, not a published-plan field."""
+        recruiter = LegoUser.objects.create(username="h4-recruiter", lego_id=746)
+        Membership.objects.create(
+            user=recruiter, role=RECRUITING, group=self.committee_group
+        )
+        self.application.interview_status = "confirmed"
+        self.application.interview_status_updated_by = recruiter
+        self.application.interview_status_updated_by_username = recruiter.username
+        self.application.save(
+            update_fields=[
+                "interview_status",
+                "interview_status_updated_by",
+                "interview_status_updated_by_username",
+            ]
+        )
+        self._create_saved(is_distributed=True, name_visibility="committee")
+
+        # Member view: status visible, metadata hidden.
+        self.client.force_authenticate(user=self.member_user)
+        member_response = self.client.get(self.url)
+        self.assertEqual(member_response.status_code, status.HTTP_200_OK)
+        member_item = member_response.data["schedule"][0]
+        self.assertEqual(member_item["interview_status"], "confirmed")
+        self.assertNotIn("interview_status_updated_at", member_item)
+        self.assertNotIn("interview_status_updated_by", member_item)
+
+        # Recruiter view: status + metadata both visible.
+        self.client.force_authenticate(user=recruiter)
+        recruiter_response = self.client.get(self.url)
+        self.assertEqual(recruiter_response.status_code, status.HTTP_200_OK)
+        recruiter_item = recruiter_response.data["schedule"][0]
+        self.assertEqual(recruiter_item["interview_status"], "confirmed")
+        self.assertEqual(
+            recruiter_item["interview_status_updated_by"], recruiter.username
+        )
+
+    def test_member_published_plan_does_not_leak_phone(self):
+        """H3 regression: a published plan visible to a plain committee member
+        must not include the candidate's phone number. Phone is gated by
+        contact_candidate_ids in schedule_response_context, which is empty
+        for non-admins. Guards against a future refactor that opens that
+        field to non-admins."""
+        self.application.phone_number = "+47 999 99 999"
+        self.application.save(update_fields=["phone_number"])
+        self._create_saved(is_distributed=True, name_visibility="committee")
+
+        self.client.force_authenticate(user=self.member_user)
+        response = self.client.get(self.url)
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(response.data["schedule"]), 1)
+        item = response.data["schedule"][0]
+        self.assertNotIn("candidate_phone", item)
+        self.assertNotIn("+47 999 99 999", str(response.data))
 
     def test_recruiter_receives_contact_and_workflow_for_visible_candidate(self):
         recruiter = LegoUser.objects.create(username="workflow-rec", lego_id=745)
@@ -3151,6 +3216,9 @@ class InterviewGenderExposureTestCase(APITestCase):
             username="g-admin", lego_id=802, gender="male"
         )
         Membership.objects.create(
+            user=self.admin_user, role=RECRUITING, group=self.committee_group
+        )
+        Membership.objects.create(
             user=self.admin_user, role=RECRUITING, group=self.admin_group
         )
         self.member_user = LegoUser.objects.create(
@@ -3248,14 +3316,12 @@ class InterviewGenderExposureTestCase(APITestCase):
         res = self.client.get(self.availability_url)
 
         self.assertEqual(res.status_code, status.HTTP_200_OK)
-        # The committee's own people only: the admission admin-group member is
-        # panel-eligible here but sits on no roster of this committee, so the
-        # completion count is the committee's own.
+        # The committee's own people: the recruiter, the active member, and the retiree.
         self.assertEqual(
             {row["username"] for row in res.data},
-            {"g-member", "g-inactive"},
+            {"g-admin", "g-member", "g-inactive"},
         )
-        self.assertEqual(sum(1 for row in res.data if row["has_submitted"]), 1)
+        self.assertEqual(sum(1 for row in res.data if row["has_submitted"]), 2)
         self.assertEqual(sum(1 for row in res.data if not row["has_submitted"]), 1)
 
     def test_unpublished_committee_visibility_does_not_release_names(self):

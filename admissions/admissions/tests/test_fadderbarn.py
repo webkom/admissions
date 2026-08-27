@@ -5,7 +5,7 @@ from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APITestCase
 
-from admissions.admissions.constants import RECRUITING
+from admissions.admissions.constants import MEMBER, RECRUITING
 from admissions.admissions.lego_directory import (
     DirectoryAuthenticationRequired,
     DirectoryUnavailable,
@@ -215,11 +215,9 @@ class FadderbarnDeclarationTestCase(APITestCase):
         self.client.post(
             self.url, {"fadderbarn": [{"lego_user_id": 5001}]}, format="json"
         )
-        admin_group = Group.objects.create(name="Webkom-admin", lego_id=14)
-        self.admission.admin_groups.add(admin_group)
-        admin = LegoUser.objects.create(username="admin", lego_id=4002)
-        Membership.objects.create(user=admin, group=admin_group, role=RECRUITING)
-        self.client.force_authenticate(user=admin)
+        recruiter = LegoUser.objects.create(username="recruiter-admin", lego_id=4002)
+        Membership.objects.create(user=recruiter, group=self.group, role=RECRUITING)
+        self.client.force_authenticate(user=recruiter)
 
         res = self.client.get(self.url)
 

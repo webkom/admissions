@@ -9,7 +9,7 @@ from django.utils import timezone
 from django.utils.decorators import method_decorator
 from django.views.decorators.csrf import ensure_csrf_cookie
 from django.views.generic.base import TemplateView
-from rest_framework import mixins, permissions, status, viewsets
+from rest_framework import generics, mixins, permissions, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.exceptions import NotFound
 from rest_framework.response import Response
@@ -37,6 +37,7 @@ from admissions.admissions.interview_workflow import (
 from admissions.admissions.models import (
     Admission,
     AdmissionGroup,
+    GodUser,
     Group,
     GroupApplication,
     LegoUser,
@@ -47,12 +48,14 @@ from admissions.admissions.scheduling_utils import panel_gender_code
 from admissions.admissions.serializers import (
     AdminAdmissionSerializer,
     AdminCreateUpdateAdmissionSerializer,
+    AdministeredAdmissionSerializer,
     AdminUserApplicationSerializer,
     AdmissionGroupContentSerializer,
     AdmissionListPublicSerializer,
     AdmissionPublicSerializer,
     ApplicationCreateUpdateSerializer,
     CommitteeMinimalApplicationSerializer,
+    GodUserSerializer,
     GroupSerializer,
     InterviewStatusSerializer,
     InterviewStatusUpdateSerializer,
@@ -68,6 +71,7 @@ from .permissions import (
     AdmissionPermissions,
     ApplicationPermissions,
     GroupPermissions,
+    IsActiveAdminGroupMember,
     IsCreatorOfObject,
     IsOrgLeadership,
     IsStaff,
@@ -627,6 +631,30 @@ class AdmissionGroupContentView(APIView):
 ##################################################
 
 
+class GodUserViewSet(
+    mixins.ListModelMixin,
+    mixins.CreateModelMixin,
+    mixins.DestroyModelMixin,
+    viewsets.GenericViewSet,
+):
+    """Webkom members manage the org-leadership allowlist (LEGO ids).
+
+    Replaces the hardcoded ``constants.GOD_LEGO_IDS`` constant. Only Webkom
+    members can read or modify the list. Anonymous users get 401;
+    logged-in non-Webkom users get 403.
+    """
+
+    queryset = GodUser.objects.all().order_by("created_at")
+    serializer_class = GodUserSerializer
+    authentication_classes = [SessionAuthentication]
+    permission_classes = [permissions.IsAuthenticated, IsWebkom]
+    lookup_field = "lego_id"
+    lookup_value_regex = r"\d+"
+
+    def perform_create(self, serializer):
+        serializer.save(added_by=self.request.user)
+
+
 class ManageAdmissionViewSet(viewsets.ModelViewSet):
     authentication_classes = [SessionAuthentication]
     permission_classes = [
@@ -666,6 +694,33 @@ class ManageAdmissionViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST,
             )
         return super().destroy(request, *args, **kwargs)
+
+
+class AdministeredAdmissionListView(generics.ListAPIView):
+    """Admissions the current user can read but cannot edit.
+
+    Gated by ``IsActiveAdminGroupMember``: only active members of an
+    admission's admin group reach this endpoint. Webkom members and
+    God users have their own manage pane and short-circuit to an
+    empty list here.
+    """
+
+    serializer_class = AdministeredAdmissionSerializer
+    authentication_classes = [SessionAuthentication]
+    permission_classes = [permissions.IsAuthenticated, IsActiveAdminGroupMember]
+
+    def get_queryset(self):
+        user = self.request.user
+        if user.is_member_of_webkom or user_is_org_leadership(user):
+            return Admission.objects.none()
+        return (
+            Admission.objects.filter(admin_groups__membership__user=user)
+            .exclude(
+                admin_groups__membership__role__in=constants.INACTIVE_MEMBERSHIP_ROLES
+            )
+            .distinct()
+            .order_by("title")
+        )
 
 
 class ManageGroupViewSet(mixins.ListModelMixin, viewsets.GenericViewSet):
