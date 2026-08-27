@@ -191,13 +191,13 @@ const Admission: React.FC<AdmissionProps> = ({ admission }) => {
       {isRevy && admission.is_open && !isLoggedIn() && (
         <p className="m-0 pt-4 text-sm text-text-faded [&_a]:font-semibold [&_a]:text-text-secondary [&_a]:underline [&_a]:underline-offset-2 [&_a:hover]:text-text-strong">
           Er du ikke medlem av Abakus? Søk via{" "}
-          <a href="https://forms.gle/SKPRvGNwuKhcZQP26">dette skjemaet</a>.
+          <a href="https://forms.gle/MYrhBBzZCm5gws2t6">dette skjemaet</a>.
         </p>
       )}
       {isRevyBoard && admission.is_open && !isLoggedIn() && (
         <p className="m-0 pt-4 text-sm text-text-faded [&_a]:font-semibold [&_a]:text-text-secondary [&_a]:underline [&_a]:underline-offset-2 [&_a:hover]:text-text-strong">
           Er du ikke medlem av Abakus? Søk via{" "}
-          <a href="https://docs.google.com/forms/d/e/1FAIpQLSdLzkn2RC_CIW3EHPKSn0f60xTP17LdnrvVb1ubVeRVHTsz1A/viewform?usp=sharing">
+          <a href="https://forms.gle/MYrhBBzZCm5gws2t6">
             dette skjemaet
           </a>
           .
