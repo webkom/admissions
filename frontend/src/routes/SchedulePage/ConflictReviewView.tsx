@@ -51,10 +51,20 @@ const ConflictReviewView: React.FC<ConflictReviewViewProps> = ({
   showSummary = true,
   onCloseStage,
 }) => {
+  // The review list is a deliberate mix: candidates proposed on your panel,
+  // plausible swap partners, and fillers drawn from the student roster so the
+  // list's shape says nothing about who you will actually interview. The
+  // server sends filler names only on your own row (decoy_candidates), keyed
+  // by the same tokens proposed_candidate_ids uses - merging them here keeps
+  // every entry resolvable and renders fillers and reals identically.
   const candidateById = useMemo(
     () =>
-      new Map((candidates ?? []).map((candidate) => [candidate.id, candidate])),
-    [candidates],
+      new Map(
+        [...(candidates ?? []), ...(currentParticipant?.decoy_candidates ?? [])].map(
+          (candidate) => [candidate.id, candidate],
+        ),
+      ),
+    [candidates, currentParticipant?.decoy_candidates],
   );
   const reviewCandidateIds = useMemo(
     () => new Set(currentParticipant?.proposed_candidate_ids ?? []),

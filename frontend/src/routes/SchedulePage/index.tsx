@@ -1053,7 +1053,13 @@ const LoadedScheduleView: React.FC<LoadedScheduleViewProps> = ({
         )}
 
         {activeSection === "plan" &&
-          (savedSchedule?.is_distributed ? (
+          (!isAdmin &&
+          myAvailabilityParticipant?.participation === "not_participating" ? (
+            <MemberAvailabilityPending
+              title="Du deltar ikke i intervjuene"
+              description="Du har meldt at du ikke deltar, og har derfor ikke tilgang til intervjuplanen. Kontakt opptaksansvarlig hvis du likevel skal delta."
+            />
+          ) : savedSchedule?.is_distributed ? (
             <DistributedPlanView
               admissionSlug={admissionSlug}
               groupId={groupId}

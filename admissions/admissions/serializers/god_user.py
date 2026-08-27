@@ -6,9 +6,7 @@ from admissions.admissions.models import GodUser, LegoUser
 
 
 class GodUserSerializer(serializers.ModelSerializer):
-    added_by_username = serializers.CharField(
-        source="added_by.username", read_only=True, default=""
-    )
+    added_by_username = serializers.SerializerMethodField()
     display_name = serializers.SerializerMethodField()
 
     class Meta:
@@ -38,6 +36,11 @@ class GodUserSerializer(serializers.ModelSerializer):
                 "inn minst én gang."
             )
         return value
+
+    def get_added_by_username(self, obj):
+        if obj.added_by_id is not None and obj.added_by is not None:
+            return obj.added_by.username
+        return ""
 
     def get_display_name(self, instance):
         user = LegoUser.objects.filter(lego_id=instance.lego_id).first()

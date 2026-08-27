@@ -105,6 +105,19 @@ class AdminUserApplicationSerializer(UserApplicationSerializer):
             APPLICATION_VIEW_MODE_ADMIN_FULL,
         )
 
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        # Mirror the PATCH endpoint (views.py:432-436): a non-admin viewer
+        # never sees the recruiter's username, so list/detail responses
+        # agree with the status-update response. ADMIN_FULL viewers keep
+        # the metadata; everyone else loses it.
+        if (
+            self.context.get("application_view_mode")
+            != APPLICATION_VIEW_MODE_ADMIN_FULL
+        ):
+            data.pop("interview_status_updated_by", None)
+        return data
+
     class Meta(UserApplicationSerializer.Meta):
         fields = UserApplicationSerializer.Meta.fields + (
             "application_view_mode",
@@ -153,7 +166,6 @@ class CommitteeMinimalApplicationSerializer(serializers.ModelSerializer):
             "phone_number",
             "group_applications",
             "interview_status",
-            "interview_status_updated_at",
         )
         read_only_fields = fields
 

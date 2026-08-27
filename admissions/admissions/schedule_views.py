@@ -14,7 +14,12 @@ from admissions.admissions.admission_access import (
     user_is_interview_admin,
 )
 from admissions.admissions.authentication import SessionAuthentication
-from admissions.admissions.models import Admission, LegoUser, SavedSchedule
+from admissions.admissions.models import (
+    Admission,
+    InterviewAvailability,
+    LegoUser,
+    SavedSchedule,
+)
 from admissions.admissions.schedule_workflow import (
     ScheduleInputError,
     ScheduleNotFound,
@@ -93,12 +98,23 @@ class SavedScheduleView(SchedulerFeatureGateMixin, APIView):
 
         return admission, group, is_admin, is_recruiter, is_interview_admin, None
 
-    def _schedule_response(self, saved, admission, is_interview_admin):
+    def _schedule_response(
+        self,
+        saved,
+        admission,
+        is_interview_admin,
+        hide_schedule_override=False,
+    ):
         ensure_window_fields(saved)
         return Response(
             SavedScheduleSerializer(
                 saved,
-                context=schedule_response_context(admission, saved, is_interview_admin),
+                context=schedule_response_context(
+                    admission,
+                    saved,
+                    is_interview_admin,
+                    hide_schedule_override=hide_schedule_override,
+                ),
             ).data
         )
 
@@ -112,7 +128,26 @@ class SavedScheduleView(SchedulerFeatureGateMixin, APIView):
         saved = SavedSchedule.objects.filter(admission=admission, group=group).first()
         if saved is None:
             return Response(status=status.HTTP_404_NOT_FOUND)
-        return self._schedule_response(saved, admission, is_interview_admin)
+        # A member who opted out must not see the plan: they have no stake in
+        # it and are not part of the workflow. Admins and recruiters keep full
+        # access regardless - they operate the schedule for the committee.
+        hide_schedule_override = (
+            not is_interview_admin
+            and not is_recruiter
+            and not is_admin
+            and InterviewAvailability.objects.filter(
+                admission=admission,
+                group=group,
+                user=request.user,
+                participation=InterviewAvailability.PARTICIPATION_NOT_PARTICIPATING,
+            ).exists()
+        )
+        return self._schedule_response(
+            saved,
+            admission,
+            is_interview_admin,
+            hide_schedule_override=hide_schedule_override,
+        )
 
     @transaction.atomic
     def post(self, request, admission_slug, group_id):

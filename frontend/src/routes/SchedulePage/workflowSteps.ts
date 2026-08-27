@@ -20,6 +20,7 @@ interface WorkflowStepParams {
   hasSavedConfig: boolean;
   hasScheduleDraft: boolean;
   myAvailabilitySaved: boolean;
+  myAvailabilityOptedOut?: boolean;
   availabilityParticipantCount: number;
   submittedAvailabilityCount: number;
   proposalConflictCount: number;
@@ -32,6 +33,7 @@ export const buildWorkflowSteps = ({
   hasConfiguredAvailabilityWindows,
   hasDistributedPlan,
   myAvailabilitySaved,
+  myAvailabilityOptedOut = false,
   availabilityParticipantCount,
   submittedAvailabilityCount,
   publicationReadiness,
@@ -67,12 +69,24 @@ export const buildWorkflowSteps = ({
       {
         key: "plan",
         title: "Intervjuplan",
-        description: "Se dine intervjuer når planen er publisert.",
+        description: myAvailabilityOptedOut
+          ? "Du har meldt at du ikke deltar."
+          : "Se dine intervjuer når planen er publisert.",
         icon: CalendarCheck,
-        status: hasDistributedPlan ? "Ferdig" : "Låst",
-        tone: hasDistributedPlan ? "success" : "locked",
-        complete: hasDistributedPlan,
-        locked: !hasDistributedPlan,
+        // A member who opted out has no stake in the plan and must not see
+        // it, so the step stays locked however far the workflow has come.
+        status: myAvailabilityOptedOut
+          ? "Låst"
+          : hasDistributedPlan
+            ? "Ferdig"
+            : "Låst",
+        tone: myAvailabilityOptedOut
+          ? "locked"
+          : hasDistributedPlan
+            ? "success"
+            : "locked",
+        complete: !myAvailabilityOptedOut && hasDistributedPlan,
+        locked: myAvailabilityOptedOut || !hasDistributedPlan,
       },
     ];
   }

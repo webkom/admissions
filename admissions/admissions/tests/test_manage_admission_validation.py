@@ -572,7 +572,8 @@ class AdministeredAdmissionListEndpointTestCase(APITestCase):
     Returns a minimal payload (slug, title, dates, userdata) of
     admissions the user can read but cannot edit. Tight blast radius:
     a custom permission class (not shared with the manage/edit
-    pipeline) gates this on active admin-group membership.
+    pipeline) gates this on leader/recruiter membership in an admin group
+    or participating committee.
     """
 
     def setUp(self):
@@ -589,13 +590,19 @@ class AdministeredAdmissionListEndpointTestCase(APITestCase):
         )
         self.admin_a_user = LegoUser.objects.create(username="admin-a", lego_id=811)
         Membership.objects.create(
-            user=self.admin_a_user, group=self.admin_group_a, role=c.MEMBER
+            user=self.admin_a_user, group=self.admin_group_a, role=c.LEADER
         )
         self.admin_b_user = LegoUser.objects.create(username="admin-b", lego_id=812)
         Membership.objects.create(
-            user=self.admin_b_user, group=self.admin_group_b, role=c.MEMBER
+            user=self.admin_b_user, group=self.admin_group_b, role=c.RECRUITING
         )
         self.plain_user = LegoUser.objects.create(username="plain", lego_id=813)
+        self.committee_recruiter = LegoUser.objects.create(
+            username="committee-recruiter", lego_id=814
+        )
+        Membership.objects.create(
+            user=self.committee_recruiter, group=self.committee, role=c.RECRUITING
+        )
 
         self.admission_a = Admission.objects.create(
             title="A-opptak",
@@ -616,6 +623,15 @@ class AdministeredAdmissionListEndpointTestCase(APITestCase):
         )
         self.admission_b.admin_groups.add(self.admin_group_b)
         self.admission_b.groups.add(self.committee)
+
+        self.committee_admission = Admission.objects.create(
+            title="Committee-opptak",
+            slug="committee-opptak",
+            open_from=timezone.now(),
+            public_deadline=timezone.now() + timedelta(days=7),
+            closed_from=timezone.now() + timedelta(days=8),
+        )
+        self.committee_admission.groups.add(self.committee)
 
         self.url = reverse("manage-admission-admin-list")
 
@@ -671,6 +687,15 @@ class AdministeredAdmissionListEndpointTestCase(APITestCase):
         self.client.force_authenticate(user=self.plain_user)
         res = self.client.get(self.url)
         self.assertEqual(res.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_committee_recruiter_sees_admission_without_admin_group_membership(self):
+        self.client.force_authenticate(user=self.committee_recruiter)
+        res = self.client.get(self.url)
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.assertEqual(
+            [row["slug"] for row in res.data],
+            ["a-opptak", "b-opptak", "committee-opptak"],
+        )
 
     def test_inactive_admin_group_membership_is_excluded(self):
         """A retired/retiree/alumni role in an admin group does not

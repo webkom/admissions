@@ -84,6 +84,17 @@ class DecoyConflictRoundTripTestCase(APITestCase):
         mine = next(row for row in availability.data if row["is_me"])
         self.assertIn(self.decoy_token, mine["proposed_candidate_ids"])
 
+    def test_the_owner_gets_their_filler_names_for_display(self):
+        """The review UI must render filler names next to real candidates, so
+        the owner's own row carries {id, name} entries keyed by the same
+        tokens proposed_candidate_ids uses."""
+        availability = self.client.get(self.availability_url)
+        mine = next(row for row in availability.data if row["is_me"])
+        self.assertEqual(
+            [{"id": self.decoy_token, "name": "Filler One"}],
+            mine["decoy_candidates"],
+        )
+
     def test_a_decoy_mark_round_trips_through_get_after_post(self):
         res = self.client.post(
             self.availability_url,
@@ -141,6 +152,8 @@ class DecoyConflictRoundTripTestCase(APITestCase):
 
         self.assertNotIn(self.decoy_token, str(availability_res.data))
         self.assertNotIn(self.decoy_token, str(candidates_res.data))
+        # The admin is neither a member of nor an interview admin for this
+        # committee, so the availability list itself stays out of reach.
 
     def test_a_decoy_mark_survives_a_real_conflict_written_in_the_same_request(self):
         """Both namespaces round-trip independently in one request."""
@@ -158,6 +171,25 @@ class DecoyConflictRoundTripTestCase(APITestCase):
         mine = next(row for row in res.data if row["is_me"])
         self.assertIn(self.decoy_token, mine["conflicts"])
         self.assertIn(self.decoy_token, mine["reviewed_candidate_ids"])
+
+    def test_the_save_echo_carries_the_filler_names(self):
+        """A save's echo hands back the same names channel as the next GET,
+        so diffing the two reveals nothing."""
+        post_res = self.client.post(
+            self.availability_url,
+            {"reviewed_candidate_ids": [self.decoy_token]},
+            format="json",
+        )
+        self.assertEqual(
+            [{"id": self.decoy_token, "name": "Filler One"}],
+            post_res.data["decoy_candidates"],
+        )
+
+        get_res = self.client.get(self.availability_url)
+        mine = next(row for row in get_res.data if row["is_me"])
+        self.assertEqual(
+            post_res.data["decoy_candidates"], mine["decoy_candidates"]
+        )
 
     def test_the_saves_echo_matches_the_next_get(self):
         """Diffing a save's echo against the next GET must reveal nothing."""
@@ -246,6 +278,13 @@ class DecoyOrderingAndOperatorScopeTestCase(APITestCase):
                 "group_id": self.group.pk,
             },
         )
+        self.availability_url = reverse(
+            "interview-availability",
+            kwargs={
+                "admission_slug": self.admission.slug,
+                "group_id": self.group.pk,
+            },
+        )
 
     def test_every_interview_admin_keeps_the_full_candidate_list(self):
         """No one is handed a collapsed list with fillers anymore: members
@@ -262,6 +301,29 @@ class DecoyOrderingAndOperatorScopeTestCase(APITestCase):
                     [entry["id"] for entry in res.data],
                     [str(self.kari_application.pk)],
                 )
+
+    def test_only_the_own_row_carries_filler_names(self):
+        """My filler names ride my row and nobody else's: if the response
+        handed me another interviewer's decoy list, cross-comparing two
+        lists would separate fillers from reals in one request."""
+        self.client.force_authenticate(user=self.interviewer)
+
+        res = self.client.get(self.availability_url)
+
+        rows = {row["user_id"]: row for row in res.data}
+        self.assertEqual(
+            sorted(
+                [
+                    (self.zora_token, "Zora Filler"),
+                    (self.anna_token, "Anna Filler"),
+                ]
+            ),
+            sorted(
+                (entry["id"], entry["name"])
+                for entry in rows[str(self.interviewer.id)]["decoy_candidates"]
+            ),
+        )
+        self.assertEqual([], rows[str(self.recruiter.id)]["decoy_candidates"])
 
 
 class PartialPublishIdentityTestCase(APITestCase):

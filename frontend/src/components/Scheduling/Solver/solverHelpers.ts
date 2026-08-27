@@ -2,7 +2,6 @@ import { isAxiosError } from "axios";
 
 import type {
   AvailabilityFallback,
-  InitialPlanningStrategy,
   PanelStability,
   RepairStrategy,
   ScheduleItem,
@@ -256,49 +255,6 @@ export const normalizeSolverOptions = (
   }
   return normalized;
 };
-
-export const INITIAL_STRATEGY_PRESETS: ReadonlyArray<{
-  key: InitialPlanningStrategy;
-  label: string;
-  description: string;
-  example: string;
-  loadBalanceWeight: number;
-  continuityWeight: number;
-  prioritizeContinuity: boolean;
-}> = [
-  {
-    key: "balanced",
-    label: "Balansert",
-    description: "En rolig kombinasjon av korte dager og jevn arbeidsmengde.",
-    example:
-      "Eksempel: når flere planer har like få avvik, velges en moderat jevn fordeling.",
-    loadBalanceWeight: 4,
-    continuityWeight: 1,
-    prioritizeContinuity: true,
-  },
-  {
-    key: "compact_days",
-    label: "Kompakte intervjudager",
-    description:
-      "Samler intervjuene i færre sammenhengende perioder med færre hull.",
-    example:
-      "Eksempel: intervjuene legges tettere når tilgjengeligheten tillater det.",
-    loadBalanceWeight: 2,
-    continuityWeight: 48,
-    prioritizeContinuity: true,
-  },
-  {
-    key: "balance_workload",
-    label: "Jevn arbeidsmengde",
-    description:
-      "Minimerer avvik først og prioriterer jevn fordeling sterkest.",
-    example:
-      "Eksempel: blant planer med like få avvik foretrekkes den jevneste belastningen.",
-    loadBalanceWeight: 10,
-    continuityWeight: 0,
-    prioritizeContinuity: false,
-  },
-];
 
 export const REPAIR_STRATEGY_PRESETS: ReadonlyArray<{
   key: RepairStrategy;

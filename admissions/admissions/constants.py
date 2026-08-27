@@ -192,13 +192,11 @@ GOD_LEGO_IDS = [8810]
 WEBKOM_GROUPNAME = "Webkom"
 """ Group name of Webkom """
 
-ADMISSION_ADMIN_ROLES = (LEADER, CO_LEADER, RECRUITING)
+ADMISSION_ADMIN_ROLES = (LEADER, RECRUITING)
 """ Roles in an admission's admin_groups that grant admission-wide admin.
 
 Kept in one place because the permission check and the serialised userdata have
-to agree - while they disagreed, a co-leader of an admin group passed every
-backend permission check but got is_admin=False, so the UI hid controls the API
-would have allowed.
+to agree.
 """
 
 LEGO_GENDER_MALE = "male"

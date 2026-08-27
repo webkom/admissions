@@ -24,20 +24,10 @@ import {
   keyboardFocusRingClass,
   sectionLabelClass,
 } from "../ui";
-import type {
-  ExperienceLevel,
-  Interviewer,
-  InitialPlanningStrategy,
-  PanelStability,
-  SolverOptions,
-} from "../types";
+import type { ExperienceLevel, Interviewer, SolverOptions } from "../types";
 import { iconSizes } from "src/styles/designTokens";
 import cn from "src/utils/cn";
-import {
-  ADVANCED_SOLVER_DEFAULTS,
-  INITIAL_STRATEGY_PRESETS,
-  type SolveJob,
-} from "./solverHelpers";
+import { ADVANCED_SOLVER_DEFAULTS, type SolveJob } from "./solverHelpers";
 import type { SolverReadiness } from "./solverSelectors";
 import AdvancedSolverSettings from "./AdvancedSolverSettings";
 import SolveProgress from "./SolveProgress";
@@ -169,21 +159,10 @@ const ExperienceEditor = ({
   </section>
 );
 
-const presetFor = (options: SolverOptions) =>
-  INITIAL_STRATEGY_PRESETS.find(
-    (preset) =>
-      preset.key === options.initial_strategy &&
-      preset.loadBalanceWeight === options.load_balance_weight &&
-      preset.continuityWeight === options.continuity_weight &&
-      preset.prioritizeContinuity === options.prioritize_continuity,
-  );
-
 interface SamplePlanPreviewProps {
   interviewerCount: number;
   panelSize: number;
-  strategy: (typeof INITIAL_STRATEGY_PRESETS)[number];
   solverOptions: SolverOptions;
-  allInterviewersRequired: boolean;
 }
 
 const panelMemberLabel = (
@@ -206,147 +185,52 @@ const panelMemberLabel = (
 const SamplePlanPreview = ({
   interviewerCount,
   panelSize,
-  strategy,
   solverOptions,
-  allInterviewersRequired,
 }: SamplePlanPreviewProps) => {
-  const rotateWithinBlock =
-    !allInterviewersRequired && solverOptions.panel_stability === "flexible";
-  const rotateBetweenBlocks =
-    !allInterviewersRequired &&
-    solverOptions.avoid_consecutive_interviewer_blocks;
-  const sampleRowsByStrategy = {
-    balanced: [
-      {
-        block: "Man morgen",
-        interview: "08:00 intervju 1",
-        blockIndex: 0,
-        withinBlockIndex: 0,
-      },
-      {
-        block: "Man morgen",
-        interview: "08:30 intervju 2",
-        blockIndex: 0,
-        withinBlockIndex: 1,
-      },
-      {
-        block: "Tir morgen",
-        interview: "08:00 intervju 3",
-        blockIndex: 1,
-        withinBlockIndex: 0,
-      },
-      {
-        block: "Tir morgen",
-        interview: "08:30 intervju 4",
-        blockIndex: 1,
-        withinBlockIndex: 1,
-      },
-    ],
-    compact_days: [
-      {
-        block: "Man morgen",
-        interview: "08:00 intervju 1",
-        blockIndex: 0,
-        withinBlockIndex: 0,
-      },
-      {
-        block: "Man morgen",
-        interview: "08:30 intervju 2",
-        blockIndex: 0,
-        withinBlockIndex: 1,
-      },
-      {
-        block: "Man morgen",
-        interview: "09:00 intervju 3",
-        blockIndex: 0,
-        withinBlockIndex: 2,
-      },
-      {
-        block: "Man morgen",
-        interview: "09:30 intervju 4",
-        blockIndex: 0,
-        withinBlockIndex: 3,
-      },
-    ],
-    balance_workload: [
-      {
-        block: "Man morgen",
-        interview: "08:00 intervju 1",
-        blockIndex: 0,
-        withinBlockIndex: 0,
-      },
-      {
-        block: "Man ettermiddag",
-        interview: "13:00 intervju 2",
-        blockIndex: 1,
-        withinBlockIndex: 0,
-      },
-      {
-        block: "Tir morgen",
-        interview: "08:00 intervju 3",
-        blockIndex: 2,
-        withinBlockIndex: 0,
-      },
-      {
-        block: "Tir ettermiddag",
-        interview: "13:00 intervju 4",
-        blockIndex: 3,
-        withinBlockIndex: 0,
-      },
-    ],
-    minimize_overtime: [
-      {
-        block: "Man dagtid",
-        interview: "09:00 intervju 1",
-        blockIndex: 0,
-        withinBlockIndex: 0,
-      },
-      {
-        block: "Man dagtid",
-        interview: "09:30 intervju 2",
-        blockIndex: 0,
-        withinBlockIndex: 1,
-      },
-      {
-        block: "Tir dagtid",
-        interview: "09:00 intervju 3",
-        blockIndex: 1,
-        withinBlockIndex: 0,
-      },
-      {
-        block: "Tir dagtid",
-        interview: "09:30 intervju 4",
-        blockIndex: 1,
-        withinBlockIndex: 1,
-      },
-    ],
-  } satisfies Record<
-    InitialPlanningStrategy,
-    Array<{
-      block: string;
-      interview: string;
-      blockIndex: number;
-      withinBlockIndex: number;
-    }>
-  >;
-  const rows = sampleRowsByStrategy[strategy.key].map((row) => {
-    const betweenBlockRotation =
-      strategy.key === "balance_workload" || rotateBetweenBlocks
-        ? row.blockIndex * panelSize
-        : 0;
+  // The default strategy (balanced) and panel-stability (preferred) are
+  // no longer user-configurable, so the sample table always shows the
+  // same "rotate between blocks, same panel within a block" shape that
+  // balanced + preferred would produce. Within-block rotation is off
+  // (preferred keeps the panel stable inside a block); between-block
+  // rotation is on (the rest-between-blocks default).
+  const rotateWithinBlock = false;
+  const rotateBetweenBlocks = true;
+  const sampleRows = [
+    {
+      block: "Man morgen",
+      interview: "08:00 intervju 1",
+      blockIndex: 0,
+      withinBlockIndex: 0,
+    },
+    {
+      block: "Man morgen",
+      interview: "08:30 intervju 2",
+      blockIndex: 0,
+      withinBlockIndex: 1,
+    },
+    {
+      block: "Tir morgen",
+      interview: "08:00 intervju 3",
+      blockIndex: 1,
+      withinBlockIndex: 0,
+    },
+    {
+      block: "Tir morgen",
+      interview: "08:30 intervju 4",
+      blockIndex: 1,
+      withinBlockIndex: 1,
+    },
+  ];
+  const rows = sampleRows.map((row) => {
+    const betweenBlockRotation = rotateBetweenBlocks
+      ? row.blockIndex * panelSize
+      : 0;
     return {
       ...row,
       offset:
         betweenBlockRotation + (rotateWithinBlock ? row.withinBlockIndex : 0),
     };
   });
-  const stabilityLabel = allInterviewersRequired
-    ? "Alle intervjuere brukes"
-    : solverOptions.panel_stability === "required"
-      ? "Samme panel er påkrevd"
-      : solverOptions.panel_stability === "preferred"
-        ? "Samme panel foretrekkes"
-        : "Panelet kan variere";
   const activeRequirements = [
     solverOptions.enforce_same_gender ? "Samme kjønn" : null,
     solverOptions.require_experienced_panel ? "Erfaren intervjuer" : null,
@@ -356,7 +240,6 @@ const SamplePlanPreview = ({
     <aside
       data-cy="generation-sample-preview"
       data-panel-size={panelSize}
-      data-strategy={strategy.key}
       className="min-w-0 border-t border-border-soft pt-6 tablet:sticky tablet:top-4 tablet:border-l tablet:border-t-0 tablet:pl-7 tablet:pt-0"
       aria-labelledby="generation-preview-heading"
     >
@@ -416,31 +299,18 @@ const SamplePlanPreview = ({
       <dl className="m-0 mt-4 divide-y divide-border-soft border-y border-border-soft text-detail">
         <div className="grid grid-cols-[var(--schedule-preview-label-width)_minmax(0,1fr)] gap-3 py-2.5">
           <dt className="font-semibold text-text-subtle">Fordeling</dt>
-          <dd
-            data-cy="generation-preview-strategy"
-            className="m-0 font-semibold text-text-primary"
-          >
-            {strategy.label}
+          <dd className="m-0 text-text-primary">
+            Balansert — kort og jevn arbeidsmengde
           </dd>
         </div>
         <div className="grid grid-cols-[var(--schedule-preview-label-width)_minmax(0,1fr)] gap-3 py-2.5">
           <dt className="font-semibold text-text-subtle">Panel i blokk</dt>
-          <dd
-            data-cy="generation-preview-stability"
-            className="m-0 text-text-primary"
-          >
-            {stabilityLabel}
-          </dd>
+          <dd className="m-0 text-text-primary">Foretrekk samme panel</dd>
         </div>
         <div className="grid grid-cols-[var(--schedule-preview-label-width)_minmax(0,1fr)] gap-3 py-2.5">
           <dt className="font-semibold text-text-subtle">Mellom blokker</dt>
-          <dd
-            data-cy="generation-preview-rest"
-            className="m-0 text-text-primary"
-          >
-            {solverOptions.avoid_consecutive_interviewer_blocks
-              ? "Panelet roteres for å gi hvile"
-              : "Samme intervjuere kan fortsette"}
+          <dd className="m-0 text-text-primary">
+            Panelet roteres for å gi hvile
           </dd>
         </div>
       </dl>
@@ -549,8 +419,6 @@ const SolverSetupPanel = ({
   }, [advancedSettingsOpen]);
 
   const panelFormationImpossible = interviewerCount < panelSize;
-  const allInterviewersRequired =
-    interviewerCount > 0 && interviewerCount === panelSize;
   const generationBlocked =
     !currentDraftReady ||
     !candidateScopeResolved ||
@@ -561,32 +429,6 @@ const SolverSetupPanel = ({
     !readiness.ready;
   const conflictBlockedCandidate = readiness.conflictBlockedCandidates[0];
   const capabilityBlockedCandidate = readiness.capabilityBlockedCandidates[0];
-  const matchedPreset = presetFor(solverOptions);
-  const selectedPreset =
-    INITIAL_STRATEGY_PRESETS.find(
-      (preset) => preset.key === solverOptions.initial_strategy,
-    ) ?? INITIAL_STRATEGY_PRESETS[0];
-
-  const choosePreset = (key: InitialPlanningStrategy) => {
-    const preset = INITIAL_STRATEGY_PRESETS.find((item) => item.key === key);
-    if (!preset) return;
-    onSolverOptionsChange((current) => ({
-      ...current,
-      initial_strategy: preset.key,
-      load_balance_weight: preset.loadBalanceWeight,
-      continuity_weight: preset.continuityWeight,
-      prioritize_continuity: preset.prioritizeContinuity,
-    }));
-  };
-
-  const choosePanelStability = (value: PanelStability) => {
-    onSolverOptionsChange((current) => ({
-      ...current,
-      policy_version: 2,
-      panel_stability: value,
-      same_panel_per_block: value === "required",
-    }));
-  };
 
   const resetAdvancedOptions = () => {
     onSolverOptionsChange((current) => ({
@@ -594,10 +436,6 @@ const SolverSetupPanel = ({
       enforce_same_gender: ADVANCED_SOLVER_DEFAULTS.enforce_same_gender,
       require_experienced_panel:
         ADVANCED_SOLVER_DEFAULTS.require_experienced_panel,
-      panel_stability: ADVANCED_SOLVER_DEFAULTS.panel_stability,
-      same_panel_per_block: ADVANCED_SOLVER_DEFAULTS.same_panel_per_block,
-      avoid_consecutive_interviewer_blocks:
-        ADVANCED_SOLVER_DEFAULTS.avoid_consecutive_interviewer_blocks,
     }));
   };
 
@@ -763,11 +601,14 @@ const SolverSetupPanel = ({
               <section className="flex flex-wrap items-center justify-between gap-4 border-y border-border-soft py-4">
                 <div className="min-w-0">
                   <p className="m-0 text-label font-bold uppercase tracking-wide text-text-subtle">
-                    {matchedPreset ? "Valgt oppsett" : "Tilpasset oppsett"}
+                    Valgt oppsett
                   </p>
                   <h3 className="m-0 mt-1 text-base font-semibold text-text-primary">
                     {panelSize} intervjuer{panelSize === 1 ? "" : "e"} per
-                    intervju, {selectedPreset.label}
+                    intervju
+                    {solverOptions.candidates_per_session > 1
+                      ? `, ${solverOptions.candidates_per_session} kandidater per intervju`
+                      : ""}
                   </h3>
                 </div>
                 <button
@@ -800,11 +641,6 @@ const SolverSetupPanel = ({
                   onPanelSizeChange={onPanelSizeChange}
                   solverOptions={solverOptions}
                   onSolverOptionsChange={onSolverOptionsChange}
-                  allInterviewersRequired={allInterviewersRequired}
-                  matchedPreset={matchedPreset}
-                  selectedPreset={selectedPreset}
-                  onChoosePreset={choosePreset}
-                  onChoosePanelStability={choosePanelStability}
                   onOpenExperienceEditor={openExperienceSetup}
                   onReset={resetAdvancedOptions}
                   onClose={closeAdvancedSettings}
@@ -812,9 +648,7 @@ const SolverSetupPanel = ({
                     <SamplePlanPreview
                       interviewerCount={interviewerCount}
                       panelSize={panelSize}
-                      strategy={selectedPreset}
                       solverOptions={solverOptions}
-                      allInterviewersRequired={allInterviewersRequired}
                     />
                   }
                 />

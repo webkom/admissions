@@ -13,6 +13,29 @@ type Notify = (message: string, tone?: StatusToastState["tone"]) => void;
 const serializeSlots = (slots: Iterable<string>) =>
   Array.from(slots).sort().join("\n");
 
+// DRF validation errors arrive as {field: ["Norwegian message"], ...} (or a
+// bare string for non-field errors). The toast must carry the server's actual
+// reason - "Kunne ikke lagre tilgjengelighet" alone hid every 400 cause, from
+// "Opptaksansvarlig må åpne tidsluker først" to a slot outside the opened
+// grid, and left users and recruiters with nothing to act on.
+const firstApiErrorMessage = (data: unknown): string | null => {
+  if (typeof data === "string") return data || null;
+  if (Array.isArray(data)) {
+    for (const entry of data) {
+      const message = firstApiErrorMessage(entry);
+      if (message) return message;
+    }
+    return null;
+  }
+  if (data && typeof data === "object") {
+    for (const value of Object.values(data as Record<string, unknown>)) {
+      const message = firstApiErrorMessage(value);
+      if (message) return message;
+    }
+  }
+  return null;
+};
+
 // Both halves of the answer, not just the available ones. Keying the
 // server-sync below on slots alone meant a remote change that touched only
 // discouraged_slots - an admin editing on someone's behalf, say - looked
@@ -108,12 +131,16 @@ export const useAvailabilityEditor = ({
       notify("Tilgjengelighet lagret.");
     } catch (error) {
       if (isSensitiveAuthorityChangedError(error)) throw error;
-      const responseStatus = (error as { response?: { status?: number } })
-        .response?.status;
+      const response = (error as { response?: { status?: number; data?: unknown } })
+        .response;
       notify(
-        responseStatus === 409
+        response?.status === 409
           ? "Tidsoppsettet er endret. Last inn siden på nytt før du bekrefter."
-          : "Kunne ikke lagre tilgjengelighet.",
+          : `Kunne ikke lagre tilgjengelighet${
+              firstApiErrorMessage(response?.data)
+                ? `: ${firstApiErrorMessage(response?.data)}`
+                : ""
+            }`,
         "error",
       );
       throw error;
@@ -131,7 +158,16 @@ export const useAvailabilityEditor = ({
       });
     } catch (error) {
       if (isSensitiveAuthorityChangedError(error)) throw error;
-      notify("Kunne ikke lagre inhabilitetssjekken.", "error");
+      const response = (error as { response?: { status?: number; data?: unknown } })
+        .response;
+      notify(
+        `Kunne ikke lagre inhabilitetssjekken${
+          firstApiErrorMessage(response?.data)
+            ? `: ${firstApiErrorMessage(response?.data)}`
+            : ""
+        }`,
+        "error",
+      );
       throw error;
     }
   };

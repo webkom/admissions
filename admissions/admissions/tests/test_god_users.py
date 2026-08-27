@@ -62,6 +62,8 @@ class GodUserEndpointTestCase(APITestCase):
         # The serializer resolves the user's display name from LegoUser.
         self.assertEqual(res.data["display_name"], self.existing_user.username)
         self.assertTrue(GodUser.objects.filter(lego_id=4242).exists())
+        self.existing_user.refresh_from_db()
+        self.assertTrue(self.existing_user.is_staff)
 
     def test_adding_an_unknown_lego_id_returns_400(self):
         """A mistyped-but-nonexistent id is rejected up front: silently
@@ -98,6 +100,8 @@ class GodUserEndpointTestCase(APITestCase):
 
     def test_webkom_member_can_remove_god_user(self):
         GodUser.objects.create(lego_id=self.existing_user.lego_id)
+        self.existing_user.is_staff = True
+        self.existing_user.save(update_fields=["is_staff"])
         self.client.force_authenticate(user=self.webkom_member)
         res = self.client.delete(
             reverse(
@@ -109,6 +113,8 @@ class GodUserEndpointTestCase(APITestCase):
         self.assertFalse(
             GodUser.objects.filter(lego_id=self.existing_user.lego_id).exists()
         )
+        self.existing_user.refresh_from_db()
+        self.assertFalse(self.existing_user.is_staff)
 
     def test_non_webkom_member_cannot_remove_god_user(self):
         GodUser.objects.create(lego_id=self.existing_user.lego_id)
