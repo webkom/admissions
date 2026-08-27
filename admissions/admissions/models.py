@@ -887,3 +887,30 @@ class DirectoryEntry(models.Model):
 
     def __str__(self):
         return self.full_name or self.username or str(self.lego_user_id)
+
+
+class GodUser(models.Model):
+    """LEGO id of a user granted admission-wide org leadership.
+
+    Replaces the hardcoded ``constants.GOD_LEGO_IDS`` list. Only Webkom
+    members can add or remove rows. The runtime check
+    ``user_is_org_leadership(user)`` reads from this table.
+    """
+
+    id = models.AutoField(primary_key=True)
+    lego_id = models.IntegerField(unique=True)
+    note = models.CharField(max_length=200, blank=True, default="")
+    added_by = models.ForeignKey(
+        "LegoUser",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="god_user_entries_added",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["created_at"]
+
+    def __str__(self):
+        return f"GodUser(lego_id={self.lego_id})"

@@ -43,6 +43,29 @@ class IsWebkom(permissions.BasePermission):
         return cast_as_lego_user(request.user).is_member_of_webkom
 
 
+class IsActiveAdminGroupMember(permissions.BasePermission):
+    """User is an active member of at least one admission admin group.
+
+    Excludes Webkom and God users — they have their own entry points. Used
+    only by the read-only administered-admissions endpoint, never by any
+    write surface.
+    """
+
+    def has_permission(self, request, *_):
+        user = cast_as_lego_user(request.user)
+        if not user.is_authenticated:
+            return False
+        if user.is_member_of_webkom or user_is_org_leadership(user):
+            return False
+        return (
+            Admission.objects.filter(admin_groups__membership__user=user)
+            .exclude(
+                admin_groups__membership__role__in=constants.INACTIVE_MEMBERSHIP_ROLES
+            )
+            .exists()
+        )
+
+
 class IsOrgLeadership(permissions.BasePermission):
     """God-listed LEGO ids (constants.GOD_LEGO_IDS): admission-wide admins
     everywhere.

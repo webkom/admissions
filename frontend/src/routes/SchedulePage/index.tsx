@@ -257,21 +257,8 @@ const SchedulePage: React.FC = () => {
     );
   }
 
-  const { is_admin, is_org_leadership, committee_group_details } =
-    admission.userdata;
-  // Every committee's schedule is independent now, so someone who belongs
-  // to more than one has to say which before anything loads - but the
-  // choice is their own committees, not every committee in the admission.
-  // Being a full admin does not widen this list; it only means every
-  // resolved committee below grants full (not just member) access. Only an
-  // admin who belongs to no committee at all falls back to the full
-  // admission roster, so they are not locked out entirely - except org
-  // leadership / god users, who are applicant admins only and must not be
-  // offered committees they cannot open.
-  const availableCommittees =
-    committee_group_details.length > 0 || !is_admin || is_org_leadership
-      ? committee_group_details
-      : admission.groups;
+  const { committee_group_details } = admission.userdata;
+  const availableCommittees = committee_group_details;
 
   if (!groupId) {
     if (availableCommittees.length === 1) {
@@ -295,13 +282,9 @@ const SchedulePage: React.FC = () => {
     (committee) => committee.pk === groupId,
   );
   const committeeName = resolvedCommittee?.name ?? admission.title;
-  // A full admission admin has the same standing as this committee's own
-  // leader/recruiter over every committee's schedule (mirrors the backend's
-  // user_is_interview_admin); a role held in some other committee does not
-  // carry over, since each committee's schedule is independent.
-  const committeeRole = is_admin ? "leader" : (resolvedCommittee?.role ?? null);
+  const committeeRole = resolvedCommittee?.role ?? null;
   const canManageSchedule =
-    is_admin || committeeRole === "leader" || committeeRole === "recruiting";
+    committeeRole === "leader" || committeeRole === "recruiting";
   const canManageInterviewWorkflow = canManageSchedule;
 
   return (
@@ -774,6 +757,45 @@ const LoadedScheduleView: React.FC<LoadedScheduleViewProps> = ({
       </div>
 
       <main className="mt-3 flex flex-col gap-3">
+        {!isAdmin && visitedSections.has("my-availability") && (
+          <div className={activeSection === "my-availability" ? "" : "hidden"}>
+            {!hasConfiguredAvailabilityWindows ? (
+              <MemberAvailabilityPending />
+            ) : (
+              <div className="flex flex-col gap-3">
+                <TimeScheduler
+                  enabledSlots={enabledSlots}
+                  selectedSlots={mySelectedSlots}
+                  onSlotsChange={setMySelectedSlots}
+                  discouragedSlots={myDiscouragedSlots}
+                  onDiscouragedChange={setMyDiscouragedSlots}
+                  dates={dates}
+                  sessionDuration={sessionDuration}
+                  chunkSize={chunkSize}
+                  chunkBreakMinutes={chunkBreakMinutes}
+                  dayStartMinute={dayStartMinute}
+                  dayEndMinute={dayEndMinute}
+                  onSave={saveAvailabilityWithFadderbarn}
+                  extraDirty={fadderbarnDirty}
+                  extraSection={
+                    <FadderbarnPicker
+                      admissionSlug={admissionSlug ?? ""}
+                      value={fadderbarn}
+                      onChange={editFadderbarn}
+                    />
+                  }
+                  participation={myAvailabilityParticipant?.participation}
+                  affectedAssignmentCount={
+                    myAvailabilityParticipant?.affected_assignment_count ?? 0
+                  }
+                  onOptOut={() => setParticipation("not_participating")}
+                  onRejoin={() => setParticipation("awaiting_response")}
+                />
+              </div>
+            )}
+          </div>
+        )}
+
         {isAdmin && visitedSections.has("config") && (
           <div className={activeSection === "config" ? "" : "hidden"}>
             <AdminScheduleConfig

@@ -44,7 +44,6 @@ class InterviewCandidatesView(SchedulerFeatureGateMixin, APIView):
         user = request.user
         user.__class__ = LegoUser
 
-        is_admin = user_is_admission_admin(admission, user)
         is_interview_admin = user_is_interview_admin(admission, group, user)
         is_committee_member = user_is_group_member(group, user)
 
@@ -63,15 +62,13 @@ class InterviewCandidatesView(SchedulerFeatureGateMixin, APIView):
             and published
             and saved.name_visibility == SavedSchedule.NAME_VISIBILITY_COMMITTEE
         )
-        hide_identity = (
-            not is_admin and not is_interview_admin and not committee_revealed
-        )
+        hide_identity = not is_interview_admin and not committee_revealed
 
         # Members only ever see the published plan: until it is published
         # they have no standing to see any applicant data at all - not the
         # pool, and not a review scope. The published plan is the only
         # thing recruiters hand them.
-        if not is_admin and not is_interview_admin:
+        if not is_interview_admin:
             if not published:
                 return Response([], status=status.HTTP_200_OK)
 
@@ -83,7 +80,7 @@ class InterviewCandidatesView(SchedulerFeatureGateMixin, APIView):
         # after publish anyway. Members (post-publication only, see above)
         # get the published rows when names are revealed - withholds and all
         # - and nothing at all otherwise.
-        if not is_admin and not is_interview_admin:
+        if not is_interview_admin:
             if committee_revealed:
                 if publication_withholds_rows(saved):
                     applications = applications.filter(

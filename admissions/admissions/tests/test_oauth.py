@@ -4,7 +4,7 @@ from django.test import TestCase, override_settings
 from django.urls import reverse
 from rest_framework.test import APITestCase
 
-from admissions.admissions.models import Group, LegoUser, Membership
+from admissions.admissions.models import GodUser, Group, LegoUser, Membership
 from admissions.admissions.tests.utils import create_admission
 from admissions.oauth import (
     VALID_MEMBERSHIP_ROLES,
@@ -56,11 +56,11 @@ class OAuthMembershipSyncTestCase(TestCase):
         self.assertIn("admissions_sessionid", response.cookies)
         self.assertIn("redirect_uri=http%3A%2F%2F127.0.0.1%3A5002", response.url)
 
-    @patch("admissions.admissions.constants.GOD_LEGO_IDS", [92000])
     def test_a_god_listed_user_is_staff_after_login(self):
-        """A hard-coded god LEGO id gets staff even when the payload carries
-        no staff group - the manage page must open for them without waiting
-        on their role data."""
+        """A god-listed LEGO id (DB-backed GodUser row) gets staff even when
+        the payload carries no staff group - the manage page must open for
+        them without waiting on their role data."""
+        GodUser.objects.create(lego_id=self.user.lego_id)
         self.user.is_staff = False
         self.user.save(update_fields=["is_staff"])
 
@@ -68,6 +68,19 @@ class OAuthMembershipSyncTestCase(TestCase):
 
         self.user.refresh_from_db()
         self.assertTrue(self.user.is_staff)
+
+    def test_a_non_god_listed_user_is_not_staff_after_login(self):
+        """A user without a GodUser row gets is_staff=False at login even if
+        their id happens to share digits with the legacy seed list."""
+        # sanity: no GodUser row for this lego id
+        self.assertFalse(GodUser.objects.filter(pk=self.user.lego_id).exists())
+        self.user.is_staff = False
+        self.user.save(update_fields=["is_staff"])
+
+        self.sync({"id": self.user.lego_id})
+
+        self.user.refresh_from_db()
+        self.assertFalse(self.user.is_staff)
 
     def test_empty_response_revokes_stale_memberships_and_staff_access(self):
         Membership.objects.create(

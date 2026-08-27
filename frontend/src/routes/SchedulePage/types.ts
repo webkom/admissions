@@ -1,6 +1,11 @@
 import type React from "react";
 
-export type TabType = "heatmap" | "config" | "solver" | "plan";
+export type TabType =
+  | "heatmap"
+  | "config"
+  | "solver"
+  | "my-availability"
+  | "plan";
 
 export interface WorkflowStepDefinition {
   key: TabType;

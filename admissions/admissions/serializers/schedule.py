@@ -568,12 +568,17 @@ class SavedScheduleSerializer(serializers.ModelSerializer):
             else:
                 safe_entry["candidate"] = candidate_detail["name"]
                 safe_entry["interview_status"] = candidate_detail["interview_status"]
-                safe_entry["interview_status_updated_at"] = candidate_detail[
-                    "interview_status_updated_at"
-                ]
-                safe_entry["interview_status_updated_by"] = candidate_detail[
-                    "interview_status_updated_by"
-                ]
+                # Status metadata (who last changed it, when) is workflow-side
+                # information reserved for interview admins. Committee members
+                # see the status value but not who/when — a recruiter's identity
+                # is not a published-plan field.
+                if self.context.get("include_interview_status_metadata", False):
+                    safe_entry["interview_status_updated_at"] = candidate_detail[
+                        "interview_status_updated_at"
+                    ]
+                    safe_entry["interview_status_updated_by"] = candidate_detail[
+                        "interview_status_updated_by"
+                    ]
                 if candidate_detail["phone"]:
                     safe_entry["candidate_phone"] = candidate_detail["phone"]
 

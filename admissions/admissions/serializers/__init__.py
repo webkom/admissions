@@ -12,6 +12,7 @@ from this namespace.
 from admissions.admissions.serializers.admissions import (
     AdminAdmissionSerializer,
     AdminCreateUpdateAdmissionSerializer,
+    AdministeredAdmissionSerializer,
     AdmissionListPublicSerializer,
     AdmissionPublicSerializer,
     ManageAdmissionSerializer,
@@ -31,6 +32,7 @@ from admissions.admissions.serializers.availability import (
     InterviewAvailabilityParticipantSerializer,
     SaveInterviewAvailabilitySerializer,
 )
+from admissions.admissions.serializers.god_user import GodUserSerializer
 from admissions.admissions.serializers.groups import (
     AdmissionGroupContentSerializer,
     AdmissionScopedGroupSerializer,
@@ -69,6 +71,7 @@ __all__ = [
     "AdminAdmissionSerializer",
     "AdminCreateUpdateAdmissionSerializer",
     "AdminUserApplicationSerializer",
+    "AdministeredAdmissionSerializer",
     "AdmissionGroupContentSerializer",
     "AdmissionListPublicSerializer",
     "AdmissionPublicSerializer",
@@ -80,6 +83,7 @@ __all__ = [
     "CommitteeMinimalApplicationSerializer",
     "GroupApplicationSerializer",
     "GroupSerializer",
+    "GodUserSerializer",
     "InterviewAvailabilityParticipantSerializer",
     "InterviewerSerializer",
     "InterviewStatusSerializer",

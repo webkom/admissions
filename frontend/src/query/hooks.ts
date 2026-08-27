@@ -11,6 +11,7 @@ import {
   AdminApplication,
   Candidate,
   Application,
+  GodUser,
   Group,
   InterviewAvailabilityParticipant,
   ExperienceLevel,
@@ -358,6 +359,32 @@ export const useManageAdmission = (slug: string, enabled = true) => {
   return useQuery<Admission, AxiosError>({
     queryKey: [`/manage/admission/${slug}/`],
     enabled: enabled && Boolean(slug),
+  });
+};
+
+export const useGodUsers = () => {
+  return useQuery<GodUser[], AxiosError>({
+    queryKey: ["/manage/god-user/"],
+  });
+};
+
+export const useAddGodUser = () => {
+  const queryClient = useQueryClient();
+  return useMutation<GodUser, AxiosError, { lego_id: number; note?: string }>({
+    mutationFn: (body) =>
+      apiClient.post<GodUser>("/manage/god-user/", body).then((r) => r.data),
+    onSuccess: () =>
+      queryClient.invalidateQueries({ queryKey: ["/manage/god-user/"] }),
+  });
+};
+
+export const useRemoveGodUser = () => {
+  const queryClient = useQueryClient();
+  return useMutation<void, AxiosError, number>({
+    mutationFn: (legoId) =>
+      apiClient.delete(`/manage/god-user/${legoId}/`).then(() => undefined),
+    onSuccess: () =>
+      queryClient.invalidateQueries({ queryKey: ["/manage/god-user/"] }),
   });
 };
 

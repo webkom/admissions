@@ -1,4 +1,9 @@
-import { CalendarCheck, LayoutPanelTop, Sparkles } from "lucide-react";
+import {
+  CalendarCheck,
+  CalendarRange,
+  LayoutPanelTop,
+  Sparkles,
+} from "lucide-react";
 
 import type {
   PublicationReadiness,
@@ -32,9 +37,33 @@ export const buildWorkflowSteps = ({
   publicationReadiness,
 }: WorkflowStepParams): WorkflowStepDefinition[] => {
   if (!isAdmin) {
-    // Members only ever see the published plan: nothing else in the
-    // schedule is for them.
+    // Members record their own availability as soon as the recruiter opens
+    // the interview windows, and otherwise only see the published plan.
+    // Applicant data (candidates, reviews) is never part of their flow.
     return [
+      {
+        key: "my-availability",
+        title: "Mine opplysninger",
+        description: hasConfiguredAvailabilityWindows
+          ? "Lagre når du kan sitte i intervju."
+          : "Vent til opptaksansvarlig åpner intervjutider.",
+        icon: CalendarRange,
+        status: hasDistributedPlan
+          ? "Ferdig"
+          : hasConfiguredAvailabilityWindows
+            ? myAvailabilitySaved
+              ? "Ferdig"
+              : "Pågår"
+            : "Låst",
+        tone:
+          myAvailabilitySaved || hasDistributedPlan
+            ? "success"
+            : hasConfiguredAvailabilityWindows
+              ? "warning"
+              : "locked",
+        complete: hasDistributedPlan || myAvailabilitySaved,
+        locked: !hasConfiguredAvailabilityWindows && !hasDistributedPlan,
+      },
       {
         key: "plan",
         title: "Intervjuplan",

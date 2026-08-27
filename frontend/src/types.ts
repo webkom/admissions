@@ -333,3 +333,11 @@ export interface InterviewAvailabilityParticipant {
     full_name?: string;
   }[];
 }
+
+export interface GodUser {
+  lego_id: number;
+  note: string;
+  added_by: string | null;
+  added_by_username: string;
+  created_at: string;
+}

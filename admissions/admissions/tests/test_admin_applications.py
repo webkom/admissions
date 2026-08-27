@@ -15,6 +15,7 @@ from admissions.admissions.constants import (
 )
 from admissions.admissions.interview_workflow import update_interview_status
 from admissions.admissions.models import (
+    GodUser,
     Group,
     GroupApplication,
     InterviewAvailability,
@@ -113,9 +114,9 @@ class AdminAdmissionPrivacyTestCase(APITestCase):
         self.assertNotIn("header_fields_response", data)
         self.assertNotIn("priority_text", data)
 
-    def test_priority_text_is_visible_to_leadership_only(self):
-        """Every admin_full viewer sees the application - only leader/co-leader
-        see the applicant's note to "central admission officers"."""
+    def test_priority_text_is_visible_to_all_admin_group_members(self):
+        """All admin_full viewers (any active member of an admin group, plus God users)
+        see the applicant's note to "central admission officers" (priority_text)."""
         UserApplication.objects.filter(
             admission=self.admission, user=self.candidate
         ).update(text="private central comment")
@@ -124,35 +125,89 @@ class AdminAdmissionPrivacyTestCase(APITestCase):
             kwargs={"admission_slug": self.admission.slug},
         )
 
-        for admin in (self.leader_admin, self.co_leader_admin):
+        for admin in (
+            self.leader_admin,
+            self.co_leader_admin,
+            self.recruiting_admin,
+            self.admin,  # Plain member of admin group
+        ):
             with self.subTest(role=admin.username):
                 self.client.force_authenticate(user=admin)
                 response = self.client.get(url)
+                self.assertEqual(response.status_code, status.HTTP_200_OK)
                 self.assertEqual(
                     response.data[0]["priority_text"], "private central comment"
                 )
 
-        self.client.force_authenticate(user=self.recruiting_admin)
-        response = self.client.get(url)
-        self.assertEqual(response.data[0]["application_view_mode"], "admin_full")
-        self.assertNotIn("priority_text", response.data[0])
+    def test_all_active_admin_group_members_are_admission_admins(self):
+        """Any active member of an admin group (including plain member) is an
+        admission admin with full application access."""
+        for admin in (
+            self.leader_admin,
+            self.co_leader_admin,
+            self.recruiting_admin,
+            self.admin,
+        ):
+            with self.subTest(role=admin.username):
+                self.client.force_authenticate(user=admin)
 
-    def test_ordinary_admin_group_member_cannot_retrieve_admin_admission(self):
+                response = self.client.get(self.url)
+                self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+                public_response = self.client.get(
+                    reverse("admission-detail", kwargs={"slug": self.admission.slug})
+                )
+                self.assertTrue(public_response.data["userdata"]["is_admin"])
+                self.assertTrue(public_response.data["userdata"]["is_privileged"])
+
+    def test_admin_group_member_cannot_open_committee_schedule(self):
+        """Admin group members manage admissions and see all applications, but
+        do NOT operate committee interview schedules (schedules belong only
+        to each committee's own recruiters/leaders)."""
+        SavedSchedule.objects.create(
+            admission=self.admission,
+            group=self.committee,
+            schedule=[],
+            start_date="2026-04-20",
+            end_date="2026-04-24",
+            session_duration=60,
+            enabled_slots=["2026-04-20|540"],
+            panel_size=1,
+        )
         self.client.force_authenticate(user=self.admin)
 
-        response = self.client.get(self.url)
-
-        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
-        public_response = self.client.get(
-            reverse("admission-detail", kwargs={"slug": self.admission.slug})
+        schedule_response = self.client.get(
+            reverse(
+                "saved-schedule",
+                kwargs={
+                    "admission_slug": self.admission.slug,
+                    "group_id": self.committee.pk,
+                },
+            )
         )
-        self.assertFalse(public_response.data["userdata"]["is_admin"])
-        self.assertFalse(public_response.data["userdata"]["is_privileged"])
-        self.assertEqual(
-            public_response.data["userdata"]["actor_id"], str(self.admin.pk)
-        )
+        self.assertEqual(schedule_response.status_code, status.HTTP_403_FORBIDDEN)
 
-    def test_active_admin_group_roles_are_reported_as_administrators(self):
+        candidates_response = self.client.get(
+            reverse(
+                "interview-candidates",
+                kwargs={
+                    "admission_slug": self.admission.slug,
+                    "group_id": self.committee.pk,
+                },
+            )
+        )
+        self.assertEqual(candidates_response.status_code, status.HTTP_403_FORBIDDEN)
+
+        availability_response = self.client.get(
+            reverse(
+                "interview-availability",
+                kwargs={
+                    "admission_slug": self.admission.slug,
+                    "group_id": self.committee.pk,
+                },
+            )
+        )
+        self.assertEqual(availability_response.status_code, status.HTTP_403_FORBIDDEN)
         # Every role user_is_admission_admin() accepts. Leaving co-leader out
         # is what let the serializer and that check drift apart: the API
         # granted a co-leader admin access while userdata reported them
@@ -423,16 +478,16 @@ class GroupLeadershipGrantsNothingTestCase(APITestCase):
         self.assertNotIn(self.admission.slug, slugs)
 
 
-@mock.patch("admissions.admissions.constants.GOD_LEGO_IDS", [91001])
 class GodUserAccessTestCase(APITestCase):
-    """Hard-coded LEGO ids get the same admission-wide admin as the
+    """DB-backed god-listed LEGO ids get the same admission-wide admin as the
     organisation's leadership, without holding any leadership role."""
 
     def setUp(self):
         self.admission = create_admission()
-        # Deliberately no admin_groups and no group membership: the
-        # hard-coded id alone must carry the access.
+        # Deliberately no admin_groups and no group membership: the god-list
+        # row alone must carry the access.
         self.god = LegoUser.objects.create(username="deputy", lego_id=91001)
+        GodUser.objects.create(lego_id=self.god.lego_id)
         self.plain = LegoUser.objects.create(username="plain", lego_id=91002)
         self.bedkom = Group.objects.create(name="Bedkom", lego_id=91003)
         self.admission.groups.add(self.bedkom)
@@ -1534,6 +1589,106 @@ class DeleteGroupApplicationsTestCase(APITestCase):
             GroupApplication.objects.filter(pk=arrkom_application.pk).exists()
         )
 
+    def test_dual_role_user_interview_status_gate_matches_view_mode(self):
+        """H1 regression: the interview_status PATCH gate must use the same
+        view-mode rule the rest of the viewset uses, not an inline copy. A
+        dual-role user (LEADER of an admin group + LEADER of webkom) gets
+        committee_minimal here. They CAN mutate an application that has a
+        webkom group_application (the status is shared across the admission),
+        but they must NOT be able to mutate an application that has ONLY a
+        rival committee's group_application — the queryset filter must
+        exclude it the same way the destroy action does."""
+        rival_only = UserApplication.objects.create(
+            user=self.pleb, admission=self.admission, phone_number="00000000"
+        )
+        GroupApplication.objects.create(
+            application=rival_only, group=self.arrkom, text="Arrkom only"
+        )
+        url = reverse(
+            "admin-userapplication-interview-status",
+            kwargs={"admission_slug": self.admission_slug, "pk": rival_only.pk},
+        )
+        self.client.force_authenticate(user=self.webkom_leader)
+
+        response = self.client.patch(
+            url,
+            {
+                "interview_status": "confirmed",
+                "expected_interview_status_updated_at": (
+                    rival_only.interview_status_updated_at.isoformat()
+                ),
+            },
+            format="json",
+        )
+
+        # The queryset filter strips the application from the list, so
+        # get_object 404s. This is the same gate the destroy action uses -
+        # if either one ever drifts, the rival-only application will be
+        # mutable from a dual-role account and that's the regression to
+        # catch.
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+        rival_only.refresh_from_db()
+        self.assertEqual(rival_only.interview_status, "not_invited")
+
+    def test_plain_committee_member_cannot_update_interview_status(self):
+        """A plain committee member (no leader/recruiter role) must not be
+        able to PATCH interview_status. Status is read-only for members -
+        the policy is "members see status, cannot edit it"."""
+        member = LegoUser.objects.create(username="plain-member", lego_id=13)
+        Membership.objects.create(user=member, role=MEMBER, group=self.webkom)
+        application = UserApplication.objects.create(
+            user=self.pleb, admission=self.admission, phone_number="00000000"
+        )
+        GroupApplication.objects.create(
+            application=application, group=self.webkom, text="Webkom only"
+        )
+        url = reverse(
+            "admin-userapplication-interview-status",
+            kwargs={"admission_slug": self.admission_slug, "pk": application.pk},
+        )
+        self.client.force_authenticate(user=member)
+
+        response = self.client.patch(
+            url,
+            {
+                "interview_status": "confirmed",
+                "expected_interview_status_updated_at": (
+                    application.interview_status_updated_at.isoformat()
+                ),
+            },
+            format="json",
+        )
+
+        # Same gate as the dual-role case: the queryset filter hides the
+        # application from a plain member (no leader/recruiter role), so
+        # 403 or 404 are both acceptable "not editable" answers.
+        self.assertIn(
+            response.status_code,
+            (status.HTTP_403_FORBIDDEN, status.HTTP_404_NOT_FOUND),
+        )
+        application.refresh_from_db()
+        self.assertEqual(application.interview_status, "not_invited")
+
+    def test_outsider_is_forbidden_not_silently_empty(self):
+        """H2 regression: a logged-in user with no role in this admission
+        must get 403 from the application listing, not 200 with an empty
+        list. The gate is at ApplicationPermissions.has_permission via
+        user_is_privileged(admission_slug). A future refactor that drops
+        the permission check and falls back to the queryset's
+        UserApplication.objects.none() would silently return [] and hide
+        the missing access decision from the audit trail."""
+        outsider = LegoUser.objects.create(username="outsider", lego_id=14)
+        self.client.force_authenticate(user=outsider)
+
+        response = self.client.get(
+            reverse(
+                "admin-userapplication-list",
+                kwargs={"admission_slug": self.admission_slug},
+            )
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
 
 class TerminateCommitteeApplicationsTestCase(APITestCase):
     def setUp(self):
@@ -1617,12 +1772,6 @@ class TerminateCommitteeApplicationsTestCase(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
 
         self.client.force_authenticate(user=self.recruiter)
-        response = self.client.post(
-            self.url, {"confirmation_name": self.committee.name}, format="json"
-        )
-        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
-
-        self.client.force_authenticate(user=self.ordinary_admin_group_member)
         response = self.client.post(
             self.url, {"confirmation_name": self.committee.name}, format="json"
         )
