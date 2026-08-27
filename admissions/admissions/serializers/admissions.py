@@ -1,7 +1,6 @@
 """Admission-level serializers."""
 
 from django.db import transaction
-from django.db.models import Q
 from rest_framework import serializers
 
 from pydantic import ValidationError as PydanticValidationError
@@ -368,7 +367,7 @@ class AdminAdmissionSerializer(serializers.ModelSerializer):
         for group in obj.groups.all():
             if (
                 Membership.objects.filter(user=request.user.pk, group=group.pk)
-                .filter(Q(role=constants.LEADER) | Q(role=constants.RECRUITING))
+                .filter(role__in=(constants.LEADER, constants.RECRUITING))
                 .exists()
             ):
                 res["is_privileged"] = True

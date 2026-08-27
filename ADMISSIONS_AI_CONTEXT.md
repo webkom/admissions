@@ -56,7 +56,7 @@ roles (`retiree`, `alumni`, `retiree_email`) never grant active access.
 | Actor | Primary capabilities |
 | --- | --- |
 | Applicant | Browse admissions, choose groups, create/update their own application while the admission is open, withdraw it, and view the receipt. |
-| Admission administrator | Full candidate access; create/edit the plan configuration; see all availability and genders; enqueue/cancel/inspect solve jobs; edit all schedule rows; publish/unpublish; export admission-wide data; inspect disclosure audit events. This is a leader/co-leader/recruiting member of an `admin_groups` group, plus the organisation's own leadership - the leader and co-leader of Hovedstyret - who are admission-wide admins in every opptak regardless of `admin_groups`. |
+| Admission administrator | Full candidate access; create/edit the plan configuration; see all availability and genders; enqueue/cancel/inspect solve jobs; edit all schedule rows; publish/unpublish; export admission-wide data; inspect disclosure audit events. This is a leader/recruiting member of an `admin_groups` group, plus organisation-listed God users who are admission-wide admins in every opptak regardless of `admin_groups`. |
 | Recruiter (`leader`/`recruiting`) | Review applicants for represented groups; see candidate identity and contact data for their scope; submit their own availability and inspect represented-group availability; reveal/hide their represented groups after a plan is published; update interview status; use outreach actions. |
 | Ordinary committee member | Submit their own availability; see their own interviews after publication; can see candidate identity only for groups explicitly revealed to them; can record conflicts only after names are visible. |
 | Admission manager | Creates/edits admissions. This is an active Webkom member, or a staff creator under the repository's manager rules. |
@@ -99,9 +99,9 @@ Important access rules:
 - `open_from`, `public_deadline`, and `closed_from` (enforced chronological);
 - shared `header_fields` question schema;
 - `groups` (participating committees) and `admin_groups` (admission-wide
-  administrators). On top of `admin_groups`, the Hovedstyret leader and
-  co-leader are always admission-wide admins - matched on the group name, not
-  the relation, so it holds even when the group is not added to the admission.
+  administrators). On top of `admin_groups`, organisation-listed God users are
+  always admission-wide admins, even when they are not members of a group in
+  the admission.
 
 Question fields use Pydantic-backed JSON models. Supported types are display
 text, text input, textarea, number input, phone input, and checkbox. Each input

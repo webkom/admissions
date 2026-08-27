@@ -652,7 +652,21 @@ class GodUserViewSet(
     lookup_value_regex = r"\d+"
 
     def perform_create(self, serializer):
-        serializer.save(added_by=self.request.user)
+        god_user = serializer.save(added_by=self.request.user)
+        LegoUser.objects.filter(lego_id=god_user.lego_id).update(is_staff=True)
+
+    def perform_destroy(self, instance):
+        lego_id = instance.lego_id
+        instance.delete()
+        user = LegoUser.objects.filter(lego_id=lego_id).first()
+        if user:
+            # Recompute is_staff: only True if user is Webkom or a leader in STAFF_LEADER_GROUPS
+            user.is_staff = user.is_member_of_webkom or any(
+                m.group.name in constants.STAFF_LEADER_GROUPS
+                and m.role == constants.LEADER
+                for m in user.membership_set.select_related("group").all()
+            )
+            user.save(update_fields=["is_staff"])
 
 
 class ManageAdmissionViewSet(viewsets.ModelViewSet):
@@ -699,10 +713,10 @@ class ManageAdmissionViewSet(viewsets.ModelViewSet):
 class AdministeredAdmissionListView(generics.ListAPIView):
     """Admissions the current user can read but cannot edit.
 
-    Gated by ``IsActiveAdminGroupMember``: only active members of an
-    admission's admin group reach this endpoint. Webkom members and
-    God users have their own manage pane and short-circuit to an
-    empty list here.
+    Gated by ``IsActiveAdminGroupMember``: active admission admins and
+    participating committee leaders/recruiters reach this endpoint.
+    Webkom members and God users have their own manage pane and
+    short-circuit to an empty list here.
     """
 
     serializer_class = AdministeredAdmissionSerializer
@@ -714,9 +728,15 @@ class AdministeredAdmissionListView(generics.ListAPIView):
         if user.is_member_of_webkom or user_is_org_leadership(user):
             return Admission.objects.none()
         return (
-            Admission.objects.filter(admin_groups__membership__user=user)
-            .exclude(
-                admin_groups__membership__role__in=constants.INACTIVE_MEMBERSHIP_ROLES
+            Admission.objects.filter(
+                Q(
+                    admin_groups__membership__user=user,
+                    admin_groups__membership__role__in=constants.ADMISSION_ADMIN_ROLES,
+                )
+                | Q(
+                    groups__membership__user=user,
+                    groups__membership__role__in=constants.ADMISSION_ADMIN_ROLES,
+                )
             )
             .distinct()
             .order_by("title")

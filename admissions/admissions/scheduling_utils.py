@@ -228,11 +228,23 @@ def get_conflict_review_readiness(admission, group, saved_schedule=None, schedul
     proposed_by_interviewer = get_proposed_candidate_ids_by_interviewer(
         saved_schedule, schedule
     )
+    # Someone who has opted out cannot complete the check (the review is not
+    # open for them), so requiring their confirmation would deadlock publish
+    # behind a person who will never answer. Their panel may still sit in a
+    # stale plan, but the plan itself is what must change then - not the
+    # roster, which is the committee's own people and their answers.
+    opted_out_ids = {
+        str(user_id)
+        for user_id, state in get_interviewer_participation(
+            admission, group, saved_schedule
+        ).items()
+        if state == InterviewAvailability.PARTICIPATION_NOT_PARTICIPATING
+    }
     required_participant_ids = []
     incomplete_participant_ids = []
     missing_pair_count = 0
     for interviewer_id, proposed_candidate_ids in proposed_by_interviewer.items():
-        if not proposed_candidate_ids:
+        if not proposed_candidate_ids or interviewer_id in opted_out_ids:
             continue
         # Confirmation must cover everything they were shown, not just their
         # own panel: an unreviewed swap partner is exactly the pair a repair
@@ -473,6 +485,14 @@ def build_conflict_review_lists(saved_schedule, swap_size=5):
             group_id=saved_schedule.group_id,
         )
     }
+    opted_out_ids = {
+        str(row.user_id)
+        for row in InterviewAvailability.objects.filter(
+            admission_id=saved_schedule.admission_id,
+            group_id=saved_schedule.group_id,
+            participation=InterviewAvailability.PARTICIPATION_NOT_PARTICIPATING,
+        )
+    }
     block_by_minute = _block_index_by_minute(saved_schedule)
     # A shared pool, not a fresh draw per interviewer: fillers recurring
     # across different interviewers' lists is what makes them look like real
@@ -504,6 +524,11 @@ def build_conflict_review_lists(saved_schedule, swap_size=5):
 
     lists = {}
     for interviewer_id, own_ids in proposed.items():
+        # Someone who opted out cannot complete the check; giving them a list
+        # would leave a roster row that can never be confirmed. The plan is
+        # what must change if their panel still sits in it.
+        if interviewer_id in opted_out_ids:
+            continue
         own = {str(value) for value in own_ids}
         own_times = {time_by_candidate.get(candidate_id) for candidate_id in own} - {
             None

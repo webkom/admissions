@@ -82,6 +82,14 @@ class SaveInterviewAvailabilitySerializer(serializers.Serializer):
         return attrs
 
 
+class DecoyCandidateSerializer(serializers.Serializer):
+    """One filler entry: the token proposed_candidate_ids carries, plus the
+    display name. Served only on the owner's own row."""
+
+    id = serializers.CharField()
+    name = serializers.CharField(allow_blank=True)
+
+
 class InterviewAvailabilityParticipantSerializer(serializers.Serializer):
     user_id = serializers.UUIDField()
     username = serializers.CharField()
@@ -113,6 +121,11 @@ class InterviewAvailabilityParticipantSerializer(serializers.Serializer):
     proposed_candidate_ids = serializers.ListField(
         child=serializers.CharField(), default=list
     )
+    # The names behind your own proposed tokens: {id, name} for your fillers,
+    # so the review UI can render them next to real candidates. Own row only,
+    # never for an admin - anyone else's filler list would make
+    # cross-comparing two interviewers' lists trivial.
+    decoy_candidates = DecoyCandidateSerializer(many=True, required=False, default=list)
     conflict_review_complete = serializers.BooleanField(default=False)
     has_submitted = serializers.BooleanField()
     participation = serializers.ChoiceField(

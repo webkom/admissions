@@ -2385,6 +2385,65 @@ class SavedScheduleVisibilityTestCase(APITestCase):
         self.assertEqual(res.status_code, status.HTTP_200_OK)
         self.assertEqual(res.data["schedule"][0]["candidate"], "Ada")
 
+    def test_member_who_opted_out_does_not_receive_the_schedule(self):
+        """A member who opted out has no stake in the plan and must not see
+        it - not even once it is published and revealed to the committee.
+        The framework stays available so they can rejoin later."""
+        self._create_saved(is_distributed=True, name_visibility="committee")
+        InterviewAvailability.objects.create(
+            admission=self.admission,
+            group=self.committee_group,
+            user=self.member_user,
+            participation=InterviewAvailability.PARTICIPATION_NOT_PARTICIPATING,
+            slots=[],
+        )
+        self.client.force_authenticate(user=self.member_user)
+
+        res = self.client.get(self.url)
+
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.assertEqual(res.data["schedule"], [])
+        # The framework remains readable: rejoining still needs the windows.
+        self.assertEqual(res.data["start_date"], "2026-04-20")
+
+    def test_opted_out_member_can_still_rejoin(self):
+        """Opting out is not permanent: the member can submit availability
+        again, which flips participation back to participating."""
+        self._create_saved(
+            is_distributed=False,
+            enabled_slots=["2026-04-20|540"],
+        )
+        InterviewAvailability.objects.create(
+            admission=self.admission,
+            group=self.committee_group,
+            user=self.member_user,
+            participation=InterviewAvailability.PARTICIPATION_NOT_PARTICIPATING,
+            slots=[],
+        )
+        self.client.force_authenticate(user=self.member_user)
+
+        res = self.client.post(
+            reverse(
+                "interview-availability",
+                kwargs={
+                    "admission_slug": self.admission.slug,
+                    "group_id": self.committee_group.pk,
+                },
+            ),
+            {"slots": ["2026-04-20|540"]},
+            format="json",
+        )
+
+        self.assertEqual(res.status_code, status.HTTP_200_OK, res.data)
+        row = InterviewAvailability.objects.get(
+            admission=self.admission,
+            group=self.committee_group,
+            user=self.member_user,
+        )
+        self.assertEqual(
+            row.participation, InterviewAvailability.PARTICIPATION_PARTICIPATING
+        )
+
     def test_partial_publication_hides_rows_after_the_boundary_for_members(self):
         other_candidate = LegoUser.objects.create(
             username="vis-candidate-2",

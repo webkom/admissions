@@ -262,11 +262,22 @@ class InterviewAvailabilityView(SchedulerFeatureGateMixin, APIView):
         # Own row only, merged in here rather than kept separate: the whole
         # point of a decoy is that it is indistinguishable from a real swap
         # candidate anywhere in this response.
-        own_decoy_tokens = (
-            {entry["token"] for entry in decoy_review_scope(saved_schedule, user.id)}
+        own_decoy_entries = (
+            [
+                {"id": entry["token"], "name": entry.get("name") or ""}
+                for entry in decoy_review_scope(saved_schedule, user.id)
+            ]
             if not is_admin and requester_review_scope_open
-            else set()
+            else []
         )
+        # The names behind own_decoy_tokens, so the review UI can render
+        # fillers next to real candidates. Own row only, and never for an
+        # admin: handing out someone else's filler list would make
+        # cross-comparing two interviewers' lists trivial, which is exactly
+        # what the shared bounded cohort exists to prevent. Within one's own
+        # row the names reveal nothing the token already placed there - the
+        # owner already sees the tokens in proposed_candidate_ids.
+        own_decoy_tokens = {entry["id"] for entry in own_decoy_entries}
         visible_proposed_candidate_ids_map = (
             proposed_candidate_ids_map
             if is_admin
@@ -396,6 +407,7 @@ class InterviewAvailabilityView(SchedulerFeatureGateMixin, APIView):
                 "proposed_candidate_ids": sorted(
                     visible_proposed_candidate_ids_map.get(str(person.id), set())
                 ),
+                "decoy_candidates": (own_decoy_entries if person.id == user.id else []),
                 "conflict_review_complete": conflict_review_complete_map.get(
                     person.id, False
                 ),
@@ -939,6 +951,15 @@ class InterviewAvailabilityView(SchedulerFeatureGateMixin, APIView):
         echo_decoy_tokens = (
             own_decoy_scope if is_own_unfiltered_row and conflict_review_open else set()
         )
+        # Same names channel as the GET projection, same own-row-only rule.
+        echo_decoy_entries = (
+            [
+                {"id": entry["token"], "name": entry.get("name") or ""}
+                for entry in decoy_review_scope(saved_schedule, target_user.id)
+            ]
+            if echo_decoy_tokens
+            else []
+        )
         echo_filter = (
             (visible_candidate_ids or set()) | echo_decoy_tokens
             if is_own_unfiltered_row
@@ -998,6 +1019,7 @@ class InterviewAvailabilityView(SchedulerFeatureGateMixin, APIView):
                     echo_filter,
                 ),
                 "proposed_candidate_ids": sorted(visible_proposed_candidate_ids),
+                "decoy_candidates": echo_decoy_entries,
                 "conflict_review_complete": self._conflict_review_complete(
                     echo_reviewed,
                     visible_proposed_candidate_ids,

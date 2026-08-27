@@ -197,10 +197,7 @@ const Admission: React.FC<AdmissionProps> = ({ admission }) => {
       {isRevyBoard && admission.is_open && !isLoggedIn() && (
         <p className="m-0 pt-4 text-sm text-text-faded [&_a]:font-semibold [&_a]:text-text-secondary [&_a]:underline [&_a]:underline-offset-2 [&_a:hover]:text-text-strong">
           Er du ikke medlem av Abakus? Søk via{" "}
-          <a href="https://forms.gle/MYrhBBzZCm5gws2t6">
-            dette skjemaet
-          </a>
-          .
+          <a href="https://forms.gle/MYrhBBzZCm5gws2t6">dette skjemaet</a>.
         </p>
       )}
     </div>

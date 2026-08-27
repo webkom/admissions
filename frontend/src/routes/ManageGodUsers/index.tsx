@@ -7,27 +7,41 @@ import { ArrowLeft, ShieldCheck, Trash2 } from "lucide-react";
 import LinkButton, { StyledButton } from "src/components/LinkButton";
 import LoadingBall from "src/components/LoadingBall";
 import { GodUser } from "src/types";
-import {
-  useAddGodUser,
-  useGodUsers,
-  useManageAdmissions,
-  useRemoveGodUser,
-} from "src/query/hooks";
+import { useAddGodUser, useGodUsers, useRemoveGodUser } from "src/query/hooks";
 import { breakpoints, iconSizes } from "src/styles/designTokens";
 import { getApiErrorMessage } from "src/utils/apiErrors";
 
 const ManageGodUsers: React.FC = () => {
   const { data, isFetching, error, refetch } = useGodUsers();
-  const { data: admissions } = useManageAdmissions();
 
   if (error) {
+    const status = error.response?.status;
+    const isForbidden = status === 401 || status === 403;
     return (
       <PageState role="alert">
-        <h1>Kunne ikke laste god-brukerne</h1>
-        <p>{getApiErrorMessage(error, "Prøv å laste siden på nytt.")}</p>
-        <StyledButton type="button" onClick={() => refetch()}>
-          Prøv igjen
-        </StyledButton>
+        {isForbidden ? (
+          <>
+            <h1>Du har ikke tilgang til god-brukerne</h1>
+            <p>
+              Bare Webkom-medlemmer kan administrere god-brukerne. Hvis du
+              nettopp ble lagt til i Webkom, logg ut og logg inn igjen for å
+              oppdatere tilgangen din.
+            </p>
+            <a href="/logout/">
+              <StyledButton type="button">
+                Logg ut og logg inn igjen
+              </StyledButton>
+            </a>
+          </>
+        ) : (
+          <>
+            <h1>Kunne ikke laste god-brukerne</h1>
+            <p>{getApiErrorMessage(error, "Prøv å laste siden på nytt.")}</p>
+            <StyledButton type="button" onClick={() => refetch()}>
+              Prøv igjen
+            </StyledButton>
+          </>
+        )}
       </PageState>
     );
   }
@@ -58,21 +72,6 @@ const ManageGodUsers: React.FC = () => {
         </HeaderInner>
       </Header>
       <Main>
-        <Sidebar>
-          <SidebarHeader>Administrerbare opptak</SidebarHeader>
-          <SidebarList>
-            {(admissions ?? []).map((admission) => (
-              <SidebarItem key={admission.pk}>
-                <SidebarLink to={`/${admission.slug}/admin/`}>
-                  {admission.title}
-                </SidebarLink>
-              </SidebarItem>
-            ))}
-            {admissions && admissions.length === 0 && (
-              <SidebarEmpty>Ingen opptak å administrere.</SidebarEmpty>
-            )}
-          </SidebarList>
-        </Sidebar>
         <Content>
           <Routes>
             <Route index element={<GodUsersView godUsers={data ?? []} />} />
@@ -301,67 +300,9 @@ const BackLink = styled(Link)`
 `;
 
 const Main = styled.main`
-  display: grid;
-  grid-template-columns: var(--management-sidebar-width) minmax(0, 1fr);
-  gap: var(--spacing-xl);
-  max-width: var(--content-width-page);
+  max-width: var(--content-width-form);
   margin: 0 auto;
   padding: var(--spacing-2xl) 0;
-
-  @media screen and (max-width: ${breakpoints.portrait}) {
-    grid-template-columns: 1fr;
-    padding-top: var(--spacing-xl);
-  }
-`;
-
-const Sidebar = styled.aside`
-  border-right: var(--border-width-default) solid var(--color-border-soft);
-  padding-right: var(--spacing-lg);
-
-  @media screen and (max-width: ${breakpoints.portrait}) {
-    padding-right: 0;
-    padding-bottom: var(--spacing-xl);
-    border-right: 0;
-    border-bottom: var(--border-width-default) solid var(--color-border-soft);
-  }
-`;
-
-const SidebarHeader = styled.h2`
-  font-size: var(--font-size-sm);
-  text-transform: uppercase;
-  letter-spacing: var(--letter-spacing-wide);
-  color: var(--color-text-muted);
-  margin: 0 0 var(--spacing-md);
-`;
-
-const SidebarList = styled.ul`
-  list-style: none;
-  padding: 0;
-  margin: 0;
-  display: flex;
-  flex-direction: column;
-  gap: var(--spacing-xs);
-`;
-
-const SidebarItem = styled.li``;
-
-const SidebarLink = styled(Link)`
-  display: block;
-  padding: var(--spacing-sm) var(--spacing-md);
-  border-radius: var(--border-radius-md);
-  color: var(--color-text-primary);
-  text-decoration: none;
-  font-size: var(--font-size-sm);
-
-  &:hover {
-    background: var(--color-surface-neutral);
-  }
-`;
-
-const SidebarEmpty = styled.p`
-  color: var(--color-text-muted);
-  font-size: var(--font-size-sm);
-  margin: 0;
 `;
 
 const Content = styled.div`
@@ -372,7 +313,6 @@ const Pane = styled.section`
   display: flex;
   flex-direction: column;
   gap: var(--spacing-xl);
-  max-width: var(--content-width-form);
   padding: var(--spacing-md) 0;
 `;
 

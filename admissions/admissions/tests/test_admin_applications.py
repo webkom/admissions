@@ -100,6 +100,33 @@ class AdminAdmissionPrivacyTestCase(APITestCase):
         self.assertNotIn("applications", response.data)
         self.assertNotIn(str(self.candidate.pk), str(response.data))
 
+    def test_recruiter_keeps_access_when_committee_leaves_admin_groups(self):
+        self.admission.admin_groups.add(self.committee)
+        GroupApplication.objects.create(
+            application=UserApplication.objects.get(
+                admission=self.admission,
+                user=self.candidate,
+            ),
+            group=self.committee,
+            text="committee answer",
+        )
+        self.admission.admin_groups.remove(self.committee)
+        self.client.force_authenticate(user=self.recruiter)
+
+        response = self.client.get(
+            reverse(
+                "admin-userapplication-list",
+                kwargs={"admission_slug": self.admission.slug},
+            )
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(response.data), 1)
+        self.assertEqual(
+            response.data[0]["group_applications"][0]["group"]["name"],
+            self.committee.name,
+        )
+
     def test_empty_filtered_prefetch_does_not_expose_general_answers(self):
         application = UserApplication.objects.get(
             admission=self.admission, user=self.candidate
@@ -127,9 +154,7 @@ class AdminAdmissionPrivacyTestCase(APITestCase):
 
         for admin in (
             self.leader_admin,
-            self.co_leader_admin,
             self.recruiting_admin,
-            self.admin,  # Plain member of admin group
         ):
             with self.subTest(role=admin.username):
                 self.client.force_authenticate(user=admin)
@@ -139,14 +164,11 @@ class AdminAdmissionPrivacyTestCase(APITestCase):
                     response.data[0]["priority_text"], "private central comment"
                 )
 
-    def test_all_active_admin_group_members_are_admission_admins(self):
-        """Any active member of an admin group (including plain member) is an
-        admission admin with full application access."""
+    def test_admission_admin_roles_have_full_application_access(self):
+        """Only leaders and recruiters in an admin group have full access."""
         for admin in (
             self.leader_admin,
-            self.co_leader_admin,
             self.recruiting_admin,
-            self.admin,
         ):
             with self.subTest(role=admin.username):
                 self.client.force_authenticate(user=admin)
@@ -208,12 +230,7 @@ class AdminAdmissionPrivacyTestCase(APITestCase):
             )
         )
         self.assertEqual(availability_response.status_code, status.HTTP_403_FORBIDDEN)
-        # Every role user_is_admission_admin() accepts. Leaving co-leader out
-        # is what let the serializer and that check drift apart: the API
-        # granted a co-leader admin access while userdata reported them
-        # unprivileged, so the frontend hid the admin actions from someone the
-        # backend was happy to serve.
-        for admin in (self.leader_admin, self.co_leader_admin, self.recruiting_admin):
+        for admin in (self.leader_admin, self.recruiting_admin):
             with self.subTest(role=admin.username):
                 self.client.force_authenticate(user=admin)
 
@@ -234,6 +251,18 @@ class AdminAdmissionPrivacyTestCase(APITestCase):
                 self.assertTrue(response.data["userdata"]["is_privileged"])
                 self.assertTrue(public_response.data["userdata"]["is_admin"])
                 self.assertTrue(public_response.data["userdata"]["is_privileged"])
+
+    def test_co_leader_has_no_admission_admin_access(self):
+        self.client.force_authenticate(user=self.co_leader_admin)
+
+        response = self.client.get(self.url)
+        public_response = self.client.get(
+            reverse("admission-detail", kwargs={"slug": self.admission.slug})
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertFalse(public_response.data["userdata"]["is_admin"])
+        self.assertFalse(public_response.data["userdata"]["is_privileged"])
 
     def test_staff_without_admin_group_role_is_not_an_admission_admin(self):
         self.client.force_authenticate(user=self.staff_without_admission_role)
@@ -791,7 +820,6 @@ class ListApplicationsTestCase(APITestCase):
                 "phone_number",
                 "group_applications",
                 "interview_status",
-                "interview_status_updated_at",
             },
         )
         self.assertEqual(

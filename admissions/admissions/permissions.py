@@ -44,11 +44,11 @@ class IsWebkom(permissions.BasePermission):
 
 
 class IsActiveAdminGroupMember(permissions.BasePermission):
-    """User is an active member of at least one admission admin group.
+    """User represents a committee or is an active admission admin.
 
     Excludes Webkom and God users — they have their own entry points. Used
     only by the read-only administered-admissions endpoint, never by any
-    write surface.
+    write surface. Committee access is limited to leader/recruiter roles.
     """
 
     def has_permission(self, request, *_):
@@ -57,13 +57,16 @@ class IsActiveAdminGroupMember(permissions.BasePermission):
             return False
         if user.is_member_of_webkom or user_is_org_leadership(user):
             return False
-        return (
-            Admission.objects.filter(admin_groups__membership__user=user)
-            .exclude(
-                admin_groups__membership__role__in=constants.INACTIVE_MEMBERSHIP_ROLES
+        return Admission.objects.filter(
+            Q(
+                admin_groups__membership__user=user,
+                admin_groups__membership__role__in=constants.ADMISSION_ADMIN_ROLES,
             )
-            .exists()
-        )
+            | Q(
+                groups__membership__user=user,
+                groups__membership__role__in=constants.ADMISSION_ADMIN_ROLES,
+            )
+        ).exists()
 
 
 class IsOrgLeadership(permissions.BasePermission):

@@ -4,8 +4,9 @@
 
 - **Admission**: one recruitment period. It defines the participating committees
   (`groups`) and the overseeing bodies (`admin_groups`). All active members of an
-  admin group are equal admission administrators (they read all applications and
-  priority text). In addition, God users (`constants.GOD_LEGO_IDS`) are
+  admin group leaders and recruiters are admission administrators (they read
+  all applications and priority text). In addition, God users
+  (`constants.GOD_LEGO_IDS`) are
   admission-wide administrators for every admission.
 - **Roles in an admission**:
   1. **God Users (`constants.GOD_LEGO_IDS`)**: Central org leadership. Admin for
@@ -45,9 +46,9 @@
 
 ## Invariants
 
-- Admission-wide administration requires an active membership in one of the
-  admission's admin groups, or a God-listed LEGO id (`constants.GOD_LEGO_IDS`).
-  All active members of an admin group are equal admission administrators. Admin
+- Admission-wide administration requires an active leader/recruiter membership
+  in one of the admission's admin groups, or a God-listed LEGO id
+  (`constants.GOD_LEGO_IDS`). Admin
   groups do not manage committee interview schedules.
 - An OAuth membership refresh replaces the local membership snapshot atomically.
   Missing, malformed, or unknown membership data must fail closed rather than

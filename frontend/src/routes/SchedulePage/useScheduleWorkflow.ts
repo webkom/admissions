@@ -80,10 +80,18 @@ export const useScheduleWorkflow = ({
     myParticipant?.has_submitted ||
       myParticipant?.participation === "not_participating",
   );
+  const myAvailabilityOptedOut = Boolean(
+    myParticipant?.participation === "not_participating",
+  );
+  // Someone who opted out cannot complete the conflict check, so they must
+  // never be a required reviewer: counting them would make the roster wait
+  // forever on a person who will never answer.
   const reviewParticipants = useMemo(
     () =>
       (participants ?? []).filter(
-        (participant) => participant.proposed_candidate_ids.length > 0,
+        (participant) =>
+          participant.participation !== "not_participating" &&
+          participant.proposed_candidate_ids.length > 0,
       ),
     [participants],
   );
@@ -224,6 +232,7 @@ export const useScheduleWorkflow = ({
         hasSavedConfig,
         hasScheduleDraft,
         myAvailabilitySaved,
+        myAvailabilityOptedOut,
         availabilityParticipantCount,
         submittedAvailabilityCount,
         proposalConflictCount,
@@ -239,6 +248,7 @@ export const useScheduleWorkflow = ({
       isAdmin,
       currentParticipant?.proposed_candidate_ids.length,
       myConflictReviewComplete,
+      myAvailabilityOptedOut,
       myAvailabilitySaved,
       proposalConflictCount,
       publicationReadiness,

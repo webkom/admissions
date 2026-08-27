@@ -15,6 +15,7 @@ from admissions.admissions.models import (
 from admissions.admissions.scheduling_utils import (
     build_conflict_review_lists,
     conflict_review_scope,
+    get_conflict_review_readiness,
 )
 from admissions.admissions.tests.utils import create_admission
 
@@ -233,6 +234,92 @@ class ConflictReviewListTestCase(TestCase):
             }
 
         self.assertEqual(cohort(), cohort())
+
+    def test_an_interviewer_who_opted_out_gets_no_review_list(self):
+        """Someone who opted out cannot complete the check, so a list for
+        them would be a roster row that can never be confirmed. The plan is
+        what must change if their panel still sits in it."""
+        ours = self._candidate("ada", 8001)
+        theirs = self._candidate("eirik", 8002)
+        saved = self._plan(
+            [
+                self._row(ours, 540, self.mine),
+                self._row(theirs, 600, self.other),
+            ],
+            my_slots=["2026-04-21:540", "2026-04-21:600"],
+        )
+        InterviewAvailability.objects.create(
+            admission=self.admission,
+            group=self.group,
+            user=self.other,
+            participation=InterviewAvailability.PARTICIPATION_NOT_PARTICIPATING,
+            slots=[],
+        )
+
+        lists = build_conflict_review_lists(saved)
+
+        self.assertIn(str(self.mine.id), lists)
+        self.assertNotIn(str(self.other.id), lists)
+
+    def test_readiness_ignores_an_interviewer_who_opted_out(self):
+        """Readiness must not deadlock behind someone who will never answer:
+        they cannot complete the check, so they are not required to."""
+        ours = self._candidate("ada", 8001)
+        theirs = self._candidate("eirik", 8002)
+        saved = self._plan(
+            [
+                self._row(ours, 540, self.mine),
+                self._row(theirs, 600, self.other),
+            ],
+            my_slots=["2026-04-21:540", "2026-04-21:600"],
+        )
+        InterviewAvailability.objects.create(
+            admission=self.admission,
+            group=self.group,
+            user=self.other,
+            participation=InterviewAvailability.PARTICIPATION_NOT_PARTICIPATING,
+            slots=[],
+        )
+
+        readiness = get_conflict_review_readiness(
+            self.admission, self.group, saved_schedule=saved
+        )
+
+        # The required/incomplete lists carry raw user ids, not strings.
+        required = {str(value) for value in readiness["required_participant_ids"]}
+        incomplete = {str(value) for value in readiness["incomplete_participant_ids"]}
+        self.assertNotIn(str(self.other.id), required)
+        self.assertNotIn(str(self.other.id), incomplete)
+        # Mine still needs to confirm before the plan is ready.
+        self.assertIn(str(self.mine.id), incomplete)
+
+    def test_readiness_is_complete_when_the_only_pending_reviewer_opted_out(self):
+        ours = self._candidate("ada", 8001)
+        theirs = self._candidate("eirik", 8002)
+        saved = self._plan(
+            [
+                self._row(ours, 540, self.mine),
+                self._row(theirs, 600, self.other),
+            ],
+            my_slots=["2026-04-21:540", "2026-04-21:600"],
+        )
+        # _plan already created mine's row; extend it with the reviewed ids.
+        InterviewAvailability.objects.filter(
+            admission=self.admission, group=self.group, user=self.mine
+        ).update(reviewed_candidate_ids=[str(ours.pk), str(theirs.pk)])
+        InterviewAvailability.objects.create(
+            admission=self.admission,
+            group=self.group,
+            user=self.other,
+            participation=InterviewAvailability.PARTICIPATION_NOT_PARTICIPATING,
+            slots=[],
+        )
+
+        readiness = get_conflict_review_readiness(
+            self.admission, self.group, saved_schedule=saved
+        )
+
+        self.assertTrue(readiness["is_complete"])
 
     def test_the_scope_falls_back_when_no_snapshot_exists(self):
         """Plans saved before review lists existed must still be reviewable."""

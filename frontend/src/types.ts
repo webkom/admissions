@@ -313,6 +313,13 @@ export interface InterviewAvailabilityParticipant {
   derived_conflicts: string[];
   reviewed_candidate_ids: string[];
   proposed_candidate_ids: string[];
+  /**
+   * {id, name} entries for your own conflict-review fillers, own row only
+   * and always empty for admins. The ids are the tokens proposed_candidate_ids
+   * carries; merge them into the review list's candidate lookup so fillers
+   * render next to real candidates without being distinguishable from them.
+   */
+  decoy_candidates?: { id: string; name: string }[];
   conflict_review_complete: boolean;
   has_submitted: boolean;
   participation: InterviewerParticipation;

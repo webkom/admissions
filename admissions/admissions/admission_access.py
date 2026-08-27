@@ -38,7 +38,11 @@ def user_is_admission_admin(admission, user):
     applications for the admission in admin_full mode, including priority_text.
     """
     return user_is_org_leadership(user) or (
-        Membership.objects.filter(user=user.pk, group__in=admission.admin_groups.all())
+        Membership.objects.filter(
+            user=user.pk,
+            group__in=admission.admin_groups.all(),
+            role__in=constants.ADMISSION_ADMIN_ROLES,
+        )
         .exclude(role__in=constants.INACTIVE_MEMBERSHIP_ROLES)
         .exists()
     )
@@ -66,6 +70,29 @@ def get_representing_groups(admission, user):
         role__in=(constants.LEADER, constants.RECRUITING),
     )
     return admission.groups.filter(pk__in=representing.values_list("group", flat=True))
+
+
+def user_is_in_competing_admin_group(admission, user):
+    """Whether the user is an active member of a committee that ALSO sits in
+    this admission's ``admin_groups``.
+
+    Such a user must never receive ADMIN_FULL — they are a competitor, not
+    a neutral admission-wide officer. The dual-role guard in
+    ``get_application_view_mode`` uses this to narrow them to
+    COMMITTEE_MINIMAL even when they hold only a plain CO_LEADER or MEMBER
+    role, which the (LEADER, RECRUITING) check in
+    ``get_representing_groups`` would otherwise miss.
+    """
+    return (
+        Membership.objects.filter(
+            user=user.pk,
+            group__pk__in=admission.groups.values("pk").intersection(
+                admission.admin_groups.values("pk")
+            ),
+        )
+        .exclude(role__in=constants.INACTIVE_MEMBERSHIP_ROLES)
+        .exists()
+    )
 
 
 def user_represents_group(admission, group, user):
@@ -100,9 +127,18 @@ def get_application_view_mode(admission, user):
     # committee even if the group itself participates. The guard still
     # applies to a competing admin group (Webkom running the tool while also
     # recruiting) - only org leadership bypasses it.
+    #
+    # The second branch (user_is_in_competing_admin_group) catches the case
+    # where a user is a plain member of a committee that also sits in
+    # admin_groups: the role-based "represents a committee" check misses
+    # them, but their admin standing would otherwise hand them every other
+    # committee's private application text.
     if (
         admission.groups.count() > 1
-        and represented_groups.exists()
+        and (
+            represented_groups.exists()
+            or user_is_in_competing_admin_group(admission, user)
+        )
         and not user_is_org_leadership(user)
     ):
         return APPLICATION_VIEW_MODE_COMMITTEE_MINIMAL
@@ -121,7 +157,12 @@ def user_is_committee_member(admission, user):
     )
 
 
-def schedule_response_context(admission, saved_schedule, is_interview_admin):
+def schedule_response_context(
+    admission,
+    saved_schedule,
+    is_interview_admin,
+    hide_schedule_override=False,
+):
     """Visibility rules for one committee's own, independent schedule.
 
     An interview admin (the admission's own admin group, or this specific
@@ -130,8 +171,12 @@ def schedule_response_context(admission, saved_schedule, is_interview_admin):
     only once the plan is both published and set to reveal names to the
     committee; there is no other committee to reveal it to any more, so
     name_visibility answers this directly.
+
+    hide_schedule_override forces the rows away even when the plan is
+    published: a member who opted out has no stake in the plan and is not
+    part of the workflow, so they must not see it.
     """
-    hide_schedule = (
+    hide_schedule = hide_schedule_override or (
         saved_schedule.distributed_through is None and not is_interview_admin
     )
     # Interview admins always work against the full draft; everyone else only
