@@ -84,9 +84,6 @@ const ConflictReviewView: React.FC<ConflictReviewViewProps> = ({
   const [selectedConflictIds, setSelectedConflictIds] = useState<Set<string>>(
     () => new Set(scopedServerConflicts),
   );
-  const [lastSavedConflictState, setLastSavedConflictState] = useState(() =>
-    serializeIds(scopedServerConflicts),
-  );
   const lastServerStateRef = useRef("");
   const reviewSectionRef = useRef<HTMLDivElement>(null);
   const reviewHeadingRef = useRef<HTMLHeadingElement>(null);
@@ -99,7 +96,6 @@ const ConflictReviewView: React.FC<ConflictReviewViewProps> = ({
   useEffect(() => {
     if (serverConflictState === lastServerStateRef.current) return;
     setSelectedConflictIds(new Set(scopedServerConflicts));
-    setLastSavedConflictState(serverConflictState);
     lastServerStateRef.current = serverConflictState;
   }, [scopedServerConflicts, serverConflictState]);
 
@@ -141,8 +137,6 @@ const ConflictReviewView: React.FC<ConflictReviewViewProps> = ({
   const proposalNamesLoading =
     candidates === undefined ||
     reviewCandidates.length !== reviewCandidateIds.size;
-  const hasConflictChanges =
-    serializeIds(selectedConflictIds) !== lastSavedConflictState;
   const selectedConflictCount = selectedConflictIds.size;
 
   const toggleConflict = (candidateId: string) => {
@@ -194,7 +188,6 @@ const ConflictReviewView: React.FC<ConflictReviewViewProps> = ({
         [...conflictIds].sort(),
       );
       setSelectedConflictIds(new Set(conflictIds));
-      setLastSavedConflictState(serializeIds(conflictIds));
       closeReview();
     } finally {
       setIsSaving(false);
@@ -208,7 +201,7 @@ const ConflictReviewView: React.FC<ConflictReviewViewProps> = ({
   const progressText = reviewProgress
     ? `${reviewProgress.complete} av ${reviewProgress.total} intervjuere har bekreftet`
     : reviewIsCurrent
-      ? "Du har bekreftet kandidatkontrollen"
+      ? "Du har bekreftet inhabilitetssjekken"
       : `${reviewCandidateIds.size} kandidater må kontrolleres`;
 
   return (
@@ -230,7 +223,7 @@ const ConflictReviewView: React.FC<ConflictReviewViewProps> = ({
             <div className="min-w-0">
               <div className="flex flex-wrap items-center gap-2">
                 <h2 className="m-0 text-sm font-bold text-text-primary">
-                  Kandidatkontroll
+                  Inhabilitetssjekk
                 </h2>
                 <Chip tone={reviewIsCurrent ? "success" : "warning"}>
                   {reviewIsCurrent ? "Ditt svar lagret" : "Din handling"}
@@ -267,7 +260,7 @@ const ConflictReviewView: React.FC<ConflictReviewViewProps> = ({
             className="animate-fade-in motion-reduce:animate-none"
           >
             <SchedulePanelHeader
-              title="Kandidatkontroll"
+              title="Inhabilitetssjekk"
               description="Kryss av bare kandidater du kjenner på en måte som gjør deg inhabil. Når du bekrefter, regnes resten som uten konflikt."
               actions={
                 <button
@@ -287,7 +280,7 @@ const ConflictReviewView: React.FC<ConflictReviewViewProps> = ({
                 data-cy="conflict-review-heading"
                 className="sr-only"
               >
-                Kandidatkontroll i planutkastet
+                Inhabilitetssjekk i planutkastet
               </h3>
               <div className="mb-5 rounded-lg border border-border-soft bg-surface-subtle px-4 py-3">
                 <p className="m-0 text-ui font-semibold text-text-primary">
@@ -349,7 +342,7 @@ const ConflictReviewView: React.FC<ConflictReviewViewProps> = ({
             </SchedulePanelBody>
             <SchedulePanelFooter className="sticky bottom-0 z-10 bg-surface-base">
               <span className="sr-only" aria-live="polite">
-                {isSaving ? "Lagrer kandidatkontroll" : ""}
+                {isSaving ? "Lagrer inhabilitetssjekk" : ""}
               </span>
               <span
                 className={cn(
@@ -365,11 +358,7 @@ const ConflictReviewView: React.FC<ConflictReviewViewProps> = ({
               </span>
               <button
                 type="button"
-                disabled={
-                  proposalNamesLoading ||
-                  isSaving ||
-                  (reviewIsCurrent && !hasConflictChanges)
-                }
+                disabled={proposalNamesLoading || isSaving}
                 onClick={() => void submitReview()}
                 data-cy="conflict-submit"
                 className={cn(actionButtonBase, actionButtonPrimary)}
@@ -379,7 +368,7 @@ const ConflictReviewView: React.FC<ConflictReviewViewProps> = ({
                   ? "Lagrer…"
                   : selectedConflictCount === 0
                     ? "Bekreft ingen inhabiliteter"
-                    : "Bekreft kandidatkontroll"}
+                    : "Bekreft inhabilitetssjekk"}
               </button>
             </SchedulePanelFooter>
           </SchedulePanel>

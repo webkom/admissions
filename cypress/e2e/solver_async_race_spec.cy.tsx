@@ -411,6 +411,8 @@ const ProposalComparisonHarness = () => (
     onExperienceLevelChange={() => Promise.resolve()}
     onOpenAvailability={() => undefined}
     onOpenFramework={() => undefined}
+    onWidenDays={() => undefined}
+    onEditByHand={() => undefined}
     onOpenConflictReview={() => undefined}
     conflictReviewReachable={false}
     onOpenPlan={() => undefined}
@@ -946,10 +948,9 @@ describe("solver asynchronous and revision races", () => {
     mountHarness(<ProposalComparisonHarness />, client);
     cy.wait("@focusRestoreSchedule");
     cy.get("[data-cy=proposal-review]").should("be.visible");
-    cy.contains("summary", "Endre planen").click();
     cy.get("[data-cy=proposal-rerun]").click();
     cy.get("[data-cy=regeneration-settings]").should("be.visible");
-    cy.contains("button", "Tilbake til planutkast").focus().click();
+    cy.contains("button", "Tilbake til utkastet").focus().click();
     cy.get("[data-cy=regeneration-settings]").should("not.exist");
     cy.get("[data-cy=proposal-review] h2").should("be.focused");
   });

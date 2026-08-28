@@ -27,7 +27,10 @@ from admissions.admissions.models import (
     SolveJob,
     UserApplication,
 )
-from admissions.admissions.schedule_validation import canonicalize_solver_payload
+from admissions.admissions.schedule_validation import (
+    ScheduleValidationError,
+    canonicalize_solver_payload,
+)
 from admissions.admissions.serializers import SolveJobSerializer, SolveOptionsSerializer
 from admissions.admissions.tests.utils import (
     ScheduleRevisionAPIClient,
@@ -135,6 +138,29 @@ class SavedSchedulePublishSemanticsTestCase(APITestCase):
         self.assertFalse(
             SavedSchedule.objects.get(admission=self.admission).is_distributed
         )
+
+    def test_removing_enabled_slot_invalidates_availability_generation(self):
+        saved = self._create_saved()
+        availability = InterviewAvailability.objects.get(
+            admission=self.admission,
+            group=self.admin_group,
+            user=self.admin_user,
+        )
+        availability.slots = ["2026-04-20|600"]
+        availability.submitted_grid_generation = saved.availability_generation
+        availability.save(update_fields=["slots", "submitted_grid_generation"])
+
+        res = self.client.post(
+            self.url,
+            {"enabled_slots": ["2026-04-20|540"]},
+            format="json",
+        )
+
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        saved.refresh_from_db()
+        availability.refresh_from_db()
+        self.assertEqual(saved.availability_generation, 2)
+        self.assertEqual(availability.slots, [])
 
     def test_distributed_through_publishes_only_part_of_the_plan(self):
         second_candidate = LegoUser.objects.create(
@@ -1161,6 +1187,67 @@ class SavedSchedulePublishSemanticsTestCase(APITestCase):
         self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertIn("schedule", res.data)
 
+    def test_partial_draft_is_preserved_when_widening_enabled_days(self):
+        """Incremental multi-day solving: a partial draft (some
+        candidates placed, others unplaced because of capacity) must
+        survive a PATCH that adds more enabled days. The user widens
+        the schedule to fit the rest, then re-runs the solver with
+        the partial plan passed back as locked_assignments.
+        """
+        saved = self._create_saved(
+            is_distributed=False,
+            start_date="2026-04-20",
+            end_date="2026-04-24",
+            enabled_slots=[
+                "2026-04-20|540",
+                "2026-04-20|600",
+                "2026-04-20|660",
+            ],
+        )
+        original_candidate_id = saved.schedule[0]["candidate_id"]
+        original_time = saved.schedule[0]["time"]
+        original_enabled = list(saved.enabled_slots)
+
+        # PATCH widens the enabled days without disturbing the partial plan.
+        res = self.client.post(
+            self.url,
+            {
+                "enabled_slots": original_enabled
+                + [
+                    "2026-04-21|540",
+                    "2026-04-21|600",
+                    "2026-04-21|660",
+                ],
+            },
+            format="json",
+        )
+
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        # The existing partial plan survives - same candidate at the same time.
+        self.assertEqual(len(res.data["schedule"]), 1)
+        self.assertEqual(res.data["schedule"][0]["candidate_id"], original_candidate_id)
+        self.assertEqual(res.data["schedule"][0]["time"], original_time)
+        self.assertEqual(
+            sorted(res.data["enabled_slots"]),
+            sorted(
+                original_enabled
+                + [
+                    "2026-04-21|540",
+                    "2026-04-21|600",
+                    "2026-04-21|660",
+                ]
+            ),
+        )
+        self.assertFalse(res.data["is_distributed"])
+        saved.refresh_from_db()
+        self.assertEqual(len(saved.schedule), 1)
+        self.assertEqual(saved.schedule[0]["candidate_id"], original_candidate_id)
+        self.assertEqual(saved.schedule[0]["time"], original_time)
+        self.assertEqual(
+            saved.enabled_slots,
+            res.data["enabled_slots"],
+        )
+
     def test_date_range_above_limit_is_rejected(self):
         res = self.client.post(
             self.url,
@@ -1417,13 +1504,20 @@ class InterviewAvailabilityHardeningTestCase(APITestCase):
         )
 
     def test_slot_outside_enabled_grid_is_rejected(self):
+        """A slot the plan does not contain always means the client was built
+        against a different framework (the grid never offers non-enabled
+        slots), so the answer is the reload conflict - even when the submitted
+        generation happens to match, e.g. when the schedule and availability
+        caches briefly disagree.
+        """
         self._create_saved_schedule(enabled_slots=["2026-04-21|540"])
         self.client.force_authenticate(user=self.recruiter)
 
         res = self.client.post(self.url, {"slots": ["2026-04-21|600"]}, format="json")
 
-        self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(res.status_code, status.HTTP_409_CONFLICT)
         self.assertIn("slots", res.data)
+        self.assertIn("Last inn siden på nytt", str(res.data))
         self.assertFalse(
             InterviewAvailability.objects.filter(
                 admission=self.admission,
@@ -1589,10 +1683,10 @@ class InterviewAvailabilityHardeningTestCase(APITestCase):
         self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertIn("reviewed_candidate_ids", res.data)
 
-    def test_member_review_attempt_is_forbidden(self):
-        """Members have no schedule access beyond the published plan: a
-        member review POST is 403, and the candidate pool stays empty even
-        with a review open."""
+    def test_member_can_review_own_scope_but_not_outside_it(self):
+        """A member confirms their own review (their review scope) but can
+        never reference candidates outside it - the candidate pool stays
+        empty and an out-of-scope id is rejected as unknown."""
         other_group = Group.objects.create(name="Andre", lego_id=630)
         self.admission.groups.add(other_group)
         other_user = LegoUser.objects.create(username="other-review", lego_id=631)
@@ -1623,7 +1717,17 @@ class InterviewAvailabilityHardeningTestCase(APITestCase):
                 },
             )
         )
-        review_res = self.client.post(
+        # In-scope: the candidate assigned to this member's panel.
+        own_review = self.client.post(
+            self.url,
+            {
+                "conflicts": [],
+                "reviewed_candidate_ids": [str(self.application.pk)],
+            },
+            format="json",
+        )
+        # Out-of-scope: a candidate from another group entirely.
+        outside_review = self.client.post(
             self.url,
             {
                 "conflicts": [str(other_application.pk)],
@@ -1634,10 +1738,27 @@ class InterviewAvailabilityHardeningTestCase(APITestCase):
             },
             format="json",
         )
+        # Posting on another interviewer's behalf stays forbidden.
+        on_behalf = self.client.post(
+            self.url,
+            {
+                "user_id": str(self.recruiter.pk),
+                "reviewed_candidate_ids": [str(self.application.pk)],
+            },
+            format="json",
+        )
 
         self.assertEqual(candidates_res.status_code, status.HTTP_200_OK)
         self.assertEqual(candidates_res.data, [])
-        self.assertEqual(review_res.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(own_review.status_code, status.HTTP_200_OK)
+        self.assertEqual(outside_review.status_code, status.HTTP_400_BAD_REQUEST)
+        # The out-of-scope candidate is rejected as unknown (the conflicts
+        # field is validated first, so that is where it lands).
+        error_text = str(outside_review.data)
+        self.assertTrue(
+            "reviewed_candidate_ids" in error_text or "conflicts" in error_text
+        )
+        self.assertEqual(on_behalf.status_code, status.HTTP_403_FORBIDDEN)
 
     def test_draft_review_preserves_conflicts_outside_the_proposal_scope(self):
         other_group = Group.objects.create(name="Andre bevart", lego_id=638)
@@ -1884,6 +2005,10 @@ class InterviewAvailabilityHardeningTestCase(APITestCase):
         )
 
     def test_member_cannot_save_conflicts_before_names_released(self):
+        """Members may complete their own review, but only while the conflict
+        review is actually open - with no plan there is nothing to review, so
+        the save is rejected (as a validation error, not a permission error,
+        since the member is allowed to submit their own row)."""
         self.client.force_authenticate(user=self.member)
 
         res = self.client.post(
@@ -1892,7 +2017,8 @@ class InterviewAvailabilityHardeningTestCase(APITestCase):
             format="json",
         )
 
-        self.assertEqual(res.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("Inhabilitet", str(res.data))
         self.assertFalse(
             InterviewAvailability.objects.filter(
                 admission=self.admission,
@@ -1902,6 +2028,8 @@ class InterviewAvailabilityHardeningTestCase(APITestCase):
         )
 
     def test_member_cannot_edit_conflicts_from_published_schedule(self):
+        """A published plan closes the conflict review, so a member's attempt
+        to touch inhabilitet afterwards is rejected and nothing is changed."""
         self._create_saved_schedule(
             enabled_slots=["2026-04-21|540"],
             is_distributed=True,
@@ -1922,7 +2050,8 @@ class InterviewAvailabilityHardeningTestCase(APITestCase):
             format="json",
         )
 
-        self.assertEqual(res.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("Inhabilitet", str(res.data))
         self.assertEqual(
             InterviewAvailability.objects.get(
                 admission=self.admission,
@@ -2443,6 +2572,39 @@ class SavedScheduleVisibilityTestCase(APITestCase):
         self.assertEqual(
             row.participation, InterviewAvailability.PARTICIPATION_PARTICIPATING
         )
+
+    def test_rejoining_preserves_existing_availability(self):
+        self._create_saved(
+            is_distributed=False,
+            enabled_slots=["2026-04-20|540"],
+        )
+        row = InterviewAvailability.objects.create(
+            admission=self.admission,
+            group=self.committee_group,
+            user=self.member_user,
+            participation=InterviewAvailability.PARTICIPATION_NOT_PARTICIPATING,
+            slots=[],
+        )
+        self.client.force_authenticate(user=self.member_user)
+
+        res = self.client.post(
+            reverse(
+                "interview-availability",
+                kwargs={
+                    "admission_slug": self.admission.slug,
+                    "group_id": self.committee_group.pk,
+                },
+            ),
+            {"slots": ["2026-04-20|540"]},
+            format="json",
+        )
+
+        self.assertEqual(res.status_code, status.HTTP_200_OK, res.data)
+        row.refresh_from_db()
+        self.assertEqual(
+            row.participation, InterviewAvailability.PARTICIPATION_PARTICIPATING
+        )
+        self.assertEqual(row.slots, ["2026-04-20|540"])
 
     def test_partial_publication_hides_rows_after_the_boundary_for_members(self):
         other_candidate = LegoUser.objects.create(
@@ -3928,6 +4090,126 @@ class SolveProposalApplyTestCase(APITestCase):
 
         self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
         self.assertTrue(SolveJob.objects.filter(pk=job.pk).exists())
+
+
+@override_settings(ALLOW_SYNTHETIC_SOLVER_INPUT=False)
+class DayScopedSolverPayloadTestCase(APITestCase):
+    """The partial-plan workflow: solve the first days now, extend later.
+
+    Scoping happens inside the saved framework (enabled_slots untouched), so
+    solving day by day never invalidates availability answers.
+    """
+
+    def setUp(self):
+        self.admin_group = Group.objects.create(name="ScopeAdmin", lego_id=970)
+        self.admin = LegoUser.objects.create(username="scope-admin", lego_id=971)
+        Membership.objects.create(
+            user=self.admin, group=self.admin_group, role=RECRUITING
+        )
+        self.admission = create_admission(created_by=self.admin, slug="scope-opptak")
+        self.admission.admin_groups.add(self.admin_group)
+        self.admission.groups.add(self.admin_group)
+        self.candidate = LegoUser.objects.create(
+            username="scope-candidate", lego_id=972
+        )
+        self.application = UserApplication.objects.create(
+            admission=self.admission,
+            user=self.candidate,
+            phone_number="12345678",
+        )
+        GroupApplication.objects.create(
+            application=self.application,
+            group=self.admin_group,
+            text="Scope application",
+        )
+        self.saved = SavedSchedule.objects.create(
+            admission=self.admission,
+            group=self.admin_group,
+            schedule=[],
+            start_date="2026-04-20",
+            end_date="2026-04-22",
+            session_duration=60,
+            enabled_slots=[
+                "2026-04-20|540",
+                "2026-04-21|540",
+                "2026-04-22|540",
+            ],
+            day_start_minute=480,
+            day_end_minute=1080,
+        )
+        InterviewAvailability.objects.create(
+            admission=self.admission,
+            group=self.admin_group,
+            user=self.admin,
+            slots=["2026-04-20|540", "2026-04-21|540", "2026-04-22|540"],
+            submitted_grid_generation=self.saved.availability_generation,
+        )
+        self.client.force_authenticate(user=self.admin)
+        self.url = reverse("solve-schedule")
+
+    def _data(self, **overrides):
+        data = {
+            "candidates": [{"id": str(self.application.pk)}],
+            "interviewers": [{"id": str(self.admin.pk)}],
+            "panel_size": 1,
+            "options": {},
+        }
+        data.update(overrides)
+        return data
+
+    def test_scope_limits_slots_blocks_and_availability(self):
+        saved = SavedSchedule.objects.get(admission=self.admission)
+        payload = canonicalize_solver_payload(
+            self.admission,
+            saved,
+            self._data(day_scope_through="2026-04-21"),
+            self.admin,
+        )
+
+        self.assertEqual(payload["all_slots"], [540, 1440 + 540])
+        # The out-of-scope day's block has no usable slots and drops out.
+        self.assertEqual(payload["blocks"], [[540], [1440 + 540]])
+        self.assertEqual(
+            payload["interviewers"][0]["availability"],
+            [540, 1440 + 540],
+        )
+
+    def test_scope_beyond_the_period_covers_everything(self):
+        saved = SavedSchedule.objects.get(admission=self.admission)
+        payload = canonicalize_solver_payload(
+            self.admission,
+            saved,
+            self._data(day_scope_through="2030-01-01"),
+            self.admin,
+        )
+
+        self.assertEqual(payload["all_slots"], [540, 1440 + 540, 2880 + 540])
+
+    def test_scope_before_the_first_day_is_rejected(self):
+        with self.assertRaises(ScheduleValidationError) as ctx:
+            canonicalize_solver_payload(
+                self.admission,
+                SavedSchedule.objects.get(admission=self.admission),
+                self._data(day_scope_through="2026-04-19"),
+                self.admin,
+            )
+        self.assertEqual(ctx.exception.field, "day_scope_through")
+
+    def test_solve_request_carries_the_scope_to_the_worker(self):
+        response = self.client.post(
+            self.url,
+            {
+                **self._data(),
+                "admission_slug": self.admission.slug,
+                "group_id": str(self.admin_group.pk),
+                "day_scope_through": "2026-04-21",
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_202_ACCEPTED)
+        request_data = SolveJob.objects.get(id=response.data["job_id"]).request_data
+        self.assertEqual(request_data["day_scope_through"], "2026-04-21")
 
 
 @override_settings(ALLOW_SYNTHETIC_SOLVER_INPUT=False)

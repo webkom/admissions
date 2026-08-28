@@ -375,7 +375,7 @@ describe("focused Planutkast interactions", () => {
     cy.get("[data-cy=conflict-candidate-candidate-1]").check();
     cy.get("[data-cy=conflict-submit]").should(
       "contain.text",
-      "Bekreft kandidatkontroll",
+      "Bekreft inhabilitetssjekk",
     );
     cy.screenshot("scheduler-workflow/05-candidate-review", {
       capture: "viewport",

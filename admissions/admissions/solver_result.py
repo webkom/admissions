@@ -501,11 +501,20 @@ def evaluate_objective_vector(
             )
 
     all_loads = [loads[str(_value(interviewer, "id"))] for interviewer in interviewers]
-    active_loads = all_loads
+    # Mirror the model's `active_loads` filter: an interviewer who
+    # contributed no availability pins min(load) = 0, collapsing the
+    # load-spread term to max(load). Excluding them lets the spread
+    # objective actually do its job.
+    active_loads = [
+        loads[str(_value(interviewer, "id"))]
+        for interviewer in interviewers
+        if _value(interviewer, "availability")
+    ]
     experienced_loads = [
         loads[str(_value(interviewer, "id"))]
         for interviewer in interviewers
         if _value(interviewer, "experience_level", "unknown") == EXPERIENCE_EXPERIENCED
+        and _value(interviewer, "availability")
     ]
     max_load = max(all_loads, default=0)
     load_spread = max(active_loads) - min(active_loads) if len(active_loads) > 1 else 0
@@ -634,11 +643,16 @@ def objective_key(
     return (
         vector.unplaced,
         vector.overtime,
-        vector.panel_breaks if prefers_stable_panel else 0,
         *((vector.joint_sessions,) if candidates_per_session > 1 else ()),
         vector.adjacent_block_rest,
         vector.extra_experienced,
         structure,
+        # Panel stability is the model's last quality tier before earliness:
+        # fresh plans balance participating interviewers fairly first and
+        # only then preserve the previous panel makeup. The comparison key
+        # must mirror that order, or an optimal-for-the-model solution
+        # compares as worse than a non-optimal one.
+        vector.panel_breaks if prefers_stable_panel else 0,
         vector.earliness,
         stability_tie,
         vector.canonical_tie,

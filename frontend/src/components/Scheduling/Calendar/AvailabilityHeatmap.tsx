@@ -12,7 +12,7 @@ import {
 import cn from "src/utils/cn";
 import { iconSizes } from "src/styles/designTokens";
 import {
-  CustomSelect,
+  SegmentedControl,
   SchedulePanel,
   SchedulePanelBody,
   SchedulePanelFooter,
@@ -69,7 +69,9 @@ interface AvailabilityBlock {
   enabledMinutes: number[];
   coverage: BlockCoverage;
   heatmapAvailableCount: number;
+  heatmapDiscouragedCount: number;
   allAvailableInterviewers: Interviewer[];
+  allDiscouragedInterviewers: Interviewer[];
 }
 
 const formatHeatmapAvailability = (
@@ -165,6 +167,46 @@ const AvailabilityHeatmap: React.FC<AvailabilityHeatmapProps> = ({
       ),
     [dates, interviewers, sessionDuration],
   );
+  const interviewerDiscouragedSlots = useMemo(
+    () =>
+      new Map(
+        interviewers.map((interviewer) => [
+          interviewer.id,
+          new Set(
+            (interviewer.discouraged ?? []).flatMap((time) => {
+              const { dayIndex, minute } = decodeScheduleTime(
+                time,
+                sessionDuration,
+              );
+              const date = dates[dayIndex];
+              return date ? [makeSlotKey(date, minute)] : [];
+            }),
+          ),
+        ]),
+      ),
+    [dates, interviewers, sessionDuration],
+  );
+  const interviewerKanOnlySlots = useMemo(
+    () =>
+      new Map(
+        interviewers.map((interviewer) => [
+          interviewer.id,
+          new Set(
+            interviewer.availability
+              .filter((time) => !(interviewer.discouraged ?? []).includes(time))
+              .flatMap((time) => {
+                const { dayIndex, minute } = decodeScheduleTime(
+                  time,
+                  sessionDuration,
+                );
+                const date = dates[dayIndex];
+                return date ? [makeSlotKey(date, minute)] : [];
+              }),
+          ),
+        ]),
+      ),
+    [dates, interviewers, sessionDuration],
+  );
   const participatingInterviewers = useMemo(
     () =>
       interviewers.filter(
@@ -250,12 +292,30 @@ const AvailabilityHeatmap: React.FC<AvailabilityHeatmapProps> = ({
               ?.has(makeSlotKey(date, minute)),
           ),
         ).length;
+        const heatmapDiscouragedCount = respondentsInScope.filter(
+          (interviewer) =>
+            minutes.some((minute) =>
+              interviewerDiscouragedSlots
+                .get(interviewer.id)
+                ?.has(makeSlotKey(date, minute)),
+            ),
+        ).length;
         const allAvailableInterviewers =
           enabledMinutes.length === 0
             ? []
             : submitted.filter((interviewer) =>
                 enabledMinutes.every((minute) =>
-                  interviewerSlots
+                  interviewerKanOnlySlots
+                    .get(interviewer.id)
+                    ?.has(makeSlotKey(date, minute)),
+                ),
+              );
+        const allDiscouragedInterviewers =
+          enabledMinutes.length === 0
+            ? []
+            : submitted.filter((interviewer) =>
+                enabledMinutes.every((minute) =>
+                  interviewerDiscouragedSlots
                     .get(interviewer.id)
                     ?.has(makeSlotKey(date, minute)),
                 ),
@@ -267,11 +327,15 @@ const AvailabilityHeatmap: React.FC<AvailabilityHeatmapProps> = ({
           enabledMinutes,
           coverage,
           heatmapAvailableCount,
+          heatmapDiscouragedCount,
           allAvailableInterviewers,
+          allDiscouragedInterviewers,
         };
       }),
     [
       inspectionCoverage.blocks,
+      interviewerDiscouragedSlots,
+      interviewerKanOnlySlots,
       interviewerSlots,
       respondentsInScope,
       submitted,
@@ -385,27 +449,36 @@ const AvailabilityHeatmap: React.FC<AvailabilityHeatmapProps> = ({
   );
   const experienceControl = (interviewer: Interviewer) =>
     onExperienceLevelChange ? (
-      <label className="flex items-center gap-2 text-detail text-text-muted">
-        Erfaring
-        <CustomSelect
+      <div className="flex flex-wrap items-center gap-2 text-detail text-text-muted">
+        <span>Erfaring</span>
+        <SegmentedControl<ExperienceLevel>
           value={interviewer.experience_level ?? "unknown"}
-          disabled={experienceSavingId === interviewer.id}
-          className="min-w-36"
           aria-label={`Erfaringsnivå for ${interviewer.name}`}
           onChange={(value) => {
             setExperienceSavingId(interviewer.id);
-            void onExperienceLevelChange(
-              interviewer.id,
-              value as ExperienceLevel,
-            ).finally(() => setExperienceSavingId(""));
+            void onExperienceLevelChange(interviewer.id, value).finally(() =>
+              setExperienceSavingId(""),
+            );
           }}
-          options={[
-            { value: "unknown", label: "Ikke klassifisert" },
-            { value: "inexperienced", label: "Uerfaren" },
-            { value: "experienced", label: "Erfaren" },
+          items={[
+            {
+              key: "unknown",
+              label: "Ukjent",
+              disabled: experienceSavingId === interviewer.id,
+            },
+            {
+              key: "inexperienced",
+              label: "Uerfaren",
+              disabled: experienceSavingId === interviewer.id,
+            },
+            {
+              key: "experienced",
+              label: "Erfaren",
+              disabled: experienceSavingId === interviewer.id,
+            },
           ]}
         />
-      </label>
+      </div>
     ) : null;
 
   return (
@@ -588,6 +661,7 @@ const AvailabilityHeatmap: React.FC<AvailabilityHeatmapProps> = ({
                 const block = blocksByKey.get(key);
                 if (!block) return <div key={key} />;
                 const count = block.heatmapAvailableCount;
+                const discouragedCount = block.heatmapDiscouragedCount;
                 const closed = block.enabledMinutes.length === 0;
                 const highlighted = isHighlighted(block);
                 const selected = selectedBlockKey === key;
@@ -667,6 +741,11 @@ const AvailabilityHeatmap: React.FC<AvailabilityHeatmapProps> = ({
                         {availabilityText}
                       </span>
                     )}
+                    {!closed && discouragedCount > 0 && (
+                      <span className="block text-nano font-semibold text-warning">
+                        {discouragedCount} helst ikke
+                      </span>
+                    )}
                   </ScheduleBlockCell>
                 );
               })}
@@ -678,7 +757,8 @@ const AvailabilityHeatmap: React.FC<AvailabilityHeatmapProps> = ({
           <BlockDetail
             block={selectedBlock}
             interviewers={inspectedInterviewers}
-            interviewerSlots={interviewerSlots}
+            interviewerKanOnlySlots={interviewerKanOnlySlots}
+            interviewerDiscouragedSlots={interviewerDiscouragedSlots}
             sessionDuration={sessionDuration}
             onClose={closeBlockDetail}
             missingResponse={missingResponse}
@@ -726,14 +806,16 @@ const ResponseStatus: React.FC<{
 const BlockDetail: React.FC<{
   block: AvailabilityBlock;
   interviewers: Interviewer[];
-  interviewerSlots: Map<string, Set<string>>;
+  interviewerKanOnlySlots: Map<string, Set<string>>;
+  interviewerDiscouragedSlots: Map<string, Set<string>>;
   sessionDuration: number;
   onClose: () => void;
   missingResponse: Interviewer[];
 }> = ({
   block,
   interviewers,
-  interviewerSlots,
+  interviewerKanOnlySlots,
+  interviewerDiscouragedSlots,
   sessionDuration,
   onClose,
   missingResponse,
@@ -742,13 +824,25 @@ const BlockDetail: React.FC<{
   const availableIds = new Set(
     block.allAvailableInterviewers.map((interviewer) => interviewer.id),
   );
+  const discouragedIds = new Set(
+    block.allDiscouragedInterviewers.map((interviewer) => interviewer.id),
+  );
+  const pureDiscouragedIds = new Set(
+    [...discouragedIds].filter((id) => !availableIds.has(id)),
+  );
   const available = interviewers.filter(
     (interviewer) =>
       interviewer.has_submitted && availableIds.has(interviewer.id),
   );
   const unavailable = interviewers.filter(
     (interviewer) =>
-      interviewer.has_submitted && !availableIds.has(interviewer.id),
+      interviewer.has_submitted &&
+      !availableIds.has(interviewer.id) &&
+      !pureDiscouragedIds.has(interviewer.id),
+  );
+  const discouraged = interviewers.filter(
+    (interviewer) =>
+      interviewer.has_submitted && pureDiscouragedIds.has(interviewer.id),
   );
   return (
     <section
@@ -783,7 +877,14 @@ const BlockDetail: React.FC<{
               const availableAtTime = interviewers.filter(
                 (interviewer) =>
                   interviewer.has_submitted &&
-                  interviewerSlots
+                  interviewerKanOnlySlots
+                    .get(interviewer.id)
+                    ?.has(makeSlotKey(block.date, minute)),
+              );
+              const discouragedAtTime = interviewers.filter(
+                (interviewer) =>
+                  interviewer.has_submitted &&
+                  interviewerDiscouragedSlots
                     .get(interviewer.id)
                     ?.has(makeSlotKey(block.date, minute)),
               );
@@ -795,19 +896,32 @@ const BlockDetail: React.FC<{
                   <strong className="tabular-nums text-text-primary">
                     {formatMinutes(minute)}
                   </strong>
-                  <span className="text-text-muted">
-                    {availableAtTime.length > 0
-                      ? availableAtTime
-                          .map((interviewer) => interviewer.name)
-                          .join(", ")
-                      : "Ingen tilgjengelige"}
-                  </span>
+                  <div className="flex flex-col gap-0.5">
+                    {availableAtTime.length > 0 && (
+                      <span className="text-text-muted">
+                        {availableAtTime.map((i) => i.name).join(", ")}
+                      </span>
+                    )}
+                    {discouragedAtTime.length > 0 && (
+                      <span className="text-warning">
+                        {discouragedAtTime.map((i) => i.name).join(", ")}{" "}
+                        &mdash; helst ikke
+                      </span>
+                    )}
+                    {availableAtTime.length === 0 &&
+                      discouragedAtTime.length === 0 && (
+                        <span className="text-text-muted">
+                          Ingen tilgjengelige
+                        </span>
+                      )}
+                  </div>
                 </div>
               );
             })}
           </div>
-          <div className="mt-3 grid gap-3 sm:grid-cols-3">
+          <div className="mt-3 grid gap-3 sm:grid-cols-4">
             <PersonList title="Hele blokken" people={available} />
+            <PersonList title="Helst ikke" people={discouraged} />
             <PersonList title="Ikke hele blokken" people={unavailable} />
             <PersonList title="Ikke svart" people={missingResponse} />
           </div>

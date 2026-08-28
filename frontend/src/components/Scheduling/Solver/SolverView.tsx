@@ -18,8 +18,10 @@ import type {
   SlotOverride,
 } from "../types";
 import {
+  buildLockedAssignments,
   buildPublishedDayLocks,
   buildSolveBlocks,
+  decodeScheduleTime,
   formatAccessibleDate,
   manualBlocksToSolverBlocks,
   slotsToSolverAvailability,
@@ -32,6 +34,7 @@ import {
   actionButtonBase,
   actionButtonNeutral,
   actionButtonPrimary,
+  keyboardFocusRingClass,
 } from "../ui";
 import cn from "../../../utils/cn";
 import { deriveAssignmentConflictSummary } from "./assignmentConflicts";
@@ -94,6 +97,10 @@ interface Props {
   ) => Promise<void>;
   onOpenAvailability: () => void;
   onOpenFramework: () => void;
+  onWidenDays: () => void;
+  /** Enter the plan's inline editing mode from outside the plan panel
+   *  (the delplan stage's "Rediger for hånd" action). */
+  onEditByHand: () => void;
   onOpenConflictReview: () => void;
   conflictReviewReachable: boolean;
   onOpenPlan: () => void;
@@ -133,11 +140,17 @@ export default function SolverView({
   onExperienceLevelChange,
   onOpenAvailability,
   onOpenFramework,
+  onWidenDays,
+  onEditByHand,
   onOpenConflictReview,
   conflictReviewReachable,
   onOpenPlan,
 }: Props) {
   const [regenerationOpen, setRegenerationOpen] = useState(false);
+  const [savedTouchSignal, setSavedTouchSignal] = useState<{
+    key: number;
+    scheduleIndexes: number[];
+  } | null>(null);
   const [repairScenarios, setRepairScenarios] = useState<RepairScenario[]>([]);
   const [selectedRepairStrategy, setSelectedRepairStrategy] =
     useState<RepairStrategy>("minimum_change");
@@ -200,6 +213,7 @@ export default function SolverView({
     enabledSlots,
     sessionDuration,
     canonicalBlocks,
+    savedSchedule: session.savedSchedule ?? null,
     onModify: session.markDraftModified,
   });
   const persistenceConfig = useMemo(
@@ -248,10 +262,17 @@ export default function SolverView({
     draftBaseRevision: session.draftBaseRevision,
     remoteRevisionChanged: session.remoteRevisionChanged,
     config: persistenceConfig,
+    syntheticInput,
     onConflict: session.markDraftConflict,
     onRevisionSaved: session.markDraftRevisionSaved,
-    onSaved: (revision) => {
+    getTouchedScheduleIndexes: draft.consumeTouchedScheduleIndexes,
+    onSaved: (revision, touchedScheduleIndexes) => {
       session.markDraftSaved(revision);
+      setSavedTouchSignal(
+        touchedScheduleIndexes.length > 0
+          ? { key: Date.now(), scheduleIndexes: touchedScheduleIndexes }
+          : null,
+      );
     },
   });
   useEffect(() => {
@@ -383,12 +404,61 @@ export default function SolverView({
     // While part of the plan is already released, every placement up to the
     // published boundary replaces the draft's own lock marks: released days
     // stay exactly as published, everything else is free to reschedule.
-    void session.solvePlan(publishedDayLocks ?? draft.lockedAssignments);
+    void session.solvePlan(
+      publishedDayLocks ?? draft.explicitLockedAssignments,
+    );
+  };
+  // Extending the scope pins every saved placement: the partial plan is the
+  // committed example everyone already works from, so a re-solve only fills
+  // the newly added day(s) around it.
+  const savedScheduleLocks = useMemo(() => {
+    const saved = session.savedSchedule;
+    if (!saved || saved.schedule.length === 0) return null;
+    return buildLockedAssignments(saved.schedule, candidates, interviewers, {
+      includeUnlockedItems: true,
+    });
+  }, [candidates, interviewers, session.savedSchedule]);
+  // The scope can never shrink below the last day that already has a
+  // planned candidate - applying a smaller solve would silently drop them.
+  const minDayCount = useMemo(() => {
+    const rows = session.savedSchedule?.schedule ?? [];
+    let lastDate: string | null = null;
+    rows.forEach((item) => {
+      if (!Number.isFinite(item.time)) return;
+      const { dayIndex } = decodeScheduleTime(item.time, sessionDuration);
+      const date = dates[dayIndex];
+      if (date && (lastDate === null || date > lastDate)) lastDate = date;
+    });
+    if (!lastDate) return 1;
+    const index = session.plannableDates.indexOf(lastDate);
+    return index === -1 ? 1 : index + 1;
+  }, [dates, session.savedSchedule, session.plannableDates, sessionDuration]);
+  const canExtendDay =
+    session.effectiveDayCount < session.plannableDates.length;
+  const nextScopeDate = canExtendDay
+    ? session.plannableDates[session.effectiveDayCount]
+    : null;
+  const extendDay = () => {
+    const next = Math.min(
+      session.effectiveDayCount + 1,
+      session.plannableDates.length,
+    );
+    if (next === session.effectiveDayCount) return;
+    session.setDayCount(next);
+    void session.solvePlan(
+      savedScheduleLocks ??
+        publishedDayLocks ??
+        draft.explicitLockedAssignments,
+      { dayCount: next },
+    );
   };
   const retryWithAvailabilityDeviation = () => {
-    void session.solvePlan(publishedDayLocks ?? draft.lockedAssignments, {
-      availabilityFallback: "propose",
-    });
+    void session.solvePlan(
+      publishedDayLocks ?? draft.explicitLockedAssignments,
+      {
+        availabilityFallback: "propose",
+      },
+    );
   };
   const previewRepairStrategy = async (strategy: RepairStrategy) => {
     if (!persistence.isSaved || persistence.isSaving) {
@@ -511,6 +581,8 @@ export default function SolverView({
   const pendingUnplaced = pendingProposal?.result.unplaceable?.length ?? 0;
   const unplaceableCandidates = draft.presentation.unplaceableCandidates;
   const currentUnplaced = draft.presentation.unplaceableCandidates.length;
+  const placementCount = draft.presentation.sortedSchedule.length;
+  const totalCandidateCount = placementCount + currentUnplaced;
   const currentOutsideAvailability =
     draft.presentation.availabilitySummary.outsideAvailabilityAssignments;
   const pendingProposalIsStale = Boolean(
@@ -616,15 +688,7 @@ export default function SolverView({
       editRequestKey={editRequestKey}
       focusRequestKey={draftFocusRequestKey}
       assignmentConflicts={assignmentConflicts}
-      blockRestPreferenceEnabled={
-        session.proposalSolverOptions?.avoid_consecutive_interviewer_blocks ??
-        null
-      }
       panelSize={session.panelSize}
-      proposalStrategy={
-        session.proposalSolverOptions?.initial_strategy ??
-        session.solverOptions.initial_strategy
-      }
       canonicalBlocks={canonicalBlocks}
       currentReviewRequired={currentReviewRequired}
       currentReviewComplete={currentReviewComplete}
@@ -635,16 +699,20 @@ export default function SolverView({
       publicationReady={publicationReady}
       solverError={session.error}
       onOpenSettings={() => setRegenerationOpen(true)}
+      onWidenDays={onWidenDays}
+      onExtendDay={canExtendDay ? extendDay : undefined}
       onOpenConflictReview={onOpenConflictReview}
       onOpenRepair={() => {
         setRepairOpen(true);
         setRepairFocusRequest((request) => request + 1);
       }}
       onRetrySolve={solvePlan}
+      onDiscardSuggestion={session.discardCurrentSuggestion}
       onOpenPlan={onOpenPlan}
       onPreviewWithAvailabilityDeviation={retryWithAvailabilityDeviation}
       previewLoading={session.loading}
       backgroundMode={backgroundMode}
+      savedTouchSignal={savedTouchSignal}
     />
   );
 
@@ -748,6 +816,10 @@ export default function SolverView({
           interviewSlotCount={session.readiness.enabledSlotCount}
           readiness={session.readiness}
           availabilityReady={availabilityReady}
+          plannableDates={session.plannableDates}
+          effectiveDayCount={session.effectiveDayCount}
+          onDayCountChange={session.setDayCount}
+          minDayCount={minDayCount}
           loading={session.loading}
           error={session.error}
           elapsedMs={session.elapsedMs}
@@ -761,6 +833,11 @@ export default function SolverView({
             0,
           )}
           currentDraftReady={
+            // Simulated plans can never be persisted (their interviewers do
+            // not exist in the backend), so their draft's save status is
+            // meaningless: counting "ready" on it would deadlock every
+            // further action behind a save that can never happen.
+            syntheticInput ||
             !hasProposal ||
             (persistence.isSaved &&
               !persistence.isSaving &&
@@ -820,13 +897,40 @@ export default function SolverView({
                     <p className="m-0 mt-1 text-detail text-text-muted">
                       {candidate.reason}
                     </p>
+                    {candidate.reason ===
+                      "For mange i komiteen har meldt inhabilitet." &&
+                      (() => {
+                        const conflictedInterviewers = interviewers
+                          .filter((interviewer) =>
+                            interviewer.biased.includes(candidate.candidate_id),
+                          )
+                          .map((interviewer) => interviewer.name);
+                        if (conflictedInterviewers.length === 0) return null;
+                        const label = `Se ${conflictedInterviewers.length} registrerte inhabilitet${
+                          conflictedInterviewers.length === 1 ? "" : "er"
+                        }`;
+                        return (
+                          <details className="group mt-2 text-detail">
+                            <summary
+                              title={conflictedInterviewers.join(", ")}
+                              className={`w-fit cursor-pointer font-semibold text-brand underline decoration-brand/40 underline-offset-2 hover:decoration-brand ${keyboardFocusRingClass}`}
+                            >
+                              {label}
+                            </summary>
+                            <p className="m-0 mt-1 text-text-muted">
+                              {conflictedInterviewers.join(", ")}
+                            </p>
+                          </details>
+                        );
+                      })()}
                   </li>
                 ))}
               </ul>
             </SchedulePanelBody>
             <SchedulePanelFooter className="sticky bottom-0 z-10 bg-surface-base">
               <span className="text-detail font-semibold text-text-muted">
-                Resten av utkastet er beholdt.
+                Planutkastet er lagret med {placementCount} av{" "}
+                {totalCandidateCount} plassert.
               </span>
               <div className="flex flex-wrap items-center justify-end gap-2">
                 <button
@@ -838,13 +942,57 @@ export default function SolverView({
                 </button>
                 <button
                   type="button"
+                  onClick={() => {
+                    setPlacementStageDismissed(true);
+                    onEditByHand();
+                  }}
+                  data-cy="schedule-stage-hand-edit"
+                  className={cn(actionButtonBase, actionButtonNeutral)}
+                >
+                  Rediger for hånd
+                </button>
+                <button
+                  type="button"
                   onClick={() => setRegenerationOpen(true)}
-                  data-cy="schedule-stage-primary-action"
-                  className={cn(actionButtonBase, actionButtonPrimary)}
+                  className={cn(actionButtonBase, actionButtonNeutral)}
                 >
                   Juster og prøv igjen
-                  <ArrowRight size={iconSizes.medium} aria-hidden="true" />
                 </button>
+                {canExtendDay ? (
+                  <button
+                    type="button"
+                    onClick={extendDay}
+                    disabled={
+                      session.loading ||
+                      (!syntheticInput &&
+                        (!persistence.isSaved ||
+                          persistence.isSaving ||
+                          persistence.hasConflict))
+                    }
+                    data-cy="schedule-stage-primary-action"
+                    data-extend-day="true"
+                    className={cn(actionButtonBase, actionButtonPrimary)}
+                  >
+                    {session.loading
+                      ? "Beregner…"
+                      : `Planlegg neste dag (${formatAccessibleDate(
+                          nextScopeDate ?? "",
+                        )})`}
+                    {!session.loading && (
+                      <ArrowRight size={iconSizes.medium} aria-hidden="true" />
+                    )}
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={onWidenDays}
+                    data-cy="schedule-stage-primary-action"
+                    className={cn(actionButtonBase, actionButtonPrimary)}
+                  >
+                    Utvid med flere dager
+                    <ArrowRight size={iconSizes.medium} aria-hidden="true" />
+                  </button>
+                )}
               </div>
             </SchedulePanelFooter>
           </SchedulePanel>

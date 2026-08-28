@@ -50,7 +50,7 @@ class SolveOptions:
     repair_strategy: str = "balanced"
     repair_mode: bool = False
     overtime_weight: int = 40
-    load_balance_weight: int = 4
+    load_balance_weight: int = 20
     continuity_weight: int = 12
     # Cost of using a "helst ikke" slot. Sits in the same weighted tier as
     # load balancing and continuity so it trades off against them rather
@@ -188,7 +188,7 @@ def solve_schedule_v1(
     options = SolveOptions(**normalized_options)
     initial_strategy_defaults = {
         "minimize_overtime": (100, 1, 0, False),
-        "balanced": (40, 4, 1, True),
+        "balanced": (40, 20, 1, True),
         "compact_days": (40, 2, 48, True),
         "balance_workload": (12, 10, 0, False),
     }

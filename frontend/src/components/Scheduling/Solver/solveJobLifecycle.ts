@@ -36,6 +36,7 @@ type SolveJobReadOutcome =
 type SolveJobPollOutcome =
   | SolveJobInterruption
   | { kind: "finished"; job: SolveJob }
+  | { kind: "pending-timeout" }
   | { kind: "missing" };
 
 type SolveJobCancelOutcome =
@@ -220,14 +221,29 @@ export const createSolveJobLifecycle = (
     created: SolveJob,
     isStale: IsStale = neverStale,
     onJobChange: OnJobChange = () => undefined,
+    pendingDeadlineMs?: number,
   ): Promise<SolveJobPollOutcome> => {
     let job = created;
     const authorityEpoch = captureSensitiveAdmissionAuthorityEpoch(scope);
     const beforePoll = interruption(isStale, authorityEpoch);
     if (beforePoll) return beforePoll;
     onJobChange(job);
+    const pendingDeadline = pendingDeadlineMs
+      ? Date.now() + pendingDeadlineMs
+      : null;
 
     while (job.status === "PENDING" || job.status === "RUNNING") {
+      // A worker claims pending jobs within its poll interval (~2s). A job
+      // that is still PENDING after the deadline was never picked up — the
+      // solver worker is not running — so fail fast instead of spinning
+      // forever. RUNNING jobs are fine; the worker is on it.
+      if (
+        pendingDeadline !== null &&
+        job.status === "PENDING" &&
+        Date.now() > pendingDeadline
+      ) {
+        return { kind: "pending-timeout" };
+      }
       await new Promise((resolve) =>
         setTimeout(resolve, SOLVE_POLL_INTERVAL_MS),
       );

@@ -26,6 +26,9 @@ interface DistributedPlanActionsParams {
   groupId: string;
   savedSchedule: SavedSchedule | undefined;
   draftPersistenceReady?: boolean;
+  /** Dev-only mock data: the plan shown contains fictitious interviewers that
+   * do not exist in the backend, so no edit can ever be persisted. */
+  syntheticInput?: boolean;
   notify: Notify;
 }
 
@@ -34,6 +37,7 @@ export const useDistributedPlanActions = ({
   groupId,
   savedSchedule,
   draftPersistenceReady = true,
+  syntheticInput = false,
   notify,
 }: DistributedPlanActionsParams) => {
   const queryClient = useQueryClient();
@@ -99,6 +103,15 @@ export const useDistributedPlanActions = ({
     errorMessage: string,
   ) => {
     if (!savedSchedule) return false;
+    if (syntheticInput) {
+      notify(
+        "Simulerte planer kan ikke lagres — de inneholder fiktive intervjuere " +
+          "som ikke finnes i systemet. Skru av «Simuler testdata» og generer " +
+          "på nytt med ekte data for å kunne lagre.",
+        "error",
+      );
+      return false;
+    }
     try {
       // The exact current boundary, not the is_distributed echo: a row edit
       // means "keep the publish state as it is", never "publish everything".

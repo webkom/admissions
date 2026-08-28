@@ -205,9 +205,9 @@ LEGO_GENDER_TO_PANEL_CODE = {LEGO_GENDER_MALE: "M", LEGO_GENDER_FEMALE: "F"}
 
 
 # CP-SAT stops as soon as it proves the best plan, so these are ceilings rather
-# than fixed delays. Normal solves use a short budget; callers can explicitly
-# request the longer ceiling for unusually difficult admissions.
-DEFAULT_SOLVER_SECONDS = 30
+# than fixed delays. Normal solves get enough time for larger admissions;
+# callers can still request the longer ceiling for unusually difficult ones.
+DEFAULT_SOLVER_SECONDS = 100
 MAX_SOLVER_SECONDS = 5 * 60
 SOLVER_NUM_WORKERS = 4
 SOLVER_RANDOM_SEED = 42

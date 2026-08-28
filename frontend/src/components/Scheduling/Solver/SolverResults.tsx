@@ -8,7 +8,7 @@ import {
   List,
   Lock,
   LockKeyhole,
-  MoreHorizontal,
+  Pencil,
   RotateCcw,
   Unlock,
   Wrench,
@@ -27,12 +27,11 @@ import {
   SchedulingButton,
   type SchedulingWorkspaceMode,
   actionButtonBase,
+  actionButtonDanger,
   actionButtonNeutral,
-  actionButtonPrimary,
   keyboardFocusRingClass,
-  useDetailsMenu,
 } from "../ui";
-import type { InitialPlanningStrategy, SavedSchedule } from "../types";
+import type { SavedSchedule } from "../types";
 import {
   decodeScheduleTime,
   formatDateHeader,
@@ -48,10 +47,13 @@ import {
   type AssignmentConflictSummary,
 } from "./assignmentConflicts";
 import { derivePlanDraftWorkflowState } from "./planDraftWorkflow";
+import DeviationNextStepMenu, {
+  type DeviationNextStepAction,
+} from "./DeviationNextStepMenu";
 import PanelMemberChips from "./PanelMemberChips";
-import PlanHealthSummary from "./PlanHealthSummary";
-
-const overflowMenuItemClass = `flex w-full rounded-md px-3 py-2 text-left text-ui font-semibold text-text-primary hover:bg-surface-subtle ${keyboardFocusRingClass}`;
+import PlanHealthSummary, {
+  type PlanHealthException,
+} from "./PlanHealthSummary";
 
 interface SolverResultsProps {
   result: SolveResponse | null;
@@ -71,9 +73,7 @@ interface SolverResultsProps {
   editRequestKey: number;
   focusRequestKey?: number;
   assignmentConflicts: AssignmentConflictSummary;
-  blockRestPreferenceEnabled: boolean | null;
   panelSize: number;
-  proposalStrategy: InitialPlanningStrategy;
   canonicalBlocks: number[][];
   currentReviewRequired: boolean;
   currentReviewComplete: boolean;
@@ -84,23 +84,22 @@ interface SolverResultsProps {
   publicationReady: boolean;
   solverError: string;
   onOpenSettings: () => void;
+  onWidenDays: () => void;
+  /** One-click incremental extend: solve the next framework day with the
+   *  saved plan locked. Undefined when every plannable day is in scope. */
+  onExtendDay?: () => void;
   onOpenConflictReview: () => void;
   onOpenRepair: () => void;
   onRetrySolve: () => void;
+  onDiscardSuggestion: () => void;
   onOpenPlan: () => void;
   onPreviewWithAvailabilityDeviation: () => void;
   previewLoading: boolean;
   backgroundMode?: boolean;
+  /** Rows the user just hand-edited, once their debounced save completed:
+   *  the plan scrolls back to them and highlights them briefly. */
+  savedTouchSignal?: { key: number; scheduleIndexes: number[] } | null;
 }
-
-const strategyLabel = (strategy: InitialPlanningStrategy) =>
-  strategy === "minimize_overtime"
-    ? "Følg tilgjengeligheten"
-    : strategy === "compact_days"
-      ? "Kompakte intervjudager"
-      : strategy === "balance_workload"
-        ? "Jevn arbeidsmengde"
-        : "Balansert";
 
 const SolverResults = ({
   result,
@@ -120,8 +119,6 @@ const SolverResults = ({
   editRequestKey,
   focusRequestKey = 0,
   assignmentConflicts,
-  blockRestPreferenceEnabled,
-  proposalStrategy,
   canonicalBlocks,
   currentReviewRequired,
   currentReviewComplete,
@@ -132,20 +129,21 @@ const SolverResults = ({
   publicationReady,
   solverError,
   onOpenSettings,
+  onWidenDays,
+  onExtendDay,
   onOpenConflictReview,
   onOpenRepair,
   onRetrySolve,
+  onDiscardSuggestion,
   onOpenPlan,
   onPreviewWithAvailabilityDeviation,
   previewLoading,
   backgroundMode = false,
+  savedTouchSignal = null,
 }: SolverResultsProps) => {
-  const [viewType, setViewType] = useState<"list" | "calendar" | "person">(
-    "list",
-  );
+  const [viewType, setViewType] = useState<"list" | "calendar">("list");
   const [workspaceMode, setWorkspaceMode] =
     useState<SchedulingWorkspaceMode>("preview");
-  const [detailsOpen, setDetailsOpen] = useState(false);
   const [selectedInterviewer, setSelectedInterviewer] = useState("");
   const [selectedListScheduleIndex, setSelectedListScheduleIndex] = useState<
     number | null
@@ -156,12 +154,10 @@ const SolverResults = ({
   const [listDropTargetIndex, setListDropTargetIndex] = useState<number | null>(
     null,
   );
+  const [moveScope, setMoveScope] = useState<"interview" | "group">(
+    "interview",
+  );
   const draftHeadingRef = useRef<HTMLHeadingElement>(null);
-  const {
-    detailsRef: overflowMenuRef,
-    closeDetails: closeOverflowMenu,
-    handleDetailsToggle: handleOverflowMenuToggle,
-  } = useDetailsMenu();
   const { presentation } = draft;
   useEffect(() => {
     if (backgroundMode || focusRequestKey <= 0) return;
@@ -227,31 +223,53 @@ const SolverResults = ({
 
     return summary;
   }, [canonicalBlocks, dates, presentation.sortedEntries, sessionDuration]);
+  const groupIndexesByScheduleIndex = useMemo(() => {
+    const groups = new Map<number, number[]>();
+    canonicalBlocks
+      .filter((block) => block.length > 0)
+      .forEach((block) => {
+        const indexes = presentation.sortedEntries
+          .filter(({ item }) => block.includes(item.time))
+          .map(({ scheduleIndex }) => scheduleIndex);
+        indexes.forEach((index) => groups.set(index, indexes));
+      });
+    return groups;
+  }, [canonicalBlocks, presentation.sortedEntries]);
 
   useEffect(() => {
     setSelectedInterviewer("");
     setSelectedListScheduleIndex(null);
     setDraggedListScheduleIndex(null);
     setListDropTargetIndex(null);
+    // The plan opens in read-only overview; editing is an explicit choice
+    // ("Rediger"), so opening the draft never invites accidental changes.
+    // startEditing baselines the edit session when the user opts in.
     setWorkspaceMode("preview");
     draft.finishEditSession();
-  }, [draft.finishEditSession, solveTick]);
+  }, [
+    backgroundMode,
+    draft.finishEditSession,
+    savedSchedule?.is_distributed,
+    solveTick,
+  ]);
 
+  // Keep the enter-editing trigger in a ref: beginEditSession's identity
+  // changes with every draft edit, and if the effect re-ran on it, each
+  // edit would re-baseline the session and disarm "Angre redigeringen".
+  const beginEditSessionRef = useRef(draft.beginEditSession);
+  useEffect(() => {
+    beginEditSessionRef.current = draft.beginEditSession;
+  });
   useEffect(() => {
     if (
       !backgroundMode &&
       editRequestKey > 0 &&
       !savedSchedule?.is_distributed
     ) {
-      draft.beginEditSession();
+      beginEditSessionRef.current();
       setWorkspaceMode("editing");
     }
-  }, [
-    backgroundMode,
-    draft.beginEditSession,
-    editRequestKey,
-    savedSchedule?.is_distributed,
-  ]);
+  }, [backgroundMode, editRequestKey, savedSchedule?.is_distributed]);
 
   useEffect(() => {
     if (
@@ -286,15 +304,58 @@ const SolverResults = ({
       return;
     }
     if (selectedListScheduleIndex !== scheduleIndex) {
-      draft.swapTimes(selectedListScheduleIndex, scheduleIndex);
+      if (moveScope === "group") {
+        draft.moveItems(
+          groupIndexesByScheduleIndex.get(selectedListScheduleIndex) ?? [
+            selectedListScheduleIndex,
+          ],
+          presentation.sortedEntries[scheduleIndex]?.item.time ??
+            presentation.sortedEntries[selectedListScheduleIndex]?.item.time ??
+            0,
+        );
+      } else {
+        draft.swapTimes(selectedListScheduleIndex, scheduleIndex);
+      }
     }
     setSelectedListScheduleIndex(null);
   };
+  // Names what a click or drag will actually move, so "Flytt gruppe" vs
+  // "Flytt intervju" is a visible fact rather than a guess.
+  const moveScopeHint = (() => {
+    if (!canEditDraft || viewType !== "list") return "";
+    const selectedEntry =
+      selectedListScheduleIndex !== null
+        ? presentation.sortedEntries[selectedListScheduleIndex]
+        : undefined;
+    if (moveScope === "group") {
+      if (selectedListScheduleIndex === null || !selectedEntry) {
+        return "Flytt gruppe: velg et intervju — hele blokken det tilhører flyttes sammen.";
+      }
+      const groupTimes = (
+        groupIndexesByScheduleIndex.get(selectedListScheduleIndex) ?? []
+      )
+        .map((index) => presentation.sortedEntries[index]?.item.time)
+        .filter((time) => Number.isFinite(time));
+      if (groupTimes.length <= 1) {
+        return `Flytt gruppe: ${selectedEntry.item.candidate} ligger alene i blokken og flyttes individuelt.`;
+      }
+      return `Flytt gruppe: ${groupTimes.length} intervjuer (${formatSlotTime(
+        Math.min(...groupTimes),
+      )}–${formatSlotTime(
+        Math.max(...groupTimes) + sessionDuration,
+      )}) flyttes sammen, inkludert ${selectedEntry.item.candidate}.`;
+    }
+    if (!selectedEntry) {
+      return "Flytt intervju: velg to intervjuer for å bytte tidspunkt.";
+    }
+    return `Bytter ${selectedEntry.item.candidate} (${formatSlotTime(
+      selectedEntry.item.time,
+    )}) med intervjuet du velger neste.`;
+  })();
   const unplaceableCount = presentation.unplaceableCandidates.length;
   const overviewStats = presentation.overviewStats;
   const totalCandidateCount =
     presentation.sortedSchedule.length + unplaceableCount;
-  const usedBlockCount = blockSummaryByScheduleIndex.size;
   const saveStatusLabel = persistence.hasConflict
     ? "Lagring stoppet"
     : persistence.state === "error"
@@ -324,20 +385,110 @@ const SolverResults = ({
     assignmentConflictCount: assignmentConflicts.assignmentCount,
     publicationReady,
   });
-  const healthExceptions = [
-    unplaceableCount > 0 && workflowState.kind !== "placements_missing"
-      ? `${unplaceableCount} mangler plass`
-      : undefined,
-    presentation.availabilitySummary.outsideAvailabilityAssignments > 0
-      ? `${presentation.availabilitySummary.outsideAvailabilityAssignments} utenfor tilgjengelighet`
-      : undefined,
-    assignmentConflicts.assignmentCount > 0
-      ? `${assignmentConflicts.assignmentCount} inhabilitet${assignmentConflicts.assignmentCount === 1 ? "" : "er"}`
-      : undefined,
-    presentation.blockRestSummary.exceptionCount > 0
-      ? `${presentation.blockRestSummary.exceptionCount} hvileavvik`
-      : undefined,
-  ].filter((value): value is string => Boolean(value));
+  const firstAvailabilityIssueScheduleIndex = useMemo(() => {
+    const entry = presentation.sortedEntries.find(({ item }) =>
+      item.panel.some(
+        (member) =>
+          presentation.availabilityStatusFor(item, member) ===
+          "outside_submitted_availability",
+      ),
+    );
+    return entry?.scheduleIndex;
+  }, [presentation]);
+  const firstConflictScheduleIndex = useMemo(
+    () => [...assignmentConflicts.affectedScheduleIndexes][0],
+    [assignmentConflicts.affectedScheduleIndexes],
+  );
+  const healthExceptions: PlanHealthException[] = [
+    ...(unplaceableCount > 0 && workflowState.kind !== "placements_missing"
+      ? [
+          {
+            key: "unplaced",
+            label: `${unplaceableCount} gjenstår`,
+            kind: "unplaced" as const,
+          },
+        ]
+      : []),
+    ...(presentation.availabilitySummary.outsideAvailabilityAssignments > 0
+      ? [
+          {
+            key: "availability",
+            label: `${presentation.availabilitySummary.outsideAvailabilityAssignments} utenfor tilgjengelighet`,
+            kind: "availability" as const,
+            ...(firstAvailabilityIssueScheduleIndex !== undefined
+              ? { scheduleIndex: firstAvailabilityIssueScheduleIndex }
+              : {}),
+          },
+        ]
+      : []),
+    ...(assignmentConflicts.assignmentCount > 0
+      ? [
+          {
+            key: "conflicts",
+            label: `${assignmentConflicts.assignmentCount} inhabilitet${assignmentConflicts.assignmentCount === 1 ? "" : "er"}`,
+            kind: "conflict" as const,
+            ...(firstConflictScheduleIndex !== undefined
+              ? { scheduleIndex: firstConflictScheduleIndex }
+              : {}),
+          },
+        ]
+      : []),
+    ...(presentation.blockRestSummary.exceptionCount > 0
+      ? [
+          {
+            key: "rest",
+            label: `${presentation.blockRestSummary.exceptionCount} hvileavvik`,
+            kind: "rest" as const,
+          },
+        ]
+      : []),
+  ];
+  const highlightedRowTimeoutRef = useRef<number | null>(null);
+  const [highlightedScheduleIndexes, setHighlightedScheduleIndexes] = useState<
+    Set<number>
+  >(() => new Set());
+  const clearRowHighlightTimeout = () => {
+    if (highlightedRowTimeoutRef.current !== null) {
+      window.clearTimeout(highlightedRowTimeoutRef.current);
+      highlightedRowTimeoutRef.current = null;
+    }
+  };
+  useEffect(() => clearRowHighlightTimeout, []);
+  // Scroll to the rows and mark them briefly, used both for "your edit was
+  // saved" and for deviation chips that point at a specific row. Calendar
+  // cards have no stable row anchors, so the scroll only applies to the
+  // list view; the highlight timeout still runs there.
+  const focusScheduleRows = (scheduleIndexes: number[]) => {
+    if (scheduleIndexes.length === 0) return;
+    clearRowHighlightTimeout();
+    setHighlightedScheduleIndexes(new Set(scheduleIndexes));
+    highlightedRowTimeoutRef.current = window.setTimeout(() => {
+      setHighlightedScheduleIndexes(new Set());
+      highlightedRowTimeoutRef.current = null;
+    }, 2000);
+    if (viewType !== "list") return;
+    window.requestAnimationFrame(() => {
+      document
+        .getElementById(`schedule-row-${scheduleIndexes[0]}`)
+        ?.scrollIntoView({
+          behavior: window.matchMedia("(prefers-reduced-motion: reduce)")
+            .matches
+            ? "auto"
+            : "smooth",
+          block: "nearest",
+        });
+    });
+  };
+  const handledTouchKeyRef = useRef(0);
+  useEffect(() => {
+    if (backgroundMode || !savedTouchSignal) return;
+    if (savedTouchSignal.key === handledTouchKeyRef.current) return;
+    handledTouchKeyRef.current = savedTouchSignal.key;
+    focusScheduleRows(savedTouchSignal.scheduleIndexes);
+    // focusScheduleRows closes over viewType only for the scroll target;
+    // re-running it on a view switch would replay the highlight, so it is
+    // deliberately not a dep.
+  }, [backgroundMode, savedTouchSignal, viewType]);
   const startEditing = () => {
     if (workspaceMode === "editing") return;
     if (!draft.canRestoreEditSession) draft.beginEditSession();
@@ -355,6 +506,122 @@ const SolverResults = ({
     }
     setWorkspaceMode("preview");
   };
+  const editAndFocusRows = (scheduleIndexes: number[]) => {
+    startEditing();
+    focusDraftHeading();
+    focusScheduleRows(scheduleIndexes);
+  };
+  const jumpToHealthException = (exception: PlanHealthException) => {
+    // An unplaced candidate has no row to jump to - the fix is scope (more
+    // enabled days), which lives in the framework section.
+    if (exception.kind === "unplaced") {
+      onWidenDays();
+      return;
+    }
+    editAndFocusRows(
+      exception.scheduleIndex !== undefined ? [exception.scheduleIndex] : [],
+    );
+  };
+  const nextStepActions: DeviationNextStepAction[] = (() => {
+    switch (workflowState.kind) {
+      case "solver_error":
+        return [
+          {
+            key: "retry-solve",
+            label: "Prøv igjen",
+            onClick: onRetrySolve,
+            variant: "primary",
+            dataCy: "proposal-primary-action",
+          },
+        ];
+      case "placements_missing":
+        return [
+          {
+            key: "hand-edit",
+            label: "Rediger for hånd",
+            onClick: () => {
+              startEditing();
+              focusDraftHeading();
+            },
+            dataCy: "proposal-hand-edit",
+          },
+          {
+            key: "settings",
+            label: "Juster oppsett",
+            onClick: onOpenSettings,
+            dataCy: "proposal-rerun-unplaceable",
+          },
+          onExtendDay
+            ? {
+                key: "extend-day",
+                label: "Planlegg neste dag",
+                onClick: onExtendDay,
+                variant: "primary",
+                dataCy: "proposal-widen-days",
+                icon: <ArrowRight size={iconSizes.small} aria-hidden="true" />,
+              }
+            : {
+                key: "widen-days",
+                label: "Utvid med flere dager",
+                onClick: onWidenDays,
+                variant: "primary",
+                dataCy: "proposal-widen-days",
+                icon: <ArrowRight size={iconSizes.small} aria-hidden="true" />,
+              },
+        ];
+      case "candidate_check_pending":
+        return [
+          {
+            key: "review",
+            label: "Kontroller kandidater",
+            onClick: onOpenConflictReview,
+            variant: "primary",
+            dataCy: "proposal-primary-action",
+            icon: <ArrowRight size={iconSizes.small} aria-hidden="true" />,
+          },
+        ];
+      case "repair_required":
+        return [
+          {
+            key: "edit-conflicts",
+            label: "Rediger berørte rader",
+            onClick: () =>
+              editAndFocusRows(
+                firstConflictScheduleIndex !== undefined
+                  ? [firstConflictScheduleIndex]
+                  : [],
+              ),
+            dataCy: "proposal-edit-conflicts",
+          },
+          {
+            key: "settings",
+            label: "Juster oppsett",
+            onClick: onOpenSettings,
+          },
+          {
+            key: "repair",
+            label: "Lag reparasjonsforslag",
+            onClick: onOpenRepair,
+            variant: "primary",
+            dataCy: "proposal-primary-action",
+            icon: <ArrowRight size={iconSizes.small} aria-hidden="true" />,
+          },
+        ];
+      case "ready_to_publish":
+        return [
+          {
+            key: "publish",
+            label: "Gå til publisering",
+            onClick: onOpenPlan,
+            variant: "primary",
+            dataCy: "proposal-primary-action",
+            icon: <ArrowRight size={iconSizes.small} aria-hidden="true" />,
+          },
+        ];
+      default:
+        return [];
+    }
+  })();
   const hasConflictFor = (
     scheduleIndex: number,
     member: Parameters<typeof assignmentPanelMemberKey>[1],
@@ -376,673 +643,681 @@ const SolverResults = ({
   return (
     <div data-cy="schedule-stage" data-stage={workflowState.kind}>
       {hasSchedule(result?.status) && planRevealed && (
-        <SchedulePanel
-          dataCy="proposal-review"
-          stage={workflowState.kind}
-          className="animate-fade-in motion-reduce:animate-none"
-        >
-          <SchedulePanelHeader
-            headingRef={draftHeadingRef}
-            title="Planutkast"
-            actions={
-              <div className="flex flex-wrap items-center gap-2">
-                {viewType === "person" ? (
-                  <button
-                    type="button"
-                    onClick={() => setViewType("list")}
-                    className={cn(actionButtonBase, actionButtonNeutral)}
-                  >
-                    Tilbake til planen
-                  </button>
-                ) : (
-                  <div data-cy="view-switcher" data-view={viewType}>
-                    <SegmentedControl<"list" | "calendar">
-                      value={viewType}
-                      onChange={setViewType}
-                      items={[
-                        {
-                          key: "list",
-                          label: "Liste",
-                          icon: <List size={iconSizes.small} />,
-                        },
-                        {
-                          key: "calendar",
-                          label: "Kalender",
-                          icon: <CalendarDays size={iconSizes.small} />,
-                        },
-                      ]}
-                      aria-label="Visning av planutkastet"
+        <>
+          <SchedulePanel
+            dataCy="proposal-review"
+            stage={workflowState.kind}
+            className="animate-fade-in motion-reduce:animate-none"
+          >
+            <SchedulePanelHeader
+              headingRef={draftHeadingRef}
+              title="Planutkast"
+              titleClassName="text-2xl font-bold"
+              actions={
+                <div className="flex flex-wrap items-center gap-2">
+                  {!backgroundMode && (
+                    <button
+                      type="button"
+                      onClick={onOpenSettings}
+                      data-cy="proposal-rerun"
+                      className={cn(actionButtonBase, actionButtonDanger)}
+                    >
+                      Generer nytt forslag
+                    </button>
+                  )}
+                </div>
+              }
+            />
+            <SchedulePanelBody>
+              {!backgroundMode && (
+                <section
+                  data-cy="plan-draft-next-action"
+                  role={workflowState.tone === "danger" ? "alert" : "status"}
+                  className={cn(
+                    "mb-4 border-b border-border-soft pb-4",
+                    workflowState.tone === "danger"
+                      ? "text-danger"
+                      : workflowState.tone === "warning"
+                        ? "text-amber-900"
+                        : workflowState.tone === "success"
+                          ? "text-success"
+                          : "text-text-primary",
+                  )}
+                >
+                  <h3 className="m-0 text-base font-bold">
+                    {workflowState.title}
+                  </h3>
+                  <p className="m-0 mt-1 text-ui text-text-muted">
+                    {workflowState.description}
+                  </p>
+                </section>
+              )}
+              {overviewStats && (
+                <PlanHealthSummary
+                  overviewStats={overviewStats}
+                  totalCandidateCount={totalCandidateCount}
+                  healthExceptions={healthExceptions}
+                  onJumpToException={jumpToHealthException}
+                  unplaceableCount={unplaceableCount}
+                  previewLoading={previewLoading}
+                  onPreviewWithAvailabilityDeviation={
+                    onPreviewWithAvailabilityDeviation
+                  }
+                />
+              )}
+              {canEditDraft && (
+                <div
+                  data-cy="manual-schedule-editing"
+                  role="status"
+                  className="mb-4 flex flex-wrap items-center justify-between gap-3 border-y border-brand-border bg-brand-soft px-4 py-3 text-ui"
+                >
+                  <div className="flex min-w-0 items-center gap-3">
+                    <Wrench
+                      size={iconSizes.small}
+                      className="flex-none text-brand"
+                      aria-hidden="true"
                     />
+                    <p className="m-0 text-detail text-text-muted">
+                      Du redigerer planen. Endringer lagres automatisk.
+                    </p>
                   </div>
-                )}
-                {!backgroundMode && !isEditing && (
-                  <details
-                    ref={overflowMenuRef}
-                    onToggle={handleOverflowMenuToggle}
-                    className="group relative"
-                  >
-                    <summary
-                      aria-haspopup="menu"
-                      className={cn(
-                        actionButtonBase,
-                        actionButtonNeutral,
-                        "cursor-pointer list-none [&::-webkit-details-marker]:hidden",
-                      )}
+                  {draft.canRestoreEditSession && !persistence.hasConflict && (
+                    <SchedulingButton
+                      onClick={draft.restoreEditSession}
+                      variant="quiet"
                     >
-                      <MoreHorizontal
-                        size={iconSizes.small}
-                        aria-hidden="true"
-                      />
-                      Endre planen
-                      <ChevronDown
-                        size={iconSizes.small}
-                        aria-hidden="true"
-                        className="transition-transform group-open:rotate-180"
-                      />
-                    </summary>
-                    <div
-                      role="menu"
-                      aria-label="Handlinger for å endre planen"
-                      className="absolute right-0 top-full z-30 mt-2 min-w-56 overflow-hidden rounded-lg border border-border bg-surface-base p-1 shadow-lg"
+                      <RotateCcw size={iconSizes.small} aria-hidden="true" />
+                      Angre redigeringen
+                    </SchedulingButton>
+                  )}
+                  {(savedSchedule?.schedule?.length ?? 0) > 0 && (
+                    <SchedulingButton
+                      onClick={onDiscardSuggestion}
+                      variant="quiet"
                     >
+                      Forkast forslag
+                    </SchedulingButton>
+                  )}
+                </div>
+              )}
+              {!backgroundMode && (
+                <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+                  <h3 className="m-0 text-base font-bold text-text-primary">
+                    Plan
+                  </h3>
+                  <div className="flex flex-wrap items-center gap-2">
+                    {canEditDraft && (
+                      <SegmentedControl<"interview" | "group">
+                        value={moveScope}
+                        onChange={setMoveScope}
+                        items={[
+                          { key: "interview", label: "Flytt intervju" },
+                          { key: "group", label: "Flytt gruppe" },
+                        ]}
+                        aria-label="Velg hva som skal flyttes"
+                      />
+                    )}
+                    {!isEditing && (
                       <button
                         type="button"
-                        role="menuitem"
                         onClick={() => {
-                          closeOverflowMenu(false);
                           startEditing();
                           focusDraftHeading();
                         }}
-                        className={overflowMenuItemClass}
+                        className={cn(actionButtonBase, actionButtonNeutral)}
                       >
-                        Rediger planutkast
+                        <Pencil size={iconSizes.small} aria-hidden="true" />
+                        Rediger
                       </button>
-                      <button
-                        type="button"
-                        role="menuitem"
-                        onClick={() => {
-                          closeOverflowMenu(false);
-                          setViewType("person");
-                          focusDraftHeading();
-                        }}
-                        className={overflowMenuItemClass}
-                      >
-                        Vis belastning
-                      </button>
-                      <button
-                        type="button"
-                        role="menuitem"
-                        onClick={() => {
-                          closeOverflowMenu(true);
-                          setDetailsOpen(true);
-                        }}
-                        className={overflowMenuItemClass}
-                      >
-                        Vis genereringsdetaljer
-                      </button>
-                      {currentReviewRequired && (
-                        <button
-                          type="button"
-                          role="menuitem"
-                          onClick={() => {
-                            closeOverflowMenu(true);
-                            onOpenConflictReview();
-                          }}
-                          data-cy="reopen-candidate-review"
-                          className={overflowMenuItemClass}
-                        >
-                          Se eller endre kandidatkontroll
-                        </button>
-                      )}
-                      <button
-                        type="button"
-                        role="menuitem"
-                        onClick={() => {
-                          closeOverflowMenu(true);
-                          onOpenSettings();
-                        }}
-                        data-cy="proposal-rerun"
-                        className={overflowMenuItemClass}
-                      >
-                        Generer nytt forslag
-                      </button>
+                    )}
+                    <div data-cy="view-switcher" data-view={viewType}>
+                      <SegmentedControl<"list" | "calendar">
+                        value={viewType}
+                        onChange={setViewType}
+                        items={[
+                          {
+                            key: "list",
+                            label: "Liste",
+                            icon: <List size={iconSizes.small} />,
+                          },
+                          {
+                            key: "calendar",
+                            label: "Kalender",
+                            icon: <CalendarDays size={iconSizes.small} />,
+                          },
+                        ]}
+                        aria-label="Visning av planutkastet"
+                      />
                     </div>
-                  </details>
-                )}
-              </div>
-            }
-          />
-          <SchedulePanelBody>
-            {!backgroundMode && (
-              <section
-                data-cy="plan-draft-next-action"
-                role={workflowState.tone === "danger" ? "alert" : "status"}
-                className={cn(
-                  "mb-4 border-b border-border-soft pb-4",
-                  workflowState.tone === "danger"
-                    ? "text-danger"
-                    : workflowState.tone === "warning"
-                      ? "text-amber-900"
-                      : workflowState.tone === "success"
-                        ? "text-success"
-                        : "text-text-primary",
-                )}
-              >
-                <h3 className="m-0 text-base font-bold">
-                  {workflowState.title}
-                </h3>
-                <p className="m-0 mt-1 text-ui text-text-muted">
-                  {workflowState.description}
-                </p>
-              </section>
-            )}
-            {overviewStats && (
-              <PlanHealthSummary
-                overviewStats={overviewStats}
-                totalCandidateCount={totalCandidateCount}
-                healthExceptions={healthExceptions}
-                detailsOpen={detailsOpen}
-                onToggleDetails={() => setDetailsOpen((open) => !open)}
-                usedBlockCount={usedBlockCount}
-                strategyLabel={strategyLabel(proposalStrategy)}
-                blockRestPreferenceEnabled={blockRestPreferenceEnabled}
-                blockRestSummary={presentation.blockRestSummary}
-                unplaceableCount={unplaceableCount}
-                previewLoading={previewLoading}
-                onPreviewWithAvailabilityDeviation={
-                  onPreviewWithAvailabilityDeviation
-                }
-              />
-            )}
-            {canEditDraft && (
-              <div
-                data-cy="manual-schedule-editing"
-                role="status"
-                className="mb-4 flex flex-wrap items-center justify-between gap-3 border-y border-brand-border bg-brand-soft px-4 py-3 text-ui"
-              >
-                <div className="flex min-w-0 items-center gap-3">
-                  <Wrench
-                    size={iconSizes.small}
-                    className="flex-none text-brand"
-                    aria-hidden="true"
-                  />
-                  <p className="m-0 text-detail text-text-muted">
-                    Du redigerer planen. Endringer lagres automatisk.
-                  </p>
+                  </div>
                 </div>
-                {draft.canRestoreEditSession && !persistence.hasConflict && (
-                  <SchedulingButton
-                    onClick={draft.restoreEditSession}
-                    variant="quiet"
-                  >
-                    <RotateCcw size={iconSizes.small} aria-hidden="true" />
-                    Angre redigeringen
-                  </SchedulingButton>
-                )}
-              </div>
-            )}
-            {viewType === "person" ? (
-              <InterviewerLoadView
-                entries={presentation.sortedEntries}
-                distribution={presentation.interviewerDistribution}
-                totalAssignments={presentation.totalAssignments}
-                selectedInterviewer={selectedInterviewer}
-                onSelectInterviewer={setSelectedInterviewer}
-                canEditDraft={canEditDraft}
-                interviewerOptions={presentation.interviewerOptions}
-                onSwapPanelMember={draft.swapPanelMember}
-                displayCandidate={presentation.displayCandidate}
-                formatSlotTime={formatSlotTime}
-                availabilityStatusFor={presentation.availabilityStatusFor}
-                hasConflictFor={hasConflictFor}
-              />
-            ) : viewType === "list" ? (
-              <>
-                <div className="overflow-x-auto rounded-lg border border-border-soft">
-                  <table className="w-full min-w-schedule-table border-collapse">
-                    <thead>
-                      <tr>
-                        <th className="first:!rounded-tl-lg !rounded-none bg-surface-subtle px-4 py-3 text-left text-ui font-semibold text-text-muted">
-                          Tidspunkt
-                        </th>
-                        <th className="!rounded-none bg-surface-subtle px-4 py-3 text-left text-ui font-semibold text-text-muted">
-                          Kandidat
-                        </th>
-                        <th className="!rounded-none bg-surface-subtle px-4 py-3 text-left text-ui font-semibold text-text-muted">
-                          Intervjupanel
-                        </th>
-                        {canEditDraft && (
-                          <th className="last:!rounded-tr-lg !rounded-none bg-surface-subtle px-4 py-3 text-left text-ui font-semibold text-text-muted">
-                            Behold
+              )}
+              {moveScopeHint && (
+                <p
+                  data-cy="move-scope-hint"
+                  aria-live="polite"
+                  className="m-0 mb-4 text-detail text-text-muted"
+                >
+                  {moveScopeHint}
+                </p>
+              )}
+              {viewType === "list" ? (
+                <>
+                  <div className="overflow-x-auto rounded-lg border border-border-soft">
+                    <table className="w-full min-w-schedule-table border-collapse">
+                      <thead>
+                        <tr>
+                          <th className="first:!rounded-tl-lg !rounded-none bg-surface-subtle px-4 py-3 text-left text-ui font-semibold text-text-muted">
+                            Tidspunkt
                           </th>
-                        )}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {presentation.sortedEntries.map(
-                        ({ item, scheduleIndex }) => {
-                          const timeOptions = draft
-                            .timeOptionsFor(scheduleIndex)
-                            .map((time) => ({
-                              value: String(time),
-                              label: formatSlotTime(time),
-                            }));
-                          const blockSummary =
-                            blockSummaryByScheduleIndex.get(scheduleIndex);
-                          return (
-                            <React.Fragment
-                              key={`${item.candidate}-${item.time}-${scheduleIndex}`}
-                            >
-                              {blockSummary && (
-                                <tr>
-                                  <th
-                                    colSpan={canEditDraft ? 4 : 3}
-                                    scope="rowgroup"
-                                    className="border-y border-border-soft bg-surface-neutral px-4 py-2.5 text-left text-detail font-bold text-text-primary"
-                                  >
-                                    {blockSummary}
-                                  </th>
-                                </tr>
-                              )}
-                              <tr
-                                title={
-                                  item.locked
-                                    ? "Manuell endring, beholdes når planen genereres på nytt"
-                                    : undefined
-                                }
-                                onDragOver={(event) => {
-                                  if (
-                                    !canEditDraft ||
-                                    draggedListScheduleIndex === null ||
-                                    draggedListScheduleIndex === scheduleIndex
-                                  ) {
-                                    return;
-                                  }
-                                  event.preventDefault();
-                                  event.dataTransfer.dropEffect = "move";
-                                  setListDropTargetIndex(scheduleIndex);
-                                }}
-                                onDragLeave={(event) => {
-                                  if (
-                                    event.currentTarget.contains(
-                                      event.relatedTarget as Node | null,
-                                    )
-                                  ) {
-                                    return;
-                                  }
-                                  if (listDropTargetIndex === scheduleIndex) {
-                                    setListDropTargetIndex(null);
-                                  }
-                                }}
-                                onDrop={(event) => {
-                                  if (!canEditDraft) return;
-                                  event.preventDefault();
-                                  const parsedIndex = Number(
-                                    event.dataTransfer.getData("text/plain"),
-                                  );
-                                  const sourceIndex = Number.isInteger(
-                                    parsedIndex,
-                                  )
-                                    ? parsedIndex
-                                    : draggedListScheduleIndex;
-                                  clearListMove();
-                                  if (
-                                    sourceIndex === null ||
-                                    sourceIndex === scheduleIndex
-                                  ) {
-                                    return;
-                                  }
-                                  draft.swapTimes(sourceIndex, scheduleIndex);
-                                }}
-                                className={cn(
-                                  "group [&:not(:last-child)>td]:border-b [&:not(:last-child)>td]:border-b-border-faint hover:[&>td]:bg-surface-soft",
-                                  listDropTargetIndex === scheduleIndex &&
-                                    "[&>td]:bg-surface-subtle [&>td]:ring-2 [&>td]:ring-inset [&>td]:ring-brand-ring",
-                                  draggedListScheduleIndex === scheduleIndex &&
-                                    "opacity-50",
-                                )}
+                          <th className="!rounded-none bg-surface-subtle px-4 py-3 text-left text-ui font-semibold text-text-muted">
+                            Kandidat
+                          </th>
+                          <th className="!rounded-none bg-surface-subtle px-4 py-3 text-left text-ui font-semibold text-text-muted">
+                            Intervjupanel
+                          </th>
+                          {canEditDraft && (
+                            <th className="last:!rounded-tr-lg !rounded-none bg-surface-subtle px-4 py-3 text-left text-ui font-semibold text-text-muted">
+                              Behold
+                            </th>
+                          )}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {presentation.sortedEntries.map(
+                          ({ item, scheduleIndex }) => {
+                            const timeOptions = draft
+                              .timeOptionsFor(scheduleIndex)
+                              .map((time) => ({
+                                value: String(time),
+                                label: formatSlotTime(time),
+                              }));
+                            const blockSummary =
+                              blockSummaryByScheduleIndex.get(scheduleIndex);
+                            return (
+                              <React.Fragment
+                                key={`${item.candidate}-${item.time}-${scheduleIndex}`}
                               >
-                                <td className="w-schedule-name whitespace-nowrap px-4 py-3 text-sm font-semibold text-text-muted">
-                                  {canEditDraft ? (
-                                    <div className="flex items-center gap-2">
-                                      <button
-                                        type="button"
-                                        draggable
-                                        aria-pressed={
-                                          selectedListScheduleIndex ===
-                                          scheduleIndex
-                                        }
-                                        aria-label={`Flytt intervjuet for ${presentation.displayCandidate(item)}`}
-                                        title="Dra til en annen rad, eller klikk to grep for å bytte tid"
-                                        onClick={() =>
-                                          selectOrSwapListInterview(
-                                            scheduleIndex,
-                                          )
-                                        }
-                                        onDragStart={(event) => {
-                                          event.dataTransfer.effectAllowed =
-                                            "move";
-                                          event.dataTransfer.setData(
-                                            "text/plain",
-                                            String(scheduleIndex),
-                                          );
-                                          setDraggedListScheduleIndex(
-                                            scheduleIndex,
-                                          );
-                                          setSelectedListScheduleIndex(null);
-                                        }}
-                                        onDragEnd={clearListMove}
-                                        className={cn(
-                                          "flex h-8 w-6 flex-none cursor-grab items-center justify-center rounded border border-border-soft bg-surface-base text-text-faded hover:border-border-quiet hover:text-text-muted active:cursor-grabbing disabled:cursor-not-allowed disabled:opacity-50",
-                                          selectedListScheduleIndex ===
-                                            scheduleIndex &&
-                                            "border-brand-strongBorder text-brand ring-2 ring-brand-ring",
-                                        )}
-                                      >
-                                        <GripVertical
-                                          size={iconSizes.detail}
-                                          aria-hidden="true"
+                                {blockSummary && (
+                                  <tr>
+                                    <th
+                                      colSpan={canEditDraft ? 4 : 3}
+                                      scope="rowgroup"
+                                      className="border-y border-border-soft bg-surface-neutral px-4 py-2.5 text-left text-detail font-bold text-text-primary"
+                                    >
+                                      {blockSummary}
+                                    </th>
+                                  </tr>
+                                )}
+                                <tr
+                                  id={`schedule-row-${scheduleIndex}`}
+                                  title={
+                                    item.locked
+                                      ? "Manuell endring, beholdes når planen genereres på nytt"
+                                      : undefined
+                                  }
+                                  onDragOver={(event) => {
+                                    if (
+                                      !canEditDraft ||
+                                      draggedListScheduleIndex === null ||
+                                      draggedListScheduleIndex === scheduleIndex
+                                    ) {
+                                      return;
+                                    }
+                                    event.preventDefault();
+                                    event.dataTransfer.dropEffect = "move";
+                                    setListDropTargetIndex(scheduleIndex);
+                                  }}
+                                  onDragLeave={(event) => {
+                                    if (
+                                      event.currentTarget.contains(
+                                        event.relatedTarget as Node | null,
+                                      )
+                                    ) {
+                                      return;
+                                    }
+                                    if (listDropTargetIndex === scheduleIndex) {
+                                      setListDropTargetIndex(null);
+                                    }
+                                  }}
+                                  onDrop={(event) => {
+                                    if (!canEditDraft) return;
+                                    event.preventDefault();
+                                    const parsedIndex = Number(
+                                      event.dataTransfer.getData("text/plain"),
+                                    );
+                                    const sourceIndex = Number.isInteger(
+                                      parsedIndex,
+                                    )
+                                      ? parsedIndex
+                                      : draggedListScheduleIndex;
+                                    clearListMove();
+                                    if (
+                                      sourceIndex === null ||
+                                      sourceIndex === scheduleIndex
+                                    ) {
+                                      return;
+                                    }
+                                    if (moveScope === "group") {
+                                      draft.moveItems(
+                                        groupIndexesByScheduleIndex.get(
+                                          sourceIndex,
+                                        ) ?? [sourceIndex],
+                                        item.time,
+                                      );
+                                    } else {
+                                      draft.swapTimes(
+                                        sourceIndex,
+                                        scheduleIndex,
+                                      );
+                                    }
+                                  }}
+                                  className={cn(
+                                    "group [&:not(:last-child)>td]:border-b [&:not(:last-child)>td]:border-b-border-faint hover:[&>td]:bg-surface-soft",
+                                    listDropTargetIndex === scheduleIndex &&
+                                      "[&>td]:bg-surface-subtle [&>td]:ring-2 [&>td]:ring-inset [&>td]:ring-brand-ring",
+                                    draggedListScheduleIndex ===
+                                      scheduleIndex && "opacity-50",
+                                    highlightedScheduleIndexes.has(
+                                      scheduleIndex,
+                                    ) &&
+                                      "[&>td]:bg-brand-soft [&>td]:ring-2 [&>td]:ring-inset [&>td]:ring-brand-ring",
+                                  )}
+                                >
+                                  <td className="w-schedule-name whitespace-nowrap px-4 py-3 text-sm font-semibold text-text-muted">
+                                    {canEditDraft ? (
+                                      <div className="flex items-center gap-2">
+                                        <button
+                                          type="button"
+                                          draggable
+                                          aria-pressed={
+                                            selectedListScheduleIndex ===
+                                            scheduleIndex
+                                          }
+                                          aria-label={`Flytt intervjuet for ${presentation.displayCandidate(item)}`}
+                                          title={
+                                            moveScope === "group"
+                                              ? "Dra gruppen til en ledig rad"
+                                              : "Dra til en annen rad, eller klikk to grep for å bytte tid"
+                                          }
+                                          onClick={() =>
+                                            selectOrSwapListInterview(
+                                              scheduleIndex,
+                                            )
+                                          }
+                                          onDragStart={(event) => {
+                                            event.dataTransfer.effectAllowed =
+                                              "move";
+                                            event.dataTransfer.setData(
+                                              "text/plain",
+                                              String(scheduleIndex),
+                                            );
+                                            setDraggedListScheduleIndex(
+                                              scheduleIndex,
+                                            );
+                                            setSelectedListScheduleIndex(null);
+                                          }}
+                                          onDragEnd={clearListMove}
+                                          className={cn(
+                                            "flex h-8 w-6 flex-none cursor-grab items-center justify-center rounded border border-border-soft bg-surface-base text-text-faded hover:border-border-quiet hover:text-text-muted active:cursor-grabbing disabled:cursor-not-allowed disabled:opacity-50",
+                                            selectedListScheduleIndex ===
+                                              scheduleIndex &&
+                                              "border-brand-strongBorder text-brand ring-2 ring-brand-ring",
+                                          )}
+                                        >
+                                          <GripVertical
+                                            size={iconSizes.detail}
+                                            aria-hidden="true"
+                                          />
+                                        </button>
+                                        <CustomSelect
+                                          className="w-56"
+                                          value={String(item.time)}
+                                          onChange={(nextTime) =>
+                                            moveScope === "group"
+                                              ? draft.moveItems(
+                                                  groupIndexesByScheduleIndex.get(
+                                                    scheduleIndex,
+                                                  ) ?? [scheduleIndex],
+                                                  Number(nextTime),
+                                                )
+                                              : draft.changeTime(
+                                                  scheduleIndex,
+                                                  nextTime,
+                                                )
+                                          }
+                                          options={timeOptions}
+                                          aria-label={`Endre tidspunkt for ${presentation.displayCandidate(item)}`}
                                         />
-                                      </button>
-                                      <CustomSelect
-                                        className="w-56"
-                                        value={String(item.time)}
-                                        onChange={(nextTime) =>
-                                          draft.changeTime(
-                                            scheduleIndex,
-                                            nextTime,
-                                          )
+                                      </div>
+                                    ) : (
+                                      <span>{formatSlotTime(item.time)}</span>
+                                    )}
+                                  </td>
+                                  <td className="px-4 py-3 text-sm font-semibold text-text-primary">
+                                    <div className="flex flex-wrap items-center gap-2">
+                                      {presentation.displayCandidate(item)}
+                                      {jointTimes.has(item.time) && (
+                                        <span className="rounded bg-brand-soft px-1.5 py-0.5 text-label font-semibold text-brand">
+                                          Fellesintervju
+                                        </span>
+                                      )}
+                                    </div>
+                                  </td>
+                                  <td className="px-4 py-3 text-sm">
+                                    <div className="flex flex-wrap gap-1.5">
+                                      <PanelMemberChips
+                                        item={item}
+                                        scheduleIndex={scheduleIndex}
+                                        canEditDraft={canEditDraft}
+                                        interviewerOptions={
+                                          presentation.interviewerOptions
                                         }
-                                        options={timeOptions}
-                                        aria-label={`Endre tidspunkt for ${presentation.displayCandidate(item)}`}
+                                        availabilityStatusFor={
+                                          presentation.availabilityStatusFor
+                                        }
+                                        assignmentConflicts={
+                                          assignmentConflicts
+                                        }
+                                        onSwapPanelMember={
+                                          draft.swapPanelMember
+                                        }
                                       />
                                     </div>
-                                  ) : (
-                                    <span>{formatSlotTime(item.time)}</span>
-                                  )}
-                                </td>
-                                <td className="px-4 py-3 text-sm font-semibold text-text-primary">
-                                  <div className="flex flex-wrap items-center gap-2">
-                                    {presentation.displayCandidate(item)}
-                                    {jointTimes.has(item.time) && (
-                                      <span className="rounded bg-brand-soft px-1.5 py-0.5 text-label font-semibold text-brand">
-                                        Fellesintervju
-                                      </span>
-                                    )}
-                                  </div>
-                                </td>
-                                <td className="px-4 py-3 text-sm">
-                                  <div className="flex flex-wrap gap-1.5">
-                                    <PanelMemberChips
-                                      item={item}
-                                      scheduleIndex={scheduleIndex}
-                                      canEditDraft={canEditDraft}
-                                      interviewerOptions={
-                                        presentation.interviewerOptions
-                                      }
-                                      availabilityStatusFor={
-                                        presentation.availabilityStatusFor
-                                      }
-                                      assignmentConflicts={assignmentConflicts}
-                                      onSwapPanelMember={draft.swapPanelMember}
-                                    />
-                                  </div>
-                                </td>
-                                {canEditDraft && (
-                                  <td className="w-40 whitespace-nowrap px-4 py-3 text-sm">
-                                    <button
-                                      type="button"
-                                      onClick={() =>
-                                        draft.toggleLock(scheduleIndex)
-                                      }
-                                      aria-label={`${lockLabel(item)} for ${presentation.displayCandidate(item)}`}
-                                      title={lockDescription(item)}
-                                      className={cn(
-                                        "inline-flex h-8 items-center gap-1.5 rounded-md border px-2.5 text-detail font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-ring",
-                                        item.locked
-                                          ? "border-brand-activeBorder bg-brand-soft text-brand hover:bg-brand-panel"
-                                          : "border-border-soft bg-surface-base text-text-muted hover:border-border-quiet hover:bg-surface-subtle",
-                                      )}
-                                    >
-                                      {item.locked ? (
-                                        <Lock
-                                          size={iconSizes.tiny}
-                                          aria-hidden="true"
-                                        />
-                                      ) : (
-                                        <Unlock
-                                          size={iconSizes.tiny}
-                                          aria-hidden="true"
-                                        />
-                                      )}
-                                      {lockLabel(item)}
-                                    </button>
                                   </td>
-                                )}
-                              </tr>
-                            </React.Fragment>
-                          );
-                        },
-                      )}
-                    </tbody>
-                  </table>
-                </div>
-              </>
-            ) : (
-              <GridCalendarView
-                schedule={presentation.displaySchedule}
-                dates={dates}
-                sessionDuration={sessionDuration}
-                dayStartMinute={dayStartMinute}
-                dayEndMinute={dayEndMinute}
-                chunkSize={chunkSize}
-                chunkBreakMinutes={chunkBreakMinutes}
-                availableSlots={enabledSlots}
-                occupiedTimes={occupiedTimes}
-                showAvailabilityLegend={canEditDraft}
-                compactSchedule
-                onMoveItem={
-                  canEditDraft
-                    ? (sortedIndex, nextTime) => {
-                        const entry = presentation.sortedEntries[sortedIndex];
-                        if (!entry) return;
-                        draft.changeTime(entry.scheduleIndex, String(nextTime));
-                      }
-                    : undefined
-                }
-                renderItem={(displayItem, sortedIndex) => {
-                  const entry = presentation.sortedEntries[sortedIndex];
-                  if (!entry) return null;
-                  const { item, scheduleIndex } = entry;
-                  const timeOptions = draft
-                    .timeOptionsFor(scheduleIndex)
-                    .map((time) => ({
-                      value: String(time),
-                      label: formatSlotTime(time),
+                                  {canEditDraft && (
+                                    <td className="w-40 whitespace-nowrap px-4 py-3 text-sm">
+                                      <button
+                                        type="button"
+                                        onClick={() =>
+                                          draft.toggleLock(scheduleIndex)
+                                        }
+                                        aria-label={`${lockLabel(item)} for ${presentation.displayCandidate(item)}`}
+                                        title={lockDescription(item)}
+                                        className={cn(
+                                          "inline-flex h-8 items-center gap-1.5 rounded-md border px-2.5 text-detail font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-ring",
+                                          item.locked
+                                            ? "border-brand-activeBorder bg-brand-soft text-brand hover:bg-brand-panel"
+                                            : "border-border-soft bg-surface-base text-text-muted hover:border-border-quiet hover:bg-surface-subtle",
+                                        )}
+                                      >
+                                        {item.locked ? (
+                                          <Lock
+                                            size={iconSizes.tiny}
+                                            aria-hidden="true"
+                                          />
+                                        ) : (
+                                          <Unlock
+                                            size={iconSizes.tiny}
+                                            aria-hidden="true"
+                                          />
+                                        )}
+                                        {lockLabel(item)}
+                                      </button>
+                                    </td>
+                                  )}
+                                </tr>
+                              </React.Fragment>
+                            );
+                          },
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </>
+              ) : (
+                <GridCalendarView
+                  schedule={presentation.displaySchedule}
+                  dates={dates}
+                  sessionDuration={sessionDuration}
+                  dayStartMinute={dayStartMinute}
+                  dayEndMinute={dayEndMinute}
+                  chunkSize={chunkSize}
+                  chunkBreakMinutes={chunkBreakMinutes}
+                  availableSlots={enabledSlots}
+                  occupiedTimes={occupiedTimes}
+                  showAvailabilityLegend={canEditDraft}
+                  compactSchedule
+                  onMoveItem={
+                    canEditDraft
+                      ? (sortedIndex, nextTime) => {
+                          const entry = presentation.sortedEntries[sortedIndex];
+                          if (!entry) return;
+                          if (moveScope === "group") {
+                            draft.moveItems(
+                              groupIndexesByScheduleIndex.get(
+                                entry.scheduleIndex,
+                              ) ?? [entry.scheduleIndex],
+                              nextTime,
+                            );
+                          } else {
+                            draft.changeTime(
+                              entry.scheduleIndex,
+                              String(nextTime),
+                            );
+                          }
+                        }
+                      : undefined
+                  }
+                  renderItem={(displayItem, sortedIndex) => {
+                    const entry = presentation.sortedEntries[sortedIndex];
+                    if (!entry) return null;
+                    const { item, scheduleIndex } = entry;
+                    const timeOptions = draft
+                      .timeOptionsFor(scheduleIndex)
+                      .map((time) => ({
+                        value: String(time),
+                        label: formatSlotTime(time),
+                      }));
+                    // The calendar column already names the weekday, so the
+                    // compact picker only needs the date and time.
+                    const calendarTimeOptions = timeOptions.map((option) => ({
+                      ...option,
+                      label: option.label.replace(/^\S+\s+/, ""),
                     }));
-                  // The calendar column already names the weekday, so the
-                  // compact picker only needs the date and time.
-                  const calendarTimeOptions = timeOptions.map((option) => ({
-                    ...option,
-                    label: option.label.replace(/^\S+\s+/, ""),
-                  }));
-                  return (
-                    <div
-                      key={`${item.candidate}-${item.time}-${scheduleIndex}`}
-                      className="flex min-w-0 flex-col gap-2 rounded-md border border-border-soft bg-surface-base px-2.5 py-2 shadow-sm"
-                    >
-                      <div className="flex min-w-0 items-start gap-2">
-                        <div className="flex min-w-0 items-center gap-1 text-xs font-bold text-text-primary">
-                          {item.locked && (
-                            <Lock
-                              size={iconSizes.tiny}
-                              aria-label="Låst"
-                              className="flex-none text-brand"
-                            />
-                          )}
-                          <span className="truncate">
-                            {displayItem.candidate}
-                          </span>
-                          {jointTimes.has(item.time) && (
-                            <span className="rounded bg-brand-soft px-1.5 py-0.5 text-label font-semibold text-brand">
-                              Felles
+                    return (
+                      <div
+                        key={`${item.candidate}-${item.time}-${scheduleIndex}`}
+                        className="flex min-w-0 flex-col gap-2 rounded-md border border-border-soft bg-surface-base px-2.5 py-2 shadow-sm"
+                      >
+                        <div className="flex min-w-0 items-start gap-2">
+                          <div className="flex min-w-0 items-center gap-1 text-xs font-bold text-text-primary">
+                            {item.locked && (
+                              <Lock
+                                size={iconSizes.tiny}
+                                aria-label="Låst"
+                                className="flex-none text-brand"
+                              />
+                            )}
+                            <span className="truncate">
+                              {displayItem.candidate}
                             </span>
-                          )}
+                            {jointTimes.has(item.time) && (
+                              <span className="rounded bg-brand-soft px-1.5 py-0.5 text-label font-semibold text-brand">
+                                Felles
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                        {canEditDraft && (
+                          <CustomSelect
+                            className="w-full min-w-0"
+                            compact
+                            value={String(item.time)}
+                            onChange={(nextTime) =>
+                              draft.changeTime(scheduleIndex, nextTime)
+                            }
+                            options={calendarTimeOptions}
+                            aria-label={`Endre tidspunkt for ${displayItem.candidate}`}
+                          />
+                        )}
+                        {canEditDraft ? (
+                          <button
+                            type="button"
+                            onClick={() => draft.toggleLock(scheduleIndex)}
+                            aria-label={`${lockLabel(item)} for ${displayItem.candidate}`}
+                            title={lockDescription(item)}
+                            className={cn(
+                              "inline-flex h-7 items-center self-start gap-1.5 rounded-md border px-2 text-detail font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-ring",
+                              item.locked
+                                ? "border-brand-activeBorder bg-brand-soft text-brand hover:bg-brand-panel"
+                                : "border-border-soft bg-surface-base text-text-muted hover:border-border-quiet hover:bg-surface-subtle",
+                            )}
+                          >
+                            {item.locked ? (
+                              <Lock size={iconSizes.tiny} aria-hidden="true" />
+                            ) : (
+                              <LockKeyhole
+                                size={iconSizes.tiny}
+                                aria-hidden="true"
+                              />
+                            )}
+                            {item.locked ? "Lås opp intervju" : "Lås intervju"}
+                          </button>
+                        ) : null}
+                        <div className="flex flex-wrap gap-1">
+                          <PanelMemberChips
+                            item={item}
+                            scheduleIndex={scheduleIndex}
+                            canEditDraft={canEditDraft}
+                            interviewerOptions={presentation.interviewerOptions}
+                            availabilityStatusFor={
+                              presentation.availabilityStatusFor
+                            }
+                            assignmentConflicts={assignmentConflicts}
+                            onSwapPanelMember={draft.swapPanelMember}
+                          />
                         </div>
                       </div>
-                      {canEditDraft && (
-                        <CustomSelect
-                          className="w-full min-w-0"
-                          compact
-                          value={String(item.time)}
-                          onChange={(nextTime) =>
-                            draft.changeTime(scheduleIndex, nextTime)
-                          }
-                          options={calendarTimeOptions}
-                          aria-label={`Endre tidspunkt for ${displayItem.candidate}`}
-                        />
+                    );
+                  }}
+                />
+              )}
+            </SchedulePanelBody>
+            {!backgroundMode && (
+              <section className="border-t border-border-soft bg-surface-subtle px-6">
+                {currentReviewRequired && (
+                  <div className="border-b border-border-soft py-5">
+                    <h3 className="m-0 text-base font-bold text-text-primary">
+                      Inhabilitetssjekk
+                    </h3>
+                    <p className="m-0 mt-1 text-detail text-text-muted">
+                      Sjekk inhabilitet før planen går videre til publisering.
+                    </p>
+                    <button
+                      type="button"
+                      onClick={onOpenConflictReview}
+                      data-cy="reopen-candidate-review"
+                      className={cn(
+                        actionButtonBase,
+                        actionButtonNeutral,
+                        "mt-4",
                       )}
-                      {canEditDraft ? (
-                        <button
-                          type="button"
-                          onClick={() => draft.toggleLock(scheduleIndex)}
-                          aria-label={`${lockLabel(item)} for ${displayItem.candidate}`}
-                          title={lockDescription(item)}
-                          className={cn(
-                            "inline-flex h-7 items-center self-start gap-1.5 rounded-md border px-2 text-detail font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-ring",
-                            item.locked
-                              ? "border-brand-activeBorder bg-brand-soft text-brand hover:bg-brand-panel"
-                              : "border-border-soft bg-surface-base text-text-muted hover:border-border-quiet hover:bg-surface-subtle",
-                          )}
+                    >
+                      Sjekk inhabilitet
+                      <ArrowRight size={iconSizes.small} aria-hidden="true" />
+                    </button>
+                  </div>
+                )}
+              </section>
+            )}
+            {!backgroundMode && (
+              <SchedulingActionBar
+                className="sticky bottom-0 z-10 bg-surface-base"
+                status={
+                  <span
+                    className={cn(
+                      "font-semibold",
+                      persistence.state === "error" || persistence.hasConflict
+                        ? "text-danger"
+                        : persistence.isSaving || hasLocalDraft
+                          ? "text-text-muted"
+                          : "text-text-faded",
+                    )}
+                  >
+                    {saveStatusLabel}
+                  </span>
+                }
+                actions={
+                  workflowState.kind === "save_conflict" ? (
+                    <SchedulingButton
+                      onClick={() => window.location.reload()}
+                      data-cy="proposal-primary-action"
+                      variant="primary"
+                    >
+                      Last inn siste versjon
+                    </SchedulingButton>
+                  ) : workflowState.kind === "save_error" ? (
+                    <SchedulingButton
+                      onClick={persistence.retry}
+                      data-cy="proposal-primary-action"
+                      variant="primary"
+                    >
+                      Prøv igjen
+                    </SchedulingButton>
+                  ) : workflowState.kind === "saving" ? null : (
+                    <div className="flex flex-wrap items-center gap-2">
+                      {nextStepActions.length > 0 && (
+                        <DeviationNextStepMenu actions={nextStepActions} />
+                      )}
+                      {isEditing && (
+                        <SchedulingButton
+                          onClick={() => changeWorkspaceMode("preview")}
+                          data-cy="proposal-primary-action"
+                          variant="primary"
                         >
-                          {item.locked ? (
-                            <Lock size={iconSizes.tiny} aria-hidden="true" />
-                          ) : (
-                            <LockKeyhole
-                              size={iconSizes.tiny}
-                              aria-hidden="true"
-                            />
-                          )}
-                          {item.locked ? "Lås opp intervju" : "Lås intervju"}
-                        </button>
-                      ) : null}
-                      <div className="flex flex-wrap gap-1">
-                        <PanelMemberChips
-                          item={item}
-                          scheduleIndex={scheduleIndex}
-                          canEditDraft={canEditDraft}
-                          interviewerOptions={presentation.interviewerOptions}
-                          availabilityStatusFor={
-                            presentation.availabilityStatusFor
-                          }
-                          assignmentConflicts={assignmentConflicts}
-                          onSwapPanelMember={draft.swapPanelMember}
-                        />
-                      </div>
+                          <Check size={iconSizes.small} aria-hidden="true" />
+                          Vis uten redigering
+                        </SchedulingButton>
+                      )}
                     </div>
-                  );
-                }}
+                  )
+                }
               />
             )}
-          </SchedulePanelBody>
+          </SchedulePanel>
           {!backgroundMode && (
-            <SchedulingActionBar
-              className="sticky bottom-0 z-10 bg-surface-base"
-              status={
-                <span
+            <section className="mt-4 rounded-panel border border-border bg-surface-base shadow-sm">
+              <details className="group">
+                <summary
                   className={cn(
-                    "font-semibold",
-                    persistence.state === "error" || persistence.hasConflict
-                      ? "text-danger"
-                      : persistence.isSaving || hasLocalDraft
-                        ? "text-text-muted"
-                        : "text-text-faded",
+                    "flex cursor-pointer list-none items-center justify-between gap-3 px-6 py-5 text-base font-bold text-text-primary [&::-webkit-details-marker]:hidden",
+                    keyboardFocusRingClass,
                   )}
                 >
-                  {saveStatusLabel}
-                </span>
-              }
-              actions={
-                workflowState.kind === "save_conflict" ? (
-                  <SchedulingButton
-                    onClick={() => window.location.reload()}
-                    data-cy="proposal-primary-action"
-                    variant="primary"
-                  >
-                    Last inn siste versjon
-                  </SchedulingButton>
-                ) : workflowState.kind === "save_error" ? (
-                  <SchedulingButton
-                    onClick={persistence.retry}
-                    data-cy="proposal-primary-action"
-                    variant="primary"
-                  >
-                    Prøv igjen
-                  </SchedulingButton>
-                ) : isEditing ? (
-                  <SchedulingButton
-                    onClick={() => changeWorkspaceMode("preview")}
-                    data-cy="proposal-primary-action"
-                    variant="primary"
-                  >
-                    <Check size={iconSizes.small} aria-hidden="true" />
-                    Gå til forhåndsvisning
-                  </SchedulingButton>
-                ) : workflowState.kind ===
-                  "saving" ? null : workflowState.kind === "solver_error" ? (
-                  <button
-                    type="button"
-                    onClick={onRetrySolve}
-                    data-cy="proposal-primary-action"
-                    className={cn(actionButtonBase, actionButtonPrimary)}
-                  >
-                    Prøv igjen
-                  </button>
-                ) : workflowState.kind === "placements_missing" ? (
-                  <button
-                    type="button"
-                    onClick={onOpenSettings}
-                    data-cy="proposal-rerun-unplaceable"
-                    className={cn(actionButtonBase, actionButtonPrimary)}
-                  >
-                    Juster og generer på nytt
-                    <ArrowRight size={iconSizes.small} aria-hidden="true" />
-                  </button>
-                ) : workflowState.kind === "candidate_check_pending" ? (
-                  <button
-                    type="button"
-                    onClick={onOpenConflictReview}
-                    data-cy="proposal-primary-action"
-                    className={cn(actionButtonBase, actionButtonPrimary)}
-                  >
-                    Kontroller kandidater
-                    <ArrowRight size={iconSizes.small} aria-hidden="true" />
-                  </button>
-                ) : workflowState.kind === "repair_required" ? (
-                  <button
-                    type="button"
-                    onClick={onOpenRepair}
-                    data-cy="proposal-primary-action"
-                    className={cn(actionButtonBase, actionButtonPrimary)}
-                  >
-                    Lag reparasjonsforslag
-                    <ArrowRight size={iconSizes.small} aria-hidden="true" />
-                  </button>
-                ) : workflowState.kind === "ready_to_publish" ? (
-                  <button
-                    type="button"
-                    onClick={onOpenPlan}
-                    data-cy="proposal-primary-action"
-                    className={cn(actionButtonBase, actionButtonPrimary)}
-                  >
-                    Gå til publisering
-                    <ArrowRight size={iconSizes.small} aria-hidden="true" />
-                  </button>
-                ) : null
-              }
-            />
+                  Belastning
+                  <ChevronDown
+                    size={iconSizes.small}
+                    aria-hidden="true"
+                    className="transition-transform group-open:rotate-180"
+                  />
+                </summary>
+                <div className="border-t border-border-soft px-6 pb-5 pt-4">
+                  <p className="m-0 text-detail text-text-muted">
+                    Se arbeidsfordelingen og klikk på en intervjuer for å
+                    undersøke eller endre panelet.
+                  </p>
+                  <div className="mt-4">
+                    <InterviewerLoadView
+                      entries={presentation.sortedEntries}
+                      distribution={presentation.interviewerDistribution}
+                      totalAssignments={presentation.totalAssignments}
+                      selectedInterviewer={selectedInterviewer}
+                      onSelectInterviewer={setSelectedInterviewer}
+                      canEditDraft={canEditDraft}
+                      interviewerOptions={presentation.interviewerOptions}
+                      onSwapPanelMember={draft.swapPanelMember}
+                      displayCandidate={presentation.displayCandidate}
+                      formatSlotTime={formatSlotTime}
+                      availabilityStatusFor={presentation.availabilityStatusFor}
+                      hasConflictFor={hasConflictFor}
+                    />
+                  </div>
+                </div>
+              </details>
+            </section>
           )}
-        </SchedulePanel>
+        </>
       )}
     </div>
   );

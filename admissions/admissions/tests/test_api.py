@@ -659,6 +659,118 @@ class SolveScheduleViewTestCase(APITestCase):
         self.assertEqual(res.data["schedule"], [])
         self.assertIn("locked_conflicts", res.data)
 
+    def test_incremental_day_solving_preserves_locked_placements(self):
+        """Incremental multi-day solving: when locked_assignments are passed
+        to the solver backend, those rows are preserved exactly. The
+        frontend's `useScheduleDraft.lockedAssignments` memo now falls
+        back to `savedSchedule.schedule` when the in-memory draft is
+        empty, so re-running on more enabled days preserves the partial
+        plan that was already saved.
+        """
+        candidates = [{"id": f"c{i}", "name": f"C{i}", "gender": ""} for i in range(5)]
+        interviewers = [
+            {
+                "id": "i1",
+                "name": "I1",
+                "gender": "M",
+                "availability": [0, 1, 2, 1440, 1441, 1442],
+            },
+            {
+                "id": "i2",
+                "name": "I2",
+                "gender": "F",
+                "availability": [0, 1, 2, 1440, 1441, 1442],
+            },
+        ]
+
+        # Run 1: only day 0 enabled, capacity for 3 candidates.
+        day0_payload = {
+            "candidates": candidates,
+            "interviewers": interviewers,
+            "panel_size": 1,
+            "options": {
+                "enforce_same_gender": False,
+                "allow_overtime": False,
+            },
+            "all_slots": [0, 1, 2],
+        }
+        res1 = self._solve(day0_payload)
+        self.assertEqual(res1.status_code, status.HTTP_200_OK)
+        self.assertEqual(res1.data["status"], "PARTIAL")
+        self.assertEqual(len(res1.data["schedule"]), 3)
+        self.assertEqual(len(res1.data["unplaceable"]), 2)
+        day0_placements = sorted(res1.data["schedule"], key=lambda item: item["time"])
+        day0_locked = [
+            {
+                "candidate_id": item["candidate_id"],
+                "candidate": item["candidate"],
+                "time": item["time"],
+                "panel": [
+                    {"id": member["id"], "name": member["name"]}
+                    for member in item["panel"]
+                ],
+            }
+            for item in day0_placements
+        ]
+
+        # Run 2: day 0 + day 1 enabled, day 0 placements are locked.
+        day1_payload = {
+            "candidates": candidates,
+            "interviewers": interviewers,
+            "panel_size": 1,
+            "options": {
+                "enforce_same_gender": False,
+                "allow_overtime": False,
+            },
+            "all_slots": [0, 1, 2, 1440, 1441, 1442],
+            "locked_assignments": day0_locked,
+        }
+        res2 = self._solve(day1_payload)
+        self.assertEqual(res2.status_code, status.HTTP_200_OK)
+        if res2.data["status"] != "SUCCESS":
+            self.fail(f"Run 2 unexpectedly partial: {res2.data}")
+        self.assertEqual(res2.data["status"], "SUCCESS")
+        self.assertEqual(len(res2.data["schedule"]), 5)
+
+        # Every day 0 placement must be exactly preserved.
+        result_by_candidate = {
+            item["candidate_id"]: item for item in res2.data["schedule"]
+        }
+        for locked_item in day0_locked:
+            candidate_id = locked_item["candidate_id"]
+            result_item = result_by_candidate[candidate_id]
+            self.assertEqual(
+                result_item["time"],
+                locked_item["time"],
+                f"Day 0 placement for {candidate_id} moved - "
+                "the lock was not honored.",
+            )
+            self.assertEqual(
+                [member["id"] for member in result_item["panel"]],
+                [member["id"] for member in locked_item["panel"]],
+                f"Day 0 panel for {candidate_id} changed - "
+                "the panel lock was not honored.",
+            )
+            self.assertTrue(
+                result_item.get("locked", False),
+                f"Day 0 placement for {candidate_id} is not flagged "
+                "as locked in the second run.",
+            )
+
+        # The remaining 2 candidates should be on day 1 (time >= 1440).
+        new_placements = [
+            item
+            for item in res2.data["schedule"]
+            if item["candidate_id"] not in {row["candidate_id"] for row in day0_locked}
+        ]
+        for item in new_placements:
+            self.assertGreaterEqual(
+                item["time"],
+                1440,
+                f"New candidate {item['candidate_id']} placed on day 0 "
+                f"({item['time']}) instead of the new day.",
+            )
+
 
 class SavedScheduleViewTestCase(APITestCase):
     client_class = ScheduleRevisionAPIClient
@@ -968,20 +1080,51 @@ class InterviewAvailabilityViewTestCase(APITestCase):
         self.assertEqual(res.data["slots"], ["2026-04-21:540"])
         self.assertEqual(res.data["conflicts"], [str(application.pk)])
 
-    def test_a_plain_member_cannot_write_availability_at_all(self):
-        """Members have no schedule access beyond the published plan: their
-        write is 403, not validated."""
+    def test_a_plain_member_can_write_own_row_but_not_incomplete_reviews(self):
+        """Committee members record their own availability and conflict
+        review (that is the member half of the workflow), so their own-row
+        writes are validated rather than blanket-forbidden. What stays
+        rejected: a conflicts-only write with no open review and no review
+        declaration, and anything posted on someone else's behalf."""
         member = LegoUser.objects.create(username="plain-member", lego_id=404)
         Membership.objects.create(user=member, role=MEMBER, group=self.group)
+        SavedSchedule.objects.create(
+            admission=self.admission,
+            group=self.group,
+            schedule=[],
+            start_date="2026-04-21",
+            session_duration=60,
+            enabled_slots=["2026-04-21|540"],
+        )
         self.client.force_authenticate(user=member)
 
+        # The member's own availability is their side of the workflow.
+        own_slots = self.client.post(
+            self.url,
+            {"slots": ["2026-04-21|540"]},
+            format="json",
+        )
+        self.assertEqual(own_slots.status_code, status.HTTP_200_OK)
+
+        # A conflicts-only write without a review declaration (and with no
+        # review open) is rejected, not silently accepted.
         res = self.client.post(
             self.url,
             {"conflicts": []},
             format="json",
         )
+        self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
 
-        self.assertEqual(res.status_code, status.HTTP_403_FORBIDDEN)
+        # Posting on someone else's behalf stays interview-admin work.
+        on_behalf = self.client.post(
+            self.url,
+            {
+                "user_id": str(self.user.pk),
+                "slots": ["2026-04-21|540"],
+            },
+            format="json",
+        )
+        self.assertEqual(on_behalf.status_code, status.HTTP_403_FORBIDDEN)
 
     def test_an_unknown_conflict_id_is_rejected_without_writing(self):
         self.client.force_authenticate(user=self.user)

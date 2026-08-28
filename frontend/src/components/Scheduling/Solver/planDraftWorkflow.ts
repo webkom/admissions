@@ -100,17 +100,17 @@ export const derivePlanDraftWorkflowState = ({
   if (unplaceableCount > 0) {
     return {
       kind: "placements_missing",
-      tone: "danger",
-      title: `${candidateLabel(unplaceableCount)} mangler intervju`,
+      tone: "warning",
+      title: `Delplan klar — ${candidateLabel(unplaceableCount)} mangler intervju`,
       description:
-        "Alle kandidater må få plass før kandidatkontrollen kan fullføres.",
+        "Aktiver flere dager for å plassere resten, eller juster planutkastet for hånd.",
     };
   }
   if (currentReviewRequired && !currentReviewComplete) {
     return {
       kind: "candidate_check_pending",
       tone: "warning",
-      title: `Kandidatkontroll, ${completeReviewerCount} av ${requiredReviewerCount} har svart`,
+      title: `Inhabilitetssjekk, ${completeReviewerCount} av ${requiredReviewerCount} har svart`,
       description:
         "Kontroller kandidatene du foreløpig er foreslått til å intervjue.",
     };
@@ -119,7 +119,7 @@ export const derivePlanDraftWorkflowState = ({
     return {
       kind: "waiting_for_reviews",
       tone: "neutral",
-      title: `Kandidatkontroll, ${completeReviewerCount} av ${requiredReviewerCount} har svart`,
+      title: `Inhabilitetssjekk, ${completeReviewerCount} av ${requiredReviewerCount} har svart`,
       description:
         missingReviewerNames.length > 0
           ? `Venter på ${missingReviewerNames.join(", ")}.`
@@ -130,9 +130,9 @@ export const derivePlanDraftWorkflowState = ({
     return {
       kind: "waiting_for_reviews",
       tone: "neutral",
-      title: "Kandidatkontroll klargjøres",
+      title: "Inhabilitetssjekk klargjøres",
       description:
-        "Neste steg blir tilgjengelig når kandidatkontrollen er klar.",
+        "Neste steg blir tilgjengelig når inhabilitetssjekken er klar.",
     };
   }
   if (assignmentConflictCount > 0) {
@@ -157,6 +157,6 @@ export const derivePlanDraftWorkflowState = ({
     tone: "success",
     title: "Planutkastet er klart",
     description:
-      "Alle kandidater er plassert og kandidatkontrollen er fullført.",
+      "Alle kandidater er plassert og inhabilitetssjekken er fullført.",
   };
 };

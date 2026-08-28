@@ -423,7 +423,7 @@ interface LoadedScheduleViewProps extends CommonScheduleViewProps {
   isAvailabilityLoading: boolean;
   dataHealth: ScheduleDataHealth;
   candidateScopeResolved: boolean;
-  onRetryLoad: () => void;
+  onRetryLoad: (sources?: ScheduleDataSource[]) => void;
 }
 
 const LoadedScheduleView: React.FC<LoadedScheduleViewProps> = ({
@@ -523,6 +523,13 @@ const LoadedScheduleView: React.FC<LoadedScheduleViewProps> = ({
     groupId,
     participants: availabilityParticipants,
     notify: showToast,
+    knownSlots: configuration.enabledSlots,
+    // The schedule and availability queries poll on independent timers, so
+    // after a framework change the grid can briefly be built from a stale
+    // plan while the save is answered with a 409. Refetch both immediately
+    // so the grid rebuilds against the current plan instead of leaving the
+    // user to guess that a manual reload is needed.
+    onStale: () => onRetryLoad(["schedule", "availability"]),
   });
   const workflow = useScheduleWorkflow({
     isAdmin: canManageSchedule,
@@ -547,6 +554,7 @@ const LoadedScheduleView: React.FC<LoadedScheduleViewProps> = ({
     groupId,
     savedSchedule,
     draftPersistenceReady,
+    syntheticInput: participants.syntheticInput,
     notify: showToast,
   });
   const {
@@ -735,7 +743,7 @@ const LoadedScheduleView: React.FC<LoadedScheduleViewProps> = ({
           </p>
           <SchedulingButton
             variant="quiet"
-            onClick={onRetryLoad}
+            onClick={() => onRetryLoad()}
             className="h-8 px-3 text-detail"
           >
             <RefreshCw size={iconSizes.detail} aria-hidden="true" />
@@ -1044,6 +1052,11 @@ const LoadedScheduleView: React.FC<LoadedScheduleViewProps> = ({
                   setFoundationWorkspace("framework");
                   handleSectionChange("config");
                 }}
+                onWidenDays={() => {
+                  setFoundationWorkspace("framework");
+                  handleSectionChange("config");
+                }}
+                onEditByHand={() => setSolverEditRequestKey((key) => key + 1)}
                 onOpenConflictReview={openConflictReview}
                 conflictReviewReachable={conflictReviewReachable}
                 onOpenPlan={() => handleSectionChange("plan")}

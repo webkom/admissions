@@ -172,11 +172,68 @@ def _solver_blocks(saved, open_slots):
     return build_solver_block_metadata(configured_blocks, open_slots)
 
 
+def _apply_day_scope(saved_slot_keys, saved, data):
+    """Restrict the slot keys to days on or before data["day_scope_through"].
+
+    The partial-plan workflow solves a few days at a time inside an already
+    enabled grid: scoping the keys here scopes the encoded slots, the block
+    metadata, and every interviewer's availability in one place, without
+    touching the saved framework (which would invalidate availability
+    answers). A scope beyond the period is clamped to it.
+    """
+    scope_through = data.get("day_scope_through")
+    if not scope_through:
+        return saved_slot_keys
+    try:
+        scope_date = date.fromisoformat(str(scope_through))
+    except ValueError as exc:
+        raise ScheduleValidationError(
+            "day_scope_through", "Ugyldig dato for dagsomfang."
+        ) from exc
+
+    def _as_date(value):
+        if isinstance(value, date):
+            return value
+        try:
+            return date.fromisoformat(str(value))
+        except ValueError as exc:
+            raise ScheduleValidationError(
+                "day_scope_through", "Ugyldig dato for dagsomfang."
+            ) from exc
+
+    start_date = _as_date(saved.start_date)
+    if scope_date < start_date:
+        raise ScheduleValidationError(
+            "day_scope_through",
+            "Dagsomfanget kan ikke være før planens første dag.",
+        )
+    end_date = _as_date(saved.end_date) if saved.end_date else start_date
+    scope_date = min(scope_date, end_date)
+    scoped_keys = []
+    for key in saved_slot_keys:
+        parsed = parse_slot_key(str(key))
+        if parsed is None:
+            continue
+        try:
+            slot_date = date.fromisoformat(parsed[0])
+        except ValueError:
+            continue
+        if slot_date <= scope_date:
+            scoped_keys.append(key)
+    if not scoped_keys:
+        raise ScheduleValidationError(
+            "day_scope_through",
+            "Dagsomfanget inneholder ingen åpne tidsluker.",
+        )
+    return scoped_keys
+
+
 def canonicalize_solver_payload(admission, saved, data, request_user):
     group = saved.group
     saved_slot_keys = saved.enabled_slots or enabled_windows_to_slots(
         saved.enabled_windows, saved.session_duration
     )
+    saved_slot_keys = _apply_day_scope(saved_slot_keys, saved, data)
     all_slots = sorted(encode_slot_keys(saved_slot_keys, saved.start_date))
     if not all_slots:
         raise ScheduleValidationError(
@@ -297,10 +354,17 @@ def canonicalize_solver_payload(admission, saved, data, request_user):
         # Both lists together are what the interviewer can actually do; the
         # "helst ikke" half is handed to the solver separately below so it
         # can prefer against it rather than be barred from it.
+        # Opting out is a participation decision, not deletion of the person's
+        # previously entered availability. When they rejoin, keep that data if
+        # it is still current for this plan; an empty/stale submission remains
+        # awaiting and must be answered again in the normal way.
         submitted_slots = availability.slots if availability is not None else []
         submitted_discouraged = (
             availability.discouraged_slots if availability is not None else []
         )
+        # A rejoining interviewer may reuse a previously saved answer. The
+        # participation flag must not erase it; current-generation validation
+        # below still decides whether the answer is usable for this plan.
         schedulable_slots = list(submitted_slots) + list(submitted_discouraged or [])
         interviewers.append(
             {

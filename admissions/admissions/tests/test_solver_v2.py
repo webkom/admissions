@@ -1,5 +1,9 @@
+import itertools
 import random
+import time
+import types
 from copy import deepcopy
+from dataclasses import replace
 from itertools import combinations
 from unittest import mock
 
@@ -310,6 +314,43 @@ class FactorizedSolverV2TestCase(SimpleTestCase):
         self.assertEqual(
             [phase["name"] for phase in result["_solver_metrics"]["phases"]],
             ["strict_feasibility", "partial_optimization"],
+        )
+
+    def test_load_spread_excludes_zero_availability_interviewers(self):
+        """An interviewer with no availability pins min(load) = 0, which
+        collapses the load-spread term to max(load) and effectively
+        removes the spread objective from the model. The fix filters
+        such interviewers out of `active_loads` (and the
+        `experienced_loads` for the experienced-spread term), so the
+        spread is measured only over the people who can actually work.
+        """
+        result = self.solve(
+            candidates=[{"id": f"c{i}", "name": f"C{i}"} for i in range(4)],
+            interviewers=[
+                interviewer("i1", [0, 1, 2, 3]),
+                interviewer("i2", [0, 1, 2, 3]),
+                # No availability — should NOT count toward min(load).
+                interviewer("webkom", []),
+            ],
+            panel_size=1,
+            slots=[0, 1, 2, 3],
+            include_metrics=True,
+        )
+
+        self.assertEqual(result["status"], "SUCCESS")
+        # All 4 candidates placed, webkom contributes 0.
+        placed_count = sum(1 for _ in result["schedule"])
+        self.assertEqual(placed_count, 4)
+        # Without the fix, load_spread would be 4 - 0 = 4 (max pinning).
+        # With the fix, webkom is excluded from active_loads so the
+        # spread is 2 - 2 = 0 (the two real workers share equally).
+        load_spread = result["_solver_metrics"]["objective_vector"]["load_spread"]
+        self.assertEqual(
+            load_spread,
+            0,
+            f"load_spread should be 0 (both real workers share equally) "
+            f"but got {load_spread}. The zero-availability interviewer "
+            f"is being included in active_loads and pinning min(load) = 0.",
         )
 
     def test_invalid_phase_incumbents_are_discarded(self):
@@ -1097,6 +1138,10 @@ class SolverDifferentialTestCase(SimpleTestCase):
                 "availability_fallback": "stop",
                 "enforce_same_gender": generator.choice([False, True]),
                 "require_experienced_panel": False,
+                # Pinned to the weights the semantic key below measures, so
+                # the comparison never shifts with application defaults.
+                "load_balance_weight": 1,
+                "continuity_weight": 12,
                 # Give these tiny oracle cases ample room to prove an optimum.
                 # The semantic comparison below still checks the solver's
                 # explicit `optimal` contract before comparing objective keys.
@@ -1221,3 +1266,103 @@ class SolverDifferentialTestCase(SimpleTestCase):
             baseline["objective_vector"],
             permuted["objective_vector"],
         )
+
+class StagedTierBudgetingTestCase(SimpleTestCase):
+    """The staged lexicographic loop must give every objective tier a slice
+    of the budget and pin an unproven tier with an upper bound, instead of
+    stopping at the first tier whose optimum it cannot prove - otherwise a
+    large admission spends the whole budget on "minimise unplaced" and the
+    plan comes back with rest violations and lopsided workload.
+    """
+
+    def _built_staged(self):
+        problem, error = solver_v2_module._normalize_problem(
+            candidates_data=[
+                {"id": "c1", "name": "One"},
+                {"id": "c2", "name": "Two"},
+            ],
+            interviewers_data=[
+                interviewer("i1", [0, 1]),
+                interviewer("i2", [0, 1]),
+            ],
+            panel_size=1,
+            options_data={
+                "policy_version": 2,
+                "panel_stability": "flexible",
+                "availability_fallback": "stop",
+            },
+            all_slots_data=[0, 1],
+            locked_assignments_data=[],
+            blocks_data=[],
+            block_metadata_data=[],
+            previous_schedule_data=[],
+        )
+        self.assertIsNone(error)
+        built = solver_v2_module._build_model(problem, full_placement=False)
+        return replace(built, staged_lexicographic=True)
+
+    def _scripted_solver_type(self, statuses, values):
+        statuses = iter(statuses)
+        values = iter(values)
+        calls = []
+
+        class ScriptedSolver:
+            def __init__(self):
+                self.parameters = types.SimpleNamespace()
+
+            def Solve(self, model, callback):
+                calls.append(self.parameters.max_time_in_seconds)
+                return next(statuses)
+
+            def Value(self, expression):
+                return next(values)
+
+            def StatusName(self, status):
+                return "SCRIPTED"
+
+            def NumBranches(self):
+                return 0
+
+            def NumConflicts(self):
+                return 0
+
+        return ScriptedSolver, calls
+
+    def test_unproven_tier_does_not_starve_the_remaining_tiers(self):
+        built = self._built_staged()
+        constraints_before = len(built.model.Proto().constraints)
+        solver_type, calls = self._scripted_solver_type(
+            statuses=itertools.chain(
+                [cp_model.FEASIBLE], itertools.repeat(cp_model.OPTIMAL)
+            ),
+            values=itertools.repeat(1),
+        )
+
+        with mock.patch.object(solver_v2_module.cp_model, "CpSolver", solver_type):
+            status, _solver, _ms = solver_v2_module._solve_model(
+                built,
+                deadline=time.monotonic() + 120,
+            )
+
+        # The unproven first tier only earns a FEASIBLE verdict, but every
+        # later tier is still solved and the bound is pinned in the model.
+        self.assertEqual(status, cp_model.FEASIBLE)
+        self.assertEqual(len(calls), len(built.tiers))
+        self.assertLess(calls[0], 120)
+        self.assertGreater(len(built.model.Proto().constraints), constraints_before)
+
+    def test_proving_every_tier_reports_optimal(self):
+        built = self._built_staged()
+        solver_type, calls = self._scripted_solver_type(
+            statuses=itertools.repeat(cp_model.OPTIMAL),
+            values=itertools.repeat(0),
+        )
+
+        with mock.patch.object(solver_v2_module.cp_model, "CpSolver", solver_type):
+            status, _solver, _ms = solver_v2_module._solve_model(
+                built,
+                deadline=time.monotonic() + 120,
+            )
+
+        self.assertEqual(status, cp_model.OPTIMAL)
+        self.assertEqual(len(calls), len(built.tiers))

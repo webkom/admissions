@@ -16,6 +16,11 @@ import { admissionGroupScope } from "src/query/sensitiveAccess";
 import { createSolveJobLifecycle } from "./solveJobLifecycle";
 import { createSolveJobStorage, type StoredSolveJob } from "./solveJobStorage";
 
+// How long a solve job may sit PENDING before we assume the solver worker is
+// not running. Only applied in development — the worker claims jobs within its
+// ~2s poll interval, so 30s of PENDING means it never started.
+const SOLVE_WORKER_STALL_MS = 30_000;
+
 interface SolveJobCompletion {
   kind: "completed";
   job: SolveJob;
@@ -235,11 +240,24 @@ export function useSolveJob(admissionSlug: string, groupId: string) {
       job,
       () => solveRunRef.current !== runId,
       setActiveJob,
+      import.meta.env.DEV ? SOLVE_WORKER_STALL_MS : undefined,
     );
     if (outcome.kind === "stale") return null;
     if (outcome.kind === "access-failure") {
       clearAfterAccessFailure();
       return "access-failure" as const;
+    }
+    if (outcome.kind === "pending-timeout") {
+      clearStoredJob();
+      solveJobIdRef.current = null;
+      setActiveJob(null);
+      setError(
+        "Solve-jobben ble aldri startet. Sjekk at `poetry run python " +
+          "manage.py run_solver_worker` kjører (eller start Django med " +
+          "`make dev`), og prøv igjen.",
+      );
+      restorePreviousResult();
+      return null;
     }
     if (outcome.kind === "missing") {
       clearStoredJob();

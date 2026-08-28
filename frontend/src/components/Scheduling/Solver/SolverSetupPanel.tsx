@@ -18,6 +18,7 @@ import {
   SchedulePanelFooter,
   SchedulePanelHeader,
   SegmentedControl,
+  Stepper,
   actionButtonBase,
   actionButtonNeutral,
   actionButtonPrimary,
@@ -25,6 +26,7 @@ import {
   sectionLabelClass,
 } from "../ui";
 import type { ExperienceLevel, Interviewer, SolverOptions } from "../types";
+import { formatAccessibleDate } from "../scheduleUtils";
 import { iconSizes } from "src/styles/designTokens";
 import cn from "src/utils/cn";
 import { ADVANCED_SOLVER_DEFAULTS, type SolveJob } from "./solverHelpers";
@@ -48,6 +50,13 @@ interface SolverSetupPanelProps {
   interviewSlotCount: number;
   readiness: SolverReadiness;
   availabilityReady: boolean;
+  /** Framework days that have at least one open slot, in order. */
+  plannableDates: string[];
+  /** How many of those days the solve will cover (never below minDayCount). */
+  effectiveDayCount: number;
+  onDayCountChange: (value: number | null) => void;
+  /** Lowest scope allowed: the last day holding a planned candidate. */
+  minDayCount: number;
   loading: boolean;
   error: string;
   elapsedMs: number;
@@ -357,6 +366,10 @@ const SolverSetupPanel = ({
   onPanelSizeChange,
   readiness,
   availabilityReady,
+  plannableDates,
+  effectiveDayCount,
+  onDayCountChange,
+  minDayCount,
   loading,
   error,
   elapsedMs,
@@ -419,6 +432,24 @@ const SolverSetupPanel = ({
   }, [advancedSettingsOpen]);
 
   const panelFormationImpossible = interviewerCount < panelSize;
+  const totalPlannableDays = plannableDates.length;
+  const dayScopeAvailable = totalPlannableDays > 1;
+  const scopeCoversAllDays = effectiveDayCount >= totalPlannableDays;
+  const scopeDateLabel = dayScopeAvailable
+    ? scopeCoversAllDays
+      ? `Alle ${totalPlannableDays} dagene (${formatAccessibleDate(
+          plannableDates[0],
+        )}–${formatAccessibleDate(plannableDates[totalPlannableDays - 1])})`
+      : `${effectiveDayCount} ${
+          effectiveDayCount === 1 ? "dag" : "dager"
+        } (${formatAccessibleDate(plannableDates[0])}–${formatAccessibleDate(
+          plannableDates[effectiveDayCount - 1],
+        )})`
+    : "";
+  const capacityTooSmall =
+    readiness.neededCapacity > 0 &&
+    readiness.usableSlotCount <
+      readiness.neededCapacity / Math.max(panelSize, 1);
   const generationBlocked =
     !currentDraftReady ||
     !candidateScopeResolved ||
@@ -492,9 +523,10 @@ const SolverSetupPanel = ({
                 }. Juster reglene eller intervjuergruppen før du genererer på nytt.`
               : readiness.neededCapacity === 0
                 ? "Ingen kandidater er lagt til i dette opptaket ennå."
-                : readiness.usableSlotCount <
-                    readiness.neededCapacity / Math.max(panelSize, 1)
-                  ? "Det er ikke nok åpne intervjutider med full paneldekning."
+                : capacityTooSmall
+                  ? dayScopeAvailable && !scopeCoversAllDays
+                    ? "De valgte dagene har ikke nok åpne intervjutider med full paneldekning. Planlegg flere dager nå, eller juster tidsoppsettet."
+                    : "Det er ikke nok åpne intervjutider med full paneldekning."
                   : "Intervjuerne har ikke nok samlet tilgjengelig kapasitet.";
   const blockedAction = !currentDraftReady
     ? null
@@ -541,9 +573,21 @@ const SolverSetupPanel = ({
                     }
                 : readiness.neededCapacity === 0
                   ? null
-                  : readiness.usableSlotCount <
-                      readiness.neededCapacity / Math.max(panelSize, 1)
-                    ? { label: "Juster tidsoppsettet", run: onOpenFramework }
+                  : capacityTooSmall
+                    ? dayScopeAvailable && !scopeCoversAllDays
+                      ? // The scope itself is the bottleneck - growing it is
+                        // one click, so that beats navigating to the grid.
+                        {
+                          label: "Planlegg flere dager",
+                          run: () =>
+                            onDayCountChange(
+                              Math.min(
+                                effectiveDayCount + 1,
+                                totalPlannableDays,
+                              ),
+                            ),
+                        }
+                      : { label: "Juster tidsoppsettet", run: onOpenFramework }
                     : { label: "Se tilgjengelighet", run: onOpenAvailability };
 
   const showConfiguration = !hasProposal || regenerationOpen;
@@ -585,7 +629,7 @@ const SolverSetupPanel = ({
                     onClick={onCloseRegeneration}
                     className={cn(actionButtonBase, actionButtonNeutral)}
                   >
-                    Tilbake til planutkast
+                    Tilbake til utkastet
                   </button>
                 ) : undefined
               }
@@ -596,6 +640,48 @@ const SolverSetupPanel = ({
                   {lockedCount} låste intervjuer beholdes;{" "}
                   {changeableInterviewCount} kan flyttes.
                 </p>
+              )}
+
+              {dayScopeAvailable && (
+                <section
+                  data-cy="day-scope"
+                  className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center"
+                >
+                  <div>
+                    <p className="m-0 text-ui font-semibold text-text-primary">
+                      Hvor mange dager skal planlegges nå?
+                    </p>
+                    <p className="m-0 mt-1 text-detail text-text-muted">
+                      {scopeDateLabel}. Resten av dagene planlegges senere —
+                      {lockedCount > 0
+                        ? " låste intervjuer beholdes."
+                        : " allerede planlagte intervjuer beholdes."}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <div data-cy="day-count">
+                      <Stepper
+                        value={effectiveDayCount}
+                        min={minDayCount}
+                        max={totalPlannableDays}
+                        onStep={onDayCountChange}
+                        aria-label="Antall dager som planlegges nå"
+                      />
+                    </div>
+                    {!scopeCoversAllDays && (
+                      <button
+                        type="button"
+                        onClick={() => onDayCountChange(null)}
+                        className={cn(
+                          "text-detail font-semibold text-brand hover:underline",
+                          keyboardFocusRingClass,
+                        )}
+                      >
+                        Alle dager
+                      </button>
+                    )}
+                  </div>
+                </section>
               )}
 
               <section className="flex flex-wrap items-center justify-between gap-4 border-y border-border-soft py-4">
@@ -610,6 +696,14 @@ const SolverSetupPanel = ({
                       ? `, ${solverOptions.candidates_per_session} kandidater per intervju`
                       : ""}
                   </h3>
+                  {dayScopeAvailable && (
+                    <p
+                      data-cy="day-scope-summary"
+                      className="m-0 mt-1 text-detail text-text-muted"
+                    >
+                      Planlegger {scopeDateLabel}
+                    </p>
+                  )}
                 </div>
                 <button
                   ref={advancedSettingsButtonRef}

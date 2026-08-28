@@ -77,9 +77,17 @@ interface UseScheduleDraftPersistenceParams {
   draftBaseRevision: string | null;
   remoteRevisionChanged: boolean;
   config: DraftPersistenceConfig;
+  /** The plan was generated from mock/synthetic input: its interviewers do
+   *  not exist in the backend, so the draft can never save. The enqueue
+   *  guard below turns the auto-save into a clear message instead of the
+   *  backend's confusing "ukjent intervjuer" rejection. */
+  syntheticInput?: boolean;
   onConflict: () => void;
   onRevisionSaved: (revision: string) => void;
-  onSaved: (revision: string) => void;
+  onSaved: (revision: string, touchedScheduleIndexes: number[]) => void;
+  /** Rows the user edited since the last completed save, drained on read
+   *  (see useScheduleDraft.consumeTouchedScheduleIndexes). */
+  getTouchedScheduleIndexes?: () => number[];
 }
 
 export const useScheduleDraftPersistence = ({
@@ -91,13 +99,16 @@ export const useScheduleDraftPersistence = ({
   draftBaseRevision,
   remoteRevisionChanged,
   config,
+  syntheticInput = false,
   onConflict,
   onRevisionSaved,
   onSaved,
+  getTouchedScheduleIndexes,
 }: UseScheduleDraftPersistenceParams) => {
   const onRevisionSavedRef = useRef(onRevisionSaved);
   const onConflictRef = useRef(onConflict);
   const onSavedRef = useRef(onSaved);
+  const touchedIndexesRef = useRef(getTouchedScheduleIndexes);
   const saveSchedule = useSaveSchedule(config.admissionSlug, config.groupId, {
     onCanonicalScheduleSaved: (schedule) =>
       onRevisionSavedRef.current(schedule.updated_at),
@@ -127,7 +138,8 @@ export const useScheduleDraftPersistence = ({
     onRevisionSavedRef.current = onRevisionSaved;
     onConflictRef.current = onConflict;
     onSavedRef.current = onSaved;
-  }, [onConflict, onRevisionSaved, onSaved]);
+    touchedIndexesRef.current = getTouchedScheduleIndexes;
+  }, [onConflict, onRevisionSaved, onSaved, getTouchedScheduleIndexes]);
 
   useEffect(() => {
     if (!inFlightRef.current) revisionRef.current = draftBaseRevision;
@@ -165,7 +177,10 @@ export const useScheduleDraftPersistence = ({
           !pendingRef.current &&
           pending.fingerprint === latestFingerprintRef.current
         ) {
-          onSavedRef.current(saved.updated_at);
+          onSavedRef.current(
+            saved.updated_at,
+            touchedIndexesRef.current?.() ?? [],
+          );
           setState("saved");
         }
       } catch (saveError) {
@@ -225,7 +240,25 @@ export const useScheduleDraftPersistence = ({
   });
   latestFingerprintRef.current = fingerprint;
 
+  const SIMULATED_PLAN_SAVE_BLOCKED =
+    "Simulerte planer kan ikke lagres — de inneholder fiktive intervjuere " +
+    "som ikke finnes i systemet. Skru av «Simuler testdata» og generer på " +
+    "nytt med ekte data for å kunne lagre.";
+
   useEffect(() => {
+    if (syntheticInput) {
+      pendingRef.current = null;
+      failedRef.current = null;
+      if (timerRef.current) {
+        clearTimeout(timerRef.current);
+        timerRef.current = null;
+      }
+      if (state !== "error" || error !== SIMULATED_PLAN_SAVE_BLOCKED) {
+        setState("error");
+        setError(SIMULATED_PLAN_SAVE_BLOCKED);
+      }
+      return;
+    }
     const persistenceUnavailable =
       !hasLocalDraft ||
       loading ||
@@ -263,7 +296,10 @@ export const useScheduleDraftPersistence = ({
       }
       setState("saved");
       setError("");
-      if (revisionRef.current) onSavedRef.current(revisionRef.current);
+      // Already persisted and unchanged: report the revision without touch
+      // information, so the view does not replay a row highlight for a save
+      // that did not happen just now.
+      if (revisionRef.current) onSavedRef.current(revisionRef.current, []);
       return;
     }
     if (fingerprint === failedRef.current?.fingerprint) return;
@@ -313,6 +349,7 @@ export const useScheduleDraftPersistence = ({
     savedSchedule?.is_distributed,
     schedule,
     solveTick,
+    syntheticInput,
   ]);
 
   useEffect(

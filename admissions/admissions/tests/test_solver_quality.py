@@ -1087,6 +1087,9 @@ class SolverQualityTestCase(APITestCase):
                     "allow_overtime": False,
                     "prioritize_continuity": True,
                     "same_panel_per_block": False,
+                    # Pinned so the captured tier maximum stays independent
+                    # of the application-default load-balance weight.
+                    "load_balance_weight": 4,
                 },
                 all_slots_data=[0, 1],
                 blocks_data=[[0, 1]],
