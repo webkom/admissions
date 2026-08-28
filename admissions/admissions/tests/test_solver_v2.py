@@ -1267,6 +1267,7 @@ class SolverDifferentialTestCase(SimpleTestCase):
             permuted["objective_vector"],
         )
 
+
 class StagedTierBudgetingTestCase(SimpleTestCase):
     """The staged lexicographic loop must give every objective tier a slice
     of the budget and pin an unproven tier with an upper bound, instead of

@@ -4,7 +4,6 @@ export type {
   EnabledWindow,
   ExperienceLevel,
   Interviewer,
-  InitialPlanningStrategy,
   ManualScheduleBlock,
   PanelStability,
   RepairStrategy,
