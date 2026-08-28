@@ -117,7 +117,7 @@ export interface AppliedSolveProposal {
   result: SolveResponse;
 }
 
-const DEFAULT_MAX_SOLVER_SECONDS = 100;
+const DEFAULT_MAX_SOLVER_SECONDS = 150;
 const LEGACY_DEFAULT_MAX_SOLVER_SECONDS = new Set([30, 120, 5 * 60]);
 // The old invisible default let a compact plan load a few interviewers
 // heavily while others idled; saved admissions carrying it are upgraded so
