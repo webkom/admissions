@@ -250,6 +250,16 @@ class InterviewAvailabilityView(SchedulerFeatureGateMixin, APIView):
         saved_schedule = SavedSchedule.objects.filter(
             admission=admission, group=group
         ).first()
+        enabled_slots = (
+            list(saved_schedule.enabled_slots or []) if saved_schedule else []
+        )
+        if saved_schedule and not enabled_slots and saved_schedule.enabled_windows:
+            enabled_slots = enabled_windows_to_slots(
+                saved_schedule.enabled_windows,
+                saved_schedule.session_duration,
+            )
+        canonical_enabled, _unused = canonicalize_slot_keys(enabled_slots)
+        enabled_slot_set = set(canonical_enabled or [])
         proposed_candidate_ids_map = get_proposed_candidate_ids_by_interviewer(
             saved_schedule
         )
@@ -385,12 +395,20 @@ class InterviewAvailabilityView(SchedulerFeatureGateMixin, APIView):
                     else InterviewAvailability.EXPERIENCE_UNKNOWN
                 ),
                 "slots": (
-                    availability_map[person.id].slots
+                    [
+                        slot
+                        for slot in availability_map[person.id].slots
+                        if slot in enabled_slot_set
+                    ]
                     if person.id in availability_map
                     else []
                 ),
                 "discouraged_slots": (
-                    availability_map[person.id].discouraged_slots
+                    [
+                        slot
+                        for slot in availability_map[person.id].discouraged_slots
+                        if slot in enabled_slot_set
+                    ]
                     if person.id in availability_map
                     else []
                 ),
@@ -491,16 +509,20 @@ class InterviewAvailabilityView(SchedulerFeatureGateMixin, APIView):
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
         if "experience_level" in serializer.validated_data and not is_interview_admin:
             return Response(status=status.HTTP_403_FORBIDDEN)
-        # Members never touch applicant data: marking inhabilitet and
-        # confirming reviews references candidates, which is why it is
-        # interview-admin work only (recruiters record reviews on a member's
-        # behalf by posting that member's user_id).
+        # Marking inhabilitet and confirming a review reference candidates:
+        # a committee member does that for their own row (their own review
+        # scope, which is exactly what the review UI shows them), while an
+        # interview admin may do it on anyone's behalf by posting that
+        # member's user_id. A member posting another person's user_id is the
+        # one shape that is never allowed.
         if (
             any(
                 field in serializer.validated_data
                 for field in ("conflicts", "reviewed_candidate_ids")
             )
             and not is_interview_admin
+            and serializer.validated_data.get("user_id") is not None
+            and serializer.validated_data.get("user_id") != user.id
         ):
             return Response(status=status.HTTP_403_FORBIDDEN)
         admission = Admission.objects.select_for_update().get(pk=admission.pk)
@@ -524,9 +546,7 @@ class InterviewAvailabilityView(SchedulerFeatureGateMixin, APIView):
 
         saved_schedule = SavedSchedule.objects.filter(
             admission=admission, group=group
-        ).first()
-
-        # discouraged_slots is only meaningful alongside the grid it belongs
+        ).first()  # discouraged_slots is only meaningful alongside the grid it belongs
         # to: everything that validates it - canonicalisation, disjointness
         # from slots, and membership of the opened grid - is derived from the
         # slots submitted with it, so all of it lives in the branch below.
@@ -572,6 +592,14 @@ class InterviewAvailabilityView(SchedulerFeatureGateMixin, APIView):
                     slot for slot in canonical_discouraged if slot not in available
                 ]
 
+            # A stale grid is checked before any slot validation: if the
+            # framework changed (generation bumped) after the user's grid was
+            # built, their slots - however valid they looked on screen - are
+            # evaluated against a different grid. Reporting that first turns
+            # what would otherwise be a confusing "slot not part of the plan"
+            # 400 into the actionable "reload" conflict. Scoped to slot
+            # submissions: participation and review updates do not reference
+            # the grid, so they must not require a generation.
             expected_generation = serializer.validated_data.get(
                 "expected_availability_generation"
             )
@@ -602,6 +630,7 @@ class InterviewAvailabilityView(SchedulerFeatureGateMixin, APIView):
                     },
                     status=status.HTTP_409_CONFLICT,
                 )
+
             enabled_slots = []
             if saved_schedule is not None:
                 enabled_slots = list(saved_schedule.enabled_slots or [])
@@ -619,16 +648,26 @@ class InterviewAvailabilityView(SchedulerFeatureGateMixin, APIView):
             enabled_set = set(
                 canonical_enabled if canonical_enabled is not None else enabled_slots
             )
+            # A slot outside the current enabled set always means the client
+            # was built against a different framework: the grid never offers
+            # non-enabled slots and the save handler normalizes whole blocks
+            # down to the enabled subset, so a submitted slot the plan does
+            # not contain is evidence the browser held a stale plan (the
+            # schedule and availability queries can briefly disagree). Answer
+            # with the same actionable reload conflict as a generation
+            # mismatch - a per-slot 400 here only leaves the user staring at
+            # a slot their own grid no longer shows.
             outside = [key for key in canonical_slots if key not in enabled_set]
             if outside:
                 return Response(
                     {
                         "slots": [
-                            f"Tidspunktet {outside[0]} er ikke en del av "
-                            "intervjuplanens tidsoppsett."
-                        ]
+                            "Tidsoppsettet er endret. Last inn siden på nytt "
+                            "før du bekrefter."
+                        ],
+                        "availability_generation": current_generation,
                     },
-                    status=status.HTTP_400_BAD_REQUEST,
+                    status=status.HTTP_409_CONFLICT,
                 )
             outside_discouraged = [
                 key
@@ -639,11 +678,12 @@ class InterviewAvailabilityView(SchedulerFeatureGateMixin, APIView):
                 return Response(
                     {
                         "discouraged_slots": [
-                            f"Tidspunktet {outside_discouraged[0]} er ikke en del "
-                            "av intervjuplanens tidsoppsett."
-                        ]
+                            "Tidsoppsettet er endret. Last inn siden på nytt "
+                            "før du bekrefter."
+                        ],
+                        "availability_generation": current_generation,
                     },
-                    status=status.HTTP_400_BAD_REQUEST,
+                    status=status.HTTP_409_CONFLICT,
                 )
 
         conflict_review_open = self._conflict_review_is_open_for_user(
@@ -801,6 +841,8 @@ class InterviewAvailabilityView(SchedulerFeatureGateMixin, APIView):
             )
         elif requested_participation is not None:
             defaults["participation"] = requested_participation
+            # Opting out clears the active answer. Rejoining is represented by
+            # submitting slots again, which also stamps the current plan.
             defaults["slots"] = []
             defaults["discouraged_slots"] = []
             defaults["submitted_grid_generation"] = None
