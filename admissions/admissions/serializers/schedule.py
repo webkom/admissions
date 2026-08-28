@@ -233,6 +233,10 @@ class ScheduleRequestsSerializer(serializers.Serializer):
     locked_assignments = LockedAssignmentSerializer(
         many=True, required=False, max_length=500
     )
+    # Optional partial-plan scope: solve only slots on or before this date
+    # (within the saved framework) so a plan can be built a few days at a
+    # time without touching the enabled-slots grid.
+    day_scope_through = serializers.DateField(required=False, allow_null=True)
     synthetic = serializers.BooleanField(required=False, default=False)
     preview_only = serializers.BooleanField(required=False, default=False)
 

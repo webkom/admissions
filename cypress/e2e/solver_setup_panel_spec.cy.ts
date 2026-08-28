@@ -314,9 +314,6 @@ describe("solver readiness and regeneration", () => {
     it(`reveals a calm rerun panel from ${trigger}`, () => {
       mountSolverSetup("rerun");
       cy.get("[data-cy=regeneration-settings]").should("not.exist");
-      if (trigger === "proposal-rerun") {
-        cy.contains("summary", "Endre planen").click();
-      }
       cy.get(`[data-cy=${trigger}]`).click();
       cy.get("[data-cy=regeneration-settings]")
         .should("be.visible")
@@ -342,7 +339,7 @@ describe("solver readiness and regeneration", () => {
           capture: "viewport",
         });
       }
-      cy.contains("button", "Tilbake til planutkast").focus().click();
+      cy.contains("button", "Tilbake til utkastet").focus().click();
       cy.get("[data-cy=regeneration-settings]").should("not.exist");
       cy.get("[data-cy=proposal-review]").should("be.visible");
     });
@@ -357,10 +354,23 @@ describe("solver readiness and regeneration", () => {
     cy.get("[data-cy=plan-health-summary]")
       .should("contain.text", "1 av 2 planlagt")
       .and("not.contain.text", "Ingen planproblemer");
-    cy.contains("th", "Behold").should("not.exist");
 
-    cy.contains("summary", "Endre planen").click();
-    cy.contains("button", "Rediger planutkast").click();
+    // A draft opens in editing mode: hand-tuning between solves is the
+    // norm, so read-only is the explicit opt-out rather than the default.
+    cy.get("[data-cy=manual-schedule-editing]").should(
+      "contain.text",
+      "Endringer lagres automatisk",
+    );
+    cy.contains("th", "Behold").should("be.visible");
+
+    cy.get("[data-cy=proposal-primary-action]")
+      .should("contain.text", "Vis uten redigering")
+      .click();
+    cy.get("[data-cy=manual-schedule-editing]").should("not.exist");
+    cy.contains("th", "Behold").should("not.exist");
+    cy.contains("Lagrer utkast…").should("be.visible");
+
+    cy.contains("button", /^Rediger$/).click();
     cy.get("[data-cy=manual-schedule-editing]").should(
       "contain.text",
       "Endringer lagres automatisk",
@@ -370,26 +380,6 @@ describe("solver readiness and regeneration", () => {
     cy.screenshot("scheduler-workflow/04-draft-manual-edit", {
       capture: "viewport",
     });
-    cy.get("[data-cy=proposal-primary-action]").should(
-      "contain.text",
-      "Gå til forhåndsvisning",
-    );
-    cy.get("[data-cy=proposal-primary-action]").click();
-    cy.get("[data-cy=manual-schedule-editing]").should("not.exist");
-    cy.contains("Lagrer utkast…").should("be.visible");
-  });
-
-  it("supports keyboard navigation and focus restoration in the plan-change menu", () => {
-    mountSolverSetup("rerun");
-    cy.contains("summary", "Endre planen").as("draftActionMenu").click();
-    cy.contains('[role="menuitem"]', "Rediger planutkast").should("be.focused");
-    cy.focused().type("{downarrow}");
-    cy.focused().should("contain.text", "Vis belastning");
-    cy.focused().type("{esc}");
-    cy.get("@draftActionMenu").should("be.focused");
-    cy.get("@draftActionMenu")
-      .parent("details")
-      .should("not.have.attr", "open");
   });
 
   it("shows one dominant explanation when a candidate is missing a placement", () => {
@@ -404,7 +394,10 @@ describe("solver readiness and regeneration", () => {
       .and("not.contain.text", "mangler plass");
     cy.get("[data-cy=plan-draft-next-action]")
       .should("have.length", 1)
-      .and("have.attr", "role", "alert")
+      // A delplan is a normal intermediate state now, not an error: the
+      // notice reads as a warning status, not an alert.
+      .and("have.attr", "role", "status")
+      .and("contain.text", "Delplan klar")
       .and("contain.text", "1 kandidat mangler intervju");
     cy.get("[data-cy=proposal-workflow-notice]").should("not.exist");
   });
@@ -412,9 +405,8 @@ describe("solver readiness and regeneration", () => {
   it("keeps a completed candidate check revisitable while others are pending", () => {
     mountSolverSetup("rerun-waiting");
     cy.get("[data-cy=plan-draft-next-action]")
-      .should("contain.text", "Kandidatkontroll")
+      .should("contain.text", "Inhabilitetssjekk")
       .and("contain.text", "Venter på Grace");
-    cy.contains("summary", "Endre planen").click();
     cy.get("[data-cy=reopen-candidate-review]").click();
     cy.get("[data-cy=navigation-action]").should("have.text", "review");
   });

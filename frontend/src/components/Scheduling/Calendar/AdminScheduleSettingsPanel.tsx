@@ -11,6 +11,7 @@ import { ConfigStep, ConfigStepList } from "../ConfigStep";
 import { buildBlockTimeChunks } from "../scheduleUtils";
 import {
   CustomValueSegmentedControl,
+  MetaValue,
   SaveButton,
   SchedulePanel,
   SchedulePanelBody,
@@ -632,6 +633,18 @@ export const AdminScheduleConfigFooter: React.FC<{
       dataCy="admin-schedule-config-footer"
       status={
         <div className="flex min-w-0 flex-col gap-2">
+          {typeof saveStatus.openSlotCount === "number" && (
+            <div className="flex flex-wrap items-center gap-5">
+              <MetaValue
+                label="Intervjublokker"
+                value={saveStatus.openBlockCount}
+              />
+              <MetaValue
+                label="Intervjutider"
+                value={saveStatus.openSlotCount}
+              />
+            </div>
+          )}
           {saveStatus.remoteRevisionChanged && (
             <div
               role="alert"

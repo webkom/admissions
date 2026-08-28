@@ -10,6 +10,7 @@ import type {
 } from "../types";
 import {
   buildLockedAssignments,
+  decodeScheduleTime,
   slotsToSolverAvailability,
 } from "../scheduleUtils";
 import {
@@ -50,6 +51,11 @@ export const useSolverSession = ({
   const [solverOptions, setSolverOptions] = useState<SolverOptions>(
     DEFAULT_SOLVER_OPTIONS,
   );
+  // Partial-plan scope: how many of the framework's plannable days the
+  // solve should cover. null means "all of them" - the framework grid is
+  // untouched, so nobody's availability answer is invalidated by solving
+  // a few days at a time and extending later.
+  const [dayCount, setDayCount] = useState<number | null>(null);
   const [proposalSolverOptions, setProposalSolverOptions] =
     useState<SolverOptions | null>(null);
   const [pendingProposalSolverOptions, setPendingProposalSolverOptions] =
@@ -207,6 +213,20 @@ export const useSolverSession = ({
     resetDraftTracking(revision);
     return true;
   }, [resetDraftTracking, revealSavedSchedule, savedSchedule?.updated_at]);
+  const discardCurrentSuggestion = useCallback(() => {
+    solveJob.reset();
+    if (!savedSchedule?.schedule.length || !revealSavedSchedule()) {
+      resetDraftTracking(null);
+      return;
+    }
+    resetDraftTracking(savedSchedule.updated_at);
+  }, [
+    resetDraftTracking,
+    revealSavedSchedule,
+    savedSchedule?.schedule.length,
+    savedSchedule?.updated_at,
+    solveJob.reset,
+  ]);
 
   useEffect(() => {
     if (accessFailureStatus === 404) {
@@ -334,6 +354,54 @@ export const useSolverSession = ({
     }
   }, [savedSchedule]);
 
+  const plannableDates = useMemo(() => {
+    const datesWithSlots = new Set(
+      Array.from(enabledSlots, (key) => key.slice(0, key.lastIndexOf("|"))),
+    );
+    return dates.filter((date) => datesWithSlots.has(date));
+  }, [dates, enabledSlots]);
+  const effectiveDayCount = Math.min(
+    dayCount ?? plannableDates.length,
+    plannableDates.length,
+  );
+  const scopedDates = useMemo(
+    () => plannableDates.slice(0, effectiveDayCount),
+    [effectiveDayCount, plannableDates],
+  );
+  const scopedEnabledSlots = useMemo(() => {
+    const scopedDateSet = new Set(scopedDates);
+    if (scopedDateSet.size === plannableDates.length) return enabledSlots;
+    return new Set(
+      Array.from(enabledSlots).filter((key) =>
+        scopedDateSet.has(key.slice(0, key.lastIndexOf("|"))),
+      ),
+    );
+  }, [enabledSlots, plannableDates.length, scopedDates]);
+  const isDayScoped = scopedDates.length < plannableDates.length;
+  // The default scope is the saved plan's own extent: a page reload in the
+  // middle of the widen-days loop must land back on "the next day can be
+  // planned", not on all days. Explicit choices (including "Alle dager")
+  // are never overwritten.
+  const dayScopeSeededRef = useRef(false);
+  useEffect(() => {
+    if (dayScopeSeededRef.current || !savedSchedule) return;
+    if (plannableDates.length === 0) return;
+    dayScopeSeededRef.current = true;
+    const rows = savedSchedule.schedule ?? [];
+    if (rows.length === 0) return;
+    let lastDate: string | null = null;
+    rows.forEach((item) => {
+      if (!Number.isFinite(item.time)) return;
+      const date =
+        dates[decodeScheduleTime(item.time, sessionDuration).dayIndex];
+      if (date && (lastDate === null || date > lastDate)) lastDate = date;
+    });
+    if (!lastDate) return;
+    const index = plannableDates.indexOf(lastDate);
+    if (index === -1 || index + 1 >= plannableDates.length) return;
+    setDayCount(index + 1);
+  }, [dates, plannableDates, savedSchedule, sessionDuration]);
+
   const readiness = useMemo(
     () =>
       deriveSolverReadiness({
@@ -341,8 +409,8 @@ export const useSolverSession = ({
         candidates,
         interviewers,
         panelSize,
-        enabledSlots,
-        dates,
+        enabledSlots: scopedEnabledSlots,
+        dates: scopedDates,
         sessionDuration,
         allowOvertime: solverOptions.availability_fallback !== "stop",
         requireExperiencedPanel: solverOptions.require_experienced_panel,
@@ -350,8 +418,8 @@ export const useSolverSession = ({
       }),
     [
       candidates,
-      dates,
-      enabledSlots,
+      scopedDates,
+      scopedEnabledSlots,
       interviewers,
       panelSize,
       sessionDuration,
@@ -388,11 +456,15 @@ export const useSolverSession = ({
         repairStrategy,
         previewOnly = false,
         availabilityFallback,
+        dayCount: dayCountOverride,
       }: {
         mode?: "initial" | "repair";
         repairStrategy?: RepairStrategy;
         previewOnly?: boolean;
         availabilityFallback?: SolverOptions["availability_fallback"];
+        /** Scope this run to the first N plannable days, e.g. when
+         *  extending a saved delplan by one day in a single click. */
+        dayCount?: number;
       } = {},
     ) => {
       if (!readiness.ready) {
@@ -425,8 +497,22 @@ export const useSolverSession = ({
         markDraftModified();
         solveJob.setPlanRevealed(Boolean(lockedAssignments.length));
       }
+      const solveScopeCount = Math.min(
+        dayCountOverride ?? effectiveDayCount,
+        plannableDates.length,
+      );
+      const solveScopeDates = plannableDates.slice(0, solveScopeCount);
+      const solveScopeDateSet = new Set(solveScopeDates);
+      const solveScopedSlots =
+        solveScopeDateSet.size === plannableDates.length
+          ? enabledSlots
+          : new Set(
+              Array.from(enabledSlots).filter((key) =>
+                solveScopeDateSet.has(key.slice(0, key.lastIndexOf("|"))),
+              ),
+            );
       const allSlots = slotsToSolverAvailability(
-        enabledSlots,
+        solveScopedSlots,
         dates,
         sessionDuration,
       );
@@ -466,6 +552,12 @@ export const useSolverSession = ({
               options: runOptions,
               ...(savedSchedule?.updated_at
                 ? { baseline_updated_at: savedSchedule.updated_at }
+                : {}),
+              ...(solveScopeDates.length < plannableDates.length
+                ? {
+                    day_scope_through:
+                      solveScopeDates[solveScopeDates.length - 1],
+                  }
                 : {}),
               ...(lockedIds.length > 0
                 ? { locked_assignments: lockedIds }
@@ -517,6 +609,36 @@ export const useSolverSession = ({
           resetDraftTracking(applied.schedule.updated_at);
           setSolveTick((tick) => tick + 1);
         } else {
+          // A solver run that fully placed every candidate is the
+          // happy path - we should not strand the user on a "save or
+          // discard" decision for a perfect plan. Auto-apply so the
+          // new draft is committed and the user can either iterate or
+          // move on to publication. A partial result still goes through
+          // the proposal panel so the user can see what's missing.
+          const unplaceableCount = completion?.result?.unplaceable?.length ?? 0;
+          if (completion?.kind === "completed" && unplaceableCount === 0) {
+            // Worker already auto-applied.
+            if (completion.job.applied_at) {
+              setSolverOptions(runOptions);
+              setProposalSolverOptions(runOptions);
+              setPendingProposalSolverOptions(null);
+              setSolveTick((tick) => tick + 1);
+              return outcome;
+            }
+            // Worker did not auto-apply - do it ourselves.
+            const applied = await solveJob.applyProposal();
+            if (!applied) return null;
+            const appliedOptions = normalizeSolverOptions(
+              applied.schedule.solver_options ?? runOptions,
+            );
+            setSolverOptions(appliedOptions);
+            setProposalSolverOptions(appliedOptions);
+            setPendingProposalSolverOptions(null);
+            syncedRevisionRef.current = applied.schedule.updated_at;
+            resetDraftTracking(applied.schedule.updated_at);
+            setSolveTick((tick) => tick + 1);
+            return outcome;
+          }
           setPendingProposalSolverOptions(runOptions);
         }
       }
@@ -528,10 +650,12 @@ export const useSolverSession = ({
       candidates,
       canonicalBlocks,
       dates,
+      effectiveDayCount,
       enabledSlots,
       interviewers,
       markDraftModified,
       panelSize,
+      plannableDates,
       readiness.ready,
       resetDraftTracking,
       savedSchedule?.updated_at,
@@ -626,6 +750,11 @@ export const useSolverSession = ({
     applyPendingProposal,
     discardPendingProposal,
     applyRepairPreview,
+    dayCount,
+    setDayCount,
+    effectiveDayCount,
+    plannableDates,
+    isDayScoped,
     draftBaseRevision: effectiveDraftBaseRevision,
     hasLocalDraft: effectiveHasLocalDraft,
     remoteRevisionChanged: effectiveRemoteRevisionChanged,
@@ -634,5 +763,6 @@ export const useSolverSession = ({
     markDraftSaved,
     markDraftConflict,
     restoreSavedProposal,
+    discardCurrentSuggestion,
   };
 };

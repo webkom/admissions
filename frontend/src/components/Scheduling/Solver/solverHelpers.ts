@@ -117,8 +117,12 @@ export interface AppliedSolveProposal {
   result: SolveResponse;
 }
 
-const DEFAULT_MAX_SOLVER_SECONDS = 30;
-const LEGACY_DEFAULT_MAX_SOLVER_SECONDS = new Set([120, 5 * 60]);
+const DEFAULT_MAX_SOLVER_SECONDS = 150;
+const LEGACY_DEFAULT_MAX_SOLVER_SECONDS = new Set([30, 120, 5 * 60]);
+// The old invisible default let a compact plan load a few interviewers
+// heavily while others idled; saved admissions carrying it are upgraded so
+// re-solves distribute fairly.
+const LEGACY_DEFAULT_LOAD_BALANCE_WEIGHT = new Set([4]);
 
 export const DEFAULT_SOLVER_OPTIONS: SolverOptions = {
   policy_version: 2,
@@ -135,7 +139,7 @@ export const DEFAULT_SOLVER_OPTIONS: SolverOptions = {
   repair_strategy: "minimum_change",
   repair_mode: false,
   overtime_weight: 40,
-  load_balance_weight: 4,
+  load_balance_weight: 20,
   continuity_weight: 1,
   max_solver_seconds: DEFAULT_MAX_SOLVER_SECONDS,
 };
@@ -252,6 +256,12 @@ export const normalizeSolverOptions = (
   // Upgrade saved admissions so they receive the extended runtime as well.
   if (LEGACY_DEFAULT_MAX_SOLVER_SECONDS.has(normalized.max_solver_seconds)) {
     normalized.max_solver_seconds = DEFAULT_MAX_SOLVER_SECONDS;
+  }
+  if (
+    normalized.load_balance_weight !== undefined &&
+    LEGACY_DEFAULT_LOAD_BALANCE_WEIGHT.has(normalized.load_balance_weight)
+  ) {
+    normalized.load_balance_weight = DEFAULT_SOLVER_OPTIONS.load_balance_weight;
   }
   return normalized;
 };

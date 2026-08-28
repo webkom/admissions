@@ -271,7 +271,7 @@ const RepairScenarioPanel = ({
                           <span className="mt-2 block text-detail font-semibold text-danger">
                             Kan ikke brukes,{" "}
                             {scenario.unplacedCandidates.length === 1
-                              ? `${scenario.unplacedCandidates[0]} står uten intervju`
+                              ? "Kandidat 1 står uten intervju"
                               : `${scenario.unplacedCandidates.length} kandidater står uten intervju`}
                           </span>
                         )}

@@ -59,6 +59,7 @@ export const SchedulePanel: React.FC<SchedulePanelProps> = ({
 
 interface SchedulePanelHeaderProps {
   title: string;
+  titleClassName?: string;
   description?: React.ReactNode;
   eyebrow?: string;
   icon?: React.ComponentType<{ size?: number | string; className?: string }>;
@@ -72,6 +73,7 @@ interface SchedulePanelHeaderProps {
 
 export const SchedulePanelHeader: React.FC<SchedulePanelHeaderProps> = ({
   title,
+  titleClassName,
   description,
   eyebrow,
   icon: Icon,
@@ -118,6 +120,7 @@ export const SchedulePanelHeader: React.FC<SchedulePanelHeaderProps> = ({
             data-cy={headingDataCy}
             className={cn(
               "m-0 rounded-sm leading-tight text-text-primary focus:outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-focus",
+              titleClassName,
               // A header carrying a subtitle heads a whole section, so it
               // renders a step up from the plain sub-panel headers.
               description ? "text-xl font-bold" : "text-title font-semibold",

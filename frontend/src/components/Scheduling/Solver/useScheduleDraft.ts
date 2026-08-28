@@ -7,7 +7,12 @@ import {
   type SetStateAction,
 } from "react";
 
-import type { Candidate, Interviewer, ScheduleItem } from "../types";
+import type {
+  Candidate,
+  Interviewer,
+  SavedSchedule,
+  ScheduleItem,
+} from "../types";
 import { buildLockedAssignments } from "../scheduleUtils";
 import { hasSchedule, type SolveResponse } from "./solverHelpers";
 import {
@@ -26,6 +31,7 @@ interface UseScheduleDraftParams {
   enabledSlots: Set<string>;
   sessionDuration: number;
   canonicalBlocks: number[][];
+  savedSchedule: SavedSchedule | null;
   onModify: () => void;
 }
 
@@ -43,6 +49,7 @@ export const toggleScheduleDraftLock = (item: ScheduleItem): ScheduleItem => {
 export interface ScheduleDraftController {
   presentation: SchedulePresentation;
   lockedAssignments: ReturnType<typeof buildLockedAssignments>;
+  explicitLockedAssignments: ReturnType<typeof buildLockedAssignments>;
   canRestoreEditSession: boolean;
   beginEditSession: () => void;
   restoreEditSession: () => void;
@@ -50,6 +57,7 @@ export interface ScheduleDraftController {
   timeOptionsFor: (scheduleIndex: number) => number[];
   toggleLock: (scheduleIndex: number) => void;
   changeTime: (scheduleIndex: number, nextTime: string) => void;
+  moveItems: (scheduleIndexes: number[], nextTime: number) => void;
   swapTimes: (sourceScheduleIndex: number, targetScheduleIndex: number) => void;
   swapPanelMember: (
     scheduleIndex: number,
@@ -57,6 +65,10 @@ export interface ScheduleDraftController {
     newName: string,
     newId?: string,
   ) => void;
+  /** Rows touched since the last save, drained on read. The persistence
+   *  layer forwards them to onSaved so the plan view can scroll back to
+   *  and highlight what the user just changed. */
+  consumeTouchedScheduleIndexes: () => number[];
 }
 
 export const useScheduleDraft = ({
@@ -68,9 +80,11 @@ export const useScheduleDraft = ({
   enabledSlots,
   sessionDuration,
   canonicalBlocks,
+  savedSchedule,
   onModify,
 }: UseScheduleDraftParams): ScheduleDraftController => {
   const editBaselineRef = useRef<SolveResponse | null>(null);
+  const touchedScheduleIndexesRef = useRef<number[]>([]);
   const [canRestoreEditSession, setCanRestoreEditSession] = useState(false);
   const presentation = useMemo(
     () => deriveSchedulePresentation(result, interviewers, canonicalBlocks),
@@ -83,7 +97,30 @@ export const useScheduleDraft = ({
       ),
     [interviewers],
   );
-  const lockedAssignments = useMemo(
+  const lockedAssignments = useMemo(() => {
+    // Incremental multi-day solving: when the in-memory draft has no
+    // placements (e.g. just after the page loads, or after the user
+    // discarded the result), fall back to the server's saved schedule
+    // and treat every persisted row as locked. Without this, re-running
+    // the solver on more enabled days would discard the partial plan
+    // the admin already saved.
+    const fromDraft = buildLockedAssignments(
+      result?.schedule ?? [],
+      candidates,
+      interviewers,
+    );
+    if (fromDraft.length > 0) return fromDraft;
+    if (savedSchedule && savedSchedule.schedule.length > 0) {
+      return buildLockedAssignments(
+        savedSchedule.schedule,
+        candidates,
+        interviewers,
+        { includeUnlockedItems: true },
+      );
+    }
+    return fromDraft;
+  }, [candidates, interviewers, result, savedSchedule]);
+  const explicitLockedAssignments = useMemo(
     () =>
       buildLockedAssignments(result?.schedule ?? [], candidates, interviewers),
     [candidates, interviewers, result],
@@ -102,14 +139,28 @@ export const useScheduleDraft = ({
     [enabledTimeOptions, result],
   );
 
+  const markTouchedScheduleIndexes = useCallback((indexes: number[]) => {
+    touchedScheduleIndexesRef.current = [
+      ...new Set([...touchedScheduleIndexesRef.current, ...indexes]),
+    ];
+  }, []);
+
+  const consumeTouchedScheduleIndexes = useCallback(() => {
+    const indexes = touchedScheduleIndexesRef.current;
+    touchedScheduleIndexesRef.current = [];
+    return indexes;
+  }, []);
+
   const beginEditSession = useCallback(() => {
     editBaselineRef.current =
       result && hasSchedule(result.status) ? result : null;
+    touchedScheduleIndexesRef.current = [];
     setCanRestoreEditSession(false);
   }, [result]);
 
   const finishEditSession = useCallback(() => {
     editBaselineRef.current = null;
+    touchedScheduleIndexesRef.current = [];
     setCanRestoreEditSession(false);
   }, []);
 
@@ -131,6 +182,7 @@ export const useScheduleDraft = ({
       }
       const currentItem = result.schedule[scheduleIndex];
       if (updater(currentItem) === currentItem) return;
+      markTouchedScheduleIndexes([scheduleIndex]);
       setCanRestoreEditSession(Boolean(editBaselineRef.current));
       onModify();
       setResult((current) => {
@@ -143,7 +195,7 @@ export const useScheduleDraft = ({
         };
       });
     },
-    [onModify, result, setResult],
+    [markTouchedScheduleIndexes, onModify, result, setResult],
   );
 
   const changeTime = useCallback(
@@ -223,6 +275,7 @@ export const useScheduleDraft = ({
         return;
       }
       setCanRestoreEditSession(Boolean(editBaselineRef.current));
+      markTouchedScheduleIndexes([sourceScheduleIndex, targetScheduleIndex]);
       onModify();
       setResult((current) => {
         if (!current || !hasSchedule(current.status)) return current;
@@ -253,12 +306,62 @@ export const useScheduleDraft = ({
         };
       });
     },
-    [onModify, result, setResult],
+    [markTouchedScheduleIndexes, onModify, result, setResult],
+  );
+
+  const moveItems = useCallback(
+    (scheduleIndexes: number[], nextTime: number) => {
+      if (
+        !result ||
+        !hasSchedule(result.status) ||
+        scheduleIndexes.length === 0 ||
+        !Number.isFinite(nextTime)
+      ) {
+        return;
+      }
+      const indexes = [...new Set(scheduleIndexes)].filter(
+        (index) => result.schedule[index],
+      );
+      if (indexes.length === 0) return;
+      const sourceTimes = indexes.map((index) => result.schedule[index].time);
+      const sourceStart = Math.min(...sourceTimes);
+      const movedTimes = sourceTimes.map(
+        (time) => nextTime + (time - sourceStart),
+      );
+      const movedIndexSet = new Set(indexes);
+      const occupiedByOther = new Set(
+        result.schedule
+          .filter((_, index) => !movedIndexSet.has(index))
+          .map((item) => item.time),
+      );
+      if (movedTimes.some((time) => occupiedByOther.has(time))) return;
+      setCanRestoreEditSession(Boolean(editBaselineRef.current));
+      markTouchedScheduleIndexes(indexes);
+      onModify();
+      setResult((current) => {
+        if (!current || !hasSchedule(current.status)) return current;
+        return {
+          ...current,
+          schedule: current.schedule.map((item, index) => {
+            const movedIndex = indexes.indexOf(index);
+            if (movedIndex < 0) return item;
+            return {
+              ...item,
+              time: movedTimes[movedIndex],
+              locked: true,
+              booking_source: "manual",
+            };
+          }),
+        };
+      });
+    },
+    [markTouchedScheduleIndexes, onModify, result, setResult],
   );
 
   return {
     presentation,
     lockedAssignments,
+    explicitLockedAssignments,
     canRestoreEditSession,
     beginEditSession,
     restoreEditSession,
@@ -266,7 +369,9 @@ export const useScheduleDraft = ({
     timeOptionsFor,
     toggleLock,
     changeTime,
+    moveItems,
     swapTimes,
     swapPanelMember,
+    consumeTouchedScheduleIndexes,
   };
 };

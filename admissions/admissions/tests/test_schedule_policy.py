@@ -79,7 +79,11 @@ class SchedulePolicyTestCase(SimpleTestCase):
             first["deviation_fingerprint"], changed["deviation_fingerprint"]
         )
 
-    def test_preferred_panel_stays_stable_across_an_empty_slot(self):
+    def test_preferred_panel_yields_to_fair_distribution(self):
+        """Panel stability is a preference, not a priority: when one panel
+        across a block would concentrate workload on a few interviewers,
+        fair distribution wins. Stability still decides when distribution
+        is unaffected (no alternative panel exists)."""
         base = {
             "candidates_data": [
                 {"id": "c1", "name": "Candidate 1"},
@@ -140,8 +144,39 @@ class SchedulePolicyTestCase(SimpleTestCase):
             {member["id"] for member in row["panel"]} for row in flexible["schedule"]
         ]
         self.assertEqual(preferred["status"], "SUCCESS")
-        self.assertEqual(preferred_panels[0], preferred_panels[1])
+        # Keeping {i1, i2} for both interviews would give i1 and i2 two
+        # interviews each while i3 and i4 stand idle. Fairness rotates the
+        # single-slot interviewers in, even under "preferred" stability.
+        self.assertNotEqual(preferred_panels[0], preferred_panels[1])
         self.assertNotEqual(flexible_panels[0], flexible_panels[1])
+        member_counts = {}
+        for panel in preferred_panels:
+            for member in panel:
+                member_counts[member] = member_counts.get(member, 0) + 1
+        self.assertEqual(set(member_counts.values()), {1})
+
+        # With no alternative panel, the preferred panel stays stable.
+        only_shared = {
+            "candidates_data": base["candidates_data"],
+            "interviewers_data": base["interviewers_data"][:2],
+            "panel_size": 2,
+            "all_slots_data": [0, 2],
+            "blocks_data": [[0, 1, 2]],
+        }
+        stable = solve_schedule(
+            **only_shared,
+            options_data={
+                "policy_version": 2,
+                "panel_stability": "preferred",
+                "availability_fallback": "stop",
+                "prioritize_continuity": False,
+                "avoid_consecutive_interviewer_blocks": False,
+            },
+        )
+        stable_panels = [
+            {member["id"] for member in row["panel"]} for row in stable["schedule"]
+        ]
+        self.assertEqual(stable_panels[0], stable_panels[1])
 
     def test_required_panel_is_hard_while_preferred_may_change_panel(self):
         base = {

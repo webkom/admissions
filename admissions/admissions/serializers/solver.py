@@ -96,7 +96,7 @@ class SolveOptionsSerializer(serializers.Serializer):
         min_value=0, max_value=10000, default=100
     )
     load_balance_weight = serializers.IntegerField(
-        min_value=0, max_value=10000, default=1
+        min_value=0, max_value=10000, default=20
     )
     continuity_weight = serializers.IntegerField(
         min_value=0, max_value=10000, default=12

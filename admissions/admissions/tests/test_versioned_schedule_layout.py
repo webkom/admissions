@@ -208,7 +208,9 @@ class AvailabilityGenerationProjectionTestCase(APITestCase):
             },
             format="json",
         )
-        self.assertEqual(restored_grid.data["availability_generation"], 2)
+        # Restoring the grid removes the added slots, and a removal also
+        # invalidates submissions: the generation bumps again.
+        self.assertEqual(restored_grid.data["availability_generation"], 3)
         participant = self.client.get(self.availability_url).data[0]
         self.assertTrue(participant["needs_review"])
 
@@ -237,7 +239,7 @@ class AvailabilityGenerationProjectionTestCase(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertIn("expected_availability_generation", response.data)
 
-    def test_removal_prunes_slots_without_changing_generation(self):
+    def test_removal_prunes_slots_and_invalidates_generation(self):
         self.client.post(
             self.availability_url,
             {
@@ -256,7 +258,9 @@ class AvailabilityGenerationProjectionTestCase(APITestCase):
         )
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(response.data["availability_generation"], 1)
+        # Removing a slot invalidates every submitted availability: the
+        # generation bumps so stale grids cannot save against the new plan.
+        self.assertEqual(response.data["availability_generation"], 2)
         availability = InterviewAvailability.objects.get(
             admission=self.admission, user=self.admin
         )

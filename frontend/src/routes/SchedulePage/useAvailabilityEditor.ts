@@ -60,6 +60,27 @@ interface AvailabilityEditorParams {
   groupId: string;
   participants: InterviewAvailabilityParticipant[] | undefined;
   notify: Notify;
+  /**
+   * The slots the framework currently allows, straight from the saved
+   * schedule. The grid is built from these, and the save guard below refuses
+   * anything outside them - so a selection that outlived a framework change
+   * can never reach the backend as a confusing slot error.
+   */
+  knownSlots?: Set<string>;
+  /**
+   * When set, the editor reads and writes this interviewer's availability
+   * instead of your own (interview-admin on-behalf editing). Saves are
+   * posted with the target's user_id; the backend requires an interview
+   * admin to do this.
+   */
+  targetUserId?: string;
+  /**
+   * Called when the editor discovers the framework changed underneath it
+   * (a selection outside the current enabled slots, or the server's 409).
+   * Lets the page refetch schedule + availability so the grid rebuilds
+   * against the current plan instead of waiting for the next poll.
+   */
+  onStale?: () => void;
 }
 
 export const useAvailabilityEditor = ({
@@ -67,6 +88,9 @@ export const useAvailabilityEditor = ({
   groupId,
   participants,
   notify,
+  knownSlots,
+  targetUserId,
+  onStale,
 }: AvailabilityEditorParams) => {
   const saveInterviewAvailability = useSaveInterviewAvailability(
     admissionSlug,
@@ -78,9 +102,32 @@ export const useAvailabilityEditor = ({
   );
   const lastAppliedServerAnswerRef = useRef<string | null>(null);
   const lastAppliedGenerationRef = useRef<number | null>(null);
-  const currentParticipant = participants?.find(
-    (participant) => participant.is_me,
+  const currentParticipant = participants?.find((participant) =>
+    targetUserId ? participant.user_id === targetUserId : participant.is_me,
   );
+
+  // The framework is the single source of truth for which slots exist. When
+  // it changes (generation bumps), whatever is on screen - and whatever the
+  // user has painted - is stale: the old slots may not exist in the new
+  // plan, so saving them would only draw a confusing backend rejection.
+  // Detect the bump and reset the editor to the new participant row instead
+  // of leaving a stale grid behind.
+  const participantGeneration = currentParticipant?.availability_generation;
+  const currentParticipantRef = useRef(currentParticipant);
+  currentParticipantRef.current = currentParticipant;
+  useEffect(() => {
+    if (participantGeneration === undefined) return;
+    if (lastAppliedGenerationRef.current === participantGeneration) return;
+    const participant = currentParticipantRef.current;
+    const serverKey = serializeAnswer(
+      participant?.slots ?? [],
+      participant?.discouraged_slots ?? [],
+    );
+    lastAppliedGenerationRef.current = participantGeneration;
+    lastAppliedServerAnswerRef.current = serverKey;
+    setSelectedSlots(new Set(participant?.slots ?? []));
+    setDiscouragedSlots(new Set(participant?.discouraged_slots ?? []));
+  }, [participantGeneration]);
 
   useEffect(() => {
     if (!currentParticipant) return;
@@ -112,8 +159,32 @@ export const useAvailabilityEditor = ({
     // deal in available slots keep it intact rather than silently clearing it.
     discouraged: Set<string> = discouragedSlots,
   ) => {
+    // The backend is the source of truth for which slots exist. A selection
+    // holding a slot that is no longer in the framework means the grid was
+    // built against a different plan (the framework changed underneath it):
+    // refuse up front with the actionable reload message instead of letting
+    // the backend answer with a confusing "slot not part of the plan". The
+    // "helst ikke" half is checked too - it is submitted as-is, so a stale
+    // discouraged slot could otherwise slip past this guard to the backend.
+    if (knownSlots) {
+      const outsideSlots = Array.from(slots).filter(
+        (slot) => !knownSlots.has(slot),
+      );
+      const outsideDiscouraged = Array.from(discouraged).filter(
+        (slot) => !knownSlots.has(slot),
+      );
+      if (outsideSlots.length > 0 || outsideDiscouraged.length > 0) {
+        notify(
+          "Tidsoppsettet er endret. Last inn siden på nytt før du bekrefter.",
+          "error",
+        );
+        onStale?.();
+        return;
+      }
+    }
     try {
       const saved = await saveInterviewAvailability.mutateAsync({
+        ...(targetUserId ? { user_id: targetUserId } : {}),
         slots: Array.from(slots),
         discouraged_slots: Array.from(discouraged).filter(
           (slot) => !slots.has(slot),
@@ -134,8 +205,9 @@ export const useAvailabilityEditor = ({
       const response = (
         error as { response?: { status?: number; data?: unknown } }
       ).response;
+      const stale = response?.status === 409;
       notify(
-        response?.status === 409
+        stale
           ? "Tidsoppsettet er endret. Last inn siden på nytt før du bekrefter."
           : `Kunne ikke lagre tilgjengelighet${
               firstApiErrorMessage(response?.data)
@@ -144,6 +216,7 @@ export const useAvailabilityEditor = ({
             }`,
         "error",
       );
+      if (stale) onStale?.();
       throw error;
     }
   };
@@ -174,6 +247,36 @@ export const useAvailabilityEditor = ({
     }
   };
 
+  // Admin on-behalf inhabilitet editing: replaces the target interviewer's
+  // declared conflicts (candidate ids only - the admin's scope is the whole
+  // candidate pool, so no review declaration is needed) without touching
+  // their slots or reviewed candidates.
+  const saveConflictReviewFor = async (
+    targetUserId: string,
+    conflictIds: string[],
+  ) => {
+    try {
+      await saveInterviewAvailability.mutateAsync({
+        user_id: targetUserId,
+        conflicts: conflictIds,
+      });
+    } catch (error) {
+      if (isSensitiveAuthorityChangedError(error)) throw error;
+      const response = (
+        error as { response?: { status?: number; data?: unknown } }
+      ).response;
+      notify(
+        `Kunne ikke lagre inhabilitetene${
+          firstApiErrorMessage(response?.data)
+            ? `: ${firstApiErrorMessage(response?.data)}`
+            : ""
+        }`,
+        "error",
+      );
+      throw error;
+    }
+  };
+
   const setParticipation = async (
     participation: "awaiting_response" | "not_participating",
     userId?: string,
@@ -182,6 +285,10 @@ export const useAvailabilityEditor = ({
       await saveInterviewAvailability.mutateAsync({
         user_id: userId,
         participation,
+        expected_availability_generation:
+          lastAppliedGenerationRef.current ??
+          currentParticipant?.availability_generation ??
+          undefined,
       });
       if (!userId || userId === currentParticipant?.user_id) {
         setSelectedSlots(new Set());
@@ -225,6 +332,7 @@ export const useAvailabilityEditor = ({
     currentParticipant,
     saveAvailability,
     saveConflictReview,
+    saveConflictReviewFor,
     setParticipation,
     setExperienceLevel,
   };

@@ -214,7 +214,7 @@ const PublicationGate = ({
                 />
                 <ReadinessRow
                   complete={readiness.reviewResolved}
-                  title="Kandidatkontroll bekreftet"
+                  title="Inhabilitetssjekk bekreftet"
                   description={reviewDescription}
                 />
                 <ReadinessRow

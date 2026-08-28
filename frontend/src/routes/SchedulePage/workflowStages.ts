@@ -157,7 +157,7 @@ export const derivePlanDraftStage = ({
         unplaceableCount === 1 ? "kandidat mangler" : "kandidater mangler"
       } plass`,
       description:
-        "Løs kapasitetsproblemet før du bruker tid på resten av planutkastet.",
+        "Delplanen er lagret. Planlegg flere dager for å plassere resten, eller juster oppsettet.",
     };
   }
 
@@ -238,7 +238,7 @@ export const derivePublicationStage = ({
   if (!readiness.ready && currentReviewRequired && !currentReviewComplete) {
     return {
       kind: "blocked_review",
-      title: "Kandidatkontrollen din gjenstår",
+      title: "Din inhabilitetssjekk gjenstår",
       description:
         "Kontroller kandidatene du kan møte i intervju før planen kan publiseres.",
       primaryAction: "review_own_check",

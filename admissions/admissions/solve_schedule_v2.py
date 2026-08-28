@@ -224,7 +224,11 @@ def _normalize_problem(
     options = SolveOptions(**normalized_options)
     strategy_defaults = {
         "minimize_overtime": (1, 0, False),
-        "balanced": (4, 1, True),
+        # Fair distribution outranks compactness: the balance term competes
+        # with continuity_weight * candidates * (runs + latest rank), so a
+        # small weight lets a compact plan load a few interviewers heavily
+        # while others idle.
+        "balanced": (20, 1, True),
         "compact_days": (2, 48, True),
         "balance_workload": (10, 0, False),
     }
@@ -1012,6 +1016,7 @@ def _build_model(
     loads = []
     active_loads = []
     experienced_loads = []
+    eligible_loads = []
     for interviewer in problem.interviewers:
         member_vars = [
             panel[(interviewer.id, interview_time)]
@@ -1021,9 +1026,19 @@ def _build_model(
         load = model.NewIntVar(0, len(problem.candidates), f"load_{interviewer.id}")
         model.Add(load == _linear_sum(member_vars))
         loads.append(load)
-        active_loads.append(load)
-        if interviewer.experience_level == "experienced":
+        # Only count interviewers with any availability toward the spread.
+        # Without this filter a fully-booked-out or zero-availability member
+        # pins min(load) = 0, which collapses the load-spread term to max(load)
+        # and effectively removes the spread objective from the model.
+        if interviewer.availability:
+            active_loads.append(load)
+        if interviewer.experience_level == "experienced" and interviewer.availability:
             experienced_loads.append(load)
+        if any(
+            (interviewer.id, interview_time) in panel
+            for interview_time in problem.sorted_slots
+        ):
+            eligible_loads.append(load)
     max_load = model.NewIntVar(0, len(problem.candidates), "max_load")
     if loads:
         model.AddMaxEquality(max_load, loads)
@@ -1220,14 +1235,6 @@ def _build_model(
     ]
     if problem.options.repair_mode and previous_by_candidate:
         tiers.append(ObjectiveTier("repair_cost", repair_cost, maximum_repair_cost))
-    elif problem.policy.prefers_stable_panel:
-        tiers.append(
-            ObjectiveTier(
-                "panel_stability",
-                panel_stability_cost,
-                len(panel_break_vars),
-            )
-        )
     # With joint interviews the solver packs two candidates into one shared
     # panel whenever it can: fewer sessions means the panel does one joint
     # interview instead of two separate ones. Skipped in repair mode so a
@@ -1264,6 +1271,20 @@ def _build_model(
                 "load_and_continuity",
                 structure,
                 maximum_structure,
+            ),
+            *(
+                [
+                    # Fresh plans should use participating interviewers
+                    # fairly before preserving the previous panel makeup.
+                    ObjectiveTier(
+                        "panel_stability",
+                        panel_stability_cost,
+                        len(panel_break_vars),
+                    )
+                ]
+                if problem.policy.prefers_stable_panel
+                and not (problem.options.repair_mode and previous_by_candidate)
+                else []
             ),
             ObjectiveTier("earliness", earliness, maximum_earliness),
         ]
@@ -1348,13 +1369,27 @@ def _solve_model(
     status = cp_model.UNKNOWN
     completed_tiers = 0
     first_incumbent_ms = None
+    # Stays True only while every tier so far has proven its optimum; the
+    # moment one tier returns merely a feasible solution the lexicographic
+    # optimum is unproven and the result must be reported as FEASIBLE.
+    all_tiers_proven = True
     for index, tier in enumerate(built.tiers):
         remaining = deadline - time.monotonic()
         if remaining <= 0.001:
             break
         built.model.Minimize(tier.expression)
         solver = configured_solver()
-        solver.parameters.max_time_in_seconds = remaining
+        tiers_left = len(built.tiers) - index
+        # Cap the slice of the remaining budget each tier may spend, so a
+        # tier that finds good solutions but cannot prove them optimal
+        # leaves time for the tiers after it. Without the cap, a large
+        # admission can burn the entire budget proving the first tier
+        # (minimising unplaced candidates) and return a plan whose quality
+        # tiers - rest between blocks, balanced load - were never
+        # optimised at all.
+        solver.parameters.max_time_in_seconds = (
+            remaining if tiers_left == 1 else remaining * 2 / (tiers_left + 1)
+        )
         callback = FirstIncumbentCallback(started)
         status = solver.Solve(built.model, callback)
         if callback.first_incumbent_ms is not None:
@@ -1368,32 +1403,32 @@ def _solve_model(
             )
         solver._phase_first_incumbent_ms = first_incumbent_ms
         if status not in (cp_model.OPTIMAL, cp_model.FEASIBLE):
-            if best_solver is not None:
-                best_solver._phase_first_incumbent_ms = first_incumbent_ms
-                return (
-                    cp_model.FEASIBLE,
-                    best_solver,
-                    int((time.monotonic() - started) * 1000),
-                )
             break
         best_solver = solver
-        if status != cp_model.OPTIMAL:
-            break
-        completed_tiers = index + 1
+        tier_value = int(solver.Value(tier.expression))
         if index < len(built.tiers) - 1:
-            built.model.Add(tier.expression == int(solver.Value(tier.expression)))
-    if (
-        best_solver is not None
-        and status == cp_model.OPTIMAL
-        and completed_tiers < len(built.tiers)
-    ):
+            if status == cp_model.OPTIMAL:
+                built.model.Add(tier.expression == tier_value)
+            else:
+                # Only an upper bound is proven, so pin the bound and keep
+                # going: the remaining tiers then search for solutions at
+                # least this good instead of the run ending on an
+                # arbitrary point of this tier.
+                built.model.Add(tier.expression <= tier_value)
+        if status != cp_model.OPTIMAL:
+            all_tiers_proven = False
+            continue
+        completed_tiers = index + 1
+    if best_solver is None:
+        return status, solver, int((time.monotonic() - started) * 1000)
+    if not (all_tiers_proven and completed_tiers == len(built.tiers)):
         best_solver._phase_first_incumbent_ms = first_incumbent_ms
         return (
             cp_model.FEASIBLE,
             best_solver,
             int((time.monotonic() - started) * 1000),
         )
-    return status, solver, int((time.monotonic() - started) * 1000)
+    return cp_model.OPTIMAL, best_solver, int((time.monotonic() - started) * 1000)
 
 
 def _reconstruct(

@@ -72,6 +72,10 @@ class SolveScheduleView(SchedulerFeatureGateMixin, APIView):
         if not serializer.is_valid():
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
         data = serializer.validated_data
+        # DRF hands back a date; everything downstream (job JSON storage and
+        # the request fingerprint) wants the plain ISO string.
+        if data.get("day_scope_through") is not None:
+            data["day_scope_through"] = data["day_scope_through"].isoformat()
         group = get_object_or_404(admission.groups, pk=data["group_id"])
 
         if not user_is_interview_admin(admission, group, user):
@@ -137,17 +141,31 @@ class SolveScheduleView(SchedulerFeatureGateMixin, APIView):
                     status=status.HTTP_400_BAD_REQUEST,
                 )
 
+        previous_saved_schedule = SavedSchedule.objects.filter(
+            admission=admission, group=group
+        ).first()
         previous_schedule = (
-            SavedSchedule.objects.filter(admission=admission, group=group)
-            .values_list("schedule", flat=True)
-            .first()
-            or []
-        )
+            previous_saved_schedule.schedule if previous_saved_schedule else []
+        ) or []
 
         if not synthetic_input:
             data["availability_generation"] = saved_config.availability_generation
             data["layout_version"] = saved_config.layout_version
             data["baseline_updated_at"] = saved_config.updated_at
+            # A changed availability/participation generation means the old
+            # schedule is no longer a valid repair baseline. Keep only explicit
+            # locked assignments; otherwise a rejoining interviewer can be
+            # suppressed by the old draft and a regenerated result can appear
+            # unchanged.
+            # Do not use the old schedule as a repair baseline after an
+            # interviewer answer changed. The saved schedule timestamp is the
+            # authoritative change token; the request baseline came from the
+            # client before that answer was saved.
+            if (
+                previous_saved_schedule is not None
+                and data.get("baseline_updated_at") != saved_config.updated_at
+            ):
+                previous_schedule = []
             data["auto_apply_if_empty"] = bool(
                 not data["preview_only"]
                 and not saved_config.schedule

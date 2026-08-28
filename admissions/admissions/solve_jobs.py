@@ -49,6 +49,7 @@ def build_solve_request(data, synthetic_input, previous_schedule):
         "interviewers": [{"id": item["id"]} for item in data["interviewers"]],
         "panel_size": data["panel_size"],
         "options": data.get("options", {}),
+        "day_scope_through": data.get("day_scope_through"),
         "locked_assignments": [
             {
                 "candidate_id": item.get("candidate_id"),

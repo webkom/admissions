@@ -634,7 +634,7 @@ def _resolve_schedule_state(
             structure_changed or old_slots != new_slots or block_configuration_changed
         )
         availability_generation = existing.availability_generation
-        if duration_changed or added_slots:
+        if duration_changed or added_slots or removed_slots:
             availability_generation += 1
         incoming_schedule = data.get("schedule")
         scheduled_slot_keys = {
