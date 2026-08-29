@@ -928,11 +928,16 @@ def _build_model(
                 required_block_panel[(interviewer_id, block.index)] = block_member
                 for interview_time in block_slots:
                     panel_var = panel.get((interviewer_id, interview_time))
+                    # session_active is 0/1 ("is this slot in use"); occupied is
+                    # 0..candidates_per_session. These are slot-in-use tests, so
+                    # a joint slot (occupied == 2) must not push a Boolean past 1.
                     if panel_var is None:
-                        model.Add(block_member + occupied[interview_time] <= 1)
+                        model.Add(block_member + session_active[interview_time] <= 1)
                         continue
                     model.Add(panel_var <= block_member)
-                    model.Add(panel_var >= block_member + occupied[interview_time] - 1)
+                    model.Add(
+                        panel_var >= block_member + session_active[interview_time] - 1
+                    )
 
     panel_break_vars = []
     if problem.policy.prefers_stable_panel or problem.options.repair_mode:
@@ -967,11 +972,14 @@ def _build_model(
                     panel_break = model.NewBoolVar(
                         f"panel_break_{block.index}_{position}_{interviewer_id}"
                     )
-                    model.Add(panel_break <= occupied[interview_time])
+                    # session_active, not occupied: a joint slot has occupied
+                    # == candidates_per_session, which would force this Boolean
+                    # break variable above 1 and make the model infeasible.
+                    model.Add(panel_break <= session_active[interview_time])
                     model.Add(panel_break >= busy - reference_var)
                     model.Add(
                         panel_break
-                        >= reference_var + occupied[interview_time] - busy - 1
+                        >= reference_var + session_active[interview_time] - busy - 1
                     )
                     model.Add(panel_break <= busy + reference_var)
                     model.Add(panel_break <= 2 - busy - reference_var)

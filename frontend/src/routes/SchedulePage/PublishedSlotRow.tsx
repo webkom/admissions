@@ -36,8 +36,10 @@ const PublishedSlotRow: React.FC<{
   item: ScheduleItem;
   candidateNamesVisible: boolean;
   isConflict: boolean;
+  /** This time seats several candidates with one shared panel. */
+  isJointTime?: boolean;
   outsideAvailability: boolean;
-  /** "09:00 – 09:30" */
+  /** "09:00 – 09:30", or "" for the follow-on rows of a joint interview. */
   timeRangeLabel: string;
   /** Full slot label with date ("tir 12. aug 09:00") for the SMS template. */
   outreachTimeLabel: string;
@@ -55,6 +57,7 @@ const PublishedSlotRow: React.FC<{
   item,
   candidateNamesVisible,
   isConflict,
+  isJointTime = false,
   outsideAvailability,
   timeRangeLabel,
   outreachTimeLabel,
@@ -128,6 +131,11 @@ const PublishedSlotRow: React.FC<{
                 )}
                 {item.candidate}
               </span>
+              {isJointTime && (
+                <span className="inline-flex flex-none rounded bg-brand-soft px-1.5 py-0.5 align-middle text-nano font-bold text-brand">
+                  Felles
+                </span>
+              )}
               {outsideAvailability && (
                 <span className="inline-flex rounded-full border border-border-soft bg-surface-neutral px-2 py-0.5 align-middle text-nano font-semibold text-text-muted">
                   Utenfor tilgjengelighet

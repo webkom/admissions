@@ -35,7 +35,8 @@ interface PlanSlotRow {
   positionInBlock: number;
   enabled: boolean;
   occupied: boolean;
-  entry?: DistributedScheduleEntry;
+  /** Usually one, but a joint interview seats several candidates at one time. */
+  entries: DistributedScheduleEntry[];
 }
 
 interface PublishedBlockMeta {
@@ -97,9 +98,12 @@ const PublishedScheduleTable: React.FC<{
       chunkSize: savedSchedule.chunk_size,
       chunkBreakMinutes: savedSchedule.chunk_break_minutes,
     });
-    const visibleEntryByTime = new Map(
-      entries.map((entry) => [entry.item.time, entry]),
-    );
+    const visibleEntriesByTime = new Map<number, DistributedScheduleEntry[]>();
+    entries.forEach((entry) => {
+      const list = visibleEntriesByTime.get(entry.item.time);
+      if (list) list.push(entry);
+      else visibleEntriesByTime.set(entry.item.time, [entry]);
+    });
     const occupiedTimes = new Set(
       savedSchedule.schedule.map((item) => item.time),
     );
@@ -122,14 +126,17 @@ const PublishedScheduleTable: React.FC<{
             positionInBlock,
             enabled: enabledSlots.has(makeSlotKey(date, minute)),
             occupied: occupiedTimes.has(time),
-            entry: visibleEntryByTime.get(time),
+            entries: visibleEntriesByTime.get(time) ?? [],
           };
         }),
       ),
     );
 
+    const configuredTimesWithEntries = new Set<number>();
     entries.forEach((entry) => {
       if (configuredTimes.has(entry.item.time)) return;
+      if (configuredTimesWithEntries.has(entry.item.time)) return;
+      configuredTimesWithEntries.add(entry.item.time);
       const { dayIndex, minute } = decodeScheduleTime(
         entry.item.time,
         savedSchedule.session_duration,
@@ -144,7 +151,7 @@ const PublishedScheduleTable: React.FC<{
         positionInBlock: 0,
         enabled: Boolean(date && enabledSlots.has(makeSlotKey(date, minute))),
         occupied: true,
-        entry,
+        entries: visibleEntriesByTime.get(entry.item.time) ?? [entry],
       });
     });
 
@@ -156,14 +163,15 @@ const PublishedScheduleTable: React.FC<{
     [slots],
   );
   const displayedSlots = useMemo(
-    () => (showEmptySlots ? slots : slots.filter((slot) => slot.entry)),
+    () =>
+      showEmptySlots ? slots : slots.filter((slot) => slot.entries.length > 0),
     [showEmptySlots, slots],
   );
 
   const blockMetaByKey = useMemo(() => {
     const map = new Map<string, PublishedBlockMeta>();
     slots.forEach((slot) => {
-      if (slot.blockIndex < 0 || !slot.entry) return;
+      if (slot.blockIndex < 0 || slot.entries.length === 0) return;
       const key = `${slot.dayIndex}-${slot.blockIndex}`;
       let meta = map.get(key);
       if (!meta) {
@@ -177,7 +185,6 @@ const PublishedScheduleTable: React.FC<{
         map.set(key, meta);
       }
       const block = meta;
-      block.items.push(slot.entry.item);
       if (block.minuteStart === null || slot.minute < block.minuteStart) {
         block.minuteStart = slot.minute;
       }
@@ -185,12 +192,17 @@ const PublishedScheduleTable: React.FC<{
       if (block.minuteEnd === null || minuteEnd > block.minuteEnd) {
         block.minuteEnd = minuteEnd;
       }
-      slot.entry.item.panel.forEach((member) => {
-        if (
-          !block.panelMembers.some((existing) => existing.name === member.name)
-        ) {
-          block.panelMembers.push(member);
-        }
+      slot.entries.forEach((entry) => {
+        block.items.push(entry.item);
+        entry.item.panel.forEach((member) => {
+          if (
+            !block.panelMembers.some(
+              (existing) => existing.name === member.name,
+            )
+          ) {
+            block.panelMembers.push(member);
+          }
+        });
       });
     });
 
@@ -241,7 +253,8 @@ const PublishedScheduleTable: React.FC<{
             </thead>
             <tbody>
               {displayedSlots.map((slot, displayIndex) => {
-                const { entry } = slot;
+                const slotEntries = slot.entries;
+                const isJointTime = slotEntries.length > 1;
                 const previousSlot = displayedSlots[displayIndex - 1];
                 const startsGroup =
                   !previousSlot ||
@@ -256,7 +269,7 @@ const PublishedScheduleTable: React.FC<{
                     ? blockMetaByKey.get(`${slot.dayIndex}-${slot.blockIndex}`)
                     : undefined;
 
-                if (!entry) {
+                if (slotEntries.length === 0) {
                   return (
                     <React.Fragment key={`slot-${slot.time}`}>
                       {startsGroup && (
@@ -305,11 +318,8 @@ const PublishedScheduleTable: React.FC<{
                   );
                 }
 
-                const candidateId = lookups.candidateIdFor(entry.item);
                 return (
-                  <React.Fragment
-                    key={`interview-${entry.scheduleIndex}-${entry.item.time}`}
-                  >
+                  <React.Fragment key={`slot-${slot.time}`}>
                     {startsGroup && (
                       <PublishedBlockHeader
                         dateLabel={
@@ -322,31 +332,44 @@ const PublishedScheduleTable: React.FC<{
                         sessionDuration={savedSchedule.session_duration}
                       />
                     )}
-                    <PublishedSlotRow
-                      admissionSlug={admissionSlug}
-                      groupId={groupId}
-                      admissionTitle={admissionTitle}
-                      committeeName={committeeName}
-                      item={entry.item}
-                      candidateNamesVisible={candidateNamesVisible}
-                      isConflict={
-                        candidateId !== undefined &&
-                        conflictIds.has(candidateId)
-                      }
-                      outsideAvailability={!slot.enabled}
-                      timeRangeLabel={`${formatMinutes(slot.minute)} – ${formatMinutes(
-                        slot.minute + savedSchedule.session_duration,
-                      )}`}
-                      outreachTimeLabel={formatSlotLabel(
-                        entry.item.time,
-                        dates,
-                        savedSchedule.session_duration,
-                      )}
-                      blockBaseline={blockBaselineFor(slot)}
-                      canManageInterviewWorkflow={canManageInterviewWorkflow}
-                      outreachTemplates={outreachTemplates}
-                      lookups={lookups}
-                    />
+                    {slotEntries.map((entry, entryIndex) => {
+                      const candidateId = lookups.candidateIdFor(entry.item);
+                      return (
+                        <PublishedSlotRow
+                          key={`interview-${entry.scheduleIndex}`}
+                          admissionSlug={admissionSlug}
+                          groupId={groupId}
+                          admissionTitle={admissionTitle}
+                          committeeName={committeeName}
+                          item={entry.item}
+                          candidateNamesVisible={candidateNamesVisible}
+                          isConflict={
+                            candidateId !== undefined &&
+                            conflictIds.has(candidateId)
+                          }
+                          isJointTime={isJointTime}
+                          outsideAvailability={!slot.enabled}
+                          timeRangeLabel={
+                            entryIndex === 0
+                              ? `${formatMinutes(slot.minute)} – ${formatMinutes(
+                                  slot.minute + savedSchedule.session_duration,
+                                )}`
+                              : ""
+                          }
+                          outreachTimeLabel={formatSlotLabel(
+                            entry.item.time,
+                            dates,
+                            savedSchedule.session_duration,
+                          )}
+                          blockBaseline={blockBaselineFor(slot)}
+                          canManageInterviewWorkflow={
+                            canManageInterviewWorkflow
+                          }
+                          outreachTemplates={outreachTemplates}
+                          lookups={lookups}
+                        />
+                      );
+                    })}
                   </React.Fragment>
                 );
               })}

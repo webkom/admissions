@@ -304,7 +304,13 @@ class ScheduleRequestsSerializer(serializers.Serializer):
         candidate_ids = {item["id"] for item in attrs.get("candidates", [])}
         interviewer_ids = {item["id"] for item in attrs.get("interviewers", [])}
         seen_candidates = set()
-        seen_times = set()
+        # Joint interviews share a slot: several locked rows may carry the same
+        # time as long as they stay within capacity and name one shared panel.
+        candidates_per_session = max(
+            1, int((attrs.get("options") or {}).get("candidates_per_session", 1))
+        )
+        locked_at_time = {}
+        panel_by_time = {}
         panel_size = attrs.get("panel_size", 4)
         for assignment in attrs.get("locked_assignments", []):
             candidate_id = assignment.get("candidate_id")
@@ -316,8 +322,9 @@ class ScheduleRequestsSerializer(serializers.Serializer):
                         ]
                     }
                 )
-            if assignment["time"] in seen_times or (
-                allowed_slots is not None and assignment["time"] not in allowed_slots
+            assignment_time = assignment["time"]
+            if locked_at_time.get(assignment_time, 0) >= candidates_per_session or (
+                allowed_slots is not None and assignment_time not in allowed_slots
             ):
                 raise serializers.ValidationError(
                     {"locked_assignments": ["Låste tidspunkt må være unike og åpne."]}
@@ -336,8 +343,17 @@ class ScheduleRequestsSerializer(serializers.Serializer):
                         ]
                     }
                 )
+            panel_key = frozenset(panel_ids)
+            if panel_by_time.setdefault(assignment_time, panel_key) != panel_key:
+                raise serializers.ValidationError(
+                    {
+                        "locked_assignments": [
+                            "Låste fellesintervjuer må dele ett panel."
+                        ]
+                    }
+                )
             seen_candidates.add(candidate_id)
-            seen_times.add(assignment["time"])
+            locked_at_time[assignment_time] = locked_at_time.get(assignment_time, 0) + 1
 
         return attrs
 

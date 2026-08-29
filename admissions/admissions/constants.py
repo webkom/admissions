@@ -217,6 +217,11 @@ MAX_SOLVER_MODEL_CONSTRAINTS = 4_000_000
 # monopolising a worker even when auxiliary variables remain under the absolute
 # protobuf safety limit.
 MAX_SOLVER_SPARSE_BASE_VARS = 100_000
+# Joint interviews: one shared panel meets this many candidates in a single
+# slot. 1 is a normal interview. Kept low - a panel can only give a handful of
+# candidates real attention at once - and mirrored by the frontend stepper's
+# max in AdvancedSolverSettings.tsx.
+MAX_CANDIDATES_PER_SESSION = 4
 MAX_SCHEDULE_DAYS = 21
 MAX_SCHEDULE_SLOTS = MAX_SCHEDULE_DAYS * 24 * 12
 MAX_SCHEDULE_WINDOWS = MAX_SCHEDULE_DAYS * 24 * 6

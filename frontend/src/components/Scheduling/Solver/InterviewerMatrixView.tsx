@@ -77,7 +77,19 @@ const SingleDayMatrix: React.FC<{
   const scheduleIndexByTime = useMemo(() => {
     const map = new Map<number, number>();
     dayEntries.forEach(({ item, scheduleIndex }) => {
-      map.set(item.time, scheduleIndex);
+      // Joint interviews share a time; the first row drives the click target
+      // and the (shared) panel, the cell lists every candidate below.
+      if (!map.has(item.time)) map.set(item.time, scheduleIndex);
+    });
+    return map;
+  }, [dayEntries]);
+
+  const candidatesByTime = useMemo(() => {
+    const map = new Map<number, string[]>();
+    dayEntries.forEach(({ item }) => {
+      const names = map.get(item.time);
+      if (names) names.push(item.candidate);
+      else map.set(item.time, [item.candidate]);
     });
     return map;
   }, [dayEntries]);
@@ -266,7 +278,10 @@ const SingleDayMatrix: React.FC<{
                       memberInPanel && scheduleIndex !== undefined
                         ? hasConflictFor(scheduleIndex, memberInPanel)
                         : false;
-                    const ariaLabel = `${row.name} – ${item.candidate} kl. ${formatMinutes(
+                    const candidateLabel = (
+                      candidatesByTime.get(col.time) ?? [item.candidate]
+                    ).join(", ");
+                    const ariaLabel = `${row.name} – ${candidateLabel} kl. ${formatMinutes(
                       decodeScheduleTime(item.time, sessionDuration).minute,
                     )}${item.locked ? " (låst)" : ""}`;
 
@@ -284,7 +299,7 @@ const SingleDayMatrix: React.FC<{
                           }
                           data-cy="matrix-cell"
                           data-schedule-index={scheduleIndex}
-                          title={`${item.candidate}${item.locked ? " (låst)" : ""}`}
+                          title={`${candidateLabel}${item.locked ? " (låst)" : ""}`}
                           aria-label={ariaLabel}
                           className={cn(
                             "flex h-full w-full items-center justify-between gap-1 bg-transparent px-2 text-left text-nano font-semibold text-text-primary transition-colors hover:text-brand focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-ring",
@@ -293,7 +308,7 @@ const SingleDayMatrix: React.FC<{
                             isHighlighted && "ring-2 ring-inset ring-brand",
                           )}
                         >
-                          <span className="truncate">{item.candidate}</span>
+                          <span className="truncate">{candidateLabel}</span>
                           {item.locked && (
                             <Lock
                               size={iconSizes.tiny}
