@@ -797,15 +797,55 @@ def _ensure_conflict_review_ready_for_publish(admission, group, data, schedule):
     readiness = get_conflict_review_readiness(admission, group, schedule=schedule)
     incomplete_count = len(readiness["incomplete_participant_ids"])
     if incomplete_count:
+        # Name up to a few of the missing reviewers so the admin can act
+        # on the message - "9 må kontrollere" is unactionable, "Kari, Ola
+        # og 7 andre" is a checklist. Names stay inside the admin who is
+        # already mid-publish; the form is the source of the complete list.
+        names = _missing_reviewer_names(readiness["incomplete_participant_ids"])
+        named = ", ".join(names[:3])
+        suffix = (
+            f" og {incomplete_count - len(names[:3])} andre"
+            if incomplete_count > len(names[:3])
+            else ""
+        )
         raise ScheduleInputError(
             {
                 "schedule": [
                     f"{incomplete_count} intervjuere må kontrollere "
                     f"{readiness['missing_pair_count']} foreslåtte "
-                    "kandidater før planen publiseres."
+                    f"kandidater før planen publiseres: {named}{suffix}."
                 ]
             }
         )
+
+
+def _missing_reviewer_names(user_ids):
+    """Best-effort display names for missing-reviewer error messages.
+
+    Admins see this when they hit the publish gate mid-flow, so the names
+    need to be recognisable (full name > username) and ordered so the list
+    reads as a checklist. Membership lookups intentionally avoid any access
+    checks - this is a server-side diagnostic and the caller is already
+    the publish-gated admin.
+    """
+    from admissions.admissions.models import LegoUser
+
+    str_ids = {str(user_id) for user_id in user_ids}
+    users = {
+        str(user.pk): user
+        for user in LegoUser.objects.filter(pk__in=str_ids)
+    }
+    ordered = sorted(
+        (users[str(user_id)] for user_id in user_ids if str(user_id) in users),
+        key=lambda user: (
+            (user.get_full_name() or user.username).lower(),
+            user.username,
+        ),
+    )
+    return [
+        user.get_full_name() or user.username
+        for user in ordered
+    ]
 
 
 def _canonicalize_schedule(
