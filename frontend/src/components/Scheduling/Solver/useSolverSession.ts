@@ -416,6 +416,7 @@ export const useSolverSession = ({
         allowOvertime: solverOptions.availability_fallback !== "stop",
         requireExperiencedPanel: solverOptions.require_experienced_panel,
         enforceSameGender: solverOptions.enforce_same_gender,
+        candidatesPerSession: solverOptions.candidates_per_session,
       }),
     [
       candidates,
@@ -427,6 +428,7 @@ export const useSolverSession = ({
       solverOptions.availability_fallback,
       solverOptions.enforce_same_gender,
       solverOptions.require_experienced_panel,
+      solverOptions.candidates_per_session,
     ],
   );
   const estimatedSeconds = useMemo(

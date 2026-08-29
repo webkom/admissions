@@ -65,6 +65,15 @@ class ApplySolveJobSerializer(serializers.Serializer):
 class SolveOptionsSerializer(serializers.Serializer):
     enforce_same_gender = serializers.BooleanField(default=False)
     require_experienced_panel = serializers.BooleanField(default=False)
+    # Joint interviews: 1 is a normal interview; 2+ means one shared panel meets
+    # exactly that many candidates together in a single slot. Candidates who
+    # cannot be paired into a full joint session are left unplaced. The solver
+    # engine (v2) reads this straight off SolveOptions; v1 has no joint support.
+    candidates_per_session = serializers.IntegerField(
+        min_value=1,
+        max_value=constants.MAX_CANDIDATES_PER_SESSION,
+        default=1,
+    )
     allow_overtime = serializers.BooleanField(required=False)
     prioritize_continuity = serializers.BooleanField(default=True)
     same_panel_per_block = serializers.BooleanField(required=False)

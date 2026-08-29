@@ -362,6 +362,7 @@ export const deriveSolverReadiness = ({
   allowOvertime,
   requireExperiencedPanel = false,
   enforceSameGender = false,
+  candidatesPerSession = 1,
 }: {
   candidateCount: number;
   candidates?: Candidate[];
@@ -373,6 +374,7 @@ export const deriveSolverReadiness = ({
   allowOvertime: boolean;
   requireExperiencedPanel?: boolean;
   enforceSameGender?: boolean;
+  candidatesPerSession?: number;
 }): SolverReadiness => {
   let submittedInterviewers = 0;
   let totalCapacity = 0;
@@ -399,7 +401,10 @@ export const deriveSolverReadiness = ({
   const usableSlotCount = allowOvertime
     ? enabledTimes.length
     : slotsWithFullPanel;
-  const neededCapacity = candidateCount * panelSize;
+  // One shared panel meets `candidatesPerSession` candidates per slot, so the
+  // slots a plan needs is the candidate count divided by that (rounded up).
+  const perSession = Math.max(1, Math.floor(candidatesPerSession));
+  const neededCapacity = Math.ceil(candidateCount / perSession) * panelSize;
   const genderDataAvailable = interviewers.some((interviewer) =>
     ["M", "F"].includes(interviewer.gender ?? ""),
   );
