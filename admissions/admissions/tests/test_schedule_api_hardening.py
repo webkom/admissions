@@ -2791,7 +2791,7 @@ class SavedScheduleVisibilityTestCase(APITestCase):
         )
         self.application.phone_number = "+47 400 00 000"
         self.application.save(update_fields=["phone_number"])
-        GroupApplication.objects.create(
+        self.group_application = GroupApplication.objects.create(
             application=self.application,
             group=self.committee_group,
             text="Arrkom application",
@@ -3257,10 +3257,10 @@ class SavedScheduleVisibilityTestCase(APITestCase):
         Membership.objects.create(
             user=recruiter, role=RECRUITING, group=self.committee_group
         )
-        self.application.interview_status = "confirmed"
-        self.application.interview_status_updated_by = recruiter
-        self.application.interview_status_updated_by_username = recruiter.username
-        self.application.save(
+        self.group_application.interview_status = "confirmed"
+        self.group_application.interview_status_updated_by = recruiter
+        self.group_application.interview_status_updated_by_username = recruiter.username
+        self.group_application.save(
             update_fields=[
                 "interview_status",
                 "interview_status_updated_by",
@@ -3312,10 +3312,10 @@ class SavedScheduleVisibilityTestCase(APITestCase):
         Membership.objects.create(
             user=recruiter, role=RECRUITING, group=self.committee_group
         )
-        self.application.interview_status = "confirmed"
-        self.application.interview_status_updated_by = recruiter
-        self.application.interview_status_updated_by_username = recruiter.username
-        self.application.save(
+        self.group_application.interview_status = "confirmed"
+        self.group_application.interview_status_updated_by = recruiter
+        self.group_application.interview_status_updated_by_username = recruiter.username
+        self.group_application.save(
             update_fields=[
                 "interview_status",
                 "interview_status_updated_by",

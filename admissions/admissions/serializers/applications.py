@@ -93,11 +93,6 @@ class UserApplicationSerializer(serializers.ModelSerializer):
 
 class AdminUserApplicationSerializer(UserApplicationSerializer):
     application_view_mode = serializers.SerializerMethodField()
-    interview_status_updated_by = serializers.CharField(
-        source="interview_status_updated_by_username",
-        allow_blank=True,
-        read_only=True,
-    )
 
     def get_application_view_mode(self, _obj):
         return self.context.get(
@@ -105,26 +100,10 @@ class AdminUserApplicationSerializer(UserApplicationSerializer):
             APPLICATION_VIEW_MODE_ADMIN_FULL,
         )
 
-    def to_representation(self, instance):
-        data = super().to_representation(instance)
-        # Mirror the PATCH endpoint (views.py:432-436): a non-admin viewer
-        # never sees the recruiter's username, so list/detail responses
-        # agree with the status-update response. ADMIN_FULL viewers keep
-        # the metadata; everyone else loses it.
-        if (
-            self.context.get("application_view_mode")
-            != APPLICATION_VIEW_MODE_ADMIN_FULL
-        ):
-            data.pop("interview_status_updated_by", None)
-        return data
-
     class Meta(UserApplicationSerializer.Meta):
-        fields = UserApplicationSerializer.Meta.fields + (
-            "application_view_mode",
-            "interview_status",
-            "interview_status_updated_at",
-            "interview_status_updated_by",
-        )
+        # Interview status now lives per committee, inside each entry of
+        # `group_applications` (see ShortGroupApplicationSerializer).
+        fields = UserApplicationSerializer.Meta.fields + ("application_view_mode",)
         read_only_fields = fields
 
 
@@ -157,6 +136,9 @@ class CommitteeMinimalApplicationSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = UserApplication
+        # Interview status (plus the `expected_interview_status_updated_at`
+        # revision token the PATCH needs) is per committee - it now sits on
+        # each `group_applications` entry, not here.
         fields = (
             "pk",
             "application_view_mode",
@@ -165,20 +147,13 @@ class CommitteeMinimalApplicationSerializer(serializers.ModelSerializer):
             "applied_within_deadline",
             "phone_number",
             "group_applications",
-            "interview_status",
-            # The revision token for the interview-status PATCH: committee
-            # viewers may change the status (views.py interview_status), so
-            # they must receive the `expected_interview_status_updated_at`
-            # value the list showed them. Without it every status change
-            # fails validation with 400. The `_by` username stays hidden.
-            "interview_status_updated_at",
         )
         read_only_fields = fields
 
 
 class InterviewStatusUpdateSerializer(serializers.Serializer):
     interview_status = serializers.ChoiceField(
-        choices=UserApplication.INTERVIEW_STATUS_CHOICES
+        choices=GroupApplication.INTERVIEW_STATUS_CHOICES
     )
     expected_interview_status_updated_at = serializers.DateTimeField()
 
@@ -203,7 +178,7 @@ class InterviewStatusSerializer(serializers.ModelSerializer):
     )
 
     class Meta:
-        model = UserApplication
+        model = GroupApplication
         fields = (
             "interview_status",
             "interview_status_updated_at",

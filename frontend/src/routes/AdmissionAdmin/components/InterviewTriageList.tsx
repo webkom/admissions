@@ -96,22 +96,46 @@ const InterviewTriageList: React.FC<InterviewTriageListProps> = ({
               )}
 
               <CandidateSummary>
-                <InterviewStatusControl
-                  admissionSlug={admission.slug}
-                  applicationScopeKey={applicationScopeKey}
-                  applicationId={application.pk}
-                  candidateName={application.user.full_name}
-                  status={application.interview_status}
-                  statusUpdatedAt={application.interview_status_updated_at}
-                  statusUpdatedBy={
-                    fullApplication?.interview_status_updated_by ?? ""
-                  }
-                  canEdit={
-                    admission.userdata.is_admin ||
-                    admission.userdata.is_recruiter
-                  }
-                  compact
-                />
+                <div className="flex min-w-0 flex-col gap-1.5">
+                  {application.group_applications
+                    .filter(
+                      (groupApplication) =>
+                        groupApplication.interview_status !== undefined,
+                    )
+                    .map((groupApplication) => (
+                      <div
+                        key={groupApplication.group.pk}
+                        className="flex min-w-0 flex-col gap-0.5"
+                      >
+                        {application.group_applications.length > 1 && (
+                          <span className="text-nano font-semibold text-text-muted">
+                            {groupApplication.group.name}
+                          </span>
+                        )}
+                        <InterviewStatusControl
+                          admissionSlug={admission.slug}
+                          groupId={groupApplication.group.pk}
+                          applicationScopeKey={applicationScopeKey}
+                          applicationId={application.pk}
+                          candidateName={application.user.full_name}
+                          status={
+                            groupApplication.interview_status ?? "not_invited"
+                          }
+                          statusUpdatedAt={
+                            groupApplication.interview_status_updated_at ?? ""
+                          }
+                          statusUpdatedBy={
+                            groupApplication.interview_status_updated_by ?? ""
+                          }
+                          canEdit={
+                            admission.userdata.is_admin ||
+                            admission.userdata.is_recruiter
+                          }
+                          compact
+                        />
+                      </div>
+                    ))}
+                </div>
 
                 {applicationWithDetails && (
                   <div

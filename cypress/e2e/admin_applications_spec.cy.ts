@@ -68,19 +68,22 @@ const applications = [
     updated_at: "2026-07-16T09:37:00Z",
     applied_within_deadline: true,
     phone_number: "900 00 001",
-    interview_status: "not_invited",
-    interview_status_updated_at: "2026-07-16T09:37:00Z",
-    interview_status_updated_by: "webkom",
     group_applications: [
       {
         group: webkom,
         text: "Jeg trives med å lære gjennom å lage produkter.",
         header_fields_response: { experience: "Et lite React-prosjekt." },
+        interview_status: "not_invited",
+        interview_status_updated_at: "2026-07-16T09:37:00Z",
+        interview_status_updated_by: "webkom",
       },
       {
         group: fagkom,
         text: "Jeg liker å forklare vanskelige konsepter.",
         header_fields_response: {},
+        interview_status: "not_invited",
+        interview_status_updated_at: "2026-07-16T09:37:00Z",
+        interview_status_updated_by: "webkom",
       },
     ],
   },
@@ -98,14 +101,14 @@ const applications = [
     updated_at: "2026-07-15T10:05:00Z",
     applied_within_deadline: true,
     phone_number: "900 00 002",
-    interview_status: "invited",
-    interview_status_updated_at: "2026-07-15T10:05:00Z",
-    interview_status_updated_by: "webkom",
     group_applications: [
       {
         group: webkom,
         text: "Jeg har laget noen små prosjekter.",
         header_fields_response: { experience: "TypeScript og Python." },
+        interview_status: "invited",
+        interview_status_updated_at: "2026-07-15T10:05:00Z",
+        interview_status_updated_by: "webkom",
       },
     ],
   },
@@ -201,7 +204,7 @@ describe("admin applications review", () => {
     cy.contains("th", "Søker til").should("not.exist");
   });
 
-  it("shows one applicant status and structured committee applications", () => {
+  it("shows a per-committee status and structured committee applications", () => {
     visitApplications();
     cy.contains("button", "Vis kandidatdata").click();
 
@@ -211,9 +214,10 @@ describe("admin applications review", () => {
       .should("be.focused")
       .click();
 
+    // Ida applied to Webkom and Fagkom - one status control per committee.
     cy.get('[aria-label^="Intervjustatus for Ida Nordmann"]')
       .filter(":visible")
-      .should("have.length", 1);
+      .should("have.length", 2);
     cy.contains("Generell søknad").should("not.exist");
     cy.contains("Hva motiverer deg?").should("not.exist");
     cy.contains("Relevant erfaring").should("be.visible");
@@ -276,14 +280,15 @@ describe("admin applications review", () => {
         created_at: applications[0].created_at,
         applied_within_deadline: false,
         phone_number: applications[0].phone_number,
-        interview_status: applications[0].interview_status,
-        interview_status_updated_at:
-          applications[0].interview_status_updated_at,
         group_applications: [
           {
             group: webkom,
             text: "Jeg trives med å lære gjennom å lage produkter.",
             header_fields_response: { experience: "Et lite React-prosjekt." },
+            interview_status:
+              applications[0].group_applications[0].interview_status,
+            interview_status_updated_at:
+              applications[0].group_applications[0].interview_status_updated_at,
           },
         ],
       },
@@ -342,6 +347,6 @@ describe("admin applications review", () => {
     cy.contains("Generell søknad").should("not.exist");
     cy.get('[aria-label^="Intervjustatus for Ida Nordmann"]')
       .filter(":visible")
-      .should("have.length", 1);
+      .should("have.length", 2);
   });
 });

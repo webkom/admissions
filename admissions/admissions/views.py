@@ -436,9 +436,35 @@ class AdminApplicationViewSet(
             application = self.get_object()
         except Http404:
             raise NotFound() from None
+
+        # Interview status is per committee (GroupApplication). The caller must
+        # say which committee's status they are changing, and may only change
+        # one for a committee they run (or, for an admission admin, any).
+        admission, _, view_mode = self.get_application_exposure()
+        raw_group_id = request.query_params.get("groupId")
+        try:
+            group_id = Group._meta.pk.to_python(raw_group_id)
+        except (TypeError, ValueError, ValidationError):
+            return Response(
+                {"groupId": ["Ugyldig gruppe-ID."]},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        group = get_object_or_404(admission.groups, pk=group_id)
+        if not (
+            user_is_admission_admin(admission, request.user)
+            or user_represents_group(admission, group, request.user)
+        ):
+            return Response(status=status.HTTP_403_FORBIDDEN)
+        try:
+            group_application = GroupApplication.objects.get(
+                application=application.pk, group=group_id
+            )
+        except GroupApplication.DoesNotExist:
+            raise NotFound() from None
+
         try:
             updated = update_interview_status(
-                application,
+                group_application,
                 serializer.validated_data["interview_status"],
                 serializer.validated_data["expected_interview_status_updated_at"],
                 request.user,
@@ -451,10 +477,7 @@ class AdminApplicationViewSet(
         except InterviewStatusNotFound:
             raise NotFound() from None
         response_data = InterviewStatusSerializer(updated).data
-        if (
-            self.get_application_exposure()[2]
-            == APPLICATION_VIEW_MODE_COMMITTEE_MINIMAL
-        ):
+        if view_mode == APPLICATION_VIEW_MODE_COMMITTEE_MINIMAL:
             response_data.pop("interview_status_updated_by", None)
         return Response(response_data)
 

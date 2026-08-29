@@ -40,10 +40,9 @@ export { compareInterviewStatuses };
 
 interface InterviewStatusControlProps {
   admissionSlug: string;
-  /** Only known when rendered from within one committee's own schedule page
-   * - keeps that committee's schedule cache entry optimistically in sync.
-   * The admin applications list spans every committee, so it has none. */
-  groupId?: string;
+  /** Interview status is per committee - this is the committee whose status
+   *  the control reads and writes. */
+  groupId: string;
   applicationScopeKey?: string;
   applicationId: string;
   candidateName: string;
