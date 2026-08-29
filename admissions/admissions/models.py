@@ -154,21 +154,6 @@ class AdmissionGroup(models.Model):
 
 
 class UserApplication(TimeStampModel):
-    INTERVIEW_STATUS_NOT_INVITED = "not_invited"
-    INTERVIEW_STATUS_INVITED = "invited"
-    INTERVIEW_STATUS_CONFIRMED = "confirmed"
-    INTERVIEW_STATUS_DECLINED = "declined"
-    INTERVIEW_STATUS_COMPLETED = "completed"
-    INTERVIEW_STATUS_CANCELLED = "cancelled"
-    INTERVIEW_STATUS_CHOICES = [
-        (INTERVIEW_STATUS_NOT_INVITED, "Not invited"),
-        (INTERVIEW_STATUS_INVITED, "Invited"),
-        (INTERVIEW_STATUS_CONFIRMED, "Confirmed"),
-        (INTERVIEW_STATUS_DECLINED, "Declined"),
-        (INTERVIEW_STATUS_COMPLETED, "Completed"),
-        (INTERVIEW_STATUS_CANCELLED, "Cancelled"),
-    ]
-
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     admission = models.ForeignKey(
         Admission, related_name="applications", on_delete=models.CASCADE
@@ -177,22 +162,6 @@ class UserApplication(TimeStampModel):
     text = models.TextField(blank=True)
     phone_number = models.CharField(max_length=20)
     header_fields_response = models.JSONField(default=None, null=True)
-    interview_status = models.CharField(
-        max_length=20,
-        choices=INTERVIEW_STATUS_CHOICES,
-        default=INTERVIEW_STATUS_NOT_INVITED,
-    )
-    interview_status_updated_at = models.DateTimeField(default=timezone.now)
-    interview_status_updated_by = models.ForeignKey(
-        settings.AUTH_USER_MODEL,
-        null=True,
-        blank=True,
-        on_delete=models.SET_NULL,
-        related_name="interview_status_updates",
-    )
-    interview_status_updated_by_username = models.CharField(
-        max_length=150, blank=True, default=""
-    )
 
     class Meta:
         constraints = [
@@ -222,6 +191,25 @@ class UserApplication(TimeStampModel):
 
 
 class GroupApplication(TimeStampModel):
+    # Interview status is per committee: one applicant can be at "Tid
+    # bekreftet" with Webkom and "Ikke kalt inn" with Arrkom in the same
+    # admission. It therefore lives here, on the (applicant, committee) row,
+    # not on UserApplication.
+    INTERVIEW_STATUS_NOT_INVITED = "not_invited"
+    INTERVIEW_STATUS_INVITED = "invited"
+    INTERVIEW_STATUS_CONFIRMED = "confirmed"
+    INTERVIEW_STATUS_DECLINED = "declined"
+    INTERVIEW_STATUS_COMPLETED = "completed"
+    INTERVIEW_STATUS_CANCELLED = "cancelled"
+    INTERVIEW_STATUS_CHOICES = [
+        (INTERVIEW_STATUS_NOT_INVITED, "Not invited"),
+        (INTERVIEW_STATUS_INVITED, "Invited"),
+        (INTERVIEW_STATUS_CONFIRMED, "Confirmed"),
+        (INTERVIEW_STATUS_DECLINED, "Declined"),
+        (INTERVIEW_STATUS_COMPLETED, "Completed"),
+        (INTERVIEW_STATUS_CANCELLED, "Cancelled"),
+    ]
+
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     application = models.ForeignKey(
         UserApplication, related_name="group_applications", on_delete=models.CASCADE
@@ -231,8 +219,26 @@ class GroupApplication(TimeStampModel):
     )
     text = models.TextField(blank=True)
     header_fields_response = models.JSONField(default=dict, null=True)
+    interview_status = models.CharField(
+        max_length=20,
+        choices=INTERVIEW_STATUS_CHOICES,
+        default=INTERVIEW_STATUS_NOT_INVITED,
+    )
+    interview_status_updated_at = models.DateTimeField(default=timezone.now)
+    interview_status_updated_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="interview_status_updates",
+    )
+    interview_status_updated_by_username = models.CharField(
+        max_length=150, blank=True, default=""
+    )
 
     class Meta:
+        # Stable order for the per-committee list a recruiter/admin sees.
+        ordering = ["created_at"]
         constraints = [
             models.UniqueConstraint(
                 fields=["application", "group"],
@@ -243,8 +249,8 @@ class GroupApplication(TimeStampModel):
 
 class InterviewStatusAuditEvent(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    application = models.ForeignKey(
-        UserApplication,
+    group_application = models.ForeignKey(
+        GroupApplication,
         on_delete=models.CASCADE,
         related_name="interview_status_events",
     )
@@ -256,10 +262,10 @@ class InterviewStatusAuditEvent(models.Model):
     )
     actor_username = models.CharField(max_length=150)
     previous_status = models.CharField(
-        max_length=20, choices=UserApplication.INTERVIEW_STATUS_CHOICES
+        max_length=20, choices=GroupApplication.INTERVIEW_STATUS_CHOICES
     )
     new_status = models.CharField(
-        max_length=20, choices=UserApplication.INTERVIEW_STATUS_CHOICES
+        max_length=20, choices=GroupApplication.INTERVIEW_STATUS_CHOICES
     )
     created_at = models.DateTimeField(auto_now_add=True)
 
@@ -267,8 +273,8 @@ class InterviewStatusAuditEvent(models.Model):
         ordering = ["-created_at"]
         indexes = [
             models.Index(
-                fields=["application", "-created_at"],
-                name="interview_status_app_time_idx",
+                fields=["group_application", "-created_at"],
+                name="interview_status_ga_time_idx",
             )
         ]
 

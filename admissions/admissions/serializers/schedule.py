@@ -8,11 +8,11 @@ from rest_framework import serializers
 
 from admissions.admissions import constants
 from admissions.admissions.models import (
+    GroupApplication,
     InterviewAvailability,
     LegoUser,
     SavedSchedule,
     ScheduleDeviationApproval,
-    UserApplication,
 )
 from admissions.admissions.schedule_policy import (
     AVAILABILITY_FALLBACKS,
@@ -530,27 +530,34 @@ class SavedScheduleSerializer(serializers.ModelSerializer):
             if visible_candidate_ids is None
             else candidate_ids & visible_candidate_ids
         )
+        # This schedule belongs to one committee, so the interview status shown
+        # here is that committee's - it comes off the GroupApplication for
+        # (candidate, instance.group), not the shared UserApplication.
         candidate_details = {
-            str(application.pk): {
-                "name": application.user.get_full_name() or application.user.username,
+            str(group_application.application_id): {
+                "name": (
+                    group_application.application.user.get_full_name()
+                    or group_application.application.user.username
+                ),
                 "phone": (
-                    application.phone_number
+                    group_application.application.phone_number
                     if contact_candidate_ids is None
-                    or str(application.pk) in contact_candidate_ids
+                    or str(group_application.application_id) in contact_candidate_ids
                     else None
                 ),
-                "interview_status": application.interview_status,
+                "interview_status": group_application.interview_status,
                 "interview_status_updated_at": date_time_field.to_representation(
-                    application.interview_status_updated_at
+                    group_application.interview_status_updated_at
                 ),
                 "interview_status_updated_by": (
-                    application.interview_status_updated_by_username
+                    group_application.interview_status_updated_by_username
                 ),
             }
-            for application in UserApplication.objects.filter(
-                admission=instance.admission,
-                pk__in=authorized_candidate_ids,
-            ).select_related("user")
+            for group_application in GroupApplication.objects.filter(
+                group=instance.group,
+                application__admission=instance.admission,
+                application_id__in=authorized_candidate_ids,
+            ).select_related("application__user")
         }
         eligible_panel_ids = {
             str(user_id)

@@ -25,7 +25,16 @@ export interface User {
   email: string;
 }
 
-export interface GroupApplication {
+/** Interview-status fields are present only for privileged viewers (a
+ *  recruiter of the committee, or an admission admin); `_updated_by` is
+ *  admin-only. */
+export interface GroupApplicationInterviewStatus {
+  interview_status?: InterviewStatus;
+  interview_status_updated_at?: string;
+  interview_status_updated_by?: string;
+}
+
+export interface GroupApplication extends GroupApplicationInterviewStatus {
   group: Group;
   text: string;
   header_fields_response: InputResponseModel;
@@ -58,9 +67,6 @@ export type ApplicationViewMode =
 
 export interface FullAdminApplication extends Application {
   application_view_mode: "admin_full" | "committee_full";
-  interview_status: InterviewStatus;
-  interview_status_updated_at: string;
-  interview_status_updated_by: string;
 }
 
 export interface CommitteeMinimalAdminApplication {
@@ -71,11 +77,10 @@ export interface CommitteeMinimalAdminApplication {
   applied_within_deadline: boolean;
   phone_number: string;
   group_applications: CommitteeGroupApplication[];
-  interview_status: InterviewStatus;
-  interview_status_updated_at: string;
 }
 
-export interface CommitteeGroupApplication {
+export interface CommitteeGroupApplication
+  extends GroupApplicationInterviewStatus {
   group: Pick<Group, "pk" | "name" | "logo" | "response_label">;
   text: string;
   header_fields_response: InputResponseModel;

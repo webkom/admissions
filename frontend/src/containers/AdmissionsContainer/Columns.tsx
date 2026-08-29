@@ -137,27 +137,47 @@ export const columns = [
       );
     },
   }),
-  columnHelper.accessor("interviewStatus", {
+  columnHelper.accessor("interviewStatuses", {
     header: "Intervju",
     size: applicationTableColumnWidths.status,
     sortingFn: (firstRow, secondRow) =>
       compareInterviewStatuses(
-        firstRow.original.interviewStatus,
-        secondRow.original.interviewStatus,
+        firstRow.original.interviewStatuses[0]?.interviewStatus ??
+          "not_invited",
+        secondRow.original.interviewStatuses[0]?.interviewStatus ??
+          "not_invited",
       ),
-    cell: ({ row, getValue }) => (
-      <InterviewStatusControl
-        admissionSlug={row.original.admissionSlug}
-        applicationScopeKey={row.original.applicationScopeKey}
-        applicationId={row.original.id}
-        candidateName={row.original.fullname}
-        status={getValue()}
-        statusUpdatedAt={row.original.interviewStatusUpdatedAt}
-        statusUpdatedBy={row.original.interviewStatusUpdatedBy ?? ""}
-        canEdit={row.original.canUpdateInterviewStatus}
-        compact
-      />
-    ),
+    cell: ({ row, getValue }) => {
+      const cells = getValue();
+      if (cells.length === 0) return null;
+      // Status is per committee. One applicant applying to several committees
+      // gets one control per committee, each labelled.
+      return (
+        <div className="flex min-w-0 flex-col gap-1.5">
+          {cells.map((cell) => (
+            <div key={cell.groupId} className="flex min-w-0 flex-col gap-0.5">
+              {cells.length > 1 && (
+                <span className="text-nano font-semibold text-text-muted">
+                  {cell.groupName}
+                </span>
+              )}
+              <InterviewStatusControl
+                admissionSlug={row.original.admissionSlug}
+                groupId={cell.groupId}
+                applicationScopeKey={row.original.applicationScopeKey}
+                applicationId={row.original.id}
+                candidateName={row.original.fullname}
+                status={cell.interviewStatus}
+                statusUpdatedAt={cell.interviewStatusUpdatedAt}
+                statusUpdatedBy={cell.interviewStatusUpdatedBy ?? ""}
+                canEdit={row.original.canUpdateInterviewStatus}
+                compact
+              />
+            </div>
+          ))}
+        </div>
+      );
+    },
   }),
   columnHelper.accessor("createdAt", {
     header: "Sendt",

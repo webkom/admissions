@@ -667,14 +667,16 @@ class ListApplicationsTestCase(APITestCase):
             },
         }
 
-    def interview_status_url(self, application):
-        return reverse(
+    def interview_status_url(self, application, group=None):
+        url = reverse(
             "admin-userapplication-interview-status",
             kwargs={
                 "admission_slug": self.admission_slug,
                 "pk": application.pk,
             },
         )
+        group = group or self.webkom
+        return f"{url}?groupId={group.pk}"
 
     def test_unauthorized_user_cannot_see_other_applications(self):
         res = self.client.get(
@@ -821,13 +823,17 @@ class ListApplicationsTestCase(APITestCase):
                 "applied_within_deadline",
                 "phone_number",
                 "group_applications",
-                "interview_status",
-                "interview_status_updated_at",
             },
         )
         self.assertEqual(
             set(json[0]["group_applications"][0]),
-            {"group", "text", "header_fields_response"},
+            {
+                "group",
+                "text",
+                "header_fields_response",
+                "interview_status",
+                "interview_status_updated_at",
+            },
         )
         self.assertEqual(
             set(json[0]["group_applications"][0]["group"]),
@@ -940,21 +946,27 @@ class ListApplicationsTestCase(APITestCase):
         )
         self.assertEqual(response.data[0]["priority_text"], application.text)
 
-    def test_group_recruiter_can_update_interview_status(self):
+    def _group_application(self, group=None, user=None):
         application = UserApplication.objects.create(
-            user=self.pleb,
+            user=user or self.pleb,
             admission=self.admission,
             phone_number="00000000",
         )
-        GroupApplication.objects.create(application=application, group=self.webkom)
-        application_updated_at = application.updated_at
+        return GroupApplication.objects.create(
+            application=application, group=group or self.webkom
+        )
+
+    def test_group_recruiter_can_update_interview_status(self):
+        group_application = self._group_application()
+        application = group_application.application
+        group_application_updated_at = group_application.updated_at
         self.client.force_authenticate(user=self.webkom_rec)
 
         response = self.client.patch(
             self.interview_status_url(application),
             {
                 "interview_status": "confirmed",
-                "expected_interview_status_updated_at": application.interview_status_updated_at.isoformat(),
+                "expected_interview_status_updated_at": group_application.interview_status_updated_at.isoformat(),
             },
             format="json",
         )
@@ -962,34 +974,34 @@ class ListApplicationsTestCase(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data["interview_status"], "confirmed")
         self.assertNotIn("interview_status_updated_by", response.data)
-        application.refresh_from_db()
-        self.assertEqual(application.interview_status, "confirmed")
-        self.assertEqual(application.interview_status_updated_by, self.webkom_rec)
-        self.assertEqual(application.updated_at, application_updated_at)
+        group_application.refresh_from_db()
+        self.assertEqual(group_application.interview_status, "confirmed")
+        self.assertEqual(group_application.interview_status_updated_by, self.webkom_rec)
+        self.assertEqual(group_application.updated_at, group_application_updated_at)
         self.assertEqual(
             response.data["interview_status_updated_at"],
-            application.interview_status_updated_at.isoformat().replace("+00:00", "Z"),
+            group_application.interview_status_updated_at.isoformat().replace(
+                "+00:00", "Z"
+            ),
         )
-        event = InterviewStatusAuditEvent.objects.get(application=application)
+        event = InterviewStatusAuditEvent.objects.get(
+            group_application=group_application
+        )
         self.assertEqual(event.actor, self.webkom_rec)
         self.assertEqual(event.actor_username, self.webkom_rec.username)
         self.assertEqual(event.previous_status, "not_invited")
         self.assertEqual(event.new_status, "confirmed")
 
     def test_interview_status_supports_declined_and_cancelled(self):
-        application = UserApplication.objects.create(
-            user=self.pleb,
-            admission=self.admission,
-            phone_number="00000000",
-        )
-        GroupApplication.objects.create(application=application, group=self.webkom)
+        group_application = self._group_application()
+        application = group_application.application
         self.client.force_authenticate(user=self.webkom_rec)
 
         declined = self.client.patch(
             self.interview_status_url(application),
             {
                 "interview_status": "declined",
-                "expected_interview_status_updated_at": application.interview_status_updated_at.isoformat(),
+                "expected_interview_status_updated_at": group_application.interview_status_updated_at.isoformat(),
             },
             format="json",
         )
@@ -1010,49 +1022,41 @@ class ListApplicationsTestCase(APITestCase):
         self.assertEqual(
             list(
                 InterviewStatusAuditEvent.objects.filter(
-                    application=application
+                    group_application=group_application
                 ).values_list("previous_status", "new_status")
             ),
             [("declined", "cancelled"), ("not_invited", "declined")],
         )
 
     def test_repeating_interview_status_does_not_create_audit_noise(self):
-        application = UserApplication.objects.create(
-            user=self.pleb,
-            admission=self.admission,
-            phone_number="00000000",
-        )
-        GroupApplication.objects.create(application=application, group=self.webkom)
+        group_application = self._group_application()
         self.client.force_authenticate(user=self.webkom_rec)
 
         response = self.client.patch(
-            self.interview_status_url(application),
+            self.interview_status_url(group_application.application),
             {
                 "interview_status": "not_invited",
-                "expected_interview_status_updated_at": application.interview_status_updated_at.isoformat(),
+                "expected_interview_status_updated_at": group_application.interview_status_updated_at.isoformat(),
             },
             format="json",
         )
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertFalse(
-            InterviewStatusAuditEvent.objects.filter(application=application).exists()
+            InterviewStatusAuditEvent.objects.filter(
+                group_application=group_application
+            ).exists()
         )
 
     def test_admin_can_update_interview_status(self):
-        application = UserApplication.objects.create(
-            user=self.pleb,
-            admission=self.admission,
-            phone_number="00000000",
-        )
-        GroupApplication.objects.create(application=application, group=self.webkom)
+        group_application = self._group_application()
         self.client.force_authenticate(user=self.admission_admin)
 
         response = self.client.patch(
-            self.interview_status_url(application),
+            self.interview_status_url(group_application.application),
             {
                 "interview_status": "invited",
-                "expected_interview_status_updated_at": application.interview_status_updated_at.isoformat(),
+                "expected_interview_status_updated_at": group_application.interview_status_updated_at.isoformat(),
             },
             format="json",
         )
@@ -1063,42 +1067,33 @@ class ListApplicationsTestCase(APITestCase):
         self.assertNotIn("updated_at", response.data)
 
     def test_candidate_cannot_update_interview_status(self):
-        application = UserApplication.objects.create(
-            user=self.pleb,
-            admission=self.admission,
-            phone_number="00000000",
-        )
-        GroupApplication.objects.create(application=application, group=self.webkom)
+        group_application = self._group_application()
         self.client.force_authenticate(user=self.pleb)
 
         response = self.client.patch(
-            self.interview_status_url(application),
+            self.interview_status_url(group_application.application),
             {
                 "interview_status": "invited",
-                "expected_interview_status_updated_at": application.interview_status_updated_at.isoformat(),
+                "expected_interview_status_updated_at": group_application.interview_status_updated_at.isoformat(),
             },
             format="json",
         )
 
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
-        application.refresh_from_db()
-        self.assertEqual(application.interview_status, "not_invited")
+        group_application.refresh_from_db()
+        self.assertEqual(group_application.interview_status, "not_invited")
 
     def test_recruiter_cannot_update_other_group_interview_status(self):
-        application = UserApplication.objects.create(
-            user=self.pleb,
-            admission=self.admission,
-            phone_number="00000000",
-        )
-        GroupApplication.objects.create(application=application, group=self.bedkom)
+        group_application = self._group_application(group=self.bedkom)
+        application = group_application.application
         self.client.force_authenticate(user=self.webkom_rec)
         payload = {
             "interview_status": "invited",
-            "expected_interview_status_updated_at": application.interview_status_updated_at.isoformat(),
+            "expected_interview_status_updated_at": group_application.interview_status_updated_at.isoformat(),
         }
 
         response = self.client.patch(
-            self.interview_status_url(application),
+            self.interview_status_url(application, group=self.bedkom),
             payload,
             format="json",
         )
@@ -1109,7 +1104,8 @@ class ListApplicationsTestCase(APITestCase):
                     "admission_slug": self.admission_slug,
                     "pk": uuid.uuid4(),
                 },
-            ),
+            )
+            + f"?groupId={self.webkom.pk}",
             payload,
             format="json",
         )
@@ -1117,50 +1113,54 @@ class ListApplicationsTestCase(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
         self.assertEqual(missing_response.status_code, status.HTTP_404_NOT_FOUND)
         self.assertEqual(response.data, missing_response.data)
-        application.refresh_from_db()
-        self.assertEqual(application.interview_status, "not_invited")
+        group_application.refresh_from_db()
+        self.assertEqual(group_application.interview_status, "not_invited")
 
-    def test_multi_group_interview_status_is_shared(self):
-        application = UserApplication.objects.create(
-            user=self.pleb,
-            admission=self.admission,
-            phone_number="00000000",
+    def test_multi_group_interview_status_is_per_committee(self):
+        webkom_ga = self._group_application(group=self.webkom)
+        application = webkom_ga.application
+        bedkom_ga = GroupApplication.objects.create(
+            application=application, group=self.bedkom
         )
-        GroupApplication.objects.create(application=application, group=self.webkom)
-        GroupApplication.objects.create(application=application, group=self.bedkom)
         self.client.force_authenticate(user=self.webkom_rec)
 
         response = self.client.patch(
-            self.interview_status_url(application),
+            self.interview_status_url(application, group=self.webkom),
             {
                 "interview_status": "confirmed",
-                "expected_interview_status_updated_at": application.interview_status_updated_at.isoformat(),
+                "expected_interview_status_updated_at": webkom_ga.interview_status_updated_at.isoformat(),
             },
             format="json",
         )
-
         self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+        webkom_ga.refresh_from_db()
+        bedkom_ga.refresh_from_db()
+        self.assertEqual(webkom_ga.interview_status, "confirmed")
+        # Bedkom's status is untouched - it is a separate committee.
+        self.assertEqual(bedkom_ga.interview_status, "not_invited")
+
         self.client.force_authenticate(user=self.bedkom_rec)
-        response = self.client.get(
+        listing = self.client.get(
             reverse(
                 "admin-userapplication-list",
                 kwargs={"admission_slug": self.admission_slug},
             )
         )
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(response.data[0]["interview_status"], "confirmed")
+        self.assertEqual(listing.status_code, status.HTTP_200_OK)
+        bedkom_entry = listing.data[0]["group_applications"][0]
+        self.assertEqual(bedkom_entry["group"]["name"], "Bedkom")
+        self.assertEqual(bedkom_entry["interview_status"], "not_invited")
 
     def test_interview_status_rejects_stale_revision(self):
-        application = UserApplication.objects.create(
-            user=self.pleb,
-            admission=self.admission,
-            phone_number="00000000",
+        group_application = self._group_application()
+        application = group_application.application
+        stale_revision = group_application.interview_status_updated_at
+        group_application.interview_status = "invited"
+        group_application.interview_status_updated_at = stale_revision + timedelta(
+            seconds=1
         )
-        GroupApplication.objects.create(application=application, group=self.webkom)
-        stale_revision = application.interview_status_updated_at
-        application.interview_status = "invited"
-        application.interview_status_updated_at = stale_revision + timedelta(seconds=1)
-        application.save(
+        group_application.save(
             update_fields=["interview_status", "interview_status_updated_at"]
         )
         self.client.force_authenticate(user=self.webkom_rec)
@@ -1175,17 +1175,13 @@ class ListApplicationsTestCase(APITestCase):
         )
 
         self.assertEqual(response.status_code, status.HTTP_409_CONFLICT)
-        application.refresh_from_db()
-        self.assertEqual(application.interview_status, "invited")
+        group_application.refresh_from_db()
+        self.assertEqual(group_application.interview_status, "invited")
 
     def test_interview_status_revision_advances_when_clock_does_not(self):
-        application = UserApplication.objects.create(
-            user=self.pleb,
-            admission=self.admission,
-            phone_number="00000000",
-        )
-        GroupApplication.objects.create(application=application, group=self.webkom)
-        previous_revision = application.interview_status_updated_at
+        group_application = self._group_application()
+        application = group_application.application
+        previous_revision = group_application.interview_status_updated_at
         self.client.force_authenticate(user=self.webkom_rec)
 
         with mock.patch(
@@ -1202,9 +1198,9 @@ class ListApplicationsTestCase(APITestCase):
             )
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        application.refresh_from_db()
+        group_application.refresh_from_db()
         self.assertGreater(
-            application.interview_status_updated_at,
+            group_application.interview_status_updated_at,
             previous_revision,
         )
 
@@ -1219,35 +1215,26 @@ class ListApplicationsTestCase(APITestCase):
         self.assertEqual(stale_response.status_code, status.HTTP_409_CONFLICT)
 
     def test_interview_status_rejects_non_object_payload(self):
-        application = UserApplication.objects.create(
-            user=self.pleb,
-            admission=self.admission,
-            phone_number="00000000",
-        )
-        GroupApplication.objects.create(application=application, group=self.webkom)
+        group_application = self._group_application()
         self.client.force_authenticate(user=self.webkom_rec)
 
         response = self.client.patch(
-            self.interview_status_url(application),
+            self.interview_status_url(group_application.application),
             [{"interview_status": "invited"}],
             format="json",
         )
 
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-        application.refresh_from_db()
-        self.assertEqual(application.interview_status, "not_invited")
+        group_application.refresh_from_db()
+        self.assertEqual(group_application.interview_status, "not_invited")
 
     def test_interview_status_returns_not_found_if_application_disappears(self):
-        application = UserApplication.objects.create(
-            user=self.pleb,
-            admission=self.admission,
-            phone_number="00000000",
-        )
-        GroupApplication.objects.create(application=application, group=self.webkom)
+        group_application = self._group_application()
+        application = group_application.application
         self.client.force_authenticate(user=self.webkom_rec)
         payload = {
             "interview_status": "invited",
-            "expected_interview_status_updated_at": application.interview_status_updated_at.isoformat(),
+            "expected_interview_status_updated_at": group_application.interview_status_updated_at.isoformat(),
         }
         url = self.interview_status_url(application)
 
@@ -1275,15 +1262,11 @@ class ListApplicationsTestCase(APITestCase):
         self.assertEqual(raced_response.data, missing_response.data)
 
     def test_interview_status_rejects_invalid_and_unrelated_fields(self):
-        application = UserApplication.objects.create(
-            user=self.pleb,
-            admission=self.admission,
-            phone_number="00000000",
-        )
-        GroupApplication.objects.create(application=application, group=self.webkom)
+        group_application = self._group_application()
+        application = group_application.application
         self.client.force_authenticate(user=self.webkom_rec)
         payload = {
-            "expected_interview_status_updated_at": application.interview_status_updated_at.isoformat()
+            "expected_interview_status_updated_at": group_application.interview_status_updated_at.isoformat()
         }
 
         invalid = self.client.patch(
@@ -1303,8 +1286,8 @@ class ListApplicationsTestCase(APITestCase):
 
         self.assertEqual(invalid.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertEqual(unrelated.status_code, status.HTTP_400_BAD_REQUEST)
-        application.refresh_from_db()
-        self.assertEqual(application.interview_status, "not_invited")
+        group_application.refresh_from_db()
+        self.assertEqual(group_application.interview_status, "not_invited")
         self.assertEqual(application.phone_number, "00000000")
 
     def test_public_application_response_does_not_expose_interview_status(self):
@@ -1657,12 +1640,15 @@ class DeleteGroupApplicationsTestCase(APITestCase):
         rival_only = UserApplication.objects.create(
             user=self.pleb, admission=self.admission, phone_number="00000000"
         )
-        GroupApplication.objects.create(
+        arrkom_ga = GroupApplication.objects.create(
             application=rival_only, group=self.arrkom, text="Arrkom only"
         )
-        url = reverse(
-            "admin-userapplication-interview-status",
-            kwargs={"admission_slug": self.admission_slug, "pk": rival_only.pk},
+        url = (
+            reverse(
+                "admin-userapplication-interview-status",
+                kwargs={"admission_slug": self.admission_slug, "pk": rival_only.pk},
+            )
+            + f"?groupId={self.arrkom.pk}"
         )
         self.client.force_authenticate(user=plain_recruiter)
 
@@ -1671,17 +1657,15 @@ class DeleteGroupApplicationsTestCase(APITestCase):
             {
                 "interview_status": "confirmed",
                 "expected_interview_status_updated_at": (
-                    rival_only.interview_status_updated_at.isoformat()
+                    arrkom_ga.interview_status_updated_at.isoformat()
                 ),
             },
             format="json",
         )
 
         self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
-        rival_only.refresh_from_db()
-        self.assertEqual(rival_only.interview_status, "not_invited")
-        rival_only.refresh_from_db()
-        self.assertEqual(rival_only.interview_status, "not_invited")
+        arrkom_ga.refresh_from_db()
+        self.assertEqual(arrkom_ga.interview_status, "not_invited")
 
     def test_plain_committee_member_cannot_update_interview_status(self):
         """A plain committee member (no leader/recruiter role) must not be
@@ -1692,12 +1676,15 @@ class DeleteGroupApplicationsTestCase(APITestCase):
         application = UserApplication.objects.create(
             user=self.pleb, admission=self.admission, phone_number="00000000"
         )
-        GroupApplication.objects.create(
+        webkom_ga = GroupApplication.objects.create(
             application=application, group=self.webkom, text="Webkom only"
         )
-        url = reverse(
-            "admin-userapplication-interview-status",
-            kwargs={"admission_slug": self.admission_slug, "pk": application.pk},
+        url = (
+            reverse(
+                "admin-userapplication-interview-status",
+                kwargs={"admission_slug": self.admission_slug, "pk": application.pk},
+            )
+            + f"?groupId={self.webkom.pk}"
         )
         self.client.force_authenticate(user=member)
 
@@ -1706,7 +1693,7 @@ class DeleteGroupApplicationsTestCase(APITestCase):
             {
                 "interview_status": "confirmed",
                 "expected_interview_status_updated_at": (
-                    application.interview_status_updated_at.isoformat()
+                    webkom_ga.interview_status_updated_at.isoformat()
                 ),
             },
             format="json",
@@ -1719,8 +1706,8 @@ class DeleteGroupApplicationsTestCase(APITestCase):
             response.status_code,
             (status.HTTP_403_FORBIDDEN, status.HTTP_404_NOT_FOUND),
         )
-        application.refresh_from_db()
-        self.assertEqual(application.interview_status, "not_invited")
+        webkom_ga.refresh_from_db()
+        self.assertEqual(webkom_ga.interview_status, "not_invited")
 
     def test_outsider_is_forbidden_not_silently_empty(self):
         """H2 regression: a logged-in user with no role in this admission
