@@ -237,8 +237,16 @@ export const useDistributedPlanActions = ({
     setPlanTransition("publishing");
     setPlanTransitionError("");
     try {
+      // Extending the publish boundary is the explicit "delplan" action
+      // we agreed on: the user is moving the published prefix forward
+      // while unplaced candidates may still live in the still-draft
+      // tail. Without the deferral flag the strict "everyone placed"
+      // gate would fire for any extension that doesn't fully saturate
+      // the new boundary. The user can still see how many are
+      // outstanding on the published plan view.
       await saveSchedule.mutateAsync({
         distributed_through: date,
+        defer_unplaced_candidates: true,
         expected_updated_at: savedSchedule.updated_at,
       });
       if (areSensitiveAdmissionCacheWritesBlocked(scope)) return false;
