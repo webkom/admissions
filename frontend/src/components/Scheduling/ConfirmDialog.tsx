@@ -140,7 +140,7 @@ const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
             )}
           </div>
         </div>
-        <div className="mt-4 flex justify-end gap-2">
+        <div className="mt-4 flex flex-col-reverse gap-2 sm:flex-row sm:flex-wrap sm:justify-end">
           <button
             type="button"
             className={cn(actionButtonBase, actionButtonNeutral)}
@@ -154,6 +154,10 @@ const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
             className={cn(
               actionButtonBase,
               isDanger ? actionButtonDanger : actionButtonPrimary,
+              // A dynamic confirm label (e.g. reviewer names) can outgrow one
+              // line; let it wrap inside the button instead of pushing Avbryt
+              // off the dialog edge.
+              "h-auto min-h-9 whitespace-normal py-1.5 text-center",
             )}
             onClick={onConfirm}
             disabled={confirmDisabled || busy}
