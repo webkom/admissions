@@ -771,6 +771,15 @@ def _resolve_schedule_state(
         distributed_through is None
         or _has_enabled_days_after(enabled_slots, distributed_through)
     )
+    # Is this save asking the server to (re)publish? Distinct from
+    # `is_distributed` (the *post*-write state) because the three-way rule
+    # for `published_without_review_by` cares about the intent: an unrelated
+    # edit while published is not a fresh publish, an unlock back to draft
+    # is not a publish, and only a publish that survives the gate counts.
+    is_publish_request = (
+        data.get("is_distributed") is True
+        or bool(data.get("distributed_through"))
+    ) and bool(schedule)
 
     return {
         "grid_changed": grid_changed,
@@ -784,39 +793,58 @@ def _resolve_schedule_state(
         "distributed_through": distributed_through,
         "conflict_review_open": conflict_review_open,
         "name_visibility": name_visibility,
+        "is_publish_request": is_publish_request,
     }
 
 
 def _ensure_conflict_review_ready_for_publish(admission, group, data, schedule):
+    """Gate publish on a finished kandidatkontroll.
+
+    Returns the ids of the interviewers whose check was outstanding and got
+    published past anyway - empty in the normal case, and empty when nothing
+    is being published. Raises unless the caller has explicitly said to go
+    ahead without them.
+    """
     is_publishing = data.get("is_distributed") is True or bool(
         data.get("distributed_through")
     )
     if not is_publishing or not schedule:
-        return
+        return []
 
     readiness = get_conflict_review_readiness(admission, group, schedule=schedule)
-    incomplete_count = len(readiness["incomplete_participant_ids"])
-    if incomplete_count:
-        # Name up to a few of the missing reviewers so the admin can act
-        # on the message - "9 må kontrollere" is unactionable, "Kari, Ola
-        # og 7 andre" is a checklist. Names stay inside the admin who is
-        # already mid-publish; the form is the source of the complete list.
-        names = _missing_reviewer_names(readiness["incomplete_participant_ids"])
-        named = ", ".join(names[:3])
-        suffix = (
-            f" og {incomplete_count - len(names[:3])} andre"
-            if incomplete_count > len(names[:3])
-            else ""
-        )
-        raise ScheduleInputError(
-            {
-                "schedule": [
-                    f"{incomplete_count} intervjuere må kontrollere "
-                    f"{readiness['missing_pair_count']} foreslåtte "
-                    f"kandidater før planen publiseres: {named}{suffix}."
-                ]
-            }
-        )
+    incomplete_ids = list(readiness["incomplete_participant_ids"])
+    if not incomplete_ids:
+        return []
+
+    # Publishing anyway is allowed but never quiet: an admin can decide the
+    # recruitment cannot wait for a member who has stopped answering, and
+    # accepts that some pairings go out unchecked for inhabilitet. The
+    # decision is recorded against the plan and against each person skipped
+    # (see _record_conflict_review_bypass), and the published plan says so.
+    if data.get("publish_without_full_review") is True:
+        return incomplete_ids
+
+    # Name up to a few of the missing reviewers so the admin can act
+    # on the message - "9 må kontrollere" is unactionable, "Kari, Ola
+    # og 7 andre" is a checklist. Names stay inside the admin who is
+    # already mid-publish; the form is the source of the complete list.
+    incomplete_count = len(incomplete_ids)
+    names = _missing_reviewer_names(incomplete_ids)
+    named = ", ".join(names[:3])
+    suffix = (
+        f" og {incomplete_count - len(names[:3])} andre"
+        if incomplete_count > len(names[:3])
+        else ""
+    )
+    raise ScheduleInputError(
+        {
+            "schedule": [
+                f"{incomplete_count} intervjuere må kontrollere "
+                f"{readiness['missing_pair_count']} foreslåtte "
+                f"kandidater før planen publiseres: {named}{suffix}."
+            ]
+        }
+    )
 
 
 def _missing_reviewer_names(user_ids):
@@ -846,6 +874,36 @@ def _missing_reviewer_names(user_ids):
         user.get_full_name() or user.username
         for user in ordered
     ]
+
+
+def _record_conflict_review_bypass(admission, saved, user, skipped_user_ids):
+    """Write the audit trail for a publish that skipped the kandidatkontroll.
+
+    One event per skipped person, so the log answers "was my check waived, by
+    whom, when" per interviewer rather than only per plan.
+    """
+    from admissions.admissions.models import LegoUser
+
+    if not skipped_user_ids:
+        return
+
+    users = {
+        str(skipped.pk): skipped
+        for skipped in LegoUser.objects.filter(
+            pk__in=[str(user_id) for user_id in skipped_user_ids]
+        )
+    }
+    for user_id in skipped_user_ids:
+        skipped = users.get(str(user_id))
+        ConflictReviewAuditEvent.objects.create(
+            admission=admission,
+            saved_schedule=saved,
+            actor=user,
+            actor_username=user.username,
+            subject_user=skipped,
+            subject_username=skipped.username if skipped else "",
+            action=ConflictReviewAuditEvent.ACTION_BYPASSED,
+        )
 
 
 def _canonicalize_schedule(
@@ -1042,6 +1100,7 @@ def _persist_schedule(
     panel_size,
     solver_options,
     layout,
+    skipped_reviewer_names=None,
 ):
     conflict_review_was_open = bool(
         existing is not None and existing.conflict_review_open
@@ -1083,6 +1142,34 @@ def _persist_schedule(
             "conflict_review_open": state["conflict_review_open"],
             "name_visibility": state["name_visibility"],
         }
+        # Three-way rule for the bypass note:
+        # - taking the plan back to draft (publish_request is false) clears it,
+        #   there is no published plan to mark;
+        # - a fresh publish with everyone confirmed (skipped_reviewer_names
+        #   is empty) replaces it with an empty list, wiping the previous
+        #   waiver on the first review-complete republish;
+        # - any other save (unrelated edit while published) keeps the
+        #   existing list, so the note does not silently outlive a
+        #   no-op-but-bumped-updated_at write.
+        # Bypass-note rule. The note is published-plan metadata: it only
+        # makes sense to write it when this save is mutating the publish
+        # boundary (`distributed_through` changing). An unrelated edit
+        # while published - e.g. a name-visibility change - must not
+        # silently rewrite or clear the note, which is why we look at
+        # the boundary delta rather than the user's intent field.
+        # When the boundary is being moved: clearing the boundary (unlock
+        # back to draft) wipes the note because there is no published
+        # plan to mark; setting the boundary records the names of anyone
+        # skipped (an empty list is the "review complete" case).
+        new_publish_boundary = state["distributed_through"]
+        boundary_changed = (
+            existing is None
+            or existing.distributed_through != new_publish_boundary
+        )
+        if boundary_changed:
+            desired_fields["published_without_review_by"] = list(
+                skipped_reviewer_names or []
+            ) if new_publish_boundary is not None else []
         if "outreach_templates" in data:
             desired_fields["outreach_templates"] = data["outreach_templates"] or {}
         if existing is None:
@@ -1284,7 +1371,9 @@ def update_saved_schedule(
         state,
         layout,
     )
-    _ensure_conflict_review_ready_for_publish(admission, group, data, schedule)
+    skipped_reviewer_ids = _ensure_conflict_review_ready_for_publish(
+        admission, group, data, schedule
+    )
     deviation_review = _deviation_review_for_publish(
         data,
         schedule,
@@ -1306,6 +1395,8 @@ def update_saved_schedule(
         panel_size,
         solver_options,
         layout,
+        skipped_reviewer_names=_missing_reviewer_names(skipped_reviewer_ids),
     )
+    _record_conflict_review_bypass(admission, saved, user, skipped_reviewer_ids)
     _record_deviation_approval(admission, saved, user, deviation_review)
     return ScheduleUpdateResult(admission=admission, saved_schedule=saved)

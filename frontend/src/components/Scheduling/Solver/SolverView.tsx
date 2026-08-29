@@ -858,7 +858,8 @@ export default function SolverView({
       onOpenSettings={() => setRegenerationOpen(true)}
       onExtendDay={canExtendDay ? extendDay : undefined}
       onFillRemainingDays={
-        canExtendDay && session.plannableDates.length > session.effectiveDayCount + 1
+        canExtendDay &&
+        session.plannableDates.length > session.effectiveDayCount + 1
           ? fillRemainingDays
           : undefined
       }

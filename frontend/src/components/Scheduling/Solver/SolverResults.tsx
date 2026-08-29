@@ -29,6 +29,7 @@ import {
   type SchedulingWorkspaceMode,
   actionButtonBase,
   actionButtonNeutral,
+  actionButtonPrimary,
   keyboardFocusRingClass,
 } from "../ui";
 import type {
@@ -539,6 +540,15 @@ const SolverResults = ({
   const overviewStats = presentation.overviewStats;
   const totalCandidateCount =
     presentation.sortedSchedule.length + unplaceableCount;
+  // The solve was deliberately limited to the first N framework days (the
+  // day-scope stepper), so `onExtendDay` is wired. Candidates that fall on
+  // the days still outside that scope are meant to be unplaced for now —
+  // that is a delplan planned in stages, not a failure. In that state the
+  // "venter på plassering" warning tray is replaced by a calm
+  // publish-the-delplan action near the top.
+  const isDayScoped = Boolean(onExtendDay);
+  const showPartialDraftPublish =
+    !backgroundMode && isDayScoped && unplaceableCount > 0;
   const saveStatusLabel = persistence.hasConflict
     ? "Lagring stoppet"
     : persistence.state === "error"
@@ -842,7 +852,9 @@ const SolverResults = ({
                   onClick: onFillRemainingDays,
                   variant: "primary" as const,
                   dataCy: "proposal-fill-remaining-days",
-                  icon: <ArrowRight size={iconSizes.small} aria-hidden="true" />,
+                  icon: (
+                    <ArrowRight size={iconSizes.small} aria-hidden="true" />
+                  ),
                 },
               ]
             : onExtendDay
@@ -853,7 +865,9 @@ const SolverResults = ({
                     onClick: onExtendDay,
                     variant: "neutral" as const,
                     dataCy: "proposal-extend-day",
-                    icon: <ArrowRight size={iconSizes.small} aria-hidden="true" />,
+                    icon: (
+                      <ArrowRight size={iconSizes.small} aria-hidden="true" />
+                    ),
                   },
                 ]
               : []),
@@ -1002,6 +1016,31 @@ const SolverResults = ({
                   </p>
                 </section>
               )}
+              {showPartialDraftPublish && (
+                <div
+                  data-cy="partial-draft-publish"
+                  className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border-soft bg-surface-subtle px-4 py-3"
+                >
+                  <p className="m-0 text-detail text-text-muted">
+                    Delplan for de valgte dagene er klar.{" "}
+                    <span className="font-semibold text-text-primary">
+                      {unplaceableCount}{" "}
+                      {unplaceableCount === 1 ? "kandidat" : "kandidater"}
+                    </span>{" "}
+                    planlegges når du tar med flere dager — de publiserte dagene
+                    røres ikke.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={onOpenPlan}
+                    data-cy="publish-partial-draft"
+                    className={cn(actionButtonBase, actionButtonPrimary)}
+                  >
+                    Publiser delplan
+                    <ArrowRight size={iconSizes.small} aria-hidden="true" />
+                  </button>
+                </div>
+              )}
               {overviewStats && (
                 <PlanHealthSummary
                   overviewStats={overviewStats}
@@ -1009,13 +1048,14 @@ const SolverResults = ({
                   healthExceptions={healthExceptions}
                   onJumpToException={openHealthExceptionModal}
                   unplaceableCount={unplaceableCount}
+                  plannedInStages={isDayScoped}
                   previewLoading={previewLoading}
                   onPreviewWithAvailabilityDeviation={
                     onPreviewWithAvailabilityDeviation
                   }
                 />
               )}
-              {unplaceableCount > 0 && onPickUnplacedSlot && (
+              {unplaceableCount > 0 && !isDayScoped && onPickUnplacedSlot && (
                 <section
                   data-cy="unplaced-tray"
                   role="status"
@@ -1193,17 +1233,23 @@ const SolverResults = ({
                     <button
                       type="button"
                       onClick={() => {
-                        const unlockable = presentation.totalAssignments - presentation.lockedCount;
+                        const unlockable =
+                          presentation.totalAssignments -
+                          presentation.lockedCount;
                         if (unlockable === 0) return;
                         draft.lockAll();
                       }}
                       disabled={
                         previewLoading ||
                         persistence.isSaving ||
-                        presentation.totalAssignments - presentation.lockedCount === 0
+                        presentation.totalAssignments -
+                          presentation.lockedCount ===
+                          0
                       }
                       title={
-                        presentation.totalAssignments - presentation.lockedCount === 0
+                        presentation.totalAssignments -
+                          presentation.lockedCount ===
+                        0
                           ? "Alle intervjuer er allerede låst"
                           : `Lås alle ${presentation.totalAssignments - presentation.lockedCount} ulåste intervjuer slik at en ny kjøring av planleggingen beholder dem og fyller ut resten rundt dem`
                       }
@@ -1216,7 +1262,9 @@ const SolverResults = ({
                       <LockKeyhole size={iconSizes.small} aria-hidden="true" />
                       <span>
                         Lås alle intervjuer
-                        {presentation.totalAssignments - presentation.lockedCount > 0
+                        {presentation.totalAssignments -
+                          presentation.lockedCount >
+                        0
                           ? ` (${presentation.totalAssignments - presentation.lockedCount})`
                           : ""}
                       </span>

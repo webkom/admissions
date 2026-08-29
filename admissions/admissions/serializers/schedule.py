@@ -116,6 +116,18 @@ class SaveScheduleInputSerializer(serializers.Serializer):
     defer_unplaced_candidates = serializers.BooleanField(
         required=False, write_only=True
     )
+    # Explicit override of the kandidatkontroll gate: when True, the
+    # publish is allowed to go through with one or more reviewers still
+    # owing their check. Skipped reviewers are recorded against the plan
+    # (published_without_review_by) and against each person (one
+    # ConflictReviewAuditEvent per skipped reviewer), so the committee
+    # sees the bypass and the audit log answers "was my check waived, by
+    # whom, when" per interviewer. Absent the flag the gate is exactly as
+    # strict as before. Write-only, no default: a visibility-only edit
+    # must not be misread as a publish-time decision.
+    publish_without_full_review = serializers.BooleanField(
+        required=False, write_only=True
+    )
     conflict_review_open = serializers.BooleanField(required=False)
     name_visibility = serializers.ChoiceField(
         choices=["hidden", "admin_only", "committee"],
@@ -435,11 +447,12 @@ class SavedScheduleSerializer(serializers.ModelSerializer):
             "is_distributed",
             "distributed_through",
             "conflict_review_open",
+            "published_without_review_by",
             "name_visibility",
             "outreach_templates",
             "updated_at",
         ]
-        read_only_fields = ["id", "updated_at"]
+        read_only_fields = ["id", "updated_at", "published_without_review_by"]
 
     def to_representation(self, instance):
         data = super().to_representation(instance)

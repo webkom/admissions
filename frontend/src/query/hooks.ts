@@ -34,6 +34,13 @@ import type { ApplicationViewMode } from "src/types";
 type SaveSchedulePayload = Partial<Omit<SavedSchedule, "id" | "updated_at">> & {
   expected_updated_at: string | null;
   deviation_approval_fingerprint?: string;
+  /**
+   * Write-only: the server records the decision against the plan
+   * (`published_without_review_by`) and each skipped reviewer
+   * (`ConflictReviewAuditEvent`) rather than storing the flag. Absent
+   * the flag the gate is exactly as strict as before.
+   */
+  publish_without_full_review?: boolean;
 };
 
 interface SaveScheduleOptions {

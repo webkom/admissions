@@ -701,6 +701,238 @@ class SavedSchedulePublishSemanticsTestCase(APITestCase):
             SavedSchedule.objects.get(admission=self.admission).is_distributed
         )
 
+    def test_publishing_past_a_missing_review_is_recorded_and_shown(self):
+        """An admin may decide the recruitment cannot wait for a member who
+        has stopped answering, but never quietly: the decision is logged
+        against them and against each person skipped, and the published plan
+        names who did not confirm so the committee can still flag an
+        inhabilitet nobody checked for."""
+        second_application = self._second_application()
+        self._create_saved(is_distributed=False, schedule=self._schedule(time=540))
+        self._mark_reviewed(self.application)
+        second_entry = self._schedule(time=600)
+        second_entry[0]["candidate_id"] = str(second_application.pk)
+        schedule = self._schedule(time=540) + second_entry
+
+        res = self.client.post(
+            self.url,
+            {
+                "schedule": schedule,
+                "is_distributed": True,
+                "publish_without_full_review": True,
+            },
+            format="json",
+        )
+
+        self.assertEqual(res.status_code, status.HTTP_200_OK, res.data)
+        saved = SavedSchedule.objects.get(admission=self.admission)
+        self.assertTrue(saved.is_distributed)
+        self.assertEqual(
+            saved.published_without_review_by,
+            [self.admin_user.get_full_name() or self.admin_user.username],
+        )
+        self.assertEqual(
+            res.data["published_without_review_by"], ["hardening-admin"]
+        )
+        bypass = ConflictReviewAuditEvent.objects.filter(
+            admission=self.admission,
+            action=ConflictReviewAuditEvent.ACTION_BYPASSED,
+        )
+        self.assertEqual(bypass.count(), 1)
+        self.assertEqual(bypass.get().actor_username, self.admin_user.username)
+        self.assertEqual(
+            bypass.get().subject_username, self.admin_user.username
+        )
+
+    def test_the_bypass_is_opt_in_per_publish_not_sticky(self):
+        """The note must not outlive the decision. A later publish with
+        everyone confirmed clears it; an ordinary edit in between leaves it
+        alone rather than silently wiping the record."""
+        second_application = self._second_application()
+        self._create_saved(is_distributed=False, schedule=self._schedule(time=540))
+        self._mark_reviewed(self.application)
+        second_entry = self._schedule(time=600)
+        second_entry[0]["candidate_id"] = str(second_application.pk)
+        schedule = self._schedule(time=540) + second_entry
+        self.client.post(
+            self.url,
+            {
+                "schedule": schedule,
+                "is_distributed": True,
+                "publish_without_full_review": True,
+            },
+            format="json",
+        )
+        saved = SavedSchedule.objects.get(admission=self.admission)
+        self.assertTrue(saved.published_without_review_by)
+
+        # An unrelated edit while published keeps the note.
+        res = self.client.post(
+            self.url,
+            {
+                "name_visibility": "admin_only",
+                "expected_updated_at": saved.updated_at,
+            },
+            format="json",
+        )
+        self.assertEqual(res.status_code, status.HTTP_200_OK, res.data)
+        saved.refresh_from_db()
+        self.assertTrue(saved.published_without_review_by)
+
+        # Publishing again once everybody has confirmed clears it.
+        self._mark_reviewed(self.application, second_application)
+        res = self.client.post(
+            self.url,
+            {
+                "schedule": schedule,
+                "is_distributed": True,
+                "expected_updated_at": saved.updated_at,
+            },
+            format="json",
+        )
+        self.assertEqual(res.status_code, status.HTTP_200_OK, res.data)
+        saved.refresh_from_db()
+        self.assertEqual(saved.published_without_review_by, [])
+
+    def test_publish_without_the_flag_still_refuses(self):
+        """The override has to be asked for. Absent the flag the gate is
+        exactly as strict as before."""
+        second_application = self._second_application()
+        self._create_saved(is_distributed=False, schedule=self._schedule(time=540))
+        self._mark_reviewed(self.application)
+        second_entry = self._schedule(time=600)
+        second_entry[0]["candidate_id"] = str(second_application.pk)
+
+        res = self.client.post(
+            self.url,
+            {
+                "schedule": self._schedule(time=540) + second_entry,
+                "is_distributed": True,
+                "publish_without_full_review": False,
+            },
+            format="json",
+        )
+
+        self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("kontrollere", res.data["schedule"][0])
+        self.assertFalse(
+            ConflictReviewAuditEvent.objects.filter(
+                action=ConflictReviewAuditEvent.ACTION_BYPASSED
+            ).exists()
+        )
+
+    def test_taking_plan_back_to_draft_clears_the_bypass_note(self):
+        """The three-way rule: unlocking the plan to draft clears the note
+        because there is no published plan to mark. A subsequent publish
+        with full review leaves it cleared."""
+        second_application = self._second_application()
+        self._create_saved(is_distributed=False, schedule=self._schedule(time=540))
+        self._mark_reviewed(self.application)
+        second_entry = self._schedule(time=600)
+        second_entry[0]["candidate_id"] = str(second_application.pk)
+        schedule = self._schedule(time=540) + second_entry
+
+        # First: bypass on a publish.
+        self.client.post(
+            self.url,
+            {
+                "schedule": schedule,
+                "is_distributed": True,
+                "publish_without_full_review": True,
+            },
+            format="json",
+        )
+        saved = SavedSchedule.objects.get(admission=self.admission)
+        self.assertTrue(saved.published_without_review_by)
+
+        # Unlocking back to draft clears the note.
+        res = self.client.post(
+            self.url,
+            {
+                "is_distributed": False,
+                "expected_updated_at": saved.updated_at,
+            },
+            format="json",
+        )
+        self.assertEqual(res.status_code, status.HTTP_200_OK, res.data)
+        saved.refresh_from_db()
+        self.assertEqual(saved.published_without_review_by, [])
+
+    def test_on_behalf_write_then_publishes_cleanly(self):
+        """The two override paths are meant to compose: an admin who has
+        chased a missing reviewer records their answer on their behalf via
+        the availability endpoint's `user_id` field, which makes the
+        kandidatkontroll complete and removes the need for
+        `publish_without_full_review` at all. This locks in that the
+        precise path is enough on its own: no bypass flag, no audit
+        event, no `published_without_review_by` note."""
+        second_application = self._second_application()
+        second_interviewer = LegoUser.objects.create(
+            username="on-behalf-target", lego_id=700
+        )
+        Membership.objects.create(
+            user=second_interviewer, role=MEMBER, group=self.admin_group
+        )
+        second_entry = self._schedule(time=600)
+        second_entry[0]["candidate_id"] = str(second_application.pk)
+        second_entry[0]["panel"] = [
+            {"id": str(second_interviewer.pk), "name": "on-behalf-target"},
+        ]
+        self._create_saved(
+            is_distributed=False, schedule=self._schedule(time=540)
+        )
+
+        # Refused first: the second interviewer has not answered.
+        res = self.client.post(
+            self.url,
+            {
+                "schedule": self._schedule(time=540) + second_entry,
+                "is_distributed": True,
+            },
+            format="json",
+        )
+        self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("kontrollere", res.data["schedule"][0])
+
+        # Admin records the second interviewer's review on their behalf.
+        availability_url = reverse(
+            "interview-availability",
+            kwargs={
+                "admission_slug": self.admission.slug,
+                "group_id": self.admin_group.pk,
+            },
+        )
+        res = self.client.post(
+            availability_url,
+            {
+                "user_id": str(second_interviewer.pk),
+                "reviewed_candidate_ids": [str(second_application.pk)],
+                "conflicts": [],
+            },
+            format="json",
+        )
+        self.assertEqual(res.status_code, status.HTTP_200_OK, res.data)
+
+        # Now the publish goes through cleanly without the bypass flag.
+        res = self.client.post(
+            self.url,
+            {
+                "schedule": self._schedule(time=540) + second_entry,
+                "is_distributed": True,
+            },
+            format="json",
+        )
+        self.assertEqual(res.status_code, status.HTTP_200_OK, res.data)
+        self.assertTrue(res.data["is_distributed"])
+        self.assertEqual(res.data.get("published_without_review_by"), [])
+        saved = SavedSchedule.objects.get(admission=self.admission)
+        self.assertEqual(saved.published_without_review_by, [])
+        self.assertFalse(
+            ConflictReviewAuditEvent.objects.filter(
+                action=ConflictReviewAuditEvent.ACTION_BYPASSED
+            ).exists()
+        )
+
     def test_manual_publish_enforces_same_gender(self):
         self.candidate_user.gender = "male"
         self.candidate_user.save(update_fields=["gender"])

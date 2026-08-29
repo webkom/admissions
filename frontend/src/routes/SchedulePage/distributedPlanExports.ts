@@ -104,7 +104,7 @@ export const buildVisibleScheduleCsv = ({
   formatTimeLabel: (time: number) => string;
 }) => {
   const rows: string[][] = [
-    ["Tidspunkt", "Kandidat", "Panel", "Intervjustatus", "Bookingtype"],
+    ["Tidspunkt", "Kandidat", "Panel", "Intervjustatus"],
   ];
   entries.forEach(({ item }) => {
     rows.push([
@@ -114,7 +114,6 @@ export const buildVisibleScheduleCsv = ({
       item.interview_status
         ? getInterviewStatusLabel(item.interview_status)
         : "Ikke registrert",
-      item.booking_source === "manual" ? "Manuell" : "Solver",
     ]);
   });
   return rows

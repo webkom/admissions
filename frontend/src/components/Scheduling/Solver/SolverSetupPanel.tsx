@@ -671,13 +671,12 @@ const SolverSetupPanel = ({
                 >
                   <div>
                     <p className="m-0 text-ui font-semibold text-text-primary">
-                      Hvor mange dager skal planlegges nå?
+                      Planlegg i etapper
                     </p>
                     <p className="m-0 mt-1 text-detail text-text-muted">
-                      {scopeDateLabel}. Resten av dagene planlegges senere —
-                      {lockedCount > 0
-                        ? " låste intervjuer beholdes."
-                        : " allerede planlagte intervjuer beholdes."}
+                      Ta de første dagene nå og resten i en senere etappe hvis
+                      du vil — det som alt er planlagt, blir stående. Nå:{" "}
+                      {scopeDateLabel}.
                     </p>
                     {minDayCount > 1 &&
                       Number.isFinite(

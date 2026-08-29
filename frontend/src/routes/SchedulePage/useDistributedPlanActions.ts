@@ -22,6 +22,21 @@ import {
 
 type Notify = (message: string, tone?: StatusToastState["tone"]) => void;
 
+// Server 400 payloads for the save-schedule endpoint use field names as keys
+// and human-readable strings as values. The publish gate cares specifically
+// about `schedule` because that is where the kandidatkontroll refusal (and a
+// handful of other publish-time checks) surface; the rest of the payload is
+// collapsed into the generic planTransitionError.
+const extractScheduleFieldError = (error: unknown): string | null => {
+  if (!isAxiosError(error)) return null;
+  const data = error.response?.data;
+  if (!data || typeof data !== "object") return null;
+  const value = (data as Record<string, unknown>).schedule;
+  if (!Array.isArray(value) || value.length === 0) return null;
+  const first = value[0];
+  return typeof first === "string" ? first : null;
+};
+
 interface DistributedPlanActionsParams {
   admissionSlug: string;
   groupId: string;
@@ -51,6 +66,10 @@ export const useDistributedPlanActions = ({
     "publishing" | "unlocking" | null
   >(null);
   const [planTransitionError, setPlanTransitionError] = useState("");
+  // Structured `schedule` field from the server's 400, kept separate from
+  // planTransitionError so the gate can render it as the actual reason
+  // (e.g. "3 intervjuere må kontrollere ...") instead of a generic toast.
+  const [scheduleFieldError, setScheduleFieldError] = useState("");
   const reportAccessFailure = (purged: boolean) => {
     if (purged) {
       notify(
@@ -167,6 +186,7 @@ export const useDistributedPlanActions = ({
     deviationApprovalFingerprint?: string,
     distributedThrough?: string,
     deferUnplacedCandidates?: boolean,
+    publishWithoutFullReview?: boolean,
   ) => {
     if (!savedSchedule || savedSchedule.schedule.length === 0) return false;
     if (!draftPersistenceReady) {
@@ -178,6 +198,7 @@ export const useDistributedPlanActions = ({
     }
     setPlanTransition("publishing");
     setPlanTransitionError("");
+    setScheduleFieldError("");
     try {
       await saveSchedule.mutateAsync({
         ...(distributedThrough
@@ -190,9 +211,13 @@ export const useDistributedPlanActions = ({
             }
           : {}),
         ...(deferUnplacedCandidates ? { defer_unplaced_candidates: true } : {}),
+        ...(publishWithoutFullReview
+          ? { publish_without_full_review: true }
+          : {}),
         expected_updated_at: savedSchedule.updated_at,
       });
       if (areSensitiveAdmissionCacheWritesBlocked(scope)) return false;
+      setScheduleFieldError("");
       notify(
         distributedThrough
           ? "Intervjuplanen er delvis publisert for komiteen."
@@ -206,6 +231,7 @@ export const useDistributedPlanActions = ({
         const reconciliation = await reconcilePublishedSchedule(visibility);
         if (reconciliation === "published") {
           setPlanTransitionError("");
+          setScheduleFieldError("");
           notify("Intervjuplanen er publisert for komiteen.");
           return true;
         }
@@ -225,6 +251,8 @@ export const useDistributedPlanActions = ({
             "Kunne ikke publisere intervjuplanen. Prøv igjen.",
           );
       setPlanTransitionError(message);
+      const structured = extractScheduleFieldError(error);
+      if (structured) setScheduleFieldError(structured);
       notify(message, "error");
       return false;
     } finally {
@@ -481,6 +509,7 @@ export const useDistributedPlanActions = ({
     unlockSchedule,
     planTransition,
     planTransitionError,
+    scheduleFieldError,
     setNameVisibility,
     replacePanelMember,
     replaceBlockPanelMember,

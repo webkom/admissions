@@ -106,3 +106,5 @@ admissions/utils/management/commands/seed_candidates.py
 admissions/utils/management/commands/seed_local_schedule.py
 admissions/admissions/tests/test_seed_candidates.py
 admissions/admissions/tests/test_seed_local_schedule.py
+.zcode/
+.zcode/

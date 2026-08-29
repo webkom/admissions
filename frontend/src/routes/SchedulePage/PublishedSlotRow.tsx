@@ -159,26 +159,30 @@ const PublishedSlotRow: React.FC<{
           }
         />
       </td>
-      <td className={cn(scheduleCell, "w-48")}>
-        {candidateNamesVisible && item.candidate_id ? (
-          <InterviewStatusControl
-            admissionSlug={admissionSlug}
-            groupId={groupId}
-            applicationScopeKey="schedule"
-            applicationId={item.candidate_id}
-            candidateName={item.candidate}
-            status={status}
-            statusUpdatedAt={item.interview_status_updated_at ?? ""}
-            statusUpdatedBy={item.interview_status_updated_by ?? ""}
-            canEdit={canManageInterviewWorkflow}
-            compact
-          />
-        ) : (
-          <Chip tone={interviewStatusChipTone[getInterviewStatusTone(status)]}>
-            {getInterviewStatusLabel(status)}
-          </Chip>
-        )}
-      </td>
+      {canManageInterviewWorkflow && (
+        <td className={cn(scheduleCell, "w-48")}>
+          {candidateNamesVisible && item.candidate_id ? (
+            <InterviewStatusControl
+              admissionSlug={admissionSlug}
+              groupId={groupId}
+              applicationScopeKey="schedule"
+              applicationId={item.candidate_id}
+              candidateName={item.candidate}
+              status={status}
+              statusUpdatedAt={item.interview_status_updated_at ?? ""}
+              statusUpdatedBy={item.interview_status_updated_by ?? ""}
+              canEdit={canManageInterviewWorkflow}
+              compact
+            />
+          ) : (
+            <Chip
+              tone={interviewStatusChipTone[getInterviewStatusTone(status)]}
+            >
+              {getInterviewStatusLabel(status)}
+            </Chip>
+          )}
+        </td>
+      )}
       <td className={cn(scheduleCell, "w-52")}>
         {canAct && nextOutreachAction ? (
           <InterviewOutreachActions

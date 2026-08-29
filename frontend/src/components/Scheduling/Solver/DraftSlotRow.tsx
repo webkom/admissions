@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from "react";
+import React from "react";
 import { ArrowUpDown, GripVertical, Lock, Unlock } from "lucide-react";
 import type { Interviewer, ScheduleItem, SchedulePanelMember } from "../types";
 import { decodeScheduleTime, formatMinutes } from "../scheduleUtils";
@@ -7,6 +7,7 @@ import { getBlockPanelDiff } from "./blockBaseline";
 import CandidateSwapChip, {
   type CandidateSwapTarget,
 } from "./CandidateSwapChip";
+import SlotPanelOverrideMenu from "./SlotPanelOverrideMenu";
 import { EditablePanelChip, type PanelChipOption } from "../ui";
 import cn from "../../../utils/cn";
 import { iconSizes } from "../../../styles/designTokens";
@@ -68,111 +69,6 @@ const shortName = (name: string): string => {
   const parts = name.trim().split(/\s+/);
   if (parts.length <= 1) return name;
   return `${parts[0]} ${parts[parts.length - 1].charAt(0)}.`;
-};
-
-const SlotPanelOverrideMenu: React.FC<{
-  item: ScheduleItem;
-  scheduleIndex: number;
-  interviewerOptions: Interviewer[];
-  onSwapPanelMember: (
-    scheduleIndex: number,
-    panelMemberIndex: number,
-    newName: string,
-    newId?: string,
-  ) => void;
-}> = ({ item, scheduleIndex, interviewerOptions, onSwapPanelMember }) => {
-  const [selectedMemberIndex, setSelectedMemberIndex] = useState<number | null>(
-    null,
-  );
-  const [isOpen, setIsOpen] = useState(false);
-  const menuRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (!isOpen) return;
-    const handleClickOutside = (e: MouseEvent) => {
-      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
-        setIsOpen(false);
-        setSelectedMemberIndex(null);
-      }
-    };
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, [isOpen]);
-
-  if (selectedMemberIndex !== null) {
-    const member = item.panel[selectedMemberIndex];
-    if (!member) return null;
-    const options: PanelChipOption[] = interviewerOptions
-      .filter((inv) => !item.panel.some((m) => m.name === inv.name))
-      .map((inv) => ({ id: inv.id, name: inv.name }));
-
-    return (
-      <div className="flex items-center gap-1">
-        <span className="text-nano font-medium text-text-muted">
-          Bytt {shortName(member.name)}:
-        </span>
-        <EditablePanelChip
-          variant="chip"
-          label="Velg erstatter…"
-          options={options}
-          searchPlaceholder="Søk intervjuer…"
-          onSelect={(newName, newId) => {
-            onSwapPanelMember(
-              scheduleIndex,
-              selectedMemberIndex,
-              newName,
-              newId,
-            );
-            setSelectedMemberIndex(null);
-          }}
-        />
-        <button
-          type="button"
-          onClick={() => setSelectedMemberIndex(null)}
-          className="px-1 text-nano text-text-muted hover:text-text-primary"
-          title="Avbryt"
-        >
-          ✕
-        </button>
-      </div>
-    );
-  }
-
-  return (
-    <div ref={menuRef} className="relative inline-block">
-      <button
-        type="button"
-        onClick={() => setIsOpen((prev) => !prev)}
-        className="inline-flex cursor-pointer items-center gap-1 rounded border border-dashed border-border-soft px-2 py-0.5 text-xs text-text-muted transition-all hover:border-brand/40 hover:bg-surface-subtle hover:text-brand"
-        title="Bytt ut et panelmedlem for dette intervjuet"
-      >
-        <ArrowUpDown size={11} aria-hidden="true" />
-        <span>Bytt intervjuer</span>
-      </button>
-
-      {isOpen && (
-        <div className="absolute left-0 top-full z-30 mt-1 min-w-[180px] rounded-lg border border-border-soft bg-surface-base p-1 shadow-lg">
-          <div className="mb-1 border-b border-border-soft px-2 py-1 text-nano font-semibold text-text-muted">
-            Hvem skal byttes ut?
-          </div>
-          {item.panel.map((member, idx) => (
-            <button
-              key={`${member.name}-${idx}`}
-              type="button"
-              onClick={() => {
-                setIsOpen(false);
-                setSelectedMemberIndex(idx);
-              }}
-              className="flex w-full cursor-pointer items-center justify-between rounded px-2 py-1.5 text-left text-xs font-medium text-text-primary transition-colors hover:bg-surface-subtle hover:text-brand"
-            >
-              <span>{member.name}</span>
-              <ArrowUpDown size={10} className="text-text-muted opacity-60" />
-            </button>
-          ))}
-        </div>
-      )}
-    </div>
-  );
 };
 
 export const DraftSlotRow: React.FC<DraftSlotRowProps> = ({
@@ -395,27 +291,27 @@ export const DraftSlotRow: React.FC<DraftSlotRowProps> = ({
       </div>
     );
   } else {
-    // exact: matches baseline. Show "—" by default, and reveal "Bytt intervjuer" on hover/focus!
-    diffNode = (
-      <div className="relative flex items-center min-h-[24px]">
-        <span
-          className="text-text-muted/60 text-sm font-medium transition-opacity group-hover:opacity-0 group-focus-within:opacity-0"
-          aria-hidden="true"
-          title="Felles standardpanel for blokken"
-        >
-          —
-        </span>
-        {canEditDraft && (
-          <div className="absolute left-0 top-0 opacity-0 transition-opacity focus-within:opacity-100 group-hover:opacity-100 group-focus-within:opacity-100">
-            <SlotPanelOverrideMenu
-              item={item}
-              scheduleIndex={scheduleIndex}
-              interviewerOptions={interviewerOptions}
-              onSwapPanelMember={onSwapPanelMember}
-            />
-          </div>
-        )}
-      </div>
+    // exact: the row runs the block's default panel. Keep the cell quiet —
+    // show "—", and clicking opens a 2-step menu to pick which interviewer to replace,
+    // which immediately transitions to the searchable replacement dropdown.
+    diffNode = canEditDraft ? (
+      <SlotPanelOverrideMenu
+        item={item}
+        scheduleIndex={scheduleIndex}
+        interviewerOptions={interviewerOptions}
+        onSwapPanelMember={onSwapPanelMember}
+        shortName={shortName}
+        hasConflictFor={hasConflictFor}
+        availabilityStatusFor={availabilityStatusFor}
+      />
+    ) : (
+      <span
+        className="text-text-muted/60 text-sm font-medium"
+        aria-hidden="true"
+        title="Felles standardpanel for blokken"
+      >
+        —
+      </span>
     );
   }
 
@@ -504,7 +400,6 @@ export const DraftSlotRow: React.FC<DraftSlotRowProps> = ({
               formatTimeLabel={formatSlotTime}
               onSwap={onSwapCandidates}
               conflict={hasConflict}
-              twoStep
             />
           ) : (
             <span className="truncate text-sm font-semibold text-text-primary">

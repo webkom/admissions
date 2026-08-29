@@ -16,6 +16,10 @@ interface PlanHealthSummaryProps {
   healthExceptions: PlanHealthException[];
   onJumpToException?: (exception: PlanHealthException) => void;
   unplaceableCount: number;
+  /** The solve only covered the first few framework days, so the remaining
+   *  candidates are planned in a later stage, not missing. Softens the
+   *  "gjenstår" wording and hides the force-everyone-in deviation preview. */
+  plannedInStages?: boolean;
   previewLoading: boolean;
   onPreviewWithAvailabilityDeviation: () => void;
 }
@@ -26,6 +30,7 @@ const PlanHealthSummary = ({
   healthExceptions,
   onJumpToException,
   unplaceableCount,
+  plannedInStages = false,
   previewLoading,
   onPreviewWithAvailabilityDeviation,
 }: PlanHealthSummaryProps) => (
@@ -42,7 +47,8 @@ const PlanHealthSummary = ({
         {unplaceableCount > 0 && (
           <span className="font-semibold tabular-nums text-text-primary">
             {" "}
-            — {unplaceableCount} gjenstår
+            — {unplaceableCount}{" "}
+            {plannedInStages ? "planlegges senere" : "gjenstår"}
           </span>
         )}
         {healthExceptions.map((exception) => (
@@ -63,7 +69,7 @@ const PlanHealthSummary = ({
         ))}
       </p>
     </div>
-    {unplaceableCount > 0 && (
+    {unplaceableCount > 0 && !plannedInStages && (
       <button
         type="button"
         disabled={previewLoading}

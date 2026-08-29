@@ -5,6 +5,7 @@ import {
   CalendarCheck,
   Check,
   Clock3,
+  Users,
 } from "lucide-react";
 
 import ConfirmDialog from "src/components/Scheduling/ConfirmDialog";
@@ -40,15 +41,24 @@ interface PublicationGateProps {
   }>;
   planTransition: "publishing" | "unlocking" | null;
   planTransitionError: string;
+  /**
+   * The structured `schedule` field from the server's 400, surfaced as the
+   * authoritative reason the publish failed (e.g. "3 intervjuere må
+   * kontrollere ..."). Distinct from `planTransitionError`, which is the
+   * generic toast message.
+   */
+  scheduleFieldError?: string;
   stage: PublicationStagePresentation;
   dates: string[];
   onOpenDraft: () => void;
   onOpenOwnReview: () => void;
+  onOpenConflictsOverview?: () => void;
   onPublish: (
     visibility: NameVisibility,
     deviationApprovalFingerprint?: string,
     distributedThrough?: string,
     deferUnplacedCandidates?: boolean,
+    publishWithoutFullReview?: boolean,
   ) => Promise<boolean>;
 }
 
@@ -94,10 +104,12 @@ const PublicationGate = ({
   readiness,
   planTransition,
   planTransitionError,
+  scheduleFieldError = "",
   stage,
   dates,
   onOpenDraft,
   onOpenOwnReview,
+  onOpenConflictsOverview,
   onPublish,
 }: PublicationGateProps) => {
   const [publishVisibility, setPublishVisibility] = useState<NameVisibility>(
@@ -119,6 +131,18 @@ const PublicationGate = ({
     setPublishVisibility(savedSchedule?.name_visibility ?? "hidden");
   }, [savedSchedule?.name_visibility]);
 
+  // The waiver on the kandidatkontroll gate is per-publish, not a setting:
+  // the admin re-decides for every publish. A fresh republish is
+  // intentionally not sticky. If the server just refused with the
+  // kandidatkontroll message, auto-tick the override for the admin so
+  // confirm is one click - the gate is showing the actual blocker,
+  // approval is implicit.
+  const [waiveReview, setWaiveReview] = useState(false);
+  const serverReviewRefusal = scheduleFieldError.includes("kontrollere");
+  useEffect(() => {
+    if (serverReviewRefusal) setWaiveReview(true);
+  }, [serverReviewRefusal]);
+
   const unplacedCount = Math.max(
     0,
     readiness.candidateCount - readiness.scheduledCandidateCount,
@@ -129,13 +153,14 @@ const PublicationGate = ({
   // with candidates waiting for days that open later.
   const unplacedResolved =
     readiness.allCandidatesScheduled || (unplacedCount > 0 && deferUnplaced);
+  const reviewResolved = readiness.reviewResolved || waiveReview;
   const publishable =
     readiness.ready ||
     (unplacedResolved &&
       readiness.draftSaved &&
       readiness.draftPersistenceReady &&
       readiness.candidateScopeResolved &&
-      readiness.reviewResolved &&
+      reviewResolved &&
       readiness.proposalConflictCount === 0);
 
   const blocker = useMemo(() => {
@@ -172,6 +197,7 @@ const PublicationGate = ({
         : undefined,
       publishScope === "partial" ? selectedThroughDate : undefined,
       deferUnplaced && unplacedCount > 0,
+      waiveReview && !readiness.reviewResolved,
     );
     if (published) setConfirmOpen(false);
   };
@@ -201,6 +227,30 @@ const PublicationGate = ({
               {planTransitionError}
             </div>
           )}
+          {scheduleFieldError && !planTransitionError && (
+            <div
+              role="alert"
+              data-cy="publish-schedule-field-error"
+              className="border-b border-amber-200 bg-amber-50 px-5 py-3 text-ui text-amber-950"
+            >
+              {scheduleFieldError}
+            </div>
+          )}
+          {savedSchedule?.published_without_review_by &&
+            savedSchedule.published_without_review_by.length > 0 && (
+              <div
+                data-cy="previously-bypassed-banner"
+                className="border-b border-amber-200 bg-amber-50 px-5 py-3 text-ui text-amber-950"
+              >
+                <strong className="block">
+                  Forrige publisering ble gjort uten kontroll fra{" "}
+                  {savedSchedule.published_without_review_by.join(", ")}
+                </strong>
+                <p className="m-0 mt-1 text-xs leading-relaxed">
+                  En ny publisering uten alle svar vil bli loggført på nytt.
+                </p>
+              </div>
+            )}
           <SchedulePanelBody className="grid gap-7 px-5 py-5 lg:grid-cols-[minmax(0,1fr)_minmax(17rem,0.42fr)]">
             <section aria-labelledby="publication-checks-heading">
               <h3
@@ -324,6 +374,44 @@ const PublicationGate = ({
                 </aside>
               )}
 
+              {(!readiness.reviewResolved &&
+                readiness.incompleteReviewerCount > 0) ||
+              serverReviewRefusal ? (
+                <aside
+                  className="rounded-xl border border-amber-200 bg-amber-50 p-4"
+                  data-cy="waive-review-panel"
+                >
+                  <p className={sectionLabelClass}>
+                    Kandidatkontroll ikke fullført
+                  </p>
+                  <label
+                    className="flex cursor-pointer items-start gap-2 text-ui text-amber-950"
+                    data-cy="waive-review-label"
+                  >
+                    <input
+                      type="checkbox"
+                      checked={waiveReview}
+                      onChange={(event) =>
+                        setWaiveReview(event.target.checked)
+                      }
+                      data-cy="waive-review"
+                      className="mt-0.5 h-4 w-4 flex-none rounded border-border-muted text-primary focus:ring-primary"
+                    />
+                    <span>
+                      Publiser uten kontrollen til{" "}
+                      {readiness.missingReviewerNames.length > 0
+                        ? readiness.missingReviewerNames.join(", ")
+                        : `${readiness.incompleteReviewerCount} intervjuere`}
+                    </span>
+                  </label>
+                  <p className="m-0 mt-3 text-detail leading-relaxed text-amber-900">
+                    Beslutningen loggføres på deg og vises på den publiserte
+                    planen, slik at komiteen ser hvilke paringer som gikk ut
+                    uten at noen sjekket for inhabilitet.
+                  </p>
+                </aside>
+              ) : null}
+
               {sortedDates.length > 1 && (
                 <aside className="rounded-xl bg-surface-subtle p-4">
                   <p className={sectionLabelClass}>Publiseringsomfang</p>
@@ -391,6 +479,17 @@ const PublicationGate = ({
               )}
             </div>
             <div className="flex flex-wrap items-center justify-end gap-2">
+              {onOpenConflictsOverview && (
+                <button
+                  type="button"
+                  onClick={onOpenConflictsOverview}
+                  data-cy="open-conflicts-overview"
+                  className={cn(actionButtonBase, actionButtonNeutral)}
+                >
+                  <Users size={iconSizes.small} aria-hidden="true" />
+                  Inhabiliteter
+                </button>
+              )}
               {publishable ? (
                 <>
                   <button
@@ -414,7 +513,13 @@ const PublicationGate = ({
                         ? `Publiser til og med ${formatAccessibleDate(selectedThroughDate)}`
                         : deferUnplaced && unplacedCount > 0
                           ? `Publiser delplan (${unplacedCount} senere)`
-                          : "Publiser intervjuplan"}
+                          : waiveReview && !readiness.reviewResolved
+                            ? `Publiser uten kontrollen til ${
+                                readiness.missingReviewerNames.length > 0
+                                  ? readiness.missingReviewerNames.join(", ")
+                                  : `${readiness.incompleteReviewerCount} intervjuere`
+                              }`
+                            : "Publiser intervjuplan"}
                   </button>
                 </>
               ) : stage.primaryAction ? (
@@ -454,7 +559,13 @@ const PublicationGate = ({
               ? "Publiserer…"
               : publishScope === "partial"
                 ? `Publiser til og med ${formatAccessibleDate(selectedThroughDate)}`
-                : "Publiser intervjuplan"
+                : waiveReview && !readiness.reviewResolved
+                  ? `Publiser uten kontrollen til ${
+                      readiness.missingReviewerNames.length > 0
+                        ? readiness.missingReviewerNames.join(", ")
+                        : `${readiness.incompleteReviewerCount} intervjuere`
+                    }`
+                  : "Publiser intervjuplan"
           }
           onConfirm={confirmPublish}
           onClose={() => setConfirmOpen(false)}

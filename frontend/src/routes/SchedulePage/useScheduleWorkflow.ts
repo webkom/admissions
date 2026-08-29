@@ -176,9 +176,7 @@ export const useScheduleWorkflow = ({
       for (const member of assignment.panel) {
         if (
           member.id &&
-          conflictsByInterviewer
-            .get(member.id)
-            ?.has(assignment.candidate_id)
+          conflictsByInterviewer.get(member.id)?.has(assignment.candidate_id)
         ) {
           const interviewer = membersById.get(member.id);
           conflicts.push({
@@ -186,7 +184,10 @@ export const useScheduleWorkflow = ({
             candidate_name: assignment.candidate ?? assignment.candidate_id,
             interviewer_id: member.id,
             interviewer_name:
-              member.name ?? interviewer?.full_name ?? interviewer?.username ?? member.id,
+              member.name ??
+              interviewer?.full_name ??
+              interviewer?.username ??
+              member.id,
           });
         }
       }
