@@ -1296,14 +1296,6 @@ def _build_model(
     ]
     if problem.options.repair_mode and previous_by_candidate:
         tiers.append(ObjectiveTier("repair_cost", repair_cost, maximum_repair_cost))
-    elif problem.policy.prefers_stable_panel:
-        tiers.append(
-            ObjectiveTier(
-                "panel_stability",
-                panel_stability_cost,
-                len(panel_break_vars),
-            )
-        )
     # With joint interviews the solver packs two candidates into one shared
     # panel whenever it can: fewer sessions means the panel does one joint
     # interview instead of two separate ones. Skipped in repair mode so a
@@ -1361,6 +1353,18 @@ def _build_model(
                     )
                 ]
                 if problem.options.require_experienced_panel
+                else []
+            ),
+            *(
+                [
+                    ObjectiveTier(
+                        "panel_stability",
+                        panel_stability_cost,
+                        len(panel_break_vars),
+                    )
+                ]
+                if problem.policy.prefers_stable_panel
+                and not (problem.options.repair_mode and previous_by_candidate)
                 else []
             ),
         ]

@@ -1572,7 +1572,7 @@ class DeleteGroupApplicationsTestCase(APITestCase):
             admission=self.admission,
             phone_number="12345678",
         )
-        webkom_application = GroupApplication.objects.create(
+        GroupApplication.objects.create(
             application=application,
             group=self.webkom,
             text="private Webkom application",

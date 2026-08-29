@@ -1951,7 +1951,7 @@ class InterviewAvailabilityHardeningTestCase(APITestCase):
         self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertIn("slots", res.data)
 
-    def test_unknown_conflict_id_is_dropped_not_rejected(self):
+    def test_phantom_conflict_id_is_dropped_not_rejected(self):
         """Submitting a conflicts list with a phantom id (e.g. a stale
         snapshot) is treated as a best-effort drop, not a client error.
         The persistence path prunes unknown ids from the saved set, so

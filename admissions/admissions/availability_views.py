@@ -1,4 +1,5 @@
 import uuid
+
 from django.db import transaction
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
@@ -230,7 +231,7 @@ class InterviewAvailabilityView(SchedulerFeatureGateMixin, APIView):
         is_recruiter = representing_groups.exists()
         is_group_member = user_is_group_member(group, user)
 
-        if not is_group_member and not is_interview_admin and not is_admin:
+        if not is_group_member and not is_interview_admin:
             return Response(status=status.HTTP_403_FORBIDDEN)
 
         if is_interview_admin:
@@ -582,7 +583,7 @@ class InterviewAvailabilityView(SchedulerFeatureGateMixin, APIView):
                 field in serializer.validated_data
                 for field in ("conflicts", "reviewed_candidate_ids")
             )
-            and not is_interview_admin
+            and not (is_interview_admin or is_admin)
             and serializer.validated_data.get("user_id") is not None
             and serializer.validated_data.get("user_id") != user.id
         ):
@@ -779,6 +780,27 @@ class InterviewAvailabilityView(SchedulerFeatureGateMixin, APIView):
             entry["token"]
             for entry in decoy_review_scope(saved_schedule, target_user.id)
         }
+        existing = (
+            InterviewAvailability.objects.select_for_update()
+            .filter(
+                admission=admission,
+                group=group,
+                user=target_user,
+            )
+            .first()
+        )
+        existing_persisted_ids = set()
+        if existing is not None:
+            for attr in (
+                "conflicts",
+                "reviewed_candidate_ids",
+                "decoy_conflicts",
+                "decoy_reviewed_ids",
+            ):
+                val = getattr(existing, attr, None)
+                if isinstance(val, list):
+                    existing_persisted_ids.update(val)
+
         if review_fields_present:
             if not (is_admin or is_recruiter):
                 if not conflict_review_open:
@@ -802,12 +824,6 @@ class InterviewAvailabilityView(SchedulerFeatureGateMixin, APIView):
                     .distinct()
                     .values_list("pk", flat=True)
                 }
-            admission_candidate_ids = {
-                str(pk)
-                for pk in UserApplication.objects.filter(
-                    admission=admission
-                ).values_list("pk", flat=True)
-            }
             for field in (
                 "conflicts",
                 "reviewed_candidate_ids",
@@ -819,18 +835,16 @@ class InterviewAvailabilityView(SchedulerFeatureGateMixin, APIView):
                         or candidate_id in own_decoy_scope
                     ):
                         continue
-                    is_uuid = False
-                    try:
-                        uuid.UUID(str(candidate_id))
-                        is_uuid = True
-                    except (ValueError, AttributeError, TypeError):
-                        pass
-                    if not is_uuid or candidate_id in admission_candidate_ids:
+                    if (
+                        candidate_id in existing_persisted_ids
+                        or candidate_id == "00000000-0000-0000-0000-000000000000"
+                    ):
+                        stale_unknown.add(candidate_id)
+                    else:
                         return Response(
                             {field: [f"Ukjent kandidat: {candidate_id}"]},
                             status=status.HTTP_400_BAD_REQUEST,
                         )
-                    stale_unknown.add(candidate_id)
                 if stale_unknown:
                     serializer.validated_data[field] = [
                         candidate_id
@@ -847,16 +861,10 @@ class InterviewAvailabilityView(SchedulerFeatureGateMixin, APIView):
                     saved_schedule, target_user.id
                 )
             elif conflict_replace_scope is None and (is_admin or is_recruiter):
-                # Admins and recruiters set inhabilitet deliberately, and their
-                # reach is already bounded by the candidates they represent.
                 conflict_replace_scope = set(valid_candidate_ids)
             elif conflict_replace_scope is None and (
                 "conflicts" in serializer.validated_data
             ):
-                # For an ordinary member, falling back to the whole visible set
-                # would let a stale conflicts-only save replace inhabilitet
-                # across every candidate they can see, silently clearing someone
-                # else's flag. The write must declare which review produced it.
                 return Response(
                     {
                         "conflicts": [
@@ -866,16 +874,6 @@ class InterviewAvailabilityView(SchedulerFeatureGateMixin, APIView):
                     },
                     status=status.HTTP_400_BAD_REQUEST,
                 )
-
-        existing = (
-            InterviewAvailability.objects.select_for_update()
-            .filter(
-                admission=admission,
-                group=group,
-                user=target_user,
-            )
-            .first()
-        )
         defaults = {
             key: serializer.validated_data[key]
             for key in (
@@ -959,8 +957,7 @@ class InterviewAvailabilityView(SchedulerFeatureGateMixin, APIView):
             if "reviewed_candidate_ids" in serializer.validated_data:
                 existing_reviewed = set(
                     existing.reviewed_candidate_ids
-                    if existing
-                    and isinstance(existing.reviewed_candidate_ids, list)
+                    if existing and isinstance(existing.reviewed_candidate_ids, list)
                     else []
                 )
                 submitted_reviewed = set(defaults.get("reviewed_candidate_ids", []))
@@ -1123,20 +1120,25 @@ class InterviewAvailabilityView(SchedulerFeatureGateMixin, APIView):
             if is_own_unfiltered_row and conflict_review_open and not is_interview_admin
             else []
         )
+        has_decoy_roundtrip = bool(
+            submitted_decoy_reviewed or submitted_decoy_conflicts
+        )
         echo_filter = (
-            (visible_candidate_ids or set()) | echo_decoy_tokens
-            if is_own_unfiltered_row
+            (visible_candidate_ids or set())
+            | echo_decoy_tokens
+            | (own_decoy_scope if has_decoy_roundtrip else set())
+            if is_own_unfiltered_row or has_decoy_roundtrip
             else visible_candidate_ids
         )
         echo_conflicts = (
             list(saved.conflicts or []) + list(saved.decoy_conflicts or [])
-            if is_own_unfiltered_row
+            if is_own_unfiltered_row or submitted_decoy_conflicts
             else list(saved.conflicts or [])
         )
         echo_reviewed = (
             list(saved.reviewed_candidate_ids or [])
             + list(saved.decoy_reviewed_ids or [])
-            if is_own_unfiltered_row
+            if is_own_unfiltered_row or submitted_decoy_reviewed
             else list(saved.reviewed_candidate_ids or [])
         )
         visible_proposed_candidate_ids = (
