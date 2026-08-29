@@ -22,6 +22,18 @@ MIGRATION_0026 = ("admissions", "0026_savedschedule_manual_blocks")
 MIGRATION_0027 = ("admissions", "0027_versioned_schedule_layout")
 MIGRATION_0028 = ("admissions", "0028_schedule_policy_approval")
 MIGRATION_0029 = ("admissions", "0029_scheduler_proposals_and_participation")
+MIGRATION_0050 = (
+    "admissions",
+    "0050_savedschedule_published_without_review_by_and_more",
+)
+MIGRATION_0051 = ("admissions", "0051_interview_status_per_committee")
+
+
+def create_lego_user(apps, slug, lego_id):
+    LegoUser = apps.get_model("admissions", "LegoUser")
+    return LegoUser.objects.create(
+        username=f"{slug}-migr", lego_id=lego_id, password=""
+    )
 
 
 def create_admission(apps, *, slug, lego_id):
@@ -276,6 +288,103 @@ class InterviewStatusMigrationTestCase(MigrationTestCase):
         application = UserApplication.objects.get(pk=self.application_id)
         self.assertEqual(application.interview_status, "not_invited")
         self.assertIsNotNone(application.interview_status_updated_at)
+
+
+class InterviewStatusPerCommitteeMigrationTestCase(MigrationTestCase):
+    migrate_from = MIGRATION_0050
+    migrate_to = MIGRATION_0051
+
+    def set_up_before_migration(self, apps):
+        UserApplication = apps.get_model("admissions", "UserApplication")
+        GroupApplication = apps.get_model("admissions", "GroupApplication")
+        Group = apps.get_model("admissions", "Group")
+        InterviewStatusAuditEvent = apps.get_model(
+            "admissions", "InterviewStatusAuditEvent"
+        )
+        user, admission = create_admission(
+            apps, slug="interview-status-per-committee", lego_id=91020
+        )
+        webkom = Group.objects.create(name="Webkom", lego_id=91021)
+        arrkom = Group.objects.create(name="Arrkom", lego_id=91022)
+
+        application = UserApplication.objects.create(
+            user=user,
+            admission=admission,
+            phone_number="00000000",
+            interview_status="confirmed",
+            interview_status_updated_by=user,
+            interview_status_updated_by_username=user.username,
+        )
+        self.webkom_ga = GroupApplication.objects.create(
+            application=application, group=webkom
+        ).pk
+        self.arrkom_ga = GroupApplication.objects.create(
+            application=application, group=arrkom
+        ).pk
+        # A change that happened under the old shared model - it must fan out
+        # to a per-committee event for BOTH committees the applicant applied
+        # to (this is the row shape that broke the first prod deploy).
+        InterviewStatusAuditEvent.objects.create(
+            application=application,
+            actor=user,
+            actor_username=user.username,
+            previous_status="not_invited",
+            new_status="confirmed",
+        )
+        # A single-committee applicant, plus an applicant with no committees.
+        solo = UserApplication.objects.create(
+            user=create_lego_user(apps, "solo", 91023),
+            admission=admission,
+            phone_number="00000000",
+        )
+        GroupApplication.objects.create(application=solo, group=webkom)
+        InterviewStatusAuditEvent.objects.create(
+            application=solo,
+            actor=user,
+            actor_username=user.username,
+            previous_status="not_invited",
+            new_status="invited",
+        )
+        orphan = UserApplication.objects.create(
+            user=create_lego_user(apps, "orphan", 91024),
+            admission=admission,
+            phone_number="00000000",
+        )
+        InterviewStatusAuditEvent.objects.create(
+            application=orphan,
+            actor=user,
+            actor_username=user.username,
+            previous_status="not_invited",
+            new_status="declined",
+        )
+
+    def test_status_and_audit_events_move_to_group_applications(self):
+        GroupApplication = self.apps.get_model("admissions", "GroupApplication")
+        InterviewStatusAuditEvent = self.apps.get_model(
+            "admissions", "InterviewStatusAuditEvent"
+        )
+
+        webkom_ga = GroupApplication.objects.get(pk=self.webkom_ga)
+        arrkom_ga = GroupApplication.objects.get(pk=self.arrkom_ga)
+        # Both committees inherit the previously-shared status.
+        self.assertEqual(webkom_ga.interview_status, "confirmed")
+        self.assertEqual(arrkom_ga.interview_status, "confirmed")
+
+        # The multi-committee event fanned out to one event per committee.
+        self.assertEqual(
+            InterviewStatusAuditEvent.objects.filter(
+                group_application=webkom_ga
+            ).count(),
+            1,
+        )
+        self.assertEqual(
+            InterviewStatusAuditEvent.objects.filter(
+                group_application=arrkom_ga
+            ).count(),
+            1,
+        )
+        # Orphan event (applicant with no committees) is dropped; solo keeps one.
+        self.assertEqual(InterviewStatusAuditEvent.objects.count(), 3)
 
 
 class AbsoluteScheduleMinutesMigrationTestCase(MigrationTestCase):
