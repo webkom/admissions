@@ -39,6 +39,7 @@ interface PublicationGateProps {
     visibility: NameVisibility,
     deviationApprovalFingerprint?: string,
     distributedThrough?: string,
+    deferUnplacedCandidates?: boolean,
   ) => Promise<boolean>;
 }
 
@@ -109,6 +110,25 @@ const PublicationGate = ({
     setPublishVisibility(savedSchedule?.name_visibility ?? "hidden");
   }, [savedSchedule?.name_visibility]);
 
+  const unplacedCount = Math.max(
+    0,
+    readiness.candidateCount - readiness.scheduledCandidateCount,
+  );
+  const [deferUnplaced, setDeferUnplaced] = useState(false);
+  // Strict readiness demands every candidate placed. A delplan - an
+  // acknowledged partial plan under progressive publishing - may publish
+  // with candidates waiting for days that open later.
+  const unplacedResolved =
+    readiness.allCandidatesScheduled || (unplacedCount > 0 && deferUnplaced);
+  const publishable =
+    readiness.ready ||
+    (unplacedResolved &&
+      readiness.draftSaved &&
+      readiness.draftPersistenceReady &&
+      readiness.candidateScopeResolved &&
+      readiness.reviewResolved &&
+      readiness.proposalConflictCount === 0);
+
   const blocker = useMemo(() => {
     if (!readiness.draftSaved) return "Et lagret planutkast mangler.";
     if (!readiness.draftPersistenceReady) {
@@ -117,15 +137,10 @@ const PublicationGate = ({
     if (!readiness.candidateScopeResolved) {
       return "Kandidatlisten er ikke ferdig lastet.";
     }
-    if (!readiness.allCandidatesScheduled) {
-      return `${Math.max(
-        0,
-        readiness.candidateCount - readiness.scheduledCandidateCount,
-      )} kandidat${
-        readiness.candidateCount - readiness.scheduledCandidateCount === 1
-          ? ""
-          : "er"
-      } mangler intervju.`;
+    if (!unplacedResolved) {
+      return `${unplacedCount} kandidat${
+        unplacedCount === 1 ? "" : "er"
+      } mangler intervju. Planlegg neste dag, eller bekreft at de planlegges senere.`;
     }
     if (readiness.proposalConflictCount > 0) {
       return `${readiness.proposalConflictCount} intervju${
@@ -138,7 +153,7 @@ const PublicationGate = ({
       } gjenstår.`;
     }
     return "";
-  }, [readiness]);
+  }, [readiness, unplacedCount, unplacedResolved]);
 
   const confirmPublish = async () => {
     const published = await onPublish(
@@ -147,6 +162,7 @@ const PublicationGate = ({
         ? deviationReview.deviation_fingerprint
         : undefined,
       publishScope === "partial" ? selectedThroughDate : undefined,
+      deferUnplaced && unplacedCount > 0,
     );
     if (published) setConfirmOpen(false);
   };
@@ -204,12 +220,14 @@ const PublicationGate = ({
                   }
                 />
                 <ReadinessRow
-                  complete={readiness.allCandidatesScheduled}
+                  complete={unplacedResolved}
                   title="Alle kandidater har et intervju"
                   description={
-                    readiness.candidateScopeResolved
-                      ? `${readiness.scheduledCandidateCount} av ${readiness.candidateCount} kandidater er plassert.`
-                      : "Venter på at kandidatlisten skal bli ferdig lastet."
+                    !readiness.candidateScopeResolved
+                      ? "Venter på at kandidatlisten skal bli ferdig lastet."
+                      : deferUnplaced && unplacedCount > 0
+                        ? `${readiness.scheduledCandidateCount} av ${readiness.candidateCount} kandidater er plassert. De siste ${unplacedCount} planlegges senere (bekreftet).`
+                        : `${readiness.scheduledCandidateCount} av ${readiness.candidateCount} kandidater er plassert.`
                   }
                 />
                 <ReadinessRow
@@ -267,6 +285,35 @@ const PublicationGate = ({
                       : "Alle med tilgang til intervjuplanen kan se kandidatnavnene."}
                 </p>
               </aside>
+
+              {unplacedCount > 0 && (
+                <aside className="rounded-xl bg-surface-subtle p-4">
+                  <p className={sectionLabelClass}>Resterende kandidater</p>
+                  <label
+                    className="flex cursor-pointer items-start gap-2 text-ui text-text-primary"
+                    data-cy="defer-unplaced-candidates-label"
+                  >
+                    <input
+                      type="checkbox"
+                      checked={deferUnplaced}
+                      onChange={(event) =>
+                        setDeferUnplaced(event.target.checked)
+                      }
+                      data-cy="defer-unplaced-candidates"
+                      className="mt-0.5 h-4 w-4 flex-none rounded border-border-muted text-primary focus:ring-primary"
+                    />
+                    <span>
+                      {unplacedCount} kandidat{unplacedCount === 1 ? "" : "er"}{" "}
+                      venter på plassering — de planlegges når flere dager åpnes
+                    </span>
+                  </label>
+                  <p className="m-0 mt-3 text-detail leading-relaxed text-text-muted">
+                    Delplanen publiseres uten dem. Bekreftelsen gjelder denne
+                    publiseringen; senere dager planlegges rundt det som alt er
+                    publisert, og utkastet viser fortsatt hvem som venter.
+                  </p>
+                </aside>
+              )}
 
               {sortedDates.length > 1 && (
                 <aside className="rounded-xl bg-surface-subtle p-4">
@@ -335,7 +382,7 @@ const PublicationGate = ({
               )}
             </div>
             <div className="flex flex-wrap items-center justify-end gap-2">
-              {readiness.ready ? (
+              {publishable ? (
                 <>
                   <button
                     type="button"
@@ -356,7 +403,9 @@ const PublicationGate = ({
                       ? "Publiserer…"
                       : publishScope === "partial"
                         ? `Publiser til og med ${formatAccessibleDate(selectedThroughDate)}`
-                        : "Publiser intervjuplan"}
+                        : deferUnplaced && unplacedCount > 0
+                          ? `Publiser delplan (${unplacedCount} senere)`
+                          : "Publiser intervjuplan"}
                   </button>
                 </>
               ) : stage.primaryAction ? (

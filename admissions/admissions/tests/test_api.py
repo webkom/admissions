@@ -1303,3 +1303,51 @@ class InterviewCandidatesViewTestCase(APITestCase):
             res.data,
             [{"id": str(self.application.pk), "name": "Ada Lovelace"}],
         )
+
+
+class LogoutSecurityTestCase(APITestCase):
+    def setUp(self):
+        self.user = LegoUser.objects.create(username="logout_user", lego_id=9876)
+        self.client.force_login(user=self.user)
+        self.logout_url = reverse("logout")
+
+    def test_same_origin_get_logout_terminates_session(self):
+        res = self.client.get(
+            self.logout_url,
+            HTTP_SEC_FETCH_SITE="same-origin",
+        )
+        self.assertEqual(res.status_code, status.HTTP_302_FOUND)
+        self.assertEqual(res["Location"], "/")
+        # Session is cleared
+        self.assertNotIn("_auth_user_id", self.client.session)
+
+    def test_cross_site_get_logout_is_ignored(self):
+        res = self.client.get(
+            self.logout_url,
+            HTTP_SEC_FETCH_SITE="cross-site",
+        )
+        self.assertEqual(res.status_code, status.HTTP_302_FOUND)
+        self.assertEqual(res["Location"], "/")
+        # User remains logged in
+        self.assertEqual(
+            str(self.client.session.get("_auth_user_id")),
+            str(self.user.pk),
+        )
+
+    def test_cross_origin_referer_get_logout_is_ignored(self):
+        res = self.client.get(
+            self.logout_url,
+            HTTP_REFERER="https://attacker.evil.com/evil-page/",
+        )
+        self.assertEqual(res.status_code, status.HTTP_302_FOUND)
+        # User remains logged in
+        self.assertEqual(
+            str(self.client.session.get("_auth_user_id")),
+            str(self.user.pk),
+        )
+
+    def test_post_logout_terminates_session(self):
+        res = self.client.post(self.logout_url)
+        self.assertEqual(res.status_code, status.HTTP_302_FOUND)
+        self.assertEqual(res["Location"], "/")
+        self.assertNotIn("_auth_user_id", self.client.session)

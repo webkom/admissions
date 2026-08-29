@@ -107,11 +107,21 @@ class SaveScheduleInputSerializer(serializers.Serializer):
     )
     is_distributed = serializers.BooleanField(required=False)
     distributed_through = serializers.DateField(required=False, allow_null=True)
+    # Explicit acknowledgment that candidates without an interview are
+    # planned for later (rolling admissions / progressive publishing). The
+    # publish is otherwise refused while active candidates are unscheduled
+    # and no enabled days remain beyond the boundary. No default: the field
+    # must be absent from payloads that do not carry it, or every
+    # visibility-only edit would count as a mutable field.
+    defer_unplaced_candidates = serializers.BooleanField(
+        required=False, write_only=True
+    )
     conflict_review_open = serializers.BooleanField(required=False)
     name_visibility = serializers.ChoiceField(
         choices=["hidden", "admin_only", "committee"],
         required=False,
     )
+    outreach_templates = serializers.JSONField(required=False)
     expected_updated_at = serializers.DateTimeField(required=True, allow_null=True)
 
     def validate_enabled_windows(self, windows):
@@ -426,6 +436,7 @@ class SavedScheduleSerializer(serializers.ModelSerializer):
             "distributed_through",
             "conflict_review_open",
             "name_visibility",
+            "outreach_templates",
             "updated_at",
         ]
         read_only_fields = ["id", "updated_at"]

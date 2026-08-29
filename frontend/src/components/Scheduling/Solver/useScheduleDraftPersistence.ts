@@ -27,6 +27,7 @@ export interface DraftPersistenceStatus {
   isSaving: boolean;
   hasConflict: boolean;
   isSaved: boolean;
+  saveNow?: () => Promise<boolean>;
 }
 
 interface DraftPersistenceConfig {
@@ -117,6 +118,13 @@ export const useScheduleDraftPersistence = ({
   const [state, setState] = useState<DraftSaveState>(
     savedSchedule?.schedule.length ? "saved" : "idle",
   );
+  // Mirror of `state` for callbacks that branch on the latest value without
+  // re-rendering (the auto-save queue runs inside effects and timers).
+  const stateRef = useRef<DraftSaveState>(state);
+  const updateState = useCallback((next: DraftSaveState) => {
+    stateRef.current = next;
+    setState(next);
+  }, []);
   const [error, setError] = useState("");
   const pendingRef = useRef<PendingDraft | null>(null);
   const failedRef = useRef<PendingDraft | null>(null);
@@ -147,10 +155,10 @@ export const useScheduleDraftPersistence = ({
 
   useEffect(() => {
     if (!hasLocalDraft && savedSchedule?.schedule.length) {
-      setState("saved");
+      updateState("saved");
       setError("");
     }
-  }, [hasLocalDraft, savedSchedule?.schedule.length]);
+  }, [hasLocalDraft, savedSchedule?.schedule.length, updateState]);
 
   const savePendingDrafts = useCallback(async () => {
     if (inFlightRef.current) return;
@@ -160,7 +168,7 @@ export const useScheduleDraftPersistence = ({
       const pending = pendingRef.current;
       pendingRef.current = null;
       inFlightFingerprintRef.current = pending.fingerprint;
-      setState("saving");
+      updateState("saving");
       setError("");
 
       try {
@@ -181,14 +189,14 @@ export const useScheduleDraftPersistence = ({
             saved.updated_at,
             touchedIndexesRef.current?.() ?? [],
           );
-          setState("saved");
+          updateState("saved");
         }
       } catch (saveError) {
         if (isSensitiveAuthorityChangedError(saveError)) {
           pendingRef.current = null;
           failedRef.current = null;
           writeUncertainRef.current = false;
-          setState("idle");
+          updateState("idle");
           setError("");
           inFlightFingerprintRef.current = null;
           break;
@@ -198,12 +206,12 @@ export const useScheduleDraftPersistence = ({
         failedRef.current = latestPending;
         if (isConflictError(saveError)) {
           writeUncertainRef.current = false;
-          setState("conflict");
+          updateState("conflict");
           setError(CONFLICT_MESSAGE);
           onConflictRef.current();
         } else {
           writeUncertainRef.current = true;
-          setState("error");
+          updateState("error");
           setError(
             scheduleSaveErrorMessage(
               saveError,
@@ -218,7 +226,7 @@ export const useScheduleDraftPersistence = ({
     }
 
     inFlightRef.current = false;
-  }, []);
+  }, [updateState]);
 
   const schedule = hasSchedule(result?.status) ? result.schedule : [];
   const fingerprint = JSON.stringify({
@@ -254,7 +262,7 @@ export const useScheduleDraftPersistence = ({
         timerRef.current = null;
       }
       if (state !== "error" || error !== SIMULATED_PLAN_SAVE_BLOCKED) {
-        setState("error");
+        updateState("error");
         setError(SIMULATED_PLAN_SAVE_BLOCKED);
       }
       return;
@@ -270,6 +278,18 @@ export const useScheduleDraftPersistence = ({
       if (timerRef.current) {
         clearTimeout(timerRef.current);
         timerRef.current = null;
+      }
+      // The queue-time "saving" state below is optimistic: the debounced
+      // request has not started yet. If the draft became unpersistable in
+      // that window, dropping the pending draft used to leave "saving"
+      // pointing at nothing - no request in flight, nothing queued - so
+      // `isSaving` stayed true forever and every further action deadlocked
+      // behind "Vent til endringene i utkastet er lagret" with no retry.
+      // Fall back to "idle" so the queueing effect re-runs (and re-saves)
+      // once the unavailable condition clears.
+      if (!inFlightRef.current && stateRef.current === "saving") {
+        updateState("idle");
+        setError("");
       }
       return;
     }
@@ -294,7 +314,7 @@ export const useScheduleDraftPersistence = ({
         clearTimeout(timerRef.current);
         timerRef.current = null;
       }
-      setState("saved");
+      updateState("saved");
       setError("");
       // Already persisted and unchanged: report the revision without touch
       // information, so the view does not replay a row highlight for a save
@@ -326,19 +346,26 @@ export const useScheduleDraftPersistence = ({
       },
     };
     failedRef.current = null;
-    setState("saving");
-    setError("");
 
-    if (timerRef.current) clearTimeout(timerRef.current);
+    if (timerRef.current) {
+      clearTimeout(timerRef.current);
+      timerRef.current = null;
+    }
     const generatedNow = lastScheduledSolveTickRef.current !== solveTick;
     lastScheduledSolveTickRef.current = solveTick;
-    timerRef.current = setTimeout(
-      () => {
+
+    if (generatedNow) {
+      updateState("saving");
+      setError("");
+      timerRef.current = setTimeout(() => {
         timerRef.current = null;
         void savePendingDrafts();
-      },
-      generatedNow ? 0 : 400,
-    );
+      }, 0);
+    } else {
+      // User manual edits: do NOT auto-save. Keep draft locally and wait for manual save via saveNow().
+      updateState("idle");
+      setError("");
+    }
   }, [
     config,
     fingerprint,
@@ -350,6 +377,7 @@ export const useScheduleDraftPersistence = ({
     schedule,
     solveTick,
     syntheticInput,
+    updateState,
   ]);
 
   useEffect(
@@ -361,11 +389,44 @@ export const useScheduleDraftPersistence = ({
   );
 
   const retry = () => {
-    if (!failedRef.current || state === "conflict") return;
+    if (!failedRef.current || stateRef.current === "conflict") return;
     pendingRef.current = failedRef.current;
     failedRef.current = null;
     void savePendingDrafts();
   };
+
+  /** Drop all local-draft save bookkeeping and re-sync with the schedule
+   *  currently on the server. Used by the regeneration panel's "Last inn
+   *  siste versjon" action: the session hook discards the local result and
+   *  reveals the remote schedule, and this clears the conflict/failed state
+   *  that otherwise deadlocked the panel. The remote revision flows back
+   *  via draftBaseRevision → revisionRef, so any later save sends the
+   *  correct expected_updated_at. */
+  const adoptRemote = useCallback(() => {
+    if (inFlightRef.current) return;
+    pendingRef.current = null;
+    failedRef.current = null;
+    writeUncertainRef.current = false;
+    if (timerRef.current) {
+      clearTimeout(timerRef.current);
+      timerRef.current = null;
+    }
+    inFlightFingerprintRef.current = null;
+    setError("");
+    updateState(savedSchedule?.schedule.length ? "saved" : "idle");
+  }, [savedSchedule?.schedule.length, updateState]);
+
+  const saveNow = useCallback(async () => {
+    if (inFlightRef.current) return false;
+    if (timerRef.current) {
+      clearTimeout(timerRef.current);
+      timerRef.current = null;
+    }
+    updateState("saving");
+    setError("");
+    await savePendingDrafts();
+    return true;
+  }, [savePendingDrafts, updateState]);
 
   const status: DraftPersistenceStatus = {
     state,
@@ -376,9 +437,10 @@ export const useScheduleDraftPersistence = ({
     isSaved:
       state === "saved" ||
       (!hasLocalDraft && Boolean(savedSchedule?.schedule.length)),
+    saveNow,
   };
 
-  return { ...status, retry };
+  return { ...status, retry, adoptRemote, saveNow };
 };
 
 export type ScheduleDraftPersistence = ReturnType<

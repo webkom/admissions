@@ -14,12 +14,7 @@ from admissions.admissions.admission_access import (
     user_is_interview_admin,
 )
 from admissions.admissions.authentication import SessionAuthentication
-from admissions.admissions.models import (
-    Admission,
-    InterviewAvailability,
-    LegoUser,
-    SavedSchedule,
-)
+from admissions.admissions.models import Admission, InterviewAvailability, SavedSchedule
 from admissions.admissions.schedule_workflow import (
     ScheduleInputError,
     ScheduleNotFound,
@@ -60,7 +55,6 @@ class SavedScheduleView(SchedulerFeatureGateMixin, APIView):
         group = get_object_or_404(admission.groups, pk=group_id)
 
         user = request.user
-        user.__class__ = LegoUser
 
         is_admin = user_is_admission_admin(admission, user)
         # Scoped to the URL's own group, like availability_views and

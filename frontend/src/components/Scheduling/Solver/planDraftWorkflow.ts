@@ -1,9 +1,25 @@
+// One-way scheduling flow — design decisions (see
+// ~/.commandcode/plans/scheduling-flow.md for the full reasoning):
+// D1 Adaptive day scope with hard-target semantics: the solver fills whole
+//    days in order over the requested day_scope_through window and reports
+//    filled_day_count; "Planlegg neste dag" is the only extend action.
+// D2 Locked rows are strict by default; the rebalance_locked option demotes
+//    draft locks to soft preferences server-side. Published days never move.
+// D3 The plan re-solves automatically when the last inhabilitet review
+//    completes, detected by polling the availability roster (the deciding
+//    review arrives in another person's browser).
+// D4 filled_day_count is the only added response field.
+// D5 This derivation is the single plan-draft state machine; the separate
+//    missing-placements screen and its dismissal flag were removed.
+
 type PlanDraftWorkflowKind =
   | "published"
+  | "pending_proposal"
   | "saving"
   | "save_conflict"
   | "save_error"
   | "solver_error"
+  | "generating"
   | "placements_missing"
   | "candidate_check_pending"
   | "waiting_for_reviews"
@@ -19,11 +35,17 @@ interface PlanDraftWorkflowState {
 
 interface PlanDraftWorkflowParams {
   isPublished?: boolean;
+  hasPendingProposal?: boolean;
+  loading?: boolean;
   saveState: "idle" | "saving" | "saved" | "error" | "conflict";
   hasSaveConflict: boolean;
   saveError: string;
   solverError: string;
   unplaceableCount: number;
+  /** Filled days reported by the latest solve, when available. */
+  filledDayCount?: number;
+  /** Whether another framework day can be pulled into the scope. */
+  extendDayAvailable?: boolean;
   currentReviewRequired: boolean;
   currentReviewComplete: boolean;
   completeReviewerCount: number;
@@ -42,11 +64,15 @@ const conflictLabel = (count: number) =>
 
 export const derivePlanDraftWorkflowState = ({
   isPublished = false,
+  hasPendingProposal = false,
+  loading = false,
   saveState,
   hasSaveConflict,
   saveError,
   solverError,
   unplaceableCount,
+  filledDayCount,
+  extendDayAvailable = false,
   currentReviewRequired,
   currentReviewComplete,
   completeReviewerCount,
@@ -97,13 +123,22 @@ export const derivePlanDraftWorkflowState = ({
       description: `${solverError} Det lagrede utkastet er beholdt.`,
     };
   }
-  if (unplaceableCount > 0) {
+  if (hasPendingProposal) {
     return {
-      kind: "placements_missing",
-      tone: "warning",
-      title: `Delplan klar — ${candidateLabel(unplaceableCount)} mangler intervju`,
+      kind: "pending_proposal",
+      tone: "neutral",
+      title: "Velg hvilket utkast du vil beholde",
       description:
-        "Aktiver flere dager for å plassere resten, eller juster planutkastet for hånd.",
+        "Det nye forslaget er klart, og det gjeldende utkastet er fortsatt urørt.",
+    };
+  }
+  if (loading) {
+    return {
+      kind: "generating",
+      tone: "neutral",
+      title: "Lager planutkast",
+      description:
+        "Planleggingen pågår. Neste handling blir tilgjengelig når forslaget er klart.",
     };
   }
   if (currentReviewRequired && !currentReviewComplete) {
@@ -122,8 +157,12 @@ export const derivePlanDraftWorkflowState = ({
       title: `Inhabilitetssjekk, ${completeReviewerCount} av ${requiredReviewerCount} har svart`,
       description:
         missingReviewerNames.length > 0
-          ? `Venter på ${missingReviewerNames.join(", ")}.`
-          : `Venter på ${pendingReviewerCount} bekreftelse${pendingReviewerCount === 1 ? "" : "r"}.`,
+          ? `Venter på ${missingReviewerNames.join(
+              ", ",
+            )}. Planen lages på nytt automatisk når alle har svart.`
+          : `Venter på ${pendingReviewerCount} bekreftelse${
+              pendingReviewerCount === 1 ? "" : "r"
+            }. Planen lages på nytt automatisk når alle har svart.`,
     };
   }
   if (requiredReviewerCount === 0) {
@@ -142,6 +181,25 @@ export const derivePlanDraftWorkflowState = ({
       title: `${conflictLabel(assignmentConflictCount)} må løses`,
       description:
         "Alle har svart. Oppdater tildelingene før planen kan publiseres.",
+    };
+  }
+  if (unplaceableCount > 0) {
+    // A delplan is a legitimate state, not a blocker: under progressive
+    // publishing the remaining candidates are planned when more days open,
+    // and the partial plan can be published as it is.
+    const filledPrefix =
+      typeof filledDayCount === "number" && filledDayCount > 0
+        ? `${filledDayCount} ${
+            filledDayCount === 1 ? "hel dag" : "hele dager"
+          } er planlagt. `
+        : "";
+    return {
+      kind: "placements_missing",
+      tone: "neutral",
+      title: `Delplan klar — ${candidateLabel(unplaceableCount)} planlegges senere`,
+      description: extendDayAvailable
+        ? `${filledPrefix}Publiser delplanen som den er, eller planlegg neste dag for å plassere resten.`
+        : `${filledPrefix}Alle planlagte dager er brukt. Publiser delplanen som den er, plasser de siste manuelt, eller utvid rammene med flere dager.`,
     };
   }
   if (!publicationReady) {

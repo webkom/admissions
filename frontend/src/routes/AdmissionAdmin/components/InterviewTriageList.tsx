@@ -7,6 +7,8 @@ import { Admission, AdminApplication } from "src/types";
 import { breakpoints, iconSizes } from "src/styles/designTokens";
 import { encodeSmsAddress } from "src/utils/emailLinks";
 import { getApplicationDeadlineStatus } from "src/utils/applicationAccess";
+import FormatTime from "src/components/Time/FormatTime";
+import { DateTime } from "luxon";
 import {
   hasApplicationDetails,
   isFullAdminApplication,
@@ -112,17 +114,43 @@ const InterviewTriageList: React.FC<InterviewTriageListProps> = ({
                 />
 
                 {applicationWithDetails && (
-                  <SentMeta
-                    className={
-                      applicationWithDetails.applied_within_deadline
-                        ? "text-success"
-                        : "text-orange-500"
-                    }
+                  <div
+                    title={`Sendt: ${DateTime.fromISO(
+                      applicationWithDetails.created_at,
+                    )
+                      .setLocale("nb")
+                      .toFormat("EEEE d. MMMM yyyy, kl. HH:mm")}`}
+                    className="flex flex-col items-end gap-0.5 leading-tight"
                   >
-                    {getApplicationDeadlineStatus(
-                      applicationWithDetails.applied_within_deadline,
-                    )}
-                  </SentMeta>
+                    <div className="flex items-center gap-1.5 tabular-nums whitespace-nowrap text-ui">
+                      <span className="font-medium text-text-primary">
+                        <FormatTime format="d. LLL">
+                          {applicationWithDetails.created_at}
+                        </FormatTime>
+                      </span>
+                      <span className="text-xs text-text-muted/60">–</span>
+                      <span className="text-text-muted">
+                        <FormatTime format="HH:mm">
+                          {applicationWithDetails.created_at}
+                        </FormatTime>
+                      </span>
+                    </div>
+                    <SentMeta
+                      data-cy="application-sent-time"
+                      data-late={
+                        !applicationWithDetails.applied_within_deadline
+                      }
+                      className={
+                        applicationWithDetails.applied_within_deadline
+                          ? "text-success"
+                          : "text-orange-500"
+                      }
+                    >
+                      {getApplicationDeadlineStatus(
+                        applicationWithDetails.applied_within_deadline,
+                      )}
+                    </SentMeta>
+                  </div>
                 )}
               </CandidateSummary>
 

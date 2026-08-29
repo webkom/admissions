@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Navigate, useParams } from "react-router-dom";
 import { ArrowRight, HelpCircle, Loader2, RefreshCw } from "lucide-react";
@@ -15,6 +15,7 @@ import type { DraftPersistenceStatus } from "src/components/Scheduling/Solver/us
 import { normalizeSolverOptions } from "src/components/Scheduling/Solver/solverHelpers";
 import AvailabilityHeatmap from "src/components/Scheduling/Calendar/AvailabilityHeatmap";
 import AvailabilityResponseRoster from "src/components/Scheduling/Calendar/AvailabilityResponseRoster";
+import OnBehalfAvailabilityEditor from "./OnBehalfAvailabilityEditor";
 import FadderbarnPicker, { type Fadderbarn } from "./FadderbarnPicker";
 import CommitteePicker from "./CommitteePicker";
 import AdminScheduleConfig from "src/components/Scheduling/Calendar/AdminScheduleConfig";
@@ -27,6 +28,7 @@ import WorkflowStepper from "./WorkflowStepper";
 import MemberAvailabilityPending from "./MemberAvailabilityPending";
 import DistributedPlanView from "./DistributedPlanView";
 import ConflictReviewView from "./ConflictReviewView";
+import CommitteeConflictsModal from "./CommitteeConflictsModal";
 import PublicationGate from "./PublicationGate";
 import { useAvailabilityEditor } from "./useAvailabilityEditor";
 import { useDistributedPlanActions } from "./useDistributedPlanActions";
@@ -458,6 +460,16 @@ const LoadedScheduleView: React.FC<LoadedScheduleViewProps> = ({
   const [toast, setToast] = useState<StatusToastState | null>(null);
   const [solverEditRequestKey, setSolverEditRequestKey] = useState(0);
   const [conflictReviewRequestKey, setConflictReviewRequestKey] = useState(0);
+  const [conflictsOverviewOpen, setConflictsOverviewOpen] = useState(false);
+  // Interview-admin on-behalf editing: which interviewer's availability is
+  // open in the editor under the heatmap. Null = closed. Dev-only by design:
+  // it exists to drive mock committees while testing locally; the production
+  // build never renders the entry point (see the onEditAvailability wiring),
+  // so recruiters cannot reach it there.
+  const onBehalfEditingEnabled = import.meta.env.DEV;
+  const [onBehalfEditTargetId, setOnBehalfEditTargetId] = useState<
+    string | null
+  >(null);
   const [fadderbarn, setFadderbarn] = useState<Fadderbarn[]>([]);
   // Hydrate once per identity, so a poll cannot overwrite an in-progress edit.
   const hydratedFadderbarnFor = React.useRef<string | null>(null);
@@ -591,6 +603,9 @@ const LoadedScheduleView: React.FC<LoadedScheduleViewProps> = ({
     visitedSections,
     steps: workflowSteps,
     changeSection: handleSectionChange,
+    deferUnplacedIntent,
+    requestDeferUnplacedFromUnplacedTray,
+    consumeDeferUnplacedIntent,
     hasConfiguredAvailabilityWindows,
     hasScheduleDraft,
     currentReviewRequired,
@@ -617,7 +632,9 @@ const LoadedScheduleView: React.FC<LoadedScheduleViewProps> = ({
     planTransitionError,
     setNameVisibility: handleSetNameVisibility,
     replacePanelMember: handleReplacePanelMember,
+    updateOutreachTemplates: handleUpdateOutreachTemplates,
     changeInterviewTime: handleChangeInterviewTime,
+    swapCandidates: handleSwapCandidates,
     toggleLock: handleToggleLock,
     setBookingSource: handleSetBookingSource,
   } = planActions;
@@ -641,6 +658,15 @@ const LoadedScheduleView: React.FC<LoadedScheduleViewProps> = ({
     availabilityParticipants?.filter(
       (participant) => participant.participation !== "not_participating",
     ) ?? [];
+  const totalCommitteeConflicts = useMemo(() => {
+    return (availabilityParticipants ?? []).reduce(
+      (acc, participant) =>
+        acc +
+        (participant.conflicts?.length ?? 0) +
+        (participant.derived_conflicts?.length ?? 0),
+      0,
+    );
+  }, [availabilityParticipants]);
   const submittedAvailabilityCount = activeAvailabilityParticipants.filter(
     (participant) => participant.has_submitted,
   ).length;
@@ -923,6 +949,11 @@ const LoadedScheduleView: React.FC<LoadedScheduleViewProps> = ({
                       setParticipation(participation, userId)
                     }
                     onExperienceLevelChange={setExperienceLevel}
+                    onEditAvailability={
+                      onBehalfEditingEnabled
+                        ? (userId) => setOnBehalfEditTargetId(userId)
+                        : undefined
+                    }
                     stage={
                       foundationStage.kind === "coverage_ready"
                         ? "foundation-coverage-ready"
@@ -969,6 +1000,25 @@ const LoadedScheduleView: React.FC<LoadedScheduleViewProps> = ({
                   <AvailabilityResponseRoster
                     participants={availabilityParticipants ?? []}
                   />
+                  {onBehalfEditingEnabled && onBehalfEditTargetId && (
+                    <OnBehalfAvailabilityEditor
+                      key={onBehalfEditTargetId}
+                      admissionSlug={admissionSlug ?? ""}
+                      groupId={groupId}
+                      targetUserId={onBehalfEditTargetId}
+                      participants={availabilityParticipants}
+                      candidates={interviewCandidates}
+                      notify={showToast}
+                      enabledSlots={enabledSlots}
+                      dates={dates}
+                      sessionDuration={sessionDuration}
+                      chunkSize={chunkSize}
+                      chunkBreakMinutes={chunkBreakMinutes}
+                      dayStartMinute={dayStartMinute}
+                      dayEndMinute={dayEndMinute}
+                      onClose={() => setOnBehalfEditTargetId(null)}
+                    />
+                  )}
                 </>
               )}
             </div>
@@ -994,6 +1044,8 @@ const LoadedScheduleView: React.FC<LoadedScheduleViewProps> = ({
                   total: publicationReadiness.requiredReviewerCount,
                   missingNames: publicationReadiness.missingReviewerNames,
                 }}
+                isAdmin={isAdmin}
+                onOpenOverview={() => setConflictsOverviewOpen(true)}
               />
             )}
             <section
@@ -1006,6 +1058,7 @@ const LoadedScheduleView: React.FC<LoadedScheduleViewProps> = ({
               <SolverView
                 candidates={candidates}
                 interviewers={interviewers}
+                currentUserName={currentUserName}
                 dates={dates}
                 sessionDuration={sessionDuration}
                 admissionTitle={admissionTitle}
@@ -1052,11 +1105,6 @@ const LoadedScheduleView: React.FC<LoadedScheduleViewProps> = ({
                   setFoundationWorkspace("framework");
                   handleSectionChange("config");
                 }}
-                onWidenDays={() => {
-                  setFoundationWorkspace("framework");
-                  handleSectionChange("config");
-                }}
-                onEditByHand={() => setSolverEditRequestKey((key) => key + 1)}
                 onOpenConflictReview={openConflictReview}
                 conflictReviewReachable={conflictReviewReachable}
                 onOpenPlan={() => handleSectionChange("plan")}
@@ -1072,6 +1120,29 @@ const LoadedScheduleView: React.FC<LoadedScheduleViewProps> = ({
               title="Du deltar ikke i intervjuene"
               description="Du har meldt at du ikke deltar, og har derfor ikke tilgang til intervjuplanen. Kontakt opptaksansvarlig hvis du likevel skal delta."
             />
+          ) : !isAdmin &&
+            savedSchedule?.conflict_review_open &&
+            myAvailabilityParticipant &&
+            (myAvailabilityParticipant.proposed_candidate_ids?.length ?? 0) >
+              0 &&
+            !myAvailabilityParticipant.conflict_review_complete ? (
+            <div className="flex flex-col gap-3">
+              {/* A member's only pre-publication stake in the plan is their
+                  own inhabilitetssjekk - publication waits on it, so it must
+                  be reachable here, not only after the plan is published.
+                  Names resolve from the member's own row (review_candidates
+                  plus decoys); the candidate pool stays admin-only. */}
+              <ConflictReviewView
+                candidates={interviewCandidates}
+                currentParticipant={myAvailabilityParticipant}
+                onSaveReview={saveConflictReview}
+                showSummary
+              />
+              <MemberAvailabilityPending
+                title="Planen er ikke publisert ennå"
+                description="Når opptaksansvarlig har publisert intervjuplanen, finner du dine intervjuer her."
+              />
+            </div>
           ) : savedSchedule?.is_distributed ? (
             <DistributedPlanView
               admissionSlug={admissionSlug}
@@ -1099,6 +1170,10 @@ const LoadedScheduleView: React.FC<LoadedScheduleViewProps> = ({
               realCandidates={realCandidates}
               interviewers={interviewers}
               enabledSlots={enabledSlots}
+              onOpenConflictsOverview={() => setConflictsOverviewOpen(true)}
+              totalCommitteeConflicts={totalCommitteeConflicts}
+              onSwapCandidates={handleSwapCandidates}
+              onUpdateOutreachTemplates={handleUpdateOutreachTemplates}
             />
           ) : isAdmin ? (
             <PublicationGate
@@ -1111,6 +1186,8 @@ const LoadedScheduleView: React.FC<LoadedScheduleViewProps> = ({
               onOpenDraft={() => handleSectionChange("solver")}
               onOpenOwnReview={openConflictReview}
               onPublish={handlePublishSchedule}
+              deferUnplacedIntent={deferUnplacedIntent}
+              onConsumeDeferUnplacedIntent={consumeDeferUnplacedIntent}
             />
           ) : (
             <MemberAvailabilityPending
@@ -1119,6 +1196,13 @@ const LoadedScheduleView: React.FC<LoadedScheduleViewProps> = ({
             />
           ))}
       </main>
+
+      <CommitteeConflictsModal
+        isOpen={conflictsOverviewOpen}
+        onClose={() => setConflictsOverviewOpen(false)}
+        participants={availabilityParticipants ?? []}
+        candidates={candidates}
+      />
 
       <WizardTour
         isOpen={wizard.isOpen}

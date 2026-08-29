@@ -65,6 +65,19 @@ export const useScheduleWorkflow = ({
   );
   const hasScheduleDraft = Boolean(savedSchedule?.schedule.length);
   const hasDistributedPlan = Boolean(savedSchedule?.is_distributed);
+  // Mirrors SolverView's isPartiallyDistributed: the plan counts as fully
+  // published only once the release boundary reaches the last configured day.
+  // Until then the Plan step's draft workspace still does real work (plan the
+  // rest); after that it is only a redirect card.
+  const lastConfiguredDate =
+    savedSchedule?.end_date ?? savedSchedule?.start_date ?? null;
+  const planFullyDistributed =
+    hasDistributedPlan &&
+    !(
+      savedSchedule?.distributed_through != null &&
+      lastConfiguredDate != null &&
+      lastConfiguredDate > savedSchedule.distributed_through
+    );
   const submittedAvailabilityCount =
     participants?.filter(
       (participant) =>
@@ -226,6 +239,7 @@ export const useScheduleWorkflow = ({
         isAdmin,
         hasConfiguredAvailabilityWindows,
         hasDistributedPlan,
+        planFullyDistributed,
         myConflictReviewComplete,
         myProposalCandidateCount:
           currentParticipant?.proposed_candidate_ids.length ?? 0,
@@ -243,6 +257,7 @@ export const useScheduleWorkflow = ({
       availabilityParticipantCount,
       hasConfiguredAvailabilityWindows,
       hasDistributedPlan,
+      planFullyDistributed,
       hasSavedConfig,
       hasScheduleDraft,
       isAdmin,
@@ -256,6 +271,17 @@ export const useScheduleWorkflow = ({
       workflowPhase,
     ],
   );
+
+  // The unplaced tray on the solver screen lets admins jump straight to the
+  // publish step with deferral pre-checked ("Publiser delplan"). We model
+  // that as a transient intent flag - PublicationGate consumes it once and
+  // clears it, so a normal revisit to the gate starts unchecked.
+  const [deferUnplacedIntent, setDeferUnplacedIntent] = useState(false);
+  const requestDeferUnplacedFromUnplacedTray = () => {
+    setDeferUnplacedIntent(true);
+    changeSection("plan");
+  };
+  const consumeDeferUnplacedIntent = () => setDeferUnplacedIntent(false);
 
   const changeSection = (key: TabType) => {
     setVisitedSections((current) => {
@@ -292,5 +318,8 @@ export const useScheduleWorkflow = ({
     availabilityReady,
     myAvailabilitySaved,
     proposalConflictCount,
+    deferUnplacedIntent,
+    requestDeferUnplacedFromUnplacedTray,
+    consumeDeferUnplacedIntent,
   };
 };

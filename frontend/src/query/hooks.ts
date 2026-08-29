@@ -281,7 +281,15 @@ export const useSaveSchedule = (
   });
 };
 
-export const useInterviewAvailability = (slug: string, groupId: string) => {
+export const useInterviewAvailability = (
+  slug: string,
+  groupId: string,
+  options?: {
+    /** Poll the roster while set (the solver view polls for the last
+     *  inhabilitet review, which is submitted in another browser). */
+    refetchInterval?: number | false;
+  },
+) => {
   const scope = admissionGroupScope(slug, groupId);
   const query = useQuery<InterviewAvailabilityParticipant[], AxiosError>({
     queryKey: [`/admin/admission/${slug}/group/${groupId}/availability/`],
@@ -290,6 +298,7 @@ export const useInterviewAvailability = (slug: string, groupId: string) => {
       Boolean(groupId) &&
       !areSensitiveAdmissionCacheWritesBlocked(scope),
     ...useSensitiveQueryOptions(scope),
+    refetchInterval: options?.refetchInterval,
     meta: admissionSensitiveQueryMeta(scope, true),
   });
   return hideDataAfterSensitiveQueryFailure(query);

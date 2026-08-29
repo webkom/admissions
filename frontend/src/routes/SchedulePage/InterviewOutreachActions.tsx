@@ -16,7 +16,20 @@ const InterviewOutreachActions: React.FC<{
   message: string;
   actionLabel: string;
   canShare: boolean;
-}> = ({ candidateName, candidatePhone, message, actionLabel, canShare }) => {
+  /**
+   * Called when the admin actually reaches for a channel - opens the SMS
+   * draft or copies the message. Used to advance the interview status the
+   * moment the invitation goes out, without a second manual step.
+   */
+  onSend?: () => void;
+}> = ({
+  candidateName,
+  candidatePhone,
+  message,
+  actionLabel,
+  canShare,
+  onSend,
+}) => {
   const [copyState, setCopyState] = useState<"copied" | "error" | "none">(
     "none",
   );
@@ -93,6 +106,7 @@ const InterviewOutreachActions: React.FC<{
       await navigator.clipboard.writeText(value);
       setCopyState("copied");
       setOpen(false);
+      onSend?.();
       window.setTimeout(() => setCopyState("none"), 1200);
     } catch {
       setCopyState("error");
@@ -158,7 +172,10 @@ const InterviewOutreachActions: React.FC<{
               <a
                 href={sms}
                 role="menuitem"
-                onClick={() => setOpen(false)}
+                onClick={() => {
+                  setOpen(false);
+                  onSend?.();
+                }}
                 className={shareItemClass}
               >
                 <MessageSquare size={iconSizes.detail} aria-hidden="true" />

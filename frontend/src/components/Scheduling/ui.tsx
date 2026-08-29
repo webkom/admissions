@@ -343,7 +343,54 @@ export const useDetailsMenu = ({
 
 export type SchedulingWorkspaceMode = "preview" | "editing";
 
-interface PanelChipOption {
+/** Shared switch (role="switch") — same pill shape as the advanced-settings
+ *  toggle: 40×20 track with a 16×16 knob, brand accent when on. Used for
+ *  view-scoped boolean options. With `label`, the text becomes the
+ *  accessible name and clicking it also toggles (the pair is wrapped in one
+ *  button). */
+export const ToggleSwitch: React.FC<{
+  checked: boolean;
+  onChange: (next: boolean) => void;
+  ariaLabel: string;
+  label?: React.ReactNode;
+  disabled?: boolean;
+}> = ({ checked, onChange, ariaLabel, label, disabled = false }) => (
+  <button
+    type="button"
+    role="switch"
+    aria-checked={checked}
+    aria-label={label ? undefined : ariaLabel}
+    disabled={disabled}
+    onClick={() => onChange(!checked)}
+    className={cn(
+      "group/toggle inline-flex items-center gap-2 text-left focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-focus disabled:cursor-not-allowed disabled:opacity-45",
+    )}
+  >
+    <span
+      aria-hidden="true"
+      className={cn(
+        "inline-flex h-6 w-10 flex-none items-center rounded-full border p-0.5 transition-colors",
+        checked
+          ? "border-brand bg-brand"
+          : "border-border-muted bg-surface-muted",
+      )}
+    >
+      <span
+        className={cn(
+          "block h-4 w-4 rounded-full bg-white shadow-sm transition-transform",
+          checked ? "translate-x-5" : "translate-x-0",
+        )}
+      />
+    </span>
+    {label && (
+      <span className="text-ui font-semibold text-text-muted group-hover/toggle:text-text-primary">
+        {label}
+      </span>
+    )}
+  </button>
+);
+
+export interface PanelChipOption {
   id?: string;
   name: string;
   disabled?: boolean;
@@ -362,6 +409,10 @@ interface EditablePanelChipProps {
   title?: string;
   searchPlaceholder?: string;
   emptyLabel?: string;
+  /** "chip" (default) is the rounded pill used for panel members; "plain"
+   *  renders the label as ordinary text so the chip can double as a table
+   *  cell title that opens a swap menu. */
+  variant?: "chip" | "plain";
 }
 
 export const EditablePanelChip: React.FC<EditablePanelChipProps> = ({
@@ -376,6 +427,7 @@ export const EditablePanelChip: React.FC<EditablePanelChipProps> = ({
   title,
   searchPlaceholder = "Søk intervjuer…",
   emptyLabel = "Ingen treff",
+  variant = "chip",
 }) => {
   const editable = !!options && !!onSelect;
   const [open, setOpen] = useState(false);
@@ -526,18 +578,31 @@ export const EditablePanelChip: React.FC<EditablePanelChipProps> = ({
         aria-haspopup={editable ? "listbox" : undefined}
         aria-expanded={editable ? open : undefined}
         className={cn(
-          "group/chip inline-flex items-center gap-1 rounded-full border px-2 py-1 text-xs font-semibold",
+          "group/chip inline-flex items-center gap-1 text-xs font-semibold",
+          variant === "chip"
+            ? "rounded-full border px-2 py-1"
+            : "rounded-md text-sm",
           editable &&
-            "cursor-pointer transition-[border-color,background] duration-100 hover:border-border-quiet hover:bg-surface-subtle focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-ring",
+            "cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-ring",
+          editable &&
+            variant === "chip" &&
+            "transition-[border-color,background] duration-100 hover:border-border-quiet hover:bg-surface-subtle",
+          editable &&
+            variant === "plain" &&
+            "underline-offset-2 hover:underline",
           open &&
-            "border-brand-activeBorder bg-brand-soft shadow-tint-sm -translate-y-px",
+            (variant === "chip"
+              ? "border-brand-activeBorder bg-brand-soft shadow-tint-sm -translate-y-px"
+              : "text-brand"),
           conflict
             ? "border-brand-activeBorder bg-brand-tint text-brand"
             : isCurrentUser
               ? "border-brand-border bg-brand-soft font-bold text-brand"
               : tone === "overtime"
                 ? "border-danger-border bg-danger-bg font-semibold text-danger"
-                : "border-border-soft bg-surface-subtle text-text-body",
+                : variant === "plain"
+                  ? "text-text-primary"
+                  : "border-border-soft bg-surface-subtle text-text-body",
         )}
       >
         {conflict && (
@@ -640,8 +705,15 @@ export const EditablePanelChip: React.FC<EditablePanelChipProps> = ({
                         {isCurrent ? (
                           <Check size={iconSizes.compact} aria-hidden="true" />
                         ) : opt.disabled ? (
-                          <span className="text-detail font-medium text-text-muted">
-                            I panelet
+                          <span
+                            className={cn(
+                              "text-detail font-medium",
+                              opt.disabledReason === "Inhabil"
+                                ? "text-danger"
+                                : "text-text-muted",
+                            )}
+                          >
+                            {opt.disabledReason ?? "I panelet"}
                           </span>
                         ) : null}
                       </button>

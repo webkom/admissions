@@ -76,6 +76,9 @@ interface AdvancedSolverSettingsProps {
   onOpenExperienceEditor: () => void;
   onReset: () => void;
   onClose: () => void;
+  /** Locked rows in the current draft; the rebalance option only matters
+   *  when there is something to re-flow. */
+  lockedCount: number;
   preview: React.ReactNode;
 }
 
@@ -90,6 +93,7 @@ const AdvancedSolverSettings = ({
   onOpenExperienceEditor,
   onReset,
   onClose,
+  lockedCount,
   preview,
 }: AdvancedSolverSettingsProps) => {
   const experiencedSummary =
@@ -210,6 +214,28 @@ const AdvancedSolverSettings = ({
               }
             />
           </section>
+
+          {lockedCount > 0 && (
+            <section className="border-t border-border-soft pt-5">
+              <p className={sectionLabelClass}>Låste intervjuer</p>
+              <AdvancedOptionRow
+                title="Frigjør låste rader i utkastet"
+                description="Solveren kan flytte låste intervjuer i utkastet for å få plass til nye kandidater. Publiserte dager flyttes aldri."
+                checked={solverOptions.rebalance_locked}
+                onToggle={() =>
+                  onSolverOptionsChange((current) => ({
+                    ...current,
+                    rebalance_locked: !current.rebalance_locked,
+                  }))
+                }
+                helper={
+                  <p className="m-0 text-detail text-text-muted">
+                    {lockedCount} låste intervjuer kan flyttes når dette er på.
+                  </p>
+                }
+              />
+            </section>
+          )}
 
           <section className="border-t border-border-soft pt-5">
             <p className={sectionLabelClass}>Intervjuform</p>

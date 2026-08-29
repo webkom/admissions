@@ -168,18 +168,36 @@ export const PanelMemberList: React.FC<{
           conflict={hasConflict}
           isCurrentUser={lookups.isCurrentUser(member)}
           options={
-            isEditableDraft
-              ? lookups.interviewerOptions.map((interviewer) => ({
-                  id: interviewer.id,
-                  name: interviewer.name,
-                  disabled:
+            isEditableDraft || isAdmin
+              ? lookups.interviewerOptions.map((interviewer) => {
+                  const inPanel =
                     interviewer.id !== member.id &&
                     item.panel.some((panelMember) =>
                       panelMember.id
                         ? panelMember.id === interviewer.id
                         : panelMember.name === interviewer.name,
-                    ),
-                }))
+                    );
+                  const isConflict =
+                    candidateId !== undefined &&
+                    (lookups
+                      .biasedFor({
+                        id: interviewer.id,
+                        name: interviewer.name,
+                      })
+                      ?.has(candidateId) ??
+                      false);
+
+                  return {
+                    id: interviewer.id,
+                    name: interviewer.name,
+                    disabled: inPanel || isConflict,
+                    disabledReason: inPanel
+                      ? "I panelet"
+                      : isConflict
+                        ? "Inhabil"
+                        : undefined,
+                  };
+                })
               : undefined
           }
           onSelect={(newName, newId) =>

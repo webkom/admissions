@@ -19,7 +19,7 @@ from admissions.admissions.admission_access import (
     user_is_interview_admin,
 )
 from admissions.admissions.authentication import SessionAuthentication
-from admissions.admissions.models import Admission, LegoUser, SavedSchedule, SolveJob
+from admissions.admissions.models import Admission, SavedSchedule, SolveJob
 from admissions.admissions.schedule_validation import (
     ScheduleValidationError,
     canonicalize_solver_payload,
@@ -66,7 +66,6 @@ class SolveScheduleView(SchedulerFeatureGateMixin, APIView):
         admission = get_object_or_404(Admission, slug=admission_slug)
 
         user = request.user
-        user.__class__ = LegoUser
 
         serializer = ScheduleRequestsSerializer(data=request.data)
         if not serializer.is_valid():
@@ -200,7 +199,6 @@ class SolveJobStatusView(SchedulerFeatureGateMixin, APIView):
     def _get_authorized_job(self, request, job_id):
         job = get_object_or_404(SolveJob, id=job_id)
         user = request.user
-        user.__class__ = LegoUser
         if not user_is_interview_admin(job.admission, job.group, user):
             return None, Response(status=status.HTTP_403_FORBIDDEN)
         return job, None
@@ -242,7 +240,6 @@ class LatestSolveJobView(SchedulerFeatureGateMixin, APIView):
         group_id = request.query_params.get("group_id")
         group = get_object_or_404(admission.groups, pk=group_id)
         user = request.user
-        user.__class__ = LegoUser
         if not user_is_interview_admin(admission, group, user):
             return Response(status=status.HTTP_403_FORBIDDEN)
         job = (
@@ -283,7 +280,6 @@ class SolveJobApplyView(SchedulerFeatureGateMixin, APIView):
         admission = Admission.objects.select_for_update().get(pk=job_stub.admission_id)
         group = job_stub.group
         user = request.user
-        user.__class__ = LegoUser
         if not user_is_interview_admin(admission, group, user):
             return Response(status=status.HTTP_403_FORBIDDEN)
 

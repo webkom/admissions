@@ -169,6 +169,34 @@ class ConflictReviewListTestCase(TestCase):
         names = {decoy["name"] for decoy in lists[str(self.mine.id)]["decoys"]}
         self.assertEqual({"Filler Three"}, names)
 
+    def test_committee_members_are_never_offered_as_decoys(self):
+        """Committee members must never show up as fillers in their own
+        committee's conflict review lists."""
+        DirectoryEntry.objects.create(
+            lego_user_id=self.mine.lego_id,
+            username=self.mine.username,
+            full_name=self.mine.get_full_name() or "My Committee Member",
+        )
+        DirectoryEntry.objects.create(
+            lego_user_id=self.other.lego_id,
+            username=self.other.username,
+            full_name=self.other.get_full_name() or "Other Committee Member",
+        )
+        DirectoryEntry.objects.create(
+            lego_user_id=9004, username="filler4", full_name="Filler Four"
+        )
+        ours = self._candidate("ada", 8001)
+        saved = self._plan(
+            [self._row(ours, 540, self.mine)], my_slots=["2026-04-21:540"]
+        )
+
+        lists = build_conflict_review_lists(saved)
+
+        names = {decoy["name"] for decoy in lists[str(self.mine.id)]["decoys"]}
+        self.assertIn("Filler Four", names)
+        self.assertNotIn(self.mine.get_full_name() or "My Committee Member", names)
+        self.assertNotIn(self.other.get_full_name() or "Other Committee Member", names)
+
     def test_the_filler_cohort_is_bounded_by_the_real_candidate_pool(self):
         """Drawing each list straight out of the full student directory is
         what would give the game away. With thousands of names to draw from,
@@ -331,3 +359,49 @@ class ConflictReviewListTestCase(TestCase):
         self.assertEqual(
             {str(ours.pk)}, conflict_review_scope(saved, str(self.mine.id))
         )
+
+    def test_admin_interviewers_receive_all_scheduled_candidates_without_decoys(self):
+        """Admin interviewers (leaders/recruiters) must be given all scheduled
+        candidates so they can safely swap themselves or others onto any interview,
+        without needing decoy fillers."""
+        Membership.objects.filter(user=self.mine, group=self.group).update(
+            role="leader"
+        )
+        c1 = self._candidate("c1", 8101)
+        c2 = self._candidate("c2", 8102)
+        c3 = self._candidate("c3", 8103)
+        c4 = self._candidate("c4", 8104)
+        c5 = self._candidate("c5", 8105)
+        c6 = self._candidate("c6", 8106)
+        c7 = self._candidate("c7", 8107)
+        c8 = self._candidate("c8", 8108)
+
+        saved = self._plan(
+            [
+                self._row(c1, 540, self.mine),
+                self._row(c2, 600, self.other),
+                self._row(c3, 660, self.other),
+                self._row(c4, 720, self.other),
+                self._row(c5, 780, self.other),
+                self._row(c6, 840, self.other),
+                self._row(c7, 900, self.other),
+                self._row(c8, 960, self.other),
+            ],
+            my_slots=["2026-04-21:540"],
+        )
+
+        lists = build_conflict_review_lists(saved, swap_size=5)
+
+        mine = lists[str(self.mine.id)]
+        self.assertEqual([str(c1.pk)], mine["own_candidate_ids"])
+        # Regular swap_size is 5, but admin gets ALL 7 other scheduled candidates
+        self.assertEqual(7, len(mine["swap_candidate_ids"]))
+        for c in [c2, c3, c4, c5, c6, c7, c8]:
+            self.assertIn(str(c.pk), mine["swap_candidate_ids"])
+        # Admins do not receive decoy fillers
+        self.assertEqual([], mine["decoys"])
+
+        # In contrast, non-admin 'other' only gets at most 5 swap candidates
+        other = lists[str(self.other.id)]
+        self.assertLessEqual(len(other["swap_candidate_ids"]), 5)
+

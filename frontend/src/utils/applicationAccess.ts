@@ -28,8 +28,8 @@ export const hasApplicationDetails = (
 
 export const getApplicationDeadlineStatus = (
   appliedWithinDeadline: boolean | undefined,
-): "innen fristen" | "etter fristen" =>
-  appliedWithinDeadline ? "innen fristen" : "etter fristen";
+): "Innen fristen" | "Etter fristen" =>
+  appliedWithinDeadline ? "Innen fristen" : "Etter fristen";
 
 export const getApplicationScopeKey = (
   admission: Admission | undefined,

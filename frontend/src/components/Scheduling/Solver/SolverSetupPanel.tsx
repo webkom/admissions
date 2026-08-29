@@ -60,12 +60,21 @@ interface SolverSetupPanelProps {
   loading: boolean;
   error: string;
   elapsedMs: number;
+  startedAt?: string | null;
   jobStatus: SolveJob["status"] | null;
   estimatedSeconds: number;
   lockedCount: number;
   hasProposal: boolean;
   changeableInterviewCount: number;
   currentDraftReady: boolean;
+  /** The draft save hit a conflict (a newer revision exists on the server):
+   *  the panel then offers the same recovery as the editor instead of the
+   *  dead-end "wait for the draft to save" message. */
+  draftSaveConflict: boolean;
+  /** Non-empty when the last draft save failed; shown with a retry action. */
+  draftSaveError: string;
+  onAdoptRemoteDraft: () => void;
+  onRetryDraftSave: () => void;
   candidateScopeResolved: boolean;
   regenerationOpen: boolean;
   onCloseRegeneration: () => void;
@@ -373,12 +382,17 @@ const SolverSetupPanel = ({
   loading,
   error,
   elapsedMs,
+  startedAt,
   jobStatus,
   estimatedSeconds,
   lockedCount,
   hasProposal,
   changeableInterviewCount,
   currentDraftReady,
+  draftSaveConflict,
+  draftSaveError,
+  onAdoptRemoteDraft,
+  onRetryDraftSave,
   candidateScopeResolved,
   regenerationOpen,
   onCloseRegeneration,
@@ -497,7 +511,11 @@ const SolverSetupPanel = ({
   };
 
   const blockedDescription = !currentDraftReady
-    ? "Vent til endringene i utkastet er lagret før du lager et nytt forslag."
+    ? draftSaveConflict
+      ? "Noen andre har lagret en nyere versjon av utkastet. Last den inn før du lager et nytt forslag."
+      : draftSaveError
+        ? draftSaveError
+        : "Vent til endringene i utkastet er lagret før du lager et nytt forslag."
     : panelFormationImpossible
       ? `Velg maksimalt ${interviewerCount} per intervju.`
       : solverOptions.require_experienced_panel &&
@@ -515,9 +533,9 @@ const SolverSetupPanel = ({
               }, mens panelet krever ${panelSize}. Kontroller registrert inhabilitet før du genererer på nytt.`
             : capabilityBlockedCandidate
               ? `${capabilityBlockedCandidate.candidate.name} kan ikke få et panel som oppfyller ${
-                  capabilityBlockedCandidate.reasons.length === 2
+                  capabilityBlockedCandidate.reasons?.length === 2
                     ? "kravene til erfaring og kjønn"
-                    : capabilityBlockedCandidate.reasons[0] === "experience"
+                    : capabilityBlockedCandidate.reasons?.[0] === "experience"
                       ? "kravet om en erfaren intervjuer"
                       : "kravet om samme kjønn"
                 }. Juster reglene eller intervjuergruppen før du genererer på nytt.`
@@ -529,7 +547,11 @@ const SolverSetupPanel = ({
                     : "Det er ikke nok åpne intervjutider med full paneldekning."
                   : "Intervjuerne har ikke nok samlet tilgjengelig kapasitet.";
   const blockedAction = !currentDraftReady
-    ? null
+    ? draftSaveConflict
+      ? { label: "Last inn siste versjon", run: onAdoptRemoteDraft }
+      : draftSaveError
+        ? { label: "Prøv igjen", run: onRetryDraftSave }
+        : null
     : !candidateScopeResolved
       ? null
       : panelFormationImpossible
@@ -561,7 +583,7 @@ const SolverSetupPanel = ({
                     run: onOpenAvailability,
                   }
               : capabilityBlockedCandidate
-                ? capabilityBlockedCandidate.reasons.length === 1 &&
+                ? capabilityBlockedCandidate.reasons?.length === 1 &&
                   capabilityBlockedCandidate.reasons[0] === "experience"
                   ? {
                       label: "Velg erfarne intervjuere",
@@ -657,6 +679,25 @@ const SolverSetupPanel = ({
                         ? " låste intervjuer beholdes."
                         : " allerede planlagte intervjuer beholdes."}
                     </p>
+                    {minDayCount > 1 &&
+                      Number.isFinite(
+                        Date.parse(plannableDates[minDayCount - 1] ?? ""),
+                      ) && (
+                        <p
+                          data-cy="day-scope-min-explainer"
+                          className="m-0 mt-1 text-detail text-text-muted"
+                        >
+                          Minst {minDayCount}{" "}
+                          {minDayCount === 1 ? "dag" : "dager"} fordi utkastet
+                          allerede har planlagte intervjuer til og med{" "}
+                          {formatAccessibleDate(
+                            plannableDates[minDayCount - 1],
+                          )}
+                          . Et nytt forslag erstatter dagene det dekker — vil du
+                          planlegge færre dager, må intervjuene på de siste
+                          dagene flyttes eller fjernes først.
+                        </p>
+                      )}
                   </div>
                   <div className="flex items-center gap-3">
                     <div data-cy="day-count">
@@ -738,6 +779,7 @@ const SolverSetupPanel = ({
                   onOpenExperienceEditor={openExperienceSetup}
                   onReset={resetAdvancedOptions}
                   onClose={closeAdvancedSettings}
+                  lockedCount={lockedCount}
                   preview={
                     <SamplePlanPreview
                       interviewerCount={interviewerCount}
@@ -758,7 +800,12 @@ const SolverSetupPanel = ({
                 />
               )}
 
-              {error && !hasProposal && (
+              {/* Also shown while regenerating (hasProposal): a re-solve that
+                  comes back INFEASIBLE/TIMEOUT sets this error, and the
+                  regeneration setup panel is the only surface that can
+                  render it — the plan view behind it stays on the kept
+                  draft. */}
+              {error && (
                 <div
                   role="alert"
                   className="rounded-lg border border-danger-border bg-danger-bg px-4 py-3 text-ui font-semibold text-danger"
@@ -812,6 +859,7 @@ const SolverSetupPanel = ({
             {loading && (
               <SolveProgress
                 elapsedMs={elapsedMs}
+                startedAt={startedAt}
                 estimatedSeconds={estimatedSeconds}
                 jobStatus={jobStatus}
               />

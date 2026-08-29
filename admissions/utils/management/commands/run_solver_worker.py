@@ -1,5 +1,5 @@
 import time
-from datetime import timedelta
+from datetime import date, timedelta
 
 from django.conf import settings
 from django.core.management.base import BaseCommand, CommandError
@@ -22,7 +22,7 @@ from admissions.admissions.admission_access import (
     user_is_admission_admin,
     user_is_interview_admin,
 )
-from admissions.admissions.models import Admission, LegoUser, SavedSchedule, SolveJob
+from admissions.admissions.models import Admission, SavedSchedule, SolveJob
 from admissions.admissions.schedule_policy import (
     build_deviation_review,
     normalize_schedule_policy,
@@ -60,6 +60,54 @@ def _refresh_db_connection():
     unrecoverable, so refresh is skipped while one is active."""
     if not connection.in_atomic_block:
         close_old_connections()
+
+
+def _coerce_date(value):
+    if isinstance(value, str):
+        try:
+            return date.fromisoformat(value)
+        except ValueError:
+            return None
+    return value if isinstance(value, date) else None
+
+
+def _demote_draft_locks(data, published_through, schedule_start):
+    """Apply the opt-in rebalance policy to a solve request.
+
+    Locked rows on or before the published boundary stay hard-locked; the
+    remaining draft locks are demoted into previous_schedule so the solver may
+    re-flow them to place newly arrived candidates. Without the flag nothing
+    moves: a locked row is pinned."""
+    options = data.get("options") or {}
+    if not options.get("rebalance_locked"):
+        return data
+    locked = data.get("locked_assignments") or []
+    if not locked:
+        return data
+    published_through = _coerce_date(published_through)
+    schedule_start = _coerce_date(schedule_start)
+
+    def is_published(row):
+        if published_through is None or schedule_start is None:
+            return False
+        interview_time = row.get("time")
+        if not isinstance(interview_time, int):
+            return False
+        row_date = schedule_start + timedelta(days=interview_time // 1440)
+        return row_date <= published_through
+
+    kept = [row for row in locked if is_published(row)]
+    demoted = [row for row in locked if not is_published(row)]
+    if not demoted:
+        return data
+    previous = list(data.get("previous_schedule") or [])
+    previous_ids = {row.get("candidate_id") for row in previous}
+    previous.extend(
+        row
+        for row in demoted
+        if row.get("candidate_id") not in previous_ids
+    )
+    return {**data, "locked_assignments": kept, "previous_schedule": previous}
 
 
 class Command(BaseCommand):
@@ -230,6 +278,8 @@ class Command(BaseCommand):
         solver_metrics = {}
         error = ""
         new_status = SolveJob.STATUS_DONE
+        published_through = None
+        schedule_start = None
         try:
             requested_by = job.requested_by
             if requested_by is None or not user_is_interview_admin(
@@ -244,6 +294,8 @@ class Command(BaseCommand):
                     saved = SavedSchedule.objects.get(
                         admission=admission, group=job.group
                     )
+                    published_through = saved.distributed_through
+                    schedule_start = saved.start_date
                     baseline_updated_at = parse_datetime(
                         data.get("baseline_updated_at") or ""
                     )
@@ -272,6 +324,7 @@ class Command(BaseCommand):
                             "previous_schedule": saved.schedule or [],
                         }
             if data is not None:
+                data = _demote_draft_locks(data, published_through, schedule_start)
                 result = solve_schedule(
                     candidates_data=data.get("candidates", []),
                     interviewers_data=data.get("interviewers", []),
@@ -361,7 +414,6 @@ class Command(BaseCommand):
                     or user is None
                 ):
                     return False
-                user.__class__ = LegoUser
                 if not user_is_interview_admin(admission, group, user):
                     return False
                 update_saved_schedule(

@@ -10,6 +10,7 @@ from admissions.admissions.models import (
     DirectoryEntry,
     FadderbarnDeclaration,
     InterviewAvailability,
+    LegoUser,
     Membership,
     SavedSchedule,
     UserApplication,
@@ -503,12 +504,29 @@ def build_conflict_review_lists(saved_schedule, swap_size=5):
     # Deliberately admission-wide, not scoped to saved_schedule.group: a
     # decoy must not be a real applicant to *any* committee in the
     # admission, not just this one, or the padding gives away real
-    # recurrence patterns.
+    # recurrence patterns. Also exclude anyone in this committee (from both
+    # Membership and CommitteeRosterEntry) so members never see their own
+    # committee colleagues as fillers.
     applicant_lego_ids = set(
         UserApplication.objects.filter(admission=saved_schedule.admission)
         .exclude(user__lego_id__isnull=True)
         .values_list("user__lego_id", flat=True)
     )
+    committee_users = LegoUser.objects.filter(
+        id__in=get_committee_interviewer_ids(saved_schedule.group)
+    )
+    committee_lego_ids = set(
+        committee_users.exclude(lego_id__isnull=True).values_list("lego_id", flat=True)
+    )
+    committee_usernames = set(
+        committee_users.exclude(username="").values_list("username", flat=True)
+    )
+    decoy_query = DirectoryEntry.objects.exclude(
+        lego_user_id__in=applicant_lego_ids | committee_lego_ids
+    )
+    if committee_usernames:
+        decoy_query = decoy_query.exclude(username__in=committee_usernames)
+
     # Drawn once, then shared by every interviewer in this build. Sampling
     # each list straight out of the full directory would defeat the point:
     # with thousands of students to draw from, two interviewers comparing
@@ -517,10 +535,26 @@ def build_conflict_review_lists(saved_schedule, swap_size=5):
     # to roughly the size of the real candidate pool makes fillers recur at
     # about the rate real candidates do, so that comparison says nothing.
     decoy_cohort = _decoy_cohort(
-        DirectoryEntry.objects.exclude(lego_user_id__in=applicant_lego_ids),
+        decoy_query,
         max(swap_size, len(time_by_candidate)),
         saved_schedule,
     )
+
+    admin_user_ids = set(
+        Membership.objects.filter(
+            group=saved_schedule.group,
+            role__in=(constants.LEADER, constants.RECRUITING),
+        ).values_list("user_id", flat=True)
+    )
+    if saved_schedule.admission:
+        admin_user_ids |= set(
+            Membership.objects.filter(
+                group__in=saved_schedule.admission.admin_groups.all(),
+            )
+            .exclude(role__in=constants.INACTIVE_MEMBERSHIP_ROLES)
+            .values_list("user_id", flat=True)
+        )
+    admin_user_id_strings = {str(uid) for uid in admin_user_ids}
 
     lists = {}
     for interviewer_id, own_ids in proposed.items():
@@ -530,70 +564,83 @@ def build_conflict_review_lists(saved_schedule, swap_size=5):
         if interviewer_id in opted_out_ids:
             continue
         own = {str(value) for value in own_ids}
-        own_times = {time_by_candidate.get(candidate_id) for candidate_id in own} - {
-            None
-        }
-        own_blocks = {
-            block_by_minute[own_time]
-            for own_time in own_times
-            if own_time in block_by_minute
-        }
-        free_slots = availability.get(interviewer_id, set())
 
-        candidates = []
-        for candidate_id, slot in time_by_candidate.items():
-            if candidate_id in own or slot is None:
-                continue
-            # Hard filter: a candidate at a time this interviewer cannot work
-            # is not a swap partner, whatever else recommends them.
-            if free_slots and slot not in free_slots:
-                continue
-            shares_panel = bool(
-                panel_by_candidate.get(candidate_id, set())
-                & {
-                    member
-                    for cid in own
-                    for member in panel_by_candidate.get(cid, set())
-                }
-                - {interviewer_id}
-            )
-            same_block = bool(own_blocks) and block_by_minute.get(slot) in own_blocks
-            same_day = any(
-                own_time is not None and own_time // (24 * 60) == slot // (24 * 60)
-                for own_time in own_times
-            )
-            # Lower sorts first: same block, then same day, then (as a pure
-            # tiebreak within those) panels a minimum-change repair would
-            # actually touch.
-            candidates.append(
-                (
-                    (
-                        0 if same_block else 1,
-                        0 if same_day else 1,
-                        0 if shares_panel else 1,
-                        slot,
-                    ),
-                    candidate_id,
-                )
-            )
-
-        candidates.sort()
-        swap = [candidate_id for _, candidate_id in candidates[:swap_size]]
-        decoy_count = min(swap_size, len(decoy_cohort))
-        # A bare uuid4, the same shape as a real UserApplication pk - fillers
-        # are told apart by membership in this row's stored decoys, never by
-        # a visible format marker.
-        decoys = (
-            [
-                {
-                    "token": str(uuid.uuid4()),
-                    "name": entry.full_name or entry.username,
-                }
-                for entry in random.sample(decoy_cohort, decoy_count)
+        if interviewer_id in admin_user_id_strings:
+            # Admins manage panel swaps, replacements, and cover across the
+            # whole committee schedule. Give them all other scheduled candidates
+            # to review so manual swaps are always pre-checked for inhabilitet,
+            # with no decoy fillers needed.
+            swap = [
+                candidate_id
+                for candidate_id in time_by_candidate
+                if candidate_id not in own
             ]
-            if decoy_count
-            else []
-        )
+            decoys = []
+        else:
+            own_times = {time_by_candidate.get(candidate_id) for candidate_id in own} - {
+                None
+            }
+            own_blocks = {
+                block_by_minute[own_time]
+                for own_time in own_times
+                if own_time in block_by_minute
+            }
+            free_slots = availability.get(interviewer_id, set())
+
+            candidates = []
+            for candidate_id, slot in time_by_candidate.items():
+                if candidate_id in own or slot is None:
+                    continue
+                # Hard filter: a candidate at a time this interviewer cannot work
+                # is not a swap partner, whatever else recommends them.
+                if free_slots and slot not in free_slots:
+                    continue
+                shares_panel = bool(
+                    panel_by_candidate.get(candidate_id, set())
+                    & {
+                        member
+                        for cid in own
+                        for member in panel_by_candidate.get(cid, set())
+                    }
+                    - {interviewer_id}
+                )
+                same_block = bool(own_blocks) and block_by_minute.get(slot) in own_blocks
+                same_day = any(
+                    own_time is not None and own_time // (24 * 60) == slot // (24 * 60)
+                    for own_time in own_times
+                )
+                # Lower sorts first: same block, then same day, then (as a pure
+                # tiebreak within those) panels a minimum-change repair would
+                # actually touch.
+                candidates.append(
+                    (
+                        (
+                            0 if same_block else 1,
+                            0 if same_day else 1,
+                            0 if shares_panel else 1,
+                            slot,
+                        ),
+                        candidate_id,
+                    )
+                )
+
+            candidates.sort()
+            swap = [candidate_id for _, candidate_id in candidates[:swap_size]]
+            decoy_count = min(swap_size, len(decoy_cohort))
+            # A bare uuid4, the same shape as a real UserApplication pk - fillers
+            # are told apart by membership in this row's stored decoys, never by
+            # a visible format marker.
+            decoys = (
+                [
+                    {
+                        "token": str(uuid.uuid4()),
+                        "name": entry.full_name or entry.username,
+                    }
+                    for entry in random.sample(decoy_cohort, decoy_count)
+                ]
+                if decoy_count
+                else []
+            )
         lists[interviewer_id] = {
             "own_candidate_ids": sorted(own),
             "swap_candidate_ids": swap,

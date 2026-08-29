@@ -16,6 +16,7 @@ import {
 import {
   DEFAULT_SOLVER_OPTIONS,
   estimateSolverSeconds,
+  hasSchedule,
   normalizeSolverOptions,
   type SolveResponse,
 } from "./solverHelpers";
@@ -467,6 +468,20 @@ export const useSolverSession = ({
         dayCount?: number;
       } = {},
     ) => {
+      // Cancel any in-flight solve before enqueueing a new one. The
+      // backend deduplicates solves by request fingerprint in
+      // enqueue_solve_job, so a still-running job with the same
+      // fingerprint (same committee, same baseline, same options) would
+      // otherwise be returned in place of a fresh solve. The user
+      // perceives this as "lag nytt forslag" silently producing the
+      // previous plan. cancel() is a no-op when no job is in flight.
+      if (
+        solveJob.jobStatus === "PENDING" ||
+        solveJob.jobStatus === "RUNNING"
+      ) {
+        await solveJob.cancel();
+      }
+
       if (!readiness.ready) {
         const blockedCandidate = readiness.conflictBlockedCandidates[0];
         const capabilityBlockedCandidate =
@@ -581,7 +596,12 @@ export const useSolverSession = ({
         return null;
       }
       const outcome = completion?.result ?? null;
-      if (outcome && !previewOnly) {
+      // Only a real schedule (SUCCESS/PARTIAL) flows into apply/retain. An
+      // INFEASIBLE or TIMEOUT result has an empty schedule and no
+      // unplaceable rows, so without this guard it slipped into the
+      // "fully placed - auto-apply" path below and silently no-op'd while
+      // the solver error was left with nowhere to surface.
+      if (outcome && hasSchedule(outcome.status) && !previewOnly) {
         if (syntheticInput) {
           setProposalSolverOptions(runOptions);
           setSolveTick((tick) => tick + 1);
@@ -661,6 +681,8 @@ export const useSolverSession = ({
       savedSchedule?.updated_at,
       savedSchedule?.schedule.length,
       sessionDuration,
+      solveJob.cancel,
+      solveJob.jobStatus,
       solveJob.setError,
       solveJob.setPlanRevealed,
       solveJob.solve,

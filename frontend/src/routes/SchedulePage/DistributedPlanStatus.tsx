@@ -1,7 +1,6 @@
 import React from "react";
-import { CalendarCheck, Info } from "lucide-react";
+import { CalendarCheck } from "lucide-react";
 import { Chip, SchedulePanel } from "src/components/Scheduling/ui";
-import { NameVisibility } from "../../types";
 import { iconSizes } from "src/styles/designTokens";
 import { ConflictImpact } from "./distributedPlanSelectors";
 
@@ -29,7 +28,6 @@ export const DistributedPlanNotices: React.FC<{
   myInterviewsOnly: boolean;
   myInterviewsCount: number;
   currentUserName: string;
-  nameVisibility: NameVisibility;
   candidateNamesVisible: boolean;
   conflictImpacts: ConflictImpact[];
   formatTimeLabel: (time: number) => string;
@@ -37,7 +35,6 @@ export const DistributedPlanNotices: React.FC<{
   myInterviewsOnly,
   myInterviewsCount,
   currentUserName,
-  nameVisibility,
   candidateNamesVisible,
   conflictImpacts,
   formatTimeLabel,
@@ -47,17 +44,6 @@ export const DistributedPlanNotices: React.FC<{
       <div className="border-b border-border-soft px-6 py-4 text-ui text-text-muted">
         Ingen intervjuer funnet for <strong>{currentUserName}</strong>. Filteret
         matcher på navn.
-      </div>
-    )}
-
-    {nameVisibility === "committee" && (
-      <div className="flex items-center gap-1.5 border-b border-border-soft px-6 py-2 text-detail text-text-faded">
-        <Info
-          size={iconSizes.detail}
-          className="flex-none"
-          aria-hidden="true"
-        />
-        <span>Klikk på et kandidatnavn for å markere inhabilitet</span>
       </div>
     )}
 

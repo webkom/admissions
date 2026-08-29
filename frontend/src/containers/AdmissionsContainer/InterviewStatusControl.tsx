@@ -14,7 +14,7 @@ import {
   type InterviewStatusTone,
 } from "src/utils/interviewStatus";
 
-const interviewStatusChipTone: Record<
+export const interviewStatusChipTone: Record<
   InterviewStatusTone,
   React.ComponentProps<typeof Chip>["tone"]
 > = {
@@ -78,7 +78,7 @@ const InterviewStatusControl: React.FC<InterviewStatusControlProps> = ({
   const updatedAt = parsedUpdatedAt.isValid
     ? parsedUpdatedAt.toFormat("d. MMM HH:mm")
     : "ukjent tidspunkt";
-  const statusExplanation = `Intervjustatus: ${statusLabel}. Status endret ${updatedAt}${
+  const statusExplanation = `Intervjustatus for ${candidateName}: ${statusLabel}. Status endret ${updatedAt}${
     statusUpdatedBy ? ` av ${statusUpdatedBy}` : ""
   }${canEdit ? ". Klikk for å endre" : ""}`;
 

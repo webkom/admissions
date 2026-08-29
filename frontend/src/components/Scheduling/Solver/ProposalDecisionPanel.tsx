@@ -15,6 +15,7 @@ import {
   actionButtonPrimary,
   keyboardFocusRingClass,
 } from "../ui";
+import type { ProposalDiffChange, ProposalDiffSummary } from "./proposalDiff";
 import type { PendingSolveProposal } from "./solverHelpers";
 
 interface ProposalDecisionPanelProps {
@@ -29,6 +30,9 @@ interface ProposalDecisionPanelProps {
   currentOutsideAvailabilityCount: number;
   proposedUnplacedCount: number;
   proposedOutsideAvailabilityCount: number;
+  /** Diff against the draft this proposal would replace; null when there is
+   *  no current draft (the first proposal ever made). */
+  diff: ProposalDiffSummary | null;
   expiryLabel?: string | null;
   isStale: boolean;
   hasExpired: boolean;
@@ -56,6 +60,74 @@ const ProposalMetric: React.FC<{ label: string; value: number }> = ({
   </div>
 );
 
+const diffSummarySentence = (diff: ProposalDiffSummary): string | null => {
+  const parts: string[] = [];
+  if (diff.movedCount > 0) {
+    parts.push(
+      `${diff.movedCount} ${diff.movedCount === 1 ? "intervju flyttes" : "intervjuer flyttes"}`,
+    );
+  }
+  if (diff.panelChangedCount > 0) {
+    parts.push(
+      `${diff.panelChangedCount} ${diff.panelChangedCount === 1 ? "får nytt panel" : "får nye paneler"}`,
+    );
+  }
+  if (diff.addedCount > 0) {
+    parts.push(
+      `${diff.addedCount} ${diff.addedCount === 1 ? "nytt intervju" : "nye intervjuer"}`,
+    );
+  }
+  if (diff.removedCount > 0) {
+    parts.push(
+      `${diff.removedCount} ${diff.removedCount === 1 ? "kandidat mister plassen" : "kandidater mister plassen"}`,
+    );
+  }
+  if (parts.length === 0) return null;
+  return `${parts.join(", ")} — alt annet er uendret.`;
+};
+
+const DiffTimeCell: React.FC<{
+  change: ProposalDiffChange;
+  dates: string[];
+  sessionDuration: number;
+}> = ({ change, dates, sessionDuration }) => {
+  const format = (time: number | undefined) =>
+    time === undefined || !Number.isFinite(time)
+      ? ""
+      : formatSlotLabel(time, dates, sessionDuration);
+  switch (change.kind) {
+    case "added":
+      return <>Nytt — {format(change.afterTime)}</>;
+    case "removed":
+      return <>Mister plassen (var {format(change.beforeTime)})</>;
+    case "moved":
+      return (
+        <>
+          {format(change.beforeTime)} → {format(change.afterTime)}
+        </>
+      );
+    default:
+      return <>{format(change.afterTime)}</>;
+  }
+};
+
+const DiffPanelCell: React.FC<{ change: ProposalDiffChange }> = ({
+  change,
+}) => {
+  if (change.kind === "added") {
+    return <>{change.addedInterviewers.join(", ")}</>;
+  }
+  if (change.kind === "removed") {
+    return <>—</>;
+  }
+  const edits = [
+    ...change.removedInterviewers.map((name) => `− ${name}`),
+    ...change.addedInterviewers.map((name) => `+ ${name}`),
+  ];
+  if (edits.length === 0) return <>Uendret</>;
+  return <>{edits.join(", ")}</>;
+};
+
 const ProposalDecisionPanel: React.FC<ProposalDecisionPanelProps> = ({
   proposal,
   stage,
@@ -68,6 +140,7 @@ const ProposalDecisionPanel: React.FC<ProposalDecisionPanelProps> = ({
   currentOutsideAvailabilityCount,
   proposedUnplacedCount,
   proposedOutsideAvailabilityCount,
+  diff,
   expiryLabel,
   isStale,
   hasExpired,
@@ -109,6 +182,13 @@ const ProposalDecisionPanel: React.FC<ProposalDecisionPanelProps> = ({
             value={proposedOutsideAvailabilityCount}
           />
         </dl>
+
+        {diff && (
+          <p className="m-0 text-ui font-semibold text-text-primary">
+            {diffSummarySentence(diff) ??
+              "Forslaget er identisk med det gjeldende utkastet."}
+          </p>
+        )}
 
         {expiryLabel && !hasExpired && (
           <p className="m-0 text-detail text-text-subtle">
@@ -209,50 +289,58 @@ const ProposalDecisionPanel: React.FC<ProposalDecisionPanelProps> = ({
                 </tbody>
               </table>
             </div>
-            <div className="max-h-72 overflow-auto rounded-md border border-border-soft">
-              <table className="w-full border-collapse text-left text-detail">
-                <thead className="sticky top-0 bg-surface-muted text-text-muted">
-                  <tr>
-                    <th className="!rounded-none !bg-transparent px-3 py-2 font-semibold">
-                      Tid
-                    </th>
-                    <th className="!rounded-none !bg-transparent px-3 py-2 font-semibold">
-                      Søker
-                    </th>
-                    <th className="!rounded-none !bg-transparent px-3 py-2 font-semibold">
-                      Panel
-                    </th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {[...proposal.result.schedule]
-                    .sort((left, right) => left.time - right.time)
-                    .map((item) => (
+            {diff && diff.changes.length > 0 ? (
+              <div className="max-h-72 overflow-auto rounded-md border border-border-soft">
+                <table className="w-full border-collapse text-left text-detail">
+                  <thead className="sticky top-0 bg-surface-muted text-text-muted">
+                    <tr>
+                      <th className="!rounded-none !bg-transparent px-3 py-2 font-semibold">
+                        Søker
+                      </th>
+                      <th className="!rounded-none !bg-transparent px-3 py-2 font-semibold">
+                        Intervju
+                      </th>
+                      <th className="!rounded-none !bg-transparent px-3 py-2 font-semibold">
+                        Panel
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {diff.changes.map((change) => (
                       <tr
-                        key={`${item.candidate_id ?? item.candidate}-${item.time}`}
+                        key={`${change.candidate}:${change.beforeTime ?? "new"}:${change.afterTime ?? "gone"}`}
                         className="border-t border-border-faint"
                       >
-                        <td className="whitespace-nowrap px-3 py-2 font-semibold text-text-muted">
-                          {formatSlotLabel(item.time, dates, sessionDuration)}
-                        </td>
                         <td className="px-3 py-2 font-semibold text-text-primary">
-                          {item.candidate}
+                          {change.candidate}
+                        </td>
+                        <td className="whitespace-nowrap px-3 py-2 text-text-muted">
+                          <DiffTimeCell
+                            change={change}
+                            dates={dates}
+                            sessionDuration={sessionDuration}
+                          />
                         </td>
                         <td className="px-3 py-2 text-text-muted">
-                          {item.panel.map((member) => member.name).join(", ")}
+                          <DiffPanelCell change={change} />
                         </td>
                       </tr>
                     ))}
-                </tbody>
-              </table>
-            </div>
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <p className="m-0 text-detail text-text-muted">
+                Ingen endringer — forslaget tilsvarer det gjeldende utkastet.
+              </p>
+            )}
           </div>
         )}
 
         {isStale && (
           <p className="m-0 text-detail font-semibold text-danger">
-            Utkastet er endret etter beregningen. Lag et nytt forslag før du
-            fortsetter.
+            Planen er endret etter at forslaget ble laget. Lag et nytt forslag
+            for å se endringene.
           </p>
         )}
         {hasExpired && (
@@ -284,7 +372,7 @@ const ProposalDecisionPanel: React.FC<ProposalDecisionPanelProps> = ({
                 keyboardFocusRingClass,
               )}
             >
-              Juster og prøv igjen
+              Juster oppsettet
             </button>
           )}
           <button

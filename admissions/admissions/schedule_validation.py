@@ -645,7 +645,10 @@ def canonicalize_schedule(
 
     if require_all_candidates and seen_candidates != set(candidate_map):
         raise ScheduleValidationError(
-            "schedule", "Alle aktive kandidater må ha et intervju før publisering."
+            "schedule",
+            "Alle aktive kandidater må ha et intervju før publisering, eller "
+            "bekreft at de siste planlegges senere (kandidater uten intervju "
+            "nå).",
         )
 
     if (solver_options or {}).get("enforce_same_gender"):

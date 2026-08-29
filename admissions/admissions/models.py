@@ -345,6 +345,7 @@ class SavedSchedule(models.Model):
         choices=NAME_VISIBILITY_CHOICES,
         default=NAME_VISIBILITY_HIDDEN,
     )
+    outreach_templates = models.JSONField(default=dict, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

@@ -92,6 +92,11 @@ class SolveOptionsSerializer(serializers.Serializer):
         required=False,
     )
     repair_mode = serializers.BooleanField(default=False)
+    # Strict by default: locked draft rows stay pinned. When opted in, the
+    # worker demotes draft locks to a soft previous schedule so the solver may
+    # re-flow them to place newly arrived candidates. Published rows are never
+    # demoted.
+    rebalance_locked = serializers.BooleanField(default=False)
     overtime_weight = serializers.IntegerField(
         min_value=0, max_value=10000, default=100
     )
@@ -101,6 +106,12 @@ class SolveOptionsSerializer(serializers.Serializer):
     continuity_weight = serializers.IntegerField(
         min_value=0, max_value=10000, default=12
     )
+    # Rank day-major earliness above the fairness terms: under progressive
+    # publishing a published day's spare slots are stranded, so the earliest
+    # days should saturate before the next one is touched. Off by default -
+    # earliness then stays the final tie-breaker below load balancing and
+    # continuity.
+    pack_early = serializers.BooleanField(default=False)
     max_solver_seconds = serializers.FloatField(
         min_value=1.0,
         max_value=constants.MAX_SOLVER_SECONDS,

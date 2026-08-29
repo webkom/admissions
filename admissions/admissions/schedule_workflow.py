@@ -1,6 +1,6 @@
 import uuid
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 
 from django.db import transaction
 from django.utils import timezone
@@ -567,6 +567,29 @@ def _resolve_block_configuration(data, existing, configuration, enabled_slots):
     return {"layout_version": 2, "legacy_compatibility": False, **layout}
 
 
+def _has_enabled_days_after(enabled_slots, boundary):
+    """True while the framework has enabled days beyond the publish boundary.
+
+    Slot keys are "YYYY-MM-DD|minute" strings, so the date half decides which
+    calendar days the plan can still grow into. A boundary at or past the last
+    enabled day means the whole framework is published and nothing remains to
+    schedule.
+    """
+    if boundary is None:
+        return False
+    for slot in enabled_slots or []:
+        if not isinstance(slot, str):
+            continue
+        day_text = slot.split("|", 1)[0]
+        if day_text:
+            try:
+                if date.fromisoformat(day_text) > boundary:
+                    return True
+            except ValueError:
+                continue
+    return False
+
+
 def _full_publish_boundary(start_date, schedule):
     """distributed_through for an unscoped ("is_distributed: true") publish.
 
@@ -739,9 +762,15 @@ def _resolve_schedule_state(
         name_visibility = SavedSchedule.NAME_VISIBILITY_HIDDEN
 
     # A saved internal draft automatically opens the short, assignment-based
-    # conflict review. There is no separate administrative "open review" step:
-    # members can review proposed candidates until the plan is published.
-    conflict_review_open = bool(schedule) and not is_distributed
+    # conflict review. There is no separate administrative "open review" step.
+    # A prefix publish no longer ends the review either: while enabled days
+    # remain beyond the boundary the plan can still grow (rolling admissions
+    # add candidates that must be inhabilitet-checked before the next
+    # publish), so the review stays open until the final day is published.
+    conflict_review_open = bool(schedule) and (
+        distributed_through is None
+        or _has_enabled_days_after(enabled_slots, distributed_through)
+    )
 
     return {
         "grid_changed": grid_changed,
@@ -844,7 +873,18 @@ def _canonicalize_schedule(
                 panel_size=panel_size,
                 solver_options=solver_options,
                 request_user_id=user.id,
-                require_all_candidates=state["is_distributed"],
+                # A prefix publish may leave candidates unscheduled on the
+                # unpublished days still to come; only publishing through the
+                # last enabled day demands that everyone has an interview, so
+                # nobody can silently fall through at the end of the plan.
+                # defer_unplaced_candidates is the explicit way out: an
+                # acknowledgment that the remaining candidates are planned
+                # for later even though no further days are enabled yet.
+                require_all_candidates=state["is_distributed"]
+                and not _has_enabled_days_after(
+                    enabled_slots, state["distributed_through"]
+                )
+                and not data.get("defer_unplaced_candidates"),
                 end_date=configuration["end_date"],
                 session_duration=configuration["session_duration"],
                 day_start_minute=configuration["day_start_minute"],
@@ -912,19 +952,6 @@ def _record_deviation_approval(admission, saved, user, review):
     )
 
 
-def _schedule_pairs_by_interviewer(schedule):
-    pairs = {}
-    for item in schedule or []:
-        candidate_id = str(item.get("candidate_id") or "")
-        if not candidate_id:
-            continue
-        for member in item.get("panel") or []:
-            interviewer_id = str(member.get("id") or "")
-            if interviewer_id:
-                pairs.setdefault(interviewer_id, set()).add(candidate_id)
-    return pairs
-
-
 def _project_interview_availability(
     *, admission, group, existing_schedule, next_schedule, enabled_slots, state
 ):
@@ -936,9 +963,6 @@ def _project_interview_availability(
     if not rows:
         return
     enabled_set = set(enabled_slots)
-    schedule_changed = (existing_schedule or []) != (next_schedule or [])
-    old_pairs = _schedule_pairs_by_interviewer(existing_schedule)
-    new_pairs = _schedule_pairs_by_interviewer(next_schedule)
     changed_at = timezone.now()
     for row in rows:
         if state["duration_changed"]:
@@ -947,21 +971,20 @@ def _project_interview_availability(
         elif state["removed_slots"]:
             row.slots = [slot for slot in row.slots or [] if slot in enabled_set]
 
-        if schedule_changed:
-            interviewer_id = str(row.user_id)
-            retainable = old_pairs.get(interviewer_id, set()).intersection(
-                new_pairs.get(interviewer_id, set())
-            )
-            row.reviewed_candidate_ids = [
-                candidate_id
-                for candidate_id in row.reviewed_candidate_ids or []
-                if str(candidate_id) in retainable
-            ]
+        # reviewed_candidate_ids is deliberately left untouched by schedule
+        # changes: an attestation is a fact about the (interviewer, candidate)
+        # pair - "I have checked this person" - not about where the plan put
+        # them. Trimming it on every re-solve forced everyone (leaders most of
+        # all, since their scope is every candidate) to re-check the same
+        # people after each solve. Withdrawn candidates are already purged by
+        # the UserApplication pre_delete signal; readiness compares the stored
+        # ids against the current scope, so genuinely new candidates are the
+        # only thing anyone is ever asked to check.
         row.updated_at = changed_at
 
     InterviewAvailability.objects.bulk_update(
         rows,
-        ["slots", "submitted_grid_generation", "reviewed_candidate_ids", "updated_at"],
+        ["slots", "submitted_grid_generation", "updated_at"],
     )
 
 
@@ -1020,6 +1043,8 @@ def _persist_schedule(
             "conflict_review_open": state["conflict_review_open"],
             "name_visibility": state["name_visibility"],
         }
+        if "outreach_templates" in data:
+            desired_fields["outreach_templates"] = data["outreach_templates"] or {}
         if existing is None:
             saved = SavedSchedule.objects.create(
                 admission=admission, group=group, **desired_fields
@@ -1136,8 +1161,12 @@ def update_saved_schedule(
     is_recruiter,
     is_admission_admin=False,
 ):
-    admission = Admission.objects.select_for_update().get(pk=admission.pk)
-    existing = SavedSchedule.objects.filter(admission=admission, group=group).first()
+    admission = Admission.objects.get(pk=admission.pk)
+    existing = (
+        SavedSchedule.objects.select_for_update()
+        .filter(admission=admission, group=group)
+        .first()
+    )
 
     mutable_fields = set(data) - {"expected_updated_at"}
     if not is_admission_admin and mutable_fields == {"name_visibility"}:
@@ -1151,7 +1180,27 @@ def update_saved_schedule(
         )
         return ScheduleUpdateResult(admission=admission, saved_schedule=saved)
 
-    if not is_admission_admin and "name_visibility" in mutable_fields:
+    if (is_recruiter or is_admin) and mutable_fields == {"outreach_templates"}:
+        _ensure_revision_matches(data, existing)
+        if existing is None:
+            raise ScheduleNotFound
+        existing.outreach_templates = data.get("outreach_templates") or {}
+        existing.save(update_fields=["outreach_templates", "updated_at"])
+        return ScheduleUpdateResult(admission=admission, saved_schedule=existing)
+
+    # A name-visibility change never rides along with other mutations for a
+    # non-admin: the audited reveal path is the visibility-only branch above.
+    # The one exception is publishing - the publish dialog legitimately sends
+    # the visibility choice together with is_distributed/distributed_through,
+    # and the main path audits that reveal transition itself.
+    is_publish_transition = data.get("is_distributed") is True or data.get(
+        "distributed_through"
+    )
+    if (
+        not is_admission_admin
+        and "name_visibility" in mutable_fields
+        and not is_publish_transition
+    ):
         raise SchedulePermissionDenied
 
     if not is_admin:

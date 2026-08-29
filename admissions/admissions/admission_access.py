@@ -37,11 +37,12 @@ def user_is_admission_admin(admission, user):
     All active members of an admin group are completely equal: they see all
     applications for the admission in admin_full mode, including priority_text.
     """
+    if not user or not getattr(user, "is_authenticated", False):
+        return False
     return user_is_org_leadership(user) or (
         Membership.objects.filter(
             user=user.pk,
             group__in=admission.admin_groups.all(),
-            role__in=constants.ADMISSION_ADMIN_ROLES,
         )
         .exclude(role__in=constants.INACTIVE_MEMBERSHIP_ROLES)
         .exists()
@@ -73,16 +74,6 @@ def get_representing_groups(admission, user):
 
 
 def user_is_in_competing_admin_group(admission, user):
-    """Whether the user is an active member of a committee that ALSO sits in
-    this admission's ``admin_groups``.
-
-    Such a user must never receive ADMIN_FULL — they are a competitor, not
-    a neutral admission-wide officer. The dual-role guard in
-    ``get_application_view_mode`` uses this to narrow them to
-    COMMITTEE_MINIMAL even when they hold only a plain CO_LEADER or MEMBER
-    role, which the (LEADER, RECRUITING) check in
-    ``get_representing_groups`` would otherwise miss.
-    """
     return (
         Membership.objects.filter(
             user=user.pk,
@@ -110,41 +101,21 @@ def user_is_group_member(group, user):
 def get_application_view_mode(admission, user):
     """Resolve how much of an application this user may read.
 
-    Committee representation is checked BEFORE admin standing, and that
-    order is load-bearing: a group that both administers an admission and
-    competes in it - Webkom running the shared tool while also recruiting -
-    must not read a rival committee's answers. Being named in admin_groups
-    therefore grants the full view only to a group that is not itself taking
-    part, which is why the central admin group should be a non-competing one
-    (Hovedstyret / Abakus-leder) rather than a committee.
+    Active members of an admin group (and org leadership) receive
+    ADMIN_FULL, granting access to ALL applications across the admission
+    regardless of group.
 
-    Do not "simplify" this by hoisting the admin check: that hands every
-    competing admin group the other committees' private application text.
+    Non-admin committee recruiters/leaders receive COMMITTEE_MINIMAL
+    (or COMMITTEE_FULL for single-group admissions), narrowed to their
+    represented committee.
     """
-    represented_groups = get_representing_groups(admission, user)
-    # Org leadership is exempt from this guard: the leader of Abakus-leder
-    # oversees the whole admission and must not be narrowed to a single
-    # committee even if the group itself participates. The guard still
-    # applies to a competing admin group (Webkom running the tool while also
-    # recruiting) - only org leadership bypasses it.
-    #
-    # The second branch (user_is_in_competing_admin_group) catches the case
-    # where a user is a plain member of a committee that also sits in
-    # admin_groups: the role-based "represents a committee" check misses
-    # them, but their admin standing would otherwise hand them every other
-    # committee's private application text.
-    if (
-        admission.groups.count() > 1
-        and (
-            represented_groups.exists()
-            or user_is_in_competing_admin_group(admission, user)
-        )
-        and not user_is_org_leadership(user)
-    ):
-        return APPLICATION_VIEW_MODE_COMMITTEE_MINIMAL
     if user_is_admission_admin(admission, user):
         return APPLICATION_VIEW_MODE_ADMIN_FULL
+
+    represented_groups = get_representing_groups(admission, user)
     if represented_groups.exists():
+        if admission.groups.count() > 1:
+            return APPLICATION_VIEW_MODE_COMMITTEE_MINIMAL
         return APPLICATION_VIEW_MODE_COMMITTEE_FULL
     return APPLICATION_VIEW_MODE_NONE
 

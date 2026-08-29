@@ -14,7 +14,7 @@ from admissions.admissions.lego_directory import (
     DirectoryUnavailable,
     search_members,
 )
-from admissions.admissions.models import Admission, LegoUser
+from admissions.admissions.models import Admission
 from admissions.admissions.scheduler_feature import SchedulerFeatureGateMixin
 
 MIN_QUERY_LENGTH = 2
@@ -40,7 +40,6 @@ class MemberSearchView(SchedulerFeatureGateMixin, APIView):
             return Response(status=status.HTTP_404_NOT_FOUND)
 
         user = request.user
-        user.__class__ = LegoUser
         if not (
             user_is_committee_member(admission, user)
             or user_is_admission_admin(admission, user)

@@ -105,7 +105,6 @@ class AppView(TemplateView):
             "is_org_leadership": False,
         }
         if self.request.user.is_authenticated:
-            self.request.user.__class__ = LegoUser
             representative = self.request.user.representative_of_group
             user_data = {
                 "id": str(self.request.user.pk),
@@ -153,6 +152,25 @@ class AppView(TemplateView):
 
 
 def logout(request):
+    # Protect against cross-site logout nuisance attacks (e.g. <img src="/logout/"> or
+    # cross-origin fetches). Allow POST requests, and for GET requests verify that the
+    # call originates from the same site via modern Fetch Metadata or Referer.
+    if request.method == "POST":
+        auth_logout(request)
+        return redirect("/")
+
+    sec_fetch_site = request.headers.get("Sec-Fetch-Site")
+    if sec_fetch_site in ("cross-site",):
+        return redirect("/")
+
+    referer = request.headers.get("Referer")
+    if referer:
+        from urllib.parse import urlparse
+
+        parsed = urlparse(referer)
+        if parsed.netloc and parsed.netloc != request.get_host():
+            return redirect("/")
+
     auth_logout(request)
     return redirect("/")
 
@@ -163,6 +181,8 @@ class PublicAdmissionViewSet(
     queryset = Admission.objects.all()
     authentication_classes = [SessionAuthentication]
     permission_classes = [AdmissionPermissions]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = "application_read"
     lookup_field = "slug"
 
     def get_serializer_class(self):
@@ -313,7 +333,6 @@ class AdminApplicationViewSet(
         admission_slug = self.kwargs.get("admission_slug")
         admission = get_object_or_404(Admission, slug=admission_slug)
         user = self.request.user
-        user.__class__ = LegoUser
         represented_groups = get_representing_groups(admission, user)
         view_mode = get_application_view_mode(admission, user)
         self._application_exposure = (
@@ -338,6 +357,14 @@ class AdminApplicationViewSet(
         user = self.request.user
         if user.is_anonymous:
             return UserApplication.objects.none()
+        # Check membership in admin groups
+        if user_is_admission_admin(admission, user) or view_mode == APPLICATION_VIEW_MODE_ADMIN_FULL:
+            return (
+                super()
+                .get_queryset()
+                .filter(admission__slug=admission_slug)
+                .prefetch_related("group_applications", "group_applications__group")
+            )
         if view_mode == APPLICATION_VIEW_MODE_COMMITTEE_MINIMAL:
             qs = GroupApplication.objects.filter(
                 group__in=representing_groups
@@ -357,14 +384,6 @@ class AdminApplicationViewSet(
                         to_attr="group_applications_filtered",
                     )
                 )
-            )
-        # Check membership in admin groups
-        if user_is_admission_admin(admission, user):
-            return (
-                super()
-                .get_queryset()
-                .filter(admission__slug=admission_slug)
-                .prefetch_related("group_applications", "group_applications__group")
             )
         # Check membership in admission groups
         if representing_groups.exists():
@@ -438,7 +457,6 @@ class AdminApplicationViewSet(
 
     def destroy(self, request, *args, **kwargs):
         admission, representing_groups, view_mode = self.get_application_exposure()
-        self.request.user.__class__ = LegoUser
 
         group_id = request.query_params.get("groupId", None)
         user_is_admin = user_is_admission_admin(admission, self.request.user)
@@ -731,13 +749,13 @@ class AdministeredAdmissionListView(generics.ListAPIView):
             Admission.objects.filter(
                 Q(
                     admin_groups__membership__user=user,
-                    admin_groups__membership__role__in=constants.ADMISSION_ADMIN_ROLES,
                 )
                 | Q(
                     groups__membership__user=user,
                     groups__membership__role__in=constants.ADMISSION_ADMIN_ROLES,
                 )
             )
+            .exclude(admin_groups__membership__role__in=constants.INACTIVE_MEMBERSHIP_ROLES)
             .distinct()
             .order_by("title")
         )
@@ -748,3 +766,9 @@ class ManageGroupViewSet(mixins.ListModelMixin, viewsets.GenericViewSet):
     serializer_class = GroupSerializer
     authentication_classes = [SessionAuthentication]
     permission_classes = [permissions.IsAuthenticated, GroupPermissions]
+
+    def get_queryset(self):
+        user = self.request.user
+        if user.is_staff or user_is_org_leadership(user) or user.is_member_of_webkom:
+            return self.queryset
+        return self.queryset.filter(membership__user=user).distinct()

@@ -199,6 +199,12 @@ export interface SolverOptions {
   initial_strategy: InitialPlanningStrategy;
   repair_strategy: RepairStrategy;
   repair_mode: boolean;
+  /**
+   * Strict locks by default. When true, the solver worker demotes draft
+   * locks to soft preferences so newly arrived candidates can be placed by
+   * re-flowing them. Published rows are never demoted.
+   */
+  rebalance_locked: boolean;
   overtime_weight: number;
   load_balance_weight: number;
   continuity_weight: number;
@@ -293,6 +299,11 @@ export interface SavedSchedule {
   distributed_through: string | null;
   conflict_review_open: boolean;
   name_visibility: NameVisibility;
+  outreach_templates?: {
+    sms?: {
+      body?: string;
+    };
+  } | null;
   updated_at: string;
 }
 
@@ -320,6 +331,14 @@ export interface InterviewAvailabilityParticipant {
    * render next to real candidates without being distinguishable from them.
    */
   decoy_candidates?: { id: string; name: string }[];
+  /**
+   * {id, name} for the real candidates in your own review scope, own row
+   * only, pre-publication: ordinary members perform their inhabilitetssjekk
+   * before the plan is published, when the candidate pool itself is
+   * admin-only. Same shape as decoy_candidates so the review UI renders
+   * both identically.
+   */
+  review_candidates?: { id: string; name: string }[];
   conflict_review_complete: boolean;
   has_submitted: boolean;
   participation: InterviewerParticipation;

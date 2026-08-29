@@ -27,8 +27,16 @@ export interface ConflictImpact extends DistributedScheduleEntry {
 export interface DistributedPlanLookups {
   interviewerOptions: Interviewer[];
   candidateIdFor: (item: ScheduleItem) => string | undefined;
-  biasedFor: (member: SchedulePanelMember) => Set<string> | undefined;
-  isCurrentUser: (member: { id?: string; name: string }) => boolean;
+  biasedFor: (member: {
+    id?: string;
+    name: string;
+    is_overtime?: boolean;
+  }) => Set<string> | undefined;
+  isCurrentUser: (member: {
+    id?: string;
+    name: string;
+    is_overtime?: boolean;
+  }) => boolean;
   availabilityStatusFor: (
     item: ScheduleItem,
     member: SchedulePanelMember,

@@ -5,13 +5,9 @@ import type { SchedulePresentation } from "./solverSelectors";
 export interface PlanHealthException {
   key: string;
   label: string;
-  /** Which fix the exception responds to: unplaced is a scope problem
-   *  (widen days), the rest are per-row or plan-level hand-edit problems. */
-  kind: "unplaced" | "availability" | "conflict" | "rest";
-  /** The row to jump to when the exception is anchored to one interview.
-   *  Unplaced candidates have no row; rest violations are block-level and
-   *  have no single row either. */
-  scheduleIndex?: number;
+  /** Which fix the exception responds to: availability and rest violations
+   *  have per-row quick fixes, conflicts jump to the affected rows. */
+  kind: "availability" | "conflict" | "rest";
 }
 
 interface PlanHealthSummaryProps {
@@ -43,6 +39,12 @@ const PlanHealthSummary = ({
         <strong className="font-semibold tabular-nums text-text-primary">
           {overviewStats.totalInterviews} av {totalCandidateCount} planlagt
         </strong>
+        {unplaceableCount > 0 && (
+          <span className="font-semibold tabular-nums text-text-primary">
+            {" "}
+            — {unplaceableCount} gjenstår
+          </span>
+        )}
         {healthExceptions.map((exception) => (
           <React.Fragment key={exception.key}>
             {", "}

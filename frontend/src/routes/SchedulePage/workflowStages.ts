@@ -62,17 +62,6 @@ export const deriveFoundationStage = ({
   };
 };
 
-type PlanDraftStage =
-  | "published"
-  | "candidate_check"
-  | "pending_proposal"
-  | "repair"
-  | "regeneration_setup"
-  | "missing_placements"
-  | "generating"
-  | "recommended_setup"
-  | "draft_review";
-
 export const derivePendingProposalDecision = ({
   isStale,
   hasExpired,
@@ -88,111 +77,6 @@ export const derivePendingProposalDecision = ({
       : ("apply" as const),
     primaryLabel: mustRegenerate ? "Forkast og lag nytt" : "Bruk forslaget",
     showAdjustAction: !mustRegenerate,
-  };
-};
-
-export const derivePlanDraftStage = ({
-  isPublished,
-  currentReviewRequired,
-  currentReviewComplete,
-  hasPendingProposal,
-  repairOpen,
-  regenerationOpen,
-  unplaceableCount = 0,
-  placementStageDismissed = false,
-  loading,
-  hasProposal,
-}: {
-  isPublished: boolean;
-  currentReviewRequired: boolean;
-  currentReviewComplete: boolean;
-  hasPendingProposal: boolean;
-  repairOpen: boolean;
-  regenerationOpen: boolean;
-  unplaceableCount?: number;
-  placementStageDismissed?: boolean;
-  loading: boolean;
-  hasProposal: boolean;
-}): ScheduleStageSummary<PlanDraftStage> => {
-  if (isPublished) {
-    return {
-      kind: "published",
-      title: "Planen er publisert",
-      description:
-        "Planen håndteres videre i intervjuplanen. Lås den opp der dersom den må endres.",
-    };
-  }
-
-  if (hasPendingProposal) {
-    return {
-      kind: "pending_proposal",
-      title: "Velg hvilket utkast du vil beholde",
-      description:
-        "Det nye forslaget er klart, og det gjeldende utkastet er fortsatt urørt.",
-    };
-  }
-
-  if (repairOpen) {
-    return {
-      kind: "repair",
-      title: "Løs inhabilitetene",
-      description:
-        "Forhåndsvis en løsning før du endrer det lagrede planutkastet.",
-    };
-  }
-
-  if (regenerationOpen) {
-    return {
-      kind: "regeneration_setup",
-      title: "Juster og lag et nytt forslag",
-      description:
-        "Det gjeldende utkastet beholdes mens du prøver et annet oppsett.",
-    };
-  }
-
-  if (unplaceableCount > 0 && !placementStageDismissed) {
-    return {
-      kind: "missing_placements",
-      title: `${unplaceableCount} ${
-        unplaceableCount === 1 ? "kandidat mangler" : "kandidater mangler"
-      } plass`,
-      description:
-        "Delplanen er lagret. Planlegg flere dager for å plassere resten, eller juster oppsettet.",
-    };
-  }
-
-  if (currentReviewRequired && !currentReviewComplete && hasProposal) {
-    return {
-      kind: "candidate_check",
-      title: "Kontroller kandidatene dine",
-      description:
-        "Bekreft eventuelle inhabiliteter før planutkastet kan gå videre.",
-    };
-  }
-
-  if (loading) {
-    return {
-      kind: "generating",
-      title: "Lager planutkast",
-      description:
-        "Planleggingen pågår. Neste handling blir tilgjengelig når forslaget er klart.",
-    };
-  }
-
-  if (!hasProposal) {
-    return {
-      kind: "recommended_setup",
-      title: "Lag planutkast",
-      description:
-        "Bruk det anbefalte oppsettet, eller åpne tilpasning bare dersom intervjuene trenger særregler.",
-    };
-  }
-
-  return {
-    kind: "draft_review",
-    title: "Kontroller planutkastet",
-    description:
-      "Se gjennom resultatet og følg den anbefalte handlingen nederst i arbeidsflaten.",
   };
 };
 

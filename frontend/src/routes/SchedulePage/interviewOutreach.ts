@@ -20,11 +20,6 @@ export const interviewOutreachVariables = [
     label: "Intervjutidspunkt",
     description: "Dato og klokkeslett",
   },
-  {
-    token: "{admission_name}",
-    label: "Opptak",
-    description: "Navnet på opptaket",
-  },
 ] as const;
 
 export const createDefaultInterviewOutreachTemplates = (
@@ -76,7 +71,7 @@ const migrateLegacyBody = (
 });
 
 export const normalizeStoredOutreachTemplates = (
-  raw: string | null | undefined,
+  raw: unknown,
   committeeName = "Abakus",
 ): InterviewOutreachTemplates => {
   const defaultTemplates =
@@ -84,7 +79,7 @@ export const normalizeStoredOutreachTemplates = (
   if (!raw) return defaultTemplates;
 
   try {
-    const parsed: unknown = JSON.parse(raw);
+    const parsed: unknown = typeof raw === "string" ? JSON.parse(raw) : raw;
     if (typeof parsed !== "object" || parsed === null) {
       return typeof parsed === "string"
         ? migrateLegacyBody(parsed, committeeName)
@@ -120,7 +115,9 @@ export const normalizeStoredOutreachTemplates = (
       };
     }
   } catch {
-    return migrateLegacyBody(raw, committeeName);
+    return typeof raw === "string"
+      ? migrateLegacyBody(raw, committeeName)
+      : defaultTemplates;
   }
 
   return defaultTemplates;
@@ -132,9 +129,9 @@ const supportedTokens = new Set<string>([
   "{tid}",
   "{komite}",
   "{kanal}",
-  "{opptak}",
   "{panel}",
   "{committee}",
+  "{admission_name}",
 ]);
 
 export const findUnknownInterviewOutreachTokens = (

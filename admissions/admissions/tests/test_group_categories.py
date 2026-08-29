@@ -104,3 +104,75 @@ class ManageGroupCategoryAPITestCase(APITestCase):
             },
             categories,
         )
+
+    def test_regular_member_only_sees_groups_they_belong_to(self):
+        member = LegoUser.objects.create(username="member", lego_id=6002)
+        Membership.objects.create(
+            user=member, group=self.teknikk, role=constants.MEMBER
+        )
+        self.client.force_authenticate(user=member)
+
+        res = self.client.get(reverse("manage-group-list"))
+
+        self.assertEqual(200, res.status_code, res.data)
+        self.assertEqual(["Teknikk"], [group["name"] for group in res.data])
+
+
+class GroupPermissionsActiveAdmissionTestCase(APITestCase):
+    def setUp(self):
+        from datetime import timedelta
+
+        from django.utils import timezone
+
+        from admissions.admissions.models import Admission
+
+        self.bedkom = Group.objects.create(name="Bedkom", lego_id=14)
+        self.admin_group = Group.objects.create(name="AdminGroup", lego_id=99)
+        self.user = LegoUser.objects.create(username="admin_user", lego_id=7001)
+        Membership.objects.create(
+            user=self.user, group=self.admin_group, role=constants.LEADER
+        )
+
+        now = timezone.now()
+        self.closed_admission = Admission.objects.create(
+            title="Old Opptak",
+            slug="old-opptak",
+            open_from=now - timedelta(days=60),
+            public_deadline=now - timedelta(days=35),
+            closed_from=now - timedelta(days=30),
+        )
+        self.closed_admission.groups.add(self.bedkom)
+        self.closed_admission.admin_groups.add(self.admin_group)
+
+        self.active_admission = Admission.objects.create(
+            title="Active Opptak",
+            slug="active-opptak",
+            open_from=now - timedelta(days=5),
+            public_deadline=now + timedelta(days=5),
+            closed_from=now + timedelta(days=10),
+        )
+
+        self.group_url = reverse("admin-group-detail", kwargs={"pk": self.bedkom.pk})
+        self.client.force_authenticate(user=self.user)
+
+    def test_admin_of_closed_admission_cannot_modify_group(self):
+        res = self.client.patch(
+            self.group_url,
+            {"description": "Updated by old admin with more than thirty characters"},
+            format="json",
+        )
+        self.assertEqual(403, res.status_code)
+
+    def test_admin_of_active_admission_can_modify_group(self):
+        self.active_admission.groups.add(self.bedkom)
+        self.active_admission.admin_groups.add(self.admin_group)
+
+        desc = "Updated by active admin with more than thirty characters"
+        res = self.client.patch(
+            self.group_url,
+            {"description": desc},
+            format="json",
+        )
+        self.assertEqual(200, res.status_code)
+        self.bedkom.refresh_from_db()
+        self.assertEqual(desc, self.bedkom.description)

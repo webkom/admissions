@@ -1,24 +1,25 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import {
   ArrowRight,
-  CalendarDays,
-  Check,
   ChevronDown,
-  GripVertical,
-  List,
-  Lock,
+  Grid3x3,
+  Layers,
+  LayoutPanelTop,
+  Loader2,
   LockKeyhole,
-  Pencil,
   RotateCcw,
-  Unlock,
-  Wrench,
+  User,
 } from "lucide-react";
 import { iconSizes } from "src/styles/designTokens";
 
 import cn from "../../../utils/cn";
-import GridCalendarView from "../Calendar/GridCalendarView";
 import {
-  CustomSelect,
   SegmentedControl,
   SchedulePanel,
   SchedulePanelBody,
@@ -27,18 +28,20 @@ import {
   SchedulingButton,
   type SchedulingWorkspaceMode,
   actionButtonBase,
-  actionButtonDanger,
   actionButtonNeutral,
   keyboardFocusRingClass,
 } from "../ui";
-import type { SavedSchedule } from "../types";
-import {
-  decodeScheduleTime,
-  formatDateHeader,
-  formatMinutes,
-  formatSlotLabel,
-} from "../scheduleUtils";
+import type {
+  Candidate,
+  Interviewer,
+  SchedulePanelMember,
+  SavedSchedule,
+} from "../types";
+import { decodeScheduleTime, formatSlotLabel } from "../scheduleUtils";
 import InterviewerLoadView from "./InterviewerLoadView";
+import BlockTable from "./BlockTable";
+import DayTabs from "./DayTabs";
+import InterviewerMatrixView from "./InterviewerMatrixView";
 import { hasSchedule, type SolveResponse } from "./solverHelpers";
 import type { ScheduleDraftController } from "./useScheduleDraft";
 import type { ScheduleDraftPersistence } from "./useScheduleDraftPersistence";
@@ -50,10 +53,16 @@ import { derivePlanDraftWorkflowState } from "./planDraftWorkflow";
 import DeviationNextStepMenu, {
   type DeviationNextStepAction,
 } from "./DeviationNextStepMenu";
-import PanelMemberChips from "./PanelMemberChips";
 import PlanHealthSummary, {
   type PlanHealthException,
 } from "./PlanHealthSummary";
+import PlanHealthModal, { type PlanHealthModalEntry } from "./PlanHealthModal";
+import {
+  collectAvailabilityExceptions,
+  collectConflictExceptions,
+  findRestViolations,
+  suggestPanelSubstitution,
+} from "./planHealthFixes";
 
 interface SolverResultsProps {
   result: SolveResponse | null;
@@ -63,13 +72,11 @@ interface SolverResultsProps {
   draft: ScheduleDraftController;
   persistence: ScheduleDraftPersistence;
   hasLocalDraft: boolean;
+  candidates: Candidate[];
+  interviewers: Interviewer[];
+  currentUserName?: string;
   dates: string[];
   sessionDuration: number;
-  dayStartMinute: number;
-  dayEndMinute: number;
-  chunkSize: number;
-  chunkBreakMinutes: number;
-  enabledSlots: Set<string>;
   editRequestKey: number;
   focusRequestKey?: number;
   assignmentConflicts: AssignmentConflictSummary;
@@ -84,7 +91,6 @@ interface SolverResultsProps {
   publicationReady: boolean;
   solverError: string;
   onOpenSettings: () => void;
-  onWidenDays: () => void;
   /** One-click incremental extend: solve the next framework day with the
    *  saved plan locked. Undefined when every plannable day is in scope. */
   onExtendDay?: () => void;
@@ -99,6 +105,14 @@ interface SolverResultsProps {
   /** Rows the user just hand-edited, once their debounced save completed:
    *  the plan scrolls back to them and highlights them briefly. */
   savedTouchSignal?: { key: number; scheduleIndexes: number[] } | null;
+  /** Open the slot picker for an unplaced candidate. Called from the
+   *  persistent unplaced tray that stays visible in both preview and
+   *  editing modes. */
+  onPickUnplacedSlot?: (candidate: {
+    candidate_id?: string;
+    candidate: string;
+    reason?: string;
+  }) => void;
 }
 
 const SolverResults = ({
@@ -109,16 +123,15 @@ const SolverResults = ({
   draft,
   persistence,
   hasLocalDraft,
+  candidates,
+  interviewers,
+  currentUserName,
   dates,
   sessionDuration,
-  dayStartMinute,
-  dayEndMinute,
-  chunkSize,
-  chunkBreakMinutes,
-  enabledSlots,
   editRequestKey,
   focusRequestKey = 0,
   assignmentConflicts,
+  panelSize,
   canonicalBlocks,
   currentReviewRequired,
   currentReviewComplete,
@@ -129,7 +142,6 @@ const SolverResults = ({
   publicationReady,
   solverError,
   onOpenSettings,
-  onWidenDays,
   onExtendDay,
   onOpenConflictReview,
   onOpenRepair,
@@ -140,8 +152,8 @@ const SolverResults = ({
   previewLoading,
   backgroundMode = false,
   savedTouchSignal = null,
+  onPickUnplacedSlot,
 }: SolverResultsProps) => {
-  const [viewType, setViewType] = useState<"list" | "calendar">("list");
   const [workspaceMode, setWorkspaceMode] =
     useState<SchedulingWorkspaceMode>("preview");
   const [selectedInterviewer, setSelectedInterviewer] = useState("");
@@ -154,9 +166,13 @@ const SolverResults = ({
   const [listDropTargetIndex, setListDropTargetIndex] = useState<number | null>(
     null,
   );
+  const [listDropTargetTime, setListDropTargetTime] = useState<number | null>(
+    null,
+  );
   const [moveScope, setMoveScope] = useState<"interview" | "group">(
     "interview",
   );
+  const [viewType, setViewType] = useState<"kort" | "matrise">("kort");
   const draftHeadingRef = useRef<HTMLHeadingElement>(null);
   const { presentation } = draft;
   useEffect(() => {
@@ -166,13 +182,7 @@ const SolverResults = ({
     });
     return () => window.cancelAnimationFrame(frame);
   }, [backgroundMode, focusRequestKey]);
-  const isEditing = workspaceMode === "editing";
-  const canEditDraft =
-    !backgroundMode && isEditing && !savedSchedule?.is_distributed;
-  const occupiedTimes = useMemo(
-    () => new Set(presentation.sortedSchedule.map((item) => item.time)),
-    [presentation.sortedSchedule],
-  );
+  const canEditDraft = !backgroundMode && !savedSchedule?.is_distributed;
   // Times hosting more than one candidate are joint interviews (one shared
   // panel meeting two candidates).
   const jointTimes = useMemo(() => {
@@ -188,41 +198,49 @@ const SolverResults = ({
   }, [presentation.sortedSchedule]);
   const formatSlotTime = (time: number) =>
     formatSlotLabel(time, dates, sessionDuration);
-  const blockSummaryByScheduleIndex = useMemo(() => {
-    const summary = new Map<number, string>();
-    const blocks = canonicalBlocks
-      .filter((block) => block.length > 0)
-      .map((block) => [...block].sort((left, right) => left - right))
-      .sort((left, right) => left[0] - right[0]);
 
-    blocks.forEach((block) => {
-      const blockTimes = new Set(block);
-      const entries = presentation.sortedEntries.filter(({ item }) =>
-        blockTimes.has(item.time),
-      );
-      if (entries.length === 0) return;
-
-      const { dayIndex, minute: startMinute } = decodeScheduleTime(
-        block[0],
-        sessionDuration,
-      );
-      const endMinute =
-        decodeScheduleTime(block[block.length - 1], sessionDuration).minute +
-        sessionDuration;
-      const date = dates[dayIndex];
-      const dateLabel = date
-        ? Object.values(formatDateHeader(date)).join(" ")
-        : `Dag ${dayIndex + 1}`;
-      summary.set(
-        entries[0].scheduleIndex,
-        `${dateLabel}, Blokk ${formatMinutes(startMinute)}–${formatMinutes(
-          endMinute,
-        )}, ${entries.length} intervju${entries.length === 1 ? "" : "er"}`,
-      );
+  const interviewerByIdOrName = useMemo(() => {
+    const byId = new Map<string, Interviewer>();
+    const byName = new Map<string, Interviewer>();
+    interviewers.forEach((i) => {
+      byId.set(i.id, i);
+      byName.set(i.name, i);
     });
+    return { byId, byName };
+  }, [interviewers]);
 
-    return summary;
-  }, [canonicalBlocks, dates, presentation.sortedEntries, sessionDuration]);
+  const getBlockInterviewerOptions = useCallback(
+    (
+      currentMember: SchedulePanelMember,
+      blockPanel: SchedulePanelMember[],
+      candidateIds: string[],
+    ) => {
+      return presentation.interviewerOptions.map((interviewer) => {
+        const inPanel =
+          interviewer.id !== currentMember.id &&
+          blockPanel.some((m) =>
+            m.id ? m.id === interviewer.id : m.name === interviewer.name,
+          );
+        const hasConflict = candidateIds.some((cid) => {
+          const i =
+            interviewerByIdOrName.byId.get(interviewer.id) ??
+            interviewerByIdOrName.byName.get(interviewer.name);
+          return i?.biased.includes(cid) ?? false;
+        });
+        return {
+          id: interviewer.id,
+          name: interviewer.name,
+          disabled: inPanel || hasConflict,
+          disabledReason: inPanel
+            ? "Allerede i blokkpanelet"
+            : hasConflict
+              ? "Inhabil mot kandidat i blokken"
+              : undefined,
+        };
+      });
+    },
+    [interviewerByIdOrName, presentation.interviewerOptions],
+  );
   const groupIndexesByScheduleIndex = useMemo(() => {
     const groups = new Map<number, number[]>();
     canonicalBlocks
@@ -235,6 +253,34 @@ const SolverResults = ({
       });
     return groups;
   }, [canonicalBlocks, presentation.sortedEntries]);
+
+  const [selectedDayFilter, setSelectedDayFilter] = useState<number | null>(
+    null,
+  );
+  const [
+    selectedSwapGroupFirstScheduleIndex,
+    setSelectedSwapGroupFirstScheduleIndex,
+  ] = useState<number | null>(null);
+
+  const countsByDay = useMemo(() => {
+    const counts = new Array<number>(dates.length).fill(0);
+    presentation.sortedEntries.forEach((entry) => {
+      const { dayIndex } = decodeScheduleTime(entry.item.time, sessionDuration);
+      if (dayIndex >= 0 && dayIndex < counts.length) {
+        counts[dayIndex] += 1;
+      }
+    });
+    return counts;
+  }, [dates.length, presentation.sortedEntries, sessionDuration]);
+
+  // Selecting a cell in the matrix focuses the corresponding row in the
+  // (hidden) Kort view via the existing highlight-and-scroll helper, and
+  // primes the list-move state so the same row is pre-selected for any
+  // subsequent drag/swap action.
+  const handleMatrixSelectSlot = (scheduleIndex: number) => {
+    setSelectedListScheduleIndex(scheduleIndex);
+    focusScheduleRows([scheduleIndex]);
+  };
 
   useEffect(() => {
     setSelectedInterviewer("");
@@ -296,33 +342,165 @@ const SolverResults = ({
   const clearListMove = () => {
     setDraggedListScheduleIndex(null);
     setListDropTargetIndex(null);
+    setListDropTargetTime(null);
   };
 
   const selectOrSwapListInterview = (scheduleIndex: number) => {
+    if (moveScope === "group") {
+      const thisGroup = groupIndexesByScheduleIndex.get(scheduleIndex) ?? [
+        scheduleIndex,
+      ];
+      const thisGroupFirstIndex = thisGroup[0];
+      if (selectedSwapGroupFirstScheduleIndex === null) {
+        setSelectedSwapGroupFirstScheduleIndex(thisGroupFirstIndex);
+        return;
+      }
+      if (selectedSwapGroupFirstScheduleIndex !== thisGroupFirstIndex) {
+        const sourceGroup = groupIndexesByScheduleIndex.get(
+          selectedSwapGroupFirstScheduleIndex,
+        ) ?? [selectedSwapGroupFirstScheduleIndex];
+        draft.swapGroups(sourceGroup, thisGroup);
+      }
+      setSelectedSwapGroupFirstScheduleIndex(null);
+      return;
+    }
+
     if (selectedListScheduleIndex === null) {
       setSelectedListScheduleIndex(scheduleIndex);
       return;
     }
     if (selectedListScheduleIndex !== scheduleIndex) {
-      if (moveScope === "group") {
-        draft.moveItems(
-          groupIndexesByScheduleIndex.get(selectedListScheduleIndex) ?? [
-            selectedListScheduleIndex,
-          ],
-          presentation.sortedEntries[scheduleIndex]?.item.time ??
-            presentation.sortedEntries[selectedListScheduleIndex]?.item.time ??
-            0,
-        );
-      } else {
-        draft.swapTimes(selectedListScheduleIndex, scheduleIndex);
-      }
+      draft.swapTimes(selectedListScheduleIndex, scheduleIndex);
     }
     setSelectedListScheduleIndex(null);
+  };
+
+  const handleRowDragStart = (
+    scheduleIndex: number,
+    event: React.DragEvent<HTMLButtonElement>,
+  ) => {
+    event.dataTransfer.effectAllowed = "move";
+    event.dataTransfer.setData("text/plain", String(scheduleIndex));
+    setDraggedListScheduleIndex(scheduleIndex);
+    setSelectedListScheduleIndex(null);
+  };
+
+  const handleRowDragOver = (
+    scheduleIndex: number,
+    event: React.DragEvent<HTMLElement>,
+  ) => {
+    if (
+      !canEditDraft ||
+      draggedListScheduleIndex === null ||
+      draggedListScheduleIndex === scheduleIndex
+    ) {
+      return;
+    }
+    event.preventDefault();
+    event.dataTransfer.dropEffect = "move";
+    setListDropTargetIndex(scheduleIndex);
+  };
+
+  const handleRowDragLeave = (
+    scheduleIndex: number,
+    event: React.DragEvent<HTMLElement>,
+  ) => {
+    if (event.currentTarget.contains(event.relatedTarget as Node | null)) {
+      return;
+    }
+    if (listDropTargetIndex === scheduleIndex) {
+      setListDropTargetIndex(null);
+    }
+  };
+
+  const handleRowDrop = (
+    scheduleIndex: number,
+    event: React.DragEvent<HTMLElement>,
+  ) => {
+    if (!canEditDraft) return;
+    event.preventDefault();
+    const parsedIndex = Number(event.dataTransfer.getData("text/plain"));
+    const sourceIndex = Number.isInteger(parsedIndex)
+      ? parsedIndex
+      : draggedListScheduleIndex;
+    clearListMove();
+    if (sourceIndex === null || sourceIndex === scheduleIndex) return;
+    if (moveScope === "group") {
+      const sourceGroup = groupIndexesByScheduleIndex.get(sourceIndex) ?? [
+        sourceIndex,
+      ];
+      const targetGroup = groupIndexesByScheduleIndex.get(scheduleIndex) ?? [
+        scheduleIndex,
+      ];
+      if (sourceGroup !== targetGroup) {
+        draft.swapGroups(sourceGroup, targetGroup);
+      }
+    } else {
+      draft.swapTimes(sourceIndex, scheduleIndex);
+    }
+  };
+
+  const handleEmptySlotDragOver = (
+    time: number,
+    event: React.DragEvent<HTMLElement>,
+  ) => {
+    if (!canEditDraft || draggedListScheduleIndex === null) return;
+    event.preventDefault();
+    event.dataTransfer.dropEffect = "move";
+    setListDropTargetTime(time);
+  };
+
+  const handleEmptySlotDragLeave = (
+    time: number,
+    event: React.DragEvent<HTMLElement>,
+  ) => {
+    if (event.currentTarget.contains(event.relatedTarget as Node | null)) {
+      return;
+    }
+    if (listDropTargetTime === time) setListDropTargetTime(null);
+  };
+
+  const handleEmptySlotDrop = (
+    time: number,
+    event: React.DragEvent<HTMLElement>,
+  ) => {
+    if (!canEditDraft) return;
+    event.preventDefault();
+    const parsedIndex = Number(event.dataTransfer.getData("text/plain"));
+    const sourceIndex = Number.isInteger(parsedIndex)
+      ? parsedIndex
+      : draggedListScheduleIndex;
+    clearListMove();
+    if (sourceIndex === null) return;
+    if (moveScope === "group") {
+      draft.moveItems(
+        groupIndexesByScheduleIndex.get(sourceIndex) ?? [sourceIndex],
+        time,
+      );
+    } else {
+      draft.changeTime(sourceIndex, String(time));
+    }
+  };
+
+  const handleEmptySlotClick = (time: number) => {
+    if (!canEditDraft || selectedListScheduleIndex === null) return;
+    if (moveScope === "group") {
+      draft.moveItems(
+        groupIndexesByScheduleIndex.get(selectedListScheduleIndex) ?? [
+          selectedListScheduleIndex,
+        ],
+        time,
+      );
+    } else {
+      draft.changeTime(selectedListScheduleIndex, String(time));
+    }
+    setSelectedListScheduleIndex(null);
+    setListDropTargetTime(null);
   };
   // Names what a click or drag will actually move, so "Flytt gruppe" vs
   // "Flytt intervju" is a visible fact rather than a guess.
   const moveScopeHint = (() => {
-    if (!canEditDraft || viewType !== "list") return "";
+    if (!canEditDraft) return "";
     const selectedEntry =
       selectedListScheduleIndex !== null
         ? presentation.sortedEntries[selectedListScheduleIndex]
@@ -360,16 +538,21 @@ const SolverResults = ({
     ? "Lagring stoppet"
     : persistence.state === "error"
       ? "Kunne ikke lagre"
-      : persistence.isSaving || hasLocalDraft
+      : persistence.isSaving
         ? "Lagrer utkast…"
-        : "Utkast lagret";
+        : hasLocalDraft
+          ? "Ulagrede endringer"
+          : "Utkast lagret";
   const workflowState = derivePlanDraftWorkflowState({
+    loading: previewLoading,
+    filledDayCount: result?.filled_day_count,
+    extendDayAvailable: Boolean(onExtendDay),
     saveState:
       persistence.hasConflict || persistence.state === "conflict"
         ? "conflict"
         : persistence.state === "error"
           ? "error"
-          : persistence.isSaving || hasLocalDraft
+          : persistence.isSaving
             ? "saving"
             : persistence.state,
     hasSaveConflict: persistence.hasConflict,
@@ -385,39 +568,17 @@ const SolverResults = ({
     assignmentConflictCount: assignmentConflicts.assignmentCount,
     publicationReady,
   });
-  const firstAvailabilityIssueScheduleIndex = useMemo(() => {
-    const entry = presentation.sortedEntries.find(({ item }) =>
-      item.panel.some(
-        (member) =>
-          presentation.availabilityStatusFor(item, member) ===
-          "outside_submitted_availability",
-      ),
-    );
-    return entry?.scheduleIndex;
-  }, [presentation]);
   const firstConflictScheduleIndex = useMemo(
     () => [...assignmentConflicts.affectedScheduleIndexes][0],
     [assignmentConflicts.affectedScheduleIndexes],
   );
   const healthExceptions: PlanHealthException[] = [
-    ...(unplaceableCount > 0 && workflowState.kind !== "placements_missing"
-      ? [
-          {
-            key: "unplaced",
-            label: `${unplaceableCount} gjenstår`,
-            kind: "unplaced" as const,
-          },
-        ]
-      : []),
     ...(presentation.availabilitySummary.outsideAvailabilityAssignments > 0
       ? [
           {
             key: "availability",
             label: `${presentation.availabilitySummary.outsideAvailabilityAssignments} utenfor tilgjengelighet`,
             kind: "availability" as const,
-            ...(firstAvailabilityIssueScheduleIndex !== undefined
-              ? { scheduleIndex: firstAvailabilityIssueScheduleIndex }
-              : {}),
           },
         ]
       : []),
@@ -427,9 +588,6 @@ const SolverResults = ({
             key: "conflicts",
             label: `${assignmentConflicts.assignmentCount} inhabilitet${assignmentConflicts.assignmentCount === 1 ? "" : "er"}`,
             kind: "conflict" as const,
-            ...(firstConflictScheduleIndex !== undefined
-              ? { scheduleIndex: firstConflictScheduleIndex }
-              : {}),
           },
         ]
       : []),
@@ -455,9 +613,9 @@ const SolverResults = ({
   };
   useEffect(() => clearRowHighlightTimeout, []);
   // Scroll to the rows and mark them briefly, used both for "your edit was
-  // saved" and for deviation chips that point at a specific row. Calendar
-  // cards have no stable row anchors, so the scroll only applies to the
-  // list view; the highlight timeout still runs there.
+  // saved" and for deviation chips that point at a specific row. The
+  // highlight timeout runs unconditionally; the scroll-to uses the
+  // `schedule-row-${index}` anchors emitted by the block table.
   const focusScheduleRows = (scheduleIndexes: number[]) => {
     if (scheduleIndexes.length === 0) return;
     clearRowHighlightTimeout();
@@ -466,7 +624,6 @@ const SolverResults = ({
       setHighlightedScheduleIndexes(new Set());
       highlightedRowTimeoutRef.current = null;
     }, 2000);
-    if (viewType !== "list") return;
     window.requestAnimationFrame(() => {
       document
         .getElementById(`schedule-row-${scheduleIndexes[0]}`)
@@ -485,10 +642,10 @@ const SolverResults = ({
     if (savedTouchSignal.key === handledTouchKeyRef.current) return;
     handledTouchKeyRef.current = savedTouchSignal.key;
     focusScheduleRows(savedTouchSignal.scheduleIndexes);
-    // focusScheduleRows closes over viewType only for the scroll target;
-    // re-running it on a view switch would replay the highlight, so it is
-    // deliberately not a dep.
-  }, [backgroundMode, savedTouchSignal, viewType]);
+    // focusScheduleRows closes over no changing state besides savedTouchSignal,
+    // so re-running on identity change would replay the highlight. The
+    // effect is therefore keyed on the signal only.
+  }, [backgroundMode, savedTouchSignal]);
   const startEditing = () => {
     if (workspaceMode === "editing") return;
     if (!draft.canRestoreEditSession) draft.beginEditSession();
@@ -499,28 +656,154 @@ const SolverResults = ({
       draftHeadingRef.current?.focus({ preventScroll: true });
     });
   };
-  const changeWorkspaceMode = (nextMode: SchedulingWorkspaceMode) => {
-    if (nextMode === "editing") {
-      startEditing();
-      return;
-    }
-    setWorkspaceMode("preview");
-  };
+
   const editAndFocusRows = (scheduleIndexes: number[]) => {
     startEditing();
     focusDraftHeading();
     focusScheduleRows(scheduleIndexes);
   };
-  const jumpToHealthException = (exception: PlanHealthException) => {
-    // An unplaced candidate has no row to jump to - the fix is scope (more
-    // enabled days), which lives in the framework section.
-    if (exception.kind === "unplaced") {
-      onWidenDays();
-      return;
+  // Health chips are calls to action: clicking one opens the matching
+  // quick-fix surface instead of silently jumping somewhere in the plan.
+  const [healthModalException, setHealthModalException] =
+    useState<PlanHealthException | null>(null);
+  const openHealthExceptionModal = (exception: PlanHealthException) => {
+    setHealthModalException(exception);
+  };
+  const healthModalEntries = useMemo<PlanHealthModalEntry[]>(() => {
+    if (!healthModalException) return [];
+    const entries = presentation.sortedEntries;
+    const substitutionParams = {
+      entries,
+      interviewers,
+      candidates,
+    };
+    const panelIndexOf = (scheduleIndex: number, memberId?: string) => {
+      const entry = entries.find(
+        (candidate) => candidate.scheduleIndex === scheduleIndex,
+      );
+      if (!entry) return -1;
+      return entry.item.panel.findIndex((member) =>
+        memberId ? member.id === memberId : member.name === member.name,
+      );
+    };
+    if (healthModalException.kind === "availability") {
+      return collectAvailabilityExceptions(
+        entries,
+        (item, member) =>
+          presentation.availabilityStatusFor(item, member) ===
+          "outside_submitted_availability",
+      ).map((exception) => {
+        const entry = entries.find(
+          (candidate) => candidate.scheduleIndex === exception.scheduleIndex,
+        );
+        return {
+          key: `availability-${exception.scheduleIndex}`,
+          scheduleIndex: exception.scheduleIndex,
+          candidateName: exception.candidateName,
+          time: exception.time,
+          problem: `${exception.offenders
+            .map((offender) => offender.name)
+            .join(
+              ", ",
+            )} står utenfor tilgjengeligheten sin i dette intervjuet.`,
+          offenderName: exception.offenders[0].name,
+          offenderId: exception.offenders[0].id,
+          offenderPanelIndex: panelIndexOf(
+            exception.scheduleIndex,
+            exception.offenders[0].id,
+          ),
+          suggestion:
+            entry &&
+            suggestPanelSubstitution({
+              ...substitutionParams,
+              item: entry.item,
+            }),
+        };
+      });
     }
-    editAndFocusRows(
-      exception.scheduleIndex !== undefined ? [exception.scheduleIndex] : [],
+    if (healthModalException.kind === "conflict") {
+      return collectConflictExceptions(entries, interviewers).map(
+        (exception) => {
+          const entry = entries.find(
+            (candidate) => candidate.scheduleIndex === exception.scheduleIndex,
+          );
+          return {
+            key: `conflict-${exception.scheduleIndex}`,
+            scheduleIndex: exception.scheduleIndex,
+            candidateName: exception.candidateName,
+            time: exception.time,
+            problem: `${exception.offenders
+              .map((offender) => offender.name)
+              .join(", ")} har meldt inhabilitet for denne kandidaten.`,
+            offenderName: exception.offenders[0].name,
+            offenderId: exception.offenders[0].id,
+            offenderPanelIndex: panelIndexOf(
+              exception.scheduleIndex,
+              exception.offenders[0].id,
+            ),
+            suggestion:
+              entry &&
+              suggestPanelSubstitution({
+                ...substitutionParams,
+                item: entry.item,
+              }),
+          };
+        },
+      );
+    }
+    return findRestViolations(entries, canonicalBlocks).map((exception) => {
+      const entry = entries.find(
+        (candidate) => candidate.scheduleIndex === exception.scheduleIndex,
+      );
+      const avoidTimes = new Set(
+        exception.blockIndexes.flatMap(
+          (blockIndex) => canonicalBlocks[blockIndex] ?? [],
+        ),
+      );
+      return {
+        key: `rest-${exception.scheduleIndex}-${exception.offenders[0].name}`,
+        scheduleIndex: exception.scheduleIndex,
+        candidateName: exception.candidateName,
+        time: exception.time,
+        problem: `${exception.offenders[0].name} jobber i to naboblokker uten pause (${exception.blockStartTimes
+          .map((start) => formatSlotTime(start))
+          .join(" og ")}).`,
+        offenderName: exception.offenders[0].name,
+        offenderId: exception.offenders[0].id,
+        offenderPanelIndex: panelIndexOf(
+          exception.scheduleIndex,
+          exception.offenders[0].id,
+        ),
+        suggestion:
+          entry &&
+          suggestPanelSubstitution({
+            ...substitutionParams,
+            item: entry.item,
+            avoidTimes,
+          }),
+      };
+    });
+  }, [
+    canonicalBlocks,
+    candidates,
+    healthModalException,
+    formatSlotTime,
+    interviewers,
+    presentation.sortedEntries,
+    presentation.availabilityStatusFor,
+  ]);
+  const applyHealthSubstitution = (entry: PlanHealthModalEntry) => {
+    if (!entry.suggestion || entry.offenderPanelIndex < 0) return;
+    draft.swapPanelMember(
+      entry.scheduleIndex,
+      entry.offenderPanelIndex,
+      entry.suggestion.replacementName,
+      entry.suggestion.replacementId,
     );
+  };
+  const editHealthRow = (scheduleIndex: number) => {
+    setHealthModalException(null);
+    editAndFocusRows([scheduleIndex]);
   };
   const nextStepActions: DeviationNextStepAction[] = (() => {
     switch (workflowState.kind) {
@@ -537,49 +820,58 @@ const SolverResults = ({
       case "placements_missing":
         return [
           {
-            key: "hand-edit",
-            label: "Rediger for hånd",
+            key: "publish-delplan",
+            label: `Publiser delplanen (${unplaceableCount} ${
+              unplaceableCount === 1 ? "kandidat" : "kandidater"
+            } senere)`,
+            onClick: onOpenPlan,
+            variant: "primary" as const,
+            dataCy: "proposal-publish-delplan",
+            icon: <ArrowRight size={iconSizes.small} aria-hidden="true" />,
+          },
+          {
+            key: "place-manually",
+            label: `Plasser de siste ${unplaceableCount} ${
+              unplaceableCount === 1 ? "kandidaten" : "kandidatene"
+            } manuelt`,
             onClick: () => {
+              const first = presentation.unplaceableCandidates[0];
+              if (onPickUnplacedSlot && first) {
+                onPickUnplacedSlot(first);
+                return;
+              }
               startEditing();
               focusDraftHeading();
             },
-            dataCy: "proposal-hand-edit",
+            variant: "neutral" as const,
+            dataCy: "proposal-place-manually",
+            icon: <ArrowRight size={iconSizes.small} aria-hidden="true" />,
           },
-          {
-            key: "settings",
-            label: "Juster oppsett",
-            onClick: onOpenSettings,
-            dataCy: "proposal-rerun-unplaceable",
-          },
-          onExtendDay
-            ? {
-                key: "extend-day",
-                label: "Planlegg neste dag",
-                onClick: onExtendDay,
-                variant: "primary",
-                dataCy: "proposal-widen-days",
-                icon: <ArrowRight size={iconSizes.small} aria-hidden="true" />,
-              }
-            : {
-                key: "widen-days",
-                label: "Utvid med flere dager",
-                onClick: onWidenDays,
-                variant: "primary",
-                dataCy: "proposal-widen-days",
-                icon: <ArrowRight size={iconSizes.small} aria-hidden="true" />,
-              },
         ];
       case "candidate_check_pending":
         return [
           {
             key: "review",
-            label: "Kontroller kandidater",
+            label: "Sjekk inhabilitet",
             onClick: onOpenConflictReview,
             variant: "primary",
             dataCy: "proposal-primary-action",
             icon: <ArrowRight size={iconSizes.small} aria-hidden="true" />,
           },
         ];
+      case "waiting_for_reviews":
+        return currentReviewRequired
+          ? [
+              {
+                key: "review",
+                label: "Endre inhabilitetssvar",
+                onClick: onOpenConflictReview,
+                variant: "neutral",
+                dataCy: "reopen-candidate-review",
+                icon: <ArrowRight size={iconSizes.small} aria-hidden="true" />,
+              },
+            ]
+          : [];
       case "repair_required":
         return [
           {
@@ -629,16 +921,6 @@ const SolverResults = ({
     assignmentConflicts.affectedPanelMemberKeys.has(
       assignmentPanelMemberKey(scheduleIndex, member),
     );
-  const lockLabel = (
-    item: (typeof presentation.sortedEntries)[number]["item"],
-  ) => (item.locked ? "Lås opp intervju" : "Lås intervju");
-
-  const lockDescription = (
-    item: (typeof presentation.sortedEntries)[number]["item"],
-  ) =>
-    item.locked
-      ? "Intervjuet beholdes når forslaget genereres på nytt."
-      : "Behold tid og panel når forslaget genereres på nytt.";
 
   return (
     <div data-cy="schedule-stage" data-stage={workflowState.kind}>
@@ -660,9 +942,9 @@ const SolverResults = ({
                       type="button"
                       onClick={onOpenSettings}
                       data-cy="proposal-rerun"
-                      className={cn(actionButtonBase, actionButtonDanger)}
+                      className={cn(actionButtonBase, actionButtonNeutral)}
                     >
-                      Generer nytt forslag
+                      Lag nytt forslag
                     </button>
                   )}
                 </div>
@@ -697,7 +979,7 @@ const SolverResults = ({
                   overviewStats={overviewStats}
                   totalCandidateCount={totalCandidateCount}
                   healthExceptions={healthExceptions}
-                  onJumpToException={jumpToHealthException}
+                  onJumpToException={openHealthExceptionModal}
                   unplaceableCount={unplaceableCount}
                   previewLoading={previewLoading}
                   onPreviewWithAvailabilityDeviation={
@@ -705,39 +987,95 @@ const SolverResults = ({
                   }
                 />
               )}
-              {canEditDraft && (
+              {unplaceableCount > 0 && onPickUnplacedSlot && (
+                <section
+                  data-cy="unplaced-tray"
+                  role="status"
+                  aria-label={`${unplaceableCount} kandidater venter på plassering`}
+                  className="mb-4 rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-ui"
+                >
+                  <p className="m-0 text-detail font-bold uppercase tracking-wide text-amber-900">
+                    {unplaceableCount}{" "}
+                    {unplaceableCount === 1
+                      ? "kandidat venter"
+                      : "kandidater venter"}{" "}
+                    på plassering
+                  </p>
+                  <ul className="m-0 mt-2 grid gap-2 p-0">
+                    {presentation.unplaceableCandidates.map((candidate) => (
+                      <li
+                        key={candidate.candidate_id ?? candidate.candidate}
+                        className="flex flex-wrap items-center justify-between gap-2 list-none"
+                      >
+                        <span className="text-ui font-semibold text-text-primary">
+                          {candidate.candidate}
+                          {candidate.reason && (
+                            <span className="ml-2 text-detail font-normal text-text-muted">
+                              – {candidate.reason}
+                            </span>
+                          )}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => onPickUnplacedSlot(candidate)}
+                          data-cy="unplaced-tray-place"
+                          className={cn(
+                            actionButtonBase,
+                            actionButtonNeutral,
+                            "border-amber-400 bg-surface-base text-amber-900 hover:bg-amber-100",
+                          )}
+                        >
+                          Plasser i ledig luke
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                </section>
+              )}
+              {canEditDraft && hasLocalDraft && (
                 <div
                   data-cy="manual-schedule-editing"
                   role="status"
-                  className="mb-4 flex flex-wrap items-center justify-between gap-3 border-y border-brand-border bg-brand-soft px-4 py-3 text-ui"
+                  className="mb-4 flex flex-wrap items-center justify-between gap-3 border-y border-brand-border bg-brand-soft px-4 py-3 text-ui animate-fade-in"
                 >
-                  <div className="flex min-w-0 items-center gap-3">
-                    <Wrench
-                      size={iconSizes.small}
-                      className="flex-none text-brand"
-                      aria-hidden="true"
-                    />
-                    <p className="m-0 text-detail text-text-muted">
-                      Du redigerer planen. Endringer lagres automatisk.
+                  <div className="flex min-w-0 items-center">
+                    <p className="m-0 text-detail font-bold text-text-primary">
+                      Du har ulagrede endringer i planen.
                     </p>
                   </div>
-                  {draft.canRestoreEditSession && !persistence.hasConflict && (
+                  <div className="flex flex-wrap items-center gap-2">
                     <SchedulingButton
-                      onClick={draft.restoreEditSession}
+                      onClick={() => {
+                        if (draft.canRestoreEditSession) {
+                          draft.restoreEditSession();
+                        }
+                        onDiscardSuggestion();
+                      }}
+                      disabled={persistence.isSaving}
                       variant="quiet"
                     >
                       <RotateCcw size={iconSizes.small} aria-hidden="true" />
-                      Angre redigeringen
+                      Forkast endringer
                     </SchedulingButton>
-                  )}
-                  {(savedSchedule?.schedule?.length ?? 0) > 0 && (
                     <SchedulingButton
-                      onClick={onDiscardSuggestion}
-                      variant="quiet"
+                      onClick={() => persistence.saveNow?.()}
+                      disabled={persistence.isSaving}
+                      variant="primary"
                     >
-                      Forkast forslag
+                      {persistence.isSaving ? (
+                        <>
+                          <Loader2
+                            size={iconSizes.small}
+                            className="animate-spin"
+                            aria-hidden="true"
+                          />
+                          Lagrer…
+                        </>
+                      ) : (
+                        "Lagre endringer"
+                      )}
                     </SchedulingButton>
-                  )}
+                  </div>
                 </div>
               )}
               {!backgroundMode && (
@@ -749,46 +1087,81 @@ const SolverResults = ({
                     {canEditDraft && (
                       <SegmentedControl<"interview" | "group">
                         value={moveScope}
-                        onChange={setMoveScope}
+                        onChange={(next) => {
+                          setMoveScope(next);
+                          setSelectedListScheduleIndex(null);
+                          setSelectedSwapGroupFirstScheduleIndex(null);
+                        }}
                         items={[
-                          { key: "interview", label: "Flytt intervju" },
-                          { key: "group", label: "Flytt gruppe" },
+                          {
+                            key: "interview",
+                            label: "Flytt intervju",
+                            icon: <User size={iconSizes.small} />,
+                          },
+                          {
+                            key: "group",
+                            label: "Flytt gruppe",
+                            icon: <Layers size={iconSizes.small} />,
+                          },
                         ]}
                         aria-label="Velg hva som skal flyttes"
                       />
                     )}
-                    {!isEditing && (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          startEditing();
-                          focusDraftHeading();
-                        }}
-                        className={cn(actionButtonBase, actionButtonNeutral)}
-                      >
-                        <Pencil size={iconSizes.small} aria-hidden="true" />
-                        Rediger
-                      </button>
-                    )}
                     <div data-cy="view-switcher" data-view={viewType}>
-                      <SegmentedControl<"list" | "calendar">
+                      <SegmentedControl<"kort" | "matrise">
                         value={viewType}
-                        onChange={setViewType}
+                        onChange={(next) => {
+                          if (next === viewType) return;
+                          // Clear any drag/select state set by the other
+                          // view so we don't carry selection across views.
+                          clearListMove();
+                          setViewType(next);
+                        }}
                         items={[
                           {
-                            key: "list",
-                            label: "Liste",
-                            icon: <List size={iconSizes.small} />,
+                            key: "kort",
+                            label: "Kort",
+                            icon: <LayoutPanelTop size={iconSizes.small} />,
                           },
                           {
-                            key: "calendar",
-                            label: "Kalender",
-                            icon: <CalendarDays size={iconSizes.small} />,
+                            key: "matrise",
+                            label: "Matrise",
+                            icon: <Grid3x3 size={iconSizes.small} />,
                           },
                         ]}
                         aria-label="Visning av planutkastet"
                       />
                     </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (presentation.lockedCount === 0) return;
+                        draft.unlockAll();
+                      }}
+                      disabled={
+                        previewLoading ||
+                        persistence.isSaving ||
+                        presentation.lockedCount === 0
+                      }
+                      title={
+                        presentation.lockedCount === 0
+                          ? "Ingen låste intervjuer å frigjøre"
+                          : `Frigjør alle ${presentation.lockedCount} låste intervjuer slik at en ny kjøring av planleggingen kan flytte dem`
+                      }
+                      className={cn(
+                        actionButtonBase,
+                        actionButtonNeutral,
+                        "inline-flex items-center gap-1.5",
+                      )}
+                    >
+                      <LockKeyhole size={iconSizes.small} aria-hidden="true" />
+                      <span>
+                        Frigjør alle intervjuer
+                        {presentation.lockedCount > 0
+                          ? ` (${presentation.lockedCount})`
+                          : ""}
+                      </span>
+                    </button>
                   </div>
                 </div>
               )}
@@ -801,426 +1174,80 @@ const SolverResults = ({
                   {moveScopeHint}
                 </p>
               )}
-              {viewType === "list" ? (
-                <>
-                  <div className="overflow-x-auto rounded-lg border border-border-soft">
-                    <table className="w-full min-w-schedule-table border-collapse">
-                      <thead>
-                        <tr>
-                          <th className="first:!rounded-tl-lg !rounded-none bg-surface-subtle px-4 py-3 text-left text-ui font-semibold text-text-muted">
-                            Tidspunkt
-                          </th>
-                          <th className="!rounded-none bg-surface-subtle px-4 py-3 text-left text-ui font-semibold text-text-muted">
-                            Kandidat
-                          </th>
-                          <th className="!rounded-none bg-surface-subtle px-4 py-3 text-left text-ui font-semibold text-text-muted">
-                            Intervjupanel
-                          </th>
-                          {canEditDraft && (
-                            <th className="last:!rounded-tr-lg !rounded-none bg-surface-subtle px-4 py-3 text-left text-ui font-semibold text-text-muted">
-                              Behold
-                            </th>
-                          )}
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {presentation.sortedEntries.map(
-                          ({ item, scheduleIndex }) => {
-                            const timeOptions = draft
-                              .timeOptionsFor(scheduleIndex)
-                              .map((time) => ({
-                                value: String(time),
-                                label: formatSlotTime(time),
-                              }));
-                            const blockSummary =
-                              blockSummaryByScheduleIndex.get(scheduleIndex);
-                            return (
-                              <React.Fragment
-                                key={`${item.candidate}-${item.time}-${scheduleIndex}`}
-                              >
-                                {blockSummary && (
-                                  <tr>
-                                    <th
-                                      colSpan={canEditDraft ? 4 : 3}
-                                      scope="rowgroup"
-                                      className="border-y border-border-soft bg-surface-neutral px-4 py-2.5 text-left text-detail font-bold text-text-primary"
-                                    >
-                                      {blockSummary}
-                                    </th>
-                                  </tr>
-                                )}
-                                <tr
-                                  id={`schedule-row-${scheduleIndex}`}
-                                  title={
-                                    item.locked
-                                      ? "Manuell endring, beholdes når planen genereres på nytt"
-                                      : undefined
-                                  }
-                                  onDragOver={(event) => {
-                                    if (
-                                      !canEditDraft ||
-                                      draggedListScheduleIndex === null ||
-                                      draggedListScheduleIndex === scheduleIndex
-                                    ) {
-                                      return;
-                                    }
-                                    event.preventDefault();
-                                    event.dataTransfer.dropEffect = "move";
-                                    setListDropTargetIndex(scheduleIndex);
-                                  }}
-                                  onDragLeave={(event) => {
-                                    if (
-                                      event.currentTarget.contains(
-                                        event.relatedTarget as Node | null,
-                                      )
-                                    ) {
-                                      return;
-                                    }
-                                    if (listDropTargetIndex === scheduleIndex) {
-                                      setListDropTargetIndex(null);
-                                    }
-                                  }}
-                                  onDrop={(event) => {
-                                    if (!canEditDraft) return;
-                                    event.preventDefault();
-                                    const parsedIndex = Number(
-                                      event.dataTransfer.getData("text/plain"),
-                                    );
-                                    const sourceIndex = Number.isInteger(
-                                      parsedIndex,
-                                    )
-                                      ? parsedIndex
-                                      : draggedListScheduleIndex;
-                                    clearListMove();
-                                    if (
-                                      sourceIndex === null ||
-                                      sourceIndex === scheduleIndex
-                                    ) {
-                                      return;
-                                    }
-                                    if (moveScope === "group") {
-                                      draft.moveItems(
-                                        groupIndexesByScheduleIndex.get(
-                                          sourceIndex,
-                                        ) ?? [sourceIndex],
-                                        item.time,
-                                      );
-                                    } else {
-                                      draft.swapTimes(
-                                        sourceIndex,
-                                        scheduleIndex,
-                                      );
-                                    }
-                                  }}
-                                  className={cn(
-                                    "group [&:not(:last-child)>td]:border-b [&:not(:last-child)>td]:border-b-border-faint hover:[&>td]:bg-surface-soft",
-                                    listDropTargetIndex === scheduleIndex &&
-                                      "[&>td]:bg-surface-subtle [&>td]:ring-2 [&>td]:ring-inset [&>td]:ring-brand-ring",
-                                    draggedListScheduleIndex ===
-                                      scheduleIndex && "opacity-50",
-                                    highlightedScheduleIndexes.has(
-                                      scheduleIndex,
-                                    ) &&
-                                      "[&>td]:bg-brand-soft [&>td]:ring-2 [&>td]:ring-inset [&>td]:ring-brand-ring",
-                                  )}
-                                >
-                                  <td className="w-schedule-name whitespace-nowrap px-4 py-3 text-sm font-semibold text-text-muted">
-                                    {canEditDraft ? (
-                                      <div className="flex items-center gap-2">
-                                        <button
-                                          type="button"
-                                          draggable
-                                          aria-pressed={
-                                            selectedListScheduleIndex ===
-                                            scheduleIndex
-                                          }
-                                          aria-label={`Flytt intervjuet for ${presentation.displayCandidate(item)}`}
-                                          title={
-                                            moveScope === "group"
-                                              ? "Dra gruppen til en ledig rad"
-                                              : "Dra til en annen rad, eller klikk to grep for å bytte tid"
-                                          }
-                                          onClick={() =>
-                                            selectOrSwapListInterview(
-                                              scheduleIndex,
-                                            )
-                                          }
-                                          onDragStart={(event) => {
-                                            event.dataTransfer.effectAllowed =
-                                              "move";
-                                            event.dataTransfer.setData(
-                                              "text/plain",
-                                              String(scheduleIndex),
-                                            );
-                                            setDraggedListScheduleIndex(
-                                              scheduleIndex,
-                                            );
-                                            setSelectedListScheduleIndex(null);
-                                          }}
-                                          onDragEnd={clearListMove}
-                                          className={cn(
-                                            "flex h-8 w-6 flex-none cursor-grab items-center justify-center rounded border border-border-soft bg-surface-base text-text-faded hover:border-border-quiet hover:text-text-muted active:cursor-grabbing disabled:cursor-not-allowed disabled:opacity-50",
-                                            selectedListScheduleIndex ===
-                                              scheduleIndex &&
-                                              "border-brand-strongBorder text-brand ring-2 ring-brand-ring",
-                                          )}
-                                        >
-                                          <GripVertical
-                                            size={iconSizes.detail}
-                                            aria-hidden="true"
-                                          />
-                                        </button>
-                                        <CustomSelect
-                                          className="w-56"
-                                          value={String(item.time)}
-                                          onChange={(nextTime) =>
-                                            moveScope === "group"
-                                              ? draft.moveItems(
-                                                  groupIndexesByScheduleIndex.get(
-                                                    scheduleIndex,
-                                                  ) ?? [scheduleIndex],
-                                                  Number(nextTime),
-                                                )
-                                              : draft.changeTime(
-                                                  scheduleIndex,
-                                                  nextTime,
-                                                )
-                                          }
-                                          options={timeOptions}
-                                          aria-label={`Endre tidspunkt for ${presentation.displayCandidate(item)}`}
-                                        />
-                                      </div>
-                                    ) : (
-                                      <span>{formatSlotTime(item.time)}</span>
-                                    )}
-                                  </td>
-                                  <td className="px-4 py-3 text-sm font-semibold text-text-primary">
-                                    <div className="flex flex-wrap items-center gap-2">
-                                      {presentation.displayCandidate(item)}
-                                      {jointTimes.has(item.time) && (
-                                        <span className="rounded bg-brand-soft px-1.5 py-0.5 text-label font-semibold text-brand">
-                                          Fellesintervju
-                                        </span>
-                                      )}
-                                    </div>
-                                  </td>
-                                  <td className="px-4 py-3 text-sm">
-                                    <div className="flex flex-wrap gap-1.5">
-                                      <PanelMemberChips
-                                        item={item}
-                                        scheduleIndex={scheduleIndex}
-                                        canEditDraft={canEditDraft}
-                                        interviewerOptions={
-                                          presentation.interviewerOptions
-                                        }
-                                        availabilityStatusFor={
-                                          presentation.availabilityStatusFor
-                                        }
-                                        assignmentConflicts={
-                                          assignmentConflicts
-                                        }
-                                        onSwapPanelMember={
-                                          draft.swapPanelMember
-                                        }
-                                      />
-                                    </div>
-                                  </td>
-                                  {canEditDraft && (
-                                    <td className="w-40 whitespace-nowrap px-4 py-3 text-sm">
-                                      <button
-                                        type="button"
-                                        onClick={() =>
-                                          draft.toggleLock(scheduleIndex)
-                                        }
-                                        aria-label={`${lockLabel(item)} for ${presentation.displayCandidate(item)}`}
-                                        title={lockDescription(item)}
-                                        className={cn(
-                                          "inline-flex h-8 items-center gap-1.5 rounded-md border px-2.5 text-detail font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-ring",
-                                          item.locked
-                                            ? "border-brand-activeBorder bg-brand-soft text-brand hover:bg-brand-panel"
-                                            : "border-border-soft bg-surface-base text-text-muted hover:border-border-quiet hover:bg-surface-subtle",
-                                        )}
-                                      >
-                                        {item.locked ? (
-                                          <Lock
-                                            size={iconSizes.tiny}
-                                            aria-hidden="true"
-                                          />
-                                        ) : (
-                                          <Unlock
-                                            size={iconSizes.tiny}
-                                            aria-hidden="true"
-                                          />
-                                        )}
-                                        {lockLabel(item)}
-                                      </button>
-                                    </td>
-                                  )}
-                                </tr>
-                              </React.Fragment>
-                            );
-                          },
-                        )}
-                      </tbody>
-                    </table>
-                  </div>
-                </>
-              ) : (
-                <GridCalendarView
-                  schedule={presentation.displaySchedule}
+              {dates.length > 1 && (
+                <div className="mb-3">
+                  <DayTabs
+                    dates={dates}
+                    countsByDay={countsByDay}
+                    selectedDayIndex={selectedDayFilter}
+                    onSelectDay={setSelectedDayFilter}
+                  />
+                </div>
+              )}
+              {viewType === "kort" ? (
+                <BlockTable
+                  entries={presentation.sortedEntries}
+                  canonicalBlocks={canonicalBlocks}
+                  candidates={candidates}
+                  interviewers={interviewers}
                   dates={dates}
                   sessionDuration={sessionDuration}
-                  dayStartMinute={dayStartMinute}
-                  dayEndMinute={dayEndMinute}
-                  chunkSize={chunkSize}
-                  chunkBreakMinutes={chunkBreakMinutes}
-                  availableSlots={enabledSlots}
-                  occupiedTimes={occupiedTimes}
-                  showAvailabilityLegend={canEditDraft}
-                  compactSchedule
-                  onMoveItem={
-                    canEditDraft
-                      ? (sortedIndex, nextTime) => {
-                          const entry = presentation.sortedEntries[sortedIndex];
-                          if (!entry) return;
-                          if (moveScope === "group") {
-                            draft.moveItems(
-                              groupIndexesByScheduleIndex.get(
-                                entry.scheduleIndex,
-                              ) ?? [entry.scheduleIndex],
-                              nextTime,
-                            );
-                          } else {
-                            draft.changeTime(
-                              entry.scheduleIndex,
-                              String(nextTime),
-                            );
-                          }
-                        }
-                      : undefined
+                  panelSize={panelSize}
+                  canEditDraft={canEditDraft}
+                  currentUserName={currentUserName}
+                  jointTimes={jointTimes}
+                  selectedDayFilter={selectedDayFilter}
+                  formatSlotTime={formatSlotTime}
+                  getBlockInterviewerOptions={getBlockInterviewerOptions}
+                  onReplaceBlockPanelMember={draft.replaceBlockPanelMember}
+                  onSwapPanelMember={draft.swapPanelMember}
+                  onSwapCandidates={draft.swapTimes}
+                  availabilityStatusFor={presentation.availabilityStatusFor}
+                  hasConflictFor={hasConflictFor}
+                  onToggleLock={draft.toggleLock}
+                  moveScope={moveScope}
+                  groupIndexesByScheduleIndex={groupIndexesByScheduleIndex}
+                  selectedListScheduleIndex={
+                    moveScope === "group"
+                      ? selectedSwapGroupFirstScheduleIndex
+                      : selectedListScheduleIndex
                   }
-                  renderItem={(displayItem, sortedIndex) => {
-                    const entry = presentation.sortedEntries[sortedIndex];
-                    if (!entry) return null;
-                    const { item, scheduleIndex } = entry;
-                    const timeOptions = draft
-                      .timeOptionsFor(scheduleIndex)
-                      .map((time) => ({
-                        value: String(time),
-                        label: formatSlotTime(time),
-                      }));
-                    // The calendar column already names the weekday, so the
-                    // compact picker only needs the date and time.
-                    const calendarTimeOptions = timeOptions.map((option) => ({
-                      ...option,
-                      label: option.label.replace(/^\S+\s+/, ""),
-                    }));
-                    return (
-                      <div
-                        key={`${item.candidate}-${item.time}-${scheduleIndex}`}
-                        className="flex min-w-0 flex-col gap-2 rounded-md border border-border-soft bg-surface-base px-2.5 py-2 shadow-sm"
-                      >
-                        <div className="flex min-w-0 items-start gap-2">
-                          <div className="flex min-w-0 items-center gap-1 text-xs font-bold text-text-primary">
-                            {item.locked && (
-                              <Lock
-                                size={iconSizes.tiny}
-                                aria-label="Låst"
-                                className="flex-none text-brand"
-                              />
-                            )}
-                            <span className="truncate">
-                              {displayItem.candidate}
-                            </span>
-                            {jointTimes.has(item.time) && (
-                              <span className="rounded bg-brand-soft px-1.5 py-0.5 text-label font-semibold text-brand">
-                                Felles
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                        {canEditDraft && (
-                          <CustomSelect
-                            className="w-full min-w-0"
-                            compact
-                            value={String(item.time)}
-                            onChange={(nextTime) =>
-                              draft.changeTime(scheduleIndex, nextTime)
-                            }
-                            options={calendarTimeOptions}
-                            aria-label={`Endre tidspunkt for ${displayItem.candidate}`}
-                          />
-                        )}
-                        {canEditDraft ? (
-                          <button
-                            type="button"
-                            onClick={() => draft.toggleLock(scheduleIndex)}
-                            aria-label={`${lockLabel(item)} for ${displayItem.candidate}`}
-                            title={lockDescription(item)}
-                            className={cn(
-                              "inline-flex h-7 items-center self-start gap-1.5 rounded-md border px-2 text-detail font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-ring",
-                              item.locked
-                                ? "border-brand-activeBorder bg-brand-soft text-brand hover:bg-brand-panel"
-                                : "border-border-soft bg-surface-base text-text-muted hover:border-border-quiet hover:bg-surface-subtle",
-                            )}
-                          >
-                            {item.locked ? (
-                              <Lock size={iconSizes.tiny} aria-hidden="true" />
-                            ) : (
-                              <LockKeyhole
-                                size={iconSizes.tiny}
-                                aria-hidden="true"
-                              />
-                            )}
-                            {item.locked ? "Lås opp intervju" : "Lås intervju"}
-                          </button>
-                        ) : null}
-                        <div className="flex flex-wrap gap-1">
-                          <PanelMemberChips
-                            item={item}
-                            scheduleIndex={scheduleIndex}
-                            canEditDraft={canEditDraft}
-                            interviewerOptions={presentation.interviewerOptions}
-                            availabilityStatusFor={
-                              presentation.availabilityStatusFor
-                            }
-                            assignmentConflicts={assignmentConflicts}
-                            onSwapPanelMember={draft.swapPanelMember}
-                          />
-                        </div>
-                      </div>
-                    );
-                  }}
+                  draggedListScheduleIndex={draggedListScheduleIndex}
+                  listDropTargetIndex={listDropTargetIndex}
+                  listDropTargetTime={listDropTargetTime}
+                  highlightedScheduleIndexes={highlightedScheduleIndexes}
+                  onSelectRow={selectOrSwapListInterview}
+                  onDragStartRow={handleRowDragStart}
+                  onDragEndRow={clearListMove}
+                  onRowDragOver={handleRowDragOver}
+                  onRowDragLeave={handleRowDragLeave}
+                  onRowDrop={handleRowDrop}
+                  onEmptySlotDragOver={handleEmptySlotDragOver}
+                  onEmptySlotDragLeave={handleEmptySlotDragLeave}
+                  onEmptySlotDrop={handleEmptySlotDrop}
+                  onEmptySlotClick={handleEmptySlotClick}
+                />
+              ) : (
+                <InterviewerMatrixView
+                  entries={presentation.sortedEntries.map((entry) => ({
+                    item: entry.item,
+                    scheduleIndex: entry.scheduleIndex,
+                  }))}
+                  dates={dates}
+                  sessionDuration={sessionDuration}
+                  dayIndex={selectedDayFilter}
+                  canonicalBlocks={canonicalBlocks}
+                  panelSize={panelSize}
+                  hasConflictFor={hasConflictFor}
+                  highlightedScheduleIndex={
+                    highlightedScheduleIndexes.size > 0
+                      ? ([...highlightedScheduleIndexes][0] ?? null)
+                      : null
+                  }
+                  onSelectSlot={handleMatrixSelectSlot}
                 />
               )}
             </SchedulePanelBody>
-            {!backgroundMode && (
-              <section className="border-t border-border-soft bg-surface-subtle px-6">
-                {currentReviewRequired && (
-                  <div className="border-b border-border-soft py-5">
-                    <h3 className="m-0 text-base font-bold text-text-primary">
-                      Inhabilitetssjekk
-                    </h3>
-                    <p className="m-0 mt-1 text-detail text-text-muted">
-                      Sjekk inhabilitet før planen går videre til publisering.
-                    </p>
-                    <button
-                      type="button"
-                      onClick={onOpenConflictReview}
-                      data-cy="reopen-candidate-review"
-                      className={cn(
-                        actionButtonBase,
-                        actionButtonNeutral,
-                        "mt-4",
-                      )}
-                    >
-                      Sjekk inhabilitet
-                      <ArrowRight size={iconSizes.small} aria-hidden="true" />
-                    </button>
-                  </div>
-                )}
-              </section>
-            )}
             {!backgroundMode && (
               <SchedulingActionBar
                 className="sticky bottom-0 z-10 bg-surface-base"
@@ -1257,18 +1284,46 @@ const SolverResults = ({
                     </SchedulingButton>
                   ) : workflowState.kind === "saving" ? null : (
                     <div className="flex flex-wrap items-center gap-2">
+                      {hasLocalDraft && (
+                        <>
+                          <SchedulingButton
+                            onClick={() => {
+                              if (draft.canRestoreEditSession) {
+                                draft.restoreEditSession();
+                              }
+                              onDiscardSuggestion();
+                            }}
+                            disabled={persistence.isSaving}
+                            variant="quiet"
+                          >
+                            <RotateCcw
+                              size={iconSizes.small}
+                              aria-hidden="true"
+                            />
+                            Forkast endringer
+                          </SchedulingButton>
+                          <SchedulingButton
+                            onClick={() => persistence.saveNow?.()}
+                            disabled={persistence.isSaving}
+                            variant="primary"
+                          >
+                            {persistence.isSaving ? (
+                              <>
+                                <Loader2
+                                  size={iconSizes.small}
+                                  className="animate-spin"
+                                  aria-hidden="true"
+                                />
+                                Lagrer…
+                              </>
+                            ) : (
+                              "Lagre endringer"
+                            )}
+                          </SchedulingButton>
+                        </>
+                      )}
                       {nextStepActions.length > 0 && (
                         <DeviationNextStepMenu actions={nextStepActions} />
-                      )}
-                      {isEditing && (
-                        <SchedulingButton
-                          onClick={() => changeWorkspaceMode("preview")}
-                          data-cy="proposal-primary-action"
-                          variant="primary"
-                        >
-                          <Check size={iconSizes.small} aria-hidden="true" />
-                          Vis uten redigering
-                        </SchedulingButton>
                       )}
                     </div>
                   )
@@ -1307,7 +1362,7 @@ const SolverResults = ({
                       canEditDraft={canEditDraft}
                       interviewerOptions={presentation.interviewerOptions}
                       onSwapPanelMember={draft.swapPanelMember}
-                      displayCandidate={presentation.displayCandidate}
+                      displayCandidate={(item) => item.candidate}
                       formatSlotTime={formatSlotTime}
                       availabilityStatusFor={presentation.availabilityStatusFor}
                       hasConflictFor={hasConflictFor}
@@ -1318,6 +1373,29 @@ const SolverResults = ({
             </section>
           )}
         </>
+      )}
+      {!backgroundMode && healthModalException && (
+        <PlanHealthModal
+          title={
+            healthModalException.kind === "availability"
+              ? "Utenfor tilgjengelighet"
+              : healthModalException.kind === "conflict"
+                ? "Inhabilitet i panelet"
+                : "Hvileavvik"
+          }
+          intro={
+            healthModalException.kind === "availability"
+              ? "Disse intervjuene har paneledlemmer som ikke har åpnet tidsluken. Bytt medlemmet, eller åpne raden og rediger selv."
+              : healthModalException.kind === "conflict"
+                ? "Disse tildelingene bruker en intervjuer som har meldt inhabilitet for kandidaten. Bytt medlemmet, eller rediger raden."
+                : "Disse pannelederne jobber i naboblokker uten pause imellom. Bytt én ut av blokken, eller rediger raden."
+          }
+          entries={healthModalEntries}
+          formatTime={formatSlotTime}
+          onApplySubstitution={applyHealthSubstitution}
+          onEditRow={editHealthRow}
+          onClose={() => setHealthModalException(null)}
+        />
       )}
     </div>
   );

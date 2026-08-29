@@ -790,6 +790,48 @@ class FactorizedSolverV2TestCase(SimpleTestCase):
         self.assertEqual(len(schedule), 4)
         self.assertEqual(len(result["unplaceable"]), 1)
 
+    def test_incomplete_block_has_stable_panel(self):
+        candidates = [
+            {"id": f"c{index}", "name": f"Candidate {index}"} for index in range(7)
+        ]
+        interviewers = [
+            interviewer(
+                f"i{index}",
+                list(range(8)),
+                experience_level="experienced" if index % 2 == 0 else "unknown",
+            )
+            for index in range(12)
+        ]
+        options = {
+            "policy_version": 2,
+            "panel_stability": "preferred",
+            "availability_fallback": "stop",
+            "require_experienced_panel": True,
+            "initial_strategy": "balanced",
+            "max_solver_seconds": 3,
+        }
+        result = solve_schedule(
+            candidates,
+            interviewers,
+            4,
+            options,
+            all_slots_data=list(range(8)),
+            blocks_data=[[0, 1, 2, 3], [4, 5, 6, 7]],
+            model_version="v2",
+        )
+        self.assertEqual(result["status"], "SUCCESS")
+        schedule_by_time = {row["time"]: row for row in result["schedule"]}
+
+        # Block 2 has 3 candidates (time 4, 5, 6) and 1 empty slot (time 7).
+        block_2_panels = [
+            tuple(sorted(member["id"] for member in schedule_by_time[time]["panel"]))
+            for time in [4, 5, 6]
+            if time in schedule_by_time
+        ]
+        self.assertEqual(len(block_2_panels), 3)
+        # All 3 slots must share the identical panel.
+        self.assertEqual(len(set(block_2_panels)), 1)
+
 
 class IndependentSolverResultTestCase(SimpleTestCase):
     def setUp(self):
@@ -1367,3 +1409,101 @@ class StagedTierBudgetingTestCase(SimpleTestCase):
 
         self.assertEqual(status, cp_model.OPTIMAL)
         self.assertEqual(len(calls), len(built.tiers))
+
+
+class PackEarlyObjectiveOrderingTestCase(SimpleTestCase):
+    """pack_early promotes the day-major earliness tier above the fairness
+    terms: progressive publishing strands an early-published day's spare
+    capacity, so an opted-in solve saturates Monday before touching Tuesday.
+    Repairs keep their minimal-change precedence, and by default earliness
+    stays the final tie-breaker below load balancing and continuity.
+    """
+
+    def _built(self, options, previous=None):
+        problem, error = solver_v2_module._normalize_problem(
+            candidates_data=[
+                {"id": "c1", "name": "One"},
+                {"id": "c2", "name": "Two"},
+            ],
+            interviewers_data=[
+                interviewer("i1", [0, 1]),
+                interviewer("i2", [0, 1]),
+            ],
+            panel_size=1,
+            options_data={
+                "policy_version": 2,
+                "panel_stability": "flexible",
+                "availability_fallback": "stop",
+                **options,
+            },
+            all_slots_data=[0, 1],
+            locked_assignments_data=[],
+            blocks_data=[],
+            block_metadata_data=[],
+            previous_schedule_data=previous or [],
+        )
+        self.assertIsNone(error)
+        return solver_v2_module._build_model(problem, full_placement=False)
+
+    def _tier_names(self, built):
+        return [tier.name for tier in built.tiers]
+
+    def test_default_keeps_earliness_as_the_final_tie_breaker(self):
+        built = self._built({})
+
+        names = self._tier_names(built)
+        self.assertLess(names.index("load_and_continuity"), names.index("earliness"))
+
+    def test_pack_early_promotes_earliness_above_the_fairness_terms(self):
+        built = self._built({"pack_early": True})
+
+        names = self._tier_names(built)
+        self.assertEqual(names.count("earliness"), 1)
+        self.assertLess(names.index("earliness"), names.index("block_fill"))
+        self.assertLess(names.index("earliness"), names.index("load_and_continuity"))
+
+    def test_repair_mode_keeps_minimal_change_precedence_over_packing(self):
+        previous = [
+            {
+                "candidate_id": "c1",
+                "time": 0,
+                "panel": [{"id": "i1", "name": "i1"}],
+            }
+        ]
+        built = self._built({"pack_early": True, "repair_mode": True}, previous)
+
+        names = self._tier_names(built)
+        self.assertLess(names.index("repair_cost"), names.index("earliness"))
+        self.assertGreater(names.index("earliness"), names.index("load_and_continuity"))
+
+    def test_packed_solve_fills_the_earlier_day_first(self):
+        slots = [540, 600, 24 * 60 + 540, 24 * 60 + 600]
+        candidates = [
+            {"id": f"c{index}", "name": f"Candidate {index}"} for index in range(3)
+        ]
+        # One interviewer, panel of one: a single session per slot, so the
+        # solver chooses which day carries the load.
+        interviewers = [interviewer("i1", slots)]
+
+        packed = solve_schedule(
+            candidates_data=candidates,
+            interviewers_data=interviewers,
+            panel_size=1,
+            options_data={
+                "policy_version": 2,
+                "panel_stability": "flexible",
+                "availability_fallback": "stop",
+                "pack_early": True,
+                "max_solver_seconds": 5,
+            },
+            all_slots_data=slots,
+        )
+        self.assertEqual(packed["status"], "SUCCESS")
+        day_counts = {}
+        for row in packed["schedule"]:
+            day = row["time"] // (24 * 60)
+            day_counts[day] = day_counts.get(day, 0) + 1
+        # Three candidates, two sessions per day: packing fills day 0 to its
+        # two-session capacity before day 1 is touched.
+        self.assertEqual(day_counts.get(0, 0), 2)
+        self.assertEqual(day_counts.get(1, 0), 1)

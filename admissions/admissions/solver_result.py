@@ -644,15 +644,10 @@ def objective_key(
         vector.unplaced,
         vector.overtime,
         *((vector.joint_sessions,) if candidates_per_session > 1 else ()),
+        vector.panel_breaks if prefers_stable_panel else 0,
         vector.adjacent_block_rest,
         vector.extra_experienced,
         structure,
-        # Panel stability is the model's last quality tier before earliness:
-        # fresh plans balance participating interviewers fairly first and
-        # only then preserve the previous panel makeup. The comparison key
-        # must mirror that order, or an optimal-for-the-model solution
-        # compares as worse than a non-optimal one.
-        vector.panel_breaks if prefers_stable_panel else 0,
         vector.earliness,
         stability_tie,
         vector.canonical_tie,

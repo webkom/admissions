@@ -15,6 +15,13 @@ export interface WorkflowStepDefinition {
    * workspace and the published plan) is active while any of them is.
    */
   keys?: TabType[];
+  /**
+   * Section to open when the step is clicked. Defaults to the first entry of
+   * `keys` (or `key`). The Plan step points at the draft workspace while
+   * planning, but jumps straight to the published plan once the whole plan is
+   * out - the workspace is only a "Åpne intervjuplan" redirect card by then.
+   */
+  navigateKey?: TabType;
   title: string;
   description: string;
   icon: React.ComponentType<{ size?: number | string; className?: string }>;
