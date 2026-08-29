@@ -615,6 +615,7 @@ const LoadedScheduleView: React.FC<LoadedScheduleViewProps> = ({
     publicationStage,
     workflowPhase,
     availabilityReady,
+    proposalConflicts,
   } = workflow;
   const {
     realCandidates,
@@ -1179,6 +1180,7 @@ const LoadedScheduleView: React.FC<LoadedScheduleViewProps> = ({
             <PublicationGate
               savedSchedule={savedSchedule}
               readiness={publicationReadiness}
+              proposalConflicts={proposalConflicts}
               stage={publicationStage}
               dates={dates}
               planTransition={planTransition}

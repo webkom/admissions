@@ -152,24 +152,48 @@ export const useScheduleWorkflow = ({
   const availabilityReady =
     availabilityParticipantCount > 0 &&
     submittedAvailabilityCount >= availabilityParticipantCount;
-  const proposalConflictCount = useMemo(() => {
+  const proposalConflicts = useMemo(() => {
     const conflictsByInterviewer = new Map(
       (participants ?? []).map((participant) => [
         participant.user_id,
         new Set(participant.conflicts),
       ]),
     );
-    return (savedSchedule?.schedule ?? []).filter((assignment) => {
-      if (!assignment.candidate_id) return false;
-      return assignment.panel.some(
-        (member) =>
+    const membersById = new Map(
+      (participants ?? []).map((participant) => [
+        participant.user_id,
+        participant,
+      ]),
+    );
+    const conflicts: Array<{
+      candidate_id: string;
+      candidate_name: string;
+      interviewer_id: string;
+      interviewer_name: string;
+    }> = [];
+    for (const assignment of savedSchedule?.schedule ?? []) {
+      if (!assignment.candidate_id) continue;
+      for (const member of assignment.panel) {
+        if (
           member.id &&
           conflictsByInterviewer
             .get(member.id)
-            ?.has(assignment.candidate_id ?? ""),
-      );
-    }).length;
+            ?.has(assignment.candidate_id)
+        ) {
+          const interviewer = membersById.get(member.id);
+          conflicts.push({
+            candidate_id: assignment.candidate_id,
+            candidate_name: assignment.candidate ?? assignment.candidate_id,
+            interviewer_id: member.id,
+            interviewer_name:
+              member.name ?? interviewer?.full_name ?? interviewer?.username ?? member.id,
+          });
+        }
+      }
+    }
+    return conflicts;
   }, [participants, savedSchedule?.schedule]);
+  const proposalConflictCount = proposalConflicts.length;
   const publicationReadiness = useMemo<PublicationReadiness>(
     () =>
       derivePublicationReadiness({
@@ -318,6 +342,7 @@ export const useScheduleWorkflow = ({
     availabilityReady,
     myAvailabilitySaved,
     proposalConflictCount,
+    proposalConflicts,
     deferUnplacedIntent,
     requestDeferUnplacedFromUnplacedTray,
     consumeDeferUnplacedIntent,

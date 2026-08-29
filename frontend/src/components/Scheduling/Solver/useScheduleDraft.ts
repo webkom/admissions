@@ -60,6 +60,7 @@ export interface ScheduleDraftController {
   /** Unlock every locked row in one go and demote any "manual" booking
    *  source back to "solver" so a re-solve is free to move them. */
   unlockAll: () => void;
+  lockAll: () => void;
   changeTime: (scheduleIndex: number, nextTime: string) => void;
   moveItems: (scheduleIndexes: number[], nextTime: number) => void;
   swapTimes: (sourceScheduleIndex: number, targetScheduleIndex: number) => void;
@@ -267,6 +268,33 @@ export const useScheduleDraft = ({
     if (unlockedIndexes.length === 0) return;
     setResult({ ...current, schedule: nextSchedule });
     markTouchedScheduleIndexes(unlockedIndexes);
+    onModify?.();
+  }, [markTouchedScheduleIndexes, onModify, result, setResult]);
+
+  // Lock every current placement so a re-solve fills the remaining
+  // unplaced candidates around the kept plan instead of reshuffling
+  // existing rows. Symmetric to unlockAll, used after the admin has
+  // eyeballed the current draft and wants to commit to it as the
+  // starting point for the next pass.
+  const lockAll = useCallback(() => {
+    const current = result;
+    if (!current || !hasSchedule(current.status)) return;
+    const lockedIndexes: number[] = [];
+    const nextSchedule = current.schedule.map((item, index) => {
+      if (item.locked) return item;
+      lockedIndexes.push(index);
+      return {
+        ...item,
+        locked: true,
+        booking_source:
+          item.booking_source === "manual"
+            ? ("manual" as const)
+            : ("solver_locked" as const),
+      };
+    });
+    if (lockedIndexes.length === 0) return;
+    setResult({ ...current, schedule: nextSchedule });
+    markTouchedScheduleIndexes(lockedIndexes);
     onModify?.();
   }, [markTouchedScheduleIndexes, onModify, result, setResult]);
 
@@ -730,6 +758,7 @@ export const useScheduleDraft = ({
     timeOptionsFor,
     toggleLock,
     unlockAll,
+    lockAll,
     changeTime,
     moveItems,
     swapTimes,

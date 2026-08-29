@@ -588,8 +588,29 @@ def canonicalize_schedule(
                 else set()
             ) | derived_conflicts.get(interviewer_id, set())
             if candidate_id in conflicts:
+                # Name the offending pair so the admin can find it in
+                # the plan: a generic "bryter en inhabilitet" leaves them
+                # hunting across 70+ rows for the conflict. The names
+                # are looked up from the application (candidate) and
+                # the InterviewAvailability row (interviewer) - both
+                # already in scope, no extra query needed.
+                candidate_name = (
+                    candidate_map.get(candidate_id).user.get_full_name()
+                    or candidate_map.get(candidate_id).user.username
+                    if candidate_map.get(candidate_id) is not None
+                    else candidate_id
+                )
+                interviewer_user = user_map.get(interviewer_id)
+                interviewer_name = (
+                    interviewer_user.get_full_name() or interviewer_user.username
+                    if interviewer_user is not None
+                    else interviewer_id
+                )
                 raise ScheduleValidationError(
-                    "schedule", "Planen bryter en registrert inhabilitet."
+                    "schedule",
+                    f"Planen bryter en registrert inhabilitet: "
+                    f"{interviewer_name} er oppført som inhabil mot "
+                    f"{candidate_name}.",
                 )
             available_times = (
                 # "Helst ikke" counts as available here: the interviewer said

@@ -29,6 +29,15 @@ import type { PublicationStagePresentation } from "./workflowStages";
 interface PublicationGateProps {
   savedSchedule: SavedSchedule | undefined;
   readiness: PublicationReadiness;
+  /** Named pairs that violate a registered inhabilitet. Same data as
+   *  readiness.proposalConflictCount, but with names so the admin can
+   *  find the offending row in the plan instead of hunting. */
+  proposalConflicts: Array<{
+    candidate_id: string;
+    candidate_name: string;
+    interviewer_id: string;
+    interviewer_name: string;
+  }>;
   planTransition: "publishing" | "unlocking" | null;
   planTransitionError: string;
   stage: PublicationStagePresentation;

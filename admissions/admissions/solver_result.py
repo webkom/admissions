@@ -199,10 +199,16 @@ def validate_schedule_result(
                     )
                 )
             if candidate_id in set(_value(interviewer, "biased", ()) or ()):
+                # The candidate/interviewer ids are returned in the issue
+                # payload so the UI can resolve names and point the admin
+                # at the offending row in the plan. The message stays
+                # generic so a screen reader still reads cleanly; the
+                # ids are the actionable bit.
                 issues.append(
                     ValidationIssue(
                         "interviewer_conflict",
-                        "Resultatet bryter en registrert inhabilitet.",
+                        "Resultatet bryter en registrert inhabilitet "
+                        "(intervjuer og kandidat i samme panel).",
                         candidate_id=candidate_id,
                         interviewer_id=interviewer_id,
                         time=interview_time,

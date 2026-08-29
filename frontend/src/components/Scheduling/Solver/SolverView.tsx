@@ -463,6 +463,23 @@ export default function SolverView({
       { dayCount: next },
     );
   };
+  // Extend the scope to every remaining enabled day at once, instead
+  // of clicking "Planlegg neste dag" once per day. The published
+  // prefix stays locked; the solver fills the still-draft tail in a
+  // single pass so the user lands on a complete draft rather than
+  // clicking through 5+ days individually. Disabled when there's
+  // nothing left to extend into.
+  const fillRemainingDays = () => {
+    const total = session.plannableDates.length;
+    if (total <= session.effectiveDayCount) return;
+    session.setDayCount(total);
+    void session.solvePlan(
+      savedScheduleLocks ??
+        publishedDayLocks ??
+        draft.explicitLockedAssignments,
+      { dayCount: total },
+    );
+  };
   const retryWithAvailabilityDeviation = () => {
     void session.solvePlan(
       publishedDayLocks ?? draft.explicitLockedAssignments,
@@ -840,6 +857,11 @@ export default function SolverView({
       solverError={session.error}
       onOpenSettings={() => setRegenerationOpen(true)}
       onExtendDay={canExtendDay ? extendDay : undefined}
+      onFillRemainingDays={
+        canExtendDay && session.plannableDates.length > session.effectiveDayCount + 1
+          ? fillRemainingDays
+          : undefined
+      }
       onOpenConflictReview={onOpenConflictReview}
       onOpenRepair={() => {
         setRepairOpen(true);

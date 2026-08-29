@@ -94,6 +94,10 @@ interface SolverResultsProps {
   /** One-click incremental extend: solve the next framework day with the
    *  saved plan locked. Undefined when every plannable day is in scope. */
   onExtendDay?: () => void;
+  /** Extend the scope to every remaining enabled day in one go, instead
+   *  of one day at a time. The published prefix stays locked; the
+   *  solver fills the still-draft tail in a single pass. */
+  onFillRemainingDays?: () => void;
   onOpenConflictReview: () => void;
   onOpenRepair: () => void;
   onRetrySolve: () => void;
@@ -143,6 +147,7 @@ const SolverResults = ({
   solverError,
   onOpenSettings,
   onExtendDay,
+  onFillRemainingDays,
   onOpenConflictReview,
   onOpenRepair,
   onRetrySolve,
@@ -829,6 +834,29 @@ const SolverResults = ({
             dataCy: "proposal-publish-delplan",
             icon: <ArrowRight size={iconSizes.small} aria-hidden="true" />,
           },
+          ...(onFillRemainingDays
+            ? [
+                {
+                  key: "fill-remaining-days",
+                  label: "Planlegg alle gjenstående dager",
+                  onClick: onFillRemainingDays,
+                  variant: "primary" as const,
+                  dataCy: "proposal-fill-remaining-days",
+                  icon: <ArrowRight size={iconSizes.small} aria-hidden="true" />,
+                },
+              ]
+            : onExtendDay
+              ? [
+                  {
+                    key: "extend-day",
+                    label: "Planlegg neste dag",
+                    onClick: onExtendDay,
+                    variant: "neutral" as const,
+                    dataCy: "proposal-extend-day",
+                    icon: <ArrowRight size={iconSizes.small} aria-hidden="true" />,
+                  },
+                ]
+              : []),
           {
             key: "place-manually",
             label: `Plasser de siste ${unplaceableCount} ${
@@ -1159,6 +1187,37 @@ const SolverResults = ({
                         Frigjør alle intervjuer
                         {presentation.lockedCount > 0
                           ? ` (${presentation.lockedCount})`
+                          : ""}
+                      </span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const unlockable = presentation.totalAssignments - presentation.lockedCount;
+                        if (unlockable === 0) return;
+                        draft.lockAll();
+                      }}
+                      disabled={
+                        previewLoading ||
+                        persistence.isSaving ||
+                        presentation.totalAssignments - presentation.lockedCount === 0
+                      }
+                      title={
+                        presentation.totalAssignments - presentation.lockedCount === 0
+                          ? "Alle intervjuer er allerede låst"
+                          : `Lås alle ${presentation.totalAssignments - presentation.lockedCount} ulåste intervjuer slik at en ny kjøring av planleggingen beholder dem og fyller ut resten rundt dem`
+                      }
+                      className={cn(
+                        actionButtonBase,
+                        actionButtonNeutral,
+                        "inline-flex items-center gap-1.5",
+                      )}
+                    >
+                      <LockKeyhole size={iconSizes.small} aria-hidden="true" />
+                      <span>
+                        Lås alle intervjuer
+                        {presentation.totalAssignments - presentation.lockedCount > 0
+                          ? ` (${presentation.totalAssignments - presentation.lockedCount})`
                           : ""}
                       </span>
                     </button>
