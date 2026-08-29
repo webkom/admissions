@@ -463,7 +463,7 @@ const PublicationGate = ({
                       dates={sortedDates}
                       distributedThrough={
                         savedSchedule?.is_distributed
-                          ? savedSchedule.distributed_through ?? null
+                          ? (savedSchedule.distributed_through ?? null)
                           : null
                       }
                       previewThrough={

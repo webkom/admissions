@@ -3,7 +3,10 @@ import { Lock, Sparkles } from "lucide-react";
 import cn from "src/utils/cn";
 import { formatAccessibleDate } from "src/components/Scheduling/scheduleUtils";
 import { iconSizes } from "src/styles/designTokens";
-import { actionButtonBase, actionButtonNeutral } from "src/components/Scheduling/ui";
+import {
+  actionButtonBase,
+  actionButtonNeutral,
+} from "src/components/Scheduling/ui";
 
 /**
  * Publish-boundary timeline: the one image that explains progressive publishing.
@@ -31,7 +34,7 @@ export interface PublishBoundaryTimelineProps {
   compact?: boolean;
 }
 
-export const PublishBoundaryTimeline: React.FC<PublishBoundaryTimelineProps> = ({
+const PublishBoundaryTimeline: React.FC<PublishBoundaryTimelineProps> = ({
   dates,
   distributedThrough,
   previewThrough = null,
@@ -52,7 +55,8 @@ export const PublishBoundaryTimeline: React.FC<PublishBoundaryTimelineProps> = (
   const publishedCount = boundaryIndex >= 0 ? boundaryIndex + 1 : 0;
   const remaining = Math.max(0, sorted.length - publishedCount);
   const canExtend = Boolean(onExtendDay) && !extendDisabled && remaining > 0;
-  const canFill = Boolean(onFillRemainingDays) && !fillDisabled && remaining > 1;
+  const canFill =
+    Boolean(onFillRemainingDays) && !fillDisabled && remaining > 1;
 
   if (sorted.length === 0) return null;
 
