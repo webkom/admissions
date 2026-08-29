@@ -169,6 +169,33 @@ class GroupApplicationSerializer(serializers.HyperlinkedModelSerializer):
 
 class ShortGroupApplicationSerializer(serializers.HyperlinkedModelSerializer):
     group = serializers.SerializerMethodField()
+    interview_status_updated_by = serializers.CharField(
+        source="interview_status_updated_by_username",
+        allow_blank=True,
+        read_only=True,
+    )
+
+    # Interview status is per committee, so it rides on the group application.
+    # Only privileged viewers (a recruiter of the committee, or an admission
+    # admin) see it at all; the "_by" username is admin-only. An applicant
+    # reading their own receipt sees none of it.
+    _PRIVILEGED_VIEW_MODES = frozenset(
+        {"admin_full", "committee_full", "committee_minimal"}
+    )
+
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        view_mode = self.context.get("application_view_mode")
+        if view_mode not in self._PRIVILEGED_VIEW_MODES:
+            for field in (
+                "interview_status",
+                "interview_status_updated_at",
+                "interview_status_updated_by",
+            ):
+                data.pop(field, None)
+        elif view_mode != "admin_full":
+            data.pop("interview_status_updated_by", None)
+        return data
 
     def get_group(self, obj):
         admission = self.context.get("admission")
@@ -192,4 +219,11 @@ class ShortGroupApplicationSerializer(serializers.HyperlinkedModelSerializer):
 
     class Meta:
         model = GroupApplication
-        fields = ("group", "text", "header_fields_response")
+        fields = (
+            "group",
+            "text",
+            "header_fields_response",
+            "interview_status",
+            "interview_status_updated_at",
+            "interview_status_updated_by",
+        )

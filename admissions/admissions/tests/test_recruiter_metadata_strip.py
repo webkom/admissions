@@ -41,14 +41,14 @@ class RecruiterMetadataStripTestCase(APITestCase):
             admission=self.admission,
             user=self.candidate,
             phone_number="00000000",
-            interview_status="confirmed",
-            interview_status_updated_by=self.recruiter,
-            interview_status_updated_by_username=self.recruiter.username,
         )
         GroupApplication.objects.create(
             application=self.candidate_user_app,
             group=self.bedkom,
             text="bedkom application text",
+            interview_status="confirmed",
+            interview_status_updated_by=self.recruiter,
+            interview_status_updated_by_username=self.recruiter.username,
         )
         self.url = reverse(
             "admin-userapplication-list",
@@ -63,11 +63,12 @@ class RecruiterMetadataStripTestCase(APITestCase):
         res = self.client.get(self.url)
         self.assertEqual(res.status_code, status.HTTP_200_OK)
         self.assertEqual(len(res.data), 1)
-        self.assertEqual(res.data[0]["interview_status"], "confirmed")
-        self.assertNotIn("interview_status_updated_by", res.data[0])
+        group_application = res.data[0]["group_applications"][0]
+        self.assertEqual(group_application["interview_status"], "confirmed")
+        self.assertNotIn("interview_status_updated_by", group_application)
         # The timestamp of the status change is needed as the revision token
         # (expected_interview_status_updated_at) for the PATCH endpoint.
-        self.assertIn("interview_status_updated_at", res.data[0])
+        self.assertIn("interview_status_updated_at", group_application)
 
     def test_recruiter_list_still_exposes_committee_level_text(self):
         """Stripping the metadata must not break the recruiter's

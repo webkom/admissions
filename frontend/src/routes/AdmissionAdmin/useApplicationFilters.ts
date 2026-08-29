@@ -66,7 +66,11 @@ export const useApplicationFilters = ({
       (visibleApplications, application) => {
         if (
           selectedInterviewStatus &&
-          application.interview_status !== selectedInterviewStatus
+          !application.group_applications.some(
+            (groupApplication) =>
+              (groupApplication.interview_status ?? "not_invited") ===
+              selectedInterviewStatus,
+          )
         ) {
           return visibleApplications;
         }

@@ -1,7 +1,12 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { AxiosError } from "axios";
 import { FieldModel, InputResponseModel } from "src/utils/jsonFields";
-import { AdminApplication, InterviewStatus, SavedSchedule } from "src/types";
+import {
+  AdminApplication,
+  GroupApplicationInterviewStatus,
+  InterviewStatus,
+  SavedSchedule,
+} from "src/types";
 import { apiClient } from "../utils/callApi";
 import {
   areSensitiveAdmissionCacheWritesBlocked,
@@ -188,28 +193,49 @@ interface InterviewStatusUpdateResponse {
 interface InterviewStatusMutationContext {
   previousStatus?: {
     interview_status: InterviewStatus;
-    interview_status_updated_at: string;
+    interview_status_updated_at?: string;
     interview_status_updated_by?: string;
   };
   previousSchedule?: SavedSchedule;
 }
 
+const patchGroupApplicationStatus = <T extends AdminApplication>(
+  application: T,
+  groupId: string,
+  patch: GroupApplicationInterviewStatus,
+): T =>
+  ({
+    ...application,
+    group_applications: application.group_applications.map(
+      (groupApplication) =>
+        groupApplication.group.pk === groupId
+          ? { ...groupApplication, ...patch }
+          : groupApplication,
+    ),
+  }) as T;
+
+const groupApplicationStatusFor = (
+  application: AdminApplication | undefined,
+  groupId: string,
+): GroupApplicationInterviewStatus | undefined =>
+  application?.group_applications.find(
+    (groupApplication) => groupApplication.group.pk === groupId,
+  );
+
 export const useAdminUpdateInterviewStatusMutation = (
   admissionSlug: string,
   applicationScopeKey: string,
-  /** Only known when called from within one committee's own schedule page -
-   * the admin applications list spans every committee, so there is no
-   * single schedule cache entry to keep in sync there. */
-  groupId?: string,
+  /** Interview status is per committee, so the caller must say which one. */
+  groupId: string,
 ) => {
   const queryClient = useQueryClient();
   const applicationsQueryKey = [
     `/admin/admission/${admissionSlug}/application/`,
     applicationScopeKey,
   ];
-  const scheduleQueryKey = groupId
-    ? [`/admin/admission/${admissionSlug}/group/${groupId}/schedule/`]
-    : null;
+  const scheduleQueryKey = [
+    `/admin/admission/${admissionSlug}/group/${groupId}/schedule/`,
+  ];
 
   return useMutation<
     InterviewStatusUpdateResponse,
@@ -228,7 +254,7 @@ export const useAdminUpdateInterviewStatusMutation = (
         async () =>
           (
             await apiClient.patch<InterviewStatusUpdateResponse>(
-              `/admin/admission/${admissionSlug}/application/${applicationId}/interview-status/`,
+              `/admin/admission/${admissionSlug}/application/${applicationId}/interview-status/?groupId=${groupId}`,
               {
                 interview_status: interviewStatus,
                 expected_interview_status_updated_at:
@@ -243,9 +269,7 @@ export const useAdminUpdateInterviewStatusMutation = (
         captureSensitiveAdmissionAuthorityEpoch(admissionSlug);
       await Promise.all([
         queryClient.cancelQueries({ queryKey: applicationsQueryKey }),
-        ...(scheduleQueryKey
-          ? [queryClient.cancelQueries({ queryKey: scheduleQueryKey })]
-          : []),
+        queryClient.cancelQueries({ queryKey: scheduleQueryKey }),
       ]);
       if (
         !isSensitiveAdmissionAuthorityEpochCurrent(
@@ -258,44 +282,46 @@ export const useAdminUpdateInterviewStatusMutation = (
       const previousApplication = queryClient
         .getQueryData<AdminApplication[]>(applicationsQueryKey)
         ?.find((application) => application.pk === applicationId);
-      const previousSchedule = scheduleQueryKey
-        ? queryClient.getQueryData<SavedSchedule>(scheduleQueryKey)
-        : undefined;
+      const previousSchedule =
+        queryClient.getQueryData<SavedSchedule>(scheduleQueryKey);
 
       queryClient.setQueryData<AdminApplication[]>(
         applicationsQueryKey,
         (currentApplications) =>
           currentApplications?.map((application) =>
             application.pk === applicationId
-              ? { ...application, interview_status: interviewStatus }
+              ? patchGroupApplicationStatus(application, groupId, {
+                  interview_status: interviewStatus,
+                })
               : application,
           ),
       );
-      if (scheduleQueryKey) {
-        queryClient.setQueryData<SavedSchedule>(scheduleQueryKey, (current) =>
-          current
-            ? {
-                ...current,
-                schedule: current.schedule.map((item) =>
-                  item.candidate_id === applicationId
-                    ? { ...item, interview_status: interviewStatus }
-                    : item,
-                ),
-              }
-            : current,
-        );
-      }
-
-      return {
-        previousStatus: previousApplication
+      queryClient.setQueryData<SavedSchedule>(scheduleQueryKey, (current) =>
+        current
           ? {
-              interview_status: previousApplication.interview_status,
+              ...current,
+              schedule: current.schedule.map((item) =>
+                item.candidate_id === applicationId
+                  ? { ...item, interview_status: interviewStatus }
+                  : item,
+              ),
+            }
+          : current,
+      );
+
+      const previousGroupApplication = groupApplicationStatusFor(
+        previousApplication,
+        groupId,
+      );
+      return {
+        previousStatus: previousGroupApplication
+          ? {
+              interview_status:
+                previousGroupApplication.interview_status ?? "not_invited",
               interview_status_updated_at:
-                previousApplication.interview_status_updated_at,
+                previousGroupApplication.interview_status_updated_at,
               interview_status_updated_by:
-                "interview_status_updated_by" in previousApplication
-                  ? previousApplication.interview_status_updated_by
-                  : undefined,
+                previousGroupApplication.interview_status_updated_by,
             }
           : undefined,
         previousSchedule,
@@ -316,14 +342,10 @@ export const useAdminUpdateInterviewStatusMutation = (
             queryKey: applicationsQueryKey,
             exact: true,
           }),
-          ...(scheduleQueryKey
-            ? [
-                queryClient.resetQueries({
-                  queryKey: scheduleQueryKey,
-                  exact: true,
-                }),
-              ]
-            : []),
+          queryClient.resetQueries({
+            queryKey: scheduleQueryKey,
+            exact: true,
+          }),
         ]);
         return;
       }
@@ -334,12 +356,18 @@ export const useAdminUpdateInterviewStatusMutation = (
           (currentApplications) =>
             currentApplications?.map((application) =>
               application.pk === applicationId
-                ? { ...application, ...previousStatus }
+                ? patchGroupApplicationStatus(application, groupId, {
+                    interview_status: previousStatus.interview_status,
+                    interview_status_updated_at:
+                      previousStatus.interview_status_updated_at,
+                    interview_status_updated_by:
+                      previousStatus.interview_status_updated_by,
+                  })
                 : application,
             ),
         );
       }
-      if (scheduleQueryKey && context?.previousSchedule) {
+      if (context?.previousSchedule) {
         queryClient.setQueryData(scheduleQueryKey, context.previousSchedule);
       }
     },
@@ -350,43 +378,39 @@ export const useAdminUpdateInterviewStatusMutation = (
         (currentApplications) =>
           currentApplications?.map((application) =>
             application.pk === applicationId
-              ? {
-                  ...application,
+              ? patchGroupApplicationStatus(application, groupId, {
                   interview_status: updatedStatus.interview_status,
                   interview_status_updated_at:
                     updatedStatus.interview_status_updated_at,
-                  ...("interview_status_updated_by" in application &&
-                  updatedStatus.interview_status_updated_by !== undefined
+                  ...(updatedStatus.interview_status_updated_by !== undefined
                     ? {
                         interview_status_updated_by:
                           updatedStatus.interview_status_updated_by,
                       }
                     : {}),
-                }
+                })
               : application,
           ),
       );
-      if (scheduleQueryKey) {
-        queryClient.setQueryData<SavedSchedule>(scheduleQueryKey, (current) =>
-          current
-            ? {
-                ...current,
-                schedule: current.schedule.map((item) =>
-                  item.candidate_id === applicationId
-                    ? {
-                        ...item,
-                        interview_status: updatedStatus.interview_status,
-                        interview_status_updated_at:
-                          updatedStatus.interview_status_updated_at,
-                        interview_status_updated_by:
-                          updatedStatus.interview_status_updated_by,
-                      }
-                    : item,
-                ),
-              }
-            : current,
-        );
-      }
+      queryClient.setQueryData<SavedSchedule>(scheduleQueryKey, (current) =>
+        current
+          ? {
+              ...current,
+              schedule: current.schedule.map((item) =>
+                item.candidate_id === applicationId
+                  ? {
+                      ...item,
+                      interview_status: updatedStatus.interview_status,
+                      interview_status_updated_at:
+                        updatedStatus.interview_status_updated_at,
+                      interview_status_updated_by:
+                        updatedStatus.interview_status_updated_by,
+                    }
+                  : item,
+              ),
+            }
+          : current,
+      );
     },
     onSettled: (_data, error) => {
       if (
@@ -399,9 +423,7 @@ export const useAdminUpdateInterviewStatusMutation = (
       void queryClient.invalidateQueries({
         queryKey: [`/admin/admission/${admissionSlug}/application/`],
       });
-      if (scheduleQueryKey) {
-        void queryClient.invalidateQueries({ queryKey: scheduleQueryKey });
-      }
+      void queryClient.invalidateQueries({ queryKey: scheduleQueryKey });
     },
   });
 };

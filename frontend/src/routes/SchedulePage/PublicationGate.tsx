@@ -584,11 +584,7 @@ const PublicationGate = ({
               : publishScope === "partial"
                 ? `Publiser til og med ${formatAccessibleDate(selectedThroughDate)}`
                 : waiveReview && !readiness.reviewResolved
-                  ? `Publiser uten kontrollen til ${
-                      readiness.missingReviewerNames.length > 0
-                        ? readiness.missingReviewerNames.join(", ")
-                        : `${readiness.incompleteReviewerCount} intervjuere`
-                    }`
+                  ? "Publiser uten kandidatkontroll"
                   : "Publiser intervjuplan"
           }
           onConfirm={confirmPublish}

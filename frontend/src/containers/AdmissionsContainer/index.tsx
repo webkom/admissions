@@ -32,6 +32,14 @@ interface AdmissionsContainerProps {
   applicationScopeKey: string;
 }
 
+export interface InterviewStatusCell {
+  groupId: string;
+  groupName: string;
+  interviewStatus: InterviewStatus;
+  interviewStatusUpdatedAt: string;
+  interviewStatusUpdatedBy?: string;
+}
+
 export interface ApplicationTableRow {
   id: string;
   application?: ApplicationWithDetails;
@@ -43,9 +51,7 @@ export interface ApplicationTableRow {
   appliedWithinDeadline?: boolean;
   phoneNumber: string;
   groupNames: string[];
-  interviewStatus: InterviewStatus;
-  interviewStatusUpdatedAt: string;
-  interviewStatusUpdatedBy?: string;
+  interviewStatuses: InterviewStatusCell[];
   canUpdateInterviewStatus: boolean;
 }
 
@@ -76,10 +82,21 @@ const AdmissionsContainer: React.FC<AdmissionsContainerProps> = ({
           phoneNumber: application.phone_number,
           appliedWithinDeadline:
             applicationWithDetails?.applied_within_deadline,
-          interviewStatus: application.interview_status,
-          interviewStatusUpdatedAt: application.interview_status_updated_at,
-          interviewStatusUpdatedBy:
-            fullApplication?.interview_status_updated_by,
+          interviewStatuses: application.group_applications
+            .filter(
+              (groupApplication) =>
+                groupApplication.interview_status !== undefined,
+            )
+            .map((groupApplication) => ({
+              groupId: groupApplication.group.pk,
+              groupName: groupApplication.group.name,
+              interviewStatus:
+                groupApplication.interview_status ?? "not_invited",
+              interviewStatusUpdatedAt:
+                groupApplication.interview_status_updated_at ?? "",
+              interviewStatusUpdatedBy:
+                groupApplication.interview_status_updated_by,
+            })),
           canUpdateInterviewStatus:
             admission.userdata.is_admin || admission.userdata.is_recruiter,
           createdAt: applicationWithDetails?.created_at,
