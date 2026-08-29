@@ -21,6 +21,7 @@ import {
   sectionLabelClass,
 } from "src/components/Scheduling/ui";
 import { formatAccessibleDate } from "src/components/Scheduling/scheduleUtils";
+import PublishBoundaryTimeline from "./PublishBoundaryTimeline";
 import { iconSizes, iconStrokeWidths } from "src/styles/designTokens";
 import type { NameVisibility, SavedSchedule } from "src/types";
 import cn from "src/utils/cn";
@@ -457,6 +458,20 @@ const PublicationGate = ({
                       </select>
                     </div>
                   )}
+                  <div className="mt-3">
+                    <PublishBoundaryTimeline
+                      dates={sortedDates}
+                      distributedThrough={
+                        savedSchedule?.is_distributed
+                          ? savedSchedule.distributed_through ?? null
+                          : null
+                      }
+                      previewThrough={
+                        publishScope === "partial" ? selectedThroughDate : null
+                      }
+                      compact
+                    />
+                  </div>
                   <p className="m-0 mt-3 text-detail leading-relaxed text-text-muted">
                     {publishScope === "full"
                       ? "Alle intervjuer i planen blir synlige med det samme."

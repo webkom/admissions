@@ -47,6 +47,7 @@ import {
 import { useSolverSession } from "./useSolverSession";
 import { derivePlanDraftWorkflowState } from "./planDraftWorkflow";
 import { useInterviewAvailability } from "src/query/hooks";
+import PublishBoundaryTimeline from "src/routes/SchedulePage/PublishBoundaryTimeline";
 import { iconSizes } from "src/styles/designTokens";
 import DraftTaskLayout from "./DraftTaskLayout";
 import ProposalDecisionPanel from "./ProposalDecisionPanel";
@@ -1053,23 +1054,27 @@ export default function SolverView({
         data-cy="partial-publish-banner"
         className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border bg-surface-subtle px-4 py-3"
       >
-        <div className="min-w-0">
-          <p className="m-0 flex items-center gap-2 text-ui font-semibold text-text-primary">
-            <Lock size={iconSizes.small} aria-hidden="true" />
-            Publisert t.o.m. {formatAccessibleDate(distributedThroughDate)}
-            {publishedDayLocks?.length
-              ? ` – ${publishedDayLocks.length} intervjuer er låst.`
-              : "."}
-          </p>
-          <p className="m-0 mt-1 text-detail leading-relaxed text-text-muted">
-            {unplannedCandidateCount === null
-              ? "Kjør planleggingen på nytt for å plassere de resterende kandidatene – de publiserte dagene flyttes ikke."
-              : `${unplannedCandidateCount} ${
-                  unplannedCandidateCount === 1
-                    ? "kandidat venter"
-                    : "kandidater venter"
-                } på intervju. Planlegg resten når du er klar – de publiserte dagene holdes uendret.`}
-          </p>
+        <div className="min-w-0 flex-1">
+          <PublishBoundaryTimeline
+            dates={dates}
+            distributedThrough={distributedThroughDate}
+            onExtendDay={canExtendDay ? extendDay : undefined}
+            onFillRemainingDays={
+              canExtendDay &&
+              session.plannableDates.length > session.effectiveDayCount + 1
+                ? fillRemainingDays
+                : undefined
+            }
+            loading={session.loading}
+          />
+          {unplannedCandidateCount !== null && (
+            <p className="m-0 mt-2 text-detail leading-relaxed text-text-muted">
+              {unplannedCandidateCount === 1
+                ? "1 kandidat venter på intervju."
+                : `${unplannedCandidateCount} kandidater venter på intervju.`}{" "}
+              De publiserte dagene holdes uendret.
+            </p>
+          )}
         </div>
         <button
           type="button"
