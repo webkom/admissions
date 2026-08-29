@@ -27,7 +27,7 @@ interface SlotPanelOverrideMenuProps {
   ) => AssignmentAvailabilityStatus;
 }
 
-export const SlotPanelOverrideMenu: React.FC<SlotPanelOverrideMenuProps> = ({
+const SlotPanelOverrideMenu: React.FC<SlotPanelOverrideMenuProps> = ({
   item,
   scheduleIndex,
   interviewerOptions,

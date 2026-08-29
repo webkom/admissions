@@ -577,9 +577,9 @@ def build_conflict_review_lists(saved_schedule, swap_size=5):
             ]
             decoys = []
         else:
-            own_times = {time_by_candidate.get(candidate_id) for candidate_id in own} - {
-                None
-            }
+            own_times = {
+                time_by_candidate.get(candidate_id) for candidate_id in own
+            } - {None}
             own_blocks = {
                 block_by_minute[own_time]
                 for own_time in own_times
@@ -604,7 +604,9 @@ def build_conflict_review_lists(saved_schedule, swap_size=5):
                     }
                     - {interviewer_id}
                 )
-                same_block = bool(own_blocks) and block_by_minute.get(slot) in own_blocks
+                same_block = (
+                    bool(own_blocks) and block_by_minute.get(slot) in own_blocks
+                )
                 same_day = any(
                     own_time is not None and own_time // (24 * 60) == slot // (24 * 60)
                     for own_time in own_times

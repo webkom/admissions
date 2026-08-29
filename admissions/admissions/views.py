@@ -358,7 +358,10 @@ class AdminApplicationViewSet(
         if user.is_anonymous:
             return UserApplication.objects.none()
         # Check membership in admin groups
-        if user_is_admission_admin(admission, user) or view_mode == APPLICATION_VIEW_MODE_ADMIN_FULL:
+        if (
+            user_is_admission_admin(admission, user)
+            or view_mode == APPLICATION_VIEW_MODE_ADMIN_FULL
+        ):
             return (
                 super()
                 .get_queryset()
@@ -755,7 +758,9 @@ class AdministeredAdmissionListView(generics.ListAPIView):
                     groups__membership__role__in=constants.ADMISSION_ADMIN_ROLES,
                 )
             )
-            .exclude(admin_groups__membership__role__in=constants.INACTIVE_MEMBERSHIP_ROLES)
+            .exclude(
+                admin_groups__membership__role__in=constants.INACTIVE_MEMBERSHIP_ROLES
+            )
             .distinct()
             .order_by("title")
         )

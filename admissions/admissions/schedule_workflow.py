@@ -777,8 +777,7 @@ def _resolve_schedule_state(
     # edit while published is not a fresh publish, an unlock back to draft
     # is not a publish, and only a publish that survives the gate counts.
     is_publish_request = (
-        data.get("is_distributed") is True
-        or bool(data.get("distributed_through"))
+        data.get("is_distributed") is True or bool(data.get("distributed_through"))
     ) and bool(schedule)
 
     return {
@@ -859,10 +858,7 @@ def _missing_reviewer_names(user_ids):
     from admissions.admissions.models import LegoUser
 
     str_ids = {str(user_id) for user_id in user_ids}
-    users = {
-        str(user.pk): user
-        for user in LegoUser.objects.filter(pk__in=str_ids)
-    }
+    users = {str(user.pk): user for user in LegoUser.objects.filter(pk__in=str_ids)}
     ordered = sorted(
         (users[str(user_id)] for user_id in user_ids if str(user_id) in users),
         key=lambda user: (
@@ -870,10 +866,7 @@ def _missing_reviewer_names(user_ids):
             user.username,
         ),
     )
-    return [
-        user.get_full_name() or user.username
-        for user in ordered
-    ]
+    return [user.get_full_name() or user.username for user in ordered]
 
 
 def _record_conflict_review_bypass(admission, saved, user, skipped_user_ids):
@@ -1161,15 +1154,17 @@ def _persist_schedule(
         # back to draft) wipes the note because there is no published
         # plan to mark; setting the boundary records the names of anyone
         # skipped (an empty list is the "review complete" case).
-        new_publish_boundary = state["distributed_through"]
-        boundary_changed = (
-            existing is None
-            or existing.distributed_through != new_publish_boundary
-        )
-        if boundary_changed:
+        is_published = state["is_distributed"] or bool(state["distributed_through"])
+        if not is_published:
+            desired_fields["published_without_review_by"] = []
+        elif "is_distributed" in data or "distributed_through" in data:
             desired_fields["published_without_review_by"] = list(
                 skipped_reviewer_names or []
-            ) if new_publish_boundary is not None else []
+            )
+        elif existing is not None:
+            desired_fields["published_without_review_by"] = (
+                existing.published_without_review_by
+            )
         if "outreach_templates" in data:
             desired_fields["outreach_templates"] = data["outreach_templates"] or {}
         if existing is None:

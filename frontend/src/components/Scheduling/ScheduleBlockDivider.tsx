@@ -66,5 +66,3 @@ export const ScheduleBlockDivider: React.FC<ScheduleBlockDividerProps> = ({
     </td>
   </tr>
 );
-
-export default ScheduleBlockDivider;

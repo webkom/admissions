@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useId, useRef, useState } from "react";
+import React, { useEffect, useId, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { AlertTriangle, Check, ChevronDown, Clock3 } from "lucide-react";
 import { iconSizes } from "src/styles/designTokens";
@@ -18,7 +18,6 @@ export {
   actionButtonPrimary,
   actionButtonNeutral,
   actionButtonGhost,
-  actionButtonActive,
   actionButtonDanger,
   Chip,
   SaveButton,
@@ -240,155 +239,7 @@ export const SchedulingActionBar: React.FC<SchedulingActionBarProps> = ({
   </SchedulePanelFooter>
 );
 
-interface DetailsMenuOptions {
-  focusFirstItemOnOpen?: boolean;
-}
-
-export const useDetailsMenu = ({
-  focusFirstItemOnOpen = true,
-}: DetailsMenuOptions = {}) => {
-  const detailsRef = useRef<HTMLDetailsElement>(null);
-
-  const menuItems = useCallback(
-    () =>
-      Array.from(
-        detailsRef.current?.querySelectorAll<HTMLElement>(
-          '[role="menuitem"]:not([disabled])',
-        ) ?? [],
-      ).filter((item) => item.getAttribute("aria-disabled") !== "true"),
-    [],
-  );
-
-  const closeDetails = useCallback((restoreFocus = false) => {
-    const details = detailsRef.current;
-    if (!details?.open) return;
-    details.open = false;
-    if (restoreFocus) {
-      details.querySelector<HTMLElement>("summary")?.focus();
-    }
-  }, []);
-
-  const handleDetailsToggle = useCallback(() => {
-    if (!focusFirstItemOnOpen || !detailsRef.current?.open) return;
-    window.requestAnimationFrame(() => {
-      if (detailsRef.current?.open) menuItems()[0]?.focus();
-    });
-  }, [focusFirstItemOnOpen, menuItems]);
-
-  useEffect(() => {
-    const handlePointerDown = (event: MouseEvent) => {
-      if (!detailsRef.current?.contains(event.target as Node)) {
-        closeDetails(false);
-      }
-    };
-    const handleFocusIn = (event: FocusEvent) => {
-      if (
-        detailsRef.current?.open &&
-        !detailsRef.current.contains(event.target as Node)
-      ) {
-        closeDetails(false);
-      }
-    };
-    const handleKeyDown = (event: KeyboardEvent) => {
-      const details = detailsRef.current;
-      if (!details?.open) return;
-
-      if (event.key === "Escape") {
-        event.preventDefault();
-        event.stopPropagation();
-        closeDetails(true);
-        return;
-      }
-
-      if (!details.contains(document.activeElement)) return;
-      if (!["ArrowDown", "ArrowUp", "Home", "End"].includes(event.key)) {
-        return;
-      }
-
-      const items = menuItems();
-      if (items.length === 0) return;
-      event.preventDefault();
-      const currentIndex = items.indexOf(document.activeElement as HTMLElement);
-      const nextIndex =
-        event.key === "Home"
-          ? 0
-          : event.key === "End"
-            ? items.length - 1
-            : event.key === "ArrowUp"
-              ? currentIndex <= 0
-                ? items.length - 1
-                : currentIndex - 1
-              : currentIndex < 0 || currentIndex === items.length - 1
-                ? 0
-                : currentIndex + 1;
-      items[nextIndex]?.focus();
-    };
-
-    document.addEventListener("mousedown", handlePointerDown);
-    document.addEventListener("focusin", handleFocusIn);
-    document.addEventListener("keydown", handleKeyDown);
-    return () => {
-      document.removeEventListener("mousedown", handlePointerDown);
-      document.removeEventListener("focusin", handleFocusIn);
-      document.removeEventListener("keydown", handleKeyDown);
-    };
-  }, [closeDetails, menuItems]);
-
-  return {
-    detailsRef,
-    closeDetails,
-    handleDetailsToggle,
-  };
-};
-
 export type SchedulingWorkspaceMode = "preview" | "editing";
-
-/** Shared switch (role="switch") — same pill shape as the advanced-settings
- *  toggle: 40×20 track with a 16×16 knob, brand accent when on. Used for
- *  view-scoped boolean options. With `label`, the text becomes the
- *  accessible name and clicking it also toggles (the pair is wrapped in one
- *  button). */
-export const ToggleSwitch: React.FC<{
-  checked: boolean;
-  onChange: (next: boolean) => void;
-  ariaLabel: string;
-  label?: React.ReactNode;
-  disabled?: boolean;
-}> = ({ checked, onChange, ariaLabel, label, disabled = false }) => (
-  <button
-    type="button"
-    role="switch"
-    aria-checked={checked}
-    aria-label={label ? undefined : ariaLabel}
-    disabled={disabled}
-    onClick={() => onChange(!checked)}
-    className={cn(
-      "group/toggle inline-flex items-center gap-2 text-left focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-focus disabled:cursor-not-allowed disabled:opacity-45",
-    )}
-  >
-    <span
-      aria-hidden="true"
-      className={cn(
-        "inline-flex h-6 w-10 flex-none items-center rounded-full border p-0.5 transition-colors",
-        checked
-          ? "border-brand bg-brand"
-          : "border-border-muted bg-surface-muted",
-      )}
-    >
-      <span
-        className={cn(
-          "block h-4 w-4 rounded-full bg-white shadow-sm transition-transform",
-          checked ? "translate-x-5" : "translate-x-0",
-        )}
-      />
-    </span>
-    {label && (
-      <span className="text-ui font-semibold text-text-muted group-hover/toggle:text-text-primary">
-        {label}
-      </span>
-    )}
-  </button>
-);
 
 export interface PanelChipOption {
   id?: string;

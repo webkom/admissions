@@ -60,6 +60,8 @@ interface PublicationGateProps {
     deferUnplacedCandidates?: boolean,
     publishWithoutFullReview?: boolean,
   ) => Promise<boolean>;
+  deferUnplacedIntent?: boolean;
+  onConsumeDeferUnplacedIntent?: () => void;
 }
 
 interface ReadinessRowProps {
@@ -111,6 +113,8 @@ const PublicationGate = ({
   onOpenOwnReview,
   onOpenConflictsOverview,
   onPublish,
+  deferUnplacedIntent,
+  onConsumeDeferUnplacedIntent,
 }: PublicationGateProps) => {
   const [publishVisibility, setPublishVisibility] = useState<NameVisibility>(
     savedSchedule?.name_visibility ?? "hidden",
@@ -148,6 +152,13 @@ const PublicationGate = ({
     readiness.candidateCount - readiness.scheduledCandidateCount,
   );
   const [deferUnplaced, setDeferUnplaced] = useState(false);
+
+  useEffect(() => {
+    if (deferUnplacedIntent) {
+      setDeferUnplaced(true);
+      onConsumeDeferUnplacedIntent?.();
+    }
+  }, [deferUnplacedIntent, onConsumeDeferUnplacedIntent]);
   // Strict readiness demands every candidate placed. A delplan - an
   // acknowledged partial plan under progressive publishing - may publish
   // with candidates waiting for days that open later.
@@ -391,9 +402,7 @@ const PublicationGate = ({
                     <input
                       type="checkbox"
                       checked={waiveReview}
-                      onChange={(event) =>
-                        setWaiveReview(event.target.checked)
-                      }
+                      onChange={(event) => setWaiveReview(event.target.checked)}
                       data-cy="waive-review"
                       className="mt-0.5 h-4 w-4 flex-none rounded border-border-muted text-primary focus:ring-primary"
                     />
@@ -582,6 +591,23 @@ const PublicationGate = ({
                 ? "Kandidatnavn vises bare til opptaksansvarlige."
                 : "Kandidatnavn blir synlige for hele komiteen."}
           </p>
+          {waiveReview && !readiness.reviewResolved && (
+            <div
+              data-cy="waive-review-confirmation"
+              className="mt-4 rounded-md border border-amber-200 bg-amber-50 px-3 py-3 text-ui text-amber-950"
+            >
+              <strong className="block">
+                Publiseres uten kandidatkontroll fra{" "}
+                {readiness.missingReviewerNames.length > 0
+                  ? readiness.missingReviewerNames.join(", ")
+                  : `${readiness.incompleteReviewerCount} intervjuere`}
+              </strong>
+              <p className="m-0 mt-1 text-detail leading-relaxed">
+                Noen paringer går ut uten at det er sjekket for inhabilitet.
+                Beslutningen loggføres på deg og vises på den publiserte planen.
+              </p>
+            </div>
+          )}
           {deviationReview?.requires_approval && (
             <div className="mt-4 rounded-md border border-amber-200 bg-amber-50 px-3 py-3 text-ui text-amber-950">
               <strong className="block">

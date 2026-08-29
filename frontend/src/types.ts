@@ -298,6 +298,7 @@ export interface SavedSchedule {
   is_distributed: boolean;
   distributed_through: string | null;
   conflict_review_open: boolean;
+  published_without_review_by?: string[];
   name_visibility: NameVisibility;
   outreach_templates?: {
     sms?: {

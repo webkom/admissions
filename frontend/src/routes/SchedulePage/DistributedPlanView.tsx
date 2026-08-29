@@ -338,6 +338,7 @@ const DistributedPlanView: React.FC<DistributedPlanViewProps> = ({
   const extendableDates = sortedDates.filter(
     (date) => !distributedThrough || date > distributedThrough,
   );
+  const waivedReviewers = savedSchedule?.published_without_review_by ?? [];
 
   const toggleLock = async (scheduleIndex: number) => {
     if (lockBusyIndex !== null) return;
@@ -527,6 +528,22 @@ const DistributedPlanView: React.FC<DistributedPlanViewProps> = ({
           className="border-b border-danger-border bg-danger-bg px-6 py-3 text-ui font-semibold text-danger"
         >
           {planTransitionError}
+        </div>
+      )}
+
+      {/* Shown to everyone who can see the plan, not just the admin who
+          decided it: a committee member who is inhabil in one of these
+          pairings is the last line of defence when nobody ran the check. */}
+      {waivedReviewers.length > 0 && (
+        <div
+          data-cy="published-without-review-banner"
+          className="border-b border-amber-200 bg-amber-50 px-6 py-3 text-ui text-amber-950"
+        >
+          <span className="font-semibold">
+            Publisert uten fullført kandidatkontroll
+          </span>{" "}
+          fra {waivedReviewers.join(", ")}. Si fra til opptaksansvarlig hvis du
+          er inhabil i et av intervjuene under.
         </div>
       )}
 

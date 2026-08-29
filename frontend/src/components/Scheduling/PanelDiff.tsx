@@ -78,5 +78,3 @@ export const PanelDiff: React.FC<PanelDiffProps> = ({
     </span>
   );
 };
-
-export default PanelDiff;

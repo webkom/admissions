@@ -135,7 +135,7 @@ export interface DraftBlockCardTableProps {
 const tableHeaderClass =
   "sticky top-0 z-10 bg-surface-neutral px-4 py-3 text-left text-label font-semibold tracking-label text-text-muted border-b border-border-soft !rounded-none";
 
-export const DraftBlockCardTable: React.FC<DraftBlockCardTableProps> = ({
+const DraftBlockCardTable: React.FC<DraftBlockCardTableProps> = ({
   entries,
   canonicalBlocks,
   candidates,

@@ -35,12 +35,3 @@ export const scheduleCandidateColumn = "w-60";
 /** Small pill showing a block's time span, e.g. "09:00 – 10:30". */
 export const scheduleTimeRangePill =
   "inline-flex items-center rounded-md border border-border-soft bg-surface-base px-2 py-0.5 text-xs font-semibold tabular-nums text-text-muted shadow-xs";
-
-/**
- * The draft table's leftmost move / swap gutter. Fixed width and always
- * present so toggling "Flytt intervju" / "Flytt gruppe" only restyles this
- * column - it never resizes, which would shift every other column.
- */
-export const scheduleMoveColumn = "w-20";
-export const scheduleMoveGutter =
-  "border-r border-border-soft bg-surface-subtle/30";

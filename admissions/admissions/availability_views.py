@@ -1,3 +1,4 @@
+import uuid
 from django.db import transaction
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
@@ -590,7 +591,10 @@ class InterviewAvailabilityView(SchedulerFeatureGateMixin, APIView):
 
         target_user = user
         target_user_id = serializer.validated_data.get("user_id")
-        if target_user_id is not None and target_user_id != user.id:
+        if target_user_id is None:
+            if not user_is_group_member(group, user):
+                return Response(status=status.HTTP_403_FORBIDDEN)
+        elif target_user_id != user.id:
             if not (is_interview_admin or is_admin):
                 return Response(status=status.HTTP_403_FORBIDDEN)
             if target_user_id not in get_eligible_interviewer_ids(admission, group):
@@ -798,33 +802,40 @@ class InterviewAvailabilityView(SchedulerFeatureGateMixin, APIView):
                     .distinct()
                     .values_list("pk", flat=True)
                 }
+            admission_candidate_ids = {
+                str(pk)
+                for pk in UserApplication.objects.filter(
+                    admission=admission
+                ).values_list("pk", flat=True)
+            }
             for field in (
                 "conflicts",
                 "reviewed_candidate_ids",
             ):
-                # Unknown candidate ids in a save are treated as best-effort
-                # drops, not client errors. The pool, the review scope, and
-                # the decoy roster can all shift between when the form
-                # rendered and when the user submitted (a withdrawal, a
-                # re-solve, a snapshot rebuild), and the rest of the row
-                # must keep working when that happens - otherwise the
-                # single "Ukjent kandidat" in a 50-name form wedges the
-                # whole submission and the user cannot save anything. The
-                # persisted state is the source of truth: the persistence
-                # path prunes any id that is not in the current pool or
-                # decoy scope, so dropped ids never become real conflicts
-                # or real attestations.
-                unknown = {
-                    candidate_id
-                    for candidate_id in serializer.validated_data.get(field, [])
-                    if candidate_id not in valid_candidate_ids
-                    and candidate_id not in own_decoy_scope
-                }
-                if unknown:
+                stale_unknown = set()
+                for candidate_id in serializer.validated_data.get(field, []):
+                    if (
+                        candidate_id in valid_candidate_ids
+                        or candidate_id in own_decoy_scope
+                    ):
+                        continue
+                    is_uuid = False
+                    try:
+                        uuid.UUID(str(candidate_id))
+                        is_uuid = True
+                    except (ValueError, AttributeError, TypeError):
+                        pass
+                    if not is_uuid or candidate_id in admission_candidate_ids:
+                        return Response(
+                            {field: [f"Ukjent kandidat: {candidate_id}"]},
+                            status=status.HTTP_400_BAD_REQUEST,
+                        )
+                    stale_unknown.add(candidate_id)
+                if stale_unknown:
                     serializer.validated_data[field] = [
                         candidate_id
                         for candidate_id in serializer.validated_data[field]
-                        if candidate_id not in unknown
+                        if candidate_id not in stale_unknown
                     ]
             if (
                 conflict_replace_scope is None
@@ -939,26 +950,21 @@ class InterviewAvailabilityView(SchedulerFeatureGateMixin, APIView):
             # the current pool or this row's decoy scope, so the rest of
             # the row keeps working and the prune itself is invisible to
             # the user (those rows simply vanish from the review list).
-            pool_or_decoys = (
-                (valid_candidate_ids or set()) | own_decoy_scope
-            )
+            pool_or_decoys = (valid_candidate_ids or set()) | own_decoy_scope
             if pool_or_decoys:
                 next_conflicts = {
                     value for value in next_conflicts if value in pool_or_decoys
                 }
             defaults["conflicts"] = sorted(next_conflicts)
             if "reviewed_candidate_ids" in serializer.validated_data:
-                next_reviewed = set(
-                    defaults.get(
-                        "reviewed_candidate_ids",
-                        (
-                            existing.reviewed_candidate_ids
-                            if existing
-                            and isinstance(existing.reviewed_candidate_ids, list)
-                            else []
-                        ),
-                    )
+                existing_reviewed = set(
+                    existing.reviewed_candidate_ids
+                    if existing
+                    and isinstance(existing.reviewed_candidate_ids, list)
+                    else []
                 )
+                submitted_reviewed = set(defaults.get("reviewed_candidate_ids", []))
+                next_reviewed = existing_reviewed | submitted_reviewed
                 next_reviewed.update(next_conflicts)
                 if pool_or_decoys:
                     next_reviewed = {

@@ -41,6 +41,7 @@ type SaveSchedulePayload = Partial<Omit<SavedSchedule, "id" | "updated_at">> & {
    * the flag the gate is exactly as strict as before.
    */
   publish_without_full_review?: boolean;
+  defer_unplaced_candidates?: boolean;
 };
 
 interface SaveScheduleOptions {

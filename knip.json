@@ -1,4 +1,5 @@
 {
   "entry": ["frontend/src/index.tsx"],
-  "project": ["frontend/src/**/*.{ts,tsx}"]
+  "project": ["frontend/src/**/*.{ts,tsx}"],
+  "ignoreExportsUsedInFile": true
 }

@@ -447,5 +447,3 @@ export const DraftSlotRow: React.FC<DraftSlotRowProps> = ({
     </tr>
   );
 };
-
-export default DraftSlotRow;

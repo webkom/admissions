@@ -289,7 +289,7 @@ export const useScheduleDraft = ({
         booking_source:
           item.booking_source === "manual"
             ? ("manual" as const)
-            : ("solver_locked" as const),
+            : ("solver" as const),
       };
     });
     if (lockedIndexes.length === 0) return;

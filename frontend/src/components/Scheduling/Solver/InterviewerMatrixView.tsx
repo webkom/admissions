@@ -315,7 +315,7 @@ const SingleDayMatrix: React.FC<{
   );
 };
 
-export const InterviewerMatrixView: React.FC<InterviewerMatrixViewProps> = ({
+const InterviewerMatrixView: React.FC<InterviewerMatrixViewProps> = ({
   entries,
   dates,
   sessionDuration,

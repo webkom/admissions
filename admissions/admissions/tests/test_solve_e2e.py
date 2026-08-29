@@ -39,9 +39,7 @@ class NonSyntheticSolveE2ETestCase(APITestCase):
         admission.groups.add(group)
         Membership.objects.create(user=admin, role=RECRUITING, group=group)
         call_command("seed_local_schedule", answer_all=True)
-        self.saved = SavedSchedule.objects.select_related(
-            "admission", "group"
-        ).first()
+        self.saved = SavedSchedule.objects.select_related("admission", "group").first()
         self.admission = self.saved.admission
         self.group = self.saved.group
         self.client.force_authenticate(user=admin)

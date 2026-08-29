@@ -404,4 +404,3 @@ class ConflictReviewListTestCase(TestCase):
         # In contrast, non-admin 'other' only gets at most 5 swap candidates
         other = lists[str(self.other.id)]
         self.assertLessEqual(len(other["swap_candidate_ids"]), 5)
-

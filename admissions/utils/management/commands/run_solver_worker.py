@@ -103,9 +103,7 @@ def _demote_draft_locks(data, published_through, schedule_start):
     previous = list(data.get("previous_schedule") or [])
     previous_ids = {row.get("candidate_id") for row in previous}
     previous.extend(
-        row
-        for row in demoted
-        if row.get("candidate_id") not in previous_ids
+        row for row in demoted if row.get("candidate_id") not in previous_ids
     )
     return {**data, "locked_assignments": kept, "previous_schedule": previous}
 

@@ -13,9 +13,7 @@ from admissions.admissions.constants import LEADER
 from admissions.admissions.models import Group, LegoUser, Membership, SolveJob
 from admissions.admissions.solve_schedule import build_solve_options, solve_schedule
 from admissions.admissions.tests.utils import create_admission
-from admissions.utils.management.commands.run_solver_worker import (
-    _demote_draft_locks,
-)
+from admissions.utils.management.commands.run_solver_worker import _demote_draft_locks
 
 ENVELOPE_KEYS = ("schedule", "unplaceable", "locked_conflicts")
 
@@ -1745,9 +1743,7 @@ class SolverQualityTestCase(APITestCase):
 
         self.assertEqual(res.status_code, status.HTTP_200_OK)
         self.assertEqual(res.data["status"], "SUCCESS")
-        placed = {
-            item["candidate_id"]: item for item in res.data["schedule"]
-        }
+        placed = {item["candidate_id"]: item for item in res.data["schedule"]}
         # The biased interviewer cannot take candidate-2, so the solver keeps
         # interviewer-1 for candidate-2 and moves the previously locked row.
         self.assertEqual(placed["candidate-2"]["time"], 1)
@@ -1797,9 +1793,7 @@ class RebalancePolicyUnitTestCase(SimpleTestCase):
     def test_without_the_flag_nothing_moves(self):
         request = self._request()
         request["options"] = {"rebalance_locked": False}
-        result = _demote_draft_locks(
-            request, date(2026, 9, 1), date(2026, 9, 1)
-        )
+        result = _demote_draft_locks(request, date(2026, 9, 1), date(2026, 9, 1))
         self.assertEqual(len(result["locked_assignments"]), 2)
         self.assertEqual(result["previous_schedule"], [])
 
@@ -1816,9 +1810,7 @@ class RebalancePolicyUnitTestCase(SimpleTestCase):
         request["previous_schedule"] = [
             {"candidate_id": "c2", "time": 1440, "panel": [{"id": "i1"}]}
         ]
-        result = _demote_draft_locks(
-            request, date(2026, 9, 1), date(2026, 9, 1)
-        )
+        result = _demote_draft_locks(request, date(2026, 9, 1), date(2026, 9, 1))
         self.assertEqual(
             [row["candidate_id"] for row in result["previous_schedule"]],
             ["c2"],

@@ -731,18 +731,14 @@ class SavedSchedulePublishSemanticsTestCase(APITestCase):
             saved.published_without_review_by,
             [self.admin_user.get_full_name() or self.admin_user.username],
         )
-        self.assertEqual(
-            res.data["published_without_review_by"], ["hardening-admin"]
-        )
+        self.assertEqual(res.data["published_without_review_by"], ["hardening-admin"])
         bypass = ConflictReviewAuditEvent.objects.filter(
             admission=self.admission,
             action=ConflictReviewAuditEvent.ACTION_BYPASSED,
         )
         self.assertEqual(bypass.count(), 1)
         self.assertEqual(bypass.get().actor_username, self.admin_user.username)
-        self.assertEqual(
-            bypass.get().subject_username, self.admin_user.username
-        )
+        self.assertEqual(bypass.get().subject_username, self.admin_user.username)
 
     def test_the_bypass_is_opt_in_per_publish_not_sticky(self):
         """The note must not outlive the decision. A later publish with
@@ -873,14 +869,19 @@ class SavedSchedulePublishSemanticsTestCase(APITestCase):
         Membership.objects.create(
             user=second_interviewer, role=MEMBER, group=self.admin_group
         )
+        InterviewAvailability.objects.create(
+            admission=self.admission,
+            group=self.admin_group,
+            user=second_interviewer,
+            slots=["2026-04-20|600"],
+        )
         second_entry = self._schedule(time=600)
         second_entry[0]["candidate_id"] = str(second_application.pk)
         second_entry[0]["panel"] = [
             {"id": str(second_interviewer.pk), "name": "on-behalf-target"},
         ]
-        self._create_saved(
-            is_distributed=False, schedule=self._schedule(time=540)
-        )
+        self._create_saved(is_distributed=False, schedule=self._schedule(time=540))
+        self._mark_reviewed(self.application)
 
         # Refused first: the second interviewer has not answered.
         res = self.client.post(
@@ -1978,7 +1979,11 @@ class InterviewAvailabilityHardeningTestCase(APITestCase):
         it on the way in just saves a round trip and a scary error. The
         row keeps working.
         """
-        self._open_conflict_review()
+        saved_schedule = self._open_conflict_review()
+        saved_schedule.schedule[0]["panel"] = [
+            {"id": str(self.recruiter.pk), "name": self.recruiter.username}
+        ]
+        saved_schedule.save(update_fields=["schedule"])
         stale_id = "802f250d-33e9-432c-a97d-f73443ec322a"
         availability = InterviewAvailability.objects.create(
             admission=self.admission,
@@ -2032,7 +2037,11 @@ class InterviewAvailabilityHardeningTestCase(APITestCase):
         a snapshot that no longer matches) is dropped, not rejected.
         Strict per-id rejection on the conflicts field would let a single
         phantom id block saving a perfectly valid set of declarations."""
-        self._open_conflict_review()
+        saved_schedule = self._open_conflict_review()
+        saved_schedule.schedule[0]["panel"].append(
+            {"id": str(self.recruiter.pk), "name": self.recruiter.username}
+        )
+        saved_schedule.save(update_fields=["schedule"])
         availability = InterviewAvailability.objects.create(
             admission=self.admission,
             group=self.committee_group,
@@ -5619,7 +5628,10 @@ class CandidateWithdrawalPrivacyTestCase(TestCase):
             group=committee,
             user=admin,
             conflicts=[str(application.pk)],
-            reviewed_candidate_ids=[str(application.pk), "11111111-1111-1111-1111-111111111111"],
+            reviewed_candidate_ids=[
+                str(application.pk),
+                "11111111-1111-1111-1111-111111111111",
+            ],
         )
 
         application.delete()
