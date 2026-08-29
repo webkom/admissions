@@ -107,11 +107,33 @@ class SaveScheduleInputSerializer(serializers.Serializer):
     )
     is_distributed = serializers.BooleanField(required=False)
     distributed_through = serializers.DateField(required=False, allow_null=True)
+    # Explicit acknowledgment that candidates without an interview are
+    # planned for later (rolling admissions / progressive publishing). The
+    # publish is otherwise refused while active candidates are unscheduled
+    # and no enabled days remain beyond the boundary. No default: the field
+    # must be absent from payloads that do not carry it, or every
+    # visibility-only edit would count as a mutable field.
+    defer_unplaced_candidates = serializers.BooleanField(
+        required=False, write_only=True
+    )
+    # Explicit override of the kandidatkontroll gate: when True, the
+    # publish is allowed to go through with one or more reviewers still
+    # owing their check. Skipped reviewers are recorded against the plan
+    # (published_without_review_by) and against each person (one
+    # ConflictReviewAuditEvent per skipped reviewer), so the committee
+    # sees the bypass and the audit log answers "was my check waived, by
+    # whom, when" per interviewer. Absent the flag the gate is exactly as
+    # strict as before. Write-only, no default: a visibility-only edit
+    # must not be misread as a publish-time decision.
+    publish_without_full_review = serializers.BooleanField(
+        required=False, write_only=True
+    )
     conflict_review_open = serializers.BooleanField(required=False)
     name_visibility = serializers.ChoiceField(
         choices=["hidden", "admin_only", "committee"],
         required=False,
     )
+    outreach_templates = serializers.JSONField(required=False)
     expected_updated_at = serializers.DateTimeField(required=True, allow_null=True)
 
     def validate_enabled_windows(self, windows):
@@ -282,7 +304,13 @@ class ScheduleRequestsSerializer(serializers.Serializer):
         candidate_ids = {item["id"] for item in attrs.get("candidates", [])}
         interviewer_ids = {item["id"] for item in attrs.get("interviewers", [])}
         seen_candidates = set()
-        seen_times = set()
+        # Joint interviews share a slot: several locked rows may carry the same
+        # time as long as they stay within capacity and name one shared panel.
+        candidates_per_session = max(
+            1, int((attrs.get("options") or {}).get("candidates_per_session", 1))
+        )
+        locked_at_time = {}
+        panel_by_time = {}
         panel_size = attrs.get("panel_size", 4)
         for assignment in attrs.get("locked_assignments", []):
             candidate_id = assignment.get("candidate_id")
@@ -294,8 +322,9 @@ class ScheduleRequestsSerializer(serializers.Serializer):
                         ]
                     }
                 )
-            if assignment["time"] in seen_times or (
-                allowed_slots is not None and assignment["time"] not in allowed_slots
+            assignment_time = assignment["time"]
+            if locked_at_time.get(assignment_time, 0) >= candidates_per_session or (
+                allowed_slots is not None and assignment_time not in allowed_slots
             ):
                 raise serializers.ValidationError(
                     {"locked_assignments": ["Låste tidspunkt må være unike og åpne."]}
@@ -314,8 +343,17 @@ class ScheduleRequestsSerializer(serializers.Serializer):
                         ]
                     }
                 )
+            panel_key = frozenset(panel_ids)
+            if panel_by_time.setdefault(assignment_time, panel_key) != panel_key:
+                raise serializers.ValidationError(
+                    {
+                        "locked_assignments": [
+                            "Låste fellesintervjuer må dele ett panel."
+                        ]
+                    }
+                )
             seen_candidates.add(candidate_id)
-            seen_times.add(assignment["time"])
+            locked_at_time[assignment_time] = locked_at_time.get(assignment_time, 0) + 1
 
         return attrs
 
@@ -425,10 +463,12 @@ class SavedScheduleSerializer(serializers.ModelSerializer):
             "is_distributed",
             "distributed_through",
             "conflict_review_open",
+            "published_without_review_by",
             "name_visibility",
+            "outreach_templates",
             "updated_at",
         ]
-        read_only_fields = ["id", "updated_at"]
+        read_only_fields = ["id", "updated_at", "published_without_review_by"]
 
     def to_representation(self, instance):
         data = super().to_representation(instance)

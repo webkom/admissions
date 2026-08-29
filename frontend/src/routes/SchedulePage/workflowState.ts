@@ -51,9 +51,14 @@ export const derivePublicationReadiness = ({
     [...activeCandidateIds].every((candidateId) =>
       scheduledCandidateIds.has(candidateId),
     );
+  // Same fallback rule the server uses in _missing_reviewer_names
+  // (schedule_workflow.py): a reviewer with no full name should never render
+  // as an empty string in the publish gate or the published-plan banner, so
+  // fall back to the username before sorting. The sort key still uses the
+  // display name, matching the server's "(get_full_name() or username).lower()".
   const missingReviewerNames = reviewParticipants
     .filter((participant) => !participant.conflict_review_complete)
-    .map((participant) => participant.full_name)
+    .map((participant) => participant.full_name || participant.username)
     .sort((left, right) => left.localeCompare(right, "nb"));
   const reviewResolved =
     conflictReviewSummary.resolved && conflictReviewSummary.isComplete;

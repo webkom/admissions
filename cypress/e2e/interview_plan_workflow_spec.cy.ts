@@ -42,7 +42,9 @@ describe("interview plan workflow", () => {
         expect(["Ikke kalt inn", "Kalt inn"]).to.include(status);
         const actionLabel =
           status === "Ikke kalt inn" ? "Send innkalling" : "Send påminnelse";
-        cy.contains("button", actionLabel).click();
+        // Anchored match: the block header has a "Send innkalling til alle (N)"
+        // batch button that must not shadow the row's own outreach action.
+        cy.contains("button", new RegExp(`^${actionLabel}$`)).click();
       });
     cy.contains('[role="menuitem"]', "Åpne SMS-utkast")
       .should("be.visible")

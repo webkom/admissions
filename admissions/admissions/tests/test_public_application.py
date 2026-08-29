@@ -599,11 +599,13 @@ class CreateApplicationTestCase(APITestCase):
         )
 
     def test_dropping_one_committee_flags_a_published_plan(self):
-        """Consistent with a full withdrawal, which already un-publishes.
+        """Dropping a committee cancels that committee's interview in place.
 
         Each committee's schedule is independent, so this must only touch the
         dropped committee's own plan - the candidate keeps their interview
-        with the committee they are still applying to.
+        with the committee they are still applying to. Cancelling the row
+        here left this plan with nothing to publish, so it comes down; a plan
+        with other interviews would have stayed published.
         """
         self.client.force_authenticate(user=self.pleb_anna)
         url = reverse(
@@ -628,8 +630,9 @@ class CreateApplicationTestCase(APITestCase):
         self.assertEqual(
             SavedSchedule.NAME_VISIBILITY_HIDDEN, koskom_saved.name_visibility
         )
-        # The interview itself survives: they are still a candidate.
-        self.assertEqual(1, len(koskom_saved.schedule))
+        # The dropped committee's interview row is cancelled rather than left
+        # stale - the candidate no longer applies there.
+        self.assertEqual(0, len(koskom_saved.schedule))
 
         # Webkom's own, independent plan is untouched by the Koskom drop.
         webkom_saved.refresh_from_db()

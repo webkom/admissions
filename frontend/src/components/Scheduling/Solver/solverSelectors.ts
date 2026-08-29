@@ -92,11 +92,6 @@ export interface SchedulePresentation {
   interviewerDistribution: InterviewerDistributionEntry[];
   interviewerOptions: Interviewer[];
   totalAssignments: number;
-  displaySchedule: ScheduleItem[];
-  displayCandidate: (candidate: {
-    candidate_id?: string;
-    candidate: string;
-  }) => string;
   unplaceableCandidates: NonNullable<SolveResponse["unplaceable"]>;
   unplaceableSuggestions: string[];
   overviewStats: ScheduleOverviewStats | null;
@@ -137,15 +132,6 @@ export const deriveSchedulePresentation = (
     (sum, interviewer) => sum + interviewer.count,
     0,
   );
-  const candidateAlias = buildCandidateAliases(result, sortedSchedule);
-  const displayCandidate = (candidate: {
-    candidate_id?: string;
-    candidate: string;
-  }) => candidateAlias.get(candidateKey(candidate)) ?? candidate.candidate;
-  const displaySchedule = sortedSchedule.map((item) => ({
-    ...item,
-    candidate: displayCandidate(item),
-  }));
   const unplaceableCandidates =
     result?.status === "PARTIAL" ? (result.unplaceable ?? []) : [];
   const unplaceableSuggestions = Array.from(
@@ -179,8 +165,6 @@ export const deriveSchedulePresentation = (
     interviewerDistribution,
     interviewerOptions,
     totalAssignments,
-    displaySchedule,
-    displayCandidate,
     unplaceableCandidates,
     unplaceableSuggestions,
     overviewStats: buildOverviewStats(
@@ -341,23 +325,6 @@ const buildBlockRestSummary = (
   };
 };
 
-const candidateKey = (candidate: {
-  candidate_id?: string;
-  candidate: string;
-}) => candidate.candidate_id ?? `legacy:${candidate.candidate}`;
-
-const buildCandidateAliases = (
-  result: SolveResponse | null,
-  schedule: ScheduleItem[],
-) => {
-  const aliases = new Map<string, string>();
-  [...schedule, ...(result?.unplaceable ?? [])].forEach((candidate) => {
-    const key = candidateKey(candidate);
-    if (!aliases.has(key)) aliases.set(key, `Kandidat ${aliases.size + 1}`);
-  });
-  return aliases;
-};
-
 const buildOverviewStats = (
   result: SolveResponse | null,
   schedule: ScheduleItem[],
@@ -395,6 +362,7 @@ export const deriveSolverReadiness = ({
   allowOvertime,
   requireExperiencedPanel = false,
   enforceSameGender = false,
+  candidatesPerSession = 1,
 }: {
   candidateCount: number;
   candidates?: Candidate[];
@@ -406,6 +374,7 @@ export const deriveSolverReadiness = ({
   allowOvertime: boolean;
   requireExperiencedPanel?: boolean;
   enforceSameGender?: boolean;
+  candidatesPerSession?: number;
 }): SolverReadiness => {
   let submittedInterviewers = 0;
   let totalCapacity = 0;
@@ -432,7 +401,10 @@ export const deriveSolverReadiness = ({
   const usableSlotCount = allowOvertime
     ? enabledTimes.length
     : slotsWithFullPanel;
-  const neededCapacity = candidateCount * panelSize;
+  // One shared panel meets `candidatesPerSession` candidates per slot, so the
+  // slots a plan needs is the candidate count divided by that (rounded up).
+  const perSession = Math.max(1, Math.floor(candidatesPerSession));
+  const neededCapacity = Math.ceil(candidateCount / perSession) * panelSize;
   const genderDataAvailable = interviewers.some((interviewer) =>
     ["M", "F"].includes(interviewer.gender ?? ""),
   );

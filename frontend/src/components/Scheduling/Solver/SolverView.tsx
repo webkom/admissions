@@ -5,7 +5,7 @@ import React, {
   useRef,
   useState,
 } from "react";
-import { ArrowRight, Lock, Sparkles } from "lucide-react";
+import { Lock } from "lucide-react";
 
 import type {
   Candidate,
@@ -26,16 +26,7 @@ import {
   manualBlocksToSolverBlocks,
   slotsToSolverAvailability,
 } from "../scheduleUtils";
-import {
-  SchedulePanel,
-  SchedulePanelBody,
-  SchedulePanelFooter,
-  SchedulePanelHeader,
-  actionButtonBase,
-  actionButtonNeutral,
-  actionButtonPrimary,
-  keyboardFocusRingClass,
-} from "../ui";
+import { actionButtonNeutral, actionButtonBase } from "../ui";
 import cn from "../../../utils/cn";
 import { deriveAssignmentConflictSummary } from "./assignmentConflicts";
 import { hasSchedule } from "./solverHelpers";
@@ -45,6 +36,7 @@ import {
   buildRepairSolveRequest,
   type RepairScenario,
 } from "./repairScenarios";
+import { buildProposalDiff } from "./proposalDiff";
 import SolverResults from "./SolverResults";
 import SolverSetupPanel from "./SolverSetupPanel";
 import { useScheduleDraft } from "./useScheduleDraft";
@@ -53,11 +45,18 @@ import {
   type DraftPersistenceStatus,
 } from "./useScheduleDraftPersistence";
 import { useSolverSession } from "./useSolverSession";
-import { derivePlanDraftStage } from "src/routes/SchedulePage/workflowStages";
+import { derivePlanDraftWorkflowState } from "./planDraftWorkflow";
+import { useInterviewAvailability } from "src/query/hooks";
+import PublishBoundaryTimeline from "src/routes/SchedulePage/PublishBoundaryTimeline";
 import { iconSizes } from "src/styles/designTokens";
 import DraftTaskLayout from "./DraftTaskLayout";
 import ProposalDecisionPanel from "./ProposalDecisionPanel";
 import PublishedPlanNotice from "./PublishedPlanNotice";
+import UnplacedSlotPicker, {
+  buildUnplacedSlotOptions,
+  type UnplacedSlotOption,
+} from "./UnplacedSlotPicker";
+import { deriveEnabledTimeOptions } from "./solverSelectors";
 
 interface Props {
   candidates: Candidate[];
@@ -90,6 +89,7 @@ interface Props {
   missingReviewerNames: string[];
   publicationReady: boolean;
   backgroundMode?: boolean;
+  currentUserName?: string;
   onDraftPersistenceChange: (status: DraftPersistenceStatus) => void;
   onExperienceLevelChange: (
     userId: string,
@@ -97,10 +97,6 @@ interface Props {
   ) => Promise<void>;
   onOpenAvailability: () => void;
   onOpenFramework: () => void;
-  onWidenDays: () => void;
-  /** Enter the plan's inline editing mode from outside the plan panel
-   *  (the delplan stage's "Rediger for hånd" action). */
-  onEditByHand: () => void;
   onOpenConflictReview: () => void;
   conflictReviewReachable: boolean;
   onOpenPlan: () => void;
@@ -136,12 +132,11 @@ export default function SolverView({
   missingReviewerNames,
   publicationReady,
   backgroundMode = false,
+  currentUserName,
   onDraftPersistenceChange,
   onExperienceLevelChange,
   onOpenAvailability,
   onOpenFramework,
-  onWidenDays,
-  onEditByHand,
   onOpenConflictReview,
   conflictReviewReachable,
   onOpenPlan,
@@ -162,12 +157,15 @@ export default function SolverView({
   const [repairOpen, setRepairOpen] = useState(false);
   const [repairFocusRequest, setRepairFocusRequest] = useState(0);
   const [draftFocusRequestKey, setDraftFocusRequestKey] = useState(0);
-  const [placementStageDismissed, setPlacementStageDismissed] = useState(false);
   const [proposalDetailsOpen, setProposalDetailsOpen] = useState(false);
+  const [unplacedPickerTarget, setUnplacedPickerTarget] = useState<{
+    candidate_id?: string;
+    candidate: string;
+    reason?: string;
+  } | null>(null);
   const proposalHeadingRef = useRef<HTMLHeadingElement>(null);
   const proposalComparisonTriggerRef = useRef<HTMLButtonElement>(null);
   const proposalComparisonHeadingRef = useRef<HTMLHeadingElement>(null);
-  const placementHeadingRef = useRef<HTMLHeadingElement>(null);
   const canonicalBlocks = useMemo(
     () =>
       blockMode === "manual"
@@ -214,6 +212,7 @@ export default function SolverView({
     sessionDuration,
     canonicalBlocks,
     savedSchedule: session.savedSchedule ?? null,
+    panelSize: session.panelSize,
     onModify: session.markDraftModified,
   });
   const persistenceConfig = useMemo(
@@ -400,13 +399,26 @@ export default function SolverView({
     setRepairError("");
   }, [repairBaselineKey]);
 
-  const solvePlan = () => {
+  const solvePlan = async () => {
     // While part of the plan is already released, every placement up to the
     // published boundary replaces the draft's own lock marks: released days
     // stay exactly as published, everything else is free to reschedule.
-    void session.solvePlan(
+    const outcome = await session.solvePlan(
       publishedDayLocks ?? draft.explicitLockedAssignments,
     );
+    // A fully-solved re-plan auto-applies inside useSolverSession — it has
+    // already replaced the current draft, so leave the regeneration setup
+    // and drop back to the plan view. A partial result (its proposal
+    // decision panel takes over) or a solver error (shown in the setup
+    // panel) deliberately keeps the setup panel open.
+    if (
+      regenerationOpen &&
+      hasSchedule(outcome?.status) &&
+      (outcome?.unplaceable?.length ?? 0) === 0
+    ) {
+      setRegenerationOpen(false);
+      setDraftFocusRequestKey((request) => request + 1);
+    }
   };
   // Extending the scope pins every saved placement: the partial plan is the
   // committed example everyone already works from, so a re-solve only fills
@@ -450,6 +462,23 @@ export default function SolverView({
         publishedDayLocks ??
         draft.explicitLockedAssignments,
       { dayCount: next },
+    );
+  };
+  // Extend the scope to every remaining enabled day at once, instead
+  // of clicking "Planlegg neste dag" once per day. The published
+  // prefix stays locked; the solver fills the still-draft tail in a
+  // single pass so the user lands on a complete draft rather than
+  // clicking through 5+ days individually. Disabled when there's
+  // nothing left to extend into.
+  const fillRemainingDays = () => {
+    const total = session.plannableDates.length;
+    if (total <= session.effectiveDayCount) return;
+    session.setDayCount(total);
+    void session.solvePlan(
+      savedScheduleLocks ??
+        publishedDayLocks ??
+        draft.explicitLockedAssignments,
+      { dayCount: total },
     );
   };
   const retryWithAvailabilityDeviation = () => {
@@ -581,6 +610,67 @@ export default function SolverView({
   const pendingUnplaced = pendingProposal?.result.unplaceable?.length ?? 0;
   const unplaceableCandidates = draft.presentation.unplaceableCandidates;
   const currentUnplaced = draft.presentation.unplaceableCandidates.length;
+  const unplacedPickerOptions = useMemo<UnplacedSlotOption[]>(() => {
+    if (!unplacedPickerTarget) return [];
+    const enabledTimeOptions = deriveEnabledTimeOptions(
+      enabledSlots,
+      dates,
+      sessionDuration,
+    );
+    const occupiedTimes = new Set(
+      (session.scopedResult?.schedule ?? []).map((item) => item.time),
+    );
+    return buildUnplacedSlotOptions({
+      enabledTimeOptions,
+      occupiedTimes,
+      candidateId: unplacedPickerTarget.candidate_id,
+      candidateName: unplacedPickerTarget.candidate,
+      panelSize: session.panelSize,
+      interviewers,
+      candidates,
+    });
+  }, [
+    candidates,
+    dates,
+    enabledSlots,
+    interviewers,
+    session.panelSize,
+    session.scopedResult?.schedule,
+    sessionDuration,
+    unplacedPickerTarget,
+  ]);
+  const openUnplacedPicker = useCallback(
+    (candidate: {
+      candidate_id?: string;
+      candidate: string;
+      reason?: string;
+    }) => {
+      setUnplacedPickerTarget(candidate);
+    },
+    [],
+  );
+  const closeUnplacedPicker = useCallback(() => {
+    setUnplacedPickerTarget(null);
+  }, []);
+  const handleUnplacedSlotPick = useCallback(
+    (time: number) => {
+      if (!unplacedPickerTarget) return;
+      const outcome = draft.assignUnplacedCandidate({
+        candidateId: unplacedPickerTarget.candidate_id,
+        candidateName: unplacedPickerTarget.candidate,
+        time,
+      });
+      if (outcome.ok) {
+        setUnplacedPickerTarget(null);
+        window.requestAnimationFrame(() => {
+          window.document
+            .querySelector<HTMLElement>("[data-stage] h2")
+            ?.focus({ preventScroll: true });
+        });
+      }
+    },
+    [draft, unplacedPickerTarget],
+  );
   const placementCount = draft.presentation.sortedSchedule.length;
   const totalCandidateCount = placementCount + currentUnplaced;
   const currentOutsideAvailability =
@@ -600,6 +690,19 @@ export default function SolverView({
     pendingProposal?.job.proposal_expires_at &&
       Date.parse(pendingProposal.job.proposal_expires_at) <= Date.now(),
   );
+  // Diff-first review: the decision panel leads with what the proposal would
+  // change, so a re-solve is reviewed by its delta rather than as a second
+  // full plan. Null while there is no current draft to diff against.
+  const pendingProposalDiff = useMemo(() => {
+    if (!pendingProposal) return null;
+    const baseline = session.scopedResult?.schedule ?? [];
+    if (baseline.length === 0) return null;
+    return buildProposalDiff({
+      baseline,
+      result: pendingProposal.result,
+      interviewers,
+    });
+  }, [interviewers, pendingProposal, session.scopedResult]);
   useEffect(() => {
     if (!pendingProposal) return;
     window.requestAnimationFrame(() =>
@@ -622,30 +725,87 @@ export default function SolverView({
       proposalComparisonHeadingRef.current?.focus({ preventScroll: true });
     });
   }, [proposalDetailsOpen]);
+  // D3: the deciding inhabilitet review is submitted in another person's
+  // browser, so local cache invalidation can never observe it. While
+  // reviewers are outstanding the roster is polled; when it flips to
+  // complete, the re-solve is enqueued once with the current locks.
+  const reviewsOutstanding =
+    requiredReviewerCount > 0 && completeReviewerCount < requiredReviewerCount;
+  const autoResolvePolling =
+    !backgroundMode &&
+    !syntheticInput &&
+    hasProposal &&
+    reviewsOutstanding &&
+    !session.loading &&
+    !pendingProposal &&
+    !session.hasLocalDraft &&
+    persistence.isSaved &&
+    !persistence.hasConflict;
+  useInterviewAvailability(admissionSlug, groupId, {
+    refetchInterval: autoResolvePolling ? 3000 : false,
+  });
+  const autoResolveArmedRef = useRef(false);
   useEffect(() => {
-    setPlacementStageDismissed(false);
-  }, [session.solveTick]);
-  useEffect(() => {
-    if (unplaceableCandidates.length === 0 || placementStageDismissed) return;
-    window.requestAnimationFrame(() =>
-      placementHeadingRef.current?.focus({ preventScroll: true }),
-    );
+    if (!hasProposal || backgroundMode || syntheticInput) return;
+    if (requiredReviewerCount === 0) return;
+    if (reviewsOutstanding) {
+      autoResolveArmedRef.current = true;
+      return;
+    }
+    if (!autoResolveArmedRef.current) return;
+    autoResolveArmedRef.current = false;
+    if (
+      session.loading ||
+      pendingProposal ||
+      session.hasLocalDraft ||
+      !persistence.isSaved ||
+      persistence.hasConflict
+    ) {
+      return;
+    }
+    solvePlan();
+    // solvePlan closes over the lock sets; re-running it on identity change
+    // is inert because the armed flag has already been consumed.
   }, [
-    placementStageDismissed,
-    session.solveTick,
-    unplaceableCandidates.length,
+    backgroundMode,
+    completeReviewerCount,
+    hasProposal,
+    pendingProposal,
+    persistence.hasConflict,
+    persistence.isSaved,
+    requiredReviewerCount,
+    reviewsOutstanding,
+    session.hasLocalDraft,
+    session.loading,
+    solvePlan,
+    syntheticInput,
   ]);
-  const planDraftStage = derivePlanDraftStage({
+  const planDraftStage = derivePlanDraftWorkflowState({
     isPublished: savedScheduleIsDistributed && !isPartiallyDistributed,
+    hasPendingProposal: Boolean(pendingProposal),
+    loading: session.loading,
+    saveState:
+      persistence.hasConflict || persistence.state === "conflict"
+        ? "conflict"
+        : persistence.state === "error"
+          ? "error"
+          : persistence.isSaving
+            ? "saving"
+            : persistence.state,
+    hasSaveConflict: persistence.hasConflict,
+    saveError: persistence.error,
+    solverError: session.error,
+    unplaceableCount: unplaceableCandidates.length,
+    filledDayCount: session.scopedResult?.filled_day_count,
+    extendDayAvailable: canExtendDay,
     currentReviewRequired,
     currentReviewComplete,
-    hasPendingProposal: Boolean(pendingProposal),
-    repairOpen,
-    regenerationOpen,
-    unplaceableCount: unplaceableCandidates.length,
-    placementStageDismissed,
-    loading: session.loading,
-    hasProposal,
+    completeReviewerCount,
+    requiredReviewerCount,
+    pendingReviewerCount,
+    missingReviewerNames,
+    assignmentConflictCount: assignmentConflicts.assignmentCount,
+    publicationReady,
   });
   const focusDraftHeading = useCallback(
     () => setDraftFocusRequestKey((request) => request + 1),
@@ -678,13 +838,11 @@ export default function SolverView({
       draft={draft}
       persistence={persistence}
       hasLocalDraft={session.hasLocalDraft}
+      candidates={candidates}
+      interviewers={interviewers}
+      currentUserName={currentUserName}
       dates={dates}
       sessionDuration={sessionDuration}
-      dayStartMinute={dayStartMinute}
-      dayEndMinute={dayEndMinute}
-      chunkSize={chunkSize}
-      chunkBreakMinutes={chunkBreakMinutes}
-      enabledSlots={enabledSlots}
       editRequestKey={editRequestKey}
       focusRequestKey={draftFocusRequestKey}
       assignmentConflicts={assignmentConflicts}
@@ -699,8 +857,13 @@ export default function SolverView({
       publicationReady={publicationReady}
       solverError={session.error}
       onOpenSettings={() => setRegenerationOpen(true)}
-      onWidenDays={onWidenDays}
       onExtendDay={canExtendDay ? extendDay : undefined}
+      onFillRemainingDays={
+        canExtendDay &&
+        session.plannableDates.length > session.effectiveDayCount + 1
+          ? fillRemainingDays
+          : undefined
+      }
       onOpenConflictReview={onOpenConflictReview}
       onOpenRepair={() => {
         setRepairOpen(true);
@@ -713,6 +876,7 @@ export default function SolverView({
       previewLoading={session.loading}
       backgroundMode={backgroundMode}
       savedTouchSignal={savedTouchSignal}
+      onPickUnplacedSlot={openUnplacedPicker}
     />
   );
 
@@ -753,6 +917,7 @@ export default function SolverView({
             currentOutsideAvailabilityCount={currentOutsideAvailability}
             proposedUnplacedCount={pendingUnplaced}
             proposedOutsideAvailabilityCount={pendingOutsideAvailability}
+            diff={pendingProposalDiff}
             expiryLabel={pendingProposalExpiry}
             isStale={pendingProposalIsStale}
             hasExpired={pendingProposalHasExpired}
@@ -823,6 +988,7 @@ export default function SolverView({
           loading={session.loading}
           error={session.error}
           elapsedMs={session.elapsedMs}
+          startedAt={session.startedAt}
           jobStatus={session.jobStatus}
           estimatedSeconds={session.estimatedSeconds}
           lockedCount={draft.presentation.lockedCount}
@@ -843,6 +1009,19 @@ export default function SolverView({
               !persistence.isSaving &&
               !persistence.hasConflict)
           }
+          draftSaveConflict={persistence.hasConflict}
+          draftSaveError={
+            persistence.state === "error" ? persistence.error : ""
+          }
+          onAdoptRemoteDraft={() => {
+            // Same recovery as the editor's "Last inn siste versjon", but
+            // in place: drop the conflicted local draft, reveal the remote
+            // schedule, and reset the save bookkeeping so the panel is no
+            // longer blocked.
+            session.discardCurrentSuggestion();
+            persistence.adoptRemote();
+          }}
+          onRetryDraftSave={() => persistence.retry()}
           candidateScopeResolved={candidateScopeResolved}
           regenerationOpen={regenerationOpen}
           onCloseRegeneration={closeRegeneration}
@@ -866,140 +1045,6 @@ export default function SolverView({
       );
     }
 
-    if (unplaceableCandidates.length > 0 && !placementStageDismissed) {
-      return (
-        <DraftTaskLayout
-          stage="missing_placements"
-          draft={renderDraftCanvas(true)}
-        >
-          <SchedulePanel
-            dataCy="missing-placements-stage"
-            stage="missing_placements"
-            className="mx-auto w-full max-w-3xl"
-          >
-            <SchedulePanelHeader
-              icon={Sparkles}
-              headingRef={placementHeadingRef}
-              headingDataCy="schedule-stage-heading"
-              title={planDraftStage.title}
-              description={planDraftStage.description}
-            />
-            <SchedulePanelBody>
-              <ul className="m-0 divide-y divide-border-soft p-0">
-                {unplaceableCandidates.map((candidate) => (
-                  <li
-                    key={candidate.candidate_id ?? candidate.candidate}
-                    className="list-none py-3 first:pt-0 last:pb-0"
-                  >
-                    <p className="m-0 text-ui font-semibold text-text-primary">
-                      {candidate.candidate}
-                    </p>
-                    <p className="m-0 mt-1 text-detail text-text-muted">
-                      {candidate.reason}
-                    </p>
-                    {candidate.reason ===
-                      "For mange i komiteen har meldt inhabilitet." &&
-                      (() => {
-                        const conflictedInterviewers = interviewers
-                          .filter((interviewer) =>
-                            interviewer.biased.includes(candidate.candidate_id),
-                          )
-                          .map((interviewer) => interviewer.name);
-                        if (conflictedInterviewers.length === 0) return null;
-                        const label = `Se ${conflictedInterviewers.length} registrerte inhabilitet${
-                          conflictedInterviewers.length === 1 ? "" : "er"
-                        }`;
-                        return (
-                          <details className="group mt-2 text-detail">
-                            <summary
-                              title={conflictedInterviewers.join(", ")}
-                              className={`w-fit cursor-pointer font-semibold text-brand underline decoration-brand/40 underline-offset-2 hover:decoration-brand ${keyboardFocusRingClass}`}
-                            >
-                              {label}
-                            </summary>
-                            <p className="m-0 mt-1 text-text-muted">
-                              {conflictedInterviewers.join(", ")}
-                            </p>
-                          </details>
-                        );
-                      })()}
-                  </li>
-                ))}
-              </ul>
-            </SchedulePanelBody>
-            <SchedulePanelFooter className="sticky bottom-0 z-10 bg-surface-base">
-              <span className="text-detail font-semibold text-text-muted">
-                Planutkastet er lagret med {placementCount} av{" "}
-                {totalCandidateCount} plassert.
-              </span>
-              <div className="flex flex-wrap items-center justify-end gap-2">
-                <button
-                  type="button"
-                  onClick={() => setPlacementStageDismissed(true)}
-                  className={cn(actionButtonBase, actionButtonNeutral)}
-                >
-                  Se resten av utkastet
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setPlacementStageDismissed(true);
-                    onEditByHand();
-                  }}
-                  data-cy="schedule-stage-hand-edit"
-                  className={cn(actionButtonBase, actionButtonNeutral)}
-                >
-                  Rediger for hånd
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setRegenerationOpen(true)}
-                  className={cn(actionButtonBase, actionButtonNeutral)}
-                >
-                  Juster og prøv igjen
-                </button>
-                {canExtendDay ? (
-                  <button
-                    type="button"
-                    onClick={extendDay}
-                    disabled={
-                      session.loading ||
-                      (!syntheticInput &&
-                        (!persistence.isSaved ||
-                          persistence.isSaving ||
-                          persistence.hasConflict))
-                    }
-                    data-cy="schedule-stage-primary-action"
-                    data-extend-day="true"
-                    className={cn(actionButtonBase, actionButtonPrimary)}
-                  >
-                    {session.loading
-                      ? "Beregner…"
-                      : `Planlegg neste dag (${formatAccessibleDate(
-                          nextScopeDate ?? "",
-                        )})`}
-                    {!session.loading && (
-                      <ArrowRight size={iconSizes.medium} aria-hidden="true" />
-                    )}
-                  </button>
-                ) : (
-                  <button
-                    type="button"
-                    onClick={onWidenDays}
-                    data-cy="schedule-stage-primary-action"
-                    className={cn(actionButtonBase, actionButtonPrimary)}
-                  >
-                    Utvid med flere dager
-                    <ArrowRight size={iconSizes.medium} aria-hidden="true" />
-                  </button>
-                )}
-              </div>
-            </SchedulePanelFooter>
-          </SchedulePanel>
-        </DraftTaskLayout>
-      );
-    }
-
     return renderDraftCanvas();
   };
 
@@ -1009,23 +1054,27 @@ export default function SolverView({
         data-cy="partial-publish-banner"
         className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border bg-surface-subtle px-4 py-3"
       >
-        <div className="min-w-0">
-          <p className="m-0 flex items-center gap-2 text-ui font-semibold text-text-primary">
-            <Lock size={iconSizes.small} aria-hidden="true" />
-            Publisert t.o.m. {formatAccessibleDate(distributedThroughDate)}
-            {publishedDayLocks?.length
-              ? ` – ${publishedDayLocks.length} intervjuer er låst.`
-              : "."}
-          </p>
-          <p className="m-0 mt-1 text-detail leading-relaxed text-text-muted">
-            {unplannedCandidateCount === null
-              ? "Kjør planleggingen på nytt for å plassere de resterende kandidatene – de publiserte dagene flyttes ikke."
-              : `${unplannedCandidateCount} ${
-                  unplannedCandidateCount === 1
-                    ? "kandidat venter"
-                    : "kandidater venter"
-                } på intervju. Planlegg resten når du er klar – de publiserte dagene holdes uendret.`}
-          </p>
+        <div className="min-w-0 flex-1">
+          <PublishBoundaryTimeline
+            dates={dates}
+            distributedThrough={distributedThroughDate}
+            onExtendDay={canExtendDay ? extendDay : undefined}
+            onFillRemainingDays={
+              canExtendDay &&
+              session.plannableDates.length > session.effectiveDayCount + 1
+                ? fillRemainingDays
+                : undefined
+            }
+            loading={session.loading}
+          />
+          {unplannedCandidateCount !== null && (
+            <p className="m-0 mt-2 text-detail leading-relaxed text-text-muted">
+              {unplannedCandidateCount === 1
+                ? "1 kandidat venter på intervju."
+                : `${unplannedCandidateCount} kandidater venter på intervju.`}{" "}
+              De publiserte dagene holdes uendret.
+            </p>
+          )}
         </div>
         <button
           type="button"
@@ -1041,6 +1090,19 @@ export default function SolverView({
     <div className="flex flex-col gap-3">
       {partialPublishBanner}
       {renderWorkspace()}
+      {unplacedPickerTarget && (
+        <UnplacedSlotPicker
+          candidateName={unplacedPickerTarget.candidate}
+          candidateReason={unplacedPickerTarget.reason}
+          panelSize={session.panelSize}
+          options={unplacedPickerOptions}
+          dates={dates}
+          sessionDuration={sessionDuration}
+          loading={session.loading}
+          onPick={handleUnplacedSlotPick}
+          onClose={closeUnplacedPicker}
+        />
+      )}
     </div>
   );
 }

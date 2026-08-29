@@ -15,6 +15,7 @@ interface WorkflowStepParams {
   isAdmin: boolean;
   hasConfiguredAvailabilityWindows: boolean;
   hasDistributedPlan: boolean;
+  planFullyDistributed?: boolean;
   myConflictReviewComplete: boolean;
   myProposalCandidateCount: number;
   hasSavedConfig: boolean;
@@ -32,6 +33,9 @@ export const buildWorkflowSteps = ({
   isAdmin,
   hasConfiguredAvailabilityWindows,
   hasDistributedPlan,
+  planFullyDistributed = false,
+  myConflictReviewComplete,
+  myProposalCandidateCount,
   myAvailabilitySaved,
   myAvailabilityOptedOut = false,
   availabilityParticipantCount,
@@ -41,7 +45,17 @@ export const buildWorkflowSteps = ({
   if (!isAdmin) {
     // Members record their own availability as soon as the recruiter opens
     // the interview windows, and otherwise only see the published plan.
-    // Applicant data (candidates, reviews) is never part of their flow.
+    // Applicant data (candidates, reviews) is never part of their flow -
+    // with one exception: their own inhabilitetssjekk. Publication waits on
+    // every proposed interviewer confirming their pairings, so a member with
+    // an unconfirmed review list has an actionable step before the plan can
+    // be published. Without it the workflow deadlocks: the admin cannot
+    // publish, and the member's plan stays locked forever.
+    const myReviewOutstanding =
+      !myAvailabilityOptedOut &&
+      !hasDistributedPlan &&
+      myProposalCandidateCount > 0 &&
+      !myConflictReviewComplete;
     return [
       {
         key: "my-availability",
@@ -71,7 +85,9 @@ export const buildWorkflowSteps = ({
         title: "Intervjuplan",
         description: myAvailabilityOptedOut
           ? "Du har meldt at du ikke deltar."
-          : "Se dine intervjuer når planen er publisert.",
+          : myReviewOutstanding
+            ? "Kontroller kandidatene du er foreslått til å intervjue."
+            : "Se dine intervjuer når planen er publisert.",
         icon: CalendarCheck,
         // A member who opted out has no stake in the plan and must not see
         // it, so the step stays locked however far the workflow has come.
@@ -79,14 +95,20 @@ export const buildWorkflowSteps = ({
           ? "Låst"
           : hasDistributedPlan
             ? "Ferdig"
-            : "Låst",
+            : myReviewOutstanding
+              ? "Pågår"
+              : "Låst",
         tone: myAvailabilityOptedOut
           ? "locked"
           : hasDistributedPlan
             ? "success"
-            : "locked",
+            : myReviewOutstanding
+              ? "warning"
+              : "locked",
         complete: !myAvailabilityOptedOut && hasDistributedPlan,
-        locked: myAvailabilityOptedOut || !hasDistributedPlan,
+        locked:
+          myAvailabilityOptedOut ||
+          (!hasDistributedPlan && !myReviewOutstanding),
       },
     ];
   }
@@ -116,10 +138,16 @@ export const buildWorkflowSteps = ({
       // a partial publish, keep planning the remaining days in the same place.
       key: "solver",
       keys: ["solver", "plan"],
+      // Once the whole plan is published the draft workspace is just a redirect
+      // card, so send the click straight to the published plan. A partial
+      // publish still needs the workspace to plan the remaining days.
+      navigateKey: planFullyDistributed ? "plan" : "solver",
       title: "Plan",
-      description: hasDistributedPlan
-        ? "Publisert. Utvid publiseringen eller planlegg resten her."
-        : "Lag planutkastet, kontroller det og publiser.",
+      description: planFullyDistributed
+        ? "Publisert. Åpne intervjuplanen for oppfølging."
+        : hasDistributedPlan
+          ? "Publisert. Utvid publiseringen eller planlegg resten her."
+          : "Lag planutkastet, kontroller det og publiser.",
       icon: Sparkles,
       status: planLocked
         ? "Låst"

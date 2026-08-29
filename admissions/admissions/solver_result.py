@@ -199,10 +199,16 @@ def validate_schedule_result(
                     )
                 )
             if candidate_id in set(_value(interviewer, "biased", ()) or ()):
+                # The candidate/interviewer ids are returned in the issue
+                # payload so the UI can resolve names and point the admin
+                # at the offending row in the plan. The message stays
+                # generic so a screen reader still reads cleanly; the
+                # ids are the actionable bit.
                 issues.append(
                     ValidationIssue(
                         "interviewer_conflict",
-                        "Resultatet bryter en registrert inhabilitet.",
+                        "Resultatet bryter en registrert inhabilitet "
+                        "(intervjuer og kandidat i samme panel).",
                         candidate_id=candidate_id,
                         interviewer_id=interviewer_id,
                         time=interview_time,
@@ -644,15 +650,10 @@ def objective_key(
         vector.unplaced,
         vector.overtime,
         *((vector.joint_sessions,) if candidates_per_session > 1 else ()),
+        vector.panel_breaks if prefers_stable_panel else 0,
         vector.adjacent_block_rest,
         vector.extra_experienced,
         structure,
-        # Panel stability is the model's last quality tier before earliness:
-        # fresh plans balance participating interviewers fairly first and
-        # only then preserve the previous panel makeup. The comparison key
-        # must mirror that order, or an optimal-for-the-model solution
-        # compares as worse than a non-optimal one.
-        vector.panel_breaks if prefers_stable_panel else 0,
         vector.earliness,
         stability_tie,
         vector.canonical_tie,

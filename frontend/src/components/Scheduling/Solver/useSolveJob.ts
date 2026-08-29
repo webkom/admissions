@@ -17,9 +17,11 @@ import { createSolveJobLifecycle } from "./solveJobLifecycle";
 import { createSolveJobStorage, type StoredSolveJob } from "./solveJobStorage";
 
 // How long a solve job may sit PENDING before we assume the solver worker is
-// not running. Only applied in development — the worker claims jobs within its
-// ~2s poll interval, so 30s of PENDING means it never started.
-const SOLVE_WORKER_STALL_MS = 30_000;
+// not running. The worker claims jobs within its ~2s poll interval, so 60s of
+// PENDING means it never started — surface that to the user instead of an
+// endless spinner. (Was dev-only; a dead worker in production is exactly as
+// invisible without it.)
+const SOLVE_WORKER_STALL_MS = 60_000;
 
 interface SolveJobCompletion {
   kind: "completed";
@@ -86,32 +88,27 @@ export function useSolveJob(admissionSlug: string, groupId: string) {
     }
   }, [result]);
 
+  const jobStartedAt =
+    activeJob &&
+    (activeJob.status === "PENDING" || activeJob.status === "RUNNING")
+      ? activeJob.status === "RUNNING" && activeJob.started_at
+        ? activeJob.started_at
+        : activeJob.created_at
+      : null;
+
   useEffect(() => {
-    if (
-      !loading ||
-      !activeJob ||
-      (activeJob.status !== "PENDING" && activeJob.status !== "RUNNING")
-    ) {
+    if (!loading) {
       setElapsedMs(0);
       return;
     }
-    const phaseStartedAt = Date.parse(
-      activeJob.status === "RUNNING" && activeJob.started_at
-        ? activeJob.started_at
-        : activeJob.created_at,
-    );
-    const updateElapsed = () => {
-      setElapsedMs(Math.max(0, Date.now() - phaseStartedAt));
+    const start = jobStartedAt ? Date.parse(jobStartedAt) : Date.now();
+    const update = () => {
+      setElapsedMs(Math.max(0, Date.now() - start));
     };
-    updateElapsed();
-    const tick = window.setInterval(updateElapsed, 100);
+    update();
+    const tick = window.setInterval(update, 100);
     return () => window.clearInterval(tick);
-  }, [
-    activeJob?.created_at,
-    activeJob?.started_at,
-    activeJob?.status,
-    loading,
-  ]);
+  }, [loading, jobStartedAt]);
 
   const clearStoredJob = useCallback(() => {
     setRestoredDraftBaseRevision(undefined);
@@ -240,7 +237,7 @@ export function useSolveJob(admissionSlug: string, groupId: string) {
       job,
       () => solveRunRef.current !== runId,
       setActiveJob,
-      import.meta.env.DEV ? SOLVE_WORKER_STALL_MS : undefined,
+      SOLVE_WORKER_STALL_MS,
     );
     if (outcome.kind === "stale") return null;
     if (outcome.kind === "access-failure") {
@@ -252,9 +249,12 @@ export function useSolveJob(admissionSlug: string, groupId: string) {
       solveJobIdRef.current = null;
       setActiveJob(null);
       setError(
-        "Solve-jobben ble aldri startet. Sjekk at `poetry run python " +
-          "manage.py run_solver_worker` kjører (eller start Django med " +
-          "`make dev`), og prøv igjen.",
+        import.meta.env.DEV
+          ? "Solve-jobben ble aldri startet. Sjekk at `poetry run python " +
+              "manage.py run_solver_worker` kjører (eller start Django med " +
+              "`make dev`), og prøv igjen."
+          : "Beregningen kom aldri i gang. Prøv igjen om litt — hvis det " +
+              "ikke hjelper, kontakt webkom.",
       );
       restorePreviousResult();
       return null;
@@ -697,6 +697,7 @@ export function useSolveJob(admissionSlug: string, groupId: string) {
     planRevealed,
     setPlanRevealed,
     elapsedMs,
+    startedAt: jobStartedAt,
     jobStatus: activeJob?.status ?? null,
     pendingProposal,
     pendingProposalRejected:

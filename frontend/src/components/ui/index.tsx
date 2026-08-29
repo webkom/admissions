@@ -5,7 +5,6 @@ export {
   actionButtonPrimary,
   actionButtonNeutral,
   actionButtonGhost,
-  actionButtonActive,
   actionButtonDanger,
 } from "./styles";
 export { Chip } from "./Chip";

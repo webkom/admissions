@@ -34,6 +34,14 @@ import type { ApplicationViewMode } from "src/types";
 type SaveSchedulePayload = Partial<Omit<SavedSchedule, "id" | "updated_at">> & {
   expected_updated_at: string | null;
   deviation_approval_fingerprint?: string;
+  /**
+   * Write-only: the server records the decision against the plan
+   * (`published_without_review_by`) and each skipped reviewer
+   * (`ConflictReviewAuditEvent`) rather than storing the flag. Absent
+   * the flag the gate is exactly as strict as before.
+   */
+  publish_without_full_review?: boolean;
+  defer_unplaced_candidates?: boolean;
 };
 
 interface SaveScheduleOptions {
@@ -281,7 +289,15 @@ export const useSaveSchedule = (
   });
 };
 
-export const useInterviewAvailability = (slug: string, groupId: string) => {
+export const useInterviewAvailability = (
+  slug: string,
+  groupId: string,
+  options?: {
+    /** Poll the roster while set (the solver view polls for the last
+     *  inhabilitet review, which is submitted in another browser). */
+    refetchInterval?: number | false;
+  },
+) => {
   const scope = admissionGroupScope(slug, groupId);
   const query = useQuery<InterviewAvailabilityParticipant[], AxiosError>({
     queryKey: [`/admin/admission/${slug}/group/${groupId}/availability/`],
@@ -290,6 +306,7 @@ export const useInterviewAvailability = (slug: string, groupId: string) => {
       Boolean(groupId) &&
       !areSensitiveAdmissionCacheWritesBlocked(scope),
     ...useSensitiveQueryOptions(scope),
+    refetchInterval: options?.refetchInterval,
     meta: admissionSensitiveQueryMeta(scope, true),
   });
   return hideDataAfterSensitiveQueryFailure(query);

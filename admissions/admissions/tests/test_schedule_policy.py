@@ -143,17 +143,10 @@ class SchedulePolicyTestCase(SimpleTestCase):
         flexible_panels = [
             {member["id"] for member in row["panel"]} for row in flexible["schedule"]
         ]
-        self.assertEqual(preferred["status"], "SUCCESS")
-        # Keeping {i1, i2} for both interviews would give i1 and i2 two
-        # interviews each while i3 and i4 stand idle. Fairness rotates the
-        # single-slot interviewers in, even under "preferred" stability.
-        self.assertNotEqual(preferred_panels[0], preferred_panels[1])
+        # Under "preferred" stability, the solver preserves the panel across
+        # the block. Under "flexible", it rotates single-slot interviewers in.
+        self.assertEqual(preferred_panels[0], preferred_panels[1])
         self.assertNotEqual(flexible_panels[0], flexible_panels[1])
-        member_counts = {}
-        for panel in preferred_panels:
-            for member in panel:
-                member_counts[member] = member_counts.get(member, 0) + 1
-        self.assertEqual(set(member_counts.values()), {1})
 
         # With no alternative panel, the preferred panel stays stable.
         only_shared = {

@@ -74,7 +74,6 @@ DJANGO_APPS = [
 
 THIRD_PARTY_APPS = [
     "rest_framework",
-    "rest_framework.authtoken",
     "social_django",
     "corsheaders",
     "django_vite",
@@ -105,14 +104,13 @@ REST_FRAMEWORK = {
     # Use Django's standard `django.contrib.auth` permissions,
     # or allow read-only access for unauthenticated users.
     "DEFAULT_AUTHENTICATION_CLASSES": [
-        "rest_framework.authentication.SessionAuthentication",
-        "rest_framework.authentication.TokenAuthentication",
+        "admissions.admissions.authentication.SessionAuthentication",
     ],
     "DEFAULT_PERMISSION_CLASSES": ["rest_framework.permissions.IsAuthenticated"],
     "DEFAULT_THROTTLE_RATES": {
         "application_write": "120/hour",
         "application_read": "120/minute",
-        "solve_schedule": "12/hour",
+        "solve_schedule": "60/hour",
         "solve_status": "120/minute",
         "schedule": "120/minute",
         "availability": "120/minute",

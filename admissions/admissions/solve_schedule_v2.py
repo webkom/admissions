@@ -8,12 +8,14 @@ from admissions.admissions import constants
 from admissions.admissions import solve_schedule as solve_schedule_module
 from admissions.admissions.schedule_policy import normalize_solver_options
 from admissions.admissions.solve_schedule import (
+    MINUTES_PER_DAY,
     Candidate,
     CanonicalBlock,
     Interviewer,
     ObjectiveTier,
     SolveOptions,
     _canonicalize_blocks,
+    build_solve_options,
 )
 from admissions.admissions.solver_result import (
     REPAIR_PROFILES,
@@ -221,7 +223,7 @@ def _normalize_problem(
         key=lambda interviewer: interviewer.id,
     )
     normalized_options, policy = normalize_solver_options(options_data)
-    options = SolveOptions(**normalized_options)
+    options = build_solve_options(normalized_options)
     strategy_defaults = {
         "minimize_overtime": (1, 0, False),
         # Fair distribution outranks compactness: the balance term competes
@@ -926,11 +928,16 @@ def _build_model(
                 required_block_panel[(interviewer_id, block.index)] = block_member
                 for interview_time in block_slots:
                     panel_var = panel.get((interviewer_id, interview_time))
+                    # session_active is 0/1 ("is this slot in use"); occupied is
+                    # 0..candidates_per_session. These are slot-in-use tests, so
+                    # a joint slot (occupied == 2) must not push a Boolean past 1.
                     if panel_var is None:
-                        model.Add(block_member + occupied[interview_time] <= 1)
+                        model.Add(block_member + session_active[interview_time] <= 1)
                         continue
                     model.Add(panel_var <= block_member)
-                    model.Add(panel_var >= block_member + occupied[interview_time] - 1)
+                    model.Add(
+                        panel_var >= block_member + session_active[interview_time] - 1
+                    )
 
     panel_break_vars = []
     if problem.policy.prefers_stable_panel or problem.options.repair_mode:
@@ -965,11 +972,14 @@ def _build_model(
                     panel_break = model.NewBoolVar(
                         f"panel_break_{block.index}_{position}_{interviewer_id}"
                     )
-                    model.Add(panel_break <= occupied[interview_time])
+                    # session_active, not occupied: a joint slot has occupied
+                    # == candidates_per_session, which would force this Boolean
+                    # break variable above 1 and make the model infeasible.
+                    model.Add(panel_break <= session_active[interview_time])
                     model.Add(panel_break >= busy - reference_var)
                     model.Add(
                         panel_break
-                        >= reference_var + occupied[interview_time] - busy - 1
+                        >= reference_var + session_active[interview_time] - busy - 1
                     )
                     model.Add(panel_break <= busy + reference_var)
                     model.Add(panel_break <= 2 - busy - reference_var)
@@ -1064,11 +1074,68 @@ def _build_model(
     slot_rank = {
         interview_time: rank for rank, interview_time in enumerate(problem.sorted_slots)
     }
+    # Day-major earliness: each day's cost band sits strictly above every
+    # earlier day's, so day 1 fills completely before day 2 is touched.
+    # Plain global-slot-rank earliness let a late slot on day 1 cost almost
+    # as much as an early slot on day 2, which produced thin candidate
+    # spread across many days instead of full early days.
+    day_of_slot = {
+        interview_time: interview_time // MINUTES_PER_DAY
+        for interview_time in problem.sorted_slots
+    }
+    days_in_order = sorted(set(day_of_slot.values()))
+    day_depth = {day: depth for depth, day in enumerate(days_in_order)}
+    rank_within_day = {}
+    per_day_counter: dict[int, int] = {}
+    for interview_time in problem.sorted_slots:
+        day = day_of_slot[interview_time]
+        rank_within_day[interview_time] = per_day_counter.get(day, 0)
+        per_day_counter[day] = rank_within_day[interview_time] + 1
+    slots_per_day = max(per_day_counter.values(), default=1)
     earliness = _linear_sum(
-        slot_rank[interview_time] * schedule_var
+        (
+            day_depth[day_of_slot[interview_time]] * slots_per_day
+            + rank_within_day[interview_time]
+        )
+        * schedule_var
         for (candidate_id, interview_time), schedule_var in schedule.items()
-        if slot_rank[interview_time] > 0
+        if rank_within_day[interview_time] > 0
     )
+
+    # Block fill: an empty slot with a USED slot after it (within the same
+    # block) is a "hole" - a mid-block gap or a block that starts late.
+    # Trailing empty slots are free: they are the sanctioned way to cut a
+    # day short ("fyll fra venstre, kutt på slutten"). Combined with the
+    # day-major earliness above this packs every day from its first slot
+    # and lets leftover capacity fall at the end, instead of scattering
+    # lonely interviews through the middle - easier logistics for panels
+    # and candidates alike.
+    hole_vars = []
+    for block in problem.canonical_blocks:
+        # Time-sorted, NOT input order: "fill from the earliest slot, cut at
+        # the latest" must be a property of clock time, otherwise a permuted
+        # all_slots/blocks input inverts the direction and breaks permutation
+        # invariance (see test_solver_v2 differential).
+        block_slots = sorted(block.usable_slots)
+        if len(block_slots) < 2:
+            continue
+        for position in range(len(block_slots) - 1):
+            any_after = model.NewBoolVar(f"hole_any_after_{block.index}_{position}")
+            model.AddMaxEquality(
+                any_after,
+                [
+                    session_active[interview_time]
+                    for interview_time in block_slots[position + 1 :]
+                ],
+            )
+            gap = model.NewBoolVar(f"hole_gap_{block.index}_{position}")
+            # gap = NOT session_active(slot) AND any_after.
+            model.Add(gap <= 1 - session_active[block_slots[position]])
+            model.Add(gap <= any_after)
+            model.Add(gap >= any_after - session_active[block_slots[position]])
+            hole_vars.append(gap)
+    hole_cost = _linear_sum(hole_vars)
+    maximum_hole_cost = len(hole_vars)
 
     continuity_cost = 0
     maximum_continuity_cost = 0
@@ -1188,7 +1255,9 @@ def _build_model(
         + maximum_continuity_cost
         + maximum_discouraged_cost
     )
-    maximum_earliness = len(problem.candidates) * max(0, len(problem.sorted_slots) - 1)
+    maximum_earliness = len(problem.candidates) * max(
+        0, len(days_in_order) * slots_per_day - 1
+    )
     panel_stability_cost = _linear_sum(panel_break_vars)
     previous_stability = (
         previous_panel_member_count + 1
@@ -1235,6 +1304,14 @@ def _build_model(
     ]
     if problem.options.repair_mode and previous_by_candidate:
         tiers.append(ObjectiveTier("repair_cost", repair_cost, maximum_repair_cost))
+    elif problem.policy.prefers_stable_panel:
+        tiers.append(
+            ObjectiveTier(
+                "panel_stability",
+                panel_stability_cost,
+                len(panel_break_vars),
+            )
+        )
     # With joint interviews the solver packs two candidates into one shared
     # panel whenever it can: fewer sessions means the panel does one joint
     # interview instead of two separate ones. Skipped in repair mode so a
@@ -1249,6 +1326,19 @@ def _build_model(
                 len(session_active),
             )
         )
+    earliness_tier = ObjectiveTier("earliness", earliness, maximum_earliness)
+    # Progressive publishing strands an early-published day's spare capacity
+    # (the boundary is immutable), so an opted-in solve ranks day-major
+    # earliness above the fairness terms: Monday saturates before Tuesday is
+    # touched, keeping the unpublished tail whole for candidates that arrive
+    # later. Repairs keep their minimal-change precedence over packing, and
+    # by default earliness stays the final tie-breaker below load balancing
+    # and continuity.
+    promote_earliness = getattr(problem.options, "pack_early", False) and not (
+        problem.options.repair_mode and previous_by_candidate
+    )
+    if promote_earliness:
+        tiers.append(earliness_tier)
     tiers.extend(
         [
             ObjectiveTier(
@@ -1256,8 +1346,22 @@ def _build_model(
                 _linear_sum(consecutive_block_vars),
                 len(consecutive_block_vars),
             ),
+            ObjectiveTier("block_fill", hole_cost, maximum_hole_cost),
+            ObjectiveTier(
+                "load_and_continuity",
+                structure,
+                maximum_structure,
+            ),
             *(
                 [
+                    # How many experienced members sit in panels beyond the
+                    # required one. Purely aesthetic - and when the committee
+                    # has few non-experienced interviewers, driving it to
+                    # zero means putting the same juniors in every panel.
+                    # It must therefore rank below fair distribution, or a
+                    # senior-heavy committee concentrates its whole load on
+                    # the few juniors (three people at 30+ interviews while
+                    # everyone else idles).
                     ObjectiveTier(
                         "extra_experienced",
                         extra_experienced,
@@ -1267,28 +1371,10 @@ def _build_model(
                 if problem.options.require_experienced_panel
                 else []
             ),
-            ObjectiveTier(
-                "load_and_continuity",
-                structure,
-                maximum_structure,
-            ),
-            *(
-                [
-                    # Fresh plans should use participating interviewers
-                    # fairly before preserving the previous panel makeup.
-                    ObjectiveTier(
-                        "panel_stability",
-                        panel_stability_cost,
-                        len(panel_break_vars),
-                    )
-                ]
-                if problem.policy.prefers_stable_panel
-                and not (problem.options.repair_mode and previous_by_candidate)
-                else []
-            ),
-            ObjectiveTier("earliness", earliness, maximum_earliness),
         ]
     )
+    if not promote_earliness:
+        tiers.append(earliness_tier)
     if not (problem.options.repair_mode and previous_by_candidate):
         tiers.append(
             ObjectiveTier(
@@ -1352,7 +1438,6 @@ def _solve_model(
     def configured_solver():
         configured = cp_model.CpSolver()
         configured.parameters.num_workers = constants.SOLVER_NUM_WORKERS
-        configured.parameters.interleave_search = True
         configured.parameters.random_seed = constants.SOLVER_RANDOM_SEED
         return configured
 

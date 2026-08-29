@@ -1,5 +1,6 @@
 import React from "react";
 import InterviewStatusControl from "src/containers/AdmissionsContainer/InterviewStatusControl";
+import { useAdminUpdateInterviewStatusMutation } from "src/query/mutations";
 import type { ScheduleItem } from "src/types";
 import {
   getInterviewNextAction,
@@ -36,6 +37,15 @@ const ScheduleInterviewWorkflow: React.FC<{
   outreachTemplates,
   part = "combined",
 }) => {
+  // Same cache scope as the InterviewStatusControl rendered beside this action
+  // (its applicationScopeKey defaults to "schedule"), so the optimistic status
+  // bump lands on the entry the status cell reads from.
+  const advanceStatusMutation = useAdminUpdateInterviewStatusMutation(
+    admissionSlug,
+    "schedule",
+    groupId,
+  );
+
   if (
     !candidateNamesVisible ||
     !item.candidate_id ||
@@ -91,6 +101,23 @@ const ScheduleInterviewWorkflow: React.FC<{
     outreachTemplates.sms.body,
     renderValues,
   );
+  // Sending the invitation is what moves "Ikke kalt inn" to "Kalt inn" - do it
+  // the moment the admin opens the SMS draft or copies the text, so the status
+  // does not lag a manual step behind. A reminder does not change status.
+  const markInvitationSent = () => {
+    if (
+      !item.candidate_id ||
+      !item.interview_status_updated_at ||
+      item.interview_status !== "not_invited"
+    ) {
+      return;
+    }
+    advanceStatusMutation.mutate({
+      applicationId: item.candidate_id,
+      interviewStatus: "invited",
+      expectedInterviewStatusUpdatedAt: item.interview_status_updated_at,
+    });
+  };
   const actionControl = (
     <InterviewOutreachActions
       candidateName={item.candidate}
@@ -98,6 +125,7 @@ const ScheduleInterviewWorkflow: React.FC<{
       message={renderedSmsBody}
       actionLabel={interviewNextActionLabels[nextAction]}
       canShare={candidateNamesVisible}
+      onSend={nextAction === "send_invitation" ? markInvitationSent : undefined}
     />
   );
 

@@ -459,6 +459,18 @@ def canonicalize_solver_payload(admission, saved, data, request_user):
     }
 
 
+def _candidates_per_session(solver_options):
+    """Clamp the joint-interview capacity from a solver-options dict to a sane
+    range. Anything missing or malformed falls back to a normal interview."""
+
+    raw = (solver_options or {}).get("candidates_per_session", 1)
+    try:
+        value = int(raw)
+    except (TypeError, ValueError):
+        return 1
+    return max(1, min(value, constants.MAX_CANDIDATES_PER_SESSION))
+
+
 def canonicalize_schedule(
     *,
     admission,
@@ -524,8 +536,13 @@ def canonicalize_schedule(
     derived_conflicts = get_declared_conflict_candidate_ids(admission, group)
 
     allow_overtime = policy.allows_availability_deviations
+    # Joint interviews: one shared panel meets this many candidates in a single
+    # slot. The solver (v2) produces such rows; validation here must accept them
+    # on the same terms - up to N candidates per time, all sharing one panel.
+    candidates_per_session = _candidates_per_session(solver_options)
     seen_candidates = set()
-    seen_times = set()
+    candidates_at_time: dict[int, int] = {}
+    panel_by_time: dict[int, frozenset] = {}
     canonical = []
     for item in schedule:
         candidate_id = str(item.get("candidate_id") or "")
@@ -544,9 +561,15 @@ def canonicalize_schedule(
             raise ScheduleValidationError(
                 "schedule", "Planen inneholder et tidspunkt som ikke er åpnet."
             )
-        if interview_time in seen_times:
+        if candidates_at_time.get(interview_time, 0) >= candidates_per_session:
             raise ScheduleValidationError(
-                "schedule", "To intervjuer kan ikke ha samme tidspunkt."
+                "schedule",
+                (
+                    "Et fellesintervju kan ikke ha flere enn "
+                    f"{candidates_per_session} kandidater."
+                    if candidates_per_session > 1
+                    else "To intervjuer kan ikke ha samme tidspunkt."
+                ),
             )
 
         panel = item.get("panel") or []
@@ -562,6 +585,13 @@ def canonicalize_schedule(
         if str(application.user_id) in panel_ids:
             raise ScheduleValidationError(
                 "schedule", "En kandidat kan ikke intervjue seg selv."
+            )
+        panel_key = frozenset(panel_ids)
+        shared_panel = panel_by_time.get(interview_time)
+        if shared_panel is not None and shared_panel != panel_key:
+            raise ScheduleValidationError(
+                "schedule",
+                "Kandidatene i et fellesintervju må dele samme panel.",
             )
 
         canonical_panel = []
@@ -588,8 +618,29 @@ def canonicalize_schedule(
                 else set()
             ) | derived_conflicts.get(interviewer_id, set())
             if candidate_id in conflicts:
+                # Name the offending pair so the admin can find it in
+                # the plan: a generic "bryter en inhabilitet" leaves them
+                # hunting across 70+ rows for the conflict. The names
+                # are looked up from the application (candidate) and
+                # the InterviewAvailability row (interviewer) - both
+                # already in scope, no extra query needed.
+                candidate_name = (
+                    candidate_map.get(candidate_id).user.get_full_name()
+                    or candidate_map.get(candidate_id).user.username
+                    if candidate_map.get(candidate_id) is not None
+                    else candidate_id
+                )
+                interviewer_user = user_map.get(interviewer_id)
+                interviewer_name = (
+                    interviewer_user.get_full_name() or interviewer_user.username
+                    if interviewer_user is not None
+                    else interviewer_id
+                )
                 raise ScheduleValidationError(
-                    "schedule", "Planen bryter en registrert inhabilitet."
+                    "schedule",
+                    f"Planen bryter en registrert inhabilitet: "
+                    f"{interviewer_name} er oppført som inhabil mot "
+                    f"{candidate_name}.",
                 )
             available_times = (
                 # "Helst ikke" counts as available here: the interviewer said
@@ -641,11 +692,17 @@ def canonicalize_schedule(
             canonical_item["booking_source"] = item["booking_source"]
         canonical.append(canonical_item)
         seen_candidates.add(candidate_id)
-        seen_times.add(interview_time)
+        candidates_at_time[interview_time] = (
+            candidates_at_time.get(interview_time, 0) + 1
+        )
+        panel_by_time.setdefault(interview_time, panel_key)
 
     if require_all_candidates and seen_candidates != set(candidate_map):
         raise ScheduleValidationError(
-            "schedule", "Alle aktive kandidater må ha et intervju før publisering."
+            "schedule",
+            "Alle aktive kandidater må ha et intervju før publisering, eller "
+            "bekreft at de siste planlegges senere (kandidater uten intervju "
+            "nå).",
         )
 
     if (solver_options or {}).get("enforce_same_gender"):

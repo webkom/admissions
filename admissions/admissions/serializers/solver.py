@@ -65,6 +65,15 @@ class ApplySolveJobSerializer(serializers.Serializer):
 class SolveOptionsSerializer(serializers.Serializer):
     enforce_same_gender = serializers.BooleanField(default=False)
     require_experienced_panel = serializers.BooleanField(default=False)
+    # Joint interviews: 1 is a normal interview; 2+ means one shared panel meets
+    # exactly that many candidates together in a single slot. Candidates who
+    # cannot be paired into a full joint session are left unplaced. The solver
+    # engine (v2) reads this straight off SolveOptions; v1 has no joint support.
+    candidates_per_session = serializers.IntegerField(
+        min_value=1,
+        max_value=constants.MAX_CANDIDATES_PER_SESSION,
+        default=1,
+    )
     allow_overtime = serializers.BooleanField(required=False)
     prioritize_continuity = serializers.BooleanField(default=True)
     same_panel_per_block = serializers.BooleanField(required=False)
@@ -92,6 +101,11 @@ class SolveOptionsSerializer(serializers.Serializer):
         required=False,
     )
     repair_mode = serializers.BooleanField(default=False)
+    # Strict by default: locked draft rows stay pinned. When opted in, the
+    # worker demotes draft locks to a soft previous schedule so the solver may
+    # re-flow them to place newly arrived candidates. Published rows are never
+    # demoted.
+    rebalance_locked = serializers.BooleanField(default=False)
     overtime_weight = serializers.IntegerField(
         min_value=0, max_value=10000, default=100
     )
@@ -101,6 +115,12 @@ class SolveOptionsSerializer(serializers.Serializer):
     continuity_weight = serializers.IntegerField(
         min_value=0, max_value=10000, default=12
     )
+    # Rank day-major earliness above the fairness terms: under progressive
+    # publishing a published day's spare slots are stranded, so the earliest
+    # days should saturate before the next one is touched. Off by default -
+    # earliness then stays the final tie-breaker below load balancing and
+    # continuity.
+    pack_early = serializers.BooleanField(default=False)
     max_solver_seconds = serializers.FloatField(
         min_value=1.0,
         max_value=constants.MAX_SOLVER_SECONDS,

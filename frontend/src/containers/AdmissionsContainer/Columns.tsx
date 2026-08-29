@@ -11,6 +11,8 @@ import {
 } from "src/styles/designTokens";
 import { encodeSmsAddress } from "src/utils/emailLinks";
 import { getApplicationDeadlineStatus } from "src/utils/applicationAccess";
+import FormatTime from "src/components/Time/FormatTime";
+import { DateTime } from "luxon";
 
 const columnHelper = createColumnHelper<ApplicationTableRow>();
 
@@ -160,21 +162,39 @@ export const columns = [
   columnHelper.accessor("createdAt", {
     header: "Sendt",
     size: applicationTableColumnWidths.timestamp,
-    cell: (info) =>
-      info.row.original.createdAt ? (
-        <span
-          data-cy="application-sent-time"
-          data-late={!info.row.original.appliedWithinDeadline}
-          className={`tabular-nums whitespace-nowrap text-sm ${
-            info.row.original.appliedWithinDeadline
-              ? "text-success"
-              : "text-orange-500"
-          }`}
+    cell: (info) => {
+      const createdAt = info.row.original.createdAt;
+      if (!createdAt) return null;
+      const isWithinDeadline = info.row.original.appliedWithinDeadline;
+      const fullTimestamp = DateTime.fromISO(createdAt)
+        .setLocale("nb")
+        .toFormat("EEEE d. MMMM yyyy, kl. HH:mm");
+
+      return (
+        <div
+          title={`Sendt: ${fullTimestamp}`}
+          className="flex min-w-0 flex-col gap-0.5 leading-tight"
         >
-          {getApplicationDeadlineStatus(
-            info.row.original.appliedWithinDeadline,
-          )}
-        </span>
-      ) : null,
+          <div className="flex items-center gap-1.5 tabular-nums whitespace-nowrap text-ui">
+            <span className="font-medium text-text-primary">
+              <FormatTime format="d. LLL">{createdAt}</FormatTime>
+            </span>
+            <span className="text-xs text-text-muted/60">–</span>
+            <span className="text-text-muted">
+              <FormatTime format="HH:mm">{createdAt}</FormatTime>
+            </span>
+          </div>
+          <span
+            data-cy="application-sent-time"
+            data-late={!isWithinDeadline}
+            className={`text-detail font-medium tabular-nums whitespace-nowrap ${
+              isWithinDeadline ? "text-success" : "text-orange-500"
+            }`}
+          >
+            {getApplicationDeadlineStatus(isWithinDeadline)}
+          </span>
+        </div>
+      );
+    },
   }),
 ];

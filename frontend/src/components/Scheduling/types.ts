@@ -10,6 +10,7 @@ export type {
   SavedSchedule,
   ScheduleBlockMode,
   ScheduleItem,
+  SchedulePanelMember,
   SlotOverride,
   SolverOptions,
 } from "../../types";

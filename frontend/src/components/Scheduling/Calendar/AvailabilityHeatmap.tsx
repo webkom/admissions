@@ -56,6 +56,9 @@ interface AvailabilityHeatmapProps {
     userId: string,
     experienceLevel: ExperienceLevel,
   ) => Promise<void>;
+  /** When set, each interviewer row gets a "Rediger" action that opens the
+   *  on-behalf availability editor for that interviewer (interview admin). */
+  onEditAvailability?: (userId: string) => void;
   stage?: string;
   foundationNav?: React.ReactNode;
   footerStatus?: React.ReactNode;
@@ -95,6 +98,7 @@ const AvailabilityHeatmap: React.FC<AvailabilityHeatmapProps> = ({
   chunkBreakMinutes,
   onParticipationChange,
   onExperienceLevelChange,
+  onEditAvailability,
   stage,
   foundationNav,
   footerStatus,
@@ -447,6 +451,19 @@ const AvailabilityHeatmap: React.FC<AvailabilityHeatmapProps> = ({
       )}
     </div>
   );
+  const editAvailabilityControl = (interviewer: Interviewer) =>
+    onEditAvailability ? (
+      <button
+        type="button"
+        onClick={() => onEditAvailability(interviewer.id)}
+        className={cn(
+          "text-detail font-semibold text-brand hover:underline",
+          keyboardFocusRingClass,
+        )}
+      >
+        Rediger tilgjengelighet
+      </button>
+    ) : null;
   const experienceControl = (interviewer: Interviewer) =>
     onExperienceLevelChange ? (
       <div className="flex flex-wrap items-center gap-2 text-detail text-text-muted">
@@ -524,6 +541,7 @@ const AvailabilityHeatmap: React.FC<AvailabilityHeatmapProps> = ({
                       <span className="ml-2 text-text-muted">Mangler svar</span>
                     </div>
                     <div className="flex flex-wrap items-center justify-end gap-3">
+                      {editAvailabilityControl(interviewer)}
                       {experienceControl(interviewer)}
                       {onParticipationChange && optOutControl(interviewer)}
                     </div>
@@ -542,6 +560,7 @@ const AvailabilityHeatmap: React.FC<AvailabilityHeatmapProps> = ({
                         <span className="ml-2 text-text-muted">Deltar</span>
                       </div>
                       <div className="flex flex-wrap items-center justify-end gap-3">
+                        {editAvailabilityControl(interviewer)}
                         {experienceControl(interviewer)}
                         {optOutControl(interviewer)}
                       </div>
@@ -559,6 +578,7 @@ const AvailabilityHeatmap: React.FC<AvailabilityHeatmapProps> = ({
                       <span className="ml-2 text-text-muted">Deltar ikke</span>
                     </div>
                     <div className="flex flex-wrap items-center justify-end gap-3">
+                      {editAvailabilityControl(interviewer)}
                       {experienceControl(interviewer)}
                       {onParticipationChange && (
                         <button

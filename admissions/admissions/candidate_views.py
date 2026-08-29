@@ -14,7 +14,6 @@ from admissions.admissions.admission_access import (
 from admissions.admissions.authentication import SessionAuthentication
 from admissions.admissions.models import (
     Admission,
-    LegoUser,
     NameVisibilityAuditEvent,
     SavedSchedule,
     UserApplication,
@@ -42,7 +41,6 @@ class InterviewCandidatesView(SchedulerFeatureGateMixin, APIView):
         group = get_object_or_404(admission.groups, pk=group_id)
 
         user = request.user
-        user.__class__ = LegoUser
 
         is_interview_admin = user_is_interview_admin(admission, group, user)
         is_committee_member = user_is_group_member(group, user)
@@ -115,7 +113,6 @@ class NameVisibilityAuditView(SchedulerFeatureGateMixin, APIView):
     def get(self, request, admission_slug, group_id):
         admission = get_object_or_404(Admission, slug=admission_slug)
         group = get_object_or_404(admission.groups, pk=group_id)
-        request.user.__class__ = LegoUser
         if not user_is_interview_admin(admission, group, request.user):
             return Response(status=status.HTTP_403_FORBIDDEN)
         events = NameVisibilityAuditEvent.objects.filter(

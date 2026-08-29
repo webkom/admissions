@@ -1,4 +1,5 @@
 from django.db.models import Q
+from django.utils import timezone
 from rest_framework import permissions
 
 from admissions.admissions import constants
@@ -11,8 +12,13 @@ from admissions.admissions.admission_access import (
 from .models import Admission, LegoUser, Membership
 
 
-def cast_as_lego_user(user_obj) -> LegoUser:
-    user_obj.__class__ = LegoUser
+def as_lego_user(user_obj) -> LegoUser:
+    """Return the request user.
+
+    AUTH_USER_MODEL is LegoUser, so request.user is always a LegoUser
+    already; this keeps that assumption in one place instead of mutating
+    ``user.__class__``.
+    """
     return user_obj
 
 
@@ -29,18 +35,18 @@ class IsOwnerOrReadOnly(permissions.BasePermission):
 
 class IsStaff(permissions.BasePermission):
     def has_permission(self, request, *_):
-        return cast_as_lego_user(request.user).is_staff
+        return as_lego_user(request.user).is_staff
 
     def has_object_permission(self, request, *_):
-        return cast_as_lego_user(request.user).is_staff
+        return as_lego_user(request.user).is_staff
 
 
 class IsWebkom(permissions.BasePermission):
     def has_permission(self, request, *_):
-        return cast_as_lego_user(request.user).is_member_of_webkom
+        return as_lego_user(request.user).is_member_of_webkom
 
     def has_object_permission(self, request, *_):
-        return cast_as_lego_user(request.user).is_member_of_webkom
+        return as_lego_user(request.user).is_member_of_webkom
 
 
 class IsActiveAdminGroupMember(permissions.BasePermission):
@@ -52,21 +58,26 @@ class IsActiveAdminGroupMember(permissions.BasePermission):
     """
 
     def has_permission(self, request, *_):
-        user = cast_as_lego_user(request.user)
+        user = as_lego_user(request.user)
         if not user.is_authenticated:
             return False
         if user.is_member_of_webkom or user_is_org_leadership(user):
             return False
-        return Admission.objects.filter(
-            Q(
-                admin_groups__membership__user=user,
-                admin_groups__membership__role__in=constants.ADMISSION_ADMIN_ROLES,
+        return (
+            Admission.objects.filter(
+                Q(
+                    admin_groups__membership__user=user,
+                )
+                | Q(
+                    groups__membership__user=user,
+                    groups__membership__role__in=constants.ADMISSION_ADMIN_ROLES,
+                )
             )
-            | Q(
-                groups__membership__user=user,
-                groups__membership__role__in=constants.ADMISSION_ADMIN_ROLES,
+            .exclude(
+                admin_groups__membership__role__in=constants.INACTIVE_MEMBERSHIP_ROLES
             )
-        ).exists()
+            .exists()
+        )
 
 
 class IsOrgLeadership(permissions.BasePermission):
@@ -80,15 +91,15 @@ class IsOrgLeadership(permissions.BasePermission):
     """
 
     def has_permission(self, request, *_):
-        return user_is_org_leadership(cast_as_lego_user(request.user))
+        return user_is_org_leadership(as_lego_user(request.user))
 
     def has_object_permission(self, request, *_):
-        return user_is_org_leadership(cast_as_lego_user(request.user))
+        return user_is_org_leadership(as_lego_user(request.user))
 
 
 class IsCreatorOfObject(permissions.BasePermission):
     def has_object_permission(self, request, view, obj):
-        return obj.created_by == cast_as_lego_user(request.user)
+        return obj.created_by == as_lego_user(request.user)
 
 
 class GroupPermissions(permissions.BasePermission):
@@ -96,7 +107,9 @@ class GroupPermissions(permissions.BasePermission):
         if request.method in permissions.SAFE_METHODS:
             return True
 
-        admissions = Admission.objects.filter(groups=obj)
+        admissions = Admission.objects.filter(
+            groups=obj, closed_from__gte=timezone.now()
+        )
         for admission in admissions:
             if user_is_admission_admin(admission, request.user):
                 return True

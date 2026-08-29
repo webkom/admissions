@@ -195,6 +195,73 @@ class SavedSchedulePublishSemanticsTestCase(APITestCase):
         saved = SavedSchedule.objects.get(admission=self.admission)
         self.assertEqual(saved.distributed_through.isoformat(), "2026-04-21")
 
+    def test_own_committee_recruiter_publishes_with_name_visibility(self):
+        """A plain committee recruiter (no admission-admin role) must be able
+        to publish their own committee's plan, including the name-visibility
+        choice made in the publish dialog. The publish payload always carries
+        name_visibility alongside is_distributed; rejecting it used to 403
+        every recruiter publish, which the frontend surfaced as a lost-access
+        purge."""
+        committee = Group.objects.create(name="Bedkom", lego_id=610)
+        self.admission.groups.add(committee)
+        recruiter = LegoUser.objects.create(username="bedkom-recruiter", lego_id=611)
+        Membership.objects.create(user=recruiter, role=RECRUITING, group=committee)
+        candidate = LegoUser.objects.create(username="bedkom-candidate", lego_id=612)
+        application = UserApplication.objects.create(
+            admission=self.admission, user=candidate, phone_number="87654321"
+        )
+        GroupApplication.objects.create(
+            application=application, group=committee, text="Bedkom application"
+        )
+        InterviewAvailability.objects.create(
+            admission=self.admission,
+            group=committee,
+            user=recruiter,
+            slots=["2026-04-20|540", "2026-04-20|600"],
+            reviewed_candidate_ids=[str(application.pk)],
+        )
+        SavedSchedule.objects.create(
+            admission=self.admission,
+            group=committee,
+            schedule=[
+                {
+                    "candidate_id": str(application.pk),
+                    "candidate": "Bedkom kandidat",
+                    "time": 540,
+                    "panel": [{"id": str(recruiter.pk), "name": "Bedkom recruiter"}],
+                }
+            ],
+            start_date="2026-04-20",
+            end_date="2026-04-24",
+            session_duration=60,
+            enabled_slots=["2026-04-20|540", "2026-04-20|600"],
+            panel_size=1,
+            is_distributed=False,
+        )
+        committee_url = reverse(
+            "saved-schedule",
+            kwargs={
+                "admission_slug": self.admission.slug,
+                "group_id": committee.pk,
+            },
+        )
+        saved = SavedSchedule.objects.get(admission=self.admission, group=committee)
+        self.client.force_authenticate(user=recruiter)
+
+        res = self.client.post(
+            committee_url,
+            {
+                "is_distributed": True,
+                "name_visibility": "admin_only",
+                "expected_updated_at": saved.updated_at,
+            },
+            format="json",
+        )
+
+        self.assertEqual(res.status_code, status.HTTP_200_OK, res.data)
+        self.assertTrue(res.data["is_distributed"])
+        self.assertEqual(res.data["name_visibility"], "admin_only")
+
     def test_distributed_through_cannot_precede_start_date(self):
         self._create_saved(is_distributed=False)
 
@@ -632,6 +699,239 @@ class SavedSchedulePublishSemanticsTestCase(APITestCase):
         self.assertIn("kontrollere", res.data["schedule"][0])
         self.assertFalse(
             SavedSchedule.objects.get(admission=self.admission).is_distributed
+        )
+
+    def test_publishing_past_a_missing_review_is_recorded_and_shown(self):
+        """An admin may decide the recruitment cannot wait for a member who
+        has stopped answering, but never quietly: the decision is logged
+        against them and against each person skipped, and the published plan
+        names who did not confirm so the committee can still flag an
+        inhabilitet nobody checked for."""
+        second_application = self._second_application()
+        self._create_saved(is_distributed=False, schedule=self._schedule(time=540))
+        self._mark_reviewed(self.application)
+        second_entry = self._schedule(time=600)
+        second_entry[0]["candidate_id"] = str(second_application.pk)
+        schedule = self._schedule(time=540) + second_entry
+
+        res = self.client.post(
+            self.url,
+            {
+                "schedule": schedule,
+                "is_distributed": True,
+                "publish_without_full_review": True,
+            },
+            format="json",
+        )
+
+        self.assertEqual(res.status_code, status.HTTP_200_OK, res.data)
+        saved = SavedSchedule.objects.get(admission=self.admission)
+        self.assertTrue(saved.is_distributed)
+        self.assertEqual(
+            saved.published_without_review_by,
+            [self.admin_user.get_full_name() or self.admin_user.username],
+        )
+        self.assertEqual(res.data["published_without_review_by"], ["hardening-admin"])
+        bypass = ConflictReviewAuditEvent.objects.filter(
+            admission=self.admission,
+            action=ConflictReviewAuditEvent.ACTION_BYPASSED,
+        )
+        self.assertEqual(bypass.count(), 1)
+        self.assertEqual(bypass.get().actor_username, self.admin_user.username)
+        self.assertEqual(bypass.get().subject_username, self.admin_user.username)
+
+    def test_the_bypass_is_opt_in_per_publish_not_sticky(self):
+        """The note must not outlive the decision. A later publish with
+        everyone confirmed clears it; an ordinary edit in between leaves it
+        alone rather than silently wiping the record."""
+        second_application = self._second_application()
+        self._create_saved(is_distributed=False, schedule=self._schedule(time=540))
+        self._mark_reviewed(self.application)
+        second_entry = self._schedule(time=600)
+        second_entry[0]["candidate_id"] = str(second_application.pk)
+        schedule = self._schedule(time=540) + second_entry
+        self.client.post(
+            self.url,
+            {
+                "schedule": schedule,
+                "is_distributed": True,
+                "publish_without_full_review": True,
+            },
+            format="json",
+        )
+        saved = SavedSchedule.objects.get(admission=self.admission)
+        self.assertTrue(saved.published_without_review_by)
+
+        # An unrelated edit while published keeps the note.
+        res = self.client.post(
+            self.url,
+            {
+                "name_visibility": "admin_only",
+                "expected_updated_at": saved.updated_at,
+            },
+            format="json",
+        )
+        self.assertEqual(res.status_code, status.HTTP_200_OK, res.data)
+        saved.refresh_from_db()
+        self.assertTrue(saved.published_without_review_by)
+
+        # Publishing again once everybody has confirmed clears it.
+        self._mark_reviewed(self.application, second_application)
+        res = self.client.post(
+            self.url,
+            {
+                "schedule": schedule,
+                "is_distributed": True,
+                "expected_updated_at": saved.updated_at,
+            },
+            format="json",
+        )
+        self.assertEqual(res.status_code, status.HTTP_200_OK, res.data)
+        saved.refresh_from_db()
+        self.assertEqual(saved.published_without_review_by, [])
+
+    def test_publish_without_the_flag_still_refuses(self):
+        """The override has to be asked for. Absent the flag the gate is
+        exactly as strict as before."""
+        second_application = self._second_application()
+        self._create_saved(is_distributed=False, schedule=self._schedule(time=540))
+        self._mark_reviewed(self.application)
+        second_entry = self._schedule(time=600)
+        second_entry[0]["candidate_id"] = str(second_application.pk)
+
+        res = self.client.post(
+            self.url,
+            {
+                "schedule": self._schedule(time=540) + second_entry,
+                "is_distributed": True,
+                "publish_without_full_review": False,
+            },
+            format="json",
+        )
+
+        self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("kontrollere", res.data["schedule"][0])
+        self.assertFalse(
+            ConflictReviewAuditEvent.objects.filter(
+                action=ConflictReviewAuditEvent.ACTION_BYPASSED
+            ).exists()
+        )
+
+    def test_taking_plan_back_to_draft_clears_the_bypass_note(self):
+        """The three-way rule: unlocking the plan to draft clears the note
+        because there is no published plan to mark. A subsequent publish
+        with full review leaves it cleared."""
+        second_application = self._second_application()
+        self._create_saved(is_distributed=False, schedule=self._schedule(time=540))
+        self._mark_reviewed(self.application)
+        second_entry = self._schedule(time=600)
+        second_entry[0]["candidate_id"] = str(second_application.pk)
+        schedule = self._schedule(time=540) + second_entry
+
+        # First: bypass on a publish.
+        self.client.post(
+            self.url,
+            {
+                "schedule": schedule,
+                "is_distributed": True,
+                "publish_without_full_review": True,
+            },
+            format="json",
+        )
+        saved = SavedSchedule.objects.get(admission=self.admission)
+        self.assertTrue(saved.published_without_review_by)
+
+        # Unlocking back to draft clears the note.
+        res = self.client.post(
+            self.url,
+            {
+                "is_distributed": False,
+                "expected_updated_at": saved.updated_at,
+            },
+            format="json",
+        )
+        self.assertEqual(res.status_code, status.HTTP_200_OK, res.data)
+        saved.refresh_from_db()
+        self.assertEqual(saved.published_without_review_by, [])
+
+    def test_on_behalf_write_then_publishes_cleanly(self):
+        """The two override paths are meant to compose: an admin who has
+        chased a missing reviewer records their answer on their behalf via
+        the availability endpoint's `user_id` field, which makes the
+        kandidatkontroll complete and removes the need for
+        `publish_without_full_review` at all. This locks in that the
+        precise path is enough on its own: no bypass flag, no audit
+        event, no `published_without_review_by` note."""
+        second_application = self._second_application()
+        second_interviewer = LegoUser.objects.create(
+            username="on-behalf-target", lego_id=700
+        )
+        Membership.objects.create(
+            user=second_interviewer, role=MEMBER, group=self.admin_group
+        )
+        InterviewAvailability.objects.create(
+            admission=self.admission,
+            group=self.admin_group,
+            user=second_interviewer,
+            slots=["2026-04-20|600"],
+        )
+        second_entry = self._schedule(time=600)
+        second_entry[0]["candidate_id"] = str(second_application.pk)
+        second_entry[0]["panel"] = [
+            {"id": str(second_interviewer.pk), "name": "on-behalf-target"},
+        ]
+        self._create_saved(is_distributed=False, schedule=self._schedule(time=540))
+        self._mark_reviewed(self.application)
+
+        # Refused first: the second interviewer has not answered.
+        res = self.client.post(
+            self.url,
+            {
+                "schedule": self._schedule(time=540) + second_entry,
+                "is_distributed": True,
+            },
+            format="json",
+        )
+        self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("kontrollere", res.data["schedule"][0])
+
+        # Admin records the second interviewer's review on their behalf.
+        availability_url = reverse(
+            "interview-availability",
+            kwargs={
+                "admission_slug": self.admission.slug,
+                "group_id": self.admin_group.pk,
+            },
+        )
+        res = self.client.post(
+            availability_url,
+            {
+                "user_id": str(second_interviewer.pk),
+                "reviewed_candidate_ids": [str(second_application.pk)],
+                "conflicts": [],
+            },
+            format="json",
+        )
+        self.assertEqual(res.status_code, status.HTTP_200_OK, res.data)
+
+        # Now the publish goes through cleanly without the bypass flag.
+        res = self.client.post(
+            self.url,
+            {
+                "schedule": self._schedule(time=540) + second_entry,
+                "is_distributed": True,
+            },
+            format="json",
+        )
+        self.assertEqual(res.status_code, status.HTTP_200_OK, res.data)
+        self.assertTrue(res.data["is_distributed"])
+        self.assertEqual(res.data.get("published_without_review_by"), [])
+        saved = SavedSchedule.objects.get(admission=self.admission)
+        self.assertEqual(saved.published_without_review_by, [])
+        self.assertFalse(
+            ConflictReviewAuditEvent.objects.filter(
+                action=ConflictReviewAuditEvent.ACTION_BYPASSED
+            ).exists()
         )
 
     def test_manual_publish_enforces_same_gender(self):
@@ -1651,7 +1951,12 @@ class InterviewAvailabilityHardeningTestCase(APITestCase):
         self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertIn("slots", res.data)
 
-    def test_unknown_conflict_id_is_rejected(self):
+    def test_phantom_conflict_id_is_dropped_not_rejected(self):
+        """Submitting a conflicts list with a phantom id (e.g. a stale
+        snapshot) is treated as a best-effort drop, not a client error.
+        The persistence path prunes unknown ids from the saved set, so
+        dropping them on the way in keeps the row working without ever
+        surfacing a scary "Ukjent kandidat" toast to the admin."""
         self._create_saved_schedule(name_visibility="committee")
         self.client.force_authenticate(user=self.recruiter)
 
@@ -1661,27 +1966,207 @@ class InterviewAvailabilityHardeningTestCase(APITestCase):
             format="json",
         )
 
-        self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertIn("conflicts", res.data)
+        self.assertEqual(res.status_code, status.HTTP_200_OK, res.data)
 
-    def test_unknown_reviewed_candidate_id_is_rejected(self):
-        self._open_conflict_review()
-        InterviewAvailability.objects.create(
+    def test_stale_reviewed_echo_is_dropped_not_rejected(self):
+        """reviewed_candidate_ids echoes the row's own persisted attestations
+        back from the GET, so a candidate that left the pool between the GET
+        and the POST (withdrawal, soft-deleted application) must not wedge
+        the whole review behind "Ukjent kandidat". The pool, the review
+        scope, and the decoy roster can all shift while the form is open,
+        so any id the server doesn't recognize is dropped silently - the
+        persistence path prunes it from the saved set anyway, so dropping
+        it on the way in just saves a round trip and a scary error. The
+        row keeps working.
+        """
+        saved_schedule = self._open_conflict_review()
+        saved_schedule.schedule[0]["panel"] = [
+            {"id": str(self.recruiter.pk), "name": self.recruiter.username}
+        ]
+        saved_schedule.save(update_fields=["schedule"])
+        stale_id = "802f250d-33e9-432c-a97d-f73443ec322a"
+        availability = InterviewAvailability.objects.create(
             admission=self.admission,
             group=self.committee_group,
             user=self.recruiter,
             slots=["2026-04-21|540"],
+            reviewed_candidate_ids=[stale_id],
+        )
+        self.client.force_authenticate(user=self.recruiter)
+
+        # The save echoes what the GET showed: the stale id plus the newly
+        # checked candidate.
+        res = self.client.post(
+            self.url,
+            {
+                "reviewed_candidate_ids": [
+                    stale_id,
+                    str(self.application.pk),
+                ]
+            },
+            format="json",
+        )
+
+        self.assertEqual(res.status_code, status.HTTP_200_OK, res.data)
+        availability.refresh_from_db()
+        # The stale echo vanished; the real attestation stuck.
+        self.assertEqual(
+            availability.reviewed_candidate_ids,
+            [str(self.application.pk)],
+        )
+
+        # A novel unknown id - never persisted on this row, not in the
+        # pool, not a decoy - is also dropped, not rejected. The user can
+        # always save, the persisted state is the source of truth, and
+        # "Ukjent kandidat" never reaches the UI.
+        novel = self.client.post(
+            self.url,
+            {"reviewed_candidate_ids": ["00000000-0000-0000-0000-000000000000"]},
+            format="json",
+        )
+        self.assertEqual(novel.status_code, status.HTTP_200_OK, novel.data)
+        availability.refresh_from_db()
+        self.assertEqual(
+            availability.reviewed_candidate_ids,
+            [str(self.application.pk)],
+        )
+
+    def test_unknown_conflict_id_is_dropped_not_rejected(self):
+        """Same rule for declared conflicts: a stale id (the applicant was
+        removed between the GET and the POST, or the form was built against
+        a snapshot that no longer matches) is dropped, not rejected.
+        Strict per-id rejection on the conflicts field would let a single
+        phantom id block saving a perfectly valid set of declarations."""
+        saved_schedule = self._open_conflict_review()
+        saved_schedule.schedule[0]["panel"].append(
+            {"id": str(self.recruiter.pk), "name": self.recruiter.username}
+        )
+        saved_schedule.save(update_fields=["schedule"])
+        availability = InterviewAvailability.objects.create(
+            admission=self.admission,
+            group=self.committee_group,
+            user=self.recruiter,
+            slots=["2026-04-21|540"],
+            conflicts=[str(self.application.pk)],
         )
         self.client.force_authenticate(user=self.recruiter)
 
         res = self.client.post(
             self.url,
-            {"reviewed_candidate_ids": ["00000000-0000-0000-0000-000000000000"]},
+            {
+                "conflicts": [
+                    str(self.application.pk),
+                    "00000000-0000-0000-0000-000000000000",
+                ]
+            },
             format="json",
         )
 
-        self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertIn("reviewed_candidate_ids", res.data)
+        self.assertEqual(res.status_code, status.HTTP_200_OK, res.data)
+        availability.refresh_from_db()
+        self.assertEqual(availability.conflicts, [str(self.application.pk)])
+
+    def test_stale_reviewed_id_is_pruned_on_next_save(self):
+        """A name the user once checked must stay checked, but the pool can
+        shrink - and once it does, an old attestation would block every
+        future save with "Ukjent kandidat". Prune persisted IDs that are no
+        longer in the current pool on save, so the rest of the row keeps
+        working without re-prompting the user about names that are gone.
+        """
+        # Open the review with the recruiter on the panel so their review
+        # scope actually contains the application - the default helper
+        # only puts the member on the panel, leaving the recruiter's scope
+        # empty and any submit rejected.
+        self._create_saved_schedule(
+            conflict_review_open=True,
+            enabled_slots=["2026-04-21|540"],
+            schedule=[
+                {
+                    "candidate_id": str(self.application.pk),
+                    "candidate": self.applicant.username,
+                    "time": 540,
+                    "panel": [
+                        {
+                            "id": str(self.recruiter.pk),
+                            "name": self.recruiter.username,
+                        },
+                        {
+                            "id": str(self.member.pk),
+                            "name": self.member.username,
+                        },
+                    ],
+                }
+            ],
+        )
+        availability = InterviewAvailability.objects.create(
+            admission=self.admission,
+            group=self.committee_group,
+            user=self.recruiter,
+            slots=["2026-04-21|540"],
+            reviewed_candidate_ids=[
+                "802f250d-33e9-432c-a97d-f73443ec322a",
+                str(self.application.pk),
+            ],
+        )
+        self.client.force_authenticate(user=self.recruiter)
+
+        res = self.client.post(
+            self.url,
+            {"reviewed_candidate_ids": [str(self.application.pk)]},
+            format="json",
+        )
+
+        self.assertEqual(res.status_code, status.HTTP_200_OK, res.data)
+        availability.refresh_from_db()
+        # The stale, no-longer-in-pool id was pruned; the still-current one
+        # was preserved. The user never saw an error and never had to clear
+        # a row by hand.
+        self.assertEqual(
+            availability.reviewed_candidate_ids,
+            [str(self.application.pk)],
+        )
+
+    def test_stale_conflict_id_is_pruned_on_next_save(self):
+        """Same prune applies to declared conflicts: a withdrawn application
+        must not leave the row in a state that rejects every future save."""
+        self._create_saved_schedule(
+            conflict_review_open=True,
+            enabled_slots=["2026-04-21|540"],
+            schedule=[
+                {
+                    "candidate_id": str(self.application.pk),
+                    "candidate": self.applicant.username,
+                    "time": 540,
+                    "panel": [
+                        {
+                            "id": str(self.recruiter.pk),
+                            "name": self.recruiter.username,
+                        }
+                    ],
+                }
+            ],
+        )
+        availability = InterviewAvailability.objects.create(
+            admission=self.admission,
+            group=self.committee_group,
+            user=self.recruiter,
+            slots=["2026-04-21|540"],
+            conflicts=[
+                "802f250d-33e9-432c-a97d-f73443ec322a",
+                str(self.application.pk),
+            ],
+        )
+        self.client.force_authenticate(user=self.recruiter)
+
+        res = self.client.post(
+            self.url,
+            {"conflicts": [str(self.application.pk)]},
+            format="json",
+        )
+
+        self.assertEqual(res.status_code, status.HTTP_200_OK, res.data)
+        availability.refresh_from_db()
+        self.assertEqual(availability.conflicts, [str(self.application.pk)])
 
     def test_member_can_review_own_scope_but_not_outside_it(self):
         """A member confirms their own review (their review scope) but can
@@ -4678,6 +5163,244 @@ class GroupRemovalDisclosureTestCase(APITestCase):
         self.assertFalse(NameVisibilityAuditEvent.objects.exists())
 
 
+class RollingPrefixPublishTestCase(APITestCase):
+    """Progressive publishing with a pool that grows (rolling admissions).
+
+    The framework enables Monday 2026-04-20 and Wednesday 2026-04-22; the
+    draft schedules only the Monday candidate. Publishing the Monday prefix
+    must work while the Wednesday candidate still waits, the conflict review
+    must survive that prefix publish (new candidates will still need
+    checking), and only publishing through the last enabled day demands that
+    every active candidate is scheduled.
+    """
+
+    client_class = ScheduleRevisionAPIClient
+
+    def setUp(self):
+        self.admin_group = Group.objects.create(name="Webkom", lego_id=610)
+        self.admin_user = LegoUser.objects.create(username="rolling-admin", lego_id=611)
+        Membership.objects.create(
+            user=self.admin_user, role=RECRUITING, group=self.admin_group
+        )
+        self.admission = create_admission(
+            created_by=self.admin_user, slug="rolling-opptak"
+        )
+        self.admission.admin_groups.add(self.admin_group)
+        self.admission.groups.add(self.admin_group)
+        self.monday_user = LegoUser.objects.create(
+            username="rolling-monday", lego_id=612
+        )
+        self.wednesday_user = LegoUser.objects.create(
+            username="rolling-wednesday", lego_id=613
+        )
+        self.monday_application = UserApplication.objects.create(
+            admission=self.admission,
+            user=self.monday_user,
+            phone_number="12345678",
+        )
+        GroupApplication.objects.create(
+            application=self.monday_application,
+            group=self.admin_group,
+            text="Monday application",
+        )
+        self.wednesday_application = UserApplication.objects.create(
+            admission=self.admission,
+            user=self.wednesday_user,
+            phone_number="87654321",
+        )
+        GroupApplication.objects.create(
+            application=self.wednesday_application,
+            group=self.admin_group,
+            text="Wednesday application",
+        )
+        InterviewAvailability.objects.create(
+            admission=self.admission,
+            group=self.admin_group,
+            user=self.admin_user,
+            slots=["2026-04-20|540", "2026-04-20|600", "2026-04-22|540"],
+        )
+        self.url = reverse(
+            "saved-schedule",
+            kwargs={
+                "admission_slug": self.admission.slug,
+                "group_id": self.admin_group.pk,
+            },
+        )
+        self.client.force_authenticate(user=self.admin_user)
+        self._create_draft()
+
+    def _schedule_item(self, application, time=540):
+        return {
+            "candidate": "Client-supplied name",
+            "candidate_id": str(application.pk),
+            "time": time,
+            "panel": [
+                {
+                    "id": str(self.admin_user.pk),
+                    "name": "Client-supplied interviewer",
+                }
+            ],
+        }
+
+    def _create_draft(self, **overrides):
+        defaults = {
+            "admission": self.admission,
+            "group": self.admin_group,
+            "schedule": [self._schedule_item(self.monday_application)],
+            "start_date": "2026-04-20",
+            "end_date": "2026-04-24",
+            "session_duration": 60,
+            "enabled_slots": [
+                "2026-04-20|540",
+                "2026-04-20|600",
+                "2026-04-22|540",
+            ],
+            "panel_size": 1,
+            "conflict_review_open": True,
+        }
+        defaults.update(overrides)
+        return SavedSchedule.objects.create(**defaults)
+
+    def _mark_reviewed(self, *applications):
+        InterviewAvailability.objects.filter(
+            admission=self.admission,
+            group=self.admin_group,
+            user=self.admin_user,
+        ).update(
+            reviewed_candidate_ids=[str(application.pk) for application in applications]
+        )
+
+    def test_prefix_publish_with_waiting_candidate_succeeds(self):
+        self._mark_reviewed(self.monday_application)
+
+        res = self.client.post(
+            self.url,
+            {"distributed_through": "2026-04-21"},
+            format="json",
+        )
+
+        self.assertEqual(res.status_code, status.HTTP_200_OK, res.data)
+        self.assertTrue(res.data["is_distributed"])
+        self.assertEqual(res.data["distributed_through"], "2026-04-21")
+        # Wednesday is still enabled but unscheduled - the review must stay
+        # open so the next publish can demand a check of the new candidates.
+        self.assertTrue(res.data["conflict_review_open"])
+
+    def test_unscoped_publish_stops_at_the_last_scheduled_day(self):
+        self._mark_reviewed(self.monday_application)
+
+        res = self.client.post(
+            self.url,
+            {"is_distributed": True},
+            format="json",
+        )
+
+        self.assertEqual(res.status_code, status.HTTP_200_OK, res.data)
+        self.assertTrue(res.data["is_distributed"])
+        self.assertEqual(res.data["distributed_through"], "2026-04-21")
+        self.assertTrue(res.data["conflict_review_open"])
+
+    def test_publishing_the_last_enabled_day_requires_every_candidate(self):
+        self._mark_reviewed(self.monday_application)
+
+        res = self.client.post(
+            self.url,
+            {"distributed_through": "2026-04-23"},
+            format="json",
+        )
+
+        self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST, res.data)
+        self.assertIn("Alle aktive kandidater", str(res.data))
+        self.assertFalse(
+            SavedSchedule.objects.get(admission=self.admission).is_distributed
+        )
+
+    def test_deferred_acknowledgment_publishes_with_waiting_candidates(self):
+        self._mark_reviewed(self.monday_application)
+
+        res = self.client.post(
+            self.url,
+            {
+                "distributed_through": "2026-04-23",
+                "defer_unplaced_candidates": True,
+            },
+            format="json",
+        )
+
+        self.assertEqual(res.status_code, status.HTTP_200_OK, res.data)
+        self.assertTrue(res.data["is_distributed"])
+        # Acknowledging deferral publishes what exists; the waiting
+        # candidate is simply absent, and the review is closed because no
+        # enabled days remain beyond the boundary.
+        self.assertFalse(res.data["conflict_review_open"])
+
+    def test_review_closes_when_the_final_day_is_published(self):
+        self._mark_reviewed(self.monday_application, self.wednesday_application)
+        prefix = self.client.post(
+            self.url,
+            {"distributed_through": "2026-04-21"},
+            format="json",
+        )
+        self.assertEqual(prefix.status_code, status.HTTP_200_OK, prefix.data)
+
+        grown = self.client.post(
+            self.url,
+            {
+                "schedule": [
+                    self._schedule_item(self.monday_application, time=540),
+                    self._schedule_item(
+                        self.wednesday_application, time=2 * 24 * 60 + 540
+                    ),
+                ],
+                "is_distributed": True,
+            },
+            format="json",
+        )
+        self.assertEqual(grown.status_code, status.HTTP_200_OK, grown.data)
+        self.assertTrue(grown.data["conflict_review_open"])
+
+        final = self.client.post(
+            self.url,
+            {"distributed_through": "2026-04-23"},
+            format="json",
+        )
+
+        self.assertEqual(final.status_code, status.HTTP_200_OK, final.data)
+        self.assertFalse(final.data["conflict_review_open"])
+        self.assertTrue(
+            ConflictReviewAuditEvent.objects.filter(
+                admission=self.admission,
+                action=ConflictReviewAuditEvent.ACTION_CLOSED,
+            ).exists()
+        )
+
+    def test_attestations_survive_a_schedule_change(self):
+        self._mark_reviewed(self.monday_application, self.wednesday_application)
+
+        res = self.client.post(
+            self.url,
+            {"schedule": [self._schedule_item(self.monday_application, time=600)]},
+            format="json",
+        )
+
+        self.assertEqual(res.status_code, status.HTTP_200_OK, res.data)
+        availability = InterviewAvailability.objects.get(
+            admission=self.admission,
+            group=self.admin_group,
+            user=self.admin_user,
+        )
+        # An attestation is a fact about the (interviewer, candidate) pair;
+        # moving interviews around must never demand a re-check of people
+        # that were already checked.
+        self.assertEqual(
+            availability.reviewed_candidate_ids,
+            [
+                str(self.monday_application.pk),
+                str(self.wednesday_application.pk),
+            ],
+        )
+
+
 class CandidateWithdrawalPrivacyTestCase(TestCase):
     def test_withdrawal_purges_denormalized_candidate_data(self):
         admin = LegoUser.objects.create(username="purge-admin", lego_id=980)
@@ -4809,10 +5532,11 @@ class CandidateWithdrawalPrivacyTestCase(TestCase):
         self.assertTrue(saved.is_distributed)
         self.assertEqual(saved.name_visibility, "committee")
 
-    def test_partial_withdrawal_of_scheduled_candidate_still_unpublishes(self):
+    def test_partial_withdrawal_cancels_the_slot_and_keeps_plan_published(self):
         withdrawing_application, saved = self._withdrawal_fixture(
             "partial-scheduled", 972
         )
+        staying_candidate_id = saved.schedule[0]["candidate_id"]
         saved.schedule = saved.schedule + [
             {
                 "candidate_id": str(withdrawing_application.pk),
@@ -4826,13 +5550,39 @@ class CandidateWithdrawalPrivacyTestCase(TestCase):
         withdrawing_application.group_applications.first().delete()
 
         saved.refresh_from_db()
-        self.assertFalse(saved.is_distributed)
-        self.assertEqual(saved.name_visibility, "hidden")
-        # The interview row itself stays: the candidate still exists, only
-        # the committee-panel pairing needs the admin's attention.
-        self.assertEqual(len(saved.schedule), 2)
-        audit_event = NameVisibilityAuditEvent.objects.get()
-        self.assertEqual(audit_event.action, NameVisibilityAuditEvent.ACTION_HIDDEN)
+        # The dropped committee's interview row is cancelled in place; the
+        # published prefix and every other invitation survive it.
+        self.assertTrue(saved.is_distributed)
+        self.assertEqual(saved.name_visibility, "committee")
+        self.assertEqual(
+            [item["candidate_id"] for item in saved.schedule],
+            [staying_candidate_id],
+        )
+        self.assertFalse(NameVisibilityAuditEvent.objects.exists())
+
+    def test_full_withdrawal_of_scheduled_candidate_keeps_plan_published(self):
+        withdrawing_application, saved = self._withdrawal_fixture("full-scheduled", 973)
+        staying_candidate_id = saved.schedule[0]["candidate_id"]
+        saved.schedule = saved.schedule + [
+            {
+                "candidate_id": str(withdrawing_application.pk),
+                "candidate": "withdrawing",
+                "time": 600,
+                "panel": [],
+            }
+        ]
+        saved.save(update_fields=["schedule"])
+
+        withdrawing_application.delete()
+
+        saved.refresh_from_db()
+        self.assertTrue(saved.is_distributed)
+        self.assertEqual(saved.name_visibility, "committee")
+        self.assertEqual(
+            [item["candidate_id"] for item in saved.schedule],
+            [staying_candidate_id],
+        )
+        self.assertFalse(NameVisibilityAuditEvent.objects.exists())
 
     def test_full_withdrawal_prunes_review_list_snapshots(self):
         """Readiness must not keep demanding review of a withdrawn candidate."""
@@ -4854,6 +5604,45 @@ class CandidateWithdrawalPrivacyTestCase(TestCase):
         review_list.refresh_from_db()
         self.assertEqual(review_list.own_candidate_ids, [other_id])
         self.assertEqual(review_list.swap_candidate_ids, [])
+
+    def test_full_withdrawal_prunes_persisted_attestations(self):
+        """Attestations are append-only, so a withdrawn candidate's id would
+        otherwise sit in reviewed_candidate_ids forever - echoed back by the
+        availability GET and tripping the next save of the same row.
+        """
+        admin = LegoUser.objects.create(username="attest-purge-admin", lego_id=990)
+        candidate = LegoUser.objects.create(
+            username="attest-purge-candidate", lego_id=991
+        )
+        admission = create_admission(created_by=admin, slug="attest-purge-opptak")
+        committee = Group.objects.create(name="Attest purge", lego_id=992)
+        admission.groups.add(committee)
+        application = UserApplication.objects.create(
+            admission=admission, user=candidate, phone_number="12345678"
+        )
+        GroupApplication.objects.create(
+            application=application, group=committee, text="Purge attest"
+        )
+        availability = InterviewAvailability.objects.create(
+            admission=admission,
+            group=committee,
+            user=admin,
+            conflicts=[str(application.pk)],
+            reviewed_candidate_ids=[
+                str(application.pk),
+                "11111111-1111-1111-1111-111111111111",
+            ],
+        )
+
+        application.delete()
+
+        availability.refresh_from_db()
+        # The withdrawn candidate's attestation is gone; unrelated ids stay.
+        self.assertEqual(availability.conflicts, [])
+        self.assertEqual(
+            availability.reviewed_candidate_ids,
+            ["11111111-1111-1111-1111-111111111111"],
+        )
 
     def test_withdrawal_clears_legacy_name_only_schedule(self):
         admin = LegoUser.objects.create(username="legacy-admin", lego_id=982)

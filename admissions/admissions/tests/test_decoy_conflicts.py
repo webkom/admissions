@@ -155,6 +155,25 @@ class DecoyConflictRoundTripTestCase(APITestCase):
         # The admin is neither a member of nor an interview admin for this
         # committee, so the availability list itself stays out of reach.
 
+    def test_admin_can_round_trip_a_target_users_legacy_decoy_token(self):
+        admin_group = Group.objects.create(name="AdminGroup", lego_id=17)
+        self.admission.admin_groups.add(admin_group)
+        admin = LegoUser.objects.create(username="admin-2", lego_id=6003)
+        Membership.objects.create(user=admin, group=admin_group, role=LEADER)
+
+        self.client.force_authenticate(user=admin)
+        response = self.client.post(
+            self.availability_url,
+            {
+                "user_id": str(self.interviewer.pk),
+                "reviewed_candidate_ids": [self.decoy_token],
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
+        self.assertIn(self.decoy_token, response.data["reviewed_candidate_ids"])
+
     def test_a_decoy_mark_survives_a_real_conflict_written_in_the_same_request(self):
         """Both namespaces round-trip independently in one request."""
         res = self.client.post(
@@ -402,3 +421,113 @@ class PartialPublishIdentityTestCase(APITestCase):
             {entry["id"] for entry in res.data},
             {str(self.early.pk), str(self.late.pk)},
         )
+
+
+class PlainMemberReviewScopeTestCase(APITestCase):
+    """An ordinary committee member proposed as an interviewer must be able
+    to perform their own inhabilitetssjekk pre-publication: publication waits
+    on that confirmation, so without a member-reachable path the workflow
+    deadlocks (the recruiter cannot publish, and the member has no UI). The
+    availability row is that path - it already carries the review tokens and
+    filler names, and must also carry the real names behind the tokens."""
+
+    def setUp(self):
+        self.admission = create_admission()
+        self.group = Group.objects.create(name="Webkom", lego_id=16)
+        self.admission.groups.add(self.group)
+        self.recruiter = LegoUser.objects.create(username="rec", lego_id=6101)
+        Membership.objects.create(
+            user=self.recruiter, group=self.group, role=RECRUITING
+        )
+        self.member = LegoUser.objects.create(username="member", lego_id=6102)
+        Membership.objects.create(user=self.member, group=self.group, role="member")
+        InterviewAvailability.objects.create(
+            admission=self.admission,
+            group=self.group,
+            user=self.member,
+            slots=["2026-04-21|540"],
+        )
+        self.candidate_user = LegoUser.objects.create(
+            username="cand", lego_id=6103, first_name="Kari", last_name="Kandidat"
+        )
+        self.application = UserApplication.objects.create(
+            admission=self.admission, user=self.candidate_user
+        )
+        GroupApplication.objects.create(
+            application=self.application, group=self.group, text="Søknad"
+        )
+        self.saved_schedule = SavedSchedule.objects.create(
+            admission=self.admission,
+            group=self.group,
+            schedule=[
+                {
+                    "candidate_id": str(self.application.pk),
+                    "candidate": "Kari Kandidat",
+                    "time": 540,
+                    "panel": [{"id": str(self.member.pk), "name": "member"}],
+                }
+            ],
+            start_date="2026-04-21",
+            session_duration=60,
+            enabled_slots=["2026-04-21|540"],
+            conflict_review_open=True,
+        )
+        ConflictReviewList.objects.create(
+            saved_schedule=self.saved_schedule,
+            revision=uuid.uuid4(),
+            interviewer=self.member,
+            own_candidate_ids=[str(self.application.pk)],
+            swap_candidate_ids=[],
+            decoys=[{"token": f"d:{uuid.uuid4()}", "name": "Filler One"}],
+        )
+        self.availability_url = reverse(
+            "interview-availability",
+            kwargs={
+                "admission_slug": self.admission.slug,
+                "group_id": self.group.pk,
+            },
+        )
+
+    def test_member_own_row_carries_real_names_for_review(self):
+        self.client.force_authenticate(user=self.member)
+        res = self.client.get(self.availability_url)
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+
+        mine = next(row for row in res.data if row["is_me"])
+        self.assertIn(str(self.application.pk), mine["proposed_candidate_ids"])
+        self.assertIn(
+            {"id": str(self.application.pk), "name": "Kari Kandidat"},
+            mine["review_candidates"],
+        )
+        # The filler rides the same lookup, indistinguishable from real candidates.
+        self.assertEqual(len(mine["review_candidates"]), 2)
+        self.assertEqual(mine["review_candidates"], mine["decoy_candidates"])
+
+    def test_review_names_never_appear_on_other_rows_or_admin_responses(self):
+        self.client.force_authenticate(user=self.recruiter)
+        res = self.client.get(self.availability_url)
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        for row in res.data:
+            self.assertEqual(row["review_candidates"], [])
+
+    def test_member_can_complete_own_review_and_close_the_loop(self):
+        self.client.force_authenticate(user=self.member)
+        mine = next(
+            row for row in self.client.get(self.availability_url).data if row["is_me"]
+        )
+        res = self.client.post(
+            self.availability_url,
+            {
+                "reviewed_candidate_ids": [
+                    entry["id"] for entry in mine["review_candidates"]
+                ],
+                "conflicts": [],
+            },
+            format="json",
+        )
+        self.assertEqual(res.status_code, status.HTTP_200_OK, res.data)
+
+        mine = next(
+            row for row in self.client.get(self.availability_url).data if row["is_me"]
+        )
+        self.assertTrue(mine["conflict_review_complete"])

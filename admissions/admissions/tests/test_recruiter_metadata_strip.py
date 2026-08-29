@@ -65,11 +65,9 @@ class RecruiterMetadataStripTestCase(APITestCase):
         self.assertEqual(len(res.data), 1)
         self.assertEqual(res.data[0]["interview_status"], "confirmed")
         self.assertNotIn("interview_status_updated_by", res.data[0])
-        # The timestamp of the status change is workflow metadata, not
-        # something committee members need to see. It is stripped from
-        # the COMMITTEE_MINIMAL serializer for symmetry with the
-        # schedule page (H4 regression).
-        self.assertNotIn("interview_status_updated_at", res.data[0])
+        # The timestamp of the status change is needed as the revision token
+        # (expected_interview_status_updated_at) for the PATCH endpoint.
+        self.assertIn("interview_status_updated_at", res.data[0])
 
     def test_recruiter_list_still_exposes_committee_level_text(self):
         """Stripping the metadata must not break the recruiter's

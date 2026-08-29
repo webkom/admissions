@@ -477,11 +477,11 @@ td {
 }
 
 th:first-child {
-  border-radius: var(--border-radius-pill) 0 0 var(--border-radius-pill);
+  border-radius: var(--border-radius-md) 0 0 0;
 }
 
 th:last-child {
-  border-radius: 0 var(--border-radius-pill) var(--border-radius-pill) 0;
+  border-radius: 0 var(--border-radius-md) 0 0;
 }
 
 tbody tr:nth-child(even) {

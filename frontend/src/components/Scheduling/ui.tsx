@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useId, useRef, useState } from "react";
+import React, { useEffect, useId, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { AlertTriangle, Check, ChevronDown, Clock3 } from "lucide-react";
 import { iconSizes } from "src/styles/designTokens";
@@ -18,7 +18,6 @@ export {
   actionButtonPrimary,
   actionButtonNeutral,
   actionButtonGhost,
-  actionButtonActive,
   actionButtonDanger,
   Chip,
   SaveButton,
@@ -240,110 +239,9 @@ export const SchedulingActionBar: React.FC<SchedulingActionBarProps> = ({
   </SchedulePanelFooter>
 );
 
-interface DetailsMenuOptions {
-  focusFirstItemOnOpen?: boolean;
-}
-
-export const useDetailsMenu = ({
-  focusFirstItemOnOpen = true,
-}: DetailsMenuOptions = {}) => {
-  const detailsRef = useRef<HTMLDetailsElement>(null);
-
-  const menuItems = useCallback(
-    () =>
-      Array.from(
-        detailsRef.current?.querySelectorAll<HTMLElement>(
-          '[role="menuitem"]:not([disabled])',
-        ) ?? [],
-      ).filter((item) => item.getAttribute("aria-disabled") !== "true"),
-    [],
-  );
-
-  const closeDetails = useCallback((restoreFocus = false) => {
-    const details = detailsRef.current;
-    if (!details?.open) return;
-    details.open = false;
-    if (restoreFocus) {
-      details.querySelector<HTMLElement>("summary")?.focus();
-    }
-  }, []);
-
-  const handleDetailsToggle = useCallback(() => {
-    if (!focusFirstItemOnOpen || !detailsRef.current?.open) return;
-    window.requestAnimationFrame(() => {
-      if (detailsRef.current?.open) menuItems()[0]?.focus();
-    });
-  }, [focusFirstItemOnOpen, menuItems]);
-
-  useEffect(() => {
-    const handlePointerDown = (event: MouseEvent) => {
-      if (!detailsRef.current?.contains(event.target as Node)) {
-        closeDetails(false);
-      }
-    };
-    const handleFocusIn = (event: FocusEvent) => {
-      if (
-        detailsRef.current?.open &&
-        !detailsRef.current.contains(event.target as Node)
-      ) {
-        closeDetails(false);
-      }
-    };
-    const handleKeyDown = (event: KeyboardEvent) => {
-      const details = detailsRef.current;
-      if (!details?.open) return;
-
-      if (event.key === "Escape") {
-        event.preventDefault();
-        event.stopPropagation();
-        closeDetails(true);
-        return;
-      }
-
-      if (!details.contains(document.activeElement)) return;
-      if (!["ArrowDown", "ArrowUp", "Home", "End"].includes(event.key)) {
-        return;
-      }
-
-      const items = menuItems();
-      if (items.length === 0) return;
-      event.preventDefault();
-      const currentIndex = items.indexOf(document.activeElement as HTMLElement);
-      const nextIndex =
-        event.key === "Home"
-          ? 0
-          : event.key === "End"
-            ? items.length - 1
-            : event.key === "ArrowUp"
-              ? currentIndex <= 0
-                ? items.length - 1
-                : currentIndex - 1
-              : currentIndex < 0 || currentIndex === items.length - 1
-                ? 0
-                : currentIndex + 1;
-      items[nextIndex]?.focus();
-    };
-
-    document.addEventListener("mousedown", handlePointerDown);
-    document.addEventListener("focusin", handleFocusIn);
-    document.addEventListener("keydown", handleKeyDown);
-    return () => {
-      document.removeEventListener("mousedown", handlePointerDown);
-      document.removeEventListener("focusin", handleFocusIn);
-      document.removeEventListener("keydown", handleKeyDown);
-    };
-  }, [closeDetails, menuItems]);
-
-  return {
-    detailsRef,
-    closeDetails,
-    handleDetailsToggle,
-  };
-};
-
 export type SchedulingWorkspaceMode = "preview" | "editing";
 
-interface PanelChipOption {
+export interface PanelChipOption {
   id?: string;
   name: string;
   disabled?: boolean;
@@ -362,6 +260,10 @@ interface EditablePanelChipProps {
   title?: string;
   searchPlaceholder?: string;
   emptyLabel?: string;
+  /** "chip" (default) is the rounded pill used for panel members; "plain"
+   *  renders the label as ordinary text so the chip can double as a table
+   *  cell title that opens a swap menu. */
+  variant?: "chip" | "plain";
 }
 
 export const EditablePanelChip: React.FC<EditablePanelChipProps> = ({
@@ -376,6 +278,7 @@ export const EditablePanelChip: React.FC<EditablePanelChipProps> = ({
   title,
   searchPlaceholder = "Søk intervjuer…",
   emptyLabel = "Ingen treff",
+  variant = "chip",
 }) => {
   const editable = !!options && !!onSelect;
   const [open, setOpen] = useState(false);
@@ -526,18 +429,31 @@ export const EditablePanelChip: React.FC<EditablePanelChipProps> = ({
         aria-haspopup={editable ? "listbox" : undefined}
         aria-expanded={editable ? open : undefined}
         className={cn(
-          "group/chip inline-flex items-center gap-1 rounded-full border px-2 py-1 text-xs font-semibold",
+          "group/chip inline-flex items-center gap-1 text-xs font-semibold",
+          variant === "chip"
+            ? "rounded-full border px-2 py-1"
+            : "rounded-md text-sm",
           editable &&
-            "cursor-pointer transition-[border-color,background] duration-100 hover:border-border-quiet hover:bg-surface-subtle focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-ring",
+            "cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-ring",
+          editable &&
+            variant === "chip" &&
+            "transition-[border-color,background] duration-100 hover:border-border-quiet hover:bg-surface-subtle",
+          editable &&
+            variant === "plain" &&
+            "underline-offset-2 hover:underline",
           open &&
-            "border-brand-activeBorder bg-brand-soft shadow-tint-sm -translate-y-px",
+            (variant === "chip"
+              ? "border-brand-activeBorder bg-brand-soft shadow-tint-sm -translate-y-px"
+              : "text-brand"),
           conflict
             ? "border-brand-activeBorder bg-brand-tint text-brand"
             : isCurrentUser
               ? "border-brand-border bg-brand-soft font-bold text-brand"
               : tone === "overtime"
                 ? "border-danger-border bg-danger-bg font-semibold text-danger"
-                : "border-border-soft bg-surface-subtle text-text-body",
+                : variant === "plain"
+                  ? "text-text-primary"
+                  : "border-border-soft bg-surface-subtle text-text-body",
         )}
       >
         {conflict && (
@@ -640,8 +556,15 @@ export const EditablePanelChip: React.FC<EditablePanelChipProps> = ({
                         {isCurrent ? (
                           <Check size={iconSizes.compact} aria-hidden="true" />
                         ) : opt.disabled ? (
-                          <span className="text-detail font-medium text-text-muted">
-                            I panelet
+                          <span
+                            className={cn(
+                              "text-detail font-medium",
+                              opt.disabledReason === "Inhabil"
+                                ? "text-danger"
+                                : "text-text-muted",
+                            )}
+                          >
+                            {opt.disabledReason ?? "I panelet"}
                           </span>
                         ) : null}
                       </button>

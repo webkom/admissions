@@ -24,7 +24,7 @@ export const applicationTableColumnWidths = {
   contact: 210,
   group: 130,
   status: 185,
-  timestamp: 115,
+  timestamp: 140,
   applicationText: 800,
   actions: 160,
 } as const;

@@ -47,4 +47,15 @@ describe("distributed plan export disclosure", () => {
     expect(hidden).not.to.contain("Svært Hemmelig");
     expect(visible).to.contain("Svært Hemmelig");
   });
+
+  it("omits the internal booking type from the CSV", () => {
+    const csv = buildVisibleScheduleCsv({
+      entries: [{ item: privateSchedule[0], scheduleIndex: 0 }],
+      candidateNamesVisible: true,
+      formatTimeLabel: () => "Mandag 09:00",
+    });
+
+    expect(csv).not.to.contain("Bookingtype");
+    expect(csv).not.to.contain("Manuell");
+  });
 });

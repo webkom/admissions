@@ -165,10 +165,12 @@ class AdminAdmissionPrivacyTestCase(APITestCase):
                 )
 
     def test_admission_admin_roles_have_full_application_access(self):
-        """Only leaders and recruiters in an admin group have full access."""
+        """All active members in an admin group have full access."""
         for admin in (
             self.leader_admin,
             self.recruiting_admin,
+            self.co_leader_admin,
+            self.admin,
         ):
             with self.subTest(role=admin.username):
                 self.client.force_authenticate(user=admin)
@@ -252,7 +254,7 @@ class AdminAdmissionPrivacyTestCase(APITestCase):
                 self.assertTrue(public_response.data["userdata"]["is_admin"])
                 self.assertTrue(public_response.data["userdata"]["is_privileged"])
 
-    def test_co_leader_has_no_admission_admin_access(self):
+    def test_co_leader_has_admission_admin_access(self):
         self.client.force_authenticate(user=self.co_leader_admin)
 
         response = self.client.get(self.url)
@@ -260,9 +262,9 @@ class AdminAdmissionPrivacyTestCase(APITestCase):
             reverse("admission-detail", kwargs={"slug": self.admission.slug})
         )
 
-        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
-        self.assertFalse(public_response.data["userdata"]["is_admin"])
-        self.assertFalse(public_response.data["userdata"]["is_privileged"])
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertTrue(public_response.data["userdata"]["is_admin"])
+        self.assertTrue(public_response.data["userdata"]["is_privileged"])
 
     def test_staff_without_admin_group_role_is_not_an_admission_admin(self):
         self.client.force_authenticate(user=self.staff_without_admission_role)
@@ -820,6 +822,7 @@ class ListApplicationsTestCase(APITestCase):
                 "phone_number",
                 "group_applications",
                 "interview_status",
+                "interview_status_updated_at",
             },
         )
         self.assertEqual(
@@ -873,40 +876,41 @@ class ListApplicationsTestCase(APITestCase):
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(admission_response.status_code, status.HTTP_200_OK)
-        # is_admin stays true - the grant is real - but a competing admin
-        # group is still confined to its own committee's applicants.
+        # Being in admin_groups grants ADMIN_FULL across all committees.
         self.assertTrue(admission_response.data["userdata"]["is_admin"])
         self.assertEqual(
             admission_response.data["userdata"]["application_view_mode"],
-            "committee_minimal",
+            "admin_full",
         )
         self.assertEqual(len(response.data), 1)
         self.assertEqual(
             response.data[0]["application_view_mode"],
-            "committee_minimal",
+            "admin_full",
         )
         self.assertEqual(response.data[0]["phone_number"], "00000000")
-        self.assertEqual(
-            response.data[0]["group_applications"],
-            [
-                {
-                    "group": {
-                        "pk": str(self.webkom.pk),
-                        "name": self.webkom.name,
-                        "logo": self.webkom.logo,
-                        "response_label": self.webkom.response_label,
-                    },
-                    "text": "private Webkom application",
-                    "header_fields_response": {"private": "webkom answer"},
-                }
-            ],
+        # Sees group applications for all committees (Webkom and Bedkom)
+        self.assertEqual(len(response.data[0]["group_applications"]), 2)
+
+        # But a recruiter of Bedkom (NOT in admin_groups) is narrowed to committee_minimal
+        self.client.force_authenticate(user=self.bedkom_rec)
+        bk_response = self.client.get(
+            reverse(
+                "admin-userapplication-list",
+                kwargs={"admission_slug": self.admission_slug},
+            )
         )
-        self.assertNotIn("priority_text", response.data[0])
-        self.assertNotIn("email", response.data[0]["user"])
-        self.assertNotIn("username", response.data[0]["user"])
-        self.assertNotIn("private Bedkom application", str(response.data))
-        self.assertNotIn("bedkom answer", str(response.data))
-        self.assertNotIn("private central comment", str(response.data))
+        self.assertEqual(bk_response.status_code, status.HTTP_200_OK)
+        self.assertEqual(
+            bk_response.data[0]["application_view_mode"],
+            "committee_minimal",
+        )
+        self.assertEqual(len(bk_response.data[0]["group_applications"]), 1)
+        self.assertEqual(
+            bk_response.data[0]["group_applications"][0]["group"]["name"],
+            "Bedkom",
+        )
+        self.assertNotIn("private central comment", str(bk_response.data))
+        self.assertIn("private central comment", str(response.data))
 
     def test_admission_admin_can_see_private_priority_comment(self):
         application = UserApplication.objects.create(
@@ -1481,6 +1485,23 @@ class DeleteGroupApplicationsTestCase(APITestCase):
         )
         self.assertEqual(res.status_code, status.HTTP_403_FORBIDDEN)
 
+    def test_committee_member_cannot_delete_whole_application(self):
+        application = UserApplication.objects.create(
+            user=self.pleb, admission=self.admission
+        )
+        GroupApplication.objects.create(application=application, group=self.webkom)
+
+        self.client.force_authenticate(user=self.pleb)
+        res = self.client.delete(
+            reverse(
+                "admin-userapplication-detail",
+                kwargs={"admission_slug": self.admission_slug, "pk": application.pk},
+            )
+        )
+
+        self.assertEqual(res.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertTrue(UserApplication.objects.filter(pk=application.pk).exists())
+
     def test_leader_can_delete_group_application(self):
         application = UserApplication.objects.create(
             user=self.pleb, admission=self.admission, phone_number="12345678"
@@ -1510,6 +1531,20 @@ class DeleteGroupApplicationsTestCase(APITestCase):
             arrkom_application,
         )
 
+    def test_deleting_final_group_application_deletes_whole_application(self):
+        application = UserApplication.objects.create(
+            user=self.pleb, admission=self.admission
+        )
+        GroupApplication.objects.create(application=application, group=self.webkom)
+
+        self.client.force_authenticate(user=self.webkom_leader)
+        res = self.client.delete(
+            f"{reverse('admin-userapplication-detail', kwargs={'admission_slug': self.admission_slug, 'pk': application.pk})}?groupId={self.webkom.pk}",
+        )
+
+        self.assertEqual(res.status_code, status.HTTP_204_NO_CONTENT)
+        self.assertFalse(UserApplication.objects.filter(pk=application.pk).exists())
+
     def test_malformed_group_id_returns_validation_error(self):
         application = UserApplication.objects.create(
             user=self.pleb, admission=self.admission, phone_number="12345678"
@@ -1531,13 +1566,13 @@ class DeleteGroupApplicationsTestCase(APITestCase):
             GroupApplication.objects.filter(application=application).exists()
         )
 
-    def test_dual_role_user_cannot_delete_hidden_or_whole_application(self):
+    def test_admin_user_can_delete_whole_and_group_applications(self):
         application = UserApplication.objects.create(
             user=self.pleb,
             admission=self.admission,
             phone_number="12345678",
         )
-        webkom_application = GroupApplication.objects.create(
+        GroupApplication.objects.create(
             application=application,
             group=self.webkom,
             text="private Webkom application",
@@ -1553,27 +1588,19 @@ class DeleteGroupApplicationsTestCase(APITestCase):
         )
         self.client.force_authenticate(user=self.webkom_leader)
 
-        # webkom_leader leads the admin group *and* one competing committee,
-        # so admin standing does not extend past their own committee here.
-        whole_response = self.client.delete(url)
-        hidden_group_response = self.client.delete(f"{url}?groupId={self.arrkom.pk}")
-
-        self.assertEqual(whole_response.status_code, status.HTTP_403_FORBIDDEN)
-        self.assertEqual(
-            hidden_group_response.status_code,
-            status.HTTP_403_FORBIDDEN,
-        )
-        self.assertTrue(UserApplication.objects.filter(pk=application.pk).exists())
-        self.assertTrue(
-            GroupApplication.objects.filter(pk=webkom_application.pk).exists()
-        )
-        self.assertTrue(
+        # webkom_leader is in admin_group, so they can delete group applications and whole application
+        group_response = self.client.delete(f"{url}?groupId={self.arrkom.pk}")
+        self.assertEqual(group_response.status_code, status.HTTP_204_NO_CONTENT)
+        self.assertFalse(
             GroupApplication.objects.filter(pk=arrkom_application.pk).exists()
         )
 
+        whole_response = self.client.delete(url)
+        self.assertEqual(whole_response.status_code, status.HTTP_204_NO_CONTENT)
+        self.assertFalse(UserApplication.objects.filter(pk=application.pk).exists())
+
     def test_committee_recruiter_without_admin_standing_still_cannot_delete(self):
-        """The dual-role guard moved to admin_groups membership, so a plain
-        committee recruiter must still be confined to its own committee."""
+        """A plain committee recruiter must still be confined to its own committee."""
         plain_recruiter = LegoUser.objects.create(
             username="plain-recruiter", lego_id=11
         )
@@ -1617,15 +1644,16 @@ class DeleteGroupApplicationsTestCase(APITestCase):
             GroupApplication.objects.filter(pk=arrkom_application.pk).exists()
         )
 
-    def test_dual_role_user_interview_status_gate_matches_view_mode(self):
-        """H1 regression: the interview_status PATCH gate must use the same
-        view-mode rule the rest of the viewset uses, not an inline copy. A
-        dual-role user (LEADER of an admin group + LEADER of webkom) gets
-        committee_minimal here. They CAN mutate an application that has a
-        webkom group_application (the status is shared across the admission),
-        but they must NOT be able to mutate an application that has ONLY a
-        rival committee's group_application — the queryset filter must
-        exclude it the same way the destroy action does."""
+    def test_committee_recruiter_interview_status_gate_matches_view_mode(self):
+        """A non-admin recruiter only gets committee_minimal, so they must
+        NOT be able to mutate an application that has ONLY a rival committee's
+        group_application — the queryset filter excludes it and get_object 404s."""
+        plain_recruiter = LegoUser.objects.create(
+            username="plain-recruiter-2", lego_id=12
+        )
+        Membership.objects.create(
+            user=plain_recruiter, role=RECRUITING, group=self.webkom
+        )
         rival_only = UserApplication.objects.create(
             user=self.pleb, admission=self.admission, phone_number="00000000"
         )
@@ -1636,7 +1664,7 @@ class DeleteGroupApplicationsTestCase(APITestCase):
             "admin-userapplication-interview-status",
             kwargs={"admission_slug": self.admission_slug, "pk": rival_only.pk},
         )
-        self.client.force_authenticate(user=self.webkom_leader)
+        self.client.force_authenticate(user=plain_recruiter)
 
         response = self.client.patch(
             url,
@@ -1649,12 +1677,9 @@ class DeleteGroupApplicationsTestCase(APITestCase):
             format="json",
         )
 
-        # The queryset filter strips the application from the list, so
-        # get_object 404s. This is the same gate the destroy action uses -
-        # if either one ever drifts, the rival-only application will be
-        # mutable from a dual-role account and that's the regression to
-        # catch.
         self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+        rival_only.refresh_from_db()
+        self.assertEqual(rival_only.interview_status, "not_invited")
         rival_only.refresh_from_db()
         self.assertEqual(rival_only.interview_status, "not_invited")
 
@@ -1822,12 +1847,7 @@ class TerminateCommitteeApplicationsTestCase(APITestCase):
             ).exists()
         )
 
-    def test_dual_role_admin_cannot_terminate_hidden_committee(self):
-        Membership.objects.create(
-            user=self.recruiter,
-            group=self.admin_group,
-            role=RECRUITING,
-        )
+    def test_non_admin_recruiter_cannot_terminate_other_committee(self):
         hidden_url = reverse(
             "terminate-committee-applications",
             kwargs={

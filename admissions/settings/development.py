@@ -90,3 +90,9 @@ CORS_ORIGIN_WHITELIST = [
     "http://127.0.0.1:5002",
     "http://127.0.0.1:8000",
 ]
+
+REST_FRAMEWORK["DEFAULT_THROTTLE_RATES"] = {
+    **REST_FRAMEWORK.get("DEFAULT_THROTTLE_RATES", {}),
+    "solve_schedule": "1000/minute",
+    "solve_status": "1000/minute",
+}

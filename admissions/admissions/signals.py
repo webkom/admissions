@@ -58,8 +58,15 @@ def purge_withdrawn_candidate(sender, instance, **kwargs):
             )
             if schedule != current_schedule:
                 saved.schedule = schedule
-                saved.distributed_through = None
-                saved.name_visibility = SavedSchedule.NAME_VISIBILITY_HIDDEN
+                # A withdrawal cancels that candidate's interview; it must not
+                # unpublish the plan. Invitations for the other interviews are
+                # already out, and pulling a published prefix back to draft
+                # mid-week revokes every one of them. Only a plan left with
+                # nothing left to show comes down entirely.
+                emptied = not schedule
+                if emptied:
+                    saved.distributed_through = None
+                    saved.name_visibility = SavedSchedule.NAME_VISIBILITY_HIDDEN
                 saved.save(
                     update_fields=[
                         "schedule",
@@ -68,7 +75,7 @@ def purge_withdrawn_candidate(sender, instance, **kwargs):
                         "updated_at",
                     ]
                 )
-                if was_visible:
+                if was_visible and emptied:
                     NameVisibilityAuditEvent.objects.create(
                         admission=admission,
                         saved_schedule=saved,
@@ -116,12 +123,25 @@ def purge_withdrawn_candidate(sender, instance, **kwargs):
                 for value in (availability.conflicts or [])
                 if str(value) != candidate_id
             ]
-            if conflicts != (availability.conflicts or []):
+            # Attestations are append-only, so a withdrawn candidate's id
+            # would otherwise sit in reviewed_candidate_ids forever - and the
+            # availability GET echoes it back to the UI, whose save then
+            # trips over it. Purge it exactly like the declared conflicts.
+            reviewed = [
+                value
+                for value in (availability.reviewed_candidate_ids or [])
+                if str(value) != candidate_id
+            ]
+            if conflicts != (availability.conflicts or []) or reviewed != (
+                availability.reviewed_candidate_ids or []
+            ):
                 availability.conflicts = conflicts
+                availability.reviewed_candidate_ids = reviewed
                 changed_availability.append(availability)
         if changed_availability:
             InterviewAvailability.objects.bulk_update(
-                changed_availability, ["conflicts"]
+                changed_availability,
+                ["conflicts", "reviewed_candidate_ids"],
             )
 
         SolveJob.objects.filter(admission_id=instance.admission_id).delete()
@@ -129,16 +149,14 @@ def purge_withdrawn_candidate(sender, instance, **kwargs):
 
 @receiver(post_delete, sender=GroupApplication)
 def flag_schedule_after_partial_withdrawal(sender, instance, **kwargs):
-    """Un-publish the plan when an applicant drops one committee but stays.
+    """Cancel this committee's interview when an applicant drops only it.
 
-    Withdrawing a whole application already removes the candidate and
-    un-publishes the plan (purge_withdrawn_candidate above). Dropping a single
-    committee did nothing, so a published plan could keep an interview whose
-    panel was picked for a committee the applicant no longer applies to.
-
-    Unlike a full withdrawal this leaves `schedule` and `conflicts` alone: the
-    candidate still has an interview and still needs their slot, and a declared
-    inhabilitet is a scheduling constraint regardless of which committees remain.
+    Withdrawing a whole application already removes the candidate and purges
+    their rows (purge_withdrawn_candidate above). Dropping a single committee
+    leaves the candidate's other interviews intact, but this committee's
+    interview is moot - so its row is cancelled in place. The published
+    boundary survives: revoking the whole prefix over one dropped committee
+    would strand every other already-invited candidate.
     """
 
     with transaction.atomic():
@@ -159,26 +177,39 @@ def flag_schedule_after_partial_withdrawal(sender, instance, **kwargs):
         if saved is None or not saved.is_distributed:
             return
 
-        # Only a candidate actually scheduled in this published plan is worth
-        # flagging. This also keeps full-withdrawal cascades out: a parent-row
-        # existence check cannot (the Collector deletes children while the
-        # parent still exists), but purge_withdrawn_candidate has already
-        # stripped the candidate from every schedule by the time this fires.
+        # Only a candidate actually scheduled in this published plan needs
+        # their row cancelled. This also keeps full-withdrawal cascades out:
+        # a parent-row existence check cannot (the Collector deletes children
+        # while the parent still exists), but purge_withdrawn_candidate has
+        # already stripped the candidate from every schedule by the time this
+        # fires.
         candidate_id = str(instance.application_id)
-        if not any(
-            isinstance(item, dict) and str(item.get("candidate_id")) == candidate_id
+        remaining_schedule = [
+            item
             for item in saved.schedule or []
-        ):
+            if not (
+                isinstance(item, dict)
+                and str(item.get("candidate_id") or "") == candidate_id
+            )
+        ]
+        if len(remaining_schedule) == len(saved.schedule or []):
             return
 
         admission = Admission.objects.get(pk=application.admission_id)
         was_visible = saved.name_visibility == SavedSchedule.NAME_VISIBILITY_COMMITTEE
-        saved.distributed_through = None
-        saved.name_visibility = SavedSchedule.NAME_VISIBILITY_HIDDEN
+        saved.schedule = remaining_schedule
+        if not remaining_schedule:
+            saved.distributed_through = None
+            saved.name_visibility = SavedSchedule.NAME_VISIBILITY_HIDDEN
         saved.save(
-            update_fields=["distributed_through", "name_visibility", "updated_at"]
+            update_fields=[
+                "schedule",
+                "distributed_through",
+                "name_visibility",
+                "updated_at",
+            ]
         )
-        if was_visible:
+        if was_visible and not remaining_schedule:
             NameVisibilityAuditEvent.objects.create(
                 admission=admission,
                 saved_schedule=saved,

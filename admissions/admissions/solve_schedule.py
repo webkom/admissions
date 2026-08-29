@@ -1,5 +1,5 @@
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, fields
 from typing import Any, Dict, List, Sequence
 
 from django.conf import settings
@@ -52,6 +52,11 @@ class SolveOptions:
     overtime_weight: int = 40
     load_balance_weight: int = 20
     continuity_weight: int = 12
+    # Front-load placements onto the earliest days (v2 objective ordering).
+    # Progressive publishing strands an early-published day's spare capacity
+    # - the boundary is immutable - so packing Monday before touching Tuesday
+    # keeps the unpublished tail whole for candidates that arrive later.
+    pack_early: bool = False
     # Cost of using a "helst ikke" slot. Sits in the same weighted tier as
     # load balancing and continuity so it trades off against them rather
     # than overriding them outright: high enough that the solver reaches for
@@ -62,6 +67,30 @@ class SolveOptions:
     policy_version: int | None = None
     panel_stability: str | None = None
     availability_fallback: str | None = None
+
+
+_SOLVE_OPTION_FIELDS = frozenset(f.name for f in fields(SolveOptions))
+
+
+def build_solve_options(normalized_options: Dict[str, Any]) -> "SolveOptions":
+    """Build SolveOptions from a normalized options dict, dropping keys that
+    are not model options.
+
+    A solve request's ``options`` legitimately carries request-level policy
+    the CP-SAT model never reads - e.g. ``rebalance_locked``, which
+    ``run_solver_worker`` consumes before the model is built. Those keys
+    survive ``normalize_solver_options`` (it copies the request dict
+    verbatim), so ``SolveOptions(**normalized_options)`` used to raise
+    ``TypeError: unexpected keyword argument`` on any of them. Filtering here
+    keeps the serializer and this dataclass from having to stay in lockstep.
+    """
+    return SolveOptions(
+        **{
+            key: value
+            for key, value in normalized_options.items()
+            if key in _SOLVE_OPTION_FIELDS
+        }
+    )
 
 
 @dataclass(frozen=True)
@@ -185,7 +214,7 @@ def solve_schedule_v1(
     candidates = [Candidate(**c) for c in candidates_data]
     interviewers = [Interviewer(**i) for i in interviewers_data]
     normalized_options, policy = normalize_solver_options(options_data)
-    options = SolveOptions(**normalized_options)
+    options = build_solve_options(normalized_options)
     initial_strategy_defaults = {
         "minimize_overtime": (100, 1, 0, False),
         "balanced": (40, 20, 1, True),
@@ -743,12 +772,67 @@ def solve_schedule_v1(
         load_spread = max_available_load - min_available_load
 
     slot_rank = {t: r for r, t in enumerate(sorted_slots)}
+    # Day-major earliness: a candidate placed anywhere on day 2 costs more
+    # than every candidate moving within day 1 combined. Plain slot-rank
+    # earliness lets the solver spread candidates thinly across many days
+    # (day 2's first slot is only slightly more expensive than day 1's last);
+    # weighting each day above all earlier days fills day 1 completely
+    # before day 2 is touched - the logistically far easier shape.
+    day_of_slot = {t: t // MINUTES_PER_DAY for t in sorted_slots}
+    days_in_order = sorted(set(day_of_slot.values()))
+    day_depth = {day: depth for depth, day in enumerate(days_in_order)}
+    # Within-day rank so the per-day earliness bands never overlap: with the
+    # global slot rank, a late slot on day 1 could cost more than an early
+    # slot on day 2, letting the solver spill candidates into later days.
+    rank_within_day = {}
+    per_day_counter: dict[int, int] = {}
+    for t in sorted_slots:
+        day = day_of_slot[t]
+        rank_within_day[t] = per_day_counter.get(day, 0)
+        per_day_counter[day] = rank_within_day[t] + 1
+    slots_per_day = max(per_day_counter.values(), default=1)
     earliness_sum = sum(
-        slot_rank[t] * schedule[(c.id, t)]
+        (day_depth[day_of_slot[t]] * slots_per_day + rank_within_day[t])
+        * schedule[(c.id, t)]
         for c in candidates
         for t in sorted_slots
-        if slot_rank[t] > 0
+        if rank_within_day[t] > 0
     )
+
+    # Block fill: an empty slot with a USED slot after it (within the same
+    # block) is a "hole" - a mid-block gap or a block that starts late.
+    # Trailing empty slots are free: they are the sanctioned way to cut a
+    # day short ("fyll fra venstre, kutt på slutten"). Combined with the
+    # day-major earliness above this packs every day from its first slot
+    # and lets leftover capacity fall at the end, instead of scattering
+    # lonely interviews through the middle - easier logistics for panels
+    # and candidates alike.
+    hole_cost = 0
+    max_hole_cost = 0
+    if canonical_blocks:
+        hole_vars = []
+        for block in canonical_blocks:
+            # Time-sorted, NOT input order: "fill from the earliest slot,
+            # cut at the latest" must be a property of clock time, otherwise
+            # a permuted all_slots/blocks input inverts the direction and
+            # breaks permutation invariance (see test_solver_v2 differential).
+            block_slots = sorted(block.usable_slots)
+            if len(block_slots) < 2:
+                continue
+            for position in range(len(block_slots) - 1):
+                any_after = model.NewBoolVar(f"hole_any_after_{block.index}_{position}")
+                model.AddMaxEquality(
+                    any_after,
+                    [occupied_var(t) for t in block_slots[position + 1 :]],
+                )
+                gap = model.NewBoolVar(f"hole_gap_{block.index}_{position}")
+                # gap = NOT used(slot) AND any_after.
+                model.Add(gap <= 1 - occupied_var(block_slots[position]))
+                model.Add(gap <= any_after)
+                model.Add(gap >= any_after - occupied_var(block_slots[position]))
+                hole_vars.append(gap)
+        hole_cost = sum(hole_vars)
+        max_hole_cost = len(hole_vars)
 
     continuity_cost = 0
     continuity_run_count = 0
@@ -847,7 +931,7 @@ def solve_schedule_v1(
     total_placed = sum(schedule[(c.id, t)] for c in candidates for t in sorted_slots)
     consecutive_block_penalty = sum(consecutive_block_violation_vars)
     max_consecutive_block_penalties = len(consecutive_block_violation_vars)
-    max_earliness = len(candidates) * max(0, len(sorted_slots) - 1)
+    max_earliness = len(candidates) * max(0, len(days_in_order) * slots_per_day - 1)
     max_load_objective = 2 * options.load_balance_weight * len(candidates)
     discouraged_cost = options.discouraged_weight * sum(discouraged_vars)
     max_discouraged_cost = options.discouraged_weight * len(discouraged_vars)
@@ -869,6 +953,7 @@ def solve_schedule_v1(
             ),
             ObjectiveTier("availability", sum(overtime_vars), len(overtime_vars)),
             ObjectiveTier("repair_cost", repair_cost, max_repair_cost),
+            ObjectiveTier("block_fill", hole_cost, max_hole_cost),
             ObjectiveTier(
                 "adjacent_block_rest",
                 consecutive_block_penalty,
@@ -914,6 +999,7 @@ def solve_schedule_v1(
                 consecutive_block_penalty,
                 max_consecutive_block_penalties,
             ),
+            ObjectiveTier("block_fill", hole_cost, max_hole_cost),
             ObjectiveTier(
                 "load_and_continuity",
                 options.load_balance_weight * (max_load + load_spread)
@@ -1057,6 +1143,61 @@ def solve_schedule_v1(
     )
 
 
+def _count_filled_days(
+    schedule: List[dict],
+    all_slots_data: List[int] | None,
+    interviewers_data: List[dict],
+    panel_size: int,
+    options_data: Dict[str, Any] | None,
+) -> int:
+    """Count the leading run of fully placed days in the solved window.
+
+    A day is full when placements cover every slot that could hold an
+    interview: an enabled slot with at least ``panel_size`` available
+    interviewers, or any enabled slot when overtime is allowed. The engines
+    pack day-major (day 1 fills completely before day 2 starts), so any
+    shortfall sits on the latest used day; this prefix is what the UI can
+    report as finished days.
+    """
+    slots = sorted(set(all_slots_data or []))
+    if not slots:
+        return 0
+    options = options_data if isinstance(options_data, dict) else {}
+    capacity_per_slot = 1
+    raw_capacity = options.get("candidates_per_session", 1)
+    if isinstance(raw_capacity, int) and raw_capacity > 0:
+        capacity_per_slot = raw_capacity
+    allow_overtime = bool(options.get("allow_overtime"))
+    availability_sets = [
+        set(interviewer.get("availability") or [])
+        for interviewer in interviewers_data or []
+        if isinstance(interviewer, dict)
+    ]
+    capacity_per_day: Dict[int, int] = {}
+    for interview_time in slots:
+        day = interview_time // MINUTES_PER_DAY
+        usable = allow_overtime or (
+            sum(1 for avail in availability_sets if interview_time in avail)
+            >= panel_size
+        )
+        if usable:
+            capacity_per_day[day] = capacity_per_day.get(day, 0) + capacity_per_slot
+    placed_per_day: Dict[int, int] = {}
+    for row in schedule:
+        interview_time = row.get("time")
+        if not isinstance(interview_time, int):
+            continue
+        day = interview_time // MINUTES_PER_DAY
+        placed_per_day[day] = placed_per_day.get(day, 0) + 1
+    filled = 0
+    for day in sorted(capacity_per_day):
+        if placed_per_day.get(day, 0) >= capacity_per_day[day]:
+            filled += 1
+        else:
+            break
+    return filled
+
+
 def solve_schedule(
     candidates_data: List[dict],
     interviewers_data: List[dict],
@@ -1072,6 +1213,17 @@ def solve_schedule(
     model_version: str | None = None,
 ) -> Dict[str, Any]:
     """Dispatch to the rollback-safe solver engine selected by configuration."""
+
+    def annotate_filled_days(result: Dict[str, Any]) -> Dict[str, Any]:
+        if result.get("status") in {"SUCCESS", "PARTIAL"}:
+            result["filled_day_count"] = _count_filled_days(
+                result.get("schedule") or [],
+                all_slots_data,
+                interviewers_data,
+                panel_size,
+                options_data,
+            )
+        return result
 
     version = model_version or getattr(
         settings, "ADMISSIONS_SOLVER_ENGINE_VERSION", "v2"
@@ -1099,6 +1251,7 @@ def solve_schedule(
         )
         if result.get("status") not in {"SUCCESS", "PARTIAL"}:
             return result
+        annotate_filled_days(result)
         from admissions.admissions.solve_schedule_v2 import _normalize_problem
         from admissions.admissions.solver_result import (
             evaluate_objective_vector,
@@ -1165,15 +1318,17 @@ def solve_schedule(
 
     from admissions.admissions.solve_schedule_v2 import solve_schedule_v2
 
-    return solve_schedule_v2(
-        candidates_data=candidates_data,
-        interviewers_data=interviewers_data,
-        panel_size=panel_size,
-        options_data=options_data,
-        locked_assignments_data=locked_assignments_data,
-        all_slots_data=all_slots_data,
-        blocks_data=blocks_data,
-        block_metadata_data=block_metadata_data,
-        previous_schedule_data=previous_schedule_data,
-        include_metrics=include_metrics,
+    return annotate_filled_days(
+        solve_schedule_v2(
+            candidates_data=candidates_data,
+            interviewers_data=interviewers_data,
+            panel_size=panel_size,
+            options_data=options_data,
+            locked_assignments_data=locked_assignments_data,
+            all_slots_data=all_slots_data,
+            blocks_data=blocks_data,
+            block_metadata_data=block_metadata_data,
+            previous_schedule_data=previous_schedule_data,
+            include_metrics=include_metrics,
+        )
     )

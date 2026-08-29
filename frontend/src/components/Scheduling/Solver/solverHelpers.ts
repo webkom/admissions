@@ -18,6 +18,9 @@ export interface SolveResponse {
     | "TIMEOUT"
     | "ERROR";
   schedule: ScheduleItem[];
+  /** Leading run of fully placed days in the solved scope; a day is full
+   *  when every slot that could hold a panel holds an interview. */
+  filled_day_count?: number;
   optimal?: boolean;
   unplaceable?: Array<{
     candidate_id: string;
@@ -117,8 +120,8 @@ export interface AppliedSolveProposal {
   result: SolveResponse;
 }
 
-const DEFAULT_MAX_SOLVER_SECONDS = 150;
-const LEGACY_DEFAULT_MAX_SOLVER_SECONDS = new Set([30, 120, 5 * 60]);
+const DEFAULT_MAX_SOLVER_SECONDS = 240;
+const LEGACY_DEFAULT_MAX_SOLVER_SECONDS = new Set([30, 100, 120, 150, 5 * 60]);
 // The old invisible default let a compact plan load a few interviewers
 // heavily while others idled; saved admissions carrying it are upgraded so
 // re-solves distribute fairly.
@@ -138,6 +141,7 @@ export const DEFAULT_SOLVER_OPTIONS: SolverOptions = {
   initial_strategy: "balanced",
   repair_strategy: "minimum_change",
   repair_mode: false,
+  rebalance_locked: false,
   overtime_weight: 40,
   load_balance_weight: 20,
   continuity_weight: 1,

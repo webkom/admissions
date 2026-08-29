@@ -1,8 +1,9 @@
+from datetime import date
 from types import SimpleNamespace
 from unittest import mock
 
 from django.core.management import call_command
-from django.test import override_settings
+from django.test import SimpleTestCase, override_settings
 from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APITestCase
@@ -10,8 +11,9 @@ from rest_framework.test import APITestCase
 import admissions.admissions.solve_schedule as solve_schedule_module
 from admissions.admissions.constants import LEADER
 from admissions.admissions.models import Group, LegoUser, Membership, SolveJob
-from admissions.admissions.solve_schedule import solve_schedule
+from admissions.admissions.solve_schedule import build_solve_options, solve_schedule
 from admissions.admissions.tests.utils import create_admission
+from admissions.utils.management.commands.run_solver_worker import _demote_draft_locks
 
 ENVELOPE_KEYS = ("schedule", "unplaceable", "locked_conflicts")
 
@@ -180,6 +182,35 @@ class SolverQualityTestCase(APITestCase):
         )
         for entry in res.data["unplaceable"]:
             self.assertTrue(entry["reason"])
+
+    def test_rebalance_locked_option_does_not_break_the_solve(self):
+        # `rebalance_locked` is a worker-level policy the SolveOptionsSerializer
+        # accepts (default False on every request) but the CP-SAT model must
+        # never see. Regression: it used to splat straight into
+        # SolveOptions(**...) and raise TypeError, failing every solve.
+        payload = {
+            "candidates": [{"id": "candidate-1", "name": "Ada", "gender": ""}],
+            "interviewers": [
+                {
+                    "id": "interviewer-1",
+                    "name": "Ola",
+                    "gender": "M",
+                    "availability": [0, 1],
+                },
+            ],
+            "panel_size": 1,
+            "all_slots": [0, 1],
+            "options": {"rebalance_locked": True},
+        }
+
+        res = self._solve(payload)
+
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.assertEqual(res.data["status"], "SUCCESS")
+        self.assertEnvelope(res.data)
+        self.assertEqual(
+            [row["candidate_id"] for row in res.data["schedule"]], ["candidate-1"]
+        )
 
     def test_locked_time_outside_open_slots_is_rejected(self):
         payload = {
@@ -939,26 +970,112 @@ class SolverQualityTestCase(APITestCase):
         self.assertEqual(compact["status"], "SUCCESS")
         compact_times = sorted(item["time"] for item in compact["schedule"])
         balanced_times = sorted(item["time"] for item in balanced["schedule"])
-        self.assertLess(
-            compact_times[-1] - compact_times[0],
-            balanced_times[-1] - balanced_times[0],
+        workload_times = sorted(item["time"] for item in workload["schedule"])
+        # Block fill and day-major earliness are tiers above load spread, so
+        # every initial strategy now packs candidates into the earliest slots
+        # and lets trailing capacity fall empty ("fyll fra venstre, kutt på
+        # slutten"). On an input this small the strategies therefore converge
+        # on the same packed shape; the assertion pins that no strategy may
+        # reintroduce interior gaps in order to spread load. The strategies
+        # still differentiate within the load/continuity tier on larger
+        # admissions where holes are unavoidable, and
+        # test_block_fill_ranks_above_load_spread_when_they_conflict /
+        # test_load_still_spreads_when_blocks_are_already_full pin the tier
+        # ordering itself.
+        self.assertEqual(compact_times, [0, 1])
+        self.assertEqual(balanced_times, [0, 1])
+        self.assertEqual(workload_times, [0, 1])
+
+    def test_block_fill_ranks_above_load_spread_when_they_conflict(self):
+        # Two interviewers with disjoint availability (early: slots 0-1,
+        # late: slots 4-5) and a single 6-slot block. Spreading the load
+        # across both interviewers would put one candidate at slot 0 and
+        # one at slot 4 - leaving four empty slots in the middle of the
+        # block (holes). Block fill is a tier above load spread, so the
+        # solver packs both candidates together at the front instead and
+        # lets the trailing slots fall empty ("fyll fra venstre, kutt på
+        # slutten").
+        result = solve_schedule(
+            candidates_data=[
+                {"id": "c1", "name": "Ada", "gender": ""},
+                {"id": "c2", "name": "Eirik", "gender": ""},
+            ],
+            interviewers_data=[
+                {
+                    "id": "early",
+                    "name": "Early",
+                    "gender": "",
+                    "availability": [0, 1],
+                },
+                {
+                    "id": "late",
+                    "name": "Late",
+                    "gender": "",
+                    "availability": [4, 5],
+                },
+            ],
+            panel_size=1,
+            options_data={
+                "initial_strategy": "balance_workload",
+                "allow_overtime": False,
+                "same_panel_per_block": False,
+                "avoid_consecutive_interviewer_blocks": False,
+            },
+            all_slots_data=[0, 1, 2, 3, 4, 5],
+            blocks_data=[[0, 1, 2, 3, 4, 5]],
         )
 
-        workload_counts = {}
-        compact_counts = {}
-        for result, counts in (
-            (workload, workload_counts),
-            (compact, compact_counts),
-        ):
-            for item in result["schedule"]:
-                interviewer_id = item["panel"][0]["id"]
-                counts[interviewer_id] = counts.get(interviewer_id, 0) + 1
-            for interviewer in interviewers:
-                counts.setdefault(interviewer["id"], 0)
-        self.assertLess(
-            max(workload_counts.values()) - min(workload_counts.values()),
-            max(compact_counts.values()) - min(compact_counts.values()),
+        self.assertEqual(result["status"], "SUCCESS")
+        times = sorted(item["time"] for item in result["schedule"])
+        # Packed at the front, no interior gap: the used slots are the
+        # block's first two, and everything after them is empty.
+        self.assertEqual(times, [0, 1])
+
+    def test_load_still_spreads_when_blocks_are_already_full(self):
+        # The opposite shape: two separate single-slot blocks. Placing both
+        # candidates leaves no holes regardless of assignment, so the load
+        # spread tier wins and each interviewer takes one block.
+        result = solve_schedule(
+            candidates_data=[
+                {"id": "c1", "name": "Ada", "gender": ""},
+                {"id": "c2", "name": "Eirik", "gender": ""},
+            ],
+            interviewers_data=[
+                {
+                    "id": "early",
+                    "name": "Early",
+                    "gender": "",
+                    "availability": [0],
+                },
+                {
+                    "id": "late",
+                    "name": "Late",
+                    "gender": "",
+                    "availability": [4],
+                },
+            ],
+            panel_size=1,
+            options_data={
+                "initial_strategy": "balance_workload",
+                "allow_overtime": False,
+                "same_panel_per_block": False,
+                "avoid_consecutive_interviewer_blocks": False,
+            },
+            all_slots_data=[0, 4],
+            blocks_data=[[0], [4]],
         )
+
+        self.assertEqual(result["status"], "SUCCESS")
+        counts = {}
+        for item in result["schedule"]:
+            interviewer_id = item["panel"][0]["id"]
+            counts[interviewer_id] = counts.get(interviewer_id, 0) + 1
+        for interviewer in (
+            {"id": "early", "name": "Early"},
+            {"id": "late", "name": "Late"},
+        ):
+            counts.setdefault(interviewer["id"], 0)
+        self.assertEqual(max(counts.values()) - min(counts.values()), 0)
 
     def test_locked_adjacent_block_assignments_survive_and_unlockeds_still_prefer_rest(
         self,
@@ -1103,6 +1220,7 @@ class SolverQualityTestCase(APITestCase):
                 "unplaced_candidates",
                 "availability",
                 "adjacent_block_rest",
+                "block_fill",
                 "load_and_continuity",
                 "earliness",
                 "stability_tie_breaker",
@@ -1434,3 +1552,287 @@ class SolverQualityTestCase(APITestCase):
             [row["time"] for row in preserve_panels["schedule"]],
             [0, 1, 2, 3],
         )
+
+    def test_fills_day_one_completely_before_touching_day_two(self):
+        """Segmented packing: the solver fills whole days in order, so a
+        shortfall can only land on the latest used day, never leave an
+        earlier day half-empty while a later day is used."""
+        payload = {
+            "candidates": [
+                {"id": "candidate-1", "name": "Ada", "gender": ""},
+                {"id": "candidate-2", "name": "Eirik", "gender": ""},
+                {"id": "candidate-3", "name": "Ola", "gender": ""},
+            ],
+            "interviewers": [
+                {
+                    "id": "interviewer-1",
+                    "name": "Ida",
+                    "gender": "F",
+                    "availability": [0, 1, 1440, 1441],
+                },
+            ],
+            "panel_size": 1,
+            "all_slots": [0, 1, 1440, 1441],
+            "options": {"enforce_same_gender": False, "allow_overtime": False},
+        }
+
+        res = self._solve(payload)
+
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.assertEqual(res.data["status"], "SUCCESS")
+        self.assertEqual(
+            sorted(item["time"] for item in res.data["schedule"]),
+            [0, 1, 1440],
+        )
+        self.assertEqual(res.data["filled_day_count"], 1)
+
+    def test_filled_days_count_only_slots_with_available_panels(self):
+        """A day counts as full when every slot a panel could staff holds an
+        interview. Slot 1 has no available interviewer, so filling slot 0
+        plus both day-2 slots makes both days full."""
+        payload = {
+            "candidates": [
+                {"id": "candidate-1", "name": "Ada", "gender": ""},
+                {"id": "candidate-2", "name": "Eirik", "gender": ""},
+                {"id": "candidate-3", "name": "Ola", "gender": ""},
+            ],
+            "interviewers": [
+                {
+                    "id": "interviewer-1",
+                    "name": "Ida",
+                    "gender": "F",
+                    "availability": [0, 1440, 1441],
+                },
+            ],
+            "panel_size": 1,
+            "all_slots": [0, 1, 1440, 1441],
+            "options": {"enforce_same_gender": False, "allow_overtime": False},
+        }
+
+        res = self._solve(payload)
+
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.assertEqual(res.data["status"], "SUCCESS")
+        self.assertEqual(
+            sorted(item["time"] for item in res.data["schedule"]),
+            [0, 1440, 1441],
+        )
+        self.assertEqual(res.data["filled_day_count"], 2)
+
+    def test_partial_result_still_reports_filled_days(self):
+        payload = {
+            "candidates": [
+                {"id": f"candidate-{i}", "name": f"Kandidat {i}", "gender": ""}
+                for i in range(5)
+            ],
+            "interviewers": [
+                {
+                    "id": "interviewer-1",
+                    "name": "Ida",
+                    "gender": "F",
+                    "availability": [0, 1, 1440, 1441],
+                },
+            ],
+            "panel_size": 1,
+            "all_slots": [0, 1, 1440, 1441],
+            "options": {"enforce_same_gender": False, "allow_overtime": False},
+        }
+
+        res = self._solve(payload)
+
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.assertEqual(res.data["status"], "PARTIAL")
+        self.assertEqual(len(res.data["schedule"]), 4)
+        self.assertEqual(res.data["filled_day_count"], 2)
+        self.assertEqual(len(res.data["unplaceable"]), 1)
+
+    def test_locked_rows_are_pinned_without_rebalance(self):
+        """D2: strict by default. The locked row keeps its time and panel even
+        though moving it would let the remaining candidate place."""
+        payload = {
+            "candidates": [
+                {"id": "candidate-1", "name": "Ada", "gender": ""},
+                {"id": "candidate-2", "name": "Eirik", "gender": ""},
+            ],
+            "interviewers": [
+                {
+                    "id": "interviewer-1",
+                    "name": "Ida",
+                    "gender": "F",
+                    "availability": [1],
+                },
+                {
+                    "id": "interviewer-2",
+                    "name": "Ola",
+                    "gender": "M",
+                    "availability": [0],
+                    "biased": ["candidate-2"],
+                },
+            ],
+            "panel_size": 1,
+            "all_slots": [0, 1],
+            "options": {"enforce_same_gender": False, "allow_overtime": False},
+            "locked_assignments": [
+                {
+                    "candidate_id": "candidate-1",
+                    "candidate": "Ada",
+                    "time": 1,
+                    "panel": [{"id": "interviewer-1", "name": "Ida"}],
+                }
+            ],
+        }
+
+        res = self._solve(payload)
+
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.assertEqual(res.data["status"], "PARTIAL")
+        locked = next(
+            item
+            for item in res.data["schedule"]
+            if item["candidate_id"] == "candidate-1"
+        )
+        self.assertEqual(locked["time"], 1)
+        self.assertEqual(locked["panel"][0]["id"], "interviewer-1")
+        self.assertEqual(
+            [c["candidate_id"] for c in res.data["unplaceable"]],
+            ["candidate-2"],
+        )
+
+    def test_rebalance_locked_demotes_draft_locks_to_soft_preferences(self):
+        """D2: with rebalance_locked the worker demotes draft locks into
+        previous_schedule, so the solver may re-flow the locked row to place
+        the candidate it was blocking."""
+        payload = {
+            "candidates": [
+                {"id": "candidate-1", "name": "Ada", "gender": ""},
+                {"id": "candidate-2", "name": "Eirik", "gender": ""},
+            ],
+            "interviewers": [
+                {
+                    "id": "interviewer-1",
+                    "name": "Ida",
+                    "gender": "F",
+                    "availability": [1],
+                },
+                {
+                    "id": "interviewer-2",
+                    "name": "Ola",
+                    "gender": "M",
+                    "availability": [0],
+                    "biased": ["candidate-2"],
+                },
+            ],
+            "panel_size": 1,
+            "all_slots": [0, 1],
+            "options": {
+                "enforce_same_gender": False,
+                "allow_overtime": False,
+                "rebalance_locked": True,
+            },
+            "locked_assignments": [
+                {
+                    "candidate_id": "candidate-1",
+                    "candidate": "Ada",
+                    "time": 1,
+                    "panel": [{"id": "interviewer-1", "name": "Ida"}],
+                }
+            ],
+        }
+
+        res = self._solve(payload)
+
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.assertEqual(res.data["status"], "SUCCESS")
+        placed = {item["candidate_id"]: item for item in res.data["schedule"]}
+        # The biased interviewer cannot take candidate-2, so the solver keeps
+        # interviewer-1 for candidate-2 and moves the previously locked row.
+        self.assertEqual(placed["candidate-2"]["time"], 1)
+        self.assertEqual(placed["candidate-2"]["panel"][0]["id"], "interviewer-1")
+        self.assertEqual(placed["candidate-1"]["time"], 0)
+        self.assertEqual(placed["candidate-1"]["panel"][0]["id"], "interviewer-2")
+        # Both slots sit on day 0 and both are used, so the one scoped day is
+        # full.
+        self.assertEqual(res.data["filled_day_count"], 1)
+
+
+class RebalancePolicyUnitTestCase(SimpleTestCase):
+    """The worker's lock-demotion policy is a pure function of the request and
+    the published boundary; test it without a database."""
+
+    def _request(self):
+        return {
+            "options": {"rebalance_locked": True},
+            "locked_assignments": [
+                {
+                    "candidate_id": "c1",
+                    "time": 0,
+                    "panel": [{"id": "i1"}],
+                },
+                {
+                    "candidate_id": "c2",
+                    "time": 1440,
+                    "panel": [{"id": "i1"}],
+                },
+            ],
+            "previous_schedule": [],
+        }
+
+    def test_published_day_stays_locked_and_draft_day_is_demoted(self):
+        result = _demote_draft_locks(
+            self._request(), date(2026, 9, 1), date(2026, 9, 1)
+        )
+        self.assertEqual(
+            [row["candidate_id"] for row in result["locked_assignments"]],
+            ["c1"],
+        )
+        self.assertEqual(
+            [row["candidate_id"] for row in result["previous_schedule"]],
+            ["c2"],
+        )
+
+    def test_without_the_flag_nothing_moves(self):
+        request = self._request()
+        request["options"] = {"rebalance_locked": False}
+        result = _demote_draft_locks(request, date(2026, 9, 1), date(2026, 9, 1))
+        self.assertEqual(len(result["locked_assignments"]), 2)
+        self.assertEqual(result["previous_schedule"], [])
+
+    def test_without_published_boundary_all_locks_are_demoted(self):
+        result = _demote_draft_locks(self._request(), None, None)
+        self.assertEqual(result["locked_assignments"], [])
+        self.assertEqual(
+            [row["candidate_id"] for row in result["previous_schedule"]],
+            ["c1", "c2"],
+        )
+
+    def test_existing_previous_schedule_rows_are_not_duplicated(self):
+        request = self._request()
+        request["previous_schedule"] = [
+            {"candidate_id": "c2", "time": 1440, "panel": [{"id": "i1"}]}
+        ]
+        result = _demote_draft_locks(request, date(2026, 9, 1), date(2026, 9, 1))
+        self.assertEqual(
+            [row["candidate_id"] for row in result["previous_schedule"]],
+            ["c2"],
+        )
+
+
+class BuildSolveOptionsUnitTestCase(SimpleTestCase):
+    """`options` carries request-level policy the CP-SAT model never reads
+    (e.g. `rebalance_locked`, consumed by the worker). Those keys must not
+    reach `SolveOptions(**...)`, which would raise TypeError."""
+
+    def test_request_level_keys_are_dropped(self):
+        options = build_solve_options(
+            {"rebalance_locked": True, "enforce_same_gender": True}
+        )
+        self.assertTrue(options.enforce_same_gender)
+        self.assertFalse(hasattr(options, "rebalance_locked"))
+
+    def test_unknown_key_does_not_raise(self):
+        # A future serializer field the dataclass does not know about yet.
+        build_solve_options({"some_new_flag": True})
+
+    def test_known_keys_are_still_applied(self):
+        options = build_solve_options({"max_solver_seconds": 42.0})
+        self.assertEqual(options.max_solver_seconds, 42.0)

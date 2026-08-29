@@ -126,6 +126,15 @@ class InterviewAvailabilityParticipantSerializer(serializers.Serializer):
     # never for an admin - anyone else's filler list would make
     # cross-comparing two interviewers' lists trivial.
     decoy_candidates = DecoyCandidateSerializer(many=True, required=False, default=list)
+    # The names behind your own REAL review tokens, pre-publication: a member
+    # performing their inhabilitetssjekk must recognise the people they are
+    # proposed to interview, and the candidate pool itself is admin-only
+    # until the plan is published. Same shape as the fillers so the review UI
+    # renders both identically; own row only, and only while the review is
+    # open.
+    review_candidates = DecoyCandidateSerializer(
+        many=True, required=False, default=list
+    )
     conflict_review_complete = serializers.BooleanField(default=False)
     has_submitted = serializers.BooleanField()
     participation = serializers.ChoiceField(

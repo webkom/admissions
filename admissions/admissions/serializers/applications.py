@@ -166,6 +166,12 @@ class CommitteeMinimalApplicationSerializer(serializers.ModelSerializer):
             "phone_number",
             "group_applications",
             "interview_status",
+            # The revision token for the interview-status PATCH: committee
+            # viewers may change the status (views.py interview_status), so
+            # they must receive the `expected_interview_status_updated_at`
+            # value the list showed them. Without it every status change
+            # fails validation with 400. The `_by` username stays hidden.
+            "interview_status_updated_at",
         )
         read_only_fields = fields
 
@@ -336,11 +342,16 @@ class ApplicationCreateUpdateSerializer(serializers.HyperlinkedModelSerializer):
         applications = validated_data.pop("applications")
         group_answers = validated_data.pop("group_answers", {})
         with transaction.atomic():
-            admission = Admission.objects.select_for_update().get(
+            admission = Admission.objects.get(
                 slug=admission_slug,
                 closed_from__gte=timezone.now(),
                 open_from__lte=timezone.now(),
             )
+            # Serialize concurrent submissions for this user without taking an
+            # exclusive lock on the shared Admission row.
+            UserApplication.objects.select_for_update().filter(
+                admission=admission, user=user
+            ).first()
             admission_groups = {
                 group.name.lower(): group for group in admission.groups.all()
             }

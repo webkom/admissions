@@ -15,6 +15,10 @@ import { CustomSelect } from "src/components/Scheduling/ui";
 import ScheduleInterviewWorkflow from "./ScheduleInterviewWorkflow";
 import { formatSlotLabel } from "src/components/Scheduling/scheduleUtils";
 import type { InterviewOutreachTemplates } from "./interviewOutreach";
+import CandidateSwapChip, {
+  CandidateSwapTarget,
+} from "src/components/Scheduling/Solver/CandidateSwapChip";
+import { deriveCandidateSwapTargets } from "src/components/Scheduling/Solver/candidateSwapTargets";
 
 const DistributedPlanCalendar: React.FC<{
   entries: DistributedScheduleEntry[];
@@ -48,6 +52,10 @@ const DistributedPlanCalendar: React.FC<{
     panelMemberIndex: number,
     replacement: { id?: string; name: string },
   ) => Promise<boolean>;
+  onSwapCandidates?: (
+    sourceScheduleIndex: number,
+    targetScheduleIndex: number,
+  ) => Promise<boolean>;
 }> = ({
   entries,
   admissionSlug,
@@ -71,11 +79,31 @@ const DistributedPlanCalendar: React.FC<{
   isChangingTime,
   getTimeOptionsForEdit,
   onReplacePanelMember,
+  onSwapCandidates,
 }) => {
   const occupiedTimes = useMemo(
     () => new Set(savedSchedule.schedule.map((item) => item.time)),
     [savedSchedule.schedule],
   );
+
+  const swapTargetsByScheduleIndex = useMemo(() => {
+    const map = new Map<number, CandidateSwapTarget[]>();
+    entries.forEach(({ item, scheduleIndex }) => {
+      map.set(
+        scheduleIndex,
+        deriveCandidateSwapTargets({
+          sourceScheduleIndex: scheduleIndex,
+          sourceItem: item,
+          allEntries: entries,
+          dates,
+          sessionDuration: savedSchedule.session_duration,
+          getCandidateId: (entryItem) => lookups.candidateIdFor(entryItem),
+          getBiasedInterviewerIds: (member) => lookups.biasedFor(member),
+        }),
+      );
+    });
+    return map;
+  }, [dates, entries, lookups, savedSchedule.session_duration]);
 
   return (
     <div className="px-6 py-4">
@@ -92,7 +120,7 @@ const DistributedPlanCalendar: React.FC<{
         showAvailabilityLegend
         moveDisabled={isChangingTime}
         onMoveItem={
-          isEditableDraft
+          isEditableDraft || isAdmin
             ? (entryIndex, nextTime) => {
                 const entry = entries[entryIndex];
                 if (!entry) return;
@@ -119,12 +147,31 @@ const DistributedPlanCalendar: React.FC<{
             >
               <div className="flex items-center justify-between gap-2">
                 <div className="truncate whitespace-nowrap text-xs font-bold text-text-primary">
-                  <CandidateConflictControl
-                    candidateName={item.candidate}
-                    candidateNamesVisible={candidateNamesVisible}
-                    isConflict={isConflict}
-                    variant="calendar"
-                  />
+                  {isAdmin && candidateNamesVisible && onSwapCandidates ? (
+                    <CandidateSwapChip
+                      item={item}
+                      scheduleIndex={scheduleIndex}
+                      targets={
+                        swapTargetsByScheduleIndex.get(scheduleIndex) ?? []
+                      }
+                      formatTimeLabel={(time) =>
+                        formatSlotLabel(
+                          time,
+                          dates,
+                          savedSchedule.session_duration,
+                        )
+                      }
+                      onSwap={onSwapCandidates}
+                      conflict={isConflict}
+                    />
+                  ) : (
+                    <CandidateConflictControl
+                      candidateName={item.candidate}
+                      candidateNamesVisible={candidateNamesVisible}
+                      isConflict={isConflict}
+                      variant="calendar"
+                    />
+                  )}
                   {isEditableDraft && (
                     <span className="ml-1 inline-flex flex-wrap gap-1">
                       <LockToggle
@@ -149,7 +196,7 @@ const DistributedPlanCalendar: React.FC<{
                     </span>
                   )}
                 </div>
-                {isEditableDraft && (
+                {(isEditableDraft || isAdmin) && (
                   <CustomSelect
                     className="w-full min-w-0"
                     compact

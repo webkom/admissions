@@ -347,13 +347,28 @@ describe("solver readiness and regeneration", () => {
 
   it("keeps preview and edit as reversible plan modes", () => {
     mountSolverSetup("rerun-saving");
+    // The plan canvas exposes a Kort/Matrise view switcher next to the
+    // move-scope control. The Kort view (default) renders the block
+    // cards; the Matrise view shows the day spreadsheet.
     cy.get("[data-cy=view-switcher]")
-      .should("contain.text", "Liste")
-      .and("contain.text", "Kalender")
-      .and("not.contain.text", "Belastning");
+      .should("have.attr", "data-view", "kort")
+      .and("contain.text", "Kort")
+      .and("contain.text", "Matrise");
+    cy.get("[data-cy=block-table]").should("exist");
     cy.get("[data-cy=plan-health-summary]")
       .should("contain.text", "1 av 2 planlagt")
       .and("not.contain.text", "Ingen planproblemer");
+
+    // Toggling to Matrise swaps the surface; the block cards disappear
+    // and the matrix spreadsheet takes their place.
+    cy.contains("button", "Matrise").click();
+    cy.get("[data-cy=view-switcher]").should(
+      "have.attr",
+      "data-view",
+      "matrise",
+    );
+    cy.get("[data-cy=interviewer-matrix]").should("exist");
+    cy.get("[data-cy=block-table]").should("not.exist");
 
     // A draft opens in editing mode: hand-tuning between solves is the
     // norm, so read-only is the explicit opt-out rather than the default.
@@ -395,10 +410,11 @@ describe("solver readiness and regeneration", () => {
     cy.get("[data-cy=plan-draft-next-action]")
       .should("have.length", 1)
       // A delplan is a normal intermediate state now, not an error: the
-      // notice reads as a warning status, not an alert.
+      // notice reads as a status, and the remaining candidates are framed
+      // as planned later rather than missing.
       .and("have.attr", "role", "status")
       .and("contain.text", "Delplan klar")
-      .and("contain.text", "1 kandidat mangler intervju");
+      .and("contain.text", "1 kandidat planlegges senere");
     cy.get("[data-cy=proposal-workflow-notice]").should("not.exist");
   });
 

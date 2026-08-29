@@ -35,7 +35,7 @@ const WorkflowStepper: React.FC<WorkflowStepperProps> = ({
               type="button"
               disabled={step.locked}
               aria-current={active ? "step" : undefined}
-              onClick={() => onChange(stepKeys[0])}
+              onClick={() => onChange(step.navigateKey ?? stepKeys[0])}
               className={cn(
                 "group flex min-h-12 min-w-0 items-center gap-3 rounded-md px-2 py-2 text-left transition-colors duration-150",
                 "focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-focus",

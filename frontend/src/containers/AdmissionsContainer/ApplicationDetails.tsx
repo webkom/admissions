@@ -8,6 +8,7 @@ import type { InputFieldModel } from "src/utils/jsonFields";
 import { iconSizes } from "src/styles/designTokens";
 import {
   ApplicationWithDetails,
+  getApplicationDeadlineStatus,
   isFullAdminApplication,
 } from "src/utils/applicationAccess";
 
@@ -105,11 +106,23 @@ const ApplicationDetails: React.FC<ApplicationDetailsProps> = ({
       })}
 
       <ApplicationMetadata>
-        <span>
-          Sent den{" "}
-          <FormatTime format="d. MMMM kl. HH:mm">
-            {application.created_at}
-          </FormatTime>
+        <span className="flex items-center gap-2">
+          <span>
+            Sent den{" "}
+            <FormatTime format="d. MMMM, kl. HH:mm">
+              {application.created_at}
+            </FormatTime>
+          </span>
+          <span className="text-text-muted">–</span>
+          <span
+            className={`font-medium ${
+              application.applied_within_deadline
+                ? "text-success"
+                : "text-orange-500"
+            }`}
+          >
+            {getApplicationDeadlineStatus(application.applied_within_deadline)}
+          </span>
         </span>
       </ApplicationMetadata>
     </DetailsContent>

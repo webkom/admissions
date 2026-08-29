@@ -5,13 +5,9 @@ import type { SchedulePresentation } from "./solverSelectors";
 export interface PlanHealthException {
   key: string;
   label: string;
-  /** Which fix the exception responds to: unplaced is a scope problem
-   *  (widen days), the rest are per-row or plan-level hand-edit problems. */
-  kind: "unplaced" | "availability" | "conflict" | "rest";
-  /** The row to jump to when the exception is anchored to one interview.
-   *  Unplaced candidates have no row; rest violations are block-level and
-   *  have no single row either. */
-  scheduleIndex?: number;
+  /** Which fix the exception responds to: availability and rest violations
+   *  have per-row quick fixes, conflicts jump to the affected rows. */
+  kind: "availability" | "conflict" | "rest";
 }
 
 interface PlanHealthSummaryProps {
@@ -20,6 +16,10 @@ interface PlanHealthSummaryProps {
   healthExceptions: PlanHealthException[];
   onJumpToException?: (exception: PlanHealthException) => void;
   unplaceableCount: number;
+  /** The solve only covered the first few framework days, so the remaining
+   *  candidates are planned in a later stage, not missing. Softens the
+   *  "gjenstår" wording and hides the force-everyone-in deviation preview. */
+  plannedInStages?: boolean;
   previewLoading: boolean;
   onPreviewWithAvailabilityDeviation: () => void;
 }
@@ -30,6 +30,7 @@ const PlanHealthSummary = ({
   healthExceptions,
   onJumpToException,
   unplaceableCount,
+  plannedInStages = false,
   previewLoading,
   onPreviewWithAvailabilityDeviation,
 }: PlanHealthSummaryProps) => (
@@ -43,6 +44,13 @@ const PlanHealthSummary = ({
         <strong className="font-semibold tabular-nums text-text-primary">
           {overviewStats.totalInterviews} av {totalCandidateCount} planlagt
         </strong>
+        {unplaceableCount > 0 && (
+          <span className="font-semibold tabular-nums text-text-primary">
+            {" "}
+            — {unplaceableCount}{" "}
+            {plannedInStages ? "planlegges senere" : "gjenstår"}
+          </span>
+        )}
         {healthExceptions.map((exception) => (
           <React.Fragment key={exception.key}>
             {", "}
@@ -61,7 +69,7 @@ const PlanHealthSummary = ({
         ))}
       </p>
     </div>
-    {unplaceableCount > 0 && (
+    {unplaceableCount > 0 && !plannedInStages && (
       <button
         type="button"
         disabled={previewLoading}

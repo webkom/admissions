@@ -5,7 +5,7 @@ import React, {
   useRef,
   useState,
 } from "react";
-import { ArrowLeft, Check } from "lucide-react";
+import { ArrowLeft, Check, Search, Users } from "lucide-react";
 
 import {
   Chip,
@@ -38,6 +38,8 @@ interface ConflictReviewViewProps {
   reviewProgress?: ReviewProgress;
   showSummary?: boolean;
   onCloseStage?: () => void;
+  isAdmin?: boolean;
+  onOpenOverview?: () => void;
 }
 
 const serializeIds = (ids: Iterable<string>) => [...ids].sort().join("\n");
@@ -50,27 +52,40 @@ const ConflictReviewView: React.FC<ConflictReviewViewProps> = ({
   reviewProgress,
   showSummary = true,
   onCloseStage,
+  isAdmin,
+  onOpenOverview,
 }) => {
   // The review list is a deliberate mix: candidates proposed on your panel,
   // plausible swap partners, and fillers drawn from the student roster so the
   // list's shape says nothing about who you will actually interview. The
   // server sends filler names only on your own row (decoy_candidates), keyed
   // by the same tokens proposed_candidate_ids uses - merging them here keeps
-  // every entry resolvable and renders fillers and reals identically.
+  // every entry resolvable and renders fillers and reals identically. A
+  // member reviewing pre-publication has no candidate pool at all, so their
+  // own row also carries the real names (review_candidates).
   const candidateById = useMemo(
     () =>
       new Map(
         [
           ...(candidates ?? []),
           ...(currentParticipant?.decoy_candidates ?? []),
+          ...(currentParticipant?.review_candidates ?? []),
         ].map((candidate) => [candidate.id, candidate]),
       ),
-    [candidates, currentParticipant?.decoy_candidates],
+    [
+      candidates,
+      currentParticipant?.decoy_candidates,
+      currentParticipant?.review_candidates,
+    ],
   );
-  const reviewCandidateIds = useMemo(
-    () => new Set(currentParticipant?.proposed_candidate_ids ?? []),
-    [currentParticipant?.proposed_candidate_ids],
-  );
+  const reviewCandidateIds = useMemo(() => {
+    if (isAdmin && candidates && candidates.length > 0) {
+      const ids = new Set(currentParticipant?.proposed_candidate_ids ?? []);
+      candidates.forEach((candidate) => ids.add(candidate.id));
+      return ids;
+    }
+    return new Set(currentParticipant?.proposed_candidate_ids ?? []);
+  }, [isAdmin, candidates, currentParticipant?.proposed_candidate_ids]);
   const scopedServerConflicts = useMemo(
     () =>
       (currentParticipant?.conflicts ?? []).filter((candidateId) =>
@@ -79,6 +94,7 @@ const ConflictReviewView: React.FC<ConflictReviewViewProps> = ({
     [currentParticipant?.conflicts, reviewCandidateIds],
   );
   const [reviewOpen, setReviewOpen] = useState(false);
+  const [candidateSearchQuery, setCandidateSearchQuery] = useState("");
   const [reviewFocusRequest, setReviewFocusRequest] = useState(0);
   const [isSaving, setIsSaving] = useState(false);
   const [selectedConflictIds, setSelectedConflictIds] = useState<Set<string>>(
@@ -133,6 +149,15 @@ const ConflictReviewView: React.FC<ConflictReviewViewProps> = ({
         .sort((left, right) => left.name.localeCompare(right.name, "nb")),
     [candidateById, reviewCandidateIds],
   );
+
+  const filteredCandidates = useMemo(() => {
+    const query = candidateSearchQuery.trim().toLowerCase();
+    if (!query) return reviewCandidates;
+    return reviewCandidates.filter((candidate) =>
+      candidate.name.toLowerCase().includes(query),
+    );
+  }, [reviewCandidates, candidateSearchQuery]);
+
   const reviewIsCurrent = Boolean(currentParticipant?.conflict_review_complete);
   const proposalNamesLoading =
     candidates === undefined ||
@@ -236,19 +261,31 @@ const ConflictReviewView: React.FC<ConflictReviewViewProps> = ({
                 </p>
               )}
             </div>
-            <button
-              type="button"
-              onClick={openReview}
-              data-cy="conflict-review-open"
-              className={cn(
-                actionButtonBase,
-                reviewIsCurrent ? actionButtonNeutral : actionButtonPrimary,
+            <div className="flex flex-wrap items-center gap-2">
+              {isAdmin && onOpenOverview && (
+                <button
+                  type="button"
+                  onClick={onOpenOverview}
+                  className={cn(actionButtonBase, actionButtonNeutral)}
+                >
+                  <Users size={iconSizes.tiny} aria-hidden="true" />
+                  Oversikt over inhabiliteter
+                </button>
               )}
-            >
-              {reviewIsCurrent
-                ? "Se eller endre svar"
-                : "Kontroller kandidater"}
-            </button>
+              <button
+                type="button"
+                onClick={openReview}
+                data-cy="conflict-review-open"
+                className={cn(
+                  actionButtonBase,
+                  reviewIsCurrent ? actionButtonNeutral : actionButtonPrimary,
+                )}
+              >
+                {reviewIsCurrent
+                  ? "Se eller endre svar"
+                  : "Kontroller kandidater"}
+              </button>
+            </div>
           </SchedulePanelBody>
         </SchedulePanel>
       )}
@@ -263,14 +300,26 @@ const ConflictReviewView: React.FC<ConflictReviewViewProps> = ({
               title="Inhabilitetssjekk"
               description="Kryss av bare kandidater du kjenner på en måte som gjør deg inhabil. Når du bekrefter, regnes resten som uten konflikt."
               actions={
-                <button
-                  type="button"
-                  onClick={closeReview}
-                  className={cn(actionButtonBase, actionButtonNeutral)}
-                >
-                  <ArrowLeft size={iconSizes.small} aria-hidden="true" />
-                  Tilbake til planutkast
-                </button>
+                <div className="flex items-center gap-2">
+                  {isAdmin && onOpenOverview && (
+                    <button
+                      type="button"
+                      onClick={onOpenOverview}
+                      className={cn(actionButtonBase, actionButtonNeutral)}
+                    >
+                      <Users size={iconSizes.tiny} aria-hidden="true" />
+                      Oversikt
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={closeReview}
+                    className={cn(actionButtonBase, actionButtonNeutral)}
+                  >
+                    <ArrowLeft size={iconSizes.small} aria-hidden="true" />
+                    Tilbake til planutkast
+                  </button>
+                </div>
               }
             />
             <SchedulePanelBody>
@@ -297,45 +346,80 @@ const ConflictReviewView: React.FC<ConflictReviewViewProps> = ({
                   Laster foreslåtte kandidater…
                 </p>
               ) : (
-                <div className="space-y-5">
-                  <div>
-                    <h3 className="m-0 text-base font-bold text-text-primary">
-                      Velg kandidatene du er inhabil for
-                    </h3>
+                <div className="space-y-4">
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div>
+                      <h3 className="m-0 text-base font-bold text-text-primary">
+                        Velg kandidatene du er inhabil for
+                      </h3>
+                      {isAdmin && (
+                        <p className="m-0 mt-0.5 text-detail text-text-muted">
+                          Som administrator har du alle{" "}
+                          {reviewCandidates.length} kandidatene tilgjengelig for
+                          å sikre at eventuelle bytter er håndtert.
+                        </p>
+                      )}
+                    </div>
+
+                    {reviewCandidates.length > 6 && (
+                      <div className="relative min-w-48">
+                        <Search
+                          size={iconSizes.tiny}
+                          aria-hidden="true"
+                          className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-text-muted"
+                        />
+                        <input
+                          type="text"
+                          value={candidateSearchQuery}
+                          onChange={(e) =>
+                            setCandidateSearchQuery(e.target.value)
+                          }
+                          placeholder="Søk kandidater…"
+                          className="w-full rounded-md border border-border-soft bg-surface-base py-1.5 pl-8 pr-3 text-ui placeholder:text-text-faded focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand-ringSoft"
+                        />
+                      </div>
+                    )}
                   </div>
 
                   <ul className="m-0 divide-y divide-border-faint overflow-hidden rounded-lg border border-border-soft p-0">
-                    {reviewCandidates.map((candidate) => {
-                      const selected = selectedConflictIds.has(candidate.id);
-                      return (
-                        <li key={candidate.id}>
-                          <label
-                            className={cn(
-                              "flex cursor-pointer items-center gap-3 px-4 py-3 transition-colors",
-                              selected
-                                ? "bg-danger-bg"
-                                : "bg-surface-base hover:bg-surface-subtle",
-                            )}
-                          >
-                            <input
-                              type="checkbox"
-                              checked={selected}
-                              onChange={() => toggleConflict(candidate.id)}
-                              data-cy={`conflict-candidate-${candidate.id}`}
-                              className="h-4 w-4 flex-none rounded border-border-muted text-danger focus:ring-danger"
-                            />
-                            <span className="min-w-0 flex-1 truncate text-ui font-semibold text-text-primary">
-                              {candidate.name}
-                            </span>
-                            {selected && (
-                              <span className="text-detail font-semibold text-danger">
-                                Inhabil
+                    {filteredCandidates.length === 0 ? (
+                      <li className="p-4 text-center text-detail text-text-muted">
+                        Ingen kandidater matcher &laquo;{candidateSearchQuery}
+                        &raquo;.
+                      </li>
+                    ) : (
+                      filteredCandidates.map((candidate) => {
+                        const selected = selectedConflictIds.has(candidate.id);
+                        return (
+                          <li key={candidate.id}>
+                            <label
+                              className={cn(
+                                "flex cursor-pointer items-center gap-3 px-4 py-3 transition-colors",
+                                selected
+                                  ? "bg-danger-bg"
+                                  : "bg-surface-base hover:bg-surface-subtle",
+                              )}
+                            >
+                              <input
+                                type="checkbox"
+                                checked={selected}
+                                onChange={() => toggleConflict(candidate.id)}
+                                data-cy={`conflict-candidate-${candidate.id}`}
+                                className="h-4 w-4 flex-none rounded border-border-muted text-danger focus:ring-danger"
+                              />
+                              <span className="min-w-0 flex-1 truncate text-ui font-semibold text-text-primary">
+                                {candidate.name}
                               </span>
-                            )}
-                          </label>
-                        </li>
-                      );
-                    })}
+                              {selected && (
+                                <span className="text-detail font-semibold text-danger">
+                                  Inhabil
+                                </span>
+                              )}
+                            </label>
+                          </li>
+                        );
+                      })
+                    )}
                   </ul>
                 </div>
               )}

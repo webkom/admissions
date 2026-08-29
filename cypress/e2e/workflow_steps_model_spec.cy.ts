@@ -6,14 +6,15 @@ import {
 import type { ConflictReviewSummary } from "../../frontend/src/routes/SchedulePage/types";
 import type {
   InterviewAvailabilityParticipant,
+  Interviewer,
   ScheduleItem,
 } from "../../frontend/src/types";
+import { buildProposalDiff } from "../../frontend/src/components/Scheduling/Solver/proposalDiff";
 import { derivePlanDraftWorkflowState } from "../../frontend/src/components/Scheduling/Solver/planDraftWorkflow";
 import { buildWorkflowSteps } from "../../frontend/src/routes/SchedulePage/workflowSteps";
 import {
   deriveFoundationStage,
   derivePendingProposalDecision,
-  derivePlanDraftStage,
   derivePublicationStage,
 } from "../../frontend/src/routes/SchedulePage/workflowStages";
 
@@ -290,18 +291,25 @@ describe("single-stage conveyor model", () => {
   });
 
   it("gives a pending proposal precedence over every draft workspace", () => {
-    const stage = derivePlanDraftStage({
-      isPublished: false,
+    const state = derivePlanDraftWorkflowState({
+      saveState: "saved",
+      hasSaveConflict: false,
+      saveError: "",
+      solverError: "",
+      hasPendingProposal: true,
+      loading: true,
+      unplaceableCount: 2,
       currentReviewRequired: true,
       currentReviewComplete: false,
-      hasPendingProposal: true,
-      repairOpen: true,
-      regenerationOpen: true,
-      loading: true,
-      hasProposal: true,
+      completeReviewerCount: 0,
+      requiredReviewerCount: 1,
+      pendingReviewerCount: 1,
+      missingReviewerNames: [],
+      assignmentConflictCount: 0,
+      publicationReady: false,
     });
 
-    expect(stage).to.include({ kind: "pending_proposal" });
+    expect(state).to.include({ kind: "pending_proposal" });
   });
 
   it("replaces adoption with regeneration for stale or expired proposals", () => {
@@ -327,48 +335,55 @@ describe("single-stage conveyor model", () => {
     });
   });
 
-  it("keeps plan-draft exception stages exclusive and loading actionless", () => {
-    const base = {
-      isPublished: false,
-      currentReviewRequired: false,
-      currentReviewComplete: true,
-      hasPendingProposal: false,
-      repairOpen: false,
-      regenerationOpen: false,
-      loading: false,
-      hasProposal: true,
-    };
+  it("keeps plan-draft states exclusive, including the inline missing-placements state", () => {
+    const state = (
+      overrides: Partial<
+        Parameters<typeof derivePlanDraftWorkflowState>[0]
+      > = {},
+    ) =>
+      derivePlanDraftWorkflowState({
+        saveState: "saved",
+        hasSaveConflict: false,
+        saveError: "",
+        solverError: "",
+        unplaceableCount: 0,
+        currentReviewRequired: false,
+        currentReviewComplete: true,
+        completeReviewerCount: 2,
+        requiredReviewerCount: 2,
+        pendingReviewerCount: 0,
+        missingReviewerNames: [],
+        assignmentConflictCount: 0,
+        publicationReady: true,
+        ...overrides,
+      });
 
     expect(
-      derivePlanDraftStage({
-        ...base,
+      state({
         currentReviewRequired: true,
         currentReviewComplete: false,
       }),
-    ).to.include({ kind: "candidate_check" });
-    expect(derivePlanDraftStage({ ...base, repairOpen: true })).to.include({
-      kind: "repair",
+    ).to.include({ kind: "candidate_check_pending" });
+    expect(state({ loading: true })).to.include({ kind: "generating" });
+    // Missing placements is an inline status, not a separate screen: it has
+    // no dismissal flag and reports the filled-day count when present.
+    expect(state({ unplaceableCount: 2 })).to.include({
+      kind: "placements_missing",
     });
     expect(
-      derivePlanDraftStage({ ...base, regenerationOpen: true }),
-    ).to.include({ kind: "regeneration_setup" });
-    expect(derivePlanDraftStage({ ...base, unplaceableCount: 2 })).to.include({
-      kind: "missing_placements",
-    });
-    expect(
-      derivePlanDraftStage({
-        ...base,
+      state({
         unplaceableCount: 2,
-        placementStageDismissed: true,
-      }),
-    ).to.include({ kind: "draft_review" });
-    expect(derivePlanDraftStage({ ...base, loading: true })).to.include({
-      kind: "generating",
+        filledDayCount: 1,
+        extendDayAvailable: true,
+      }).description,
+    ).to.include("1 hel dag er planlagt");
+    expect(
+      state({ unplaceableCount: 2, extendDayAvailable: false }).description,
+    ).to.include("Plasser de siste manuelt");
+    expect(state({ assignmentConflictCount: 1 })).to.include({
+      kind: "repair_required",
     });
-    expect(derivePlanDraftStage({ ...base, hasProposal: false })).to.include({
-      kind: "recommended_setup",
-    });
-    expect(derivePlanDraftStage(base)).to.include({ kind: "draft_review" });
+    expect(state()).to.include({ kind: "ready_to_publish" });
   });
 
   it("derives blocked, publishable, and published publication stages", () => {
@@ -460,25 +475,89 @@ describe("coarse workflow steps", () => {
       publicationReadiness,
     });
 
-  it("uses only coarse labels and locks publication until readiness agrees", () => {
+  it("uses only coarse labels and locks the plan step until the foundation is ready", () => {
     const waiting = adminSteps(readiness({ reviewComplete: false }));
     expect(waiting.map((step) => step.status)).to.deep.equal([
       "Ferdig",
       "Pågår",
-      "Låst",
     ]);
-    expect(waiting[2].locked).to.equal(true);
+    expect(waiting[1].title).to.equal("Plan");
 
     const ready = adminSteps();
     expect(ready.map((step) => step.status)).to.deep.equal([
       "Ferdig",
-      "Ferdig",
-      "Pågår",
+      "Klar til å publisere",
     ]);
-    expect(ready[2].locked).to.equal(false);
+    expect(ready[1].locked).to.equal(false);
 
     const unsavedEdit = adminSteps(readiness({ draftPersistenceReady: false }));
-    expect(unsavedEdit[2]).to.include({ status: "Låst", locked: true });
+    expect(unsavedEdit[1]).to.include({ status: "Pågår" });
+
+    const locked = buildWorkflowSteps({
+      isAdmin: true,
+      hasConfiguredAvailabilityWindows: false,
+      hasDistributedPlan: false,
+      myConflictReviewComplete: true,
+      myProposalCandidateCount: 0,
+      hasSavedConfig: true,
+      hasScheduleDraft: false,
+      myAvailabilitySaved: false,
+      availabilityParticipantCount: 2,
+      submittedAvailabilityCount: 0,
+      proposalConflictCount: 0,
+      workflowPhase: "setup",
+      publicationReadiness: readiness({ draft: [] }),
+    });
+    expect(locked[1]).to.include({ status: "Låst", locked: true });
+  });
+
+  it("gives a member an actionable review step before publication", () => {
+    const base = {
+      isAdmin: false,
+      hasConfiguredAvailabilityWindows: true,
+      hasDistributedPlan: false,
+      myAvailabilitySaved: true,
+      availabilityParticipantCount: 2,
+      submittedAvailabilityCount: 2,
+      proposalConflictCount: 0,
+      workflowPhase: "setup",
+      publicationReadiness: readiness({ draft: [] }),
+    };
+
+    // No proposed pairings yet: the plan stays locked, as before.
+    expect(
+      buildWorkflowSteps({
+        ...base,
+        myConflictReviewComplete: false,
+        myProposalCandidateCount: 0,
+        hasSavedConfig: true,
+        hasScheduleDraft: true,
+      })[1],
+    ).to.include({ status: "Låst", locked: true });
+
+    // Proposed but unconfirmed: the member must be able to reach their
+    // inhabilitetssjekk, or publication waits forever on a step they
+    // cannot see.
+    expect(
+      buildWorkflowSteps({
+        ...base,
+        myConflictReviewComplete: false,
+        myProposalCandidateCount: 3,
+        hasSavedConfig: true,
+        hasScheduleDraft: true,
+      })[1],
+    ).to.include({ status: "Pågår", locked: false });
+
+    // Confirmed: back to waiting for publication.
+    expect(
+      buildWorkflowSteps({
+        ...base,
+        myConflictReviewComplete: true,
+        myProposalCandidateCount: 3,
+        hasSavedConfig: true,
+        hasScheduleDraft: true,
+      })[1],
+    ).to.include({ status: "Låst", locked: true });
   });
 
   it("keeps Planutkast locked until the whole foundation is ready", () => {
@@ -499,5 +578,140 @@ describe("coarse workflow steps", () => {
     });
 
     expect(steps[1]).to.include({ status: "Låst", locked: true });
+  });
+
+  it("sends the Plan step straight to the published plan once it is fully out", () => {
+    const base = {
+      isAdmin: true,
+      hasConfiguredAvailabilityWindows: true,
+      myConflictReviewComplete: true,
+      myProposalCandidateCount: 1,
+      hasSavedConfig: true,
+      hasScheduleDraft: true,
+      myAvailabilitySaved: true,
+      availabilityParticipantCount: 2,
+      submittedAvailabilityCount: 2,
+      proposalConflictCount: 0,
+      workflowPhase: "published" as const,
+      publicationReadiness: readiness(),
+    };
+
+    // Draft in progress: the step opens the workspace.
+    expect(
+      buildWorkflowSteps({ ...base, hasDistributedPlan: false })[1],
+    ).to.include({ navigateKey: "solver" });
+
+    // Partially published: the workspace still plans the remaining days.
+    expect(
+      buildWorkflowSteps({
+        ...base,
+        hasDistributedPlan: true,
+        planFullyDistributed: false,
+      })[1],
+    ).to.include({ navigateKey: "solver" });
+
+    // Fully published: skip the redirect card, open the plan directly.
+    expect(
+      buildWorkflowSteps({
+        ...base,
+        hasDistributedPlan: true,
+        planFullyDistributed: true,
+      })[1],
+    ).to.include({ navigateKey: "plan" });
+  });
+});
+
+describe("proposal diff", () => {
+  const interviewer = (id: string, name: string): Interviewer => ({
+    id,
+    name,
+    availability: [],
+    biased: [],
+    has_submitted: true,
+  });
+  const interviewers = [
+    interviewer("i1", "Ola"),
+    interviewer("i2", "Kari"),
+    interviewer("i3", "Per"),
+  ];
+  const item = (
+    candidate: string,
+    time: number,
+    panel: Interviewer[],
+  ): ScheduleItem => ({
+    candidate_id: candidate,
+    candidate,
+    time,
+    panel: panel.map(({ id, name }) => ({ id, name })),
+  });
+
+  it("counts unchanged placements instead of listing them", () => {
+    const diff = buildProposalDiff({
+      baseline: [item("a", 0, interviewers.slice(0, 2))],
+      result: {
+        status: "SUCCESS",
+        schedule: [item("a", 0, interviewers.slice(0, 2))],
+      },
+      interviewers,
+    });
+
+    expect(diff.changes).to.have.length(0);
+    expect(diff).to.include({ unchangedCount: 1, movedCount: 0 });
+  });
+
+  it("classifies moved interviews, panel swaps, gains, and losses", () => {
+    const diff = buildProposalDiff({
+      baseline: [
+        item("moved", 0, interviewers.slice(0, 2)),
+        item("swapped", 1, [interviewers[0], interviewers[1]]),
+        item("lost", 2, interviewers.slice(0, 2)),
+        item("kept", 3, interviewers.slice(0, 2)),
+      ],
+      result: {
+        status: "PARTIAL",
+        schedule: [
+          item("moved", 5, interviewers.slice(0, 2)),
+          item("swapped", 1, [interviewers[0], interviewers[2]]),
+          item("gained", 4, interviewers.slice(0, 2)),
+          item("kept", 3, interviewers.slice(0, 2)),
+        ],
+        unplaceable: [{ candidate_id: "lost", candidate: "lost" }],
+      },
+      interviewers,
+    });
+
+    expect(diff).to.include({
+      movedCount: 1,
+      panelChangedCount: 1,
+      addedCount: 1,
+      removedCount: 1,
+      unchangedCount: 1,
+    });
+    const swapped = diff.changes.find(
+      ({ candidate }) => candidate === "swapped",
+    );
+    expect(swapped?.removedInterviewers).to.deep.equal(["Kari"]);
+    expect(swapped?.addedInterviewers).to.deep.equal(["Per"]);
+    expect(diff.unplacedCandidates).to.include("lost");
+  });
+
+  it("pairs legacy rows without ids by name", () => {
+    const legacyRow = {
+      candidate: "Navn Uten Id",
+      time: 0,
+      panel: [{ name: "Ola" }],
+    } as ScheduleItem;
+    const diff = buildProposalDiff({
+      baseline: [legacyRow],
+      result: {
+        status: "SUCCESS",
+        schedule: [
+          { candidate: "Navn Uten Id", time: 1, panel: [{ name: "Ola" }] },
+        ] as ScheduleItem[],
+      },
+      interviewers,
+    });
+
+    expect(diff).to.include({ movedCount: 1, unchangedCount: 0 });
   });
 });

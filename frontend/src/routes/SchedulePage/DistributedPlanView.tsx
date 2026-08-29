@@ -1,14 +1,19 @@
-import React, { useEffect, useMemo, useState } from "react";
-import { CalendarCheck, MoreHorizontal, Unlock } from "lucide-react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
+import {
+  CalendarCheck,
+  CalendarDays,
+  Download,
+  Pencil,
+  Unlock,
+} from "lucide-react";
 import {
   Chip,
   SchedulePanel,
   SchedulePanelHeader,
   SchedulePanelBody,
   actionButtonBase,
+  actionButtonDanger,
   actionButtonNeutral,
-  keyboardFocusRingClass,
-  useDetailsMenu,
 } from "src/components/Scheduling/ui";
 import ConfirmDialog from "src/components/Scheduling/ConfirmDialog";
 import ExportChooserModal from "src/components/Scheduling/Solver/ExportChooserModal";
@@ -19,13 +24,14 @@ import {
   SavedSchedule,
 } from "../../types";
 import {
+  decodeScheduleTime,
   formatAccessibleDate,
   formatSlotLabel,
 } from "src/components/Scheduling/scheduleUtils";
 import cn from "src/utils/cn";
 import PlanFilterBar from "./PlanFilterBar";
 import DistributedPlanCalendar from "./DistributedPlanCalendar";
-import DistributedPlanTable from "./DistributedPlanTable";
+import PublishedScheduleTable from "./PublishedScheduleTable";
 import {
   DistributedPlanNotices,
   EmptyDistributedPlan,
@@ -46,6 +52,7 @@ import InterviewOutreachTemplateEditor from "./InterviewOutreachTemplateEditor";
 import {
   createDefaultInterviewOutreachTemplates,
   normalizeStoredOutreachTemplates,
+  type InterviewOutreachTemplates,
 } from "./interviewOutreach";
 import { iconSizes } from "src/styles/designTokens";
 
@@ -85,7 +92,29 @@ interface DistributedPlanViewProps {
   realCandidates: Candidate[];
   interviewers: Interviewer[];
   enabledSlots: Set<string>;
+  onOpenConflictsOverview?: () => void;
+  totalCommitteeConflicts?: number;
+  onSwapCandidates?: (
+    sourceScheduleIndex: number,
+    targetScheduleIndex: number,
+  ) => Promise<boolean>;
+  onUpdateOutreachTemplates?: (
+    templates: InterviewOutreachTemplates,
+  ) => Promise<boolean>;
 }
+
+const formatDisplayDate = (dateStr: string) => {
+  try {
+    const date = new Date(dateStr + "T12:00:00");
+    return date.toLocaleDateString("nb-NO", {
+      weekday: "long",
+      day: "numeric",
+      month: "long",
+    });
+  } catch {
+    return dateStr;
+  }
+};
 
 const DistributedPlanView: React.FC<DistributedPlanViewProps> = ({
   admissionSlug,
@@ -113,11 +142,21 @@ const DistributedPlanView: React.FC<DistributedPlanViewProps> = ({
   realCandidates,
   interviewers,
   enabledSlots,
+  onOpenConflictsOverview,
+  totalCommitteeConflicts,
+  onSwapCandidates,
+  onUpdateOutreachTemplates,
 }) => {
   const [myInterviewsOnly, setMyInterviewsOnly] = useState(!isAdmin);
   const [planViewMode, setPlanViewMode] = useState<"calendar" | "table">(
     "table",
   );
+  const [selectedDateFilter, setSelectedDateFilter] = useState<string | null>(
+    null,
+  );
+  const [selectedStatusFilter, setSelectedStatusFilter] = useState<
+    string | null
+  >(null);
   const [isUpdatingNames, setIsUpdatingNames] = useState(false);
   const [isExportChooserOpen, setIsExportChooserOpen] = useState(false);
   const [isConfirmingShowNames, setIsConfirmingShowNames] = useState(false);
@@ -126,11 +165,6 @@ const DistributedPlanView: React.FC<DistributedPlanViewProps> = ({
   const [isUnlockDialogOpen, setIsUnlockDialogOpen] = useState(false);
   const [isExtendDialogOpen, setIsExtendDialogOpen] = useState(false);
   const [extendThroughDate, setExtendThroughDate] = useState("");
-  const {
-    detailsRef: actionMenuRef,
-    closeDetails: closeActionMenu,
-    handleDetailsToggle: handleActionMenuToggle,
-  } = useDetailsMenu();
   const [outreachPersistenceState, setOutreachPersistenceState] = useState<
     "saving" | "saved" | "error"
   >("saved");
@@ -139,28 +173,56 @@ const DistributedPlanView: React.FC<DistributedPlanViewProps> = ({
     () => createDefaultInterviewOutreachTemplates(committeeName),
     [committeeName],
   );
-  const [outreachTemplates, setOutreachTemplates] = useState(() => {
-    try {
-      return normalizeStoredOutreachTemplates(
-        window.localStorage.getItem(outreachTemplateStorageKey),
-        committeeName,
-      );
-    } catch {
-      return defaultOutreachTemplates;
-    }
-  });
+  const [outreachTemplates, setOutreachTemplates] =
+    useState<InterviewOutreachTemplates>(() => {
+      if (savedSchedule?.outreach_templates) {
+        return normalizeStoredOutreachTemplates(
+          savedSchedule.outreach_templates,
+          committeeName,
+        );
+      }
+      try {
+        return normalizeStoredOutreachTemplates(
+          window.localStorage.getItem(outreachTemplateStorageKey),
+          committeeName,
+        );
+      } catch {
+        return defaultOutreachTemplates;
+      }
+    });
 
   useEffect(() => {
-    try {
-      window.localStorage.setItem(
-        outreachTemplateStorageKey,
-        JSON.stringify(outreachTemplates),
+    if (savedSchedule?.outreach_templates) {
+      setOutreachTemplates(
+        normalizeStoredOutreachTemplates(
+          savedSchedule.outreach_templates,
+          committeeName,
+        ),
       );
-      setOutreachPersistenceState("saved");
-    } catch {
-      setOutreachPersistenceState("error");
     }
-  }, [outreachTemplates, outreachTemplateStorageKey]);
+  }, [committeeName, savedSchedule?.outreach_templates]);
+
+  const handleTemplateChange = useCallback(
+    async (nextTemplates: InterviewOutreachTemplates) => {
+      setOutreachTemplates(nextTemplates);
+      try {
+        window.localStorage.setItem(
+          outreachTemplateStorageKey,
+          JSON.stringify(nextTemplates),
+        );
+      } catch {
+        // ignore
+      }
+      if (onUpdateOutreachTemplates) {
+        setOutreachPersistenceState("saving");
+        const ok = await onUpdateOutreachTemplates(nextTemplates);
+        setOutreachPersistenceState(ok ? "saved" : "error");
+      } else {
+        setOutreachPersistenceState("saved");
+      }
+    },
+    [onUpdateOutreachTemplates, outreachTemplateStorageKey],
+  );
 
   const conflictSet = useMemo(() => new Set(myConflicts), [myConflicts]);
   const lookups = useMemo(
@@ -186,6 +248,70 @@ const DistributedPlanView: React.FC<DistributedPlanViewProps> = ({
     () => selectConflictImpacts(sortedEntries, conflictSet, lookups),
     [conflictSet, lookups, sortedEntries],
   );
+
+  const dateCounts = useMemo(() => {
+    const counts = new Map<string, number>();
+    sortedEntries.forEach((entry) => {
+      const { dayIndex } = decodeScheduleTime(
+        entry.item.time,
+        savedSchedule?.session_duration ?? 60,
+      );
+      const d = dates[dayIndex];
+      if (d) counts.set(d, (counts.get(d) ?? 0) + 1);
+    });
+    return counts;
+  }, [sortedEntries, dates, savedSchedule?.session_duration]);
+
+  const statusCounts = useMemo(() => {
+    if (!isAdmin) return null;
+    const counts = {
+      total: sortedEntries.length,
+      not_invited: 0,
+      invited: 0,
+      confirmed: 0,
+      completed: 0,
+      declined: 0,
+      cancelled: 0,
+    };
+    sortedEntries.forEach(({ item }) => {
+      const s = item.interview_status ?? "not_invited";
+      if (s === "confirmed") counts.confirmed++;
+      else if (s === "invited") counts.invited++;
+      else if (s === "completed") counts.completed++;
+      else if (s === "not_invited") counts.not_invited++;
+      else if (s === "declined") counts.declined++;
+      else if (s === "cancelled") counts.cancelled++;
+    });
+    return counts;
+  }, [isAdmin, sortedEntries]);
+
+  const filteredDisplayEntries = useMemo(() => {
+    return displayEntries.filter((entry) => {
+      if (selectedDateFilter) {
+        const { dayIndex } = decodeScheduleTime(
+          entry.item.time,
+          savedSchedule?.session_duration ?? 60,
+        );
+        if (dates[dayIndex] !== selectedDateFilter) return false;
+      }
+      if (selectedStatusFilter) {
+        const s = entry.item.interview_status ?? "not_invited";
+        if (s !== selectedStatusFilter) return false;
+      }
+      return true;
+    });
+  }, [
+    displayEntries,
+    selectedDateFilter,
+    selectedStatusFilter,
+    dates,
+    savedSchedule?.session_duration,
+  ]);
+
+  const calendarDates = useMemo(() => {
+    if (selectedDateFilter) return [selectedDateFilter];
+    return dates;
+  }, [dates, selectedDateFilter]);
   const enabledTimeOptions = useMemo(
     () =>
       savedSchedule
@@ -212,6 +338,7 @@ const DistributedPlanView: React.FC<DistributedPlanViewProps> = ({
   const extendableDates = sortedDates.filter(
     (date) => !distributedThrough || date > distributedThrough,
   );
+  const waivedReviewers = savedSchedule?.published_without_review_by ?? [];
 
   const toggleLock = async (scheduleIndex: number) => {
     if (lockBusyIndex !== null) return;
@@ -345,83 +472,52 @@ const DistributedPlanView: React.FC<DistributedPlanViewProps> = ({
         }
         actions={
           <div className="flex flex-wrap items-center gap-2">
-            <details
-              ref={actionMenuRef}
-              onToggle={handleActionMenuToggle}
-              className="relative"
+            <button
+              type="button"
+              onClick={() => setIsExportChooserOpen(true)}
+              className={cn(
+                actionButtonBase,
+                actionButtonNeutral,
+                "inline-flex items-center gap-1.5",
+              )}
             >
-              <summary
-                aria-haspopup="menu"
+              <Download size={iconSizes.small} aria-hidden="true" />
+              Eksporter
+            </button>
+            {isAdmin && isPartiallyPublished && extendableDates.length > 0 && (
+              <button
+                type="button"
+                onClick={() => {
+                  setExtendThroughDate(
+                    extendableDates[extendableDates.length - 1],
+                  );
+                  setIsExtendDialogOpen(true);
+                }}
+                disabled={planTransition !== null}
                 className={cn(
                   actionButtonBase,
                   actionButtonNeutral,
-                  "cursor-pointer list-none [&::-webkit-details-marker]:hidden",
+                  "inline-flex items-center gap-1.5",
                 )}
               >
-                <MoreHorizontal size={iconSizes.small} aria-hidden="true" />
-                Flere handlinger
-              </summary>
-              <div
-                role="menu"
-                aria-label="Flere handlinger for intervjuplanen"
-                className="absolute right-0 top-full z-30 mt-2 grid min-w-56 gap-1 overflow-hidden rounded-lg border border-border bg-surface-base p-1 shadow-lg"
-              >
-                <button
-                  type="button"
-                  role="menuitem"
-                  onClick={() => {
-                    closeActionMenu(true);
-                    setIsExportChooserOpen(true);
-                  }}
-                  className={cn(
-                    "flex items-center rounded-md px-3 py-2 text-left text-ui font-semibold text-text-primary hover:bg-surface-subtle",
-                    keyboardFocusRingClass,
-                  )}
-                >
-                  Eksporter plan
-                </button>
-                {isAdmin &&
-                  isPartiallyPublished &&
-                  extendableDates.length > 0 && (
-                    <button
-                      type="button"
-                      role="menuitem"
-                      onClick={() => {
-                        closeActionMenu(true);
-                        setExtendThroughDate(
-                          extendableDates[extendableDates.length - 1],
-                        );
-                        setIsExtendDialogOpen(true);
-                      }}
-                      disabled={planTransition !== null}
-                      className={cn(
-                        "flex items-center rounded-md px-3 py-2 text-left text-ui font-semibold text-text-primary hover:bg-surface-subtle",
-                        keyboardFocusRingClass,
-                      )}
-                    >
-                      Utvid publisering
-                    </button>
-                  )}
-                {isAdmin && (
-                  <button
-                    type="button"
-                    role="menuitem"
-                    onClick={() => {
-                      closeActionMenu(true);
-                      setIsUnlockDialogOpen(true);
-                    }}
-                    disabled={planTransition !== null}
-                    className={cn(
-                      "flex items-center gap-2 rounded-md px-3 py-2 text-left text-ui font-semibold text-danger hover:bg-danger-bg",
-                      keyboardFocusRingClass,
-                    )}
-                  >
-                    <Unlock size={iconSizes.small} aria-hidden="true" />
-                    Lås opp og rediger
-                  </button>
+                Utvid publisering
+              </button>
+            )}
+            {isAdmin && (
+              <button
+                type="button"
+                onClick={() => setIsUnlockDialogOpen(true)}
+                disabled={planTransition !== null}
+                className={cn(
+                  actionButtonBase,
+                  actionButtonDanger,
+                  "inline-flex items-center gap-1.5",
                 )}
-              </div>
-            </details>
+              >
+                <Pencil size={iconSizes.small} aria-hidden="true" />
+                Rediger
+              </button>
+            )}
           </div>
         }
       />
@@ -432,6 +528,22 @@ const DistributedPlanView: React.FC<DistributedPlanViewProps> = ({
           className="border-b border-danger-border bg-danger-bg px-6 py-3 text-ui font-semibold text-danger"
         >
           {planTransitionError}
+        </div>
+      )}
+
+      {/* Shown to everyone who can see the plan, not just the admin who
+          decided it: a committee member who is inhabil in one of these
+          pairings is the last line of defence when nobody ran the check. */}
+      {waivedReviewers.length > 0 && (
+        <div
+          data-cy="published-without-review-banner"
+          className="border-b border-amber-200 bg-amber-50 px-6 py-3 text-ui text-amber-950"
+        >
+          <span className="font-semibold">
+            Publisert uten fullført kandidatkontroll
+          </span>{" "}
+          fra {waivedReviewers.join(", ")}. Si fra til opptaksansvarlig hvis du
+          er inhabil i et av intervjuene under.
         </div>
       )}
 
@@ -449,8 +561,21 @@ const DistributedPlanView: React.FC<DistributedPlanViewProps> = ({
         }}
         isUpdatingNames={isUpdatingNames}
         conflictBadgeCount={
-          namesVisible && myConflicts.length > 0 ? myConflicts.length : 0
+          isAdmin
+            ? (totalCommitteeConflicts ?? 0)
+            : namesVisible && myConflicts.length > 0
+              ? myConflicts.length
+              : 0
         }
+        onOpenConflictsOverview={isAdmin ? onOpenConflictsOverview : undefined}
+        dates={sortedDates}
+        selectedDateFilter={selectedDateFilter}
+        onSelectDateFilter={setSelectedDateFilter}
+        dateCounts={dateCounts}
+        canFilterByStatus={isAdmin}
+        statusCounts={isAdmin ? (statusCounts ?? undefined) : undefined}
+        selectedStatusFilter={selectedStatusFilter}
+        onSelectStatusFilter={isAdmin ? setSelectedStatusFilter : undefined}
       />
 
       <SchedulePanelBody noPadding>
@@ -463,11 +588,47 @@ const DistributedPlanView: React.FC<DistributedPlanViewProps> = ({
           />
         )}
 
+        {isPartiallyPublished && distributedThrough && (
+          <div className="mx-6 my-3 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-brand-border bg-brand-soft/70 px-4 py-3 text-ui">
+            <div className="flex items-center gap-2.5">
+              <CalendarDays
+                className="text-brand flex-none"
+                size={iconSizes.small}
+              />
+              <div>
+                <p className="m-0 font-bold text-text-primary">
+                  Planen er delvis publisert frem til{" "}
+                  {formatDisplayDate(distributedThrough)}
+                </p>
+                <p className="m-0 text-detail text-text-muted">
+                  Kandidater og komité ser bare intervjuer frem til denne
+                  datoen. Intervjuer på senere dager holdes tilbake inntil dere
+                  utvider.
+                </p>
+              </div>
+            </div>
+            {isAdmin && extendableDates.length > 0 && (
+              <button
+                type="button"
+                onClick={() => {
+                  setExtendThroughDate(
+                    extendableDates[extendableDates.length - 1],
+                  );
+                  setIsExtendDialogOpen(true);
+                }}
+                disabled={planTransition !== null}
+                className="inline-flex items-center gap-1.5 rounded-md bg-brand px-3.5 py-1.5 text-detail font-bold text-white shadow-sm hover:bg-brand-hover transition-colors cursor-pointer"
+              >
+                Utvid publisering
+              </button>
+            )}
+          </div>
+        )}
+
         <DistributedPlanNotices
           myInterviewsOnly={myInterviewsOnly}
           myInterviewsCount={myInterviews.length}
           currentUserName={currentUserName}
-          nameVisibility={savedSchedule.name_visibility}
           candidateNamesVisible={namesVisible}
           conflictImpacts={conflictImpacts}
           formatTimeLabel={formatTimeLabel}
@@ -476,10 +637,7 @@ const DistributedPlanView: React.FC<DistributedPlanViewProps> = ({
         {canManageInterviewWorkflow && namesVisible && (
           <InterviewOutreachTemplateEditor
             value={outreachTemplates}
-            onChange={(nextTemplates) => {
-              setOutreachPersistenceState("saving");
-              setOutreachTemplates(nextTemplates);
-            }}
+            onChange={handleTemplateChange}
             persistenceState={outreachPersistenceState}
             committeeName={committeeName}
           />
@@ -487,13 +645,13 @@ const DistributedPlanView: React.FC<DistributedPlanViewProps> = ({
 
         {planViewMode === "calendar" ? (
           <DistributedPlanCalendar
-            entries={displayEntries}
+            entries={filteredDisplayEntries}
             admissionSlug={admissionSlug}
             groupId={groupId}
             admissionTitle={admissionTitle}
             committeeName={committeeName}
             savedSchedule={savedSchedule}
-            dates={dates}
+            dates={calendarDates}
             enabledSlots={enabledSlots}
             candidateNamesVisible={namesVisible}
             isEditableDraft={false}
@@ -509,10 +667,11 @@ const DistributedPlanView: React.FC<DistributedPlanViewProps> = ({
             getTimeOptionsForEdit={getTimeOptionsForEdit}
             onChangeTime={changeTime}
             onReplacePanelMember={onReplacePanelMember}
+            onSwapCandidates={onSwapCandidates}
           />
         ) : (
-          <DistributedPlanTable
-            entries={displayEntries}
+          <PublishedScheduleTable
+            entries={filteredDisplayEntries}
             admissionSlug={admissionSlug}
             groupId={groupId}
             admissionTitle={admissionTitle}
@@ -521,20 +680,11 @@ const DistributedPlanView: React.FC<DistributedPlanViewProps> = ({
             dates={dates}
             enabledSlots={enabledSlots}
             candidateNamesVisible={namesVisible}
-            isEditableDraft={false}
             isAdmin={isAdmin}
             canManageInterviewWorkflow={canManageInterviewWorkflow}
             outreachTemplates={outreachTemplates}
             conflictIds={conflictSet}
-            lockBusy={lockBusyIndex !== null}
             lookups={lookups}
-            formatTimeLabel={formatTimeLabel}
-            onToggleLock={toggleLock}
-            onSetBookingSource={setBookingSource}
-            isChangingTime={isChangingTime}
-            getTimeOptionsForEdit={getTimeOptionsForEdit}
-            onChangeTime={changeTime}
-            onReplacePanelMember={onReplacePanelMember}
           />
         )}
       </SchedulePanelBody>

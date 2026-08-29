@@ -1,6 +1,6 @@
 import uuid
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 
 from django.db import transaction
 from django.utils import timezone
@@ -567,6 +567,29 @@ def _resolve_block_configuration(data, existing, configuration, enabled_slots):
     return {"layout_version": 2, "legacy_compatibility": False, **layout}
 
 
+def _has_enabled_days_after(enabled_slots, boundary):
+    """True while the framework has enabled days beyond the publish boundary.
+
+    Slot keys are "YYYY-MM-DD|minute" strings, so the date half decides which
+    calendar days the plan can still grow into. A boundary at or past the last
+    enabled day means the whole framework is published and nothing remains to
+    schedule.
+    """
+    if boundary is None:
+        return False
+    for slot in enabled_slots or []:
+        if not isinstance(slot, str):
+            continue
+        day_text = slot.split("|", 1)[0]
+        if day_text:
+            try:
+                if date.fromisoformat(day_text) > boundary:
+                    return True
+            except ValueError:
+                continue
+    return False
+
+
 def _full_publish_boundary(start_date, schedule):
     """distributed_through for an unscoped ("is_distributed: true") publish.
 
@@ -739,9 +762,23 @@ def _resolve_schedule_state(
         name_visibility = SavedSchedule.NAME_VISIBILITY_HIDDEN
 
     # A saved internal draft automatically opens the short, assignment-based
-    # conflict review. There is no separate administrative "open review" step:
-    # members can review proposed candidates until the plan is published.
-    conflict_review_open = bool(schedule) and not is_distributed
+    # conflict review. There is no separate administrative "open review" step.
+    # A prefix publish no longer ends the review either: while enabled days
+    # remain beyond the boundary the plan can still grow (rolling admissions
+    # add candidates that must be inhabilitet-checked before the next
+    # publish), so the review stays open until the final day is published.
+    conflict_review_open = bool(schedule) and (
+        distributed_through is None
+        or _has_enabled_days_after(enabled_slots, distributed_through)
+    )
+    # Is this save asking the server to (re)publish? Distinct from
+    # `is_distributed` (the *post*-write state) because the three-way rule
+    # for `published_without_review_by` cares about the intent: an unrelated
+    # edit while published is not a fresh publish, an unlock back to draft
+    # is not a publish, and only a publish that survives the gate counts.
+    is_publish_request = (
+        data.get("is_distributed") is True or bool(data.get("distributed_through"))
+    ) and bool(schedule)
 
     return {
         "grid_changed": grid_changed,
@@ -755,27 +792,110 @@ def _resolve_schedule_state(
         "distributed_through": distributed_through,
         "conflict_review_open": conflict_review_open,
         "name_visibility": name_visibility,
+        "is_publish_request": is_publish_request,
     }
 
 
 def _ensure_conflict_review_ready_for_publish(admission, group, data, schedule):
+    """Gate publish on a finished kandidatkontroll.
+
+    Returns the ids of the interviewers whose check was outstanding and got
+    published past anyway - empty in the normal case, and empty when nothing
+    is being published. Raises unless the caller has explicitly said to go
+    ahead without them.
+    """
     is_publishing = data.get("is_distributed") is True or bool(
         data.get("distributed_through")
     )
     if not is_publishing or not schedule:
-        return
+        return []
 
     readiness = get_conflict_review_readiness(admission, group, schedule=schedule)
-    incomplete_count = len(readiness["incomplete_participant_ids"])
-    if incomplete_count:
-        raise ScheduleInputError(
-            {
-                "schedule": [
-                    f"{incomplete_count} intervjuere må kontrollere "
-                    f"{readiness['missing_pair_count']} foreslåtte "
-                    "kandidater før planen publiseres."
-                ]
-            }
+    incomplete_ids = list(readiness["incomplete_participant_ids"])
+    if not incomplete_ids:
+        return []
+
+    # Publishing anyway is allowed but never quiet: an admin can decide the
+    # recruitment cannot wait for a member who has stopped answering, and
+    # accepts that some pairings go out unchecked for inhabilitet. The
+    # decision is recorded against the plan and against each person skipped
+    # (see _record_conflict_review_bypass), and the published plan says so.
+    if data.get("publish_without_full_review") is True:
+        return incomplete_ids
+
+    # Name up to a few of the missing reviewers so the admin can act
+    # on the message - "9 må kontrollere" is unactionable, "Kari, Ola
+    # og 7 andre" is a checklist. Names stay inside the admin who is
+    # already mid-publish; the form is the source of the complete list.
+    incomplete_count = len(incomplete_ids)
+    names = _missing_reviewer_names(incomplete_ids)
+    named = ", ".join(names[:3])
+    suffix = (
+        f" og {incomplete_count - len(names[:3])} andre"
+        if incomplete_count > len(names[:3])
+        else ""
+    )
+    raise ScheduleInputError(
+        {
+            "schedule": [
+                f"{incomplete_count} intervjuere må kontrollere "
+                f"{readiness['missing_pair_count']} foreslåtte "
+                f"kandidater før planen publiseres: {named}{suffix}."
+            ]
+        }
+    )
+
+
+def _missing_reviewer_names(user_ids):
+    """Best-effort display names for missing-reviewer error messages.
+
+    Admins see this when they hit the publish gate mid-flow, so the names
+    need to be recognisable (full name > username) and ordered so the list
+    reads as a checklist. Membership lookups intentionally avoid any access
+    checks - this is a server-side diagnostic and the caller is already
+    the publish-gated admin.
+    """
+    from admissions.admissions.models import LegoUser
+
+    str_ids = {str(user_id) for user_id in user_ids}
+    users = {str(user.pk): user for user in LegoUser.objects.filter(pk__in=str_ids)}
+    ordered = sorted(
+        (users[str(user_id)] for user_id in user_ids if str(user_id) in users),
+        key=lambda user: (
+            (user.get_full_name() or user.username).lower(),
+            user.username,
+        ),
+    )
+    return [user.get_full_name() or user.username for user in ordered]
+
+
+def _record_conflict_review_bypass(admission, saved, user, skipped_user_ids):
+    """Write the audit trail for a publish that skipped the kandidatkontroll.
+
+    One event per skipped person, so the log answers "was my check waived, by
+    whom, when" per interviewer rather than only per plan.
+    """
+    from admissions.admissions.models import LegoUser
+
+    if not skipped_user_ids:
+        return
+
+    users = {
+        str(skipped.pk): skipped
+        for skipped in LegoUser.objects.filter(
+            pk__in=[str(user_id) for user_id in skipped_user_ids]
+        )
+    }
+    for user_id in skipped_user_ids:
+        skipped = users.get(str(user_id))
+        ConflictReviewAuditEvent.objects.create(
+            admission=admission,
+            saved_schedule=saved,
+            actor=user,
+            actor_username=user.username,
+            subject_user=skipped,
+            subject_username=skipped.username if skipped else "",
+            action=ConflictReviewAuditEvent.ACTION_BYPASSED,
         )
 
 
@@ -844,7 +964,18 @@ def _canonicalize_schedule(
                 panel_size=panel_size,
                 solver_options=solver_options,
                 request_user_id=user.id,
-                require_all_candidates=state["is_distributed"],
+                # A prefix publish may leave candidates unscheduled on the
+                # unpublished days still to come; only publishing through the
+                # last enabled day demands that everyone has an interview, so
+                # nobody can silently fall through at the end of the plan.
+                # defer_unplaced_candidates is the explicit way out: an
+                # acknowledgment that the remaining candidates are planned
+                # for later even though no further days are enabled yet.
+                require_all_candidates=state["is_distributed"]
+                and not _has_enabled_days_after(
+                    enabled_slots, state["distributed_through"]
+                )
+                and not data.get("defer_unplaced_candidates"),
                 end_date=configuration["end_date"],
                 session_duration=configuration["session_duration"],
                 day_start_minute=configuration["day_start_minute"],
@@ -912,19 +1043,6 @@ def _record_deviation_approval(admission, saved, user, review):
     )
 
 
-def _schedule_pairs_by_interviewer(schedule):
-    pairs = {}
-    for item in schedule or []:
-        candidate_id = str(item.get("candidate_id") or "")
-        if not candidate_id:
-            continue
-        for member in item.get("panel") or []:
-            interviewer_id = str(member.get("id") or "")
-            if interviewer_id:
-                pairs.setdefault(interviewer_id, set()).add(candidate_id)
-    return pairs
-
-
 def _project_interview_availability(
     *, admission, group, existing_schedule, next_schedule, enabled_slots, state
 ):
@@ -936,9 +1054,6 @@ def _project_interview_availability(
     if not rows:
         return
     enabled_set = set(enabled_slots)
-    schedule_changed = (existing_schedule or []) != (next_schedule or [])
-    old_pairs = _schedule_pairs_by_interviewer(existing_schedule)
-    new_pairs = _schedule_pairs_by_interviewer(next_schedule)
     changed_at = timezone.now()
     for row in rows:
         if state["duration_changed"]:
@@ -947,21 +1062,20 @@ def _project_interview_availability(
         elif state["removed_slots"]:
             row.slots = [slot for slot in row.slots or [] if slot in enabled_set]
 
-        if schedule_changed:
-            interviewer_id = str(row.user_id)
-            retainable = old_pairs.get(interviewer_id, set()).intersection(
-                new_pairs.get(interviewer_id, set())
-            )
-            row.reviewed_candidate_ids = [
-                candidate_id
-                for candidate_id in row.reviewed_candidate_ids or []
-                if str(candidate_id) in retainable
-            ]
+        # reviewed_candidate_ids is deliberately left untouched by schedule
+        # changes: an attestation is a fact about the (interviewer, candidate)
+        # pair - "I have checked this person" - not about where the plan put
+        # them. Trimming it on every re-solve forced everyone (leaders most of
+        # all, since their scope is every candidate) to re-check the same
+        # people after each solve. Withdrawn candidates are already purged by
+        # the UserApplication pre_delete signal; readiness compares the stored
+        # ids against the current scope, so genuinely new candidates are the
+        # only thing anyone is ever asked to check.
         row.updated_at = changed_at
 
     InterviewAvailability.objects.bulk_update(
         rows,
-        ["slots", "submitted_grid_generation", "reviewed_candidate_ids", "updated_at"],
+        ["slots", "submitted_grid_generation", "updated_at"],
     )
 
 
@@ -979,6 +1093,7 @@ def _persist_schedule(
     panel_size,
     solver_options,
     layout,
+    skipped_reviewer_names=None,
 ):
     conflict_review_was_open = bool(
         existing is not None and existing.conflict_review_open
@@ -1020,6 +1135,38 @@ def _persist_schedule(
             "conflict_review_open": state["conflict_review_open"],
             "name_visibility": state["name_visibility"],
         }
+        # Three-way rule for the bypass note:
+        # - taking the plan back to draft (publish_request is false) clears it,
+        #   there is no published plan to mark;
+        # - a fresh publish with everyone confirmed (skipped_reviewer_names
+        #   is empty) replaces it with an empty list, wiping the previous
+        #   waiver on the first review-complete republish;
+        # - any other save (unrelated edit while published) keeps the
+        #   existing list, so the note does not silently outlive a
+        #   no-op-but-bumped-updated_at write.
+        # Bypass-note rule. The note is published-plan metadata: it only
+        # makes sense to write it when this save is mutating the publish
+        # boundary (`distributed_through` changing). An unrelated edit
+        # while published - e.g. a name-visibility change - must not
+        # silently rewrite or clear the note, which is why we look at
+        # the boundary delta rather than the user's intent field.
+        # When the boundary is being moved: clearing the boundary (unlock
+        # back to draft) wipes the note because there is no published
+        # plan to mark; setting the boundary records the names of anyone
+        # skipped (an empty list is the "review complete" case).
+        is_published = state["is_distributed"] or bool(state["distributed_through"])
+        if not is_published:
+            desired_fields["published_without_review_by"] = []
+        elif "is_distributed" in data or "distributed_through" in data:
+            desired_fields["published_without_review_by"] = list(
+                skipped_reviewer_names or []
+            )
+        elif existing is not None:
+            desired_fields["published_without_review_by"] = (
+                existing.published_without_review_by
+            )
+        if "outreach_templates" in data:
+            desired_fields["outreach_templates"] = data["outreach_templates"] or {}
         if existing is None:
             saved = SavedSchedule.objects.create(
                 admission=admission, group=group, **desired_fields
@@ -1136,8 +1283,12 @@ def update_saved_schedule(
     is_recruiter,
     is_admission_admin=False,
 ):
-    admission = Admission.objects.select_for_update().get(pk=admission.pk)
-    existing = SavedSchedule.objects.filter(admission=admission, group=group).first()
+    admission = Admission.objects.get(pk=admission.pk)
+    existing = (
+        SavedSchedule.objects.select_for_update()
+        .filter(admission=admission, group=group)
+        .first()
+    )
 
     mutable_fields = set(data) - {"expected_updated_at"}
     if not is_admission_admin and mutable_fields == {"name_visibility"}:
@@ -1151,7 +1302,27 @@ def update_saved_schedule(
         )
         return ScheduleUpdateResult(admission=admission, saved_schedule=saved)
 
-    if not is_admission_admin and "name_visibility" in mutable_fields:
+    if (is_recruiter or is_admin) and mutable_fields == {"outreach_templates"}:
+        _ensure_revision_matches(data, existing)
+        if existing is None:
+            raise ScheduleNotFound
+        existing.outreach_templates = data.get("outreach_templates") or {}
+        existing.save(update_fields=["outreach_templates", "updated_at"])
+        return ScheduleUpdateResult(admission=admission, saved_schedule=existing)
+
+    # A name-visibility change never rides along with other mutations for a
+    # non-admin: the audited reveal path is the visibility-only branch above.
+    # The one exception is publishing - the publish dialog legitimately sends
+    # the visibility choice together with is_distributed/distributed_through,
+    # and the main path audits that reveal transition itself.
+    is_publish_transition = data.get("is_distributed") is True or data.get(
+        "distributed_through"
+    )
+    if (
+        not is_admission_admin
+        and "name_visibility" in mutable_fields
+        and not is_publish_transition
+    ):
         raise SchedulePermissionDenied
 
     if not is_admin:
@@ -1195,7 +1366,9 @@ def update_saved_schedule(
         state,
         layout,
     )
-    _ensure_conflict_review_ready_for_publish(admission, group, data, schedule)
+    skipped_reviewer_ids = _ensure_conflict_review_ready_for_publish(
+        admission, group, data, schedule
+    )
     deviation_review = _deviation_review_for_publish(
         data,
         schedule,
@@ -1217,6 +1390,8 @@ def update_saved_schedule(
         panel_size,
         solver_options,
         layout,
+        skipped_reviewer_names=_missing_reviewer_names(skipped_reviewer_ids),
     )
+    _record_conflict_review_bypass(admission, saved, user, skipped_reviewer_ids)
     _record_deviation_approval(admission, saved, user, deviation_review)
     return ScheduleUpdateResult(admission=admission, saved_schedule=saved)

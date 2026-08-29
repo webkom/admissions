@@ -9,6 +9,12 @@ interface ExportChooserModalProps {
   onExportCsv: () => void;
   onClose: () => void;
   showCsv?: boolean;
+  /**
+   * When true, the modal only offers "mine" exports — the user is not an
+   * opptaksansvarlig and must not be able to surface the full plan or
+   * anything CSV-shaped.
+   */
+  restrictToMyInterviews?: boolean;
 }
 
 interface ExportOptionProps {
@@ -39,6 +45,7 @@ const ExportChooserModal = ({
   onExportCsv,
   onClose,
   showCsv = true,
+  restrictToMyInterviews = false,
 }: ExportChooserModalProps) => {
   const dialogRef = useRef<HTMLDivElement>(null);
 
@@ -79,43 +86,78 @@ const ExportChooserModal = ({
           id="export-chooser-title"
           className="m-0 text-base font-bold text-text-primary"
         >
-          Velg eksportmåte
+          {restrictToMyInterviews
+            ? "Eksporter dine intervjuer"
+            : "Velg eksportmåte"}
         </h4>
-        <p className="mb-0 mt-2 text-ui text-text-muted">
-          Kalenderfiler bruker anonyme kandidatnavn. CSV kan inneholde navn og
-          må behandles som konfidensiell informasjon.
-        </p>
+        {showCsv && !restrictToMyInterviews && (
+          <p className="mb-0 mt-2 text-ui text-text-muted">
+            Kalenderfiler bruker anonyme kandidatnavn. CSV kan inneholde navn og
+            må behandles som konfidensiell informasjon.
+          </p>
+        )}
+        {restrictToMyInterviews && (
+          <p className="mb-0 mt-2 text-ui text-text-muted">
+            Du kan bare eksportere dine egne intervjuer. Opptaksansvarlig
+            bestemmer hva som deles videre.
+          </p>
+        )}
         <div className="mt-4 grid gap-2">
-          <ExportOption
-            icon={<Calendar size={iconSizes.standard} />}
-            title="Apple Calendar / Outlook"
-            hint="Åpner .ics-filen direkte"
-            onClick={() => {
-              onExportIcs("apple");
-              onClose();
-            }}
-          />
-          <ExportOption
-            icon={<CalendarDays size={iconSizes.standard} />}
-            title="Google Calendar"
-            hint="Importer .ics-filen via innstillinger"
-            onClick={() => {
-              onExportIcs("google");
-              onClose();
-            }}
-          />
-          {showCsv && (
+          {restrictToMyInterviews ? (
             <>
-              <div className="my-1 h-px bg-border-faint" />
               <ExportOption
-                icon={<FileSpreadsheet size={iconSizes.standard} />}
-                title="CSV-fil"
-                hint="For Excel eller Google Sheets"
+                icon={<Calendar size={iconSizes.standard} />}
+                title="Apple Calendar / Outlook"
+                hint="Åpner .ics-filen med dine intervjuer"
                 onClick={() => {
-                  onExportCsv();
+                  onExportIcs("apple");
                   onClose();
                 }}
               />
+              <ExportOption
+                icon={<CalendarDays size={iconSizes.standard} />}
+                title="Google Calendar"
+                hint="Importer dine intervjuer via innstillinger"
+                onClick={() => {
+                  onExportIcs("google");
+                  onClose();
+                }}
+              />
+            </>
+          ) : (
+            <>
+              <ExportOption
+                icon={<Calendar size={iconSizes.standard} />}
+                title="Apple Calendar / Outlook"
+                hint="Åpner .ics-filen direkte"
+                onClick={() => {
+                  onExportIcs("apple");
+                  onClose();
+                }}
+              />
+              <ExportOption
+                icon={<CalendarDays size={iconSizes.standard} />}
+                title="Google Calendar"
+                hint="Importer .ics-filen via innstillinger"
+                onClick={() => {
+                  onExportIcs("google");
+                  onClose();
+                }}
+              />
+              {showCsv && (
+                <>
+                  <div className="my-1 h-px bg-border-faint" />
+                  <ExportOption
+                    icon={<FileSpreadsheet size={iconSizes.standard} />}
+                    title="CSV-fil"
+                    hint="For Excel eller Google Sheets"
+                    onClick={() => {
+                      onExportCsv();
+                      onClose();
+                    }}
+                  />
+                </>
+              )}
             </>
           )}
           <button

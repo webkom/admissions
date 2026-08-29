@@ -411,7 +411,6 @@ const ProposalComparisonHarness = () => (
     onExperienceLevelChange={() => Promise.resolve()}
     onOpenAvailability={() => undefined}
     onOpenFramework={() => undefined}
-    onWidenDays={() => undefined}
     onEditByHand={() => undefined}
     onOpenConflictReview={() => undefined}
     conflictReviewReachable={false}
@@ -1097,5 +1096,103 @@ describe("solver asynchronous and revision races", () => {
     cy.get("[data-cy=draft-conflicts]").should("have.text", "1");
     cy.get("[data-cy=draft-authority]").should("have.text", "server-newer");
     cy.get("[data-cy=draft-value]").should("have.text", "Local draft");
+  });
+
+  const currentPlanSchedule = () => ({
+    ...savedSchedule("Current candidate"),
+    schedule: [
+      {
+        candidate_id: "candidate-1",
+        candidate: "Current candidate",
+        time: 840,
+        panel: [
+          { id: "interviewer-1", name: "Interviewer", is_overtime: false },
+        ],
+      },
+    ],
+    updated_at: "revision-1",
+  });
+
+  it("surfaces an infeasible regeneration in the setup panel and keeps the plan", () => {
+    const client = queryClientWithDefaultQuery();
+    cy.intercept(
+      "GET",
+      `**/api/admin/admission/${admissionSlug}/group/${groupId}/schedule/`,
+      { statusCode: 200, body: currentPlanSchedule() },
+    ).as("regenSchedule");
+    const infeasible: SolveResponse = {
+      status: "INFEASIBLE",
+      schedule: [],
+      unplaceable: [],
+    };
+    cy.intercept("POST", "**/api/solve/", {
+      statusCode: 202,
+      body: solveJob("infeasible-job", "DONE", infeasible),
+    }).as("infeasibleSolve");
+
+    mountHarness(<ProposalComparisonHarness />, client);
+    cy.wait("@regenSchedule");
+    cy.get("[data-cy=proposal-review]").should("be.visible");
+    cy.get("[data-cy=proposal-rerun]").click();
+    cy.get("[data-cy=regeneration-settings]")
+      .should("be.visible")
+      .find("[data-cy=generate-proposal]")
+      .click();
+    cy.wait("@infeasibleSolve");
+
+    // The solver error is rendered inside the still-open setup panel — it has
+    // nowhere else to go while a plan is kept.
+    cy.get("[data-cy=regeneration-settings]")
+      .should("be.visible")
+      .contains("Ingen løsning finnes med disse begrensningene");
+    // No keep/replace decision, and the kept plan is untouched.
+    cy.get("[data-cy=candidate-proposal]").should("not.exist");
+  });
+
+  it("leaves the regeneration setup once a re-solve applies cleanly", () => {
+    const client = queryClientWithDefaultQuery();
+    const solved = {
+      ...currentPlanSchedule(),
+      updated_at: "revision-2",
+    };
+    let scheduleReads = 0;
+    cy.intercept(
+      "GET",
+      `**/api/admin/admission/${admissionSlug}/group/${groupId}/schedule/`,
+      (request) => {
+        scheduleReads += 1;
+        request.reply({
+          statusCode: 200,
+          body: scheduleReads === 1 ? currentPlanSchedule() : solved,
+        });
+      },
+    ).as("cleanRegenSchedule");
+    cy.intercept("POST", "**/api/solve/", {
+      statusCode: 202,
+      body: solveJob("clean-job", "DONE", {
+        status: "SUCCESS",
+        schedule: currentPlanSchedule().schedule,
+      }),
+    }).as("cleanSolve");
+    cy.intercept("POST", "**/api/solve/clean-job/apply/", {
+      statusCode: 200,
+      body: solved,
+    }).as("applyClean");
+
+    mountHarness(<ProposalComparisonHarness />, client);
+    cy.wait("@cleanRegenSchedule");
+    cy.get("[data-cy=proposal-rerun]").click();
+    cy.get("[data-cy=regeneration-settings]")
+      .should("be.visible")
+      .find("[data-cy=generate-proposal]")
+      .click();
+    cy.wait("@cleanSolve");
+    cy.wait("@applyClean");
+
+    // A perfect re-solve replaces the draft with no decision panel, and the
+    // view returns to the plan instead of stranding on the setup panel.
+    cy.get("[data-cy=candidate-proposal]").should("not.exist");
+    cy.get("[data-cy=regeneration-settings]").should("not.exist");
+    cy.get("[data-cy=proposal-review]").should("be.visible");
   });
 });

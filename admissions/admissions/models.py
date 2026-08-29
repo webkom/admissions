@@ -331,6 +331,16 @@ class SavedSchedule(models.Model):
         db_persist=True,
     )
     conflict_review_open = models.BooleanField(default=False)
+    # Names (not ids) of reviewers whose kandidatkontroll was outstanding at
+    # the moment the plan was published and the publish was allowed to go
+    # through anyway via `publish_without_full_review`. The denormalized
+    # display form is deliberate: this field exists to be read off the
+    # published plan by people who are not administrators, long after the
+    # roster may have changed. The authoritative "was my check waived, by
+    # whom, when" answer lives in ConflictReviewAuditEvent. Cleared on a
+    # fresh publish that completes the review, kept across unrelated edits,
+    # cleared on taking the plan back to draft - see _persist_schedule.
+    published_without_review_by = models.JSONField(default=list, blank=True)
 
     NAME_VISIBILITY_HIDDEN = "hidden"
     NAME_VISIBILITY_ADMIN_ONLY = "admin_only"
@@ -345,6 +355,7 @@ class SavedSchedule(models.Model):
         choices=NAME_VISIBILITY_CHOICES,
         default=NAME_VISIBILITY_HIDDEN,
     )
+    outreach_templates = models.JSONField(default=dict, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -465,12 +476,20 @@ class ConflictReviewAuditEvent(models.Model):
     ACTION_VIEWED = "viewed"
     ACTION_SUBMITTED = "submitted"
     ACTION_FROZEN = "frozen"
+    # The publish was allowed through with this reviewer's kandidatkontroll
+    # still incomplete - the recruiter explicitly waived it via
+    # `publish_without_full_review`. The pairing shows up on the published
+    # plan's "published_without_review_by" list, and one event is recorded
+    # per skipped reviewer so the trail answers "was my check waived, by
+    # whom, when" rather than only "did this plan get a waiver".
+    ACTION_BYPASSED = "bypassed"
     ACTION_CHOICES = [
         (ACTION_OPENED, "Opened"),
         (ACTION_CLOSED, "Closed"),
         (ACTION_VIEWED, "Viewed"),
         (ACTION_SUBMITTED, "Submitted"),
         (ACTION_FROZEN, "Frozen"),
+        (ACTION_BYPASSED, "Bypassed"),
     ]
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)

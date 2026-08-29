@@ -3,16 +3,43 @@ import React from "react";
 import { progressMessageFor, type SolveJob } from "./solverHelpers";
 
 interface SolveProgressProps {
-  elapsedMs: number;
+  elapsedMs?: number;
+  startedAt?: string | null;
   estimatedSeconds: number;
   jobStatus: SolveJob["status"] | null;
 }
 
 const SolveProgress = ({
-  elapsedMs,
+  elapsedMs: externalElapsedMs,
+  startedAt,
   estimatedSeconds,
   jobStatus,
 }: SolveProgressProps) => {
+  const [internalElapsedMs, setInternalElapsedMs] = React.useState(
+    externalElapsedMs ?? 0,
+  );
+  const mountTimeRef = React.useRef(Date.now());
+
+  React.useEffect(() => {
+    if (jobStatus && jobStatus !== "PENDING" && jobStatus !== "RUNNING") {
+      setInternalElapsedMs(externalElapsedMs ?? 0);
+      return;
+    }
+    const phaseStartedAt = startedAt
+      ? Date.parse(startedAt)
+      : mountTimeRef.current - (externalElapsedMs ?? 0);
+    const update = () => {
+      setInternalElapsedMs(Math.max(0, Date.now() - phaseStartedAt));
+    };
+    update();
+    const tick = window.setInterval(update, 100);
+    return () => window.clearInterval(tick);
+  }, [externalElapsedMs, jobStatus, startedAt]);
+
+  const elapsedMs =
+    externalElapsedMs !== undefined && externalElapsedMs > 0
+      ? externalElapsedMs
+      : internalElapsedMs;
   const waitingForWorker = jobStatus === "PENDING";
   const estimatedMs = estimatedSeconds * 1000;
   const progressTargetMs = estimatedMs * 1.35;
