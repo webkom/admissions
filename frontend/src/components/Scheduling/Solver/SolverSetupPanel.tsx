@@ -55,8 +55,12 @@ interface SolverSetupPanelProps {
   /** How many of those days the solve will cover (never below minDayCount). */
   effectiveDayCount: number;
   onDayCountChange: (value: number | null) => void;
-  /** Lowest scope allowed: the last day holding a planned candidate. */
+  /** Lowest scope allowed: the published prefix, or 1 when nothing is
+   *  published yet. */
   minDayCount: number;
+  /** Plannable days the current draft already covers. Scoping below this
+   *  replaces those draft days on the next solve. */
+  draftDayExtent: number;
   loading: boolean;
   error: string;
   elapsedMs: number;
@@ -379,6 +383,7 @@ const SolverSetupPanel = ({
   effectiveDayCount,
   onDayCountChange,
   minDayCount,
+  draftDayExtent,
   loading,
   error,
   elapsedMs,
@@ -675,8 +680,7 @@ const SolverSetupPanel = ({
                     </p>
                     <p className="m-0 mt-1 text-detail text-text-muted">
                       Ta de første dagene nå og resten i en senere etappe hvis
-                      du vil — det som alt er planlagt, blir stående. Nå:{" "}
-                      {scopeDateLabel}.
+                      du vil. Nå: {scopeDateLabel}.
                     </p>
                     {minDayCount > 1 &&
                       Number.isFinite(
@@ -687,14 +691,30 @@ const SolverSetupPanel = ({
                           className="m-0 mt-1 text-detail text-text-muted"
                         >
                           Minst {minDayCount}{" "}
-                          {minDayCount === 1 ? "dag" : "dager"} fordi utkastet
-                          allerede har planlagte intervjuer til og med{" "}
+                          {minDayCount === 1 ? "dag" : "dager"} fordi planen alt
+                          er publisert til og med{" "}
                           {formatAccessibleDate(
                             plannableDates[minDayCount - 1],
                           )}
-                          . Et nytt forslag erstatter dagene det dekker — vil du
-                          planlegge færre dager, må intervjuene på de siste
-                          dagene flyttes eller fjernes først.
+                          . Publiserte dager kan ikke tas ut av planen igjen.
+                        </p>
+                      )}
+                    {effectiveDayCount < draftDayExtent &&
+                      Number.isFinite(
+                        Date.parse(plannableDates[draftDayExtent - 1] ?? ""),
+                      ) && (
+                        <p
+                          data-cy="day-scope-shrink-warning"
+                          className="m-0 mt-1 text-detail font-medium text-amber-700"
+                        >
+                          Utkastet har intervjuer til og med{" "}
+                          {formatAccessibleDate(
+                            plannableDates[draftDayExtent - 1],
+                          )}
+                          . Et kortere forslag erstatter disse dagene:
+                          intervjuene flyttes inn i de valgte dagene, eller
+                          planlegges i en senere etappe hvis det ikke er plass.
+                          Du får se forslaget før du velger.
                         </p>
                       )}
                   </div>

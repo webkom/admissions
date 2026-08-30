@@ -147,6 +147,25 @@ const PublicationGate = ({
   useEffect(() => {
     if (serverReviewRefusal) setWaiveReview(true);
   }, [serverReviewRefusal]);
+  // A committee recruiter only ever sees their own review row (the other
+  // interviewers' proposed candidates are admin-only), so `readiness` can
+  // read "resolved" while the backend still counts unfinished reviewers.
+  // Once the server has actually refused on that basis, ticking the box
+  // must send `publish_without_full_review` regardless of local readiness.
+  const reviewWaiveActive =
+    waiveReview && (!readiness.reviewResolved || serverReviewRefusal);
+  // Name the reviewers when the local readiness knows them; on a bare
+  // server refusal (committee recruiter - can't see the other rows) fall
+  // back to a count, then to a generic phrase.
+  const waiveReviewTarget =
+    readiness.missingReviewerNames.length > 0
+      ? readiness.missingReviewerNames.join(", ")
+      : readiness.incompleteReviewerCount > 0
+        ? `${readiness.incompleteReviewerCount} intervjuere`
+        : null;
+  const waiveReviewButtonLabel = waiveReviewTarget
+    ? `Publiser uten kontrollen til ${waiveReviewTarget}`
+    : "Publiser uten kandidatkontroll";
 
   const unplacedCount = Math.max(
     0,
@@ -209,7 +228,7 @@ const PublicationGate = ({
         : undefined,
       publishScope === "partial" ? selectedThroughDate : undefined,
       deferUnplaced && unplacedCount > 0,
-      waiveReview && !readiness.reviewResolved,
+      reviewWaiveActive,
     );
     if (published) setConfirmOpen(false);
   };
@@ -407,12 +426,7 @@ const PublicationGate = ({
                       data-cy="waive-review"
                       className="mt-0.5 h-4 w-4 flex-none rounded border-border-muted text-primary focus:ring-primary"
                     />
-                    <span>
-                      Publiser uten kontrollen til{" "}
-                      {readiness.missingReviewerNames.length > 0
-                        ? readiness.missingReviewerNames.join(", ")
-                        : `${readiness.incompleteReviewerCount} intervjuere`}
-                    </span>
+                    <span>{waiveReviewButtonLabel}</span>
                   </label>
                   <p className="m-0 mt-3 text-detail leading-relaxed text-amber-900">
                     Beslutningen loggføres på deg og vises på den publiserte
@@ -537,12 +551,8 @@ const PublicationGate = ({
                         ? `Publiser til og med ${formatAccessibleDate(selectedThroughDate)}`
                         : deferUnplaced && unplacedCount > 0
                           ? `Publiser delplan (${unplacedCount} senere)`
-                          : waiveReview && !readiness.reviewResolved
-                            ? `Publiser uten kontrollen til ${
-                                readiness.missingReviewerNames.length > 0
-                                  ? readiness.missingReviewerNames.join(", ")
-                                  : `${readiness.incompleteReviewerCount} intervjuere`
-                              }`
+                          : reviewWaiveActive
+                            ? waiveReviewButtonLabel
                             : "Publiser intervjuplan"}
                   </button>
                 </>
@@ -583,7 +593,7 @@ const PublicationGate = ({
               ? "Publiserer…"
               : publishScope === "partial"
                 ? `Publiser til og med ${formatAccessibleDate(selectedThroughDate)}`
-                : waiveReview && !readiness.reviewResolved
+                : reviewWaiveActive
                   ? "Publiser uten kandidatkontroll"
                   : "Publiser intervjuplan"
           }
@@ -602,16 +612,15 @@ const PublicationGate = ({
                 ? "Kandidatnavn vises bare til opptaksansvarlige."
                 : "Kandidatnavn blir synlige for hele komiteen."}
           </p>
-          {waiveReview && !readiness.reviewResolved && (
+          {reviewWaiveActive && (
             <div
               data-cy="waive-review-confirmation"
               className="mt-4 rounded-md border border-amber-200 bg-amber-50 px-3 py-3 text-ui text-amber-950"
             >
               <strong className="block">
-                Publiseres uten kandidatkontroll fra{" "}
-                {readiness.missingReviewerNames.length > 0
-                  ? readiness.missingReviewerNames.join(", ")
-                  : `${readiness.incompleteReviewerCount} intervjuere`}
+                {waiveReviewTarget
+                  ? `Publiseres uten kandidatkontroll fra ${waiveReviewTarget}`
+                  : "Publiseres uten fullført kandidatkontroll"}
               </strong>
               <p className="m-0 mt-1 text-detail leading-relaxed">
                 Noen paringer går ut uten at det er sjekket for inhabilitet.

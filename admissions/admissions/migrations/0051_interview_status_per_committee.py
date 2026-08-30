@@ -17,6 +17,18 @@ from django.conf import settings
 from django.db import migrations, models
 
 
+def _flush_deferred_constraints(schema_editor):
+    """Force Django's DEFERRABLE INITIALLY DEFERRED FK checks to run now.
+
+    This migration does row-level writes (RunPython) and then ALTER TABLE on
+    the same tables in one transaction. Postgres refuses the ALTER while
+    deferred FK trigger events are still pending ("cannot ALTER TABLE ...
+    because it has pending trigger events"), so settle them first.
+    """
+    if schema_editor.connection.vendor == "postgresql":
+        schema_editor.execute("SET CONSTRAINTS ALL IMMEDIATE")
+
+
 def migrate_forward(apps, schema_editor):
     UserApplication = apps.get_model("admissions", "UserApplication")
     GroupApplication = apps.get_model("admissions", "GroupApplication")
@@ -28,7 +40,9 @@ def migrate_forward(apps, schema_editor):
     for application in UserApplication.objects.all().iterator():
         GroupApplication.objects.filter(application=application).update(
             interview_status=application.interview_status,
-            interview_status_updated_at=application.interview_status_updated_at,
+            interview_status_updated_at=(
+                application.interview_status_updated_at or django.utils.timezone.now()
+            ),
             interview_status_updated_by=application.interview_status_updated_by,
             interview_status_updated_by_username=(
                 application.interview_status_updated_by_username
@@ -37,6 +51,9 @@ def migrate_forward(apps, schema_editor):
 
     # Re-home audit events. A change under the old model touched the shared
     # status, i.e. effectively every committee - so fan each event out.
+    # `application` (the old FK) is still a NOT NULL column at this point in
+    # the migration - it is dropped by a later operation - so the fanned-out
+    # clones must still carry it.
     for event in (
         InterviewStatusAuditEvent.objects.select_related("application").all().iterator()
     ):
@@ -50,6 +67,7 @@ def migrate_forward(apps, schema_editor):
         event.save(update_fields=["group_application"])
         for group_application in group_applications[1:]:
             clone = InterviewStatusAuditEvent.objects.create(
+                application=event.application,
                 group_application=group_application,
                 actor=event.actor,
                 actor_username=event.actor_username,
@@ -59,6 +77,8 @@ def migrate_forward(apps, schema_editor):
             InterviewStatusAuditEvent.objects.filter(pk=clone.pk).update(
                 created_at=event.created_at
             )
+
+    _flush_deferred_constraints(schema_editor)
 
 
 def migrate_backward(apps, schema_editor):
@@ -106,6 +126,8 @@ def migrate_backward(apps, schema_editor):
         seen_applications.add(application_id)
         event.application_id = application_id
         event.save(update_fields=["application"])
+
+    _flush_deferred_constraints(schema_editor)
 
 
 class Migration(migrations.Migration):
