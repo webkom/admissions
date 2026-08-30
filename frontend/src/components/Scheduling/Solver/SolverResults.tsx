@@ -28,10 +28,12 @@ import {
   SchedulingButton,
   type SchedulingWorkspaceMode,
   actionButtonBase,
+  actionButtonDanger,
   actionButtonNeutral,
   actionButtonPrimary,
   keyboardFocusRingClass,
 } from "../ui";
+import ConfirmDialog from "../ConfirmDialog";
 import type {
   Candidate,
   Interviewer,
@@ -103,6 +105,14 @@ interface SolverResultsProps {
   onOpenRepair: () => void;
   onRetrySolve: () => void;
   onDiscardSuggestion: () => void;
+  /** Throw away the unpublished part of the plan and start over. Resolves
+   *  false when the write failed, so the dialog can stay open. Undefined
+   *  where deleting makes no sense (simulated plans, member view). */
+  onClearDraft?: () => Promise<boolean>;
+  /** Interviews `onClearDraft` would remove. Zero hides the action. */
+  clearableDraftCount?: number;
+  /** Interviews that would survive because they are already published. */
+  publishedDraftCount?: number;
   onOpenPlan: () => void;
   onPreviewWithAvailabilityDeviation: () => void;
   previewLoading: boolean;
@@ -153,6 +163,9 @@ const SolverResults = ({
   onOpenRepair,
   onRetrySolve,
   onDiscardSuggestion,
+  onClearDraft,
+  clearableDraftCount = 0,
+  publishedDraftCount = 0,
   onOpenPlan,
   onPreviewWithAvailabilityDeviation,
   previewLoading,
@@ -179,6 +192,8 @@ const SolverResults = ({
     "interview",
   );
   const [viewType, setViewType] = useState<"kort" | "matrise">("kort");
+  const [clearDraftOpen, setClearDraftOpen] = useState(false);
+  const [clearingDraft, setClearingDraft] = useState(false);
   const draftHeadingRef = useRef<HTMLHeadingElement>(null);
   const { presentation } = draft;
   useEffect(() => {
@@ -989,6 +1004,22 @@ const SolverResults = ({
                       Lag nytt forslag
                     </button>
                   )}
+                  {!backgroundMode &&
+                    onClearDraft &&
+                    clearableDraftCount > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => setClearDraftOpen(true)}
+                        // An unsaved local edit would be racing the delete,
+                        // and the delete rewrites the same rows - wait for
+                        // the draft to settle first.
+                        disabled={persistence.isSaving}
+                        data-cy="clear-draft"
+                        className={cn(actionButtonBase, actionButtonDanger)}
+                      >
+                        Slett utkast
+                      </button>
+                    )}
                 </div>
               }
             />
@@ -1503,6 +1534,33 @@ const SolverResults = ({
           onEditRow={editHealthRow}
           onClose={() => setHealthModalException(null)}
         />
+      )}
+      {clearDraftOpen && onClearDraft && (
+        <ConfirmDialog
+          title="Slette planutkastet?"
+          confirmLabel={clearingDraft ? "Sletter…" : "Slett utkast"}
+          tone="danger"
+          busy={clearingDraft}
+          onConfirm={async () => {
+            setClearingDraft(true);
+            const cleared = await onClearDraft();
+            setClearingDraft(false);
+            // Keep the dialog open on failure - the toast explains why,
+            // and closing would look like the delete had gone through.
+            if (cleared) setClearDraftOpen(false);
+          }}
+          onClose={() => setClearDraftOpen(false)}
+        >
+          <p className="m-0">
+            {clearableDraftCount} intervju
+            {clearableDraftCount === 1 ? "" : "er"} blir fjernet, og kandidatene
+            går tilbake til å være uplanlagte.
+            {publishedDraftCount > 0
+              ? ` De ${publishedDraftCount} publiserte intervjuene beholdes.`
+              : ""}
+          </p>
+          <p className="m-0 mt-2 font-semibold">Dette kan ikke angres.</p>
+        </ConfirmDialog>
       )}
     </div>
   );

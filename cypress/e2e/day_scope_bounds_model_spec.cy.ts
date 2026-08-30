@@ -1,4 +1,7 @@
-import { deriveDayScopeBounds } from "../../frontend/src/components/Scheduling/Solver/solverSelectors";
+import {
+  deriveDayScopeBounds,
+  splitScheduleAtPublicationBoundary,
+} from "../../frontend/src/components/Scheduling/Solver/solverSelectors";
 import { encodeScheduleTime } from "../../frontend/src/components/Scheduling/scheduleUtils";
 import type { ScheduleItem } from "../../frontend/src/types";
 
@@ -95,6 +98,87 @@ describe("day scope bounds model", () => {
   it("never returns a floor below one", () => {
     expect(bounds({ distributedThrough: "1999-01-01" }).minDayCount).to.equal(
       1,
+    );
+  });
+});
+
+const split = (overrides: {
+  schedule?: ScheduleItem[];
+  distributedThrough?: string | null;
+}) =>
+  splitScheduleAtPublicationBoundary({
+    schedule: overrides.schedule ?? [],
+    scheduleDates: SCHEDULE_DATES,
+    distributedThrough: overrides.distributedThrough ?? null,
+    sessionDuration: 30,
+  });
+
+describe("publication boundary split", () => {
+  it("treats the whole plan as deletable when nothing is published", () => {
+    const result = split({ schedule: [row(0), row(1), row(4)] });
+    expect(result.published).to.have.length(0);
+    expect(result.unpublished).to.have.length(3);
+  });
+
+  it("keeps the published prefix and returns only the tail as deletable", () => {
+    const result = split({
+      schedule: [row(0), row(1), row(2), row(3)],
+      distributedThrough: "2026-09-07",
+    });
+    expect(result.published.map((item) => item.candidate)).to.deep.equal([
+      "c-0",
+      "c-1",
+    ]);
+    expect(result.unpublished.map((item) => item.candidate)).to.deep.equal([
+      "c-2",
+      "c-3",
+    ]);
+  });
+
+  it("keeps a row that falls exactly on the boundary day", () => {
+    const result = split({
+      schedule: [row(1)],
+      distributedThrough: "2026-09-07",
+    });
+    expect(result.published).to.have.length(1);
+    expect(result.unpublished).to.have.length(0);
+  });
+
+  it("leaves nothing deletable once the whole plan is published", () => {
+    const result = split({
+      schedule: [row(0), row(4)],
+      distributedThrough: "2026-09-10",
+    });
+    expect(result.published).to.have.length(2);
+    expect(result.unpublished).to.have.length(0);
+  });
+
+  it("treats a row outside the framework as deletable, never published", () => {
+    // The period moved under the draft: day 9 no longer maps to a date, so
+    // it cannot be inside a boundary and must stay reachable for deletion.
+    const orphan: ScheduleItem = {
+      candidate: "orphan",
+      candidate_id: "orphan",
+      time: encodeScheduleTime(9, 8 * 60, 30),
+      panel: [],
+    };
+    const result = split({
+      schedule: [row(0), orphan],
+      distributedThrough: "2026-09-10",
+    });
+    expect(result.published.map((item) => item.candidate)).to.deep.equal([
+      "c-0",
+    ]);
+    expect(result.unpublished.map((item) => item.candidate)).to.deep.equal([
+      "orphan",
+    ]);
+  });
+
+  it("preserves every row across the split", () => {
+    const schedule = [row(0), row(1), row(2), row(3), row(4)];
+    const result = split({ schedule, distributedThrough: "2026-09-08" });
+    expect(result.published.length + result.unpublished.length).to.equal(
+      schedule.length,
     );
   });
 });

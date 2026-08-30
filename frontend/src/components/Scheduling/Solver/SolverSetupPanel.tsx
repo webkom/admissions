@@ -711,8 +711,10 @@ const SolverSetupPanel = ({
                           {formatAccessibleDate(
                             plannableDates[draftDayExtent - 1],
                           )}
-                          . Et kortere forslag erstatter dem, så de må
-                          planlegges på nytt i en senere etappe.
+                          . Et kortere forslag erstatter disse dagene:
+                          intervjuene flyttes inn i de valgte dagene, eller
+                          planlegges i en senere etappe hvis det ikke er plass.
+                          Du får se forslaget før du velger.
                         </p>
                       )}
                   </div>

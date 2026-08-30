@@ -158,6 +158,28 @@ export const useDistributedPlanActions = ({
     }
   };
 
+  /** Throw away the unpublished part of the plan and start over.
+   *
+   *  `keptRows` is what survives - the published prefix, or nothing at all
+   *  when the plan was never published. The caller does the split (it owns
+   *  the framework dates needed to decode row times); this only persists it.
+   *  Reusing saveScheduleRows keeps the publication boundary exactly where
+   *  it was: deleting a draft must never publish or unpublish anything.
+   *
+   *  The draft autosave deliberately refuses to write an empty schedule, so
+   *  this explicit mutation is the only way to clear a plan. */
+  const clearUnpublishedDraft = async (
+    keptRows: ScheduleItem[],
+    removedCount: number,
+  ) =>
+    saveScheduleRows(
+      keptRows,
+      removedCount === 1
+        ? "Intervjuet er fjernet fra planutkastet."
+        : `${removedCount} intervjuer er fjernet fra planutkastet.`,
+      "Kunne ikke slette planutkastet. Prøv igjen.",
+    );
+
   const setNameVisibility = async (visibility: NameVisibility) => {
     if (!savedSchedule) return false;
     try {
@@ -510,6 +532,7 @@ export const useDistributedPlanActions = ({
     planTransition,
     planTransitionError,
     scheduleFieldError,
+    clearUnpublishedDraft,
     setNameVisibility,
     replacePanelMember,
     replaceBlockPanelMember,
