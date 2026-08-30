@@ -41,6 +41,11 @@ import type {
   SavedSchedule,
 } from "../types";
 import { decodeScheduleTime, formatSlotLabel } from "../scheduleUtils";
+import {
+  createAssignmentAvailabilityResolver,
+  worstAvailabilityStatus,
+} from "../assignmentAvailability";
+import { toPanelSwapOption } from "../panelSwapEligibility";
 import InterviewerLoadView from "./InterviewerLoadView";
 import BlockTable from "./BlockTable";
 import DayTabs from "./DayTabs";
@@ -93,6 +98,11 @@ interface SolverResultsProps {
   missingReviewerNames: string[];
   publicationReady: boolean;
   solverError: string;
+  /** The status of the last failed solve, kept separate from `result`
+   *  because `result` may have been restored to the previous good plan.
+   *  Lets the next-step menu distinguish a true timeout (no incumbent found)
+   *  from a validation rejection. */
+  failedResult?: { status: string; timeout_reason?: string } | null;
   onOpenSettings: () => void;
   /** One-click incremental extend: solve the next framework day with the
    *  saved plan locked. Undefined when every plannable day is in scope. */
@@ -156,6 +166,7 @@ const SolverResults = ({
   missingReviewerNames,
   publicationReady,
   solverError,
+  failedResult,
   onOpenSettings,
   onExtendDay,
   onFillRemainingDays,
@@ -220,47 +231,70 @@ const SolverResults = ({
   const formatSlotTime = (time: number) =>
     formatSlotLabel(time, dates, sessionDuration);
 
-  const interviewerByIdOrName = useMemo(() => {
-    const byId = new Map<string, Interviewer>();
-    const byName = new Map<string, Interviewer>();
-    interviewers.forEach((i) => {
-      byId.set(i.id, i);
-      byName.set(i.name, i);
-    });
-    return { byId, byName };
-  }, [interviewers]);
+  const resolveAvailabilityAtTime = useMemo(
+    () => createAssignmentAvailabilityResolver(interviewers),
+    [interviewers],
+  );
+
+  // Options for one panel seat, greyed out (with a reason) when the interviewer
+  // may not take it: already seated, inhabil against a candidate in the block,
+  // or outside their submitted availability. `slotTimes` is the one slot for a
+  // per-slot override, or every occupied slot in the block for a block swap.
+  const buildPanelSwapOptions = useCallback(
+    (
+      currentMember: SchedulePanelMember,
+      seatedPanel: SchedulePanelMember[],
+      candidateIds: string[],
+      slotTimes: number[],
+    ) => {
+      const blockCandidateIds = new Set(candidateIds);
+      return presentation.interviewerOptions.map((interviewer) =>
+        toPanelSwapOption(interviewer, {
+          replacing: currentMember,
+          seatedPanel,
+          blockCandidateIds,
+          availabilityStatusFor: (candidate) =>
+            worstAvailabilityStatus(
+              slotTimes.map((time) =>
+                resolveAvailabilityAtTime(
+                  { id: candidate.id, name: candidate.name },
+                  time,
+                ),
+              ),
+            ),
+        }),
+      );
+    },
+    [presentation.interviewerOptions, resolveAvailabilityAtTime],
+  );
 
   const getBlockInterviewerOptions = useCallback(
     (
       currentMember: SchedulePanelMember,
       blockPanel: SchedulePanelMember[],
       candidateIds: string[],
-    ) => {
-      return presentation.interviewerOptions.map((interviewer) => {
-        const inPanel =
-          interviewer.id !== currentMember.id &&
-          blockPanel.some((m) =>
-            m.id ? m.id === interviewer.id : m.name === interviewer.name,
-          );
-        const hasConflict = candidateIds.some((cid) => {
-          const i =
-            interviewerByIdOrName.byId.get(interviewer.id) ??
-            interviewerByIdOrName.byName.get(interviewer.name);
-          return i?.biased.includes(cid) ?? false;
-        });
-        return {
-          id: interviewer.id,
-          name: interviewer.name,
-          disabled: inPanel || hasConflict,
-          disabledReason: inPanel
-            ? "Allerede i blokkpanelet"
-            : hasConflict
-              ? "Inhabil mot kandidat i blokken"
-              : undefined,
-        };
-      });
-    },
-    [interviewerByIdOrName, presentation.interviewerOptions],
+      blockSlotTimes: number[],
+    ) =>
+      buildPanelSwapOptions(
+        currentMember,
+        blockPanel,
+        candidateIds,
+        blockSlotTimes,
+      ),
+    [buildPanelSwapOptions],
+  );
+
+  const getSlotInterviewerOptions = useCallback(
+    (
+      currentMember: SchedulePanelMember,
+      slotPanel: SchedulePanelMember[],
+      slotTime: number,
+      blockCandidateIds: string[],
+    ) =>
+      buildPanelSwapOptions(currentMember, slotPanel, blockCandidateIds, [
+        slotTime,
+      ]),
+    [buildPanelSwapOptions],
   );
   const groupIndexesByScheduleIndex = useMemo(() => {
     const groups = new Map<number, number[]>();
@@ -837,16 +871,48 @@ const SolverResults = ({
   };
   const nextStepActions: DeviationNextStepAction[] = (() => {
     switch (workflowState.kind) {
-      case "solver_error":
-        return [
-          {
+      case "solver_error": {
+        // When the solver timed out finding *any* placement and the day-scope
+        // stepper is available, suggest planning one day at a time first —
+        // retrying the same full scope will likely time out again.
+        const isNoIncumbentTimeout =
+          failedResult?.status === "TIMEOUT";
+        const actions: DeviationNextStepAction[] = [];
+        if (isNoIncumbentTimeout && onExtendDay) {
+          actions.push({
+            key: "extend-day",
+            label: "Planlegg én dag om gangen",
+            onClick: onExtendDay,
+            variant: "primary" as const,
+            dataCy: "proposal-primary-action",
+            icon: <ArrowRight size={iconSizes.small} aria-hidden="true" />,
+          });
+          actions.push({
+            key: "retry-solve",
+            label: "Prøv igjen likevel",
+            onClick: onRetrySolve,
+            variant: "neutral" as const,
+            dataCy: "proposal-retry-anyway",
+          });
+        } else {
+          actions.push({
             key: "retry-solve",
             label: "Prøv igjen",
             onClick: onRetrySolve,
-            variant: "primary",
+            variant: "primary" as const,
             dataCy: "proposal-primary-action",
-          },
-        ];
+          });
+        }
+        // A timeout or validation rejection often stems from a tight setup;
+        // point at the settings surface so the user can widen it.
+        actions.push({
+          key: "settings",
+          label: "Juster oppsett",
+          onClick: onOpenSettings,
+          variant: "neutral" as const,
+        });
+        return actions;
+      }
       case "placements_missing":
         return [
           {
@@ -1337,6 +1403,7 @@ const SolverResults = ({
                   selectedDayFilter={selectedDayFilter}
                   formatSlotTime={formatSlotTime}
                   getBlockInterviewerOptions={getBlockInterviewerOptions}
+                  getSlotInterviewerOptions={getSlotInterviewerOptions}
                   onReplaceBlockPanelMember={draft.replaceBlockPanelMember}
                   onSwapPanelMember={draft.swapPanelMember}
                   onSwapCandidates={draft.swapTimes}

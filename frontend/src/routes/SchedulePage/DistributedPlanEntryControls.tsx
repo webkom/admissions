@@ -6,6 +6,7 @@ import cn from "src/utils/cn";
 import { DistributedPlanLookups } from "./distributedPlanSelectors";
 import { iconSizes } from "src/styles/designTokens";
 import { assignmentAvailabilityLabel } from "src/components/Scheduling/assignmentAvailability";
+import { toPanelSwapOption } from "src/components/Scheduling/panelSwapEligibility";
 
 export const LockToggle: React.FC<{
   locked: boolean;
@@ -133,6 +134,9 @@ export const PanelMemberList: React.FC<{
   isEditableDraft: boolean;
   compact?: boolean;
   lookups: DistributedPlanLookups;
+  /** Candidate ids of every interview in this slot's block. An interviewer with
+   *  a registered inhabilitet against any of them cannot be swapped in. */
+  blockCandidateIds: ReadonlySet<string>;
   onReplacePanelMember: (
     scheduleIndex: number,
     panelMemberIndex: number,
@@ -146,6 +150,7 @@ export const PanelMemberList: React.FC<{
   isEditableDraft,
   compact,
   lookups,
+  blockCandidateIds,
   onReplacePanelMember,
 }) => (
   <div className={cn("flex flex-wrap", compact ? "gap-1" : "gap-1.5")}>
@@ -169,35 +174,18 @@ export const PanelMemberList: React.FC<{
           isCurrentUser={lookups.isCurrentUser(member)}
           options={
             isEditableDraft || isAdmin
-              ? lookups.interviewerOptions.map((interviewer) => {
-                  const inPanel =
-                    interviewer.id !== member.id &&
-                    item.panel.some((panelMember) =>
-                      panelMember.id
-                        ? panelMember.id === interviewer.id
-                        : panelMember.name === interviewer.name,
-                    );
-                  const isConflict =
-                    candidateId !== undefined &&
-                    (lookups
-                      .biasedFor({
-                        id: interviewer.id,
-                        name: interviewer.name,
-                      })
-                      ?.has(candidateId) ??
-                      false);
-
-                  return {
-                    id: interviewer.id,
-                    name: interviewer.name,
-                    disabled: inPanel || isConflict,
-                    disabledReason: inPanel
-                      ? "I panelet"
-                      : isConflict
-                        ? "Inhabil"
-                        : undefined,
-                  };
-                })
+              ? lookups.interviewerOptions.map((interviewer) =>
+                  toPanelSwapOption(interviewer, {
+                    replacing: member,
+                    seatedPanel: item.panel,
+                    blockCandidateIds,
+                    availabilityStatusFor: (candidate) =>
+                      lookups.availabilityStatusFor(item, {
+                        id: candidate.id,
+                        name: candidate.name,
+                      }),
+                  }),
+                )
               : undefined
           }
           onSelect={(newName, newId) =>
