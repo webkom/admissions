@@ -31,6 +31,7 @@ from admissions.admissions.schedule_validation import (
     ScheduleValidationError,
     canonicalize_solver_payload,
 )
+from admissions.admissions.schedule_workflow import ScheduleInputError
 from admissions.admissions.serializers import SolveJobSerializer, SolveOptionsSerializer
 from admissions.admissions.tests.utils import (
     ScheduleRevisionAPIClient,
@@ -5738,3 +5739,92 @@ class OAuthGenderCaptureTestCase(TestCase):
 
         user.refresh_from_db()
         self.assertEqual(user.gender, "")
+
+
+class SavedScheduleRejectionLoggingTestCase(APITestCase):
+    """A rejected save must leave a server-side trace naming the field.
+
+    Without one, a production 400 is only ever visible as a toast the operator
+    has already dismissed - the frontend Sentry event carries the status but
+    deliberately never the body.
+    """
+
+    def setUp(self):
+        group = Group.objects.create(name="Webkom", lego_id=700)
+        user = LegoUser.objects.create(username="rejection-admin", lego_id=701)
+        Membership.objects.create(user=user, role=RECRUITING, group=group)
+        self.admission = create_admission(created_by=user, slug="rejection-opptak")
+        self.admission.admin_groups.add(group)
+        self.admission.groups.add(group)
+        self.url = reverse(
+            "saved-schedule",
+            kwargs={
+                "admission_slug": self.admission.slug,
+                "group_id": group.pk,
+            },
+        )
+        self.client.force_authenticate(user=user)
+
+    def _post_and_capture_log(self, payload):
+        with mock.patch("admissions.utils.middleware.log.new") as new_log:
+            request_log = new_log.return_value
+            response = self.client.post(self.url, payload, format="json")
+        return response, request_log
+
+    def _rejection_calls(self, request_log):
+        return [
+            call
+            for call in request_log.warning.call_args_list
+            if call.args and call.args[0] == "saved_schedule_rejected"
+        ]
+
+    def test_serializer_rejection_logs_the_offending_field(self):
+        response, request_log = self._post_and_capture_log(
+            {"session_duration": 9999, "expected_updated_at": None}
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        (call,) = self._rejection_calls(request_log)
+        self.assertEqual(call.kwargs["stage"], "serializer")
+        self.assertEqual(call.kwargs["fields"], ["session_duration"])
+        self.assertEqual(call.kwargs["admission_slug"], self.admission.slug)
+
+    def test_workflow_rejection_is_logged_with_its_own_stage(self):
+        with mock.patch(
+            "admissions.admissions.schedule_views.update_saved_schedule",
+            side_effect=ScheduleInputError({"enabled_slots": ["Ugyldig tidsluke: x"]}),
+        ):
+            response, request_log = self._post_and_capture_log(
+                {"expected_updated_at": None}
+            )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        (call,) = self._rejection_calls(request_log)
+        self.assertEqual(call.kwargs["stage"], "workflow")
+        self.assertEqual(call.kwargs["fields"], ["enabled_slots"])
+
+    def test_rejection_log_carries_no_error_message_text(self):
+        """Messages interpolate slot keys and panel members - keys only."""
+        with mock.patch(
+            "admissions.admissions.schedule_views.update_saved_schedule",
+            side_effect=ScheduleInputError(
+                {"schedule": ["Ola Nordmann kan ikke intervjue seg selv"]}
+            ),
+        ):
+            _, request_log = self._post_and_capture_log({"expected_updated_at": None})
+
+        (call,) = self._rejection_calls(request_log)
+        self.assertNotIn("Ola Nordmann", str(call))
+        self.assertNotIn("intervjue seg selv", str(call))
+
+    def test_accepted_save_logs_no_rejection(self):
+        response, request_log = self._post_and_capture_log(
+            {
+                "start_date": "2026-04-20",
+                "session_duration": 60,
+                "expected_updated_at": None,
+            }
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(self._rejection_calls(request_log), [])

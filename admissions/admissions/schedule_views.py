@@ -6,6 +6,8 @@ from rest_framework.response import Response
 from rest_framework.throttling import ScopedRateThrottle
 from rest_framework.views import APIView
 
+from structlog import get_logger
+
 from admissions.admissions.admission_access import (
     get_representing_groups,
     schedule_response_context,
@@ -29,6 +31,8 @@ from admissions.admissions.serializers import (
     SaveScheduleInputSerializer,
 )
 from admissions.admissions.session_renewal import renew_session
+
+log = get_logger()
 
 
 class SavedScheduleView(SchedulerFeatureGateMixin, APIView):
@@ -143,6 +147,26 @@ class SavedScheduleView(SchedulerFeatureGateMixin, APIView):
             hide_schedule_override=hide_schedule_override,
         )
 
+    @staticmethod
+    def _log_rejection(request, admission_slug, group_id, stage, errors):
+        """Record which fields a rejected save tripped on.
+
+        A 400 here reaches the operator as a toast and is then gone. The
+        frontend Sentry event carries the status but deliberately never the
+        body, and nothing server-side wrote it down - so a production 400 was
+        unanswerable unless someone could reproduce it. Log the error *keys*
+        only: the messages interpolate slot keys and panel members, and stay
+        out of the log for the same reason they stay out of Sentry.
+        """
+        fields = sorted(errors) if isinstance(errors, dict) else ["<non_field>"]
+        getattr(request, "log", log).warning(
+            "saved_schedule_rejected",
+            stage=stage,
+            admission_slug=admission_slug,
+            group_id=str(group_id),
+            fields=fields,
+        )
+
     @transaction.atomic
     def post(self, request, admission_slug, group_id):
         admission, group, is_admin, is_recruiter, is_interview_admin, err = (
@@ -153,6 +177,9 @@ class SavedScheduleView(SchedulerFeatureGateMixin, APIView):
 
         serializer = SaveScheduleInputSerializer(data=request.data)
         if not serializer.is_valid():
+            self._log_rejection(
+                request, admission_slug, group_id, "serializer", serializer.errors
+            )
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
         try:
@@ -175,6 +202,9 @@ class SavedScheduleView(SchedulerFeatureGateMixin, APIView):
                 status=status.HTTP_409_CONFLICT,
             )
         except ScheduleInputError as exc:
+            self._log_rejection(
+                request, admission_slug, group_id, "workflow", exc.errors
+            )
             return Response(exc.errors, status=status.HTTP_400_BAD_REQUEST)
 
         # A save is proof of a present human, same as an application submit.

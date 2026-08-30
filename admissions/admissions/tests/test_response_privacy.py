@@ -3,6 +3,7 @@ from unittest import mock
 from django.test import RequestFactory, TestCase, override_settings
 
 from admissions.admissions.models import LegoUser
+from admissions.utils.csp import connect_src_origin
 from admissions.utils.middleware import LoggingMiddleware
 
 
@@ -59,3 +60,31 @@ class RequestIdPrivacyTestCase(TestCase):
         request_id = new_log.call_args.kwargs["request_id"]
         self.assertNotIn("candidate", request_id)
         self.assertEqual(len(request_id), 36)
+
+
+class ConnectSrcOriginTestCase(TestCase):
+    """The production connect-src is assembled from the Sentry DSN and API URL.
+
+    A DSN carries its public key as userinfo, which is not a legal CSP source
+    expression - browsers drop the whole source and block every envelope POST,
+    killing frontend error reporting without any server-side signal.
+    """
+
+    def test_sentry_dsn_userinfo_is_stripped(self):
+        origin = connect_src_origin(
+            "https://4455111cecb2473da4401814b7a011da@o309049.ingest.sentry.io/5348193"
+        )
+
+        self.assertEqual(origin, "https://o309049.ingest.sentry.io")
+        self.assertNotIn("@", origin)
+
+    def test_explicit_port_is_kept(self):
+        self.assertEqual(
+            connect_src_origin("https://api.example.com:8443/path"),
+            "https://api.example.com:8443",
+        )
+
+    def test_unusable_urls_are_dropped(self):
+        for url in ("", None, "not a url", "mailto:noreply@abakus.no"):
+            with self.subTest(url=url):
+                self.assertIsNone(connect_src_origin(url))
