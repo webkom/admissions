@@ -1876,13 +1876,29 @@ def _phase_metrics(phase: PhaseResult):
             len(phase.built.schedule) + len(phase.built.panel)
         ),
         "staged_lexicographic": phase.built.staged_lexicographic,
-        "branches": phase.solver.NumBranches(),
-        "conflicts": phase.solver.NumConflicts(),
+        "branches": _solver_counter(phase.solver, "NumBranches"),
+        "conflicts": _solver_counter(phase.solver, "NumConflicts"),
         "validated": phase.schedule is not None,
         "validation_issue_codes": sorted(
             {issue["code"] for issue in phase.validation_issues}
         )[:20],
     }
+
+
+def _solver_counter(solver, name: str) -> int | None:
+    """A search counter from a solver that may never have run.
+
+    In staged mode every tier solves with its own solver, so a phase where no
+    tier produced a solution hands back the untouched one it started with -
+    and ortools raises "solve() has not been called." rather than reporting
+    zero. Metrics are diagnostic, and the worker asks for them on every run:
+    a missing counter must never turn a solve into a RuntimeError.
+    """
+
+    try:
+        return getattr(solver, name)()
+    except (RuntimeError, AttributeError):
+        return None
 
 
 def _first_incumbent_ms(phases: Sequence[PhaseResult], preprocess_ms: int):

@@ -1756,3 +1756,39 @@ class SolverWorkerCountTestCase(SimpleTestCase):
         self.assertLessEqual(
             constants.SOLVER_NUM_WORKERS, constants.MAX_SOLVER_NUM_WORKERS
         )
+
+
+class PhaseMetricsOnUnsolvedSolverTestCase(SimpleTestCase):
+    """Metrics must survive a phase whose solver never ran.
+
+    In staged mode each tier solves with its own solver, so a phase where no
+    tier produced a solution returns the untouched one it started with.
+    ortools raises "solve() has not been called." for the search counters
+    rather than reporting zero, and because the worker asks for metrics on
+    every run this surfaced as a RuntimeError killing an otherwise finished
+    solve - not only in tests.
+    """
+
+    def test_an_unsolved_solver_reports_no_counters_instead_of_raising(self):
+        never_solved = cp_model.CpSolver()
+
+        with self.assertRaises(RuntimeError):
+            never_solved.NumBranches()
+
+        self.assertIsNone(solver_v2_module._solver_counter(never_solved, "NumBranches"))
+        self.assertIsNone(
+            solver_v2_module._solver_counter(never_solved, "NumConflicts")
+        )
+
+    def test_a_solved_solver_still_reports_its_counters(self):
+        model = cp_model.CpModel()
+        model.NewBoolVar("x")
+        solver = cp_model.CpSolver()
+        solver.Solve(model)
+
+        self.assertIsNotNone(solver_v2_module._solver_counter(solver, "NumBranches"))
+
+    def test_an_unknown_counter_is_absent_rather_than_fatal(self):
+        self.assertIsNone(
+            solver_v2_module._solver_counter(cp_model.CpSolver(), "NoSuchCounter")
+        )
