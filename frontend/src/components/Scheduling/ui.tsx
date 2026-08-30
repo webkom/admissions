@@ -246,6 +246,10 @@ export interface PanelChipOption {
   name: string;
   disabled?: boolean;
   disabledReason?: string;
+  /** Machine-readable block reason so consumers don't have to match on the
+   *  Norwegian display string. Present whenever `disabled` is true and the
+   *  option was built by `toPanelSwapOption`. */
+  disabledKind?: "on_panel" | "inhabil" | "unavailable";
 }
 
 interface EditablePanelChipProps {
@@ -559,7 +563,7 @@ export const EditablePanelChip: React.FC<EditablePanelChipProps> = ({
                           <span
                             className={cn(
                               "text-detail font-medium",
-                              opt.disabledReason === "Inhabil"
+                              opt.disabledKind === "inhabil"
                                 ? "text-danger"
                                 : "text-text-muted",
                             )}

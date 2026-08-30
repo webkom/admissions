@@ -3,7 +3,6 @@ import {
   Interviewer,
   SavedSchedule,
   ScheduleItem,
-  SchedulePanelMember,
 } from "../../types";
 import {
   encodeScheduleTime,
@@ -39,7 +38,7 @@ export interface DistributedPlanLookups {
   }) => boolean;
   availabilityStatusFor: (
     item: ScheduleItem,
-    member: SchedulePanelMember,
+    member: { id?: string; name: string; is_overtime?: boolean },
   ) => AssignmentAvailabilityStatus;
 }
 

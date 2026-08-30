@@ -1980,11 +1980,18 @@ def solve_schedule_v2(
                 "locked_conflicts": [],
             }
         else:
+            # Every phase returned UNKNOWN — CP-SAT could not find any
+            # feasible placement within the budget. This is distinct from
+            # INFEASIBLE (the model is provably unsolvable) and from ERROR
+            # (a solution was found but failed validation). The
+            # `timeout_reason` lets the frontend suggest planning fewer
+            # days at a time instead of blindly retrying the same scope.
             result = {
                 "status": "TIMEOUT",
                 "schedule": [],
                 "unplaceable": [],
                 "locked_conflicts": [],
+                "timeout_reason": "no_incumbent",
             }
         if include_metrics:
             result["_solver_metrics"] = {

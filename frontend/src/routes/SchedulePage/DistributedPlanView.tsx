@@ -652,6 +652,7 @@ const DistributedPlanView: React.FC<DistributedPlanViewProps> = ({
             committeeName={committeeName}
             savedSchedule={savedSchedule}
             dates={calendarDates}
+            fullDates={dates}
             enabledSlots={enabledSlots}
             candidateNamesVisible={namesVisible}
             isEditableDraft={false}

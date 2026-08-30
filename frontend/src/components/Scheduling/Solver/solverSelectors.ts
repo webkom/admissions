@@ -587,3 +587,41 @@ export const deriveDayScopeBounds = ({
     draftDayExtent,
   };
 };
+
+/** Split a plan into the part the committee has already been shown and the
+ *  part that is still only a draft.
+ *
+ *  A published interview is a commitment - it is visible to the committee and
+ *  the candidate has usually been invited - so it survives every draft-level
+ *  operation. Everything after the boundary is still the recruiter's to
+ *  discard. With nothing published the whole plan is unpublished.
+ *
+ *  A row whose day falls outside the framework (the period moved under the
+ *  draft) counts as unpublished: it cannot be inside a boundary that only
+ *  spans framework days, and leaving it behind would strand a row nothing
+ *  can reach. */
+export const splitScheduleAtPublicationBoundary = ({
+  schedule,
+  scheduleDates,
+  distributedThrough,
+  sessionDuration,
+}: {
+  schedule: ScheduleItem[];
+  scheduleDates: string[];
+  distributedThrough: string | null;
+  sessionDuration: number;
+}): { published: ScheduleItem[]; unpublished: ScheduleItem[] } => {
+  const published: ScheduleItem[] = [];
+  const unpublished: ScheduleItem[] = [];
+  schedule.forEach((item) => {
+    if (!distributedThrough || !Number.isFinite(item.time)) {
+      unpublished.push(item);
+      return;
+    }
+    const { dayIndex } = decodeScheduleTime(item.time, sessionDuration);
+    const date = scheduleDates[dayIndex];
+    if (date && date <= distributedThrough) published.push(item);
+    else unpublished.push(item);
+  });
+  return { published, unpublished };
+};

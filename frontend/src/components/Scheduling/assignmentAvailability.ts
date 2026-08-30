@@ -5,6 +5,21 @@ export type AssignmentAvailabilityStatus =
   | "availability_not_submitted"
   | "outside_submitted_availability";
 
+/** The most restrictive status across several slots, e.g. every slot of a block
+ *  a single panel covers. `outside_submitted_availability` wins over
+ *  `availability_not_submitted`, which wins over `verified`. */
+export const worstAvailabilityStatus = (
+  statuses: readonly AssignmentAvailabilityStatus[],
+): AssignmentAvailabilityStatus => {
+  if (statuses.includes("outside_submitted_availability")) {
+    return "outside_submitted_availability";
+  }
+  if (statuses.includes("availability_not_submitted")) {
+    return "availability_not_submitted";
+  }
+  return "verified";
+};
+
 export const assignmentAvailabilityLabel = (
   status: AssignmentAvailabilityStatus,
 ): string | null => {
@@ -37,7 +52,12 @@ export const createAssignmentAvailabilityResolver = (
     }
   });
 
-  return (member: SchedulePanelMember, time: number) => {
+  return (
+    member: Pick<SchedulePanelMember, "id" | "name"> & {
+      is_overtime?: boolean;
+    },
+    time: number,
+  ) => {
     const interviewer = member.id
       ? interviewerById.get(member.id)
       : uniqueInterviewerByName.get(member.name);

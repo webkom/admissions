@@ -28,6 +28,11 @@ export interface SolveResponse {
     reason?: string;
   }>;
   locked_conflicts?: Array<{ message: string; assignment?: unknown }>;
+  /** Present on TIMEOUT results. `no_incumbent` means CP-SAT found no
+   *  feasible placement within the budget — every solve phase returned
+   *  UNKNOWN. The frontend uses this to suggest planning fewer days at a
+   *  time instead of blindly retrying the same scope. */
+  timeout_reason?: "no_incumbent";
   error?: string;
   request_fingerprint?: string;
   policy_snapshot?: {
@@ -60,8 +65,9 @@ export const solveFailureMessage = (result: SolveResponse): string => {
       );
     case "TIMEOUT":
       return (
-        "Solveren rakk ikke å bli ferdig innen tidsgrensen. Forrige plan er " +
-        "beholdt — prøv igjen."
+        "Solveren rakk ikke å finne en fullstendig plan innen tidsgrensen. " +
+        "Forrige plan er beholdt — prøv å planlegge én dag om gangen, eller " +
+        "juster oppsettet (flere slots, færre inhabiliteter)."
       );
     case "LOCKED_CONFLICT":
       return (

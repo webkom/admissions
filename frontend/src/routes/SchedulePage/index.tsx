@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Navigate, useParams } from "react-router-dom";
 import { ArrowRight, HelpCircle, Loader2, RefreshCw } from "lucide-react";
@@ -32,6 +32,7 @@ import CommitteeConflictsModal from "./CommitteeConflictsModal";
 import PublicationGate from "./PublicationGate";
 import { useAvailabilityEditor } from "./useAvailabilityEditor";
 import { useDistributedPlanActions } from "./useDistributedPlanActions";
+import { splitScheduleAtPublicationBoundary } from "src/components/Scheduling/Solver/solverSelectors";
 import { useScheduleConfiguration } from "./useScheduleConfiguration";
 import { useScheduleParticipants } from "./useScheduleParticipants";
 import { useScheduleWorkflow } from "./useScheduleWorkflow";
@@ -639,7 +640,28 @@ const LoadedScheduleView: React.FC<LoadedScheduleViewProps> = ({
     swapCandidates: handleSwapCandidates,
     toggleLock: handleToggleLock,
     setBookingSource: handleSetBookingSource,
+    clearUnpublishedDraft,
   } = planActions;
+  // "Slett utkast": published interviews are a commitment and always
+  // survive, so only the tail past the boundary is deletable.
+  const draftSplit = useMemo(
+    () =>
+      splitScheduleAtPublicationBoundary({
+        schedule: savedSchedule?.schedule ?? [],
+        scheduleDates: dates,
+        distributedThrough: savedSchedule?.distributed_through ?? null,
+        sessionDuration,
+      }),
+    [dates, savedSchedule, sessionDuration],
+  );
+  const handleClearDraft = useCallback(
+    () =>
+      clearUnpublishedDraft(
+        draftSplit.published,
+        draftSplit.unpublished.length,
+      ),
+    [clearUnpublishedDraft, draftSplit],
+  );
   const openProposalForEditing = () => {
     setSolverEditRequestKey((key) => key + 1);
     handleSectionChange("solver");
@@ -1098,6 +1120,13 @@ const LoadedScheduleView: React.FC<LoadedScheduleViewProps> = ({
                   showAdminConflictReviewStage && myAvailabilityParticipant,
                 )}
                 onDraftPersistenceChange={setDraftPersistenceStatus}
+                onClearDraft={
+                  canManageSchedule && !syntheticInput
+                    ? handleClearDraft
+                    : undefined
+                }
+                clearableDraftCount={draftSplit.unpublished.length}
+                publishedDraftCount={draftSplit.published.length}
                 onExperienceLevelChange={setExperienceLevel}
                 onOpenAvailability={() => {
                   setFoundationWorkspace("availability");

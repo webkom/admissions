@@ -55,10 +55,7 @@ import UnplacedSlotPicker, {
   buildUnplacedSlotOptions,
   type UnplacedSlotOption,
 } from "./UnplacedSlotPicker";
-import {
-  deriveDayScopeBounds,
-  deriveEnabledTimeOptions,
-} from "./solverSelectors";
+import { deriveEnabledTimeOptions } from "./solverSelectors";
 
 interface Props {
   candidates: Candidate[];
@@ -102,6 +99,11 @@ interface Props {
   onOpenConflictReview: () => void;
   conflictReviewReachable: boolean;
   onOpenPlan: () => void;
+  /** Delete the unpublished part of the plan. Undefined disables the
+   *  action (simulated plans, or a viewer who cannot edit). */
+  onClearDraft?: () => Promise<boolean>;
+  clearableDraftCount?: number;
+  publishedDraftCount?: number;
 }
 
 export default function SolverView({
@@ -142,6 +144,9 @@ export default function SolverView({
   onOpenConflictReview,
   conflictReviewReachable,
   onOpenPlan,
+  onClearDraft,
+  clearableDraftCount,
+  publishedDraftCount,
 }: Props) {
   const [regenerationOpen, setRegenerationOpen] = useState(false);
   const [savedTouchSignal, setSavedTouchSignal] = useState<{
@@ -435,24 +440,9 @@ export default function SolverView({
   // The published prefix is a hard floor (see deriveDayScopeBounds); an
   // unpublished draft is not, so a from-scratch plan stays fully rescopable
   // for staged planning. draftDayExtent drives the "these draft days get
-  // replaced" warning in the setup panel.
-  const { minDayCount, draftDayExtent } = useMemo(
-    () =>
-      deriveDayScopeBounds({
-        schedule: session.savedSchedule?.schedule ?? [],
-        scheduleDates: dates,
-        plannableDates: session.plannableDates,
-        distributedThrough: distributedThroughDate,
-        sessionDuration,
-      }),
-    [
-      dates,
-      distributedThroughDate,
-      session.savedSchedule,
-      session.plannableDates,
-      sessionDuration,
-    ],
-  );
+  // replaced" warning in the setup panel. Both are derived in the session,
+  // which also needs them to gate auto-apply on a narrowing solve.
+  const { minDayCount, draftDayExtent } = session;
   // The scope is seeded from the last drafted day, which can sit below a
   // later publication boundary (published days with no interview yet). A
   // re-solve must always cover every published day, so lift it to the floor.
@@ -871,6 +861,7 @@ export default function SolverView({
       missingReviewerNames={missingReviewerNames}
       publicationReady={publicationReady}
       solverError={session.error}
+      failedResult={session.failedResult}
       onOpenSettings={() => setRegenerationOpen(true)}
       onExtendDay={canExtendDay ? extendDay : undefined}
       onFillRemainingDays={
@@ -886,6 +877,9 @@ export default function SolverView({
       }}
       onRetrySolve={solvePlan}
       onDiscardSuggestion={session.discardCurrentSuggestion}
+      onClearDraft={onClearDraft}
+      clearableDraftCount={clearableDraftCount}
+      publishedDraftCount={publishedDraftCount}
       onOpenPlan={onOpenPlan}
       onPreviewWithAvailabilityDeviation={retryWithAvailabilityDeviation}
       previewLoading={session.loading}

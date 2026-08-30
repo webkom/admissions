@@ -20,7 +20,7 @@ import {
   normalizeSolverOptions,
   type SolveResponse,
 } from "./solverHelpers";
-import { deriveSolverReadiness } from "./solverSelectors";
+import { deriveDayScopeBounds, deriveSolverReadiness } from "./solverSelectors";
 import { useSolveJob } from "./useSolveJob";
 
 interface UseSolverSessionParams {
@@ -365,6 +365,21 @@ export const useSolverSession = ({
     dayCount ?? plannableDates.length,
     plannableDates.length,
   );
+  // Owned here rather than in the view because solvePlan needs the draft
+  // extent to decide whether a run is narrowing the scope (see the
+  // auto-apply exception below); the view reads the same values.
+  const dayScopeBounds = useMemo(
+    () =>
+      deriveDayScopeBounds({
+        schedule: savedSchedule?.schedule ?? [],
+        scheduleDates: dates,
+        plannableDates,
+        distributedThrough: savedSchedule?.distributed_through ?? null,
+        sessionDuration,
+      }),
+    [dates, plannableDates, savedSchedule, sessionDuration],
+  );
+  const { minDayCount, draftDayExtent } = dayScopeBounds;
   const scopedDates = useMemo(
     () => plannableDates.slice(0, effectiveDayCount),
     [effectiveDayCount, plannableDates],
@@ -637,8 +652,20 @@ export const useSolverSession = ({
           // new draft is committed and the user can either iterate or
           // move on to publication. A partial result still goes through
           // the proposal panel so the user can see what's missing.
+          //
+          // Exception: a run that narrows the day scope below what the
+          // draft already covers is a trade, not an improvement - it packs
+          // the later days into the earlier ones. Even at zero unplaceable
+          // that silently replaces an arrangement the recruiter may have
+          // spent time on, and an applied proposal has no undo, so it
+          // always goes through the comparison panel.
           const unplaceableCount = completion?.result?.unplaceable?.length ?? 0;
-          if (completion?.kind === "completed" && unplaceableCount === 0) {
+          const narrowsDayScope = solveScopeCount < draftDayExtent;
+          if (
+            completion?.kind === "completed" &&
+            unplaceableCount === 0 &&
+            !narrowsDayScope
+          ) {
             // Worker already auto-applied.
             if (completion.job.applied_at) {
               setSolverOptions(runOptions);
@@ -672,6 +699,7 @@ export const useSolverSession = ({
       candidates,
       canonicalBlocks,
       dates,
+      draftDayExtent,
       effectiveDayCount,
       enabledSlots,
       interviewers,
@@ -779,6 +807,8 @@ export const useSolverSession = ({
     effectiveDayCount,
     plannableDates,
     isDayScoped,
+    minDayCount,
+    draftDayExtent,
     draftBaseRevision: effectiveDraftBaseRevision,
     hasLocalDraft: effectiveHasLocalDraft,
     remoteRevisionChanged: effectiveRemoteRevisionChanged,
