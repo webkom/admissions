@@ -379,7 +379,9 @@ describe("single-stage conveyor model", () => {
     ).to.include("1 hel dag er planlagt");
     expect(
       state({ unplaceableCount: 2, extendDayAvailable: false }).description,
-    ).to.include("Plasser de siste manuelt");
+      // Mid-sentence in a comma-separated list, so lowercase - the assertion
+      // is that the description offers manual placement, not how it is cased.
+    ).to.include("plasser de siste manuelt");
     expect(state({ assignmentConflictCount: 1 })).to.include({
       kind: "repair_required",
     });
