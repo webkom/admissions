@@ -50,6 +50,7 @@ export interface DraftSlotRowProps {
   ) => void;
   candidateSwapTargets?: CandidateSwapTarget[];
   onSwapCandidates?: (sourceIndex: number, targetIndex: number) => void;
+  onUnassignCandidate?: (scheduleIndex: number) => void;
   formatSlotTime: (time: number) => string;
   onSelectRow: (scheduleIndex: number) => void;
   onDragStartRow: (
@@ -108,6 +109,7 @@ export const DraftSlotRow: React.FC<DraftSlotRowProps> = ({
   onSwapPanelMember,
   candidateSwapTargets,
   onSwapCandidates,
+  onUnassignCandidate,
   formatSlotTime,
   onSelectRow,
   onDragStartRow,
@@ -396,14 +398,17 @@ export const DraftSlotRow: React.FC<DraftSlotRowProps> = ({
         <div className="flex min-w-0 items-center gap-2">
           {canEditDraft &&
           onSwapCandidates &&
-          candidateSwapTargets &&
-          candidateSwapTargets.length > 0 ? (
+          // A row with no swap partners still opens the menu when the slot
+          // can be emptied - that is exactly the case the cancel option
+          // exists for.
+          (onUnassignCandidate || (candidateSwapTargets?.length ?? 0) > 0) ? (
             <CandidateSwapChip
               item={item}
               scheduleIndex={scheduleIndex}
-              targets={candidateSwapTargets}
+              targets={candidateSwapTargets ?? []}
               formatTimeLabel={formatSlotTime}
               onSwap={onSwapCandidates}
+              onUnassign={onUnassignCandidate}
               conflict={hasConflict}
             />
           ) : (

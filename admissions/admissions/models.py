@@ -697,6 +697,13 @@ class SolveJob(models.Model):
     request_data = models.JSONField()
     request_fingerprint = models.CharField(max_length=64, blank=True, default="")
     result = models.JSONField(null=True, blank=True)
+    # The best plan found so far while the solve is still running. CP-SAT
+    # reaches a usable schedule within seconds and then spends the rest of the
+    # budget polishing it, so this is what lets the browser show (and adopt) a
+    # plan instead of watching a progress bar for four minutes. Always a
+    # validated result; cleared when the final `result` lands.
+    preview_result = models.JSONField(null=True, blank=True)
+    preview_updated_at = models.DateTimeField(null=True, blank=True)
     solver_metrics = models.JSONField(default=dict, blank=True)
     error = models.TextField(blank=True, default="")
 

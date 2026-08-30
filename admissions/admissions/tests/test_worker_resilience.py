@@ -4,7 +4,7 @@ from unittest import mock
 
 from django.core.management import call_command
 from django.db import InterfaceError, OperationalError
-from django.test import SimpleTestCase, TestCase
+from django.test import SimpleTestCase, TestCase, TransactionTestCase
 from django.utils import timezone
 
 from admissions.admissions import constants
@@ -15,6 +15,7 @@ from admissions.admissions.models import (
     SavedSchedule,
     SolveJob,
 )
+from admissions.admissions.solve_jobs import cancel_solve_job
 from admissions.admissions.tests.utils import create_admission
 from admissions.utils.management.commands import run_solver_worker
 from admissions.utils.management.commands.run_solver_worker import Command
@@ -308,3 +309,117 @@ class WriteBackResilienceTestCase(TestCase):
         call_command("run_solver_worker", once=True)
         job.refresh_from_db()
         self.assertEqual(job.status, SolveJob.STATUS_ERROR)
+
+
+class IncumbentPreviewMixin:
+    def setUp(self):
+        self.user = LegoUser.objects.create(username="preview-admin", lego_id=980)
+        self.group = Group.objects.create(name="Preview admins", lego_id=981)
+        Membership.objects.create(
+            user=self.user, group=self.group, role=constants.RECRUITING
+        )
+        self.admission = create_admission(created_by=self.user, slug="preview-opptak")
+        self.admission.admin_groups.add(self.group)
+        self.admission.groups.add(self.group)
+
+    def _create_job(self):
+        return SolveJob.objects.create(
+            admission=self.admission,
+            group=self.group,
+            requested_by=self.user,
+            request_data={"panel_size": 1, "options": {}},
+            request_fingerprint="fp-preview",
+            status=SolveJob.STATUS_RUNNING,
+            started_at=timezone.now(),
+        )
+
+
+class IncumbentPublisherTestCase(IncumbentPreviewMixin, TransactionTestCase):
+    """The publisher writes from its own thread, hence its own connection.
+
+    That is the whole point of it - a Django connection is thread-local, and
+    CP-SAT calls back on solver threads - but it also means these cases need
+    committed data, not a wrapping test transaction.
+    """
+
+    def test_a_preview_reaches_the_job_row_while_it_is_still_running(self):
+        job = self._create_job()
+        publisher = run_solver_worker.IncumbentPublisher(job.id)
+        try:
+            # True: nothing has told the solver to stop.
+            self.assertTrue(publisher.submit({"status": "SUCCESS", "schedule": []}))
+        finally:
+            # close() flushes the pending write before joining the thread.
+            publisher.close()
+
+        job.refresh_from_db()
+        self.assertEqual(job.preview_result, {"status": "SUCCESS", "schedule": []})
+        self.assertIsNotNone(job.preview_updated_at)
+
+    def test_cancelling_stops_the_solver_and_keeps_the_best_plan(self):
+        job = self._create_job()
+        best = {"status": "SUCCESS", "schedule": [{"candidate": "a"}]}
+        publisher = run_solver_worker.IncumbentPublisher(job.id)
+        publisher.submit(best)
+        publisher.close()
+
+        cancel_solve_job(job)
+
+        stopped = run_solver_worker.IncumbentPublisher(job.id)
+        # The first submit still answers with the cached verdict; the write it
+        # triggers is what discovers the cancellation.
+        stopped.submit({"status": "SUCCESS", "schedule": []})
+        stopped.close()
+        self.assertFalse(stopped.submit({"status": "SUCCESS", "schedule": []}))
+
+        job.refresh_from_db()
+        self.assertEqual(job.status, SolveJob.STATUS_CANCELLED)
+        # cancel_solve_job clears `result` but deliberately leaves the preview,
+        # so "stop and use this plan" does not throw the solve away.
+        self.assertIsNone(job.result)
+        self.assertEqual(job.preview_result, best)
+
+
+class IncumbentPreviewTestCase(IncumbentPreviewMixin, TestCase):
+    def test_a_preview_carries_the_context_that_makes_it_adoptable(self):
+        job = self._create_job()
+        published = []
+
+        def solve_publishing_once(*args, **kwargs):
+            kwargs["on_incumbent"]({"status": "SUCCESS", "schedule": []})
+            return {"status": "SUCCESS", "schedule": [], "_solver_metrics": {}}
+
+        with mock.patch.object(
+            run_solver_worker, "solve_schedule", side_effect=solve_publishing_once
+        ), mock.patch.object(
+            run_solver_worker.IncumbentPublisher,
+            "submit",
+            autospec=True,
+            side_effect=lambda self, payload: published.append(payload) is None or True,
+        ):
+            Command()._run(job)
+
+        self.assertEqual(len(published), 1)
+        preview = published[0]
+        self.assertEqual(preview["request_fingerprint"], "fp-preview")
+        self.assertIn("policy_snapshot", preview)
+        self.assertIn("deviation_review", preview)
+
+    def test_the_final_result_clears_the_live_preview(self):
+        job = self._create_job()
+        SolveJob.objects.filter(pk=job.pk).update(
+            preview_result={"status": "SUCCESS", "schedule": []},
+            preview_updated_at=timezone.now(),
+        )
+
+        with mock.patch.object(
+            run_solver_worker,
+            "solve_schedule",
+            return_value={"status": "SUCCESS", "schedule": [], "_solver_metrics": {}},
+        ):
+            Command()._run(job)
+
+        job.refresh_from_db()
+        self.assertEqual(job.status, SolveJob.STATUS_DONE)
+        self.assertIsNone(job.preview_result)
+        self.assertIsNone(job.preview_updated_at)

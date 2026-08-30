@@ -1,4 +1,4 @@
-import React, { useMemo } from "react";
+import React, { useCallback, useMemo, useState } from "react";
 import { ArrowUpDown, GripVertical } from "lucide-react";
 import { EditablePanelChip } from "../ui";
 import type {
@@ -15,6 +15,11 @@ import {
 import type { AssignmentAvailabilityStatus } from "../assignmentAvailability";
 import { calculateBlockBaseline } from "./blockBaseline";
 import { DraftSlotRow } from "./DraftSlotRow";
+import {
+  blockPanelAt,
+  eligibleInterviewersFor,
+  panelConflictsWithCandidate,
+} from "./useScheduleDraft";
 import {
   deriveCandidateSwapTargets,
   type CandidateSwapTarget,
@@ -139,7 +144,59 @@ export interface DraftBlockCardTableProps {
   ) => void;
   onEmptySlotDrop: (time: number, event: React.DragEvent<HTMLElement>) => void;
   onEmptySlotClick: (time: number) => void;
+  /** Cancel an interview outright, freeing its slot. Absent when the plan
+   *  cannot be edited. */
+  onUnassignCandidate?: (scheduleIndex: number) => void;
+  /** Candidates still waiting for a place, offered directly on every open
+   *  slot so placing one does not require the picker modal. */
+  unplacedCandidates?: Array<{ candidate_id: string; candidate: string }>;
+  onAssignUnplacedCandidate?: (args: {
+    candidateId?: string;
+    candidateName: string;
+    time: number;
+  }) => void;
 }
+
+/** Day indexes that already hold at least one interview. */
+const plannedDays = (blocks: DayScopedBlock[]): Set<number> => {
+  const days = new Set<number>();
+  blocks.forEach((block) => {
+    if (block.entries.length > 0) days.add(block.dayIndex);
+  });
+  return days;
+};
+
+type DayScopedBlock = Pick<BlockData, "dayIndex" | "entries">;
+
+/** Blocks to render: the day filter first, then the unplanned-day toggle.
+ *
+ *  The toggle hides whole *days*, not blocks. A day that has any interview
+ *  keeps its empty blocks, because those are precisely the slots you would
+ *  fill next; a day with nothing at all is what the toggle is for. */
+export const visibleBlocks = <T extends DayScopedBlock>(
+  blocks: T[],
+  selectedDayFilter: number | null,
+  hideUnplannedDays: boolean,
+): T[] => {
+  const scoped =
+    selectedDayFilter === null
+      ? blocks
+      : blocks.filter((block) => block.dayIndex === selectedDayFilter);
+  if (!hideUnplannedDays) return scoped;
+  // Planned days are derived from every block, not the day-scoped subset, so
+  // the two filters stay independent of each other.
+  const planned = plannedDays(blocks);
+  return scoped.filter((block) => planned.has(block.dayIndex));
+};
+
+/** Days with nothing planned yet. The toggle reports this so its label says
+ *  what turning it on would actually hide. */
+export const countUnplannedDays = (blocks: DayScopedBlock[]): number => {
+  const planned = plannedDays(blocks);
+  return [...new Set(blocks.map((block) => block.dayIndex))].filter(
+    (day) => !planned.has(day),
+  ).length;
+};
 
 const tableHeaderClass =
   "sticky top-0 z-10 bg-surface-neutral px-4 py-3 text-left text-label font-semibold tracking-label text-text-muted border-b border-border-soft !rounded-none";
@@ -182,12 +239,82 @@ const DraftBlockCardTable: React.FC<DraftBlockCardTableProps> = ({
   onEmptySlotDragLeave,
   onEmptySlotDrop,
   onEmptySlotClick,
+  onUnassignCandidate,
+  unplacedCandidates,
+  onAssignUnplacedCandidate,
 }) => {
   const candidateIdByName = useMemo(() => {
     const map = new Map<string, string>();
     candidates.forEach((candidate) => map.set(candidate.name, candidate.id));
     return map;
   }, [candidates]);
+
+  // Plain candidate names: EditablePanelChip hands the option's `name`
+  // straight back as the selection, and assignUnplacedCandidate matches on
+  // it when a candidate has no id.
+  //
+  // Both disabled cases mirror a way the placement would actually fail, so
+  // the menu never offers a click that quietly does nothing: inside a block
+  // that already has a panel the new interview must join it, and everywhere
+  // else the greedy pick needs enough habile interviewers to fill one.
+  const optionsForSlot = useCallback(
+    (time: number) => {
+      const blockPanel = blockPanelAt(
+        entries.map((entry) => entry.item),
+        canonicalBlocks,
+        time,
+      );
+      return (unplacedCandidates ?? []).map((candidate) => {
+        const record = candidates.find(
+          (entry) =>
+            entry.id === candidate.candidate_id ||
+            entry.name === candidate.candidate,
+        );
+        if (blockPanel) {
+          const conflict = panelConflictsWithCandidate(
+            blockPanel,
+            interviewers,
+            candidate.candidate_id,
+            record?.user_id,
+          );
+          return {
+            id: candidate.candidate_id || undefined,
+            name: candidate.candidate,
+            disabled: conflict,
+            disabledReason: conflict
+              ? "Panelet i denne blokken er inhabilt for kandidaten."
+              : undefined,
+          };
+        }
+        const eligible = eligibleInterviewersFor(
+          interviewers,
+          candidate.candidate_id,
+          record?.user_id,
+        ).length;
+        return {
+          id: candidate.candidate_id || undefined,
+          name: candidate.candidate,
+          disabled: eligible < panelSize,
+          disabledReason:
+            eligible < panelSize
+              ? `Bare ${eligible} habile intervjuere - panelet trenger ${panelSize}.`
+              : undefined,
+        };
+      });
+    },
+    [
+      canonicalBlocks,
+      candidates,
+      entries,
+      interviewers,
+      panelSize,
+      unplacedCandidates,
+    ],
+  );
+  const canPlaceUnplaced =
+    canEditDraft &&
+    Boolean(onAssignUnplacedCandidate) &&
+    (unplacedCandidates?.length ?? 0) > 0;
 
   const candidateSwapTargetsMap = useMemo(() => {
     const map = new Map<number, CandidateSwapTarget[]>();
@@ -218,6 +345,11 @@ const DraftBlockCardTable: React.FC<DraftBlockCardTableProps> = ({
     return map;
   }, [candidateIdByName, dates, entries, interviewers, sessionDuration]);
 
+  // Off by default: the whole framework is the useful default view now
+  // that an empty block can be filled in place. On, it restores the older
+  // behaviour of showing only days that already have something planned.
+  const [hideUnplannedDays, setHideUnplannedDays] = useState(false);
+
   const blocks = useMemo<BlockData[]>(() => {
     const rawBlocks = canonicalBlocks
       .filter((block) => block.length > 0)
@@ -232,7 +364,6 @@ const DraftBlockCardTable: React.FC<DraftBlockCardTableProps> = ({
       const blockEntries = entries.filter(({ item }) =>
         blockTimes.has(item.time),
       );
-      if (blockEntries.length === 0) return;
 
       const { dayIndex, minute: startMinute } = decodeScheduleTime(
         block[0],
@@ -294,12 +425,11 @@ const DraftBlockCardTable: React.FC<DraftBlockCardTableProps> = ({
     sessionDuration,
   ]);
 
-  const activeBlocks = useMemo(() => {
-    if (selectedDayFilter === null) {
-      return blocks;
-    }
-    return blocks.filter((b) => b.dayIndex === selectedDayFilter);
-  }, [blocks, selectedDayFilter]);
+  const activeBlocks = useMemo(
+    () => visibleBlocks(blocks, selectedDayFilter, hideUnplannedDays),
+    [blocks, hideUnplannedDays, selectedDayFilter],
+  );
+  const unplannedDayCount = useMemo(() => countUnplannedDays(blocks), [blocks]);
 
   const coveredScheduleIndexes = useMemo(() => {
     const covered = new Set<number>();
@@ -319,6 +449,19 @@ const DraftBlockCardTable: React.FC<DraftBlockCardTableProps> = ({
 
   return (
     <div data-cy="block-table" className="flex flex-col gap-4">
+      {unplannedDayCount > 0 && (
+        <label className="flex items-center gap-2 self-end text-detail font-medium text-text-muted">
+          <input
+            type="checkbox"
+            checked={hideUnplannedDays}
+            onChange={(event) => setHideUnplannedDays(event.target.checked)}
+            data-cy="hide-unplanned-days"
+            className="size-4 accent-brand"
+          />
+          Skjul {unplannedDayCount} {unplannedDayCount === 1 ? "dag" : "dager"}{" "}
+          uten intervjuer
+        </label>
+      )}
       <div className="overflow-hidden rounded-lg border border-border-soft bg-surface-base shadow-sm">
         <div className="overflow-x-auto">
           <table className="w-full border-collapse">
@@ -552,6 +695,7 @@ const DraftBlockCardTable: React.FC<DraftBlockCardTableProps> = ({
                               scheduleIndex,
                             )}
                             onSwapCandidates={onSwapCandidates}
+                            onUnassignCandidate={onUnassignCandidate}
                             formatSlotTime={formatSlotTime}
                             onSelectRow={onSelectRow}
                             onDragStartRow={onDragStartRow}
@@ -601,7 +745,32 @@ const DraftBlockCardTable: React.FC<DraftBlockCardTableProps> = ({
                             className="px-4 py-3 text-sm text-text-muted font-medium align-middle"
                           >
                             <div className="flex items-center justify-between">
-                              <span>Ledig luke</span>
+                              {canPlaceUnplaced ? (
+                                // The row itself is a move target, so a click
+                                // inside the menu must not also count as
+                                // "drop the selected interview here".
+                                <div
+                                  onClick={(event) => event.stopPropagation()}
+                                >
+                                  <EditablePanelChip
+                                    variant="plain"
+                                    label="Ledig luke — sett inn kandidat"
+                                    options={optionsForSlot(time)}
+                                    onSelect={(candidateName, candidateId) =>
+                                      onAssignUnplacedCandidate?.({
+                                        candidateId,
+                                        candidateName,
+                                        time,
+                                      })
+                                    }
+                                    title="Sett en kandidat som venter på plassering rett inn i denne luken"
+                                    searchPlaceholder="Søk kandidat…"
+                                    emptyLabel="Ingen treff på søket"
+                                  />
+                                </div>
+                              ) : (
+                                <span>Ledig luke</span>
+                              )}
                               {isDropTarget &&
                                 draggedListScheduleIndex !== null && (
                                   <span className="text-xs font-semibold text-brand">

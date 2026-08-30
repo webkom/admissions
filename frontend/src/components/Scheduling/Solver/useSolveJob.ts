@@ -71,6 +71,11 @@ export function useSolveJob(admissionSlug: string, groupId: string) {
 
   const solveRunRef = useRef(0);
   const proposalActionRunRef = useRef(0);
+  // Whether the in-flight solve adopts its result straight into the plan.
+  // The proposal flows build their proposal from the *finished* job, so a
+  // mid-flight preview cannot stand in for one — the accept action is only
+  // offered while this is true.
+  const applyResultRef = useRef(true);
   const solveJobIdRef = useRef<string | null>(null);
   const pendingProposalRef = useRef<PendingSolveProposal | null>(null);
   const completedProposalRef = useRef<PendingSolveProposal | null>(null);
@@ -465,6 +470,52 @@ export function useSolveJob(admissionSlug: string, groupId: string) {
     restorePreviousResult();
   };
 
+  // The best plan the running solve has published so far, or null. The solver
+  // finds a usable schedule in seconds and then polishes it for the rest of
+  // its budget, so this is available almost immediately.
+  const livePreview =
+    loading &&
+    applyResultRef.current &&
+    activeJob?.status === "RUNNING" &&
+    activeJob.preview_result &&
+    hasSchedule(activeJob.preview_result.status)
+      ? activeJob.preview_result
+      : null;
+
+  const acceptPreview = async () => {
+    const preview = livePreview;
+    const jobId = solveJobIdRef.current;
+    if (!preview) return;
+    // Same shape as `cancel`: retire the run so the in-flight poll settles as
+    // stale, then stop the worker. The server keeps `preview_result` through a
+    // cancel precisely so this plan survives.
+    const runId = ++solveRunRef.current;
+    const isStale = () => solveRunRef.current !== runId;
+    solveJobIdRef.current = null;
+    setActiveJob(null);
+    setLoading(false);
+    setError("");
+    setFailedResult(null);
+    setResult(preview);
+    setPlanRevealed(true);
+    if (!jobId) {
+      clearStoredJob();
+      return;
+    }
+    try {
+      const outcome = await lifecycle.cancel(jobId, isStale);
+      if (outcome.kind === "stale") return;
+      if (outcome.kind === "access-failure") {
+        clearAfterAccessFailure();
+        return;
+      }
+    } catch {
+      // The plan is already adopted locally; a failed stop only means the
+      // worker keeps running until its budget expires.
+    }
+    clearStoredJob();
+  };
+
   const solve = async (
     payload: unknown,
     baseRevision: string | null,
@@ -482,6 +533,7 @@ export function useSolveJob(admissionSlug: string, groupId: string) {
   ) => {
     const runId = ++solveRunRef.current;
     proposalActionRunRef.current += 1;
+    applyResultRef.current = applyResult;
     setRejectedProposalJobId(null);
     setRestoredDraftBaseRevision(undefined);
     setActiveJob(null);
@@ -722,6 +774,8 @@ export function useSolveJob(admissionSlug: string, groupId: string) {
     elapsedMs,
     startedAt: jobStartedAt,
     jobStatus: activeJob?.status ?? null,
+    livePreview,
+    acceptPreview,
     pendingProposal,
     pendingProposalRejected:
       pendingProposal !== null &&

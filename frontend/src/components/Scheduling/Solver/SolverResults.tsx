@@ -552,6 +552,24 @@ const SolverResults = ({
     setSelectedListScheduleIndex(null);
     setListDropTargetTime(null);
   };
+  const handleUnassignCandidate = (scheduleIndex: number) => {
+    if (!canEditDraft) return;
+    // Row indexes shift when the schedule loses an entry, so any selection
+    // pointing into the old positions has to go with it.
+    setSelectedListScheduleIndex(null);
+    setListDropTargetTime(null);
+    draft.unassignCandidate(scheduleIndex);
+  };
+
+  const handleAssignUnplaced = (args: {
+    candidateId?: string;
+    candidateName: string;
+    time: number;
+  }) => {
+    if (!canEditDraft) return;
+    draft.assignUnplacedCandidate(args);
+  };
+
   // Names what a click or drag will actually move, so "Flytt gruppe" vs
   // "Flytt intervju" is a visible fact rather than a guess.
   const moveScopeHint = (() => {
@@ -1430,6 +1448,13 @@ const SolverResults = ({
                   onEmptySlotDragLeave={handleEmptySlotDragLeave}
                   onEmptySlotDrop={handleEmptySlotDrop}
                   onEmptySlotClick={handleEmptySlotClick}
+                  onUnassignCandidate={
+                    canEditDraft ? handleUnassignCandidate : undefined
+                  }
+                  unplacedCandidates={presentation.unplaceableCandidates}
+                  onAssignUnplacedCandidate={
+                    canEditDraft ? handleAssignUnplaced : undefined
+                  }
                 />
               ) : (
                 <InterviewerMatrixView
