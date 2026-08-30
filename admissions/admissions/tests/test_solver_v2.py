@@ -11,6 +11,7 @@ from django.test import SimpleTestCase, override_settings
 
 from ortools.sat.python import cp_model
 
+from admissions.admissions import constants
 from admissions.admissions import solve_schedule_v2 as solver_v2_module
 from admissions.admissions.solve_schedule import Candidate, Interviewer, solve_schedule
 from admissions.admissions.solver_result import (
@@ -387,7 +388,7 @@ class FactorizedSolverV2TestCase(SimpleTestCase):
         timeout_solver.NumBranches.return_value = 0
         timeout_solver.NumConflicts.return_value = 0
 
-        def solve_then_timeout(built, *, deadline):
+        def solve_then_timeout(built, *, deadline, **_kwargs):
             calls.append(built.full_placement)
             if len(calls) == 1:
                 return real_solve_model(built, deadline=deadline)
@@ -451,7 +452,7 @@ class FactorizedSolverV2TestCase(SimpleTestCase):
         timeout_solver.NumBranches.return_value = 0
         timeout_solver.NumConflicts.return_value = 0
 
-        def infeasible_then_timeout(built, *, deadline):
+        def infeasible_then_timeout(built, *, deadline, **_kwargs):
             if built.full_placement:
                 return cp_model.INFEASIBLE, infeasible_solver, 0
             return cp_model.UNKNOWN, timeout_solver, 0
@@ -486,7 +487,7 @@ class FactorizedSolverV2TestCase(SimpleTestCase):
         invalid_solver.NumBranches.return_value = 0
         invalid_solver.NumConflicts.return_value = 0
 
-        def infeasible_then_invalid(built, *, deadline):
+        def infeasible_then_invalid(built, *, deadline, **_kwargs):
             if built.full_placement:
                 return cp_model.INFEASIBLE, infeasible_solver, 0
             return cp_model.MODEL_INVALID, invalid_solver, 0
@@ -1392,9 +1393,93 @@ class StagedTierBudgetingTestCase(SimpleTestCase):
         # The unproven first tier only earns a FEASIBLE verdict, but every
         # later tier is still solved and the bound is pinned in the model.
         self.assertEqual(status, cp_model.FEASIBLE)
-        self.assertEqual(len(calls), len(built.tiers))
         self.assertLess(calls[0], 120)
         self.assertGreater(len(built.model.Proto().constraints), constraints_before)
+        # Every tier in the sweep, plus one reclaim attempt on the tier that
+        # was left unproven - the leftover budget is not thrown away.
+        self.assertEqual(len(calls), len(built.tiers) + 1)
+
+    def test_reclaiming_an_unproven_tier_never_reports_optimal(self):
+        """A reclaim proves a tier optimal only inside the pinned region.
+
+        The later tiers were pinned while this one was merely bounded, so
+        their pins may exclude the true lexicographic optimum. Improving the
+        plan afterwards is sound; claiming the optimum is proven is not.
+        """
+
+        built = self._built_staged()
+        solver_type, calls = self._scripted_solver_type(
+            statuses=itertools.chain(
+                [cp_model.FEASIBLE], itertools.repeat(cp_model.OPTIMAL)
+            ),
+            values=itertools.repeat(1),
+        )
+
+        with mock.patch.object(solver_v2_module.cp_model, "CpSolver", solver_type):
+            status, _solver, _ms = solver_v2_module._solve_model(
+                built,
+                deadline=time.monotonic() + 120,
+            )
+
+        # The reclaim call answered OPTIMAL for the first tier and the sweep
+        # answered OPTIMAL for all the rest, yet the verdict stays FEASIBLE.
+        self.assertEqual(len(calls), len(built.tiers) + 1)
+        self.assertEqual(status, cp_model.FEASIBLE)
+
+    def test_a_tier_with_no_solution_does_not_abandon_the_tiers_below_it(self):
+        """UNKNOWN on one tier used to `break` and forfeit the rest.
+
+        It cost both the remaining tiers and the remaining budget, even though
+        the incumbent found above was untouched and perfectly usable.
+        """
+
+        built = self._built_staged()
+        solver_type, calls = self._scripted_solver_type(
+            statuses=itertools.chain(
+                [cp_model.OPTIMAL, cp_model.UNKNOWN],
+                itertools.repeat(cp_model.OPTIMAL),
+            ),
+            values=itertools.repeat(1),
+        )
+
+        with mock.patch.object(solver_v2_module.cp_model, "CpSolver", solver_type):
+            status, _solver, _ms = solver_v2_module._solve_model(
+                built,
+                deadline=time.monotonic() + 120,
+            )
+
+        self.assertEqual(status, cp_model.FEASIBLE)
+        # Sweep over every tier, then a reclaim attempt on the one that
+        # returned nothing.
+        self.assertEqual(len(calls), len(built.tiers) + 1)
+
+    def test_each_tier_is_warm_started_from_the_previous_solution(self):
+        """Without the hint every tier re-derives a first solution by hand.
+
+        The previous tier's plan is feasible by construction once that tier is
+        pinned, so handing it over is what keeps the later tiers from spending
+        their whole slice rediscovering it.
+        """
+
+        built = self._built_staged()
+        hints_per_call = []
+        solver_type, _calls = self._scripted_solver_type(
+            statuses=itertools.repeat(cp_model.OPTIMAL),
+            values=itertools.repeat(1),
+        )
+
+        class RecordingSolver(solver_type):
+            def Solve(self, model, callback):
+                hints_per_call.append(len(model.Proto().solution_hint.vars))
+                return super().Solve(model, callback)
+
+        with mock.patch.object(solver_v2_module.cp_model, "CpSolver", RecordingSolver):
+            solver_v2_module._solve_model(built, deadline=time.monotonic() + 120)
+
+        variable_count = len(built.model.Proto().variables)
+        # The first tier keeps whatever the build hinted; every tier after it
+        # is handed the full assignment from the tier above.
+        self.assertEqual(hints_per_call[1:], [variable_count] * (len(built.tiers) - 1))
 
     def test_proving_every_tier_reports_optimal(self):
         built = self._built_staged()
@@ -1509,3 +1594,165 @@ class PackEarlyObjectiveOrderingTestCase(SimpleTestCase):
         # two-session capacity before day 1 is touched.
         self.assertEqual(day_counts.get(0, 0), 2)
         self.assertEqual(day_counts.get(1, 0), 1)
+
+
+@override_settings(ADMISSIONS_SOLVER_ENGINE_VERSION="v2")
+class LiveIncumbentTestCase(SimpleTestCase):
+    """The solver reaches a usable plan in seconds and then polishes it.
+
+    Streaming those incumbents out is what lets an administrator see - and
+    adopt - a plan instead of watching a progress bar for the whole budget.
+    """
+
+    def _case(self, **overrides):
+        slots = list(range(6))
+        return {
+            "candidates_data": [
+                {"id": f"c{index}", "name": f"Candidate {index}"} for index in range(4)
+            ],
+            "interviewers_data": [
+                interviewer("i1", slots),
+                interviewer("i2", slots),
+            ],
+            "panel_size": 1,
+            "options_data": {
+                "policy_version": 2,
+                "panel_stability": "flexible",
+                "availability_fallback": "stop",
+                "max_solver_seconds": 5,
+                **overrides,
+            },
+            "all_slots_data": slots,
+        }
+
+    def test_incumbents_are_published_before_the_solve_finishes(self):
+        published = []
+        result = solve_schedule(
+            **self._case(),
+            on_incumbent=lambda payload: published.append(payload) is None,
+        )
+
+        self.assertEqual(result["status"], "SUCCESS")
+        self.assertTrue(published)
+        for payload in published:
+            # A preview may be adopted straight from the browser, so it has to
+            # be a complete, usable result - not a bag of raw solver values.
+            self.assertIn(payload["status"], {"SUCCESS", "PARTIAL"})
+            self.assertTrue(payload["schedule"])
+            self.assertIn("objective_vector", payload)
+            self.assertFalse(payload["optimal"])
+            self.assertGreaterEqual(payload["elapsed_ms"], 0)
+
+    def test_published_incumbents_pass_the_same_validator_as_the_result(self):
+        published = []
+        solve_schedule(
+            **self._case(require_experienced_panel=False),
+            on_incumbent=lambda payload: published.append(payload) is None,
+        )
+
+        self.assertTrue(published)
+        for payload in published:
+            issues = validate_schedule_result(
+                schedule=payload["schedule"],
+                candidates=[
+                    Candidate(id=f"c{index}", name=f"Candidate {index}")
+                    for index in range(4)
+                ],
+                interviewers=[
+                    Interviewer(**interviewer("i1", list(range(6)))),
+                    Interviewer(**interviewer("i2", list(range(6)))),
+                ],
+                panel_size=1,
+                all_slots=list(range(6)),
+                allow_overtime=False,
+                enforce_same_gender=False,
+                require_experienced_panel=False,
+                requires_stable_panel=False,
+                blocks=[],
+                locked_assignments=[],
+            )
+            self.assertEqual(issues, [])
+
+    def test_returning_false_stops_the_search_and_keeps_the_plan(self):
+        """This is how a cancelled job stops burning CPU without losing work."""
+
+        started = time.monotonic()
+        seen = []
+
+        def stop_immediately(payload):
+            seen.append(payload)
+            return False
+
+        result = solve_schedule(
+            **self._case(max_solver_seconds=60),
+            on_incumbent=stop_immediately,
+        )
+        elapsed = time.monotonic() - started
+
+        self.assertTrue(seen)
+        self.assertIn(result["status"], {"SUCCESS", "PARTIAL"})
+        self.assertTrue(result["schedule"])
+        # It stopped on request rather than spending the 60s budget.
+        self.assertLess(elapsed, 30)
+
+    def test_a_broken_publisher_never_breaks_the_solve(self):
+        def explode(payload):
+            raise RuntimeError("preview storage is down")
+
+        result = solve_schedule(**self._case(), on_incumbent=explode)
+
+        self.assertEqual(result["status"], "SUCCESS")
+        self.assertEqual(len(result["schedule"]), 4)
+
+
+class SolverWorkerCountTestCase(SimpleTestCase):
+    """The worker count decides CP-SAT's portfolio, so it decides the plan.
+
+    Two properties matter beyond "reads the env var": the default must not
+    vary with the host, or the same seed yields a different plan locally, in
+    CI and in production; and a malformed value must not raise, because this
+    module is imported by the whole service rather than only the solver.
+    """
+
+    def test_the_default_does_not_depend_on_the_host(self):
+        self.assertEqual(
+            constants.resolve_solver_num_workers(None),
+            constants.DEFAULT_SOLVER_NUM_WORKERS,
+        )
+        self.assertEqual(
+            constants.resolve_solver_num_workers("   "),
+            constants.DEFAULT_SOLVER_NUM_WORKERS,
+        )
+
+    def test_a_smaller_container_can_actually_size_down(self):
+        # The previous max(4, ...) floor silently ignored anything below 4,
+        # which made the override useless for the case it was written for.
+        self.assertEqual(constants.resolve_solver_num_workers("2"), 2)
+
+    def test_values_outside_the_supported_range_are_clamped(self):
+        self.assertEqual(
+            constants.resolve_solver_num_workers("64"),
+            constants.MAX_SOLVER_NUM_WORKERS,
+        )
+        self.assertEqual(
+            constants.resolve_solver_num_workers("0"),
+            constants.MIN_SOLVER_NUM_WORKERS,
+        )
+        self.assertEqual(
+            constants.resolve_solver_num_workers("-3"),
+            constants.MIN_SOLVER_NUM_WORKERS,
+        )
+
+    def test_a_malformed_value_degrades_the_solver_and_nothing_else(self):
+        with self.assertLogs("admissions.admissions.constants", level="WARNING"):
+            resolved = constants.resolve_solver_num_workers("eight")
+
+        self.assertEqual(resolved, constants.DEFAULT_SOLVER_NUM_WORKERS)
+
+    def test_the_module_level_value_is_within_range(self):
+        self.assertGreaterEqual(
+            constants.SOLVER_NUM_WORKERS, constants.MIN_SOLVER_NUM_WORKERS
+        )
+        self.assertLessEqual(
+            constants.SOLVER_NUM_WORKERS, constants.MAX_SOLVER_NUM_WORKERS
+        )

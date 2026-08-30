@@ -80,8 +80,16 @@ export const solveFailureMessage = (result: SolveResponse): string => {
   }
 };
 
+/** Reason stamped on a candidate whose interview an admin cancelled from
+ *  the plan. Unlike the solver's own reasons this one is not a constraint
+ *  failure - the slot is free and the candidate can go straight back into
+ *  it - so it reads as an instruction rather than a diagnosis. */
+export const UNASSIGNED_REASON = "Intervjuet ble avlyst av en administrator.";
+
 export const unplaceableSuggestion = (reason?: string): string | null => {
   switch (reason) {
+    case UNASSIGNED_REASON:
+      return "Sett kandidaten i en ledig luke, eller publiser uten og planlegg senere.";
     case "For mange i komiteen har meldt inhabilitet.":
       return "Be færre melde inhabilitet, eller legg til flere intervjuere.";
     case "Ikke nok intervjukapasitet i de åpne tidslukene.":
@@ -103,6 +111,15 @@ export interface SolveJob {
   request_fingerprint: string;
   status: "PENDING" | "RUNNING" | "DONE" | "ERROR" | "CANCELLED";
   result: SolveResponse | null;
+  /** Best plan found so far while the job is still RUNNING. The solver
+   *  reaches a usable schedule within seconds and spends the rest of its
+   *  budget polishing it, so this is what the progress panel shows — and what
+   *  "Bruk denne nå" adopts. Already validated server-side, and carries the
+   *  same fingerprint/policy/deviation context as a finished result. Cleared
+   *  when the final `result` lands; survives a cancel on purpose, so stopping
+   *  early keeps the work. */
+  preview_result: SolveResponse | null;
+  preview_updated_at: string | null;
   error: string;
   created_at: string;
   started_at: string | null;

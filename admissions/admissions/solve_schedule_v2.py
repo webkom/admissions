@@ -3,6 +3,7 @@ from dataclasses import dataclass, replace
 from typing import Any, Dict, List, Sequence
 
 from ortools.sat.python import cp_model
+from structlog import get_logger
 
 from admissions.admissions import constants
 from admissions.admissions import solve_schedule as solve_schedule_module
@@ -24,6 +25,8 @@ from admissions.admissions.solver_result import (
     objective_key,
     validate_schedule_result,
 )
+
+log = get_logger()
 
 REQUIRE_SAME_GENDER = 1
 REQUIRE_EXPERIENCE = 2
@@ -494,11 +497,14 @@ def _normalize_problem(
         )
         for interview_time in sorted_slots
     }
+    biased_sets = {
+        interviewer.id: frozenset(interviewer.biased) for interviewer in interviewers
+    }
     conflict_masks = {
         candidate.id: sum(
             interviewer_bits[interviewer.id]
             for interviewer in interviewers
-            if candidate.id in set(interviewer.biased)
+            if candidate.id in biased_sets[interviewer.id]
             or (candidate.user_id and str(candidate.user_id) == interviewer.id)
         )
         for candidate in candidates
@@ -525,10 +531,11 @@ def _normalize_problem(
         )
     if policy.requires_stable_panel and len(locked_by_candidate) > 1:
         for block in canonical_blocks:
+            block_slot_set = frozenset(block.usable_slots)
             in_block = [
                 (candidate_id, locked)
                 for candidate_id, locked in locked_by_candidate.items()
-                if locked["time"] in set(block.usable_slots)
+                if locked["time"] in block_slot_set
             ]
             for candidate_id, locked in in_block[1:]:
                 if locked["panel_ids"] != in_block[0][1]["panel_ids"]:
@@ -689,6 +696,42 @@ def _add_and(model, target, parts):
     model.Add(target >= _linear_sum(values) - len(values) + 1)
 
 
+def _minimize_lexicographically(model, tiers) -> bool:
+    """Set the lexicographic objective. Returns True if it must be staged.
+
+    The single weighted sum needs each tier scaled above the whole range of
+    every tier below it, which overflows int64 on any realistic admission -
+    so in practice this almost always reports True and the tiers are solved
+    one at a time by `_solve_model`.
+    """
+
+    try:
+        model.Minimize(solve_schedule_module._build_lexicographic_objective(tiers))
+        staged = model.Validate().startswith("Possible integer overflow in objective")
+    except OverflowError:
+        staged = True
+    if staged:
+        model.Minimize(tiers[0].expression)
+    return staged
+
+
+def _arm_objective(built: BuiltModel) -> BuiltModel:
+    """Promote a feasibility-only model into the optimising one, in place.
+
+    `strict_feasibility` and `full_optimization` are the same model down to
+    the last constraint - only the objective differs. Rebuilding it meant a
+    second pass over every candidate/slot pair for nothing.
+    """
+
+    started = time.monotonic()
+    staged = _minimize_lexicographically(built.model, built.tiers)
+    return replace(
+        built,
+        staged_lexicographic=staged,
+        build_ms=int((time.monotonic() - started) * 1000),
+    )
+
+
 def _build_model(
     problem: SolverProblem,
     *,
@@ -782,31 +825,63 @@ def _build_model(
 
     # Aggregate every candidate conflict into one row per interviewer/slot.
     # The one-candidate-per-slot invariant makes this exact.
+    eligible_sets = {
+        key: frozenset(value) for key, value in problem.eligibility.items()
+    }
     for (interviewer_id, interview_time), panel_var in panel.items():
         incompatible_candidates = [
             schedule[(candidate_id, interview_time)]
             for candidate_id in problem.candidate_ids_by_slot[interview_time]
-            if interviewer_id not in problem.eligibility[(candidate_id, interview_time)]
+            if interviewer_id not in eligible_sets[(candidate_id, interview_time)]
         ]
         model.Add(panel_var + _linear_sum(incompatible_candidates) <= 1)
 
     gender_data_available = any(
         interviewer.gender in {"M", "F"} for interviewer in problem.interviewers
     )
-    for (candidate_id, interview_time), schedule_var in schedule.items():
-        candidate = problem.candidate_map[candidate_id]
-        if (
-            problem.options.enforce_same_gender
-            and gender_data_available
-            and candidate.gender in {"M", "F"}
-        ):
-            matching = [
-                panel[(interviewer.id, interview_time)]
+    if problem.options.enforce_same_gender and gender_data_available:
+        # Count the matching panel members once per (slot, gender) and compare
+        # each candidate against that count. Writing the sum out per
+        # (candidate, slot) instead multiplies the model by the committee size:
+        # on a 120-candidate admission it took the linear terms from 87k to
+        # 217k, and past 200 candidates from 183k to 509k.
+        needed_genders = sorted(
+            {
+                candidate.gender
+                for candidate in problem.candidates
+                if candidate.gender in {"M", "F"}
+            }
+        )
+        gender_count: dict[tuple[str, int], Any] = {}
+        for gender in needed_genders:
+            matching_ids = [
+                interviewer.id
                 for interviewer in problem.interviewers
-                if interviewer.gender == candidate.gender
-                and (interviewer.id, interview_time) in panel
+                if interviewer.gender == gender
             ]
-            model.Add(_linear_sum(matching) >= schedule_var)
+            for interview_time in problem.sorted_slots:
+                members = [
+                    panel[(interviewer_id, interview_time)]
+                    for interviewer_id in matching_ids
+                    if (interviewer_id, interview_time) in panel
+                ]
+                if not members:
+                    continue
+                count = model.NewIntVar(
+                    0, problem.panel_size, f"gender_{gender}_{interview_time}"
+                )
+                model.Add(count == _linear_sum(members))
+                gender_count[(gender, interview_time)] = count
+        for (candidate_id, interview_time), schedule_var in schedule.items():
+            candidate = problem.candidate_map[candidate_id]
+            if candidate.gender not in {"M", "F"}:
+                continue
+            count = gender_count.get((candidate.gender, interview_time))
+            if count is None:
+                # No interviewer of that gender can work the slot at all.
+                model.Add(schedule_var == 0)
+            else:
+                model.Add(count >= schedule_var)
 
     experienced_panel_vars = []
     if problem.options.require_experienced_panel:
@@ -844,6 +919,7 @@ def _build_model(
     candidate_id_by_name = {
         candidate.name: candidate.id for candidate in problem.candidates
     }
+    sorted_slot_set = frozenset(problem.sorted_slots)
     for row in problem.previous_schedule:
         candidate_id = row.get("candidate_id") or candidate_id_by_name.get(
             row.get("candidate")
@@ -852,7 +928,7 @@ def _build_model(
         if (
             candidate_id not in problem.candidate_map
             or not isinstance(interview_time, int)
-            or interview_time not in set(problem.sorted_slots)
+            or interview_time not in sorted_slot_set
         ):
             continue
         previous_by_candidate[candidate_id] = row
@@ -907,11 +983,12 @@ def _build_model(
                 block_occupied,
                 [session_active[interview_time] for interview_time in block_slots],
             )
+            block_slot_set = frozenset(block_slots)
             possible_ids = sorted(
                 {
                     interviewer_id
                     for interviewer_id, interview_time in panel
-                    if interview_time in set(block_slots)
+                    if interview_time in block_slot_set
                 }
             )
             block_members = {
@@ -950,11 +1027,12 @@ def _build_model(
                 block_occupied,
                 [session_active[interview_time] for interview_time in block_slots],
             )
+            block_slot_set = frozenset(block_slots)
             possible_ids = sorted(
                 {
                     interviewer_id
                     for interviewer_id, interview_time in panel
-                    if interview_time in set(block_slots)
+                    if interview_time in block_slot_set
                 }
             )
             reference = {
@@ -1384,19 +1462,9 @@ def _build_model(
             )
         )
 
-    if feasibility_only:
-        staged_lexicographic = False
-    else:
-        try:
-            model.Minimize(solve_schedule_module._build_lexicographic_objective(tiers))
-            validation_error = model.Validate()
-            staged_lexicographic = validation_error.startswith(
-                "Possible integer overflow in objective"
-            )
-        except OverflowError:
-            staged_lexicographic = True
-        if staged_lexicographic:
-            model.Minimize(tiers[0].expression)
+    staged_lexicographic = (
+        False if feasibility_only else _minimize_lexicographically(model, tiers)
+    )
     variable_count = len(model.Proto().variables)
     constraint_count = len(model.Proto().constraints)
     if variable_count > constants.MAX_SOLVER_MODEL_VARS:
@@ -1418,102 +1486,251 @@ def _build_model(
     )
 
 
+# Tiers whose only job is to canonicalise between plans that are already equal
+# on every meaningful measure. Proving one optimal was measured eating a fifth
+# of the budget, so they never get more than a sliver of what is left.
+_TIE_BREAKER_TIERS = frozenset({"stability_tie_breaker"})
+
+
+class _IncumbentCallback(cp_model.CpSolverSolutionCallback):
+    """Times a phase's first solution and streams improving plans out.
+
+    `publish` receives a reconstructed schedule and returns False to ask the
+    search to stop - that is how a cancelled job stops burning CPU. It runs
+    inside CP-SAT's search, so it is rate limited here (reconstruction walks
+    every candidate/slot variable) and can never propagate an exception into
+    the solver.
+    """
+
+    def __init__(self, phase_started, *, problem=None, built=None, publish=None):
+        super().__init__()
+        self._phase_started = phase_started
+        self._problem = problem
+        self._built = built
+        self._publish = publish
+        self._last_published = 0.0
+        self.first_incumbent_ms = None
+
+    def on_solution_callback(self):
+        now = time.monotonic()
+        if self.first_incumbent_ms is None:
+            self.first_incumbent_ms = int((now - self._phase_started) * 1000)
+        if self._publish is None or self._problem is None:
+            return
+        if (
+            self._last_published
+            and now - self._last_published < constants.SOLVER_INCUMBENT_PUBLISH_SECONDS
+        ):
+            return
+        self._last_published = now
+        try:
+            keep_going = self._publish(_reconstruct(self._problem, self._built, self))
+        except Exception:
+            # A broken publisher must degrade to "no live preview", never to a
+            # failed solve: the plan itself is still perfectly good.
+            log.exception("solver_incumbent_publish_failed")
+            self._publish = None
+            return
+        if keep_going is False:
+            self.StopSearch()
+
+
+def _model_variables(built: BuiltModel) -> list[Any]:
+    """Every variable in the model, in proto order.
+
+    Hinting the whole assignment - not just the candidate/panel booleans - is
+    what lets CP-SAT accept a previous solution outright instead of
+    re-deriving the auxiliary block, run and break variables that define it.
+    """
+
+    return [
+        built.model.GetIntVarFromProtoIndex(index)
+        for index in range(len(built.model.Proto().variables))
+    ]
+
+
+def _full_assignment(built: BuiltModel, solver: cp_model.CpSolver) -> list[int]:
+    """Snapshot a solution so a later phase can be warm-started from it."""
+
+    return [solver.Value(variable) for variable in _model_variables(built)]
+
+
 def _solve_model(
     built: BuiltModel,
     *,
     deadline: float,
+    problem: SolverProblem | None = None,
+    publish_incumbent=None,
+    warm_start: Sequence[int] | None = None,
 ) -> tuple[int, cp_model.CpSolver, int]:
-    class FirstIncumbentCallback(cp_model.CpSolverSolutionCallback):
-        def __init__(self, phase_started):
-            super().__init__()
-            self.phase_started = phase_started
-            self.first_incumbent_ms = None
+    """Run the model until the deadline, staging the tiers when needed.
 
-        def on_solution_callback(self):
-            if self.first_incumbent_ms is None:
-                self.first_incumbent_ms = int(
-                    (time.monotonic() - self.phase_started) * 1000
-                )
+    Staged mode solves one tier at a time and freezes each tier's value before
+    moving down. Three properties keep that from throwing budget away:
+
+    * every tier is warm-started from the previous tier's solution, which is
+      feasible by construction once the tier above it is pinned. Without the
+      hint CP-SAT re-derives a first solution from scratch on an ever more
+      constrained model, and frequently spends the whole slice doing it;
+    * a tier that returns nothing is skipped, not fatal. The tiers below it
+      are still worth optimising and the incumbent above is untouched, so
+      abandoning the sweep would forfeit both the remaining tiers and the
+      remaining budget;
+    * whatever budget survives the sweep goes back into the tiers that were
+      never proven. Every other tier stays pinned during that pass, so a
+      better value there is a strict lexicographic improvement, never a trade.
+    """
 
     def configured_solver():
         configured = cp_model.CpSolver()
         configured.parameters.num_workers = constants.SOLVER_NUM_WORKERS
         configured.parameters.random_seed = constants.SOLVER_RANDOM_SEED
+        configured.parameters.linearization_level = constants.SOLVER_LINEARIZATION_LEVEL
+        # NB: `repair_hint` looks made for the reclaim pass (which can tighten a
+        # tier below the incumbent that seeded the hint) but crashes CP-SAT
+        # inside MinimizeL1DistanceWithHint on this model. An unusable hint is
+        # discarded silently instead, which is the behaviour we want anyway.
         return configured
+
+    def make_callback(phase_started):
+        return _IncumbentCallback(
+            phase_started,
+            problem=problem,
+            built=built,
+            publish=publish_incumbent,
+        )
 
     solver = configured_solver()
     started = time.monotonic()
     if not built.staged_lexicographic:
         solver.parameters.max_time_in_seconds = max(0.001, deadline - time.monotonic())
-        callback = FirstIncumbentCallback(started)
+        callback = make_callback(started)
         status = solver.Solve(built.model, callback)
         solver._phase_first_incumbent_ms = callback.first_incumbent_ms
         return status, solver, int((time.monotonic() - started) * 1000)
 
+    hint_variables = _model_variables(built)
+    # A warm start from the phase before is already a solution of this model:
+    # the strict-feasibility phase solves the very same constraints.
+    incumbent: list[int] | None = list(warm_start) if warm_start else None
     best_solver = None
     status = cp_model.UNKNOWN
-    completed_tiers = 0
     first_incumbent_ms = None
-    # Stays True only while every tier so far has proven its optimum; the
-    # moment one tier returns merely a feasible solution the lexicographic
-    # optimum is unproven and the result must be reported as FEASIBLE.
-    all_tiers_proven = True
+    proven_tiers: set[int] = set()
+    tier_values: dict[int, int] = {}
+
+    def run_tier(tier, cap):
+        """Minimise one tier from the current incumbent. Returns (status, value)."""
+
+        nonlocal status, best_solver, first_incumbent_ms, incumbent
+        if incumbent is not None:
+            # Only clear once there is something better to put in their place:
+            # before the first solution the build-time hints (the previous
+            # published schedule) are the best guess available.
+            built.model.ClearHints()
+            for variable, value in zip(hint_variables, incumbent):
+                built.model.AddHint(variable, value)
+        built.model.Minimize(tier.expression)
+        tier_solver = configured_solver()
+        tier_solver.parameters.max_time_in_seconds = max(0.001, cap)
+        callback = make_callback(started)
+        tier_status = tier_solver.Solve(built.model, callback)
+        if callback.first_incumbent_ms is not None:
+            first_incumbent_ms = (
+                callback.first_incumbent_ms
+                if first_incumbent_ms is None
+                else min(first_incumbent_ms, callback.first_incumbent_ms)
+            )
+        status = tier_status
+        if tier_status not in (cp_model.OPTIMAL, cp_model.FEASIBLE):
+            return tier_status, None
+        best_solver = tier_solver
+        incumbent = [tier_solver.Value(variable) for variable in hint_variables]
+        return tier_status, int(tier_solver.Value(tier.expression))
+
+    def tier_cap(tier, remaining, *, share):
+        cap = remaining * share
+        if tier.name in _TIE_BREAKER_TIERS:
+            cap = min(cap, remaining * constants.SOLVER_TIE_BREAKER_BUDGET_SHARE)
+        return cap
+
+    unproven: list[int] = []
     for index, tier in enumerate(built.tiers):
         remaining = deadline - time.monotonic()
         if remaining <= 0.001:
             break
-        built.model.Minimize(tier.expression)
-        solver = configured_solver()
         tiers_left = len(built.tiers) - index
-        # Cap the slice of the remaining budget each tier may spend, so a
-        # tier that finds good solutions but cannot prove them optimal
-        # leaves time for the tiers after it. Without the cap, a large
-        # admission can burn the entire budget proving the first tier
-        # (minimising unplaced candidates) and return a plan whose quality
-        # tiers - rest between blocks, balanced load - were never
-        # optimised at all.
-        solver.parameters.max_time_in_seconds = (
-            remaining if tiers_left == 1 else remaining * 2 / (tiers_left + 1)
-        )
-        callback = FirstIncumbentCallback(started)
-        status = solver.Solve(built.model, callback)
-        if callback.first_incumbent_ms is not None:
-            first_incumbent_ms = min(
-                (
-                    first_incumbent_ms
-                    if first_incumbent_ms is not None
-                    else callback.first_incumbent_ms
-                ),
-                callback.first_incumbent_ms,
-            )
-        solver._phase_first_incumbent_ms = first_incumbent_ms
-        if status not in (cp_model.OPTIMAL, cp_model.FEASIBLE):
-            break
-        best_solver = solver
-        tier_value = int(solver.Value(tier.expression))
+        # Cap the slice of the remaining budget each tier may spend, so a tier
+        # that finds good solutions but cannot prove them optimal leaves time
+        # for the tiers after it. Without the cap, a large admission can burn
+        # the entire budget proving the first tier (minimising unplaced
+        # candidates) and return a plan whose quality tiers - rest between
+        # blocks, balanced load - were never optimised at all.
+        share = 1.0 if tiers_left == 1 else 2 / (tiers_left + 1)
+        if unproven:
+            # Reclaim work is already queued, so no single tier may swallow
+            # more than half of what is left.
+            share = min(share, constants.SOLVER_TIER_BUDGET_SHARE)
+        tier_status, tier_value = run_tier(tier, tier_cap(tier, remaining, share=share))
+        if tier_value is None:
+            unproven.append(index)
+            continue
+        tier_values[index] = tier_value
         if index < len(built.tiers) - 1:
-            if status == cp_model.OPTIMAL:
+            if tier_status == cp_model.OPTIMAL:
                 built.model.Add(tier.expression == tier_value)
             else:
                 # Only an upper bound is proven, so pin the bound and keep
                 # going: the remaining tiers then search for solutions at
-                # least this good instead of the run ending on an
-                # arbitrary point of this tier.
+                # least this good instead of the run ending on an arbitrary
+                # point of this tier.
                 built.model.Add(tier.expression <= tier_value)
-        if status != cp_model.OPTIMAL:
-            all_tiers_proven = False
+        if tier_status == cp_model.OPTIMAL:
+            proven_tiers.add(index)
+        else:
+            unproven.append(index)
+
+    # Reclaim: spend what is left on the tiers that never proved out. Each
+    # round is bounded and only re-queues a tier that strictly improved, so
+    # this cannot spin on a tier that has stopped making progress.
+    rounds_left = 2 * len(built.tiers)
+    while unproven and rounds_left > 0:
+        rounds_left -= 1
+        remaining = deadline - time.monotonic()
+        if remaining <= 1.0:
+            break
+        index = unproven.pop(0)
+        tier = built.tiers[index]
+        share = 1.0 if not unproven else constants.SOLVER_TIER_BUDGET_SHARE
+        tier_status, tier_value = run_tier(tier, tier_cap(tier, remaining, share=share))
+        if tier_value is None:
             continue
-        completed_tiers = index + 1
+        # A tier that produced nothing during the sweep has no value to beat,
+        # so its first result counts as progress and earns another round.
+        previous_value = tier_values.get(index)
+        improved = previous_value is None or tier_value < previous_value
+        tier_values[index] = tier_value
+        if tier_status == cp_model.OPTIMAL:
+            # Deliberately NOT credited to `proven_tiers`. This proves the
+            # tier optimal only *within* the region the later tiers were
+            # pinned to, and those pins were chosen while this tier was
+            # merely bounded - so the lexicographic optimum is still
+            # unproven. The plan gets better; the verdict does not.
+            built.model.Add(tier.expression == tier_value)
+            continue
+        built.model.Add(tier.expression <= tier_value)
+        if improved:
+            unproven.append(index)
+
     if best_solver is None:
         return status, solver, int((time.monotonic() - started) * 1000)
-    if not (all_tiers_proven and completed_tiers == len(built.tiers)):
-        best_solver._phase_first_incumbent_ms = first_incumbent_ms
-        return (
-            cp_model.FEASIBLE,
-            best_solver,
-            int((time.monotonic() - started) * 1000),
-        )
-    return cp_model.OPTIMAL, best_solver, int((time.monotonic() - started) * 1000)
+    best_solver._phase_first_incumbent_ms = first_incumbent_ms
+    # Every tier ran and every tier proved its own optimum: only then is the
+    # lexicographic optimum itself proven.
+    resolved = (
+        cp_model.OPTIMAL if len(proven_tiers) == len(built.tiers) else cp_model.FEASIBLE
+    )
+    return resolved, best_solver, int((time.monotonic() - started) * 1000)
 
 
 def _reconstruct(
@@ -1749,14 +1966,18 @@ def _repair_neighborhood_problem(problem: SolverProblem) -> SolverProblem | None
     invalid_required_blocks: set[int] = set()
     if problem.policy.requires_stable_panel:
         for block in problem.canonical_blocks:
+            block_slot_set = frozenset(block.usable_slots)
             block_panels = {
                 panel_ids
                 for interview_time, panel_ids, _row in previous_rows.values()
-                if interview_time in set(block.usable_slots)
+                if interview_time in block_slot_set
             }
             if len(block_panels) > 1:
                 invalid_required_blocks.add(block.index)
 
+    block_slot_sets = {
+        block.index: frozenset(block.usable_slots) for block in problem.canonical_blocks
+    }
     frozen_by_candidate = dict(problem.locked_by_candidate)
     frozen_assignments = list(problem.locked_assignments)
     for candidate_id, (interview_time, panel_ids, row) in previous_rows.items():
@@ -1793,7 +2014,7 @@ def _repair_neighborhood_problem(problem: SolverProblem) -> SolverProblem | None
             continue
         if any(
             block.index in invalid_required_blocks
-            and interview_time in set(block.usable_slots)
+            and interview_time in block_slot_sets[block.index]
             for block in problem.canonical_blocks
         ):
             continue
@@ -1833,7 +2054,16 @@ def solve_schedule_v2(
     previous_schedule_data: List[dict] | None = None,
     *,
     include_metrics: bool = False,
+    on_incumbent=None,
 ) -> Dict[str, Any]:
+    """Solve the interview schedule.
+
+    `on_incumbent`, when given, receives every improving plan as it is found -
+    already validated, so a caller may show or adopt it directly. Returning
+    False from it asks the solver to stop early and keep what it has, which is
+    how a cancelled job stops burning CPU without losing its work.
+    """
+
     started = time.monotonic()
     configured_budget = float(
         (options_data or {}).get("max_solver_seconds", constants.DEFAULT_SOLVER_SECONDS)
@@ -1855,6 +2085,70 @@ def solve_schedule_v2(
         return early_result
     preprocess_ms = int((time.monotonic() - started) * 1000)
 
+    def make_publisher(phase_problem: SolverProblem, *, full_placement: bool):
+        """Wrap the caller's hook so only *valid* plans ever escape early.
+
+        A live incumbent may be adopted straight from the browser, so it has
+        to clear the same validator as a finished result; an invalid one is
+        simply not published and the search carries on.
+        """
+
+        if on_incumbent is None:
+            return None
+
+        def publish(schedule: list[dict]):
+            issues = validate_schedule_result(
+                schedule=schedule,
+                candidates=phase_problem.candidates,
+                interviewers=phase_problem.interviewers,
+                panel_size=phase_problem.panel_size,
+                all_slots=phase_problem.sorted_slots,
+                allow_overtime=phase_problem.options.allow_overtime,
+                enforce_same_gender=phase_problem.options.enforce_same_gender,
+                require_experienced_panel=(
+                    phase_problem.options.require_experienced_panel
+                ),
+                requires_stable_panel=phase_problem.policy.requires_stable_panel,
+                blocks=phase_problem.canonical_blocks,
+                locked_assignments=phase_problem.locked_assignments,
+                require_all_candidates=full_placement,
+                candidates_per_session=phase_problem.options.candidates_per_session,
+            )
+            if issues:
+                return True
+            placed_ids = {str(row.get("candidate_id") or "") for row in schedule}
+            unplaceable = _unplaceable(phase_problem, placed_ids)
+            return on_incumbent(
+                {
+                    "status": "SUCCESS" if not unplaceable else "PARTIAL",
+                    "schedule": schedule,
+                    "unplaceable": unplaceable,
+                    "locked_conflicts": [],
+                    "optimal": False,
+                    "objective_vector": evaluate_objective_vector(
+                        schedule=schedule,
+                        candidates=phase_problem.candidates,
+                        interviewers=phase_problem.interviewers,
+                        sorted_slots=phase_problem.sorted_slots,
+                        blocks=phase_problem.canonical_blocks,
+                        previous_schedule=phase_problem.previous_schedule,
+                        panel_size=phase_problem.panel_size,
+                        require_experienced_panel=(
+                            phase_problem.options.require_experienced_panel
+                        ),
+                        candidates_per_session=(
+                            phase_problem.options.candidates_per_session
+                        ),
+                    ).as_dict(),
+                    "elapsed_ms": int((time.monotonic() - started) * 1000),
+                }
+            )
+
+        return publish
+
+    publish = make_publisher(problem, full_placement=True)
+    publish_partial = make_publisher(problem, full_placement=False)
+
     phases: list[PhaseResult] = []
     incumbents: list[PhaseResult] = []
     neighborhood_problem = _repair_neighborhood_problem(problem)
@@ -1871,6 +2165,10 @@ def solve_schedule_v2(
             status, solver, solve_ms = _solve_model(
                 repair_model,
                 deadline=repair_deadline,
+                problem=neighborhood_problem,
+                publish_incumbent=make_publisher(
+                    neighborhood_problem, full_placement=True
+                ),
             )
             repair_phase = _evaluate_phase(
                 name="repair_neighborhood",
@@ -1896,7 +2194,12 @@ def solve_schedule_v2(
     except ModelTooLarge:
         return _error("Probleminstansen overskrider modellgrensen.")
     if time.monotonic() < strict_deadline:
-        status, solver, solve_ms = _solve_model(strict_model, deadline=strict_deadline)
+        status, solver, solve_ms = _solve_model(
+            strict_model,
+            deadline=strict_deadline,
+            problem=problem,
+            publish_incumbent=publish,
+        )
         strict_phase = _evaluate_phase(
             name="strict_feasibility",
             status=status,
@@ -1918,21 +2221,31 @@ def solve_schedule_v2(
                 }
             return result
 
-    strict_has_incumbent = any(
-        phase.name == "strict_feasibility" and phase.schedule is not None
-        for phase in phases
+    strict_phase_with_incumbent = next(
+        (
+            phase
+            for phase in phases
+            if phase.name == "strict_feasibility" and phase.schedule is not None
+        ),
+        None,
     )
+    strict_has_incumbent = strict_phase_with_incumbent is not None
     if strict_has_incumbent and time.monotonic() < deadline:
-        try:
-            optimized_model = _build_model(
-                problem,
-                full_placement=True,
-                hint_schedule=incumbents[-1].schedule,
+        # Same constraints, only the objective differs, so arm the model that
+        # already exists rather than building a second copy of it - and carry
+        # the strict solution over as the starting point.
+        optimized_model = _arm_objective(strict_model)
+        warm_start = _full_assignment(
+            optimized_model, strict_phase_with_incumbent.solver
+        )
+        if time.monotonic() < deadline:
+            status, solver, solve_ms = _solve_model(
+                optimized_model,
+                deadline=deadline,
+                problem=problem,
+                publish_incumbent=publish,
+                warm_start=warm_start,
             )
-        except ModelTooLarge:
-            optimized_model = None
-        if optimized_model is not None and time.monotonic() < deadline:
-            status, solver, solve_ms = _solve_model(optimized_model, deadline=deadline)
             phase = _evaluate_phase(
                 name="full_optimization",
                 status=status,
@@ -1950,7 +2263,12 @@ def solve_schedule_v2(
         except ModelTooLarge:
             return _error("Probleminstansen overskrider modellgrensen.")
         if time.monotonic() < deadline:
-            status, solver, solve_ms = _solve_model(partial_model, deadline=deadline)
+            status, solver, solve_ms = _solve_model(
+                partial_model,
+                deadline=deadline,
+                problem=problem,
+                publish_incumbent=publish_partial,
+            )
             phase = _evaluate_phase(
                 name="partial_optimization",
                 status=status,

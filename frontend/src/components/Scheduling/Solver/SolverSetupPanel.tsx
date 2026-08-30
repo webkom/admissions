@@ -29,7 +29,11 @@ import type { ExperienceLevel, Interviewer, SolverOptions } from "../types";
 import { formatAccessibleDate } from "../scheduleUtils";
 import { iconSizes } from "src/styles/designTokens";
 import cn from "src/utils/cn";
-import { ADVANCED_SOLVER_DEFAULTS, type SolveJob } from "./solverHelpers";
+import {
+  ADVANCED_SOLVER_DEFAULTS,
+  type SolveJob,
+  type SolveResponse,
+} from "./solverHelpers";
 import type { SolverReadiness } from "./solverSelectors";
 import AdvancedSolverSettings from "./AdvancedSolverSettings";
 import SolveProgress from "./SolveProgress";
@@ -66,6 +70,9 @@ interface SolverSetupPanelProps {
   elapsedMs: number;
   startedAt?: string | null;
   jobStatus: SolveJob["status"] | null;
+  /** Best plan the running solve has published so far, if any. */
+  livePreview?: SolveResponse | null;
+  onAcceptPreview?: () => void;
   estimatedSeconds: number;
   lockedCount: number;
   hasProposal: boolean;
@@ -389,6 +396,8 @@ const SolverSetupPanel = ({
   elapsedMs,
   startedAt,
   jobStatus,
+  livePreview,
+  onAcceptPreview,
   estimatedSeconds,
   lockedCount,
   hasProposal,
@@ -881,6 +890,8 @@ const SolverSetupPanel = ({
                 startedAt={startedAt}
                 estimatedSeconds={estimatedSeconds}
                 jobStatus={jobStatus}
+                preview={livePreview}
+                onAcceptPreview={onAcceptPreview}
               />
             )}
 

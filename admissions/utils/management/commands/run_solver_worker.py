@@ -1,3 +1,4 @@
+import threading
 import time
 from datetime import date, timedelta
 
@@ -106,6 +107,83 @@ def _demote_draft_locks(data, published_through, schedule_start):
         row for row in demoted if row.get("candidate_id") not in previous_ids
     )
     return {**data, "locked_assignments": kept, "previous_schedule": previous}
+
+
+class IncumbentPublisher:
+    """Persists live solver incumbents from a single dedicated thread.
+
+    CP-SAT invokes its solution callback on a solver thread, and Django
+    connections are thread-local - writing from there would open, and then
+    leak, a connection per solver thread. So the callback only hands the plan
+    over and this one thread owns the only extra connection.
+
+    The write doubles as the cancellation check: no row matched means the job
+    is no longer RUNNING, and `submit` starts answering False so the solver
+    stops rather than polishing a plan nobody will read. The last preview
+    stays in the row, so cancelling keeps the best plan found so far instead
+    of throwing the whole solve away.
+    """
+
+    # Long enough that a stuck write cannot wedge shutdown, short enough that
+    # the caller is not left waiting on it.
+    JOIN_TIMEOUT_SECONDS = 5.0
+
+    def __init__(self, job_id):
+        self._job_id = job_id
+        self._lock = threading.Lock()
+        self._pending = None
+        self._keep_going = True
+        self._wake = threading.Event()
+        self._closing = False
+        self._thread = threading.Thread(
+            target=self._loop, name="solve-preview", daemon=True
+        )
+        self._thread.start()
+
+    def submit(self, result):
+        """Hand over a plan from the solver thread. False means 'stop solving'."""
+
+        with self._lock:
+            self._pending = result
+            keep_going = self._keep_going
+        self._wake.set()
+        return keep_going
+
+    def close(self):
+        self._closing = True
+        self._wake.set()
+        self._thread.join(timeout=self.JOIN_TIMEOUT_SECONDS)
+
+    def _loop(self):
+        try:
+            while True:
+                # The timeout is a backstop for a set() that races the clear
+                # below; nothing is lost, it just lands a tick later.
+                self._wake.wait(timeout=1.0)
+                self._wake.clear()
+                with self._lock:
+                    pending, self._pending = self._pending, None
+                if pending is not None:
+                    self._persist(pending)
+                if self._closing:
+                    return
+        finally:
+            connection.close()
+
+    def _persist(self, result):
+        try:
+            updated = SolveJob.objects.filter(
+                id=self._job_id, status=SolveJob.STATUS_RUNNING
+            ).update(preview_result=result, preview_updated_at=timezone.now())
+        except (InterfaceError, OperationalError):
+            # A dropped preview is not a dropped solve. Drop the broken
+            # connection and let the next incumbent try again.
+            log.warning("solve_job_preview_write_failed", job_id=str(self._job_id))
+            connection.close()
+            return
+        if not updated:
+            with self._lock:
+                self._keep_going = False
 
 
 class Command(BaseCommand):
@@ -323,28 +401,48 @@ class Command(BaseCommand):
                         }
             if data is not None:
                 data = _demote_draft_locks(data, published_through, schedule_start)
-                result = solve_schedule(
-                    candidates_data=data.get("candidates", []),
-                    interviewers_data=data.get("interviewers", []),
-                    panel_size=data["panel_size"],
-                    options_data=data.get("options", {}),
-                    locked_assignments_data=data.get("locked_assignments", []),
-                    all_slots_data=data.get("all_slots"),
-                    blocks_data=data.get("blocks", []),
-                    block_metadata_data=data.get("block_metadata", []),
-                    previous_schedule_data=data.get("previous_schedule", []),
-                    include_metrics=True,
-                )
-                solver_metrics = result.pop("_solver_metrics", {})
                 policy = normalize_schedule_policy(data.get("options", {}))
-                result["request_fingerprint"] = job.request_fingerprint
-                result["policy_snapshot"] = policy.snapshot()
-                result["deviation_review"] = build_deviation_review(
-                    schedule=result.get("schedule", []),
-                    policy=policy,
-                    availability_generation=data.get("availability_generation", 1),
-                    layout_version=data.get("layout_version", 1),
-                )
+
+                def decorate(payload):
+                    """Attach the context that makes a result adoptable.
+
+                    A live preview may be adopted straight from the browser
+                    ("stop and keep the best plan"), so it has to carry the
+                    same fingerprint, policy snapshot and deviation review as
+                    a finished result.
+                    """
+
+                    payload["request_fingerprint"] = job.request_fingerprint
+                    payload["policy_snapshot"] = policy.snapshot()
+                    payload["deviation_review"] = build_deviation_review(
+                        schedule=payload.get("schedule", []),
+                        policy=policy,
+                        availability_generation=data.get("availability_generation", 1),
+                        layout_version=data.get("layout_version", 1),
+                    )
+                    return payload
+
+                publisher = IncumbentPublisher(job.id)
+                try:
+                    result = solve_schedule(
+                        candidates_data=data.get("candidates", []),
+                        interviewers_data=data.get("interviewers", []),
+                        panel_size=data["panel_size"],
+                        options_data=data.get("options", {}),
+                        locked_assignments_data=data.get("locked_assignments", []),
+                        all_slots_data=data.get("all_slots"),
+                        blocks_data=data.get("blocks", []),
+                        block_metadata_data=data.get("block_metadata", []),
+                        previous_schedule_data=data.get("previous_schedule", []),
+                        include_metrics=True,
+                        on_incumbent=lambda partial: publisher.submit(
+                            decorate(partial)
+                        ),
+                    )
+                finally:
+                    publisher.close()
+                solver_metrics = result.pop("_solver_metrics", {})
+                decorate(result)
         except SchedulePermissionDenied:
             error = "Kun opptaksansvarlige kan kjøre intervjusolveren."
             new_status = SolveJob.STATUS_ERROR
@@ -463,6 +561,10 @@ class Command(BaseCommand):
                     status=new_status,
                     error=error,
                     finished_at=timezone.now(),
+                    # The finished result supersedes the live preview; leaving
+                    # it behind would show two plans at once.
+                    preview_result=None,
+                    preview_updated_at=None,
                 )
             except (InterfaceError, OperationalError):
                 log.exception(

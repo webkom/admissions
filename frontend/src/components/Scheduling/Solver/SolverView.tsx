@@ -1000,6 +1000,8 @@ export default function SolverView({
           elapsedMs={session.elapsedMs}
           startedAt={session.startedAt}
           jobStatus={session.jobStatus}
+          livePreview={session.livePreview}
+          onAcceptPreview={session.acceptPreview}
           estimatedSeconds={session.estimatedSeconds}
           lockedCount={draft.presentation.lockedCount}
           hasProposal={hasProposal}

@@ -69,6 +69,8 @@ const solveJob = (
   baseline_updated_at: "revision-1",
   auto_apply_if_empty: false,
   preview_only: false,
+  preview_result: null,
+  preview_updated_at: null,
 });
 
 const savedSchedule = (candidate: string): SavedSchedule => ({
