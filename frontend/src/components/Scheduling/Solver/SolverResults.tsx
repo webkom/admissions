@@ -875,8 +875,7 @@ const SolverResults = ({
         // When the solver timed out finding *any* placement and the day-scope
         // stepper is available, suggest planning one day at a time first —
         // retrying the same full scope will likely time out again.
-        const isNoIncumbentTimeout =
-          failedResult?.status === "TIMEOUT";
+        const isNoIncumbentTimeout = failedResult?.status === "TIMEOUT";
         const actions: DeviationNextStepAction[] = [];
         if (isNoIncumbentTimeout && onExtendDay) {
           actions.push({
