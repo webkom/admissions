@@ -71,6 +71,15 @@ export interface DraftBlockCardTableProps {
     currentMember: SchedulePanelMember,
     blockPanel: SchedulePanelMember[],
     candidateIds: string[],
+    blockSlotTimes: number[],
+  ) => BlockInterviewerOption[];
+  /** Replacement options for a single slot's panel seat. Inhabilitet is checked
+   *  against every candidate in the block; availability against that one slot. */
+  getSlotInterviewerOptions: (
+    currentMember: SchedulePanelMember,
+    slotPanel: SchedulePanelMember[],
+    slotTime: number,
+    blockCandidateIds: string[],
   ) => BlockInterviewerOption[];
   onReplaceBlockPanelMember: (
     scheduleIndexes: number[],
@@ -149,6 +158,7 @@ const DraftBlockCardTable: React.FC<DraftBlockCardTableProps> = ({
   selectedDayFilter,
   formatSlotTime,
   getBlockInterviewerOptions,
+  getSlotInterviewerOptions,
   onReplaceBlockPanelMember,
   onSwapPanelMember,
   onSwapCandidates,
@@ -387,6 +397,9 @@ const DraftBlockCardTable: React.FC<DraftBlockCardTableProps> = ({
                                             member,
                                             block.baselinePanel,
                                             block.candidateIds,
+                                            block.entries.map(
+                                              (entry) => entry.item.time,
+                                            ),
                                           )
                                         : undefined
                                     }
@@ -526,7 +539,14 @@ const DraftBlockCardTable: React.FC<DraftBlockCardTableProps> = ({
                             isHighlighted={isHighlighted}
                             groupSpanningCell={groupSpanningCell}
                             renderFlyttCell={moveScope === "interview"}
-                            interviewerOptions={interviewers}
+                            buildReplacementOptions={(currentMember) =>
+                              getSlotInterviewerOptions(
+                                currentMember,
+                                item.panel,
+                                item.time,
+                                block.candidateIds,
+                              )
+                            }
                             onSwapPanelMember={onSwapPanelMember}
                             candidateSwapTargets={candidateSwapTargetsMap.get(
                               scheduleIndex,

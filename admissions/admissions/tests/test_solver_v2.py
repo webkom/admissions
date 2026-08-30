@@ -434,6 +434,7 @@ class FactorizedSolverV2TestCase(SimpleTestCase):
 
         self.assertEqual(result["status"], "TIMEOUT")
         self.assertEqual(result["schedule"], [])
+        self.assertEqual(result["timeout_reason"], "no_incumbent")
         self.assertFalse(result["_solver_metrics"]["optimal"])
         self.assertEqual(
             [phase["name"] for phase in result["_solver_metrics"]["phases"]],
@@ -473,6 +474,7 @@ class FactorizedSolverV2TestCase(SimpleTestCase):
 
         self.assertEqual(result["status"], "TIMEOUT")
         self.assertEqual(result["schedule"], [])
+        self.assertEqual(result["timeout_reason"], "no_incumbent")
 
     def test_partial_model_invalid_is_an_error_not_a_timeout(self):
         infeasible_solver = mock.Mock()

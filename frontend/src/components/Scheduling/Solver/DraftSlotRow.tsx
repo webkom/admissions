@@ -1,6 +1,6 @@
 import React from "react";
 import { ArrowUpDown, GripVertical, Lock, Unlock } from "lucide-react";
-import type { Interviewer, ScheduleItem, SchedulePanelMember } from "../types";
+import type { ScheduleItem, SchedulePanelMember } from "../types";
 import { decodeScheduleTime, formatMinutes } from "../scheduleUtils";
 import type { AssignmentAvailabilityStatus } from "../assignmentAvailability";
 import { getBlockPanelDiff } from "./blockBaseline";
@@ -35,7 +35,13 @@ export interface DraftSlotRowProps {
   isHighlighted: boolean;
   groupSpanningCell?: React.ReactNode;
   renderFlyttCell?: boolean;
-  interviewerOptions: Interviewer[];
+  /** All interviewers as swap options for the seat held by `currentMember`,
+   *  greyed out (with a reason) when a swap is not allowed — already seated,
+   *  inhabil against a candidate in the block, or outside their availability
+   *  for this slot. */
+  buildReplacementOptions: (
+    currentMember: SchedulePanelMember,
+  ) => PanelChipOption[];
   onSwapPanelMember: (
     scheduleIndex: number,
     panelMemberIndex: number,
@@ -71,6 +77,16 @@ const shortName = (name: string): string => {
   return `${parts[0]} ${parts[parts.length - 1].charAt(0)}.`;
 };
 
+/** Drop the seat's own occupant from its replacement list (re-picking them is a
+ *  no-op the old menus never offered). */
+const excludeRef = (
+  options: PanelChipOption[],
+  ref: { id?: string; name: string },
+): PanelChipOption[] =>
+  options.filter((option) =>
+    option.id && ref.id ? option.id !== ref.id : option.name !== ref.name,
+  );
+
 export const DraftSlotRow: React.FC<DraftSlotRowProps> = ({
   scheduleIndex,
   item,
@@ -88,7 +104,7 @@ export const DraftSlotRow: React.FC<DraftSlotRowProps> = ({
   isHighlighted,
   groupSpanningCell,
   renderFlyttCell = true,
-  interviewerOptions,
+  buildReplacementOptions,
   onSwapPanelMember,
   candidateSwapTargets,
   onSwapCandidates,
@@ -177,16 +193,7 @@ export const DraftSlotRow: React.FC<DraftSlotRowProps> = ({
           id: removed.id,
           name: `${removed.name} (Gjenopprett standard)`,
         },
-        ...interviewerOptions
-          .filter(
-            (inv) =>
-              inv.name !== added.name &&
-              !item.panel.some((m) => m.name === inv.name),
-          )
-          .map((inv) => ({
-            id: inv.id,
-            name: inv.name,
-          })),
+        ...excludeRef(buildReplacementOptions(added), added),
       ];
 
       diffNode =
@@ -221,9 +228,10 @@ export const DraftSlotRow: React.FC<DraftSlotRowProps> = ({
               (addedMember.id && m.id === addedMember.id) ||
               m.name === addedMember.name,
           );
-          const options: PanelChipOption[] = interviewerOptions
-            .filter((inv) => !item.panel.some((m) => m.name === inv.name))
-            .map((inv) => ({ id: inv.id, name: inv.name }));
+          const options: PanelChipOption[] = excludeRef(
+            buildReplacementOptions(addedMember),
+            addedMember,
+          );
 
           return canEditDraft && memberIndex >= 0 ? (
             <EditablePanelChip
@@ -260,13 +268,10 @@ export const DraftSlotRow: React.FC<DraftSlotRowProps> = ({
     diffNode = (
       <div className="flex flex-wrap items-center gap-1.5">
         {item.panel.map((member, mIdx) => {
-          const options: PanelChipOption[] = interviewerOptions
-            .filter(
-              (inv) =>
-                inv.name !== member.name &&
-                !item.panel.some((m) => m.name === inv.name),
-            )
-            .map((inv) => ({ id: inv.id, name: inv.name }));
+          const options: PanelChipOption[] = excludeRef(
+            buildReplacementOptions(member),
+            member,
+          );
 
           return canEditDraft ? (
             <EditablePanelChip
@@ -298,7 +303,7 @@ export const DraftSlotRow: React.FC<DraftSlotRowProps> = ({
       <SlotPanelOverrideMenu
         item={item}
         scheduleIndex={scheduleIndex}
-        interviewerOptions={interviewerOptions}
+        buildReplacementOptions={buildReplacementOptions}
         onSwapPanelMember={onSwapPanelMember}
         shortName={shortName}
         hasConflictFor={hasConflictFor}

@@ -47,6 +47,13 @@ export function useSolveJob(admissionSlug: string, groupId: string) {
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<SolveResponse | null>(null);
   const [error, setError] = useState("");
+  // The status of the last failed solve (TIMEOUT, INFEASIBLE, ERROR, etc.),
+  // kept separate from `result` because `result` may have been restored to
+  // the previous good plan. Lets the next-step menu suggest planning fewer
+  // days at a time when the failure was a no-incumbent timeout.
+  const [failedResult, setFailedResult] = useState<
+    (Pick<SolveResponse, "status"> & { timeout_reason?: string }) | null
+  >(null);
   const [planRevealed, setPlanRevealed] = useState(() =>
     hasSchedule(result?.status),
   );
@@ -184,6 +191,7 @@ export function useSolveJob(admissionSlug: string, groupId: string) {
     setLoading(false);
     setResult(null);
     setError("");
+    setFailedResult(null);
     setPlanRevealed(false);
     clearStoredJob();
     setPendingProposal(null);
@@ -218,8 +226,16 @@ export function useSolveJob(admissionSlug: string, groupId: string) {
     }
     if (jobResult) {
       if (restorePreviousResult()) {
+        setFailedResult({
+          status: jobResult.status,
+          timeout_reason: jobResult.timeout_reason,
+        });
         setError(solveFailureMessage(jobResult));
       } else {
+        setFailedResult({
+          status: jobResult.status,
+          timeout_reason: jobResult.timeout_reason,
+        });
         setResult(jobResult);
       }
       return;
@@ -274,6 +290,10 @@ export function useSolveJob(admissionSlug: string, groupId: string) {
     } else if (outcome.job.status === "ERROR") {
       setError(outcome.job.error || "Solveren feilet under kjøring.");
     } else if (outcome.job.result && !hasSchedule(outcome.job.result.status)) {
+      setFailedResult({
+        status: outcome.job.result.status,
+        timeout_reason: outcome.job.result.timeout_reason,
+      });
       setError(solveFailureMessage(outcome.job.result));
     }
     return outcome.job.result;
@@ -467,6 +487,7 @@ export function useSolveJob(admissionSlug: string, groupId: string) {
     setActiveJob(null);
     setLoading(true);
     setError("");
+    setFailedResult(null);
     if (applyResult) setResult(null);
 
     try {
@@ -585,6 +606,7 @@ export function useSolveJob(admissionSlug: string, groupId: string) {
       proposalActionRunRef.current !== actionRunId;
     setProposalActionLoading(true);
     setError("");
+    setFailedResult(null);
     try {
       const outcome = await lifecycle.apply(
         proposal.job.job_id,
@@ -694,6 +716,7 @@ export function useSolveJob(admissionSlug: string, groupId: string) {
     setResult,
     error,
     setError,
+    failedResult,
     planRevealed,
     setPlanRevealed,
     elapsedMs,

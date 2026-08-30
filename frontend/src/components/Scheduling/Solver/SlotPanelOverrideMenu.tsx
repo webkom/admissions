@@ -3,13 +3,19 @@ import { createPortal } from "react-dom";
 import { ArrowLeft, ArrowUpDown, X } from "lucide-react";
 import cn from "../../../utils/cn";
 import { iconSizes } from "../../../styles/designTokens";
-import type { Interviewer, ScheduleItem, SchedulePanelMember } from "../types";
+import type { ScheduleItem, SchedulePanelMember } from "../types";
 import type { AssignmentAvailabilityStatus } from "../assignmentAvailability";
+import type { PanelChipOption } from "../ui";
 
 interface SlotPanelOverrideMenuProps {
   item: ScheduleItem;
   scheduleIndex: number;
-  interviewerOptions: Interviewer[];
+  /** All interviewers as replacement options for the chosen seat, greyed out
+   *  (with a reason) when a swap is not allowed — already seated, inhabil
+   *  against a candidate in the block, or outside their availability. */
+  buildReplacementOptions: (
+    currentMember: SchedulePanelMember,
+  ) => PanelChipOption[];
   onSwapPanelMember: (
     scheduleIndex: number,
     panelMemberIndex: number,
@@ -30,7 +36,7 @@ interface SlotPanelOverrideMenuProps {
 const SlotPanelOverrideMenu: React.FC<SlotPanelOverrideMenuProps> = ({
   item,
   scheduleIndex,
-  interviewerOptions,
+  buildReplacementOptions,
   onSwapPanelMember,
   shortName,
   hasConflictFor,
@@ -160,38 +166,51 @@ const SlotPanelOverrideMenu: React.FC<SlotPanelOverrideMenuProps> = ({
   const selectedMember =
     selectedMemberIndex !== null ? item.panel[selectedMemberIndex] : null;
 
-  const replacementOptions = selectedMember
-    ? interviewerOptions.filter(
-        (inv) =>
-          inv.name !== selectedMember.name &&
-          !item.panel.some((m) => m.name === inv.name),
+  const replacementOptions: PanelChipOption[] = selectedMember
+    ? buildReplacementOptions(selectedMember).filter((option) =>
+        option.id && selectedMember.id
+          ? option.id !== selectedMember.id
+          : option.name !== selectedMember.name,
       )
     : [];
 
-  const filteredOptions = replacementOptions.filter((inv) =>
-    inv.name.toLowerCase().includes(query.trim().toLowerCase()),
+  const filteredOptions = replacementOptions.filter((option) =>
+    option.name.toLowerCase().includes(query.trim().toLowerCase()),
   );
+
+  const stepHighlight = (direction: 1 | -1) => {
+    const count = filteredOptions.length;
+    if (count === 0) return;
+    setHighlightedIndex((prev) => {
+      let next = prev < 0 ? (direction === 1 ? -1 : 0) : prev;
+      for (let step = 0; step < count; step += 1) {
+        next = (next + direction + count) % count;
+        if (!filteredOptions[next]?.disabled) return next;
+      }
+      return prev;
+    });
+  };
 
   const handleInputKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
     switch (event.key) {
       case "ArrowDown":
         event.preventDefault();
-        setHighlightedIndex((prev) =>
-          prev < filteredOptions.length - 1 ? prev + 1 : 0,
-        );
+        stepHighlight(1);
         break;
       case "ArrowUp":
         event.preventDefault();
-        setHighlightedIndex((prev) =>
-          prev > 0 ? prev - 1 : filteredOptions.length - 1,
-        );
+        stepHighlight(-1);
         break;
       case "Enter": {
         event.preventDefault();
-        const target =
+        const highlighted =
           highlightedIndex >= 0 && highlightedIndex < filteredOptions.length
             ? filteredOptions[highlightedIndex]
-            : filteredOptions[0];
+            : undefined;
+        const target =
+          highlighted && !highlighted.disabled
+            ? highlighted
+            : filteredOptions.find((option) => !option.disabled);
         if (target && selectedMemberIndex !== null) {
           onSwapPanelMember(
             scheduleIndex,
@@ -370,40 +389,65 @@ const SlotPanelOverrideMenu: React.FC<SlotPanelOverrideMenuProps> = ({
                   {filteredOptions.length === 0 ? (
                     <li role="none">
                       <p className="m-0 px-2 py-3 text-center text-xs text-text-muted">
-                        Ingen tilgjengelige erstattere
+                        Ingen treff
                       </p>
                     </li>
                   ) : (
-                    filteredOptions.map((inv, index) => {
-                      const isHighlighted = index === highlightedIndex;
+                    filteredOptions.map((option, index) => {
+                      const isHighlighted =
+                        index === highlightedIndex && !option.disabled;
                       return (
-                        <li key={inv.id ?? inv.name} role="none">
+                        <li key={option.id ?? option.name} role="none">
                           <button
                             id={optionId(index)}
                             type="button"
                             tabIndex={-1}
                             role="option"
                             aria-selected={isHighlighted}
+                            disabled={option.disabled}
+                            title={option.disabledReason}
                             onClick={() => {
-                              if (selectedMemberIndex !== null) {
+                              if (
+                                !option.disabled &&
+                                selectedMemberIndex !== null
+                              ) {
                                 onSwapPanelMember(
                                   scheduleIndex,
                                   selectedMemberIndex,
-                                  inv.name,
-                                  inv.id,
+                                  option.name,
+                                  option.id,
                                 );
                                 handleClose();
                               }
                             }}
-                            onMouseEnter={() => setHighlightedIndex(index)}
+                            onMouseEnter={() => {
+                              if (!option.disabled) setHighlightedIndex(index);
+                            }}
                             className={cn(
-                              "flex w-full cursor-pointer items-center justify-between gap-2 rounded-md px-2.5 py-2 text-left text-sm font-semibold transition-colors",
-                              isHighlighted
-                                ? "bg-surface-subtle text-text-primary"
-                                : "text-text-primary hover:bg-surface-subtle",
+                              "flex w-full items-center justify-between gap-2 rounded-md px-2.5 py-2 text-left text-sm font-semibold transition-colors",
+                              option.disabled
+                                ? "cursor-not-allowed text-text-faded"
+                                : cn(
+                                    "cursor-pointer text-text-primary",
+                                    isHighlighted
+                                      ? "bg-surface-subtle"
+                                      : "hover:bg-surface-subtle",
+                                  ),
                             )}
                           >
-                            <span className="truncate">{inv.name}</span>
+                            <span className="truncate">{option.name}</span>
+                            {option.disabled && option.disabledReason && (
+                              <span
+                                className={cn(
+                                  "flex-none text-detail font-medium",
+                                  option.disabledKind === "inhabil"
+                                    ? "text-danger"
+                                    : "text-text-muted",
+                                )}
+                              >
+                                {option.disabledReason}
+                              </span>
+                            )}
                           </button>
                         </li>
                       );

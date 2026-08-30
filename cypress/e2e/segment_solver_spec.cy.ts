@@ -78,7 +78,7 @@ describe("segmented solving status", () => {
     expect(extendable.kind).to.equal("placements_missing");
     expect(extendable.description).to.include("2 hele dager er planlagt");
     expect(extendable.description).to.include(
-      "Planlegg neste dag for å plassere resten",
+      "planlegg neste dag for å plassere resten",
     );
   });
 
@@ -89,7 +89,7 @@ describe("segmented solving status", () => {
       extendDayAvailable: false,
     });
     expect(exhausted.kind).to.equal("placements_missing");
-    expect(exhausted.description).to.include("Plasser de siste manuelt");
+    expect(exhausted.description).to.include("plasser de siste manuelt");
     // Without a filled-day count the copy omits the prefix entirely.
     expect(state({ unplaceableCount: 2 }).description).to.not.include(
       "er planlagt",

@@ -861,6 +861,7 @@ export default function SolverView({
       missingReviewerNames={missingReviewerNames}
       publicationReady={publicationReady}
       solverError={session.error}
+      failedResult={session.failedResult}
       onOpenSettings={() => setRegenerationOpen(true)}
       onExtendDay={canExtendDay ? extendDay : undefined}
       onFillRemainingDays={
