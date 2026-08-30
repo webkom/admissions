@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo } from "react";
+import React, { useCallback, useMemo, useState } from "react";
 import { ArrowUpDown, GripVertical } from "lucide-react";
 import { EditablePanelChip } from "../ui";
 import type {
@@ -157,6 +157,47 @@ export interface DraftBlockCardTableProps {
   }) => void;
 }
 
+/** Day indexes that already hold at least one interview. */
+const plannedDays = (blocks: DayScopedBlock[]): Set<number> => {
+  const days = new Set<number>();
+  blocks.forEach((block) => {
+    if (block.entries.length > 0) days.add(block.dayIndex);
+  });
+  return days;
+};
+
+type DayScopedBlock = Pick<BlockData, "dayIndex" | "entries">;
+
+/** Blocks to render: the day filter first, then the unplanned-day toggle.
+ *
+ *  The toggle hides whole *days*, not blocks. A day that has any interview
+ *  keeps its empty blocks, because those are precisely the slots you would
+ *  fill next; a day with nothing at all is what the toggle is for. */
+export const visibleBlocks = <T extends DayScopedBlock>(
+  blocks: T[],
+  selectedDayFilter: number | null,
+  hideUnplannedDays: boolean,
+): T[] => {
+  const scoped =
+    selectedDayFilter === null
+      ? blocks
+      : blocks.filter((block) => block.dayIndex === selectedDayFilter);
+  if (!hideUnplannedDays) return scoped;
+  // Planned days are derived from every block, not the day-scoped subset, so
+  // the two filters stay independent of each other.
+  const planned = plannedDays(blocks);
+  return scoped.filter((block) => planned.has(block.dayIndex));
+};
+
+/** Days with nothing planned yet. The toggle reports this so its label says
+ *  what turning it on would actually hide. */
+export const countUnplannedDays = (blocks: DayScopedBlock[]): number => {
+  const planned = plannedDays(blocks);
+  return [...new Set(blocks.map((block) => block.dayIndex))].filter(
+    (day) => !planned.has(day),
+  ).length;
+};
+
 const tableHeaderClass =
   "sticky top-0 z-10 bg-surface-neutral px-4 py-3 text-left text-label font-semibold tracking-label text-text-muted border-b border-border-soft !rounded-none";
 
@@ -304,6 +345,11 @@ const DraftBlockCardTable: React.FC<DraftBlockCardTableProps> = ({
     return map;
   }, [candidateIdByName, dates, entries, interviewers, sessionDuration]);
 
+  // Off by default: the whole framework is the useful default view now
+  // that an empty block can be filled in place. On, it restores the older
+  // behaviour of showing only days that already have something planned.
+  const [hideUnplannedDays, setHideUnplannedDays] = useState(false);
+
   const blocks = useMemo<BlockData[]>(() => {
     const rawBlocks = canonicalBlocks
       .filter((block) => block.length > 0)
@@ -318,7 +364,6 @@ const DraftBlockCardTable: React.FC<DraftBlockCardTableProps> = ({
       const blockEntries = entries.filter(({ item }) =>
         blockTimes.has(item.time),
       );
-      if (blockEntries.length === 0) return;
 
       const { dayIndex, minute: startMinute } = decodeScheduleTime(
         block[0],
@@ -380,12 +425,11 @@ const DraftBlockCardTable: React.FC<DraftBlockCardTableProps> = ({
     sessionDuration,
   ]);
 
-  const activeBlocks = useMemo(() => {
-    if (selectedDayFilter === null) {
-      return blocks;
-    }
-    return blocks.filter((b) => b.dayIndex === selectedDayFilter);
-  }, [blocks, selectedDayFilter]);
+  const activeBlocks = useMemo(
+    () => visibleBlocks(blocks, selectedDayFilter, hideUnplannedDays),
+    [blocks, hideUnplannedDays, selectedDayFilter],
+  );
+  const unplannedDayCount = useMemo(() => countUnplannedDays(blocks), [blocks]);
 
   const coveredScheduleIndexes = useMemo(() => {
     const covered = new Set<number>();
@@ -405,6 +449,19 @@ const DraftBlockCardTable: React.FC<DraftBlockCardTableProps> = ({
 
   return (
     <div data-cy="block-table" className="flex flex-col gap-4">
+      {unplannedDayCount > 0 && (
+        <label className="flex items-center gap-2 self-end text-detail font-medium text-text-muted">
+          <input
+            type="checkbox"
+            checked={hideUnplannedDays}
+            onChange={(event) => setHideUnplannedDays(event.target.checked)}
+            data-cy="hide-unplanned-days"
+            className="size-4 accent-brand"
+          />
+          Skjul {unplannedDayCount} {unplannedDayCount === 1 ? "dag" : "dager"}{" "}
+          uten intervjuer
+        </label>
+      )}
       <div className="overflow-hidden rounded-lg border border-border-soft bg-surface-base shadow-sm">
         <div className="overflow-x-auto">
           <table className="w-full border-collapse">
