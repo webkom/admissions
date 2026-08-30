@@ -21,7 +21,6 @@ import {
   buildLockedAssignments,
   buildPublishedDayLocks,
   buildSolveBlocks,
-  decodeScheduleTime,
   formatAccessibleDate,
   manualBlocksToSolverBlocks,
   slotsToSolverAvailability,
@@ -56,7 +55,10 @@ import UnplacedSlotPicker, {
   buildUnplacedSlotOptions,
   type UnplacedSlotOption,
 } from "./UnplacedSlotPicker";
-import { deriveEnabledTimeOptions } from "./solverSelectors";
+import {
+  deriveDayScopeBounds,
+  deriveEnabledTimeOptions,
+} from "./solverSelectors";
 
 interface Props {
   candidates: Candidate[];
@@ -430,21 +432,34 @@ export default function SolverView({
       includeUnlockedItems: true,
     });
   }, [candidates, interviewers, session.savedSchedule]);
-  // The scope can never shrink below the last day that already has a
-  // planned candidate - applying a smaller solve would silently drop them.
-  const minDayCount = useMemo(() => {
-    const rows = session.savedSchedule?.schedule ?? [];
-    let lastDate: string | null = null;
-    rows.forEach((item) => {
-      if (!Number.isFinite(item.time)) return;
-      const { dayIndex } = decodeScheduleTime(item.time, sessionDuration);
-      const date = dates[dayIndex];
-      if (date && (lastDate === null || date > lastDate)) lastDate = date;
-    });
-    if (!lastDate) return 1;
-    const index = session.plannableDates.indexOf(lastDate);
-    return index === -1 ? 1 : index + 1;
-  }, [dates, session.savedSchedule, session.plannableDates, sessionDuration]);
+  // The published prefix is a hard floor (see deriveDayScopeBounds); an
+  // unpublished draft is not, so a from-scratch plan stays fully rescopable
+  // for staged planning. draftDayExtent drives the "these draft days get
+  // replaced" warning in the setup panel.
+  const { minDayCount, draftDayExtent } = useMemo(
+    () =>
+      deriveDayScopeBounds({
+        schedule: session.savedSchedule?.schedule ?? [],
+        scheduleDates: dates,
+        plannableDates: session.plannableDates,
+        distributedThrough: distributedThroughDate,
+        sessionDuration,
+      }),
+    [
+      dates,
+      distributedThroughDate,
+      session.savedSchedule,
+      session.plannableDates,
+      sessionDuration,
+    ],
+  );
+  // The scope is seeded from the last drafted day, which can sit below a
+  // later publication boundary (published days with no interview yet). A
+  // re-solve must always cover every published day, so lift it to the floor.
+  const { effectiveDayCount, setDayCount } = session;
+  useEffect(() => {
+    if (effectiveDayCount < minDayCount) setDayCount(minDayCount);
+  }, [effectiveDayCount, minDayCount, setDayCount]);
   const canExtendDay =
     session.effectiveDayCount < session.plannableDates.length;
   const nextScopeDate = canExtendDay
@@ -985,6 +1000,7 @@ export default function SolverView({
           effectiveDayCount={session.effectiveDayCount}
           onDayCountChange={session.setDayCount}
           minDayCount={minDayCount}
+          draftDayExtent={draftDayExtent}
           loading={session.loading}
           error={session.error}
           elapsedMs={session.elapsedMs}

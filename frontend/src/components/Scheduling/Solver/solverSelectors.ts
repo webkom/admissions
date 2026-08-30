@@ -11,6 +11,7 @@ import {
 import {
   parseSlotKey,
   encodeScheduleTime,
+  decodeScheduleTime,
   slotsToSolverAvailability,
 } from "../scheduleUtils";
 import {
@@ -535,4 +536,54 @@ export const deriveAvailableTimeOptions = (
   return selectableTimes.filter(
     (time) => time === currentTime || !occupiedTimes.has(time),
   );
+};
+
+export interface DayScopeBounds {
+  /** Lowest day scope the solver may run at. The published prefix is a
+   *  promise to the committee (those days are visible, invitations have gone
+   *  out), so a re-solve can never pull the scope back past the last
+   *  published day. With nothing published this is 1: an unpublished draft is
+   *  not a promise, and re-solving a shorter scope just replaces its tail -
+   *  which is what staged planning is. */
+  minDayCount: number;
+  /** How many plannable days the current draft already places a candidate
+   *  within (0 when it is empty). Scoping below this drops the draft rows on
+   *  the days past it, so the setup panel warns first. */
+  draftDayExtent: number;
+}
+
+export const deriveDayScopeBounds = ({
+  schedule,
+  scheduleDates,
+  plannableDates,
+  distributedThrough,
+  sessionDuration,
+}: {
+  schedule: ScheduleItem[];
+  /** Every framework day, in order - the index space `item.time` decodes to. */
+  scheduleDates: string[];
+  /** Framework days with at least one open slot, in order. */
+  plannableDates: string[];
+  distributedThrough: string | null;
+  sessionDuration: number;
+}): DayScopeBounds => {
+  const publishedDayCount = distributedThrough
+    ? plannableDates.filter((date) => date <= distributedThrough).length
+    : 0;
+
+  // The furthest plannable day the draft touches. Rows on a day that is no
+  // longer plannable (the framework changed under the draft) do not count.
+  let draftDayExtent = 0;
+  schedule.forEach((item) => {
+    if (!Number.isFinite(item.time)) return;
+    const { dayIndex } = decodeScheduleTime(item.time, sessionDuration);
+    const plannableIndex = plannableDates.indexOf(scheduleDates[dayIndex]);
+    if (plannableIndex + 1 > draftDayExtent)
+      draftDayExtent = plannableIndex + 1;
+  });
+
+  return {
+    minDayCount: Math.max(1, publishedDayCount),
+    draftDayExtent,
+  };
 };
