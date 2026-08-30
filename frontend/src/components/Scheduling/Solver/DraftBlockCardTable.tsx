@@ -1,4 +1,4 @@
-import React, { useMemo } from "react";
+import React, { useCallback, useMemo } from "react";
 import { ArrowUpDown, GripVertical } from "lucide-react";
 import { EditablePanelChip } from "../ui";
 import type {
@@ -15,6 +15,11 @@ import {
 import type { AssignmentAvailabilityStatus } from "../assignmentAvailability";
 import { calculateBlockBaseline } from "./blockBaseline";
 import { DraftSlotRow } from "./DraftSlotRow";
+import {
+  blockPanelAt,
+  eligibleInterviewersFor,
+  panelConflictsWithCandidate,
+} from "./useScheduleDraft";
 import {
   deriveCandidateSwapTargets,
   type CandidateSwapTarget,
@@ -139,6 +144,17 @@ export interface DraftBlockCardTableProps {
   ) => void;
   onEmptySlotDrop: (time: number, event: React.DragEvent<HTMLElement>) => void;
   onEmptySlotClick: (time: number) => void;
+  /** Cancel an interview outright, freeing its slot. Absent when the plan
+   *  cannot be edited. */
+  onUnassignCandidate?: (scheduleIndex: number) => void;
+  /** Candidates still waiting for a place, offered directly on every open
+   *  slot so placing one does not require the picker modal. */
+  unplacedCandidates?: Array<{ candidate_id: string; candidate: string }>;
+  onAssignUnplacedCandidate?: (args: {
+    candidateId?: string;
+    candidateName: string;
+    time: number;
+  }) => void;
 }
 
 const tableHeaderClass =
@@ -182,12 +198,82 @@ const DraftBlockCardTable: React.FC<DraftBlockCardTableProps> = ({
   onEmptySlotDragLeave,
   onEmptySlotDrop,
   onEmptySlotClick,
+  onUnassignCandidate,
+  unplacedCandidates,
+  onAssignUnplacedCandidate,
 }) => {
   const candidateIdByName = useMemo(() => {
     const map = new Map<string, string>();
     candidates.forEach((candidate) => map.set(candidate.name, candidate.id));
     return map;
   }, [candidates]);
+
+  // Plain candidate names: EditablePanelChip hands the option's `name`
+  // straight back as the selection, and assignUnplacedCandidate matches on
+  // it when a candidate has no id.
+  //
+  // Both disabled cases mirror a way the placement would actually fail, so
+  // the menu never offers a click that quietly does nothing: inside a block
+  // that already has a panel the new interview must join it, and everywhere
+  // else the greedy pick needs enough habile interviewers to fill one.
+  const optionsForSlot = useCallback(
+    (time: number) => {
+      const blockPanel = blockPanelAt(
+        entries.map((entry) => entry.item),
+        canonicalBlocks,
+        time,
+      );
+      return (unplacedCandidates ?? []).map((candidate) => {
+        const record = candidates.find(
+          (entry) =>
+            entry.id === candidate.candidate_id ||
+            entry.name === candidate.candidate,
+        );
+        if (blockPanel) {
+          const conflict = panelConflictsWithCandidate(
+            blockPanel,
+            interviewers,
+            candidate.candidate_id,
+            record?.user_id,
+          );
+          return {
+            id: candidate.candidate_id || undefined,
+            name: candidate.candidate,
+            disabled: conflict,
+            disabledReason: conflict
+              ? "Panelet i denne blokken er inhabilt for kandidaten."
+              : undefined,
+          };
+        }
+        const eligible = eligibleInterviewersFor(
+          interviewers,
+          candidate.candidate_id,
+          record?.user_id,
+        ).length;
+        return {
+          id: candidate.candidate_id || undefined,
+          name: candidate.candidate,
+          disabled: eligible < panelSize,
+          disabledReason:
+            eligible < panelSize
+              ? `Bare ${eligible} habile intervjuere - panelet trenger ${panelSize}.`
+              : undefined,
+        };
+      });
+    },
+    [
+      canonicalBlocks,
+      candidates,
+      entries,
+      interviewers,
+      panelSize,
+      unplacedCandidates,
+    ],
+  );
+  const canPlaceUnplaced =
+    canEditDraft &&
+    Boolean(onAssignUnplacedCandidate) &&
+    (unplacedCandidates?.length ?? 0) > 0;
 
   const candidateSwapTargetsMap = useMemo(() => {
     const map = new Map<number, CandidateSwapTarget[]>();
@@ -552,6 +638,7 @@ const DraftBlockCardTable: React.FC<DraftBlockCardTableProps> = ({
                               scheduleIndex,
                             )}
                             onSwapCandidates={onSwapCandidates}
+                            onUnassignCandidate={onUnassignCandidate}
                             formatSlotTime={formatSlotTime}
                             onSelectRow={onSelectRow}
                             onDragStartRow={onDragStartRow}
@@ -601,7 +688,32 @@ const DraftBlockCardTable: React.FC<DraftBlockCardTableProps> = ({
                             className="px-4 py-3 text-sm text-text-muted font-medium align-middle"
                           >
                             <div className="flex items-center justify-between">
-                              <span>Ledig luke</span>
+                              {canPlaceUnplaced ? (
+                                // The row itself is a move target, so a click
+                                // inside the menu must not also count as
+                                // "drop the selected interview here".
+                                <div
+                                  onClick={(event) => event.stopPropagation()}
+                                >
+                                  <EditablePanelChip
+                                    variant="plain"
+                                    label="Ledig luke — sett inn kandidat"
+                                    options={optionsForSlot(time)}
+                                    onSelect={(candidateName, candidateId) =>
+                                      onAssignUnplacedCandidate?.({
+                                        candidateId,
+                                        candidateName,
+                                        time,
+                                      })
+                                    }
+                                    title="Sett en kandidat som venter på plassering rett inn i denne luken"
+                                    searchPlaceholder="Søk kandidat…"
+                                    emptyLabel="Ingen treff på søket"
+                                  />
+                                </div>
+                              ) : (
+                                <span>Ledig luke</span>
+                              )}
                               {isDropTarget &&
                                 draggedListScheduleIndex !== null && (
                                   <span className="text-xs font-semibold text-brand">
