@@ -224,6 +224,19 @@ export default function SolverView({
     panelSize: session.panelSize,
     onModify: session.markDraftModified,
   });
+  // Days the admin marked finished. Seeded from the server and kept in sync
+  // with it, but locally toggleable - the toggle persists immediately.
+  const savedCompletedDays = session.savedSchedule?.completed_days;
+  const [completedDays, setCompletedDays] = useState<string[]>(
+    () => savedCompletedDays ?? [],
+  );
+  useEffect(() => {
+    setCompletedDays(savedCompletedDays ?? []);
+  }, [savedCompletedDays]);
+  const completedDatesSet = useMemo(
+    () => new Set(completedDays),
+    [completedDays],
+  );
   const persistenceConfig = useMemo(
     () => ({
       admissionSlug,
@@ -240,6 +253,7 @@ export default function SolverView({
       blockMode,
       manualBlocks,
       slotOverrides,
+      completedDays,
       panelSize: session.panelSize,
       solverOptions: session.solverOptions,
     }),
@@ -249,6 +263,7 @@ export default function SolverView({
       blockMode,
       chunkBreakMinutes,
       chunkSize,
+      completedDays,
       dayEndMinute,
       dayStartMinute,
       enabledSlots,
@@ -482,6 +497,16 @@ export default function SolverView({
   const extendDay = () => planThroughDayCount(session.effectiveDayCount + 1);
   const fillRemainingDays = () =>
     planThroughDayCount(session.plannableDates.length);
+  const toggleDayCompleted = (date: string) => {
+    setCompletedDays((current) =>
+      current.includes(date)
+        ? current.filter((value) => value !== date)
+        : [...current, date].sort(),
+    );
+    // Persist right away - a "this day is done" mark should not sit as an
+    // unsaved local edit waiting for the manual save button.
+    window.setTimeout(() => void persistence.saveNow?.(), 0);
+  };
   const retryWithAvailabilityDeviation = () => {
     void session.solvePlan(
       publishedDayLocks ?? draft.explicitLockedAssignments,
@@ -1084,6 +1109,10 @@ export default function SolverView({
         distributedThrough={distributedThroughDate}
         onPlanThrough={canExtendDay ? planThrough : undefined}
         onPublishThrough={onPublishThrough}
+        completedDates={completedDatesSet}
+        onToggleComplete={
+          syntheticInput || session.loading ? undefined : toggleDayCompleted
+        }
         publishSuggestionReady={persistence.isSaved && !persistence.isSaving}
         loading={session.loading}
       />

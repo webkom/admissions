@@ -313,6 +313,11 @@ class SavedSchedule(models.Model):
     resolved_blocks = models.JSONField(default=list, blank=True)
     layout_version = models.PositiveSmallIntegerField(default=2)
     slot_overrides = models.JSONField(default=list, blank=True)
+    # Framework days ("YYYY-MM-DD") the admin has marked finished. Their placed
+    # interviews stay; their still-open slots are withheld from every later
+    # solve, so extending the plan onto new days never backfills a day that is
+    # done - even after someone is removed from it and leaves a hole.
+    completed_days = models.JSONField(default=list, blank=True)
     availability_generation = models.PositiveIntegerField(default=1)
     panel_size = models.PositiveSmallIntegerField(null=True, blank=True)
     solver_options = models.JSONField(null=True, blank=True)

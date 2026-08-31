@@ -125,6 +125,42 @@ class SavedSchedulePublishSemanticsTestCase(APITestCase):
             reviewed_candidate_ids=[str(application.pk) for application in applications]
         )
 
+    def test_completed_days_round_trip_and_never_touch_availability(self):
+        saved = self._create_saved(
+            is_distributed=False,
+            enabled_slots=["2026-04-20|540", "2026-04-21|540"],
+        )
+        generation_before = saved.availability_generation
+
+        res = self.client.post(
+            self.url,
+            {"completed_days": ["2026-04-20"]},
+            format="json",
+        )
+
+        self.assertEqual(res.status_code, status.HTTP_200_OK, res.data)
+        saved.refresh_from_db()
+        self.assertEqual(saved.completed_days, ["2026-04-20"])
+        # Marking a day finished is not a framework change.
+        self.assertEqual(saved.availability_generation, generation_before)
+
+    def test_completed_day_without_an_interview_is_dropped(self):
+        saved = self._create_saved(
+            is_distributed=False,
+            enabled_slots=["2026-04-20|540", "2026-04-21|540"],
+        )
+
+        # 2026-04-21 has no interview in the schedule, so it cannot be "done".
+        res = self.client.post(
+            self.url,
+            {"completed_days": ["2026-04-20", "2026-04-21"]},
+            format="json",
+        )
+
+        self.assertEqual(res.status_code, status.HTTP_200_OK, res.data)
+        saved.refresh_from_db()
+        self.assertEqual(saved.completed_days, ["2026-04-20"])
+
     def test_row_edit_survives_a_roster_that_shrank_under_the_plan(self):
         """Editing a row must not be blocked because fewer people are
         participating than the plan's panel size.
@@ -5464,6 +5500,46 @@ class CanonicalSolverInputTestCase(APITestCase):
         )
 
         self.assertEqual(payload["interviewers"][0]["biased"], [])
+
+    def test_a_completed_day_only_contributes_its_locked_slot_times(self):
+        """A day marked finished keeps its locked interviews but withholds its
+        open slots, so a later solve cannot backfill it after a removal."""
+        SavedSchedule.objects.filter(admission=self.admission).update(
+            start_date="2026-04-20",
+            end_date="2026-04-21",
+            enabled_slots=[
+                "2026-04-20|540",
+                "2026-04-20|600",
+                "2026-04-21|540",
+                "2026-04-21|600",
+            ],
+            resolved_blocks=[],
+            completed_days=["2026-04-20"],
+        )
+        saved_schedule = SavedSchedule.objects.get(admission=self.admission)
+
+        payload = canonicalize_solver_payload(
+            self.admission,
+            saved_schedule,
+            {
+                "candidates": [{"id": str(self.application.pk)}],
+                "interviewers": [{"id": str(self.admin.pk)}],
+                "panel_size": 1,
+                "options": {},
+                "locked_assignments": [
+                    {
+                        "candidate_id": str(self.application.pk),
+                        "time": 540,
+                        "panel": [{"id": str(self.admin.pk), "name": "x"}],
+                    }
+                ],
+            },
+            self.admin,
+        )
+
+        # 540 survives (a locked interview sits there); 600 on the completed
+        # day is gone; both of the next day's slots stay.
+        self.assertEqual(payload["all_slots"], [540, 1980, 2040])
 
     def test_review_scope_is_not_enforced_without_locked_assignments(self):
         """A fresh solve has nothing reviewed yet, so the review-scope
