@@ -289,7 +289,7 @@ const TimeScheduler: React.FC<TimeSchedulerProps> = ({
               <UserMinus size={iconSizes.standard} aria-hidden="true" />
             </span>
             <div>
-              <h2 className="m-0 text-sm font-bold text-text-primary">
+              <h2 className="m-0 text-ui font-bold text-text-primary">
                 Du deltar ikke i intervjuene
               </h2>
               <p className="m-0 mt-0.5 text-detail text-text-muted">

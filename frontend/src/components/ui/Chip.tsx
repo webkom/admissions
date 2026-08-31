@@ -19,7 +19,8 @@ export const Chip: React.FC<ChipProps> = ({
       "inline-flex items-center gap-1 whitespace-nowrap rounded-full border px-2.5 py-1 text-detail font-semibold",
       tone === "brand" && "border-brand-border bg-brand-muted text-brand",
       tone === "success" && "border-success-border bg-success-bg text-success",
-      tone === "warning" && "border-amber-300 bg-amber-100 text-amber-900",
+      tone === "warning" &&
+        "border-warning-border bg-warning-bgStrong text-warning-text",
       tone === "danger" && "border-danger-border bg-danger-bg text-danger",
       tone === "muted" &&
         "border-border-soft bg-surface-subtle text-text-muted",

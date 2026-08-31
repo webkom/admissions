@@ -138,7 +138,7 @@ const GridCalendarView: React.FC<GridCalendarViewProps> = ({
             className="flex-none text-brand"
           />
         )}
-        <span className="truncate whitespace-nowrap text-xs font-bold text-text-primary">
+        <span className="truncate whitespace-nowrap text-label font-bold text-text-primary">
           {item.candidate}
         </span>
       </div>
@@ -202,7 +202,7 @@ const GridCalendarView: React.FC<GridCalendarViewProps> = ({
                 <span className="text-detail font-medium text-text-muted">
                   {weekday}
                 </span>
-                <span className="text-sm font-semibold text-text-primary">
+                <span className="text-ui font-semibold text-text-primary">
                   {dayMonth}
                 </span>
               </div>
@@ -212,7 +212,7 @@ const GridCalendarView: React.FC<GridCalendarViewProps> = ({
           {minutes.map((minute) => {
             return (
               <React.Fragment key={minute}>
-                <div className="flex min-h-20 flex-col items-end justify-center bg-surface-subtle pr-4 text-xs font-bold tabular-nums text-text-muted">
+                <div className="flex min-h-20 flex-col items-end justify-center bg-surface-subtle pr-4 text-label font-bold tabular-nums text-text-muted">
                   {formatMinutes(minute)}
                 </div>
                 {visibleDays.map(({ date, dayIndex }) => {

@@ -147,4 +147,59 @@ describe("toPanelSwapOption", () => {
       disabledKind: undefined,
     });
   });
+  it("blocks an interviewer who opted out of interviewing", () => {
+    // Opting out also means no submitted availability, so without an explicit
+    // rule the reason would either be wrong ("Ikke tilgjengelig") or absent -
+    // and the refusal would arrive from the server, which rejects
+    // non-participating panel members at canonicalisation.
+    const optedOut = interviewer({
+      id: "out",
+      name: "Opted Out",
+      has_submitted: false,
+      participation: "not_participating",
+    });
+
+    expect(panelSwapBlockReason(optedOut, ctx)).to.equal("not_participating");
+    const option = toPanelSwapOption(optedOut, ctx);
+    expect(option.disabled).to.equal(true);
+    expect(option.disabledReason).to.equal("Deltar ikke");
+  });
+
+  it("names opting out ahead of unavailability", () => {
+    // Both apply; the reason shown should be the cause, not the symptom.
+    const optedOut = interviewer({
+      id: "out2",
+      name: "Opted Out Two",
+      availability: [],
+      participation: "not_participating",
+    });
+
+    expect(panelSwapBlockReason(optedOut, ctx)).to.equal("not_participating");
+  });
+
+  it("keeps a participating interviewer selectable", () => {
+    const willing = interviewer({
+      id: "in",
+      name: "Willing",
+      participation: "participating",
+    });
+
+    expect(panelSwapBlockReason(willing, ctx)).to.equal(null);
+    expect(toPanelSwapOption(willing, ctx).disabled).to.equal(false);
+  });
+
+  it('keeps a "helst ikke" slot selectable', () => {
+    // Discouraged is a preference the solver prices as a penalty, not a
+    // constraint it refuses - so a manual swap onto it must stay possible.
+    const reluctant = interviewer({
+      id: "meh",
+      name: "Reluctant",
+      availability: [480, 510],
+      discouraged: [480],
+      participation: "participating",
+    });
+
+    expect(panelSwapBlockReason(reluctant, ctx)).to.equal(null);
+    expect(toPanelSwapOption(reluctant, ctx).disabled).to.equal(false);
+  });
 });

@@ -93,7 +93,7 @@ export const CandidateConflictControl: React.FC<{
     return (
       <span
         className={
-          variant === "calendar" ? "text-text-muted" : "text-sm text-text-muted"
+          variant === "calendar" ? "text-text-muted" : "text-ui text-text-muted"
         }
       >
         —
@@ -110,7 +110,7 @@ export const CandidateConflictControl: React.FC<{
         variant === "calendar"
           ? cn(isConflict && "text-danger")
           : cn(
-              "inline-flex items-center gap-1.5 text-sm font-semibold",
+              "inline-flex items-center gap-1.5 text-ui font-semibold",
               isConflict ? "text-danger" : "text-text-primary",
             )
       }

@@ -12,9 +12,14 @@ import type {
   Interviewer,
   SavedSchedule,
   ScheduleItem,
+  SchedulePanelMember,
 } from "../types";
 import { buildLockedAssignments } from "../scheduleUtils";
-import { hasSchedule, type SolveResponse } from "./solverHelpers";
+import {
+  hasSchedule,
+  UNASSIGNED_REASON,
+  type SolveResponse,
+} from "./solverHelpers";
 import {
   deriveAvailableTimeOptions,
   deriveEnabledTimeOptions,
@@ -44,6 +49,92 @@ export const toggleScheduleDraftLock = (item: ScheduleItem): ScheduleItem => {
     ...(!locked && item.booking_source === "manual"
       ? { booking_source: "solver" as const }
       : {}),
+  };
+};
+
+/** Interviewers who may sit on a panel for this candidate.
+ *
+ *  Two exclusions, and both matter: an interviewer who declared inhabilitet,
+ *  and the candidate themselves when they are also on the committee. The
+ *  server refuses a plan where someone interviews themselves, so leaving the
+ *  second one out turns into a 400 at save time rather than a blocked pick
+ *  here. Shared with the option list on open slots so the menu never offers
+ *  a placement the greedy pick below cannot actually make. */
+export const eligibleInterviewersFor = (
+  interviewers: Interviewer[],
+  candidateId?: string,
+  candidateUserId?: string,
+): Interviewer[] =>
+  interviewers.filter(
+    (interviewer) =>
+      !(candidateId && interviewer.biased.includes(candidateId)) &&
+      !(candidateUserId && interviewer.id === candidateUserId),
+  );
+
+/** The panel already sitting in the block that contains `time`, or null when
+ *  the slot is outside every block or its block has no interview yet. */
+export const blockPanelAt = (
+  schedule: ScheduleItem[],
+  canonicalBlocks: number[][],
+  time: number,
+): SchedulePanelMember[] | null => {
+  const blockSlots = canonicalBlocks.find((slots) => slots.includes(time));
+  if (!blockSlots) return null;
+  const seated = schedule.find((item) => blockSlots.includes(item.time));
+  return seated && seated.panel.length > 0 ? seated.panel : null;
+};
+
+/** Whether an existing panel is unusable for this candidate - someone on it
+ *  declared inhabilitet, or it seats the candidate themselves.
+ *
+ *  Only identifiable members are judged: a panel member with no id, or one no
+ *  longer in the interviewer roster, is left alone rather than treated as a
+ *  conflict, so a legacy or retired seat never blocks a valid placement. */
+export const panelConflictsWithCandidate = (
+  panel: SchedulePanelMember[],
+  interviewers: Interviewer[],
+  candidateId?: string,
+  candidateUserId?: string,
+): boolean =>
+  panel.some((member) => {
+    if (!member.id) return false;
+    if (candidateUserId && member.id === candidateUserId) return true;
+    const interviewer = interviewers.find((entry) => entry.id === member.id);
+    return Boolean(candidateId && interviewer?.biased.includes(candidateId));
+  });
+
+/** Pure transition behind `unassignCandidate`: the row leaves the plan and
+ *  its candidate joins the unplaced queue. Exported so the rule is testable
+ *  without mounting the hook, the way `toggleScheduleDraftLock` is. */
+export const unassignCandidateFromResult = (
+  result: SolveResponse,
+  scheduleIndex: number,
+): SolveResponse => {
+  const removed = result.schedule[scheduleIndex];
+  if (!removed) return result;
+  const alreadyQueued = (result.unplaceable ?? []).some(
+    (entry) =>
+      (removed.candidate_id && entry.candidate_id === removed.candidate_id) ||
+      entry.candidate === removed.candidate,
+  );
+  return {
+    ...result,
+    // A freed slot means the plan no longer covers everyone, which is what
+    // PARTIAL means. It also has to be said out loud: unplaceableCandidates
+    // is only read on PARTIAL, so leaving a SUCCESS status here would make
+    // the candidate disappear from the UI instead of queueing for placement.
+    status: "PARTIAL",
+    schedule: result.schedule.filter((_, index) => index !== scheduleIndex),
+    unplaceable: alreadyQueued
+      ? result.unplaceable
+      : [
+          ...(result.unplaceable ?? []),
+          {
+            candidate_id: removed.candidate_id ?? "",
+            candidate: removed.candidate,
+            reason: UNASSIGNED_REASON,
+          },
+        ],
   };
 };
 
@@ -91,6 +182,14 @@ export interface ScheduleDraftController {
     candidateName: string;
     time: number;
   }) => { ok: boolean; reason?: string };
+  /** Free a slot that has no replacement to swap in - a cancelled
+   *  interview. The row leaves `result.schedule` and the candidate returns
+   *  to the unplaced queue, so the plan still knows it owes them an
+   *  interview. The exact inverse of `assignUnplacedCandidate`. */
+  unassignCandidate: (scheduleIndex: number) => {
+    ok: boolean;
+    reason?: string;
+  };
   /** Rows touched since the last save, drained on read. The persistence
    *  layer forwards them to onSaved so the plan view can scroll back to
    *  and highlight what the user just changed. */
@@ -673,11 +772,8 @@ export const useScheduleDraft = ({
       );
       if (!targetEntry) return { ok: false, reason: "not_unplaceable" };
 
-      // Greedy panel pick: prefer non-biased interviewers who are listed
-      // as available for this slot, otherwise fall back to non-biased
-      // interviewers who didn't list it (marked as overtime so the
-      // user knows). Order by current load so the manual placement
-      // doesn't unbalance the rest of the plan.
+      // Load per interviewer, so a hand placement does not unbalance the
+      // rest of the plan.
       const loadById = new Map<string, number>();
       interviewers.forEach((interviewer) => loadById.set(interviewer.id, 0));
       result.schedule.forEach((item) => {
@@ -687,21 +783,87 @@ export const useScheduleDraft = ({
         });
       });
 
-      const sortedInterviewers = [...interviewers].sort((a, b) => {
+      const candidateRecord = candidates.find(
+        (entry) =>
+          (candidateId && entry.id === candidateId) ||
+          entry.name === candidateName,
+      );
+
+      const commitPlacement = (
+        panel: ScheduleItem["panel"],
+        hasOvertime: boolean,
+      ) => {
+        const newItem: ScheduleItem = {
+          candidate: targetEntry.candidate,
+          candidate_id: targetEntry.candidate_id,
+          time,
+          panel,
+          locked: true,
+          booking_source: "manual",
+        };
+        const newIndex = result.schedule.length;
+        onModify();
+        markTouchedScheduleIndexes([newIndex]);
+        setCanRestoreEditSession(Boolean(editBaselineRef.current));
+        setResult((current) => {
+          if (!current || !hasSchedule(current.status)) return current;
+          return {
+            ...current,
+            schedule: [...current.schedule, newItem],
+            unplaceable: remainingUnplaceable,
+          };
+        });
+        return { ok: true, overtime: hasOvertime };
+      };
+
+      // A block that already holds interviews has a panel, and the server
+      // refuses a plan whose block mixes panels ("Alle intervjuer i samme
+      // blokk ma ha samme panel") when the policy asks for stable panels.
+      // That policy is not visible from here, so join the block's panel
+      // whenever there is one - the right shape under either policy, since a
+      // lone differing panel inside a block is odd even where it is allowed.
+      const blockPanel = blockPanelAt(result.schedule, canonicalBlocks, time);
+      if (blockPanel) {
+        if (
+          panelConflictsWithCandidate(
+            blockPanel,
+            interviewers,
+            candidateId,
+            candidateRecord?.user_id,
+          )
+        ) {
+          return { ok: false, reason: "block_panel_conflict" };
+        }
+        const panel = blockPanel.map((member) => ({
+          ...member,
+          is_overtime: !interviewers
+            .find((interviewer) => interviewer.id === member.id)
+            ?.availability.includes(time),
+        }));
+        return commitPlacement(
+          panel,
+          panel.some((member) => member.is_overtime),
+        );
+      }
+
+      // No block panel to join: pick greedily, preferring interviewers who
+      // listed this slot and falling back to ones who did not (marked as
+      // overtime so the user knows).
+      const sortedInterviewers = eligibleInterviewersFor(
+        interviewers,
+        candidateId,
+        candidateRecord?.user_id,
+      ).sort((a, b) => {
         const loadA = loadById.get(a.id) ?? 0;
         const loadB = loadById.get(b.id) ?? 0;
         if (loadA !== loadB) return loadA - loadB;
         return a.name.localeCompare(b.name, "nb");
       });
 
-      const isBiasedAgainst = (interviewer: Interviewer) =>
-        Boolean(candidateId && interviewer.biased.includes(candidateId));
-
       const panel: ScheduleItem["panel"] = [];
       let hasOvertime = false;
       for (const interviewer of sortedInterviewers) {
         if (panel.length >= panelSize) break;
-        if (isBiasedAgainst(interviewer)) continue;
         const isAvailable = interviewer.availability.includes(time);
         if (!isAvailable) hasOvertime = true;
         panel.push({
@@ -715,29 +877,11 @@ export const useScheduleDraft = ({
         return { ok: false, reason: "no_panel" };
       }
 
-      const newItem: ScheduleItem = {
-        candidate: targetEntry.candidate,
-        candidate_id: targetEntry.candidate_id,
-        time,
-        panel,
-        locked: true,
-        booking_source: "manual",
-      };
-      const newIndex = result.schedule.length;
-      onModify();
-      markTouchedScheduleIndexes([newIndex]);
-      setCanRestoreEditSession(Boolean(editBaselineRef.current));
-      setResult((current) => {
-        if (!current || !hasSchedule(current.status)) return current;
-        return {
-          ...current,
-          schedule: [...current.schedule, newItem],
-          unplaceable: remainingUnplaceable,
-        };
-      });
-      return { ok: true, overtime: hasOvertime };
+      return commitPlacement(panel, hasOvertime);
     },
     [
+      canonicalBlocks,
+      candidates,
       interviewers,
       markTouchedScheduleIndexes,
       onModify,
@@ -745,6 +889,32 @@ export const useScheduleDraft = ({
       result,
       setResult,
     ],
+  );
+
+  const unassignCandidate = useCallback(
+    (scheduleIndex: number) => {
+      if (!result || !hasSchedule(result.status)) {
+        return { ok: false, reason: "no_result" };
+      }
+      if (!result.schedule[scheduleIndex]) {
+        return { ok: false, reason: "not_found" };
+      }
+
+      onModify();
+      setCanRestoreEditSession(Boolean(editBaselineRef.current));
+      // Dropping a row shifts every later index down one, so anything keyed
+      // by the old positions is stale. The touched list only drives the
+      // post-save scroll-and-highlight, so clearing it costs a nicety
+      // rather than correctness - unlike assignUnplacedCandidate, which
+      // appends and can safely name its new index.
+      touchedScheduleIndexesRef.current = [];
+      setResult((current) => {
+        if (!current || !hasSchedule(current.status)) return current;
+        return unassignCandidateFromResult(current, scheduleIndex);
+      });
+      return { ok: true };
+    },
+    [onModify, result, setResult],
   );
 
   return {
@@ -766,6 +936,7 @@ export const useScheduleDraft = ({
     swapPanelMember,
     replaceBlockPanelMember,
     assignUnplacedCandidate,
+    unassignCandidate,
     consumeTouchedScheduleIndexes,
   };
 };

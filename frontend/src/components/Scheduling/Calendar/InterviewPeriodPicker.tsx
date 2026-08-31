@@ -410,7 +410,7 @@ const InterviewPeriodPicker: React.FC<InterviewPeriodPickerProps> = ({
           <span className="block text-tiny font-medium text-text-subtle">
             Intervjuperiode
           </span>
-          <span className="mt-0.5 block truncate text-sm font-bold text-text-primary">
+          <span className="mt-0.5 block truncate text-ui font-bold text-text-primary">
             {formatRange(startDate, endDate)}
           </span>
         </span>

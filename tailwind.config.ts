@@ -82,6 +82,14 @@ const config: Config = {
           mediumBorder: "var(--color-coverage-medium-border)",
           text: "var(--color-coverage-text)",
         },
+        warning: {
+          DEFAULT: "var(--color-warning-text)",
+          text: "var(--color-warning-text)",
+          bg: "var(--color-warning-bg)",
+          bgStrong: "var(--color-warning-bg-strong)",
+          border: "var(--color-warning-border)",
+          solid: "var(--color-warning-solid)",
+        },
         danger: {
           DEFAULT: "var(--color-danger)",
           bg: "var(--color-danger-bg)",

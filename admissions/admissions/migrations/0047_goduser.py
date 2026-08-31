@@ -2,28 +2,32 @@ import django.db.models.deletion
 from django.conf import settings
 from django.db import migrations, models
 
+# The list this migration seeded when it was written, frozen here as a
+# literal. It used to read constants.GOD_LEGO_IDS, but a migration must not
+# depend on live application code: the constant is the *current* answer,
+# while a migration needs the answer as of the moment it ran. The list is now
+# managed through /api/manage/god-user/, so the constant is gone and this
+# historical value is all that remains of it.
+SEEDED_GOD_LEGO_IDS = [8810]
+
 
 def seed_god_user_ids(apps, schema_editor):
-    """Seed the GodUser table from constants.GOD_LEGO_IDS.
+    """Seed the GodUser table with the god list as it stood at deploy time.
 
-    Mirrors the production list at deploy time so behaviour does not
-    change between the constant and the DB-backed check. The constant
-    remains as a safety net for the OAuth login path and for tests that
-    patch it directly.
+    Mirrors the production list so behaviour did not change when the check
+    moved from a hardcoded constant to this table.
     """
     GodUser = apps.get_model("admissions", "GodUser")
-    from admissions.admissions import constants
 
-    for lego_id in constants.GOD_LEGO_IDS:
+    for lego_id in SEEDED_GOD_LEGO_IDS:
         GodUser.objects.get_or_create(lego_id=lego_id)
 
 
 def unseed_god_user_ids(apps, schema_editor):
     """Reverse migration: drop the seeded rows."""
     GodUser = apps.get_model("admissions", "GodUser")
-    from admissions.admissions import constants
 
-    GodUser.objects.filter(lego_id__in=constants.GOD_LEGO_IDS).delete()
+    GodUser.objects.filter(lego_id__in=SEEDED_GOD_LEGO_IDS).delete()
 
 
 class Migration(migrations.Migration):

@@ -1,4 +1,4 @@
-import React, { useMemo } from "react";
+import React, { useCallback, useMemo, useState } from "react";
 import { ArrowUpDown, GripVertical } from "lucide-react";
 import { EditablePanelChip } from "../ui";
 import type {
@@ -16,6 +16,11 @@ import type { AssignmentAvailabilityStatus } from "../assignmentAvailability";
 import { calculateBlockBaseline } from "./blockBaseline";
 import { DraftSlotRow } from "./DraftSlotRow";
 import {
+  blockPanelAt,
+  eligibleInterviewersFor,
+  panelConflictsWithCandidate,
+} from "./useScheduleDraft";
+import {
   deriveCandidateSwapTargets,
   type CandidateSwapTarget,
 } from "./candidateSwapTargets";
@@ -26,6 +31,17 @@ interface ScheduleEntry {
   item: ScheduleItem;
   scheduleIndex: number;
 }
+
+type BlockSlot =
+  | {
+      kind: "entry";
+      time: number;
+      entry: ScheduleEntry;
+    }
+  | {
+      kind: "open";
+      time: number;
+    };
 
 interface BlockData {
   key: string;
@@ -63,6 +79,10 @@ export interface DraftBlockCardTableProps {
   sessionDuration: number;
   panelSize: number;
   canEditDraft: boolean;
+  /** Rows the committee has already been shown. They stay visible in the
+   *  draft but hold their time, panel and candidate until the plan is
+   *  unlocked, so the rest of the period can be planned around them. */
+  isPublishedRow?: (item: ScheduleItem) => boolean;
   currentUserName?: string;
   jointTimes: ReadonlySet<number>;
   selectedDayFilter: number | null;
@@ -139,7 +159,59 @@ export interface DraftBlockCardTableProps {
   ) => void;
   onEmptySlotDrop: (time: number, event: React.DragEvent<HTMLElement>) => void;
   onEmptySlotClick: (time: number) => void;
+  /** Cancel an interview outright, freeing its slot. Absent when the plan
+   *  cannot be edited. */
+  onUnassignCandidate?: (scheduleIndex: number) => void;
+  /** Candidates still waiting for a place, offered directly on every open
+   *  slot so placing one does not require the picker modal. */
+  unplacedCandidates?: Array<{ candidate_id: string; candidate: string }>;
+  onAssignUnplacedCandidate?: (args: {
+    candidateId?: string;
+    candidateName: string;
+    time: number;
+  }) => void;
 }
+
+/** Day indexes that already hold at least one interview. */
+const plannedDays = (blocks: DayScopedBlock[]): Set<number> => {
+  const days = new Set<number>();
+  blocks.forEach((block) => {
+    if (block.entries.length > 0) days.add(block.dayIndex);
+  });
+  return days;
+};
+
+type DayScopedBlock = Pick<BlockData, "dayIndex" | "entries">;
+
+/** Blocks to render: the day filter first, then the unplanned-day toggle.
+ *
+ *  The toggle hides whole *days*, not blocks. A day that has any interview
+ *  keeps its empty blocks, because those are precisely the slots you would
+ *  fill next; a day with nothing at all is what the toggle is for. */
+export const visibleBlocks = <T extends DayScopedBlock>(
+  blocks: T[],
+  selectedDayFilter: number | null,
+  hideUnplannedDays: boolean,
+): T[] => {
+  const scoped =
+    selectedDayFilter === null
+      ? blocks
+      : blocks.filter((block) => block.dayIndex === selectedDayFilter);
+  if (!hideUnplannedDays) return scoped;
+  // Planned days are derived from every block, not the day-scoped subset, so
+  // the two filters stay independent of each other.
+  const planned = plannedDays(blocks);
+  return scoped.filter((block) => planned.has(block.dayIndex));
+};
+
+/** Days with nothing planned yet. The toggle reports this so its label says
+ *  what turning it on would actually hide. */
+export const countUnplannedDays = (blocks: DayScopedBlock[]): number => {
+  const planned = plannedDays(blocks);
+  return [...new Set(blocks.map((block) => block.dayIndex))].filter(
+    (day) => !planned.has(day),
+  ).length;
+};
 
 const tableHeaderClass =
   "sticky top-0 z-10 bg-surface-neutral px-4 py-3 text-left text-label font-semibold tracking-label text-text-muted border-b border-border-soft !rounded-none";
@@ -153,6 +225,7 @@ const DraftBlockCardTable: React.FC<DraftBlockCardTableProps> = ({
   sessionDuration,
   panelSize,
   canEditDraft,
+  isPublishedRow,
   currentUserName,
   jointTimes,
   selectedDayFilter,
@@ -182,12 +255,82 @@ const DraftBlockCardTable: React.FC<DraftBlockCardTableProps> = ({
   onEmptySlotDragLeave,
   onEmptySlotDrop,
   onEmptySlotClick,
+  onUnassignCandidate,
+  unplacedCandidates,
+  onAssignUnplacedCandidate,
 }) => {
   const candidateIdByName = useMemo(() => {
     const map = new Map<string, string>();
     candidates.forEach((candidate) => map.set(candidate.name, candidate.id));
     return map;
   }, [candidates]);
+
+  // Plain candidate names: EditablePanelChip hands the option's `name`
+  // straight back as the selection, and assignUnplacedCandidate matches on
+  // it when a candidate has no id.
+  //
+  // Both disabled cases mirror a way the placement would actually fail, so
+  // the menu never offers a click that quietly does nothing: inside a block
+  // that already has a panel the new interview must join it, and everywhere
+  // else the greedy pick needs enough habile interviewers to fill one.
+  const optionsForSlot = useCallback(
+    (time: number) => {
+      const blockPanel = blockPanelAt(
+        entries.map((entry) => entry.item),
+        canonicalBlocks,
+        time,
+      );
+      return (unplacedCandidates ?? []).map((candidate) => {
+        const record = candidates.find(
+          (entry) =>
+            entry.id === candidate.candidate_id ||
+            entry.name === candidate.candidate,
+        );
+        if (blockPanel) {
+          const conflict = panelConflictsWithCandidate(
+            blockPanel,
+            interviewers,
+            candidate.candidate_id,
+            record?.user_id,
+          );
+          return {
+            id: candidate.candidate_id || undefined,
+            name: candidate.candidate,
+            disabled: conflict,
+            disabledReason: conflict
+              ? "Panelet i denne blokken er inhabilt for kandidaten."
+              : undefined,
+          };
+        }
+        const eligible = eligibleInterviewersFor(
+          interviewers,
+          candidate.candidate_id,
+          record?.user_id,
+        ).length;
+        return {
+          id: candidate.candidate_id || undefined,
+          name: candidate.candidate,
+          disabled: eligible < panelSize,
+          disabledReason:
+            eligible < panelSize
+              ? `Bare ${eligible} habile intervjuere - panelet trenger ${panelSize}.`
+              : undefined,
+        };
+      });
+    },
+    [
+      canonicalBlocks,
+      candidates,
+      entries,
+      interviewers,
+      panelSize,
+      unplacedCandidates,
+    ],
+  );
+  const canPlaceUnplaced =
+    canEditDraft &&
+    Boolean(onAssignUnplacedCandidate) &&
+    (unplacedCandidates?.length ?? 0) > 0;
 
   const candidateSwapTargetsMap = useMemo(() => {
     const map = new Map<number, CandidateSwapTarget[]>();
@@ -218,6 +361,11 @@ const DraftBlockCardTable: React.FC<DraftBlockCardTableProps> = ({
     return map;
   }, [candidateIdByName, dates, entries, interviewers, sessionDuration]);
 
+  // Off by default: the whole framework is the useful default view now
+  // that an empty block can be filled in place. On, it restores the older
+  // behaviour of showing only days that already have something planned.
+  const [hideUnplannedDays, setHideUnplannedDays] = useState(false);
+
   const blocks = useMemo<BlockData[]>(() => {
     const rawBlocks = canonicalBlocks
       .filter((block) => block.length > 0)
@@ -232,7 +380,6 @@ const DraftBlockCardTable: React.FC<DraftBlockCardTableProps> = ({
       const blockEntries = entries.filter(({ item }) =>
         blockTimes.has(item.time),
       );
-      if (blockEntries.length === 0) return;
 
       const { dayIndex, minute: startMinute } = decodeScheduleTime(
         block[0],
@@ -294,12 +441,11 @@ const DraftBlockCardTable: React.FC<DraftBlockCardTableProps> = ({
     sessionDuration,
   ]);
 
-  const activeBlocks = useMemo(() => {
-    if (selectedDayFilter === null) {
-      return blocks;
-    }
-    return blocks.filter((b) => b.dayIndex === selectedDayFilter);
-  }, [blocks, selectedDayFilter]);
+  const activeBlocks = useMemo(
+    () => visibleBlocks(blocks, selectedDayFilter, hideUnplannedDays),
+    [blocks, hideUnplannedDays, selectedDayFilter],
+  );
+  const unplannedDayCount = useMemo(() => countUnplannedDays(blocks), [blocks]);
 
   const coveredScheduleIndexes = useMemo(() => {
     const covered = new Set<number>();
@@ -319,6 +465,19 @@ const DraftBlockCardTable: React.FC<DraftBlockCardTableProps> = ({
 
   return (
     <div data-cy="block-table" className="flex flex-col gap-4">
+      {unplannedDayCount > 0 && (
+        <label className="flex items-center gap-2 self-end text-detail font-medium text-text-muted">
+          <input
+            type="checkbox"
+            checked={hideUnplannedDays}
+            onChange={(event) => setHideUnplannedDays(event.target.checked)}
+            data-cy="hide-unplanned-days"
+            className="size-4 accent-brand"
+          />
+          Skjul {unplannedDayCount} {unplannedDayCount === 1 ? "dag" : "dager"}{" "}
+          uten intervjuer
+        </label>
+      )}
       <div className="overflow-hidden rounded-lg border border-border-soft bg-surface-base shadow-sm">
         <div className="overflow-x-auto">
           <table className="w-full border-collapse">
@@ -357,17 +516,17 @@ const DraftBlockCardTable: React.FC<DraftBlockCardTableProps> = ({
                           {/* Top row: Date/Block & Time on left, interview count on right */}
                           <div className="flex flex-wrap items-center justify-between gap-3">
                             <div className="flex flex-wrap items-center gap-2.5">
-                              <span className="text-sm font-bold text-text-primary">
+                              <span className="text-ui font-bold text-text-primary">
                                 {block.dateLabel}, Blokk {block.blockNumber}
                               </span>
                               <span
-                                className="inline-flex items-center rounded-md border border-border-soft bg-surface-base px-2 py-0.5 text-xs font-semibold tabular-nums text-text-muted shadow-xs"
+                                className="inline-flex items-center rounded-md border border-border-soft bg-surface-base px-2 py-0.5 text-label font-semibold tabular-nums text-text-muted shadow-xs"
                                 title="Blokkens tidsrom"
                               >
                                 {block.timeRangeLabel}
                               </span>
                             </div>
-                            <span className="text-xs font-medium text-text-muted">
+                            <span className="text-label font-medium text-text-muted">
                               {block.entries.length}{" "}
                               {block.entries.length === 1
                                 ? "intervju"
@@ -379,7 +538,7 @@ const DraftBlockCardTable: React.FC<DraftBlockCardTableProps> = ({
                           {block.baselinePanel &&
                             block.baselinePanel.length > 0 && (
                               <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
-                                <span className="text-xs font-semibold text-text-muted">
+                                <span className="text-label font-semibold text-text-muted">
                                   Panel:
                                 </span>
                                 {block.baselinePanel.map((member, index) => (
@@ -421,199 +580,252 @@ const DraftBlockCardTable: React.FC<DraftBlockCardTableProps> = ({
                       </td>
                     </tr>
 
-                    {/* Occupied Slots */}
-                    {block.entries.map(
-                      ({ item, scheduleIndex }, entryIndex) => {
-                        const isRowInSelectedGroup =
-                          moveScope === "group" &&
-                          selectedListScheduleIndex !== null &&
-                          (
-                            groupIndexesByScheduleIndex.get(
-                              selectedListScheduleIndex,
-                            ) ?? []
-                          ).includes(scheduleIndex);
-                        const isRowInDraggedGroup =
-                          moveScope === "group" &&
-                          draggedListScheduleIndex !== null &&
-                          (
-                            groupIndexesByScheduleIndex.get(
-                              draggedListScheduleIndex,
-                            ) ?? []
-                          ).includes(scheduleIndex);
-                        const isRowSelected =
-                          moveScope === "group"
-                            ? isRowInSelectedGroup
-                            : selectedListScheduleIndex === scheduleIndex;
-                        const isRowDragged =
-                          moveScope === "group"
-                            ? isRowInDraggedGroup
-                            : draggedListScheduleIndex === scheduleIndex;
-                        const isDropTarget =
-                          listDropTargetIndex === scheduleIndex;
-                        const isHighlighted =
-                          highlightedScheduleIndexes.has(scheduleIndex);
+                    {/* Unified Chronological Slots (Interleaving occupied interviews and open slots) */}
+                    {(() => {
+                      const allSlots: BlockSlot[] = [
+                        ...block.entries.map((entry) => ({
+                          kind: "entry" as const,
+                          time: entry.item.time,
+                          entry,
+                        })),
+                        ...block.openSlotTimes.map((time) => ({
+                          kind: "open" as const,
+                          time,
+                        })),
+                      ].sort((a, b) => a.time - b.time);
 
-                        const groupSpanningCell =
-                          moveScope === "group" && entryIndex === 0 ? (
-                            <td
-                              rowSpan={block.entries.length}
-                              className="w-24 p-1.5 align-middle border-r border-border-soft bg-surface-subtle/30 text-center"
-                            >
-                              {canEditDraft && (
-                                <div className="flex h-full min-h-[90px] w-full flex-col items-center justify-center gap-2 py-2">
-                                  <button
-                                    type="button"
-                                    draggable
-                                    aria-pressed={isGroupSelected}
-                                    aria-label={`Flytt hele blokken (${block.dateLabel}, Blokk ${block.blockNumber})`}
-                                    title="Dra for å flytte hele blokken"
-                                    onClick={() =>
-                                      block.scheduleIndexes[0] !== undefined &&
-                                      onSelectRow(block.scheduleIndexes[0])
-                                    }
-                                    onDragStart={(event) =>
-                                      block.scheduleIndexes[0] !== undefined &&
-                                      onDragStartRow(
-                                        block.scheduleIndexes[0],
-                                        event,
-                                      )
-                                    }
-                                    onDragEnd={onDragEndRow}
-                                    className={cn(
-                                      "flex flex-1 w-7 min-h-[45px] items-center justify-center rounded-md border transition-all cursor-grab active:cursor-grabbing",
-                                      isGroupSelected
-                                        ? "border-brand bg-brand text-white shadow-sm ring-2 ring-brand-ring"
-                                        : "border-border-soft bg-surface-base text-text-muted hover:border-brand/40 hover:bg-surface-subtle hover:text-text-primary",
-                                    )}
-                                  >
-                                    <GripVertical
-                                      size={iconSizes.medium}
-                                      aria-hidden="true"
-                                    />
-                                  </button>
-                                  <button
-                                    type="button"
-                                    onClick={() =>
-                                      block.scheduleIndexes[0] !== undefined &&
-                                      onSelectRow(block.scheduleIndexes[0])
-                                    }
-                                    aria-pressed={isGroupSelected}
-                                    title={
-                                      isGroupSelected
-                                        ? "Valgt blokk – klikk en annen blokk for å bytte plass"
-                                        : "Klikk for å bytte plass med en annen blokk"
-                                    }
-                                    className={cn(
-                                      "inline-flex items-center gap-0.5 rounded px-1.5 py-0.5 text-nano font-semibold transition-colors border cursor-pointer",
-                                      isGroupSelected
-                                        ? "border-brand bg-brand text-white shadow-xs ring-2 ring-brand-ring"
-                                        : "border-border-soft bg-surface-base text-text-muted hover:border-border-quiet hover:bg-surface-subtle hover:text-text-primary",
-                                    )}
-                                  >
-                                    <ArrowUpDown size={10} aria-hidden="true" />
-                                    <span>
-                                      {isGroupSelected ? "Valgt" : "Bytt"}
-                                    </span>
-                                  </button>
-                                </div>
-                              )}
-                            </td>
-                          ) : undefined;
-
-                        return (
-                          <DraftSlotRow
-                            key={scheduleIndex}
-                            scheduleIndex={scheduleIndex}
-                            item={item}
-                            sessionDuration={sessionDuration}
-                            canEditDraft={canEditDraft}
-                            baselinePanel={block.baselinePanel}
-                            availabilityStatusFor={availabilityStatusFor}
-                            hasConflictFor={hasConflictFor}
-                            onToggleLock={onToggleLock}
-                            isJointTime={jointTimes.has(item.time)}
-                            moveScope={moveScope}
-                            isRowSelected={isRowSelected}
-                            isRowDragged={isRowDragged}
-                            isDropTarget={isDropTarget}
-                            isHighlighted={isHighlighted}
-                            groupSpanningCell={groupSpanningCell}
-                            renderFlyttCell={moveScope === "interview"}
-                            buildReplacementOptions={(currentMember) =>
-                              getSlotInterviewerOptions(
-                                currentMember,
-                                item.panel,
-                                item.time,
-                                block.candidateIds,
-                              )
-                            }
-                            onSwapPanelMember={onSwapPanelMember}
-                            candidateSwapTargets={candidateSwapTargetsMap.get(
-                              scheduleIndex,
-                            )}
-                            onSwapCandidates={onSwapCandidates}
-                            formatSlotTime={formatSlotTime}
-                            onSelectRow={onSelectRow}
-                            onDragStartRow={onDragStartRow}
-                            onDragEndRow={onDragEndRow}
-                            onRowDragOver={onRowDragOver}
-                            onRowDragLeave={onRowDragLeave}
-                            onRowDrop={onRowDrop}
-                          />
-                        );
-                      },
-                    )}
-
-                    {/* Open Slots */}
-                    {block.openSlotTimes.map((time) => {
-                      const startMinute = decodeScheduleTime(
-                        time,
-                        sessionDuration,
-                      ).minute;
-                      const slotLabel = `${formatMinutes(
-                        startMinute,
-                      )}–${formatMinutes(startMinute + sessionDuration)}`;
-                      const isDropTarget = listDropTargetTime === time;
-
-                      return (
-                        <tr
-                          key={`open-${time}`}
-                          onDragOver={(event) =>
-                            onEmptySlotDragOver(time, event)
-                          }
-                          onDragLeave={(event) =>
-                            onEmptySlotDragLeave(time, event)
-                          }
-                          onDrop={(event) => onEmptySlotDrop(time, event)}
-                          onClick={() => onEmptySlotClick(time)}
-                          className={cn(
-                            "border-b border-border-soft bg-surface-base transition-colors cursor-pointer hover:bg-surface-subtle",
-                            isDropTarget &&
-                              "bg-brand-soft/40 ring-2 ring-inset ring-brand-ring",
-                          )}
-                        >
-                          <td className="w-24 px-1 py-3 text-center align-middle" />
-                          <td className="w-36 whitespace-nowrap px-4 py-3 text-sm tabular-nums font-medium text-text-muted align-middle">
-                            {slotLabel}
-                          </td>
+                      const groupSpanningCell =
+                        moveScope === "group" &&
+                        canEditDraft &&
+                        block.scheduleIndexes.length > 0 ? (
                           <td
-                            colSpan={2}
-                            className="px-4 py-3 text-sm text-text-muted font-medium align-middle"
+                            rowSpan={allSlots.length}
+                            className="w-24 p-1.5 align-middle border-r border-border-soft bg-surface-subtle/30 text-center"
                           >
-                            <div className="flex items-center justify-between">
-                              <span>Ledig luke</span>
-                              {isDropTarget &&
-                                draggedListScheduleIndex !== null && (
-                                  <span className="text-xs font-semibold text-brand">
-                                    Slipp intervjuet her
-                                  </span>
+                            <div className="flex h-full min-h-[90px] w-full flex-col items-center justify-center gap-2 py-2">
+                              <button
+                                type="button"
+                                draggable
+                                aria-pressed={isGroupSelected}
+                                aria-label={`Flytt hele blokken (${block.dateLabel}, Blokk ${block.blockNumber})`}
+                                title="Dra for å flytte hele blokken"
+                                onClick={() =>
+                                  block.scheduleIndexes[0] !== undefined &&
+                                  onSelectRow(block.scheduleIndexes[0])
+                                }
+                                onDragStart={(event) =>
+                                  block.scheduleIndexes[0] !== undefined &&
+                                  onDragStartRow(
+                                    block.scheduleIndexes[0],
+                                    event,
+                                  )
+                                }
+                                onDragEnd={onDragEndRow}
+                                className={cn(
+                                  "flex flex-1 w-7 min-h-[45px] items-center justify-center rounded-md border transition-all cursor-grab active:cursor-grabbing",
+                                  isGroupSelected
+                                    ? "border-brand bg-brand text-white shadow-sm ring-2 ring-brand-ring"
+                                    : "border-border-soft bg-surface-base text-text-muted hover:border-brand/40 hover:bg-surface-subtle hover:text-text-primary",
                                 )}
+                              >
+                                <GripVertical
+                                  size={iconSizes.medium}
+                                  aria-hidden="true"
+                                />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  block.scheduleIndexes[0] !== undefined &&
+                                  onSelectRow(block.scheduleIndexes[0])
+                                }
+                                aria-pressed={isGroupSelected}
+                                title={
+                                  isGroupSelected
+                                    ? "Valgt blokk – klikk en annen blokk for å bytte plass"
+                                    : "Klikk for å bytte plass med en annen blokk"
+                                }
+                                className={cn(
+                                  "inline-flex items-center gap-0.5 rounded px-1.5 py-0.5 text-nano font-semibold transition-colors border cursor-pointer",
+                                  isGroupSelected
+                                    ? "border-brand bg-brand text-white shadow-xs ring-2 ring-brand-ring"
+                                    : "border-border-soft bg-surface-base text-text-muted hover:border-border-quiet hover:bg-surface-subtle hover:text-text-primary",
+                                )}
+                              >
+                                <ArrowUpDown size={10} aria-hidden="true" />
+                                <span>
+                                  {isGroupSelected ? "Valgt" : "Bytt"}
+                                </span>
+                              </button>
                             </div>
                           </td>
-                          <td className="w-16 px-4 py-3 text-center align-middle" />
-                        </tr>
-                      );
-                    })}
+                        ) : undefined;
+
+                      return allSlots.map((slot, slotIndex) => {
+                        if (slot.kind === "entry") {
+                          const { item, scheduleIndex } = slot.entry;
+                          const isRowInSelectedGroup =
+                            moveScope === "group" &&
+                            selectedListScheduleIndex !== null &&
+                            (
+                              groupIndexesByScheduleIndex.get(
+                                selectedListScheduleIndex,
+                              ) ?? []
+                            ).includes(scheduleIndex);
+                          const isRowInDraggedGroup =
+                            moveScope === "group" &&
+                            draggedListScheduleIndex !== null &&
+                            (
+                              groupIndexesByScheduleIndex.get(
+                                draggedListScheduleIndex,
+                              ) ?? []
+                            ).includes(scheduleIndex);
+                          const isRowSelected =
+                            moveScope === "group"
+                              ? isRowInSelectedGroup
+                              : selectedListScheduleIndex === scheduleIndex;
+                          const isRowDragged =
+                            moveScope === "group"
+                              ? isRowInDraggedGroup
+                              : draggedListScheduleIndex === scheduleIndex;
+                          const isDropTarget =
+                            listDropTargetIndex === scheduleIndex;
+                          const isHighlighted =
+                            highlightedScheduleIndexes.has(scheduleIndex);
+
+                          return (
+                            <DraftSlotRow
+                              key={scheduleIndex}
+                              scheduleIndex={scheduleIndex}
+                              item={item}
+                              sessionDuration={sessionDuration}
+                              canEditDraft={
+                                canEditDraft && !isPublishedRow?.(item)
+                              }
+                              isPublishedRow={Boolean(isPublishedRow?.(item))}
+                              baselinePanel={block.baselinePanel}
+                              availabilityStatusFor={availabilityStatusFor}
+                              hasConflictFor={hasConflictFor}
+                              onToggleLock={onToggleLock}
+                              isJointTime={jointTimes.has(item.time)}
+                              moveScope={moveScope}
+                              isRowSelected={isRowSelected}
+                              isRowDragged={isRowDragged}
+                              isDropTarget={isDropTarget}
+                              isHighlighted={isHighlighted}
+                              groupSpanningCell={
+                                moveScope === "group" && slotIndex === 0
+                                  ? groupSpanningCell
+                                  : undefined
+                              }
+                              renderFlyttCell={moveScope === "interview"}
+                              buildReplacementOptions={(currentMember) =>
+                                getSlotInterviewerOptions(
+                                  currentMember,
+                                  item.panel,
+                                  item.time,
+                                  block.candidateIds,
+                                )
+                              }
+                              onSwapPanelMember={onSwapPanelMember}
+                              candidateSwapTargets={candidateSwapTargetsMap.get(
+                                scheduleIndex,
+                              )}
+                              onSwapCandidates={onSwapCandidates}
+                              onUnassignCandidate={onUnassignCandidate}
+                              formatSlotTime={formatSlotTime}
+                              onSelectRow={onSelectRow}
+                              onDragStartRow={onDragStartRow}
+                              onDragEndRow={onDragEndRow}
+                              onRowDragOver={onRowDragOver}
+                              onRowDragLeave={onRowDragLeave}
+                              onRowDrop={onRowDrop}
+                            />
+                          );
+                        }
+
+                        // Open slot
+                        const time = slot.time;
+                        const startMinute = decodeScheduleTime(
+                          time,
+                          sessionDuration,
+                        ).minute;
+                        const slotLabel = `${formatMinutes(
+                          startMinute,
+                        )}–${formatMinutes(startMinute + sessionDuration)}`;
+                        const isDropTarget = listDropTargetTime === time;
+
+                        return (
+                          <tr
+                            key={`open-${time}`}
+                            onDragOver={(event) =>
+                              onEmptySlotDragOver(time, event)
+                            }
+                            onDragLeave={(event) =>
+                              onEmptySlotDragLeave(time, event)
+                            }
+                            onDrop={(event) => onEmptySlotDrop(time, event)}
+                            onClick={() => onEmptySlotClick(time)}
+                            className={cn(
+                              "border-b border-border-soft bg-surface-base transition-colors cursor-pointer hover:bg-surface-subtle",
+                              isDropTarget &&
+                                "bg-brand-soft/40 ring-2 ring-inset ring-brand-ring",
+                            )}
+                          >
+                            {moveScope === "group" ? (
+                              slotIndex === 0 ? (
+                                groupSpanningCell
+                              ) : null
+                            ) : (
+                              <td className="w-24 px-1 py-3 text-center align-middle" />
+                            )}
+                            <td className="w-36 whitespace-nowrap px-4 py-3 text-ui tabular-nums font-medium text-text-muted align-middle">
+                              {slotLabel}
+                            </td>
+                            <td
+                              colSpan={2}
+                              className="px-4 py-3 text-ui text-text-muted font-medium align-middle"
+                            >
+                              <div className="flex items-center justify-between">
+                                {canPlaceUnplaced ? (
+                                  // The row itself is a move target, so a click
+                                  // inside the menu must not also count as
+                                  // "drop the selected interview here".
+                                  <div
+                                    onClick={(event) => event.stopPropagation()}
+                                  >
+                                    <EditablePanelChip
+                                      variant="plain"
+                                      label="Ledig luke — sett inn kandidat"
+                                      options={optionsForSlot(time)}
+                                      onSelect={(candidateName, candidateId) =>
+                                        onAssignUnplacedCandidate?.({
+                                          candidateId,
+                                          candidateName,
+                                          time,
+                                        })
+                                      }
+                                      title="Sett en kandidat som venter på plassering rett inn i denne luken"
+                                      searchPlaceholder="Søk kandidat…"
+                                      emptyLabel="Ingen treff på søket"
+                                    />
+                                  </div>
+                                ) : (
+                                  <span>Ledig luke</span>
+                                )}
+                                {isDropTarget &&
+                                  draggedListScheduleIndex !== null && (
+                                    <span className="text-label font-semibold text-brand">
+                                      Slipp intervjuet her
+                                    </span>
+                                  )}
+                              </div>
+                            </td>
+                            <td className="w-16 px-4 py-3 text-center align-middle" />
+                          </tr>
+                        );
+                      });
+                    })()}
                   </React.Fragment>
                 );
               })}
@@ -624,10 +836,10 @@ const DraftBlockCardTable: React.FC<DraftBlockCardTableProps> = ({
                   <tr className="border-y border-border-soft bg-surface-neutral/60">
                     <td colSpan={5} className="px-4 py-3">
                       <div className="flex items-center gap-2">
-                        <span className="text-sm font-bold text-text-primary">
+                        <span className="text-ui font-bold text-text-primary">
                           Utenfor blokk
                         </span>
-                        <span className="text-xs font-medium text-text-muted">
+                        <span className="text-label font-medium text-text-muted">
                           · {unassignedEntries.length}{" "}
                           {unassignedEntries.length === 1
                             ? "intervju"
@@ -664,13 +876,13 @@ const DraftBlockCardTable: React.FC<DraftBlockCardTableProps> = ({
                           </button>
                         )}
                       </td>
-                      <td className="w-36 whitespace-nowrap px-4 py-3 text-sm tabular-nums font-medium text-text-primary align-middle">
+                      <td className="w-36 whitespace-nowrap px-4 py-3 text-ui tabular-nums font-medium text-text-primary align-middle">
                         {formatSlotTime(item.time)}
                       </td>
-                      <td className="w-60 px-4 py-3 text-sm font-semibold text-text-primary align-middle">
+                      <td className="w-60 px-4 py-3 text-ui font-semibold text-text-primary align-middle">
                         {item.candidate}
                       </td>
-                      <td className="px-4 py-3 text-sm text-text-faded align-middle">
+                      <td className="px-4 py-3 text-ui text-text-faded align-middle">
                         —
                       </td>
                       <td className="w-16 px-4 py-3 text-center align-middle" />

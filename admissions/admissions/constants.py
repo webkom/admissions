@@ -1,3 +1,8 @@
+import logging
+import os
+
+_log = logging.getLogger(__name__)
+
 MEMBER = "member"
 LEADER = "leader"
 CO_LEADER = "co-leader"
@@ -121,7 +126,7 @@ ADMISSION_GROUP_CATEGORIES = (
         # group, and backup - which LEGO does type as a komite - does not
         # belong in a list of komite-opptak. Hovedstyret is deliberately not
         # here: its members hold no admission access, and central god access
-        # is handled by GOD_LEGO_IDS instead.
+        # is handled by the GodUser table instead.
         GROUP_CATEGORY_OTHER,
         ("Abakus-leder", "backup"),
     ),
@@ -184,11 +189,6 @@ def group_category(name):
 STAFF_LEADER_GROUPS = ["backup", "Abakus-leder", "RevyStyret"]
 """ Members of these groups with role leader attain the is_staff attribute and can manage admissions. Matched against the LEGO login payload's group names - no local Group row is needed. """
 
-# DEPRECATED: god-list is now DB-backed (admissions.admissions.models.GodUser).
-# The constant remains as the seed list for migration 0047_goduser and as
-# a test fixture. The runtime checks in admission_access.user_is_org_leadership
-# and oauth.update_custom_user_details consult the DB only.
-GOD_LEGO_IDS = [8810]
 WEBKOM_GROUPNAME = "Webkom"
 """ Group name of Webkom """
 
@@ -209,8 +209,72 @@ LEGO_GENDER_TO_PANEL_CODE = {LEGO_GENDER_MALE: "M", LEGO_GENDER_FEMALE: "F"}
 # callers can still request the longer ceiling for unusually difficult ones.
 DEFAULT_SOLVER_SECONDS = 240
 MAX_SOLVER_SECONDS = 5 * 60
-SOLVER_NUM_WORKERS = 4
+# CP-SAT runs a portfolio: more workers means more LNS subsolvers, which is
+# what actually finds good plans fast on this model class. Measured on an
+# 8-core box, lifting 4 -> 8 roughly halved the wall time *and* returned
+# lexicographically better plans.
+#
+# Deliberately a fixed default rather than one read from the host. The
+# portfolio's composition changes with the worker count, so CP-SAT returns a
+# different plan for the same seed on a differently-sized machine - a constant
+# is what keeps a local reproduction, CI and production talking about the same
+# plan. `os.cpu_count()` would also report the host's cores rather than a
+# container's quota, oversubscribing exactly the small containers it looks
+# like it protects. Ops sizes a container through the environment instead.
+DEFAULT_SOLVER_NUM_WORKERS = 8
+MIN_SOLVER_NUM_WORKERS = 1
+MAX_SOLVER_NUM_WORKERS = 32
+
+
+def resolve_solver_num_workers(raw: str | None) -> int:
+    """Worker count from the environment, surviving a malformed value.
+
+    This module is imported by the models, the views and the solve worker
+    alike, so a typo in the deploy config has to degrade the solver rather
+    than stop the whole service from importing.
+    """
+
+    raw = (raw or "").strip()
+    if not raw:
+        return DEFAULT_SOLVER_NUM_WORKERS
+    try:
+        requested = int(raw)
+    except ValueError:
+        _log.warning(
+            "Ignoring malformed ADMISSIONS_SOLVER_NUM_WORKERS=%r, using %d.",
+            raw,
+            DEFAULT_SOLVER_NUM_WORKERS,
+        )
+        return DEFAULT_SOLVER_NUM_WORKERS
+    clamped = max(MIN_SOLVER_NUM_WORKERS, min(requested, MAX_SOLVER_NUM_WORKERS))
+    if clamped != requested:
+        _log.warning(
+            "ADMISSIONS_SOLVER_NUM_WORKERS=%d is out of range, using %d.",
+            requested,
+            clamped,
+        )
+    return clamped
+
+
+SOLVER_NUM_WORKERS = resolve_solver_num_workers(
+    os.environ.get("ADMISSIONS_SOLVER_NUM_WORKERS")
+)
 SOLVER_RANDOM_SEED = 42
+# The default (1) leaves the assignment/packing structure of this model mostly
+# to the CP propagators. Level 2 builds the fuller LP relaxation, which prices
+# the load-balance and block-fill tiers far better here.
+SOLVER_LINEARIZATION_LEVEL = 2
+# A staged tier gets at most this share of the remaining budget, so a tier that
+# finds good solutions but cannot prove them optimal leaves time for the rest.
+SOLVER_TIER_BUDGET_SHARE = 0.5
+# `stability_tie_breaker` only canonicalises between plans that are already
+# equal on every meaningful tier. Proving it optimal was measured eating 20-25%
+# of the budget, so it never gets more than this fraction of what is left.
+SOLVER_TIE_BREAKER_BUDGET_SHARE = 0.15
+# Wall-clock gap between two persisted incumbents while a solve is running.
+# Small enough that the browser (polling every 1.5s) sees a usable plan almost
+# immediately, large enough that the callback never becomes the bottleneck.
+SOLVER_INCUMBENT_PUBLISH_SECONDS = 2.0
 MAX_SOLVER_MODEL_VARS = 2_000_000
 MAX_SOLVER_MODEL_CONSTRAINTS = 4_000_000
 # A much lower sparse-core guard prevents Python model construction/search from

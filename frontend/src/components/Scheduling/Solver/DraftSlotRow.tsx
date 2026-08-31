@@ -17,6 +17,9 @@ export interface DraftSlotRowProps {
   item: ScheduleItem;
   sessionDuration: number;
   canEditDraft: boolean;
+  /** Already released to the committee. The row stays visible so the rest of
+   *  the period can be planned around it, but nothing on it can move. */
+  isPublishedRow?: boolean;
   baselinePanel: SchedulePanelMember[] | null;
   availabilityStatusFor: (
     item: ScheduleItem,
@@ -50,6 +53,7 @@ export interface DraftSlotRowProps {
   ) => void;
   candidateSwapTargets?: CandidateSwapTarget[];
   onSwapCandidates?: (sourceIndex: number, targetIndex: number) => void;
+  onUnassignCandidate?: (scheduleIndex: number) => void;
   formatSlotTime: (time: number) => string;
   onSelectRow: (scheduleIndex: number) => void;
   onDragStartRow: (
@@ -92,6 +96,7 @@ export const DraftSlotRow: React.FC<DraftSlotRowProps> = ({
   item,
   sessionDuration,
   canEditDraft,
+  isPublishedRow = false,
   baselinePanel,
   availabilityStatusFor,
   hasConflictFor,
@@ -108,6 +113,7 @@ export const DraftSlotRow: React.FC<DraftSlotRowProps> = ({
   onSwapPanelMember,
   candidateSwapTargets,
   onSwapCandidates,
+  onUnassignCandidate,
   formatSlotTime,
   onSelectRow,
   onDragStartRow,
@@ -145,7 +151,7 @@ export const DraftSlotRow: React.FC<DraftSlotRowProps> = ({
     warnings.push(
       <span
         key="availability"
-        className="flex-none rounded bg-amber-100 px-1.5 py-0.5 text-nano font-bold text-amber-900"
+        className="flex-none rounded bg-warning-bgStrong px-1.5 py-0.5 text-nano font-bold text-warning-text"
         title={availabilityIssues
           .map(
             (member) =>
@@ -212,7 +218,7 @@ export const DraftSlotRow: React.FC<DraftSlotRowProps> = ({
           />
         ) : (
           <span
-            className="inline-flex items-center rounded border border-amber-200 bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-800"
+            className="inline-flex items-center rounded border border-warning-border bg-warning-bg px-2 py-0.5 text-label font-medium text-warning-text"
             title={`+ ${added.name}\n− ${removed.name}`}
           >
             {shortName(added.name)} ⇄ {shortName(removed.name)}
@@ -248,7 +254,7 @@ export const DraftSlotRow: React.FC<DraftSlotRowProps> = ({
           ) : (
             <span
               key={addedMember.name}
-              className="inline-flex items-center rounded border border-amber-200 bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-800"
+              className="inline-flex items-center rounded border border-warning-border bg-warning-bg px-2 py-0.5 text-label font-medium text-warning-text"
             >
               + {shortName(addedMember.name)}
             </span>
@@ -257,7 +263,7 @@ export const DraftSlotRow: React.FC<DraftSlotRowProps> = ({
         {diff.removed.map((removedMember) => (
           <span
             key={removedMember.name}
-            className="inline-flex items-center rounded border border-border-soft bg-surface-neutral px-2 py-0.5 text-xs font-medium text-text-muted"
+            className="inline-flex items-center rounded border border-border-soft bg-surface-neutral px-2 py-0.5 text-label font-medium text-text-muted"
           >
             − {shortName(removedMember.name)}
           </span>
@@ -287,7 +293,7 @@ export const DraftSlotRow: React.FC<DraftSlotRowProps> = ({
           ) : (
             <span
               key={`${member.name}-${mIdx}`}
-              className="text-xs font-medium text-text-muted"
+              className="text-label font-medium text-text-muted"
             >
               {shortName(member.name)}
             </span>
@@ -311,7 +317,7 @@ export const DraftSlotRow: React.FC<DraftSlotRowProps> = ({
       />
     ) : (
       <span
-        className="text-text-muted/60 text-sm font-medium"
+        className="text-text-muted/60 text-ui font-medium"
         aria-hidden="true"
         title="Felles standardpanel for blokken"
       >
@@ -387,7 +393,7 @@ export const DraftSlotRow: React.FC<DraftSlotRowProps> = ({
       )}
 
       {/* Col 2: Tidspunkt */}
-      <td className="w-36 whitespace-nowrap px-4 py-3 text-sm tabular-nums font-semibold text-text-primary align-middle">
+      <td className="w-36 whitespace-nowrap px-4 py-3 text-ui tabular-nums font-semibold text-text-primary align-middle">
         {slotLabel}
       </td>
 
@@ -396,18 +402,21 @@ export const DraftSlotRow: React.FC<DraftSlotRowProps> = ({
         <div className="flex min-w-0 items-center gap-2">
           {canEditDraft &&
           onSwapCandidates &&
-          candidateSwapTargets &&
-          candidateSwapTargets.length > 0 ? (
+          // A row with no swap partners still opens the menu when the slot
+          // can be emptied - that is exactly the case the cancel option
+          // exists for.
+          (onUnassignCandidate || (candidateSwapTargets?.length ?? 0) > 0) ? (
             <CandidateSwapChip
               item={item}
               scheduleIndex={scheduleIndex}
-              targets={candidateSwapTargets}
+              targets={candidateSwapTargets ?? []}
               formatTimeLabel={formatSlotTime}
               onSwap={onSwapCandidates}
+              onUnassign={onUnassignCandidate}
               conflict={hasConflict}
             />
           ) : (
-            <span className="truncate text-sm font-semibold text-text-primary">
+            <span className="truncate text-ui font-semibold text-text-primary">
               {item.candidate}
             </span>
           )}
@@ -420,6 +429,17 @@ export const DraftSlotRow: React.FC<DraftSlotRowProps> = ({
 
       {/* Col 5: Lås (Ghost toggle button with Lock/Unlock) */}
       <td className="w-16 px-4 py-3 text-center align-middle">
+        {isPublishedRow && (
+          <span
+            title="Publisert - synlig for komiteen. Lås opp planen for å endre."
+            className="inline-flex items-center justify-center p-1.5 text-success"
+          >
+            <Lock size={iconSizes.small} aria-hidden="true" />
+            <span className="sr-only">
+              Publisert intervju for {item.candidate}, kan ikke endres
+            </span>
+          </span>
+        )}
         {canEditDraft && (
           <button
             type="button"

@@ -1,12 +1,21 @@
 import React from "react";
 
-import { progressMessageFor, type SolveJob } from "./solverHelpers";
+import {
+  progressMessageFor,
+  type SolveJob,
+  type SolveResponse,
+} from "./solverHelpers";
 
 interface SolveProgressProps {
   elapsedMs?: number;
   startedAt?: string | null;
   estimatedSeconds: number;
   jobStatus: SolveJob["status"] | null;
+  /** Best plan found so far. The solver reaches a usable schedule in seconds
+   *  and spends the rest of its budget improving it, so this normally appears
+   *  long before the run ends. */
+  preview?: SolveResponse | null;
+  onAcceptPreview?: () => void;
 }
 
 const SolveProgress = ({
@@ -14,6 +23,8 @@ const SolveProgress = ({
   startedAt,
   estimatedSeconds,
   jobStatus,
+  preview,
+  onAcceptPreview,
 }: SolveProgressProps) => {
   const [internalElapsedMs, setInternalElapsedMs] = React.useState(
     externalElapsedMs ?? 0,
@@ -51,6 +62,8 @@ const SolveProgress = ({
           ? (elapsedMs / Math.max(progressTargetMs, 1)) * 92
           : 92 + Math.min(5, ((elapsedMs - progressTargetMs) / 1000) * 0.08),
       );
+  const previewPlaced = preview?.schedule.length ?? 0;
+  const previewUnplaced = preview?.unplaceable?.length ?? 0;
   const progressMessage = waitingForWorker
     ? elapsedMs >= 8000
       ? import.meta.env.DEV
@@ -77,11 +90,40 @@ const SolveProgress = ({
         />
       </div>
       <div className="mt-2 flex justify-between gap-2 text-detail text-text-muted">
-        <span aria-live="polite">{progressMessage}</span>
+        <span aria-live="polite">
+          {preview ? "Forbedrer planen…" : progressMessage}
+        </span>
         <strong className="tabular-nums text-text-primary">
           {(elapsedMs / 1000).toFixed(1)}s
         </strong>
       </div>
+      {preview && (
+        <div
+          className="mt-2 flex flex-wrap items-center justify-between gap-2 rounded-md bg-surface-muted px-3 py-2"
+          data-cy="solve-live-preview"
+        >
+          <span className="text-detail text-text-primary">
+            <strong className="font-semibold">
+              {previewPlaced} {previewPlaced === 1 ? "kandidat" : "kandidater"}{" "}
+              plassert
+            </strong>
+            {previewUnplaced > 0
+              ? ` — ${previewUnplaced} uten plass så langt.`
+              : " — hele planen går opp."}{" "}
+            Solveren finpusser videre til den er ferdig.
+          </span>
+          {onAcceptPreview && (
+            <button
+              type="button"
+              onClick={onAcceptPreview}
+              data-cy="solve-accept-preview"
+              className="shrink-0 text-ui font-semibold text-brand hover:underline"
+            >
+              Bruk denne nå
+            </button>
+          )}
+        </div>
+      )}
     </div>
   );
 };

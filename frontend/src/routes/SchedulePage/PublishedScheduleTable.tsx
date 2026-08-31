@@ -299,7 +299,7 @@ const PublishedScheduleTable: React.FC<{
                                 : "Ikke tilgjengelig for intervju"
                           }
                           className={cn(
-                            "px-4 py-3 text-sm font-medium",
+                            "px-4 py-3 text-ui font-medium",
                             slot.occupied
                               ? "bg-surface-subtle text-text-muted"
                               : slot.enabled

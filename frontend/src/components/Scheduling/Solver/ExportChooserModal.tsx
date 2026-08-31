@@ -7,6 +7,10 @@ import { keyboardFocusRingClass } from "../ui";
 interface ExportChooserModalProps {
   onExportIcs: (target: "apple" | "google") => void;
   onExportCsv: () => void;
+  /** CSV plus this committee's søknadstekst. Undefined where it is not
+   *  offered (member view, or the texts could not be loaded). */
+  onExportCsvWithText?: () => void;
+  csvWithTextLoading?: boolean;
   onClose: () => void;
   showCsv?: boolean;
   /**
@@ -43,6 +47,8 @@ const ExportOption = ({ icon, title, hint, onClick }: ExportOptionProps) => (
 const ExportChooserModal = ({
   onExportIcs,
   onExportCsv,
+  onExportCsvWithText,
+  csvWithTextLoading = false,
   onClose,
   showCsv = true,
   restrictToMyInterviews = false,
@@ -84,7 +90,7 @@ const ExportChooserModal = ({
       >
         <h4
           id="export-chooser-title"
-          className="m-0 text-base font-bold text-text-primary"
+          className="m-0 text-title font-bold text-text-primary"
         >
           {restrictToMyInterviews
             ? "Eksporter dine intervjuer"
@@ -156,13 +162,29 @@ const ExportChooserModal = ({
                       onClose();
                     }}
                   />
+                  {onExportCsvWithText && (
+                    <ExportOption
+                      icon={<FileSpreadsheet size={iconSizes.standard} />}
+                      title="CSV-fil med søknadstekst"
+                      hint={
+                        csvWithTextLoading
+                          ? "Henter søknadstekstene…"
+                          : "Hele søknaden til denne komiteen, én rad per intervju"
+                      }
+                      onClick={() => {
+                        if (csvWithTextLoading) return;
+                        onExportCsvWithText();
+                        onClose();
+                      }}
+                    />
+                  )}
                 </>
               )}
             </>
           )}
           <button
             type="button"
-            className={`mt-2 text-sm font-semibold text-text-muted hover:text-text-primary ${keyboardFocusRingClass}`}
+            className={`mt-2 text-ui font-semibold text-text-muted hover:text-text-primary ${keyboardFocusRingClass}`}
             onClick={onClose}
           >
             Avbryt

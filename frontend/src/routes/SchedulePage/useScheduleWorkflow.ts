@@ -297,17 +297,6 @@ export const useScheduleWorkflow = ({
     ],
   );
 
-  // The unplaced tray on the solver screen lets admins jump straight to the
-  // publish step with deferral pre-checked ("Publiser delplan"). We model
-  // that as a transient intent flag - PublicationGate consumes it once and
-  // clears it, so a normal revisit to the gate starts unchecked.
-  const [deferUnplacedIntent, setDeferUnplacedIntent] = useState(false);
-  const requestDeferUnplacedFromUnplacedTray = () => {
-    setDeferUnplacedIntent(true);
-    changeSection("plan");
-  };
-  const consumeDeferUnplacedIntent = () => setDeferUnplacedIntent(false);
-
   const changeSection = (key: TabType) => {
     setVisitedSections((current) => {
       if (current.has(key)) return current;
@@ -344,8 +333,5 @@ export const useScheduleWorkflow = ({
     myAvailabilitySaved,
     proposalConflictCount,
     proposalConflicts,
-    deferUnplacedIntent,
-    requestDeferUnplacedFromUnplacedTray,
-    consumeDeferUnplacedIntent,
   };
 };

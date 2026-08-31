@@ -683,7 +683,7 @@ class GodUserViewSet(
 ):
     """Webkom members manage the org-leadership allowlist (LEGO ids).
 
-    Replaces the hardcoded ``constants.GOD_LEGO_IDS`` constant. Only Webkom
+    The sole source of truth for god access. Only Webkom
     members can read or modify the list. Anonymous users get 401;
     logged-in non-Webkom users get 403.
     """

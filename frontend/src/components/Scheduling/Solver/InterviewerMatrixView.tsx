@@ -371,7 +371,7 @@ const InterviewerMatrixView: React.FC<InterviewerMatrixViewProps> = ({
           <div key={dIndex} className="flex flex-col gap-2">
             {dayIndex === null && (
               <div className="flex items-center gap-2 px-1">
-                <h4 className="m-0 text-sm font-bold text-text-primary">
+                <h4 className="m-0 text-ui font-bold text-text-primary">
                   {dateLabel}
                 </h4>
               </div>

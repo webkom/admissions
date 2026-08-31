@@ -81,30 +81,50 @@ export const exportVisibleScheduleCsv = ({
   entries,
   candidateNamesVisible,
   formatTimeLabel,
+  applicationTextById,
 }: {
   entries: DistributedScheduleEntry[];
   candidateNamesVisible: boolean;
   formatTimeLabel: (time: number) => string;
+  applicationTextById?: ReadonlyMap<string, string>;
 }) => {
   const csv = buildVisibleScheduleCsv({
     entries,
     candidateNamesVisible,
     formatTimeLabel,
+    applicationTextById,
   });
-  download(["\ufeff" + csv], "text/csv;charset=utf-8", "intervjuplan.csv");
+  download(
+    ["\ufeff" + csv],
+    "text/csv;charset=utf-8",
+    applicationTextById
+      ? "intervjuplan-med-soknadstekst.csv"
+      : "intervjuplan.csv",
+  );
 };
 
 export const buildVisibleScheduleCsv = ({
   entries,
   candidateNamesVisible,
   formatTimeLabel,
+  applicationTextById,
 }: {
   entries: DistributedScheduleEntry[];
   candidateNamesVisible: boolean;
   formatTimeLabel: (time: number) => string;
+  /** Søknadstekst per candidate id. Present only for the with-text export;
+   *  passing it adds the column. */
+  applicationTextById?: ReadonlyMap<string, string>;
 }) => {
+  const withText = applicationTextById !== undefined;
   const rows: string[][] = [
-    ["Tidspunkt", "Kandidat", "Panel", "Intervjustatus"],
+    [
+      "Tidspunkt",
+      "Kandidat",
+      "Panel",
+      "Intervjustatus",
+      ...(withText ? ["Søknadstekst"] : []),
+    ],
   ];
   entries.forEach(({ item }) => {
     rows.push([
@@ -114,6 +134,13 @@ export const buildVisibleScheduleCsv = ({
       item.interview_status
         ? getInterviewStatusLabel(item.interview_status)
         : "Ikke registrert",
+      ...(withText
+        ? [
+            (item.candidate_id &&
+              applicationTextById?.get(item.candidate_id)) ||
+              "",
+          ]
+        : []),
     ]);
   });
   return rows

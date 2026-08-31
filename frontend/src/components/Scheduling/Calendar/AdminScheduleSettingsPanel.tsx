@@ -434,7 +434,7 @@ const AdminScheduleSettingsPanel: React.FC<AdminScheduleSettingsPanelProps> = ({
                 <span
                   id="period-input-error"
                   aria-live="polite"
-                  className="mt-1 block text-xs font-semibold text-danger"
+                  className="mt-1 block text-label font-semibold text-danger"
                 >
                   {period.isTooLong
                     ? `Maks ${MAX_RANGE_DAYS} dager`
@@ -495,7 +495,7 @@ const AdminScheduleSettingsPanel: React.FC<AdminScheduleSettingsPanelProps> = ({
                 <span
                   id="daily-time-error"
                   aria-live="polite"
-                  className="mt-1 block text-xs font-semibold text-danger"
+                  className="mt-1 block text-label font-semibold text-danger"
                 >
                   Ugyldig tidsrom
                 </span>

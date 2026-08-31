@@ -26,17 +26,16 @@ import {
   SchedulePanelHeader,
   SchedulingActionBar,
   SchedulingButton,
-  type SchedulingWorkspaceMode,
   actionButtonBase,
   actionButtonDanger,
   actionButtonNeutral,
-  actionButtonPrimary,
   keyboardFocusRingClass,
 } from "../ui";
 import ConfirmDialog from "../ConfirmDialog";
 import type {
   Candidate,
   Interviewer,
+  ScheduleItem,
   SchedulePanelMember,
   SavedSchedule,
 } from "../types";
@@ -112,6 +111,9 @@ interface SolverResultsProps {
    *  solver fills the still-draft tail in a single pass. */
   onFillRemainingDays?: () => void;
   onOpenConflictReview: () => void;
+  /** Jump to Grunnlag to widen the period. Offered only when the plan has run
+   *  out of days to grow into. */
+  onOpenFramework?: () => void;
   onOpenRepair: () => void;
   onRetrySolve: () => void;
   onDiscardSuggestion: () => void;
@@ -171,6 +173,7 @@ const SolverResults = ({
   onExtendDay,
   onFillRemainingDays,
   onOpenConflictReview,
+  onOpenFramework,
   onOpenRepair,
   onRetrySolve,
   onDiscardSuggestion,
@@ -184,8 +187,6 @@ const SolverResults = ({
   savedTouchSignal = null,
   onPickUnplacedSlot,
 }: SolverResultsProps) => {
-  const [workspaceMode, setWorkspaceMode] =
-    useState<SchedulingWorkspaceMode>("preview");
   const [selectedInterviewer, setSelectedInterviewer] = useState("");
   const [selectedListScheduleIndex, setSelectedListScheduleIndex] = useState<
     number | null
@@ -214,7 +215,38 @@ const SolverResults = ({
     });
     return () => window.cancelAnimationFrame(frame);
   }, [backgroundMode, focusRequestKey]);
-  const canEditDraft = !backgroundMode && !savedSchedule?.is_distributed;
+  // The recruiter's draft is always editable - there is no preview mode to
+  // leave first, and no side-by-side panel that makes it read-only.
+  // `backgroundMode` governs chrome (autofocus, header actions, save footer),
+  // not permission. The only immutable rows are the ones the committee has
+  // already been shown: a published interview is a commitment - it is visible
+  // to the committee and the candidate has usually been invited - so it holds
+  // until the whole plan is unlocked.
+  const canEditDraft = true;
+  const distributedThrough = savedSchedule?.is_distributed
+    ? (savedSchedule.distributed_through ?? null)
+    : null;
+  const isPublishedTime = useCallback(
+    (time: number) => {
+      if (!distributedThrough || !Number.isFinite(time)) return false;
+      const { dayIndex } = decodeScheduleTime(time, sessionDuration);
+      const date = dates[dayIndex];
+      return Boolean(date && date <= distributedThrough);
+    },
+    [dates, distributedThrough, sessionDuration],
+  );
+  const isPublishedRow = useCallback(
+    (item: ScheduleItem) => isPublishedTime(item.time),
+    [isPublishedTime],
+  );
+  /** Row-level gate for the handlers, which address rows by index. */
+  const canEditRowAt = useCallback(
+    (scheduleIndex: number) => {
+      const item = presentation.sortedEntries[scheduleIndex]?.item;
+      return item !== undefined && !isPublishedRow(item);
+    },
+    [isPublishedRow, presentation.sortedEntries],
+  );
   // Times hosting more than one candidate are joint interviews (one shared
   // panel meeting two candidates).
   const jointTimes = useMemo(() => {
@@ -342,10 +374,9 @@ const SolverResults = ({
     setSelectedListScheduleIndex(null);
     setDraggedListScheduleIndex(null);
     setListDropTargetIndex(null);
-    // The plan opens in read-only overview; editing is an explicit choice
-    // ("Rediger"), so opening the draft never invites accidental changes.
-    // startEditing baselines the edit session when the user opts in.
-    setWorkspaceMode("preview");
+    // A fresh solve or a publish supersedes whatever the user was moving
+    // around, so the selection and the undo baseline both reset. The draft
+    // itself stays editable throughout.
     draft.finishEditSession();
   }, [
     backgroundMode,
@@ -362,19 +393,11 @@ const SolverResults = ({
     beginEditSessionRef.current = draft.beginEditSession;
   });
   useEffect(() => {
-    if (
-      !backgroundMode &&
-      editRequestKey > 0 &&
-      !savedSchedule?.is_distributed
-    ) {
-      beginEditSessionRef.current();
-      setWorkspaceMode("editing");
-    }
-  }, [backgroundMode, editRequestKey, savedSchedule?.is_distributed]);
+    if (editRequestKey > 0) beginEditSessionRef.current();
+  }, [editRequestKey]);
 
   useEffect(() => {
     if (
-      workspaceMode !== "preview" ||
       !persistence.isSaved ||
       persistence.isSaving ||
       hasLocalDraft ||
@@ -391,7 +414,6 @@ const SolverResults = ({
     persistence.isSaved,
     persistence.isSaving,
     persistence.state,
-    workspaceMode,
   ]);
 
   const clearListMove = () => {
@@ -445,7 +467,7 @@ const SolverResults = ({
     event: React.DragEvent<HTMLElement>,
   ) => {
     if (
-      !canEditDraft ||
+      !canEditRowAt(scheduleIndex) ||
       draggedListScheduleIndex === null ||
       draggedListScheduleIndex === scheduleIndex
     ) {
@@ -472,7 +494,7 @@ const SolverResults = ({
     scheduleIndex: number,
     event: React.DragEvent<HTMLElement>,
   ) => {
-    if (!canEditDraft) return;
+    if (!canEditRowAt(scheduleIndex)) return;
     event.preventDefault();
     const parsedIndex = Number(event.dataTransfer.getData("text/plain"));
     const sourceIndex = Number.isInteger(parsedIndex)
@@ -480,6 +502,7 @@ const SolverResults = ({
       : draggedListScheduleIndex;
     clearListMove();
     if (sourceIndex === null || sourceIndex === scheduleIndex) return;
+    if (!canEditRowAt(sourceIndex)) return;
     if (moveScope === "group") {
       const sourceGroup = groupIndexesByScheduleIndex.get(sourceIndex) ?? [
         sourceIndex,
@@ -499,7 +522,13 @@ const SolverResults = ({
     time: number,
     event: React.DragEvent<HTMLElement>,
   ) => {
-    if (!canEditDraft || draggedListScheduleIndex === null) return;
+    if (
+      !canEditDraft ||
+      isPublishedTime(time) ||
+      draggedListScheduleIndex === null
+    ) {
+      return;
+    }
     event.preventDefault();
     event.dataTransfer.dropEffect = "move";
     setListDropTargetTime(time);
@@ -519,14 +548,14 @@ const SolverResults = ({
     time: number,
     event: React.DragEvent<HTMLElement>,
   ) => {
-    if (!canEditDraft) return;
+    if (!canEditDraft || isPublishedTime(time)) return;
     event.preventDefault();
     const parsedIndex = Number(event.dataTransfer.getData("text/plain"));
     const sourceIndex = Number.isInteger(parsedIndex)
       ? parsedIndex
       : draggedListScheduleIndex;
     clearListMove();
-    if (sourceIndex === null) return;
+    if (sourceIndex === null || !canEditRowAt(sourceIndex)) return;
     if (moveScope === "group") {
       draft.moveItems(
         groupIndexesByScheduleIndex.get(sourceIndex) ?? [sourceIndex],
@@ -538,7 +567,14 @@ const SolverResults = ({
   };
 
   const handleEmptySlotClick = (time: number) => {
-    if (!canEditDraft || selectedListScheduleIndex === null) return;
+    if (
+      !canEditDraft ||
+      isPublishedTime(time) ||
+      selectedListScheduleIndex === null ||
+      !canEditRowAt(selectedListScheduleIndex)
+    ) {
+      return;
+    }
     if (moveScope === "group") {
       draft.moveItems(
         groupIndexesByScheduleIndex.get(selectedListScheduleIndex) ?? [
@@ -552,6 +588,24 @@ const SolverResults = ({
     setSelectedListScheduleIndex(null);
     setListDropTargetTime(null);
   };
+  const handleUnassignCandidate = (scheduleIndex: number) => {
+    if (!canEditRowAt(scheduleIndex)) return;
+    // Row indexes shift when the schedule loses an entry, so any selection
+    // pointing into the old positions has to go with it.
+    setSelectedListScheduleIndex(null);
+    setListDropTargetTime(null);
+    draft.unassignCandidate(scheduleIndex);
+  };
+
+  const handleAssignUnplaced = (args: {
+    candidateId?: string;
+    candidateName: string;
+    time: number;
+  }) => {
+    if (!canEditDraft || isPublishedTime(args.time)) return;
+    draft.assignUnplacedCandidate(args);
+  };
+
   // Names what a click or drag will actually move, so "Flytt gruppe" vs
   // "Flytt intervju" is a visible fact rather than a guess.
   const moveScopeHint = (() => {
@@ -589,15 +643,12 @@ const SolverResults = ({
   const overviewStats = presentation.overviewStats;
   const totalCandidateCount =
     presentation.sortedSchedule.length + unplaceableCount;
-  // The solve was deliberately limited to the first N framework days (the
-  // day-scope stepper), so `onExtendDay` is wired. Candidates that fall on
-  // the days still outside that scope are meant to be unplaced for now —
-  // that is a delplan planned in stages, not a failure. In that state the
-  // "venter på plassering" warning tray is replaced by a calm
-  // publish-the-delplan action near the top.
+  // The solve was deliberately limited to the first N framework days, so
+  // candidates on days outside that scope are meant to be unplaced for now -
+  // staged planning, not a failure. The calm framing lives in the workflow
+  // headline and the day strip; releasing what is ready is one of the next
+  // steps below rather than a banner competing with them.
   const isDayScoped = Boolean(onExtendDay);
-  const showPartialDraftPublish =
-    !backgroundMode && isDayScoped && unplaceableCount > 0;
   const saveStatusLabel = persistence.hasConflict
     ? "Lagring stoppet"
     : persistence.state === "error"
@@ -711,9 +762,7 @@ const SolverResults = ({
     // effect is therefore keyed on the signal only.
   }, [backgroundMode, savedTouchSignal]);
   const startEditing = () => {
-    if (workspaceMode === "editing") return;
     if (!draft.canRestoreEditSession) draft.beginEditSession();
-    setWorkspaceMode("editing");
   };
   const focusDraftHeading = () => {
     window.requestAnimationFrame(() => {
@@ -869,171 +918,179 @@ const SolverResults = ({
     setHealthModalException(null);
     editAndFocusRows([scheduleIndex]);
   };
-  const nextStepActions: DeviationNextStepAction[] = (() => {
+  // One recommended step per state, with the other exits behind it. The
+  // ordering is the recommendation: when days remain, finishing the plan beats
+  // releasing an incomplete one, because publishing cannot be undone.
+  const nextStep: {
+    primary: DeviationNextStepAction;
+    secondary: DeviationNextStepAction[];
+  } | null = (() => {
+    const arrow = <ArrowRight size={iconSizes.small} aria-hidden="true" />;
+    const publishWhatIsReady: DeviationNextStepAction = {
+      key: "publish-ready",
+      label: "Publiser det som er klart",
+      onClick: onOpenPlan,
+      dataCy: "proposal-publish-delplan",
+      icon: arrow,
+    };
+    const placeManually: DeviationNextStepAction = {
+      key: "place-manually",
+      label: `Plasser de siste ${unplaceableCount} ${
+        unplaceableCount === 1 ? "kandidaten" : "kandidatene"
+      } manuelt`,
+      onClick: () => {
+        const first = presentation.unplaceableCandidates[0];
+        if (onPickUnplacedSlot && first) {
+          onPickUnplacedSlot(first);
+          return;
+        }
+        startEditing();
+        focusDraftHeading();
+      },
+      dataCy: "proposal-place-manually",
+    };
+    const adjustSettings: DeviationNextStepAction = {
+      key: "settings",
+      label: "Juster oppsett",
+      onClick: onOpenSettings,
+    };
+
     switch (workflowState.kind) {
       case "solver_error": {
-        // When the solver timed out finding *any* placement and the day-scope
-        // stepper is available, suggest planning one day at a time first —
-        // retrying the same full scope will likely time out again.
+        // A timeout that found no placement at all will almost certainly time
+        // out again on the same scope, so narrowing it is the way forward
+        // rather than a retry.
         const isNoIncumbentTimeout = failedResult?.status === "TIMEOUT";
-        const actions: DeviationNextStepAction[] = [];
         if (isNoIncumbentTimeout && onExtendDay) {
-          actions.push({
-            key: "extend-day",
-            label: "Planlegg én dag om gangen",
-            onClick: onExtendDay,
-            variant: "primary" as const,
-            dataCy: "proposal-primary-action",
-            icon: <ArrowRight size={iconSizes.small} aria-hidden="true" />,
-          });
-          actions.push({
-            key: "retry-solve",
-            label: "Prøv igjen likevel",
-            onClick: onRetrySolve,
-            variant: "neutral" as const,
-            dataCy: "proposal-retry-anyway",
-          });
-        } else {
-          actions.push({
+          return {
+            primary: {
+              key: "extend-day",
+              label: "Planlegg færre dager",
+              onClick: onExtendDay,
+              icon: arrow,
+            },
+            secondary: [
+              {
+                key: "retry-solve",
+                label: "Prøv igjen likevel",
+                onClick: onRetrySolve,
+                dataCy: "proposal-retry-anyway",
+              },
+              adjustSettings,
+            ],
+          };
+        }
+        return {
+          primary: {
             key: "retry-solve",
             label: "Prøv igjen",
             onClick: onRetrySolve,
-            variant: "primary" as const,
-            dataCy: "proposal-primary-action",
-          });
-        }
-        // A timeout or validation rejection often stems from a tight setup;
-        // point at the settings surface so the user can widen it.
-        actions.push({
-          key: "settings",
-          label: "Juster oppsett",
-          onClick: onOpenSettings,
-          variant: "neutral" as const,
-        });
-        return actions;
-      }
-      case "placements_missing":
-        return [
-          {
-            key: "publish-delplan",
-            label: `Publiser delplanen (${unplaceableCount} ${
-              unplaceableCount === 1 ? "kandidat" : "kandidater"
-            } senere)`,
-            onClick: onOpenPlan,
-            variant: "primary" as const,
-            dataCy: "proposal-publish-delplan",
-            icon: <ArrowRight size={iconSizes.small} aria-hidden="true" />,
           },
-          ...(onFillRemainingDays
-            ? [
-                {
-                  key: "fill-remaining-days",
-                  label: "Planlegg alle gjenstående dager",
-                  onClick: onFillRemainingDays,
-                  variant: "primary" as const,
-                  dataCy: "proposal-fill-remaining-days",
-                  icon: (
-                    <ArrowRight size={iconSizes.small} aria-hidden="true" />
-                  ),
-                },
-              ]
-            : onExtendDay
+          secondary: [adjustSettings],
+        };
+      }
+      case "placements_missing": {
+        const planRest = onFillRemainingDays
+          ? {
+              key: "fill-remaining-days",
+              label: "Planlegg resten",
+              onClick: onFillRemainingDays,
+              dataCy: "proposal-fill-remaining-days",
+              icon: arrow,
+            }
+          : onExtendDay
+            ? {
+                key: "extend-day",
+                label: "Planlegg neste dag",
+                onClick: onExtendDay,
+                dataCy: "proposal-extend-day",
+                icon: arrow,
+              }
+            : null;
+        // Days left to plan: completing the plan is the recommendation.
+        if (planRest) {
+          return {
+            primary: planRest,
+            secondary: [publishWhatIsReady, placeManually],
+          };
+        }
+        // Nothing left to plan into: releasing what exists is all that is
+        // left, short of widening the period back in Grunnlag.
+        return {
+          primary: publishWhatIsReady,
+          secondary: [
+            placeManually,
+            ...(onOpenFramework
               ? [
                   {
-                    key: "extend-day",
-                    label: "Planlegg neste dag",
-                    onClick: onExtendDay,
-                    variant: "neutral" as const,
-                    dataCy: "proposal-extend-day",
-                    icon: (
-                      <ArrowRight size={iconSizes.small} aria-hidden="true" />
-                    ),
+                    key: "open-framework",
+                    label: "Åpne flere dager i Grunnlag",
+                    onClick: onOpenFramework,
+                    dataCy: "proposal-open-framework",
                   },
                 ]
               : []),
-          {
-            key: "place-manually",
-            label: `Plasser de siste ${unplaceableCount} ${
-              unplaceableCount === 1 ? "kandidaten" : "kandidatene"
-            } manuelt`,
-            onClick: () => {
-              const first = presentation.unplaceableCandidates[0];
-              if (onPickUnplacedSlot && first) {
-                onPickUnplacedSlot(first);
-                return;
-              }
-              startEditing();
-              focusDraftHeading();
-            },
-            variant: "neutral" as const,
-            dataCy: "proposal-place-manually",
-            icon: <ArrowRight size={iconSizes.small} aria-hidden="true" />,
-          },
-        ];
+          ],
+        };
+      }
       case "candidate_check_pending":
-        return [
-          {
+        return {
+          primary: {
             key: "review",
             label: "Sjekk inhabilitet",
             onClick: onOpenConflictReview,
-            variant: "primary",
-            dataCy: "proposal-primary-action",
-            icon: <ArrowRight size={iconSizes.small} aria-hidden="true" />,
+            icon: arrow,
           },
-        ];
+          secondary: [],
+        };
       case "waiting_for_reviews":
         return currentReviewRequired
-          ? [
-              {
+          ? {
+              primary: {
                 key: "review",
                 label: "Endre inhabilitetssvar",
                 onClick: onOpenConflictReview,
-                variant: "neutral",
                 dataCy: "reopen-candidate-review",
-                icon: <ArrowRight size={iconSizes.small} aria-hidden="true" />,
+                icon: arrow,
               },
-            ]
-          : [];
+              secondary: [],
+            }
+          : null;
       case "repair_required":
-        return [
-          {
-            key: "edit-conflicts",
-            label: "Rediger berørte rader",
-            onClick: () =>
-              editAndFocusRows(
-                firstConflictScheduleIndex !== undefined
-                  ? [firstConflictScheduleIndex]
-                  : [],
-              ),
-            dataCy: "proposal-edit-conflicts",
-          },
-          {
-            key: "settings",
-            label: "Juster oppsett",
-            onClick: onOpenSettings,
-          },
-          {
+        return {
+          primary: {
             key: "repair",
             label: "Lag reparasjonsforslag",
             onClick: onOpenRepair,
-            variant: "primary",
-            dataCy: "proposal-primary-action",
-            icon: <ArrowRight size={iconSizes.small} aria-hidden="true" />,
+            icon: arrow,
           },
-        ];
+          secondary: [
+            {
+              key: "edit-conflicts",
+              label: "Rediger berørte rader",
+              onClick: () =>
+                editAndFocusRows(
+                  firstConflictScheduleIndex !== undefined
+                    ? [firstConflictScheduleIndex]
+                    : [],
+                ),
+              dataCy: "proposal-edit-conflicts",
+            },
+            adjustSettings,
+          ],
+        };
       case "ready_to_publish":
-        return [
-          {
+        return {
+          primary: {
             key: "publish",
             label: "Gå til publisering",
             onClick: onOpenPlan,
-            variant: "primary",
-            dataCy: "proposal-primary-action",
-            icon: <ArrowRight size={iconSizes.small} aria-hidden="true" />,
+            icon: arrow,
           },
-        ];
+          secondary: [],
+        };
       default:
-        return [];
+        return null;
     }
   })();
   const hasConflictFor = (
@@ -1098,44 +1155,19 @@ const SolverResults = ({
                     workflowState.tone === "danger"
                       ? "text-danger"
                       : workflowState.tone === "warning"
-                        ? "text-amber-900"
+                        ? "text-warning-text"
                         : workflowState.tone === "success"
                           ? "text-success"
                           : "text-text-primary",
                   )}
                 >
-                  <h3 className="m-0 text-base font-bold">
+                  <h3 className="m-0 text-title font-bold">
                     {workflowState.title}
                   </h3>
                   <p className="m-0 mt-1 text-ui text-text-muted">
                     {workflowState.description}
                   </p>
                 </section>
-              )}
-              {showPartialDraftPublish && (
-                <div
-                  data-cy="partial-draft-publish"
-                  className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border-soft bg-surface-subtle px-4 py-3"
-                >
-                  <p className="m-0 text-detail text-text-muted">
-                    Delplan for de valgte dagene er klar.{" "}
-                    <span className="font-semibold text-text-primary">
-                      {unplaceableCount}{" "}
-                      {unplaceableCount === 1 ? "kandidat" : "kandidater"}
-                    </span>{" "}
-                    planlegges når du tar med flere dager — de publiserte dagene
-                    røres ikke.
-                  </p>
-                  <button
-                    type="button"
-                    onClick={onOpenPlan}
-                    data-cy="publish-partial-draft"
-                    className={cn(actionButtonBase, actionButtonPrimary)}
-                  >
-                    Publiser delplan
-                    <ArrowRight size={iconSizes.small} aria-hidden="true" />
-                  </button>
-                </div>
               )}
               {overviewStats && (
                 <PlanHealthSummary
@@ -1156,9 +1188,9 @@ const SolverResults = ({
                   data-cy="unplaced-tray"
                   role="status"
                   aria-label={`${unplaceableCount} kandidater venter på plassering`}
-                  className="mb-4 rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-ui"
+                  className="mb-4 rounded-lg border border-warning-border bg-warning-bg px-4 py-3 text-ui"
                 >
-                  <p className="m-0 text-detail font-bold uppercase tracking-wide text-amber-900">
+                  <p className="m-0 text-detail font-bold uppercase tracking-wide text-warning-text">
                     {unplaceableCount}{" "}
                     {unplaceableCount === 1
                       ? "kandidat venter"
@@ -1186,7 +1218,7 @@ const SolverResults = ({
                           className={cn(
                             actionButtonBase,
                             actionButtonNeutral,
-                            "border-amber-400 bg-surface-base text-amber-900 hover:bg-amber-100",
+                            "border-warning-border bg-surface-base text-warning-text hover:bg-warning-bgStrong",
                           )}
                         >
                           Plasser i ledig luke
@@ -1244,7 +1276,7 @@ const SolverResults = ({
               )}
               {!backgroundMode && (
                 <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-                  <h3 className="m-0 text-base font-bold text-text-primary">
+                  <h3 className="m-0 text-title font-bold text-text-primary">
                     Plan
                   </h3>
                   <div className="flex flex-wrap items-center gap-2">
@@ -1397,6 +1429,7 @@ const SolverResults = ({
                   sessionDuration={sessionDuration}
                   panelSize={panelSize}
                   canEditDraft={canEditDraft}
+                  isPublishedRow={isPublishedRow}
                   currentUserName={currentUserName}
                   jointTimes={jointTimes}
                   selectedDayFilter={selectedDayFilter}
@@ -1430,6 +1463,13 @@ const SolverResults = ({
                   onEmptySlotDragLeave={handleEmptySlotDragLeave}
                   onEmptySlotDrop={handleEmptySlotDrop}
                   onEmptySlotClick={handleEmptySlotClick}
+                  onUnassignCandidate={
+                    canEditDraft ? handleUnassignCandidate : undefined
+                  }
+                  unplacedCandidates={presentation.unplaceableCandidates}
+                  onAssignUnplacedCandidate={
+                    canEditDraft ? handleAssignUnplaced : undefined
+                  }
                 />
               ) : (
                 <InterviewerMatrixView
@@ -1526,8 +1566,11 @@ const SolverResults = ({
                           </SchedulingButton>
                         </>
                       )}
-                      {nextStepActions.length > 0 && (
-                        <DeviationNextStepMenu actions={nextStepActions} />
+                      {nextStep && (
+                        <DeviationNextStepMenu
+                          primary={nextStep.primary}
+                          secondary={nextStep.secondary}
+                        />
                       )}
                     </div>
                   )
@@ -1540,7 +1583,7 @@ const SolverResults = ({
               <details className="group">
                 <summary
                   className={cn(
-                    "flex cursor-pointer list-none items-center justify-between gap-3 px-6 py-5 text-base font-bold text-text-primary [&::-webkit-details-marker]:hidden",
+                    "flex cursor-pointer list-none items-center justify-between gap-3 px-6 py-5 text-title font-bold text-text-primary [&::-webkit-details-marker]:hidden",
                     keyboardFocusRingClass,
                   )}
                 >

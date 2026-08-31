@@ -31,6 +31,7 @@ from admissions.admissions.schedule_validation import (
     ScheduleValidationError,
     canonicalize_solver_payload,
 )
+from admissions.admissions.schedule_workflow import ScheduleInputError
 from admissions.admissions.serializers import SolveJobSerializer, SolveOptionsSerializer
 from admissions.admissions.tests.utils import (
     ScheduleRevisionAPIClient,
@@ -1951,6 +1952,113 @@ class InterviewAvailabilityHardeningTestCase(APITestCase):
         self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertIn("slots", res.data)
 
+    def test_reviewed_id_outside_scope_is_dropped_not_rejected(self):
+        """A real candidate in this committee that is outside the submitter's
+        current review scope is dropped, not rejected.
+
+        The review scope is a snapshot, regenerated whenever the plan changes
+        (`_refresh_conflict_review_lists`) - and the plan re-solves by itself
+        the moment the last outstanding review lands. So an interviewer who
+        has the review form open can have their scope rewritten underneath
+        them and submit ids that were in scope when they read the page. Those
+        ids are real and were never persisted on this row, so neither the
+        stale-echo nor the sentinel escape hatch catches them: before this,
+        a routine save died on 400 "Ukjent kandidat".
+        """
+        other_applicant = LegoUser.objects.create(
+            username="hardening-applicant-2", lego_id=6251
+        )
+        other_application = UserApplication.objects.create(
+            user=other_applicant, admission=self.admission
+        )
+        GroupApplication.objects.create(
+            application=other_application,
+            group=self.committee_group,
+            text="Komite application 2",
+        )
+        saved_schedule = self._open_conflict_review()
+        # The recruiter is on the panel for self.application, so the review
+        # is open *for them* and their scope is exactly that one candidate.
+        saved_schedule.schedule[0]["panel"] = [
+            {"id": str(self.recruiter.pk), "name": self.recruiter.username}
+        ]
+        saved_schedule.save(update_fields=["schedule"])
+        InterviewAvailability.objects.create(
+            admission=self.admission,
+            group=self.committee_group,
+            user=self.recruiter,
+            slots=["2026-04-21|540"],
+        )
+        self.client.force_authenticate(user=self.recruiter)
+
+        # other_application is a real candidate in this committee, but the
+        # recruiter is not on its panel.
+        res = self.client.post(
+            self.url,
+            {
+                "reviewed_candidate_ids": [
+                    str(self.application.pk),
+                    str(other_application.pk),
+                ]
+            },
+            format="json",
+        )
+
+        self.assertEqual(res.status_code, status.HTTP_200_OK, res.data)
+        stored = InterviewAvailability.objects.get(
+            admission=self.admission,
+            group=self.committee_group,
+            user=self.recruiter,
+        )
+        # The in-scope attestation sticks; the out-of-scope one is dropped
+        # rather than rejected, so the save always goes through.
+        self.assertEqual(stored.reviewed_candidate_ids, [str(self.application.pk)])
+
+    def test_recruiter_declares_conflict_outside_own_panel_scope(self):
+        """Same shape for `conflicts`: a recruiter must be able to declare
+        inhabilitet against any candidate in their committee, whether or not
+        they happen to sit on that candidate's proposed panel. Declaring one
+        is precisely how a bad pairing gets *avoided* before it is planned,
+        so scoping it to already-proposed pairings defeats the purpose.
+        """
+        other_applicant = LegoUser.objects.create(
+            username="hardening-applicant-3", lego_id=6252
+        )
+        other_application = UserApplication.objects.create(
+            user=other_applicant, admission=self.admission
+        )
+        GroupApplication.objects.create(
+            application=other_application,
+            group=self.committee_group,
+            text="Komite application 3",
+        )
+        saved_schedule = self._open_conflict_review()
+        saved_schedule.schedule[0]["panel"] = [
+            {"id": str(self.recruiter.pk), "name": self.recruiter.username}
+        ]
+        saved_schedule.save(update_fields=["schedule"])
+        InterviewAvailability.objects.create(
+            admission=self.admission,
+            group=self.committee_group,
+            user=self.recruiter,
+            slots=["2026-04-21|540"],
+        )
+        self.client.force_authenticate(user=self.recruiter)
+
+        res = self.client.post(
+            self.url,
+            {"conflicts": [str(other_application.pk)]},
+            format="json",
+        )
+
+        self.assertEqual(res.status_code, status.HTTP_200_OK, res.data)
+        stored = InterviewAvailability.objects.get(
+            admission=self.admission,
+            group=self.committee_group,
+            user=self.recruiter,
+        )
+        self.assertIn(str(other_application.pk), stored.conflicts)
+
     def test_phantom_conflict_id_is_dropped_not_rejected(self):
         """Submitting a conflicts list with a phantom id (e.g. a stale
         snapshot) is treated as a best-effort drop, not a client error.
@@ -2126,6 +2234,52 @@ class InterviewAvailabilityHardeningTestCase(APITestCase):
             [str(self.application.pk)],
         )
 
+    def test_review_save_never_deletes_a_live_declared_conflict(self):
+        """A declared inhabilitet against an application that still exists
+        survives a review save, whatever committee that application belongs
+        to. The prune is allowed to clear ids that name nothing; it is never
+        allowed to clear one that names a real person, because the result
+        would be an inhabil interviewer quietly back on a panel.
+        """
+        other_group = Group.objects.create(name="Annen komite", lego_id=6401)
+        self.admission.groups.add(other_group)
+        other_user = LegoUser.objects.create(
+            username="live-conflict-candidate", lego_id=6402
+        )
+        other_application = UserApplication.objects.create(
+            user=other_user, admission=self.admission
+        )
+        GroupApplication.objects.create(
+            application=other_application,
+            group=other_group,
+            text="Other committee application",
+        )
+        saved_schedule = self._open_conflict_review()
+        saved_schedule.schedule[0]["panel"] = [
+            {"id": str(self.recruiter.pk), "name": self.recruiter.username}
+        ]
+        saved_schedule.save(update_fields=["schedule"])
+        availability = InterviewAvailability.objects.create(
+            admission=self.admission,
+            group=self.committee_group,
+            user=self.recruiter,
+            slots=["2026-04-21|540"],
+            conflicts=[str(other_application.pk)],
+            # A genuinely dead id alongside it, to show the prune still works.
+            reviewed_candidate_ids=["802f250d-33e9-432c-a97d-f73443ec322a"],
+        )
+        self.client.force_authenticate(user=self.recruiter)
+
+        res = self.client.post(
+            self.url,
+            {"reviewed_candidate_ids": [str(self.application.pk)]},
+            format="json",
+        )
+
+        self.assertEqual(res.status_code, status.HTTP_200_OK, res.data)
+        availability.refresh_from_db()
+        self.assertEqual(availability.conflicts, [str(other_application.pk)])
+
     def test_stale_conflict_id_is_pruned_on_next_save(self):
         """Same prune applies to declared conflicts: a withdrawn application
         must not leave the row in a state that rejects every future save."""
@@ -2281,11 +2435,18 @@ class InterviewAvailabilityHardeningTestCase(APITestCase):
         )
 
         # The reviewer (recruiter) has no review scope here - the panel
-        # belongs to the member - so the out-of-scope conflict is rejected
-        # and the stored conflict survives untouched.
-        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        # belongs to the member - so their attestation for a candidate they
+        # were not asked about is dropped rather than rejected: the save goes
+        # through, and the review simply stays incomplete.
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
         availability.refresh_from_db()
+        # The invariant that actually matters is unchanged, and is enforced by
+        # `conflict_replace_scope` rather than by the status code: an empty
+        # review scope clears nothing, so a conflict held against a candidate
+        # outside it survives untouched.
         self.assertEqual(availability.conflicts, [str(other_application.pk)])
+        # Nothing out of scope was attested to either.
+        self.assertEqual(availability.reviewed_candidate_ids, [])
 
     def test_review_scope_requires_submitted_interview_availability(self):
         other_group = Group.objects.create(name="Andre uten tider", lego_id=632)
@@ -5738,3 +5899,92 @@ class OAuthGenderCaptureTestCase(TestCase):
 
         user.refresh_from_db()
         self.assertEqual(user.gender, "")
+
+
+class SavedScheduleRejectionLoggingTestCase(APITestCase):
+    """A rejected save must leave a server-side trace naming the field.
+
+    Without one, a production 400 is only ever visible as a toast the operator
+    has already dismissed - the frontend Sentry event carries the status but
+    deliberately never the body.
+    """
+
+    def setUp(self):
+        group = Group.objects.create(name="Webkom", lego_id=700)
+        user = LegoUser.objects.create(username="rejection-admin", lego_id=701)
+        Membership.objects.create(user=user, role=RECRUITING, group=group)
+        self.admission = create_admission(created_by=user, slug="rejection-opptak")
+        self.admission.admin_groups.add(group)
+        self.admission.groups.add(group)
+        self.url = reverse(
+            "saved-schedule",
+            kwargs={
+                "admission_slug": self.admission.slug,
+                "group_id": group.pk,
+            },
+        )
+        self.client.force_authenticate(user=user)
+
+    def _post_and_capture_log(self, payload):
+        with mock.patch("admissions.utils.middleware.log.new") as new_log:
+            request_log = new_log.return_value
+            response = self.client.post(self.url, payload, format="json")
+        return response, request_log
+
+    def _rejection_calls(self, request_log):
+        return [
+            call
+            for call in request_log.warning.call_args_list
+            if call.args and call.args[0] == "saved_schedule_rejected"
+        ]
+
+    def test_serializer_rejection_logs_the_offending_field(self):
+        response, request_log = self._post_and_capture_log(
+            {"session_duration": 9999, "expected_updated_at": None}
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        (call,) = self._rejection_calls(request_log)
+        self.assertEqual(call.kwargs["stage"], "serializer")
+        self.assertEqual(call.kwargs["fields"], ["session_duration"])
+        self.assertEqual(call.kwargs["admission_slug"], self.admission.slug)
+
+    def test_workflow_rejection_is_logged_with_its_own_stage(self):
+        with mock.patch(
+            "admissions.admissions.schedule_views.update_saved_schedule",
+            side_effect=ScheduleInputError({"enabled_slots": ["Ugyldig tidsluke: x"]}),
+        ):
+            response, request_log = self._post_and_capture_log(
+                {"expected_updated_at": None}
+            )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        (call,) = self._rejection_calls(request_log)
+        self.assertEqual(call.kwargs["stage"], "workflow")
+        self.assertEqual(call.kwargs["fields"], ["enabled_slots"])
+
+    def test_rejection_log_carries_no_error_message_text(self):
+        """Messages interpolate slot keys and panel members - keys only."""
+        with mock.patch(
+            "admissions.admissions.schedule_views.update_saved_schedule",
+            side_effect=ScheduleInputError(
+                {"schedule": ["Ola Nordmann kan ikke intervjue seg selv"]}
+            ),
+        ):
+            _, request_log = self._post_and_capture_log({"expected_updated_at": None})
+
+        (call,) = self._rejection_calls(request_log)
+        self.assertNotIn("Ola Nordmann", str(call))
+        self.assertNotIn("intervjue seg selv", str(call))
+
+    def test_accepted_save_logs_no_rejection(self):
+        response, request_log = self._post_and_capture_log(
+            {
+                "start_date": "2026-04-20",
+                "session_duration": 60,
+                "expected_updated_at": None,
+            }
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(self._rejection_calls(request_log), [])

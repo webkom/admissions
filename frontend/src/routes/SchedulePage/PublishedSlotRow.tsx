@@ -119,7 +119,7 @@ const PublishedSlotRow: React.FC<{
                     : undefined
                 }
                 className={cn(
-                  "inline-flex items-center gap-1.5 text-sm font-semibold text-text-primary",
+                  "inline-flex items-center gap-1.5 text-ui font-semibold text-text-primary",
                   isConflict && "text-danger",
                 )}
               >
@@ -149,7 +149,7 @@ const PublishedSlotRow: React.FC<{
             )}
           </div>
         ) : (
-          <span className="text-sm text-text-muted">—</span>
+          <span className="text-ui text-text-muted">—</span>
         )}
       </td>
       <td className={cn(scheduleCell, "min-w-0")}>
@@ -165,6 +165,7 @@ const PublishedSlotRow: React.FC<{
                 .map((member) => member.name),
             )
           }
+          isCurrentUser={lookups.isCurrentUser}
         />
       </td>
       {canManageInterviewWorkflow && (
@@ -222,6 +223,8 @@ const PublishedSlotRow: React.FC<{
 
 interface PublishedSlotRowLookups {
   biasedFor: (member: { id?: string; name: string }) => Set<string> | undefined;
+  /** Marks the reader's own seat in the Panel column. */
+  isCurrentUser?: (member: { id?: string; name: string }) => boolean;
 }
 
 export default PublishedSlotRow;

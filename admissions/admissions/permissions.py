@@ -81,7 +81,7 @@ class IsActiveAdminGroupMember(permissions.BasePermission):
 
 
 class IsOrgLeadership(permissions.BasePermission):
-    """God-listed LEGO ids (constants.GOD_LEGO_IDS): admission-wide admins
+    """God-listed LEGO ids (the GodUser table): admission-wide admins
     everywhere.
 
     Kept as its own class rather than folded into IsWebkom so a committee

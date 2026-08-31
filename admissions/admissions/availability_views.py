@@ -35,6 +35,7 @@ from admissions.admissions.scheduler_feature import SchedulerFeatureGateMixin
 from admissions.admissions.scheduling_utils import (
     availability_submission_is_current,
     canonicalize_slot_keys,
+    conflict_review_offered_scope,
     conflict_review_scope,
     decoy_review_scope,
     get_committee_interviewer_ids,
@@ -87,14 +88,22 @@ class InterviewAvailabilityView(SchedulerFeatureGateMixin, APIView):
 
     @staticmethod
     def _review_scope(saved_schedule, user_id):
+        """What publication waits for: own pairings plus likely repair
+        partners. Narrower than what the interviewer is shown."""
         return conflict_review_scope(saved_schedule, user_id)
+
+    @staticmethod
+    def _offered_scope(saved_schedule, user_id):
+        """What the interviewer is shown and may declare against: every
+        candidate placed in the draft."""
+        return conflict_review_offered_scope(saved_schedule, user_id)
 
     @staticmethod
     def _own_review_candidates(admission, group, saved_schedule, user):
         """[{id, name}] for the real candidates in the requester's review
         scope, own row only. Same {id, name} shape as the decoy entries so
         the review UI renders fillers and real candidates identically."""
-        scope = InterviewAvailabilityView._review_scope(saved_schedule, user.id)
+        scope = InterviewAvailabilityView._offered_scope(saved_schedule, user.id)
         if not scope:
             return []
         name_by_id = {
@@ -146,7 +155,7 @@ class InterviewAvailabilityView(SchedulerFeatureGateMixin, APIView):
         if self._conflict_review_is_open_for_user(
             admission, group, saved_schedule, user
         ):
-            return self._review_scope(saved_schedule, user.id)
+            return self._offered_scope(saved_schedule, user.id)
         # A schedule belongs to exactly one committee now: visibility is
         # either running this committee's own workflow, or this committee's
         # own recruiter having published names to it.
@@ -171,6 +180,27 @@ class InterviewAvailabilityView(SchedulerFeatureGateMixin, APIView):
             )
             .values_list("pk", flat=True)
             .distinct()
+        }
+
+    @staticmethod
+    def _existing_application_ids(admission, candidate_ids):
+        """Which of `candidate_ids` still name a real application in this
+        admission. Used to tell a withdrawn candidate (prune) apart from one
+        that simply belongs to another committee (keep)."""
+        parsed = []
+        for candidate_id in candidate_ids:
+            try:
+                parsed.append(uuid.UUID(str(candidate_id)))
+            except (ValueError, AttributeError, TypeError):
+                # Decoy tokens and malformed values name no application.
+                continue
+        if not parsed:
+            return set()
+        return {
+            str(pk)
+            for pk in UserApplication.objects.filter(
+                admission=admission, pk__in=parsed
+            ).values_list("pk", flat=True)
         }
 
     def _visible_conflicts(self, conflicts, visible_candidate_ids):
@@ -338,7 +368,7 @@ class InterviewAvailabilityView(SchedulerFeatureGateMixin, APIView):
             if is_admin
             else (
                 {
-                    str(user.id): self._review_scope(saved_schedule, user.id)
+                    str(user.id): self._offered_scope(saved_schedule, user.id)
                     | own_decoy_tokens
                 }
                 if requester_review_scope_open
@@ -347,7 +377,7 @@ class InterviewAvailabilityView(SchedulerFeatureGateMixin, APIView):
         )
         if is_admin and requester_review_scope_open:
             visible_proposed_candidate_ids_map[str(user.id)] = (
-                self._review_scope(saved_schedule, user.id) | own_decoy_tokens
+                self._offered_scope(saved_schedule, user.id) | own_decoy_tokens
             )
         availability_generation = (
             saved_schedule.availability_generation if saved_schedule is not None else 1
@@ -814,29 +844,51 @@ class InterviewAvailabilityView(SchedulerFeatureGateMixin, APIView):
                         status=status.HTTP_400_BAD_REQUEST,
                     )
 
-            valid_candidate_ids = visible_candidate_ids
-            if valid_candidate_ids is None:
-                valid_candidate_ids = {
-                    str(pk)
-                    for pk in UserApplication.objects.filter(
-                        admission=admission, group_applications__group=group
-                    )
-                    .distinct()
-                    .values_list("pk", flat=True)
-                }
+            all_group_candidate_ids = {
+                str(pk)
+                for pk in UserApplication.objects.filter(
+                    admission=admission, group_applications__group=group
+                )
+                .distinct()
+                .values_list("pk", flat=True)
+            }
+            if conflict_review_open:
+                target_review_scope = self._offered_scope(
+                    saved_schedule, target_user.id
+                )
+                valid_reviewed_ids = target_review_scope | own_decoy_scope
+            else:
+                valid_reviewed_ids = all_group_candidate_ids | own_decoy_scope
+
+            valid_conflict_ids = all_group_candidate_ids | own_decoy_scope
+
             for field in (
                 "conflicts",
                 "reviewed_candidate_ids",
             ):
+                allowed_ids = (
+                    valid_conflict_ids if field == "conflicts" else valid_reviewed_ids
+                )
                 stale_unknown = set()
                 for candidate_id in serializer.validated_data.get(field, []):
-                    if (
-                        candidate_id in valid_candidate_ids
-                        or candidate_id in own_decoy_scope
-                    ):
+                    if candidate_id in allowed_ids:
                         continue
                     if (
-                        candidate_id in existing_persisted_ids
+                        # A real candidate in this committee that is merely
+                        # outside the current review scope. That scope is a
+                        # snapshot which is regenerated whenever the plan
+                        # changes (_refresh_conflict_review_lists), and the
+                        # plan re-solves by itself when the last review lands
+                        # - so an interviewer with the form open can have
+                        # their scope shift underneath them and submit ids
+                        # that were in scope when the page was read. Those
+                        # ids were never persisted, so no other escape hatch
+                        # catches them, and a hard 400 would wedge the whole
+                        # review behind "Ukjent kandidat" on a routine save.
+                        # Drop them: the attestation simply does not apply to
+                        # a pairing that no longer exists.
+                        candidate_id in valid_conflict_ids
+                        or candidate_id in existing_persisted_ids
                         or candidate_id == "00000000-0000-0000-0000-000000000000"
                     ):
                         stale_unknown.add(candidate_id)
@@ -857,11 +909,11 @@ class InterviewAvailabilityView(SchedulerFeatureGateMixin, APIView):
                 and saved_schedule is not None
                 and saved_schedule.conflict_review_open
             ):
-                conflict_replace_scope = self._review_scope(
+                conflict_replace_scope = self._offered_scope(
                     saved_schedule, target_user.id
                 )
             elif conflict_replace_scope is None and (is_admin or is_recruiter):
-                conflict_replace_scope = set(valid_candidate_ids)
+                conflict_replace_scope = set(valid_conflict_ids)
             elif conflict_replace_scope is None and (
                 "conflicts" in serializer.validated_data
             ):
@@ -948,10 +1000,28 @@ class InterviewAvailabilityView(SchedulerFeatureGateMixin, APIView):
             # the current pool or this row's decoy scope, so the rest of
             # the row keeps working and the prune itself is invisible to
             # the user (those rows simply vanish from the review list).
-            pool_or_decoys = (valid_candidate_ids or set()) | own_decoy_scope
+            #
+            # The test is existence, not scope. A declared inhabilitet against
+            # an application that still exists is never pruned, even when it
+            # sits outside this row's committee: deleting one silently is the
+            # single failure this whole flow exists to prevent, since it would
+            # put an inhabil interviewer back on a panel with no trace. Only
+            # ids that name nothing at all - a withdrawn or hard-deleted
+            # application - are dropped, which is what the prune is for.
+            pool_or_decoys = (valid_conflict_ids or set()) | own_decoy_scope
             if pool_or_decoys:
+                unresolved = {
+                    value for value in next_conflicts if value not in pool_or_decoys
+                }
+                still_real = (
+                    self._existing_application_ids(admission, unresolved)
+                    if unresolved
+                    else set()
+                )
                 next_conflicts = {
-                    value for value in next_conflicts if value in pool_or_decoys
+                    value
+                    for value in next_conflicts
+                    if value in pool_or_decoys or value in still_real
                 }
             defaults["conflicts"] = sorted(next_conflicts)
             if "reviewed_candidate_ids" in serializer.validated_data:
@@ -1145,7 +1215,7 @@ class InterviewAvailabilityView(SchedulerFeatureGateMixin, APIView):
             proposed_candidate_ids
             if is_admin
             else (
-                self._review_scope(saved_schedule, user.id) | echo_decoy_tokens
+                self._offered_scope(saved_schedule, user.id) | echo_decoy_tokens
                 if target_user.id == user.id and conflict_review_open
                 else set()
             )

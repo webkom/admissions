@@ -604,9 +604,6 @@ const LoadedScheduleView: React.FC<LoadedScheduleViewProps> = ({
     visitedSections,
     steps: workflowSteps,
     changeSection: handleSectionChange,
-    deferUnplacedIntent,
-    requestDeferUnplacedFromUnplacedTray,
-    consumeDeferUnplacedIntent,
     hasConfiguredAvailabilityWindows,
     hasScheduleDraft,
     currentReviewRequired,
@@ -626,6 +623,13 @@ const LoadedScheduleView: React.FC<LoadedScheduleViewProps> = ({
     syntheticInput,
     developmentTools,
   } = participants;
+  // The day strip is the single place the publication cursor moves. On an
+  // already-published plan that is a direct extend; on an unpublished one it
+  // has to go through the gate's checks first, so the chosen boundary is
+  // carried over and the gate opens primed with it.
+  const [publishThroughIntent, setPublishThroughIntent] = useState<
+    string | null
+  >(null);
   const {
     publishSchedule: handlePublishSchedule,
     extendDistributedThrough: handleExtendDistributedThrough,
@@ -772,7 +776,7 @@ const LoadedScheduleView: React.FC<LoadedScheduleViewProps> = ({
             type="button"
             onClick={() => wizard.open()}
             className={cn(
-              "inline-flex h-9 items-center gap-2 rounded-full border border-border bg-surface-subtle px-4 text-sm font-semibold text-text-primary transition-colors hover:bg-surface-neutral",
+              "inline-flex h-9 items-center gap-2 rounded-full border border-border bg-surface-subtle px-4 text-ui font-semibold text-text-primary transition-colors hover:bg-surface-neutral",
               keyboardFocusRingClass,
             )}
           >
@@ -1139,6 +1143,18 @@ const LoadedScheduleView: React.FC<LoadedScheduleViewProps> = ({
                 onOpenConflictReview={openConflictReview}
                 conflictReviewReachable={conflictReviewReachable}
                 onOpenPlan={() => handleSectionChange("plan")}
+                onPublishThrough={
+                  canManageSchedule
+                    ? (date) => {
+                        if (savedSchedule?.is_distributed) {
+                          void handleExtendDistributedThrough(date);
+                          return;
+                        }
+                        setPublishThroughIntent(date);
+                        handleSectionChange("plan");
+                      }
+                    : undefined
+                }
               />
             </section>
           </div>
@@ -1220,8 +1236,10 @@ const LoadedScheduleView: React.FC<LoadedScheduleViewProps> = ({
               onOpenOwnReview={openConflictReview}
               onOpenConflictsOverview={() => setConflictsOverviewOpen(true)}
               onPublish={handlePublishSchedule}
-              deferUnplacedIntent={deferUnplacedIntent}
-              onConsumeDeferUnplacedIntent={consumeDeferUnplacedIntent}
+              publishThroughIntent={publishThroughIntent}
+              onConsumePublishThroughIntent={() =>
+                setPublishThroughIntent(null)
+              }
             />
           ) : (
             <MemberAvailabilityPending

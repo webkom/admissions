@@ -6,9 +6,21 @@ schedules **a few days at a time**: solve the first days, publish a partial plan
 send 1-click SMS invitations that flip the interview status automatically, then
 extend both the plan and the publication boundary to the remaining days.
 
-> **Verified against** `92d69e72` (branch `staging`, 2026-08-29).
+> **Verified against** `92d69e72` (branch `staging`, 2026-08-29), then revised
+> for the day-strip flow (2026-08-31). The API shapes below are unchanged; the
+> controls that drive them were consolidated — see [§3.2](#32-plan-a-scope-on-the-day-strip)
+> and [§6](#6-step-4--extend-the-plan-and-the-boundary).
 > This document is tightly coupled to UI strings and API shapes — re-check it
 > against the code when either changes. All source links are repo-relative.
+
+> **The one mental model.** The framework days, the plan and the publication are
+> all *prefixes of the same ordered list of days*. Every "extend" in this guide
+> is one of two cursors moving right along that list, and both move from the
+> same control: the **day strip**
+> ([`PlanDayStrip.tsx`](../../frontend/src/components/Scheduling/Solver/PlanDayStrip.tsx),
+> derived in [`planDayStripModel.ts`](../../frontend/src/components/Scheduling/Solver/planDayStripModel.ts)).
+> It renders at the top of the **Plan** step in every state, and again above the
+> published plan.
 
 ---
 
@@ -177,20 +189,20 @@ Members do the same from their side under **Mine opplysninger**. The **Plan**
 step stays locked until the framework is set, the recruiter's availability is
 saved, and every participating interviewer has answered.
 
-### 3.2 Solve a 2-day scope
+### 3.2 Plan a scope on the day strip
 
-In **Plan**, with no proposal yet, [`SolverSetupPanel.tsx`](../../frontend/src/components/Scheduling/Solver/SolverSetupPanel.tsx)
-shows the setup panel. Its **Planlegg i etapper** section (shown only when the
-framework has more than one plannable day):
+In **Plan**, the day strip sits above the workspace. Each cell is one framework
+day in one of four states — `publisert` (locked, released), `planlagt` (has
+interviews, not released), `ikke planlagt` (open slots, nothing on it yet, drawn
+with a dashed border because it is the thing to click), `stengt` (no open
+slots). A solid rule marks the publication boundary, a dashed one how far the
+plan reaches.
 
-- Copy: *"Ta de første dagene nå og resten i en senere etappe hvis du vil — det
-  som alt er planlagt, blir stående. Nå: 2 dager (mandag 10. august–tirsdag 11.
-  august)."*
-- A stepper labelled **Antall dager som planlegges nå**, `min` = the last day
-  that already has a planned interview (1 on a fresh plan), `max` = all
-  plannable days, plus an **Alle dager** shortcut.
-
-Set it to **2**, then click **Lag planutkast**.
+Click **day 2** — *"Planlegg til og med tirsdag 11. august"* — then **Lag
+planutkast**. The scope is no longer a separate stepper: `SolverSetupPanel`
+only reports it (*"Planlegger …"*), and every plan-extension in the app routes
+through one `planThrough(date)` in
+[`SolverView.tsx`](../../frontend/src/components/Scheduling/Solver/SolverView.tsx).
 
 ### 3.3 What happens
 
@@ -215,10 +227,21 @@ Set it to **2**, then click **Lag planutkast**.
 [`planDraftWorkflow.ts`](../../frontend/src/components/Scheduling/Solver/planDraftWorkflow.ts#L186-L203):
 `unplaceableCount > 0` → `kind: "placements_missing"`, rendered as
 
-- **Title:** `Delplan klar — 34 kandidater planlegges senere`
-- **Description:** `2 hele dager er planlagt. Publiser delplanen som den er, eller planlegg neste dag for å plassere resten.`
+- **Title:** `34 kandidater venter på plassering`
+- **Description:** `2 hele dager er planlagt. Planlegg resten av dagene, eller publiser det som er klart nå.`
   *(when there is no scope left to extend into, the description instead offers
   manual placement or widening the framework.)*
+
+The next-step menu below renders **one** primary action and folds the rest
+behind *Andre valg*
+([`DeviationNextStepMenu.tsx`](../../frontend/src/components/Scheduling/Solver/DeviationNextStepMenu.tsx),
+whose props make a second primary unrepresentable). With days left to plan the
+primary is **Planlegg resten**, not publishing: releasing days cannot be undone,
+so it must not be the path of least resistance.
+
+**"Delplan" is no longer a user-facing word.** The concept is unchanged — it is
+just "published through Wednesday", which the strip draws. `defer_unplaced_candidates`
+is untouched on the wire and is now derived rather than ticked (see §4.1).
 
 The recruiter can browse the solved days (`DayTabs`), adjust panels
 (`CandidateSwapChip`, [`SlotPanelOverrideMenu`](../../frontend/src/components/Scheduling/Solver/SlotPanelOverrideMenu.tsx)),
@@ -246,9 +269,7 @@ evaluates readiness.
 │  ✔ Tilgjengelighetsavvik kontrollert     Planen holder seg innenfor …                 │
 ├──────────────────────────────────────────────────────────────────────────────────────┤
 │  Kandidatnavn etter publisering   [ Skjult | ▸Ansvarlige◂ | Komiteen ]               │
-│  Resterende kandidater            [x] 34 kandidater venter på plassering — de …       │
-│                                       planlegges når flere dager åpnes                │
-│  Publiseringsomfang               [ Hele planen | ▸Til og med en dato◂ ] → [11. aug]  │
+│  Publiseringsomfang               🔒 🔒 ┃ ● ○ ○   (the day strip, boundary previewed) │
 └──────────────────────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -257,14 +278,16 @@ covers availability-deviation review — see [troubleshooting](#8-code-map--trou
 
 ### 4.1 Passing the gate
 
-1. **Defer unplaced.** With unplaced candidates present, a **Resterende
-   kandidater** panel appears with the checkbox
-   *"34 kandidater venter på plassering — de planlegges når flere dager åpnes"*.
-   Ticking it satisfies the placement row and sends `defer_unplaced_candidates:
-   true`.
-2. **Scope.** The **Publiseringsomfang** panel (shown only when the framework has
-   more than one day) → **Til og med en dato** → pick the day-2 date. This binds
-   `distributed_through`.
+1. **Defer unplaced.** No longer a checkbox. `defer_unplaced_candidates` is
+   derived (`unplacedCount > 0`) — the backend only consults it when publishing
+   through the last enabled day, so the tick never carried information the gate
+   did not already have. The acknowledgement moved into the publish confirmation
+   (*"34 kandidater står fortsatt uten intervju"*), where the decision is
+   actually made, so it is asked once rather than twice.
+2. **Scope.** Chosen on the day strip, not in the gate. Clicking a planned day
+   sets the boundary; the gate's **Publiseringsomfang** panel now just shows the
+   strip with that choice previewed. `publishScope` is derived from the chosen
+   date rather than being a separate segmented control.
 3. **Names.** **Kandidatnavn etter publisering** → **Ansvarlige**
    (`name_visibility: "admin_only"`). Helper text: *"Bare opptaksansvarlige kan
    se kandidatnavnene."*
@@ -432,37 +455,28 @@ stable; the label is what the UI shows.
    │ names: admin_only        │          │ Wed 12 / Thu 13 / Fri 14 │        │                        │
    └──────────────────────────┘          │ (new solve)              │        └────────────────────────┘
                                          └──────────────────────────┘
-      "Planlegg alle gjenstående dager"        "Utvid publisering"           (optional) names → "Komiteen"
+        click a day: "Planlegg til…"      then, in place: "Publiser t.o.m…"    (optional) names → "Komiteen"
 ```
 
-### 6.1 Phase A — extend the solver draft
+### 6.1 Both cursors, one control
 
-1. Back in **Plan**, the partial-publish banner reads
-   *"Publisert t.o.m. tirsdag 11. august – 36 intervjuer er låst. 34 kandidater
-   venter på intervju. Planlegg resten når du er klar – de publiserte dagene
-   holdes uendret."* ([`SolverView.tsx`](../../frontend/src/components/Scheduling/Solver/SolverView.tsx#L1050)).
-2. `publishedDayLocks` pins every interview on or before the boundary; the solver
-   may not move, shift or unassign any of them.
-3. The next-step menu on the proposal
-   ([`SolverResults.tsx`](../../frontend/src/components/Scheduling/Solver/SolverResults.tsx#L845-L873))
-   offers **one** extend action, depending on how much scope is left:
-   - **Planlegg alle gjenstående dager** (`fillRemainingDays`) — when ≥ 2 days
-     remain; expands the scope to every remaining day and solves them in one pass.
-   - **Planlegg neste dag** (`extendDay`) — when exactly one day remains; +1 day.
-   - Plus **Plasser de siste N kandidatene manuelt**.
-4. CP-SAT packs the remaining candidates into the newly opened days; the draft
-   autosaves.
+The Phase A / Phase B split is gone. Planning further days and releasing them
+are still two deliberate acts — you should look at a plan before the committee
+does — but they now happen on the same strip, in the same place, without
+changing screens.
 
-### 6.2 Phase B — extend the publication boundary (**Utvid publisering**)
-
-1. Open **Intervjuplan**. Click **Utvid publisering** (header, or the blue button
-   in the partial-publish banner — admin only, shown while partially published
-   with days left to release).
-2. The modal (*"Flere intervjuer blir synlige for komiteen. Planen er nå
-   publisert til og med tirsdag 11. august."*) has a **Publiser til og med**
-   select of the not-yet-published dates.
-3. Confirm. [`extendDistributedThrough`](../../frontend/src/routes/SchedulePage/useDistributedPlanActions.ts#L263)
-   sends:
+1. In **Plan**, the strip shows `🔒 Mon` `🔒 Tue` ┃ `● Wed` `○ Thu` `○ Fri`.
+2. Click **Fri** → *"Planlegg til og med fredag 14. august"*. `publishedDayLocks`
+   pins every interview on or before the boundary, and on a scope extension
+   `savedScheduleLocks` pins every saved row, so the solver only searches the
+   newly opened days. Mon–Tue cannot move.
+3. Once the new days save cleanly, the strip offers the follow-on step in place:
+   **"Publiser t.o.m. fredag 14. august"**. This is the chained step that
+   replaced the cross-screen hop; it is suppressed while the draft has unsaved
+   or failed writes (`publishSuggestionReady`), so you cannot release a plan the
+   server has not accepted.
+4. Confirm. [`extendDistributedThrough`](../../frontend/src/routes/SchedulePage/useDistributedPlanActions.ts#L263)
+   sends the same request as before:
 
    ```json
    {
@@ -472,10 +486,15 @@ stable; the label is what the UI shows.
    }
    ```
 
-   The deferral flag is always included here (commit `0c1d3593`) so the strict
-   "everyone placed" check cannot block an extension that does not fully saturate
-   the new boundary.
-4. Members immediately see the newly published days.
+Publishing is offered **only over days that already hold interviews**: releasing
+an empty day tells the committee nothing and spends a boundary that can never be
+moved back. Published cells are inert — no hover, no click.
+
+The **Utvid publisering** button (formerly in the `DistributedPlanView` header
+*and* in a banner) is gone; the strip renders above the published plan and
+carries that action on the day itself. The unlock action, formerly a
+danger-styled **Rediger**, is now **Lås opp for redigering** — it unpublishes
+the whole plan and hides it from the committee, which "Rediger" did not say.
 
 ### 6.3 Phase C — reveal names to the whole committee
 
@@ -526,11 +545,11 @@ sequenceDiagram
     FE-->>Rec: OS SMS app opens, prefilled
 
     Note over Rec,Mem: Extend
-    Rec->>FE: Planlegg alle gjenstående dager
+    Rec->>FE: day strip → Planlegg til og med Fri
     FE->>API: POST /api/solve/ (Mon–Tue pinned)
     W-->>API: placements for Wed–Fri
     FE->>API: autosave
-    Rec->>FE: Utvid publisering → Fri
+    Rec->>FE: day strip → Publiser t.o.m. Fri
     FE->>API: PATCH (distributed_through=Fri, defer_unplaced_candidates=true)
     Mem->>FE: Wed–Fri now visible
     Rec->>FE: names → Komiteen
@@ -546,12 +565,12 @@ stateDiagram-v2
     Draft --> DelplanPublished: PATCH distributed_through = day 2 (defer + admin_only)
     Draft --> FullyPublished: PATCH is_distributed = true (all placed + committee)
 
-    DelplanPublished --> DelplanExtended: Utvid publisering (distributed_through = later day)
-    DelplanExtended --> DelplanExtended: Utvid publisering
+    DelplanPublished --> DelplanExtended: publish through a later day (distributed_through)
+    DelplanExtended --> DelplanExtended: publish through a later day
     DelplanExtended --> FullyPublished: boundary passes the last interview day
 
-    DelplanPublished --> Draft: Rediger (unlock)
-    DelplanExtended --> Draft: Rediger (unlock)
+    DelplanPublished --> Draft: Lås opp for redigering
+    DelplanExtended --> Draft: Lås opp for redigering
 
     state DelplanPublished {
         [*] --> NamesAdminOnly
@@ -576,10 +595,11 @@ stateDiagram-v2
 | URLs | [`urls.py`](../../admissions/urls.py) | `api/solve/…`, `api/admin/admission/<slug>/group/<uuid>/schedule/` |
 | Publication gate UI | [`PublicationGate.tsx`](../../frontend/src/routes/SchedulePage/PublicationGate.tsx) | 6 readiness rows, defer checkbox, scope selector, review waiver |
 | Solver workspace | [`SolverView.tsx`](../../frontend/src/components/Scheduling/Solver/SolverView.tsx) | `publishedDayLocks`, `savedScheduleLocks`, `extendDay`, `fillRemainingDays`, partial-publish banner |
-| Solver setup | [`SolverSetupPanel.tsx`](../../frontend/src/components/Scheduling/Solver/SolverSetupPanel.tsx) | `Planlegg i etapper`, `effectiveDayCount`, `minDayCount`, `scopeDateLabel` |
-| Proposal next steps | [`SolverResults.tsx`](../../frontend/src/components/Scheduling/Solver/SolverResults.tsx) | `Planlegg alle gjenstående dager`, `Planlegg neste dag` |
+| Day strip (both cursors) | [`PlanDayStrip.tsx`](../../frontend/src/components/Scheduling/Solver/PlanDayStrip.tsx) · [`planDayStripModel.ts`](../../frontend/src/components/Scheduling/Solver/planDayStripModel.ts) | `derivePlanDayStrip`, `PlanDayState`, `canPlanThrough`, `canPublishThrough`, `publishableCount` |
+| Solver setup | [`SolverSetupPanel.tsx`](../../frontend/src/components/Scheduling/Solver/SolverSetupPanel.tsx) | `effectiveDayCount`, `scopeDateLabel` (read-only; scope is set on the strip) |
+| Proposal next steps | [`SolverResults.tsx`](../../frontend/src/components/Scheduling/Solver/SolverResults.tsx) · [`DeviationNextStepMenu.tsx`](../../frontend/src/components/Scheduling/Solver/DeviationNextStepMenu.tsx) | `nextStep` (one primary + `Andre valg`), `Planlegg resten` |
 | Draft-state headline | [`planDraftWorkflow.ts`](../../frontend/src/components/Scheduling/Solver/planDraftWorkflow.ts) | `placements_missing`, `filledDayCount`, `extendDayAvailable` |
-| Published plan | [`DistributedPlanView.tsx`](../../frontend/src/routes/SchedulePage/DistributedPlanView.tsx) · [`PublishedScheduleTable.tsx`](../../frontend/src/routes/SchedulePage/PublishedScheduleTable.tsx) · [`PublishedSlotRow.tsx`](../../frontend/src/routes/SchedulePage/PublishedSlotRow.tsx) | `Utvid publisering`, name toggle, `handleOutreachSend` |
+| Published plan | [`DistributedPlanView.tsx`](../../frontend/src/routes/SchedulePage/DistributedPlanView.tsx) · [`PublishedScheduleTable.tsx`](../../frontend/src/routes/SchedulePage/PublishedScheduleTable.tsx) · [`PublishedSlotRow.tsx`](../../frontend/src/routes/SchedulePage/PublishedSlotRow.tsx) | `Lås opp for redigering`, name toggle, `handleOutreachSend` |
 | Publish/extend/unlock actions | [`useDistributedPlanActions.ts`](../../frontend/src/routes/SchedulePage/useDistributedPlanActions.ts) | `publishSchedule`, `extendDistributedThrough`, `unlockSchedule`, `setNameVisibility` |
 | Outreach | [`InterviewOutreachActions.tsx`](../../frontend/src/routes/SchedulePage/InterviewOutreachActions.tsx) · [`InterviewOutreachTemplateEditor.tsx`](../../frontend/src/routes/SchedulePage/InterviewOutreachTemplateEditor.tsx) · [`interviewOutreach.ts`](../../frontend/src/routes/SchedulePage/interviewOutreach.ts) | `sms:` link, clipboard, token rendering |
 | Status vocab | [`interviewStatus.ts`](../../frontend/src/utils/interviewStatus.ts) | labels, tones, next actions |
@@ -589,10 +609,16 @@ stateDiagram-v2
 **"Publiser …" button is disabled / a blocker line is shown.**
 [`PublicationGate.tsx`](../../frontend/src/routes/SchedulePage/PublicationGate.tsx#L177-L201)
 in order: no saved draft → unsaved local edits → candidate list still loading →
-unplaced candidates and *Resterende kandidater* not ticked → a proposal pairing
-violates a registered inhabilitet (resolve it in the draft) → outstanding
-kandidatkontroll and the waiver not ticked → availability-deviation approval
-pending (handled in the confirm dialog).
+a proposal pairing violates a registered inhabilitet (resolve it in the draft) →
+outstanding kandidatkontroll and the waiver not ticked → availability-deviation
+approval pending (handled in the confirm dialog). Unplaced candidates no longer
+block: deferral is derived, and acknowledged in the confirm dialog.
+
+**The draft looks read-only.**
+It should not be. Editing is gated per row on the publication boundary only —
+published rows hold, everything after the boundary edits freely, including
+while the setup, repair or proposal-decision panel is open beside it. If a row
+after the boundary will not take an edit, that is a bug, not a mode.
 
 **A candidate withdraws after the first days are published.**
 Set the row's status to **Trukket seg / Avlyst** (`cancelled`). Status changes
@@ -637,19 +663,19 @@ regenerated whenever the UI drifts.
 
 Milestones worth a shot:
 
-1. `SolverSetupPanel` — **Planlegg i etapper** stepper at 2, scope label visible
-2. `SolverResults` — **Delplan klar** headline + the next-step menu open
-3. `PublicationGate` — all 6 rows green, the three side panels, **Ansvarlige** +
-   **Til og med en dato** selected
+1. The day strip with both rules drawn: locked days, a planned day, open days
+2. `SolverResults` — the **venter på plassering** headline + **Andre valg** open
+3. `PublicationGate` — all 6 rows green, **Ansvarlige** selected, the strip
+   previewing the chosen boundary
 4. The publish confirm dialog
 5. **Side-by-side: recruiter vs member** `DistributedPlanView` — real
    name/phone/**Send innkalling** next to `Kandidat N` / no phone / table ending
    at the boundary *(this is the single most important image)*
 6. `InterviewOutreachActions` menu open (**Åpne SMS-utkast** / **Kopier
    meldingstekst**)
-7. The partial-publish banner in **Plan** (**Publisert t.o.m. … – N intervjuer
-   er låst**)
-8. **Utvid publisering** modal, then **Gjør kandidatnavn synlige for hele
+7. The day strip in **Plan** after a partial publish, with the chained
+   **Publiser t.o.m. …** step showing
+8. The day strip's **Publiser t.o.m. …** confirm, then **Gjør kandidatnavn synlige for hele
    komiteen?**
 
 Keep it to ~8 annotated stills. Record one short screen-capture GIF of the

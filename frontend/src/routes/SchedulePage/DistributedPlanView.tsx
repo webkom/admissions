@@ -1,11 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
-import {
-  CalendarCheck,
-  CalendarDays,
-  Download,
-  Pencil,
-  Unlock,
-} from "lucide-react";
+import { CalendarCheck, Download, Unlock } from "lucide-react";
 import {
   Chip,
   SchedulePanel,
@@ -17,6 +11,8 @@ import {
 } from "src/components/Scheduling/ui";
 import ConfirmDialog from "src/components/Scheduling/ConfirmDialog";
 import ExportChooserModal from "src/components/Scheduling/Solver/ExportChooserModal";
+import { useInterviewCandidateTexts } from "src/query/hooks";
+import PlanDayStrip from "src/components/Scheduling/Solver/PlanDayStrip";
 import {
   Candidate,
   Interviewer,
@@ -102,19 +98,6 @@ interface DistributedPlanViewProps {
     templates: InterviewOutreachTemplates,
   ) => Promise<boolean>;
 }
-
-const formatDisplayDate = (dateStr: string) => {
-  try {
-    const date = new Date(dateStr + "T12:00:00");
-    return date.toLocaleDateString("nb-NO", {
-      weekday: "long",
-      day: "numeric",
-      month: "long",
-    });
-  } catch {
-    return dateStr;
-  }
-};
 
 const DistributedPlanView: React.FC<DistributedPlanViewProps> = ({
   admissionSlug,
@@ -338,6 +321,13 @@ const DistributedPlanView: React.FC<DistributedPlanViewProps> = ({
   const extendableDates = sortedDates.filter(
     (date) => !distributedThrough || date > distributedThrough,
   );
+  // Days holding interviews. Only these are worth releasing: publishing an
+  // empty day tells the committee nothing and spends a boundary that can
+  // never be moved back.
+  const publishedDayDates = useMemo(
+    () => new Set(dateCounts.keys()),
+    [dateCounts],
+  );
   const waivedReviewers = savedSchedule?.published_without_review_by ?? [];
 
   const toggleLock = async (scheduleIndex: number) => {
@@ -415,6 +405,33 @@ const DistributedPlanView: React.FC<DistributedPlanViewProps> = ({
     });
   };
 
+  // Søknadstekst is fetched only once the export chooser is open, and only
+  // for someone who runs this committee - it is the heaviest and most
+  // sensitive thing this page can hold, and the plain CSV never needs it.
+  const candidateTexts = useInterviewCandidateTexts(
+    admissionSlug,
+    groupId,
+    isAdmin && isExportChooserOpen,
+  );
+  const applicationTextById = useMemo(() => {
+    const byId = new Map<string, string>();
+    (candidateTexts.data ?? []).forEach((candidate) => {
+      if (candidate.application_text) {
+        byId.set(candidate.id, candidate.application_text);
+      }
+    });
+    return byId;
+  }, [candidateTexts.data]);
+
+  const handleExportCsvWithText = () => {
+    exportVisibleScheduleCsv({
+      entries: displayEntries,
+      candidateNamesVisible: namesVisible,
+      formatTimeLabel,
+      applicationTextById,
+    });
+  };
+
   const handleSelectVisibility = async (next: NameVisibility) => {
     if (!canToggleCandidateNames || isUpdatingNames) return;
     if (next === savedSchedule.name_visibility) {
@@ -484,25 +501,6 @@ const DistributedPlanView: React.FC<DistributedPlanViewProps> = ({
               <Download size={iconSizes.small} aria-hidden="true" />
               Eksporter
             </button>
-            {isAdmin && isPartiallyPublished && extendableDates.length > 0 && (
-              <button
-                type="button"
-                onClick={() => {
-                  setExtendThroughDate(
-                    extendableDates[extendableDates.length - 1],
-                  );
-                  setIsExtendDialogOpen(true);
-                }}
-                disabled={planTransition !== null}
-                className={cn(
-                  actionButtonBase,
-                  actionButtonNeutral,
-                  "inline-flex items-center gap-1.5",
-                )}
-              >
-                Utvid publisering
-              </button>
-            )}
             {isAdmin && (
               <button
                 type="button"
@@ -514,8 +512,8 @@ const DistributedPlanView: React.FC<DistributedPlanViewProps> = ({
                   "inline-flex items-center gap-1.5",
                 )}
               >
-                <Pencil size={iconSizes.small} aria-hidden="true" />
-                Rediger
+                <Unlock size={iconSizes.small} aria-hidden="true" />
+                Lås opp for redigering
               </button>
             )}
           </div>
@@ -537,7 +535,7 @@ const DistributedPlanView: React.FC<DistributedPlanViewProps> = ({
       {waivedReviewers.length > 0 && (
         <div
           data-cy="published-without-review-banner"
-          className="border-b border-amber-200 bg-amber-50 px-6 py-3 text-ui text-amber-950"
+          className="border-b border-warning-border bg-warning-bg px-6 py-3 text-ui text-warning-text"
         >
           <span className="font-semibold">
             Publisert uten fullført kandidatkontroll
@@ -584,44 +582,32 @@ const DistributedPlanView: React.FC<DistributedPlanViewProps> = ({
             showCsv={isAdmin}
             onExportIcs={handleExportIcs}
             onExportCsv={handleExportCsv}
+            onExportCsvWithText={
+              isAdmin && !candidateTexts.isError
+                ? handleExportCsvWithText
+                : undefined
+            }
+            csvWithTextLoading={candidateTexts.isLoading}
             onClose={() => setIsExportChooserOpen(false)}
           />
         )}
 
-        {isPartiallyPublished && distributedThrough && (
-          <div className="mx-6 my-3 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-brand-border bg-brand-soft/70 px-4 py-3 text-ui">
-            <div className="flex items-center gap-2.5">
-              <CalendarDays
-                className="text-brand flex-none"
-                size={iconSizes.small}
-              />
-              <div>
-                <p className="m-0 font-bold text-text-primary">
-                  Planen er delvis publisert frem til{" "}
-                  {formatDisplayDate(distributedThrough)}
-                </p>
-                <p className="m-0 text-detail text-text-muted">
-                  Kandidater og komité ser bare intervjuer frem til denne
-                  datoen. Intervjuer på senere dager holdes tilbake inntil dere
-                  utvider.
-                </p>
-              </div>
-            </div>
-            {isAdmin && extendableDates.length > 0 && (
-              <button
-                type="button"
-                onClick={() => {
-                  setExtendThroughDate(
-                    extendableDates[extendableDates.length - 1],
-                  );
-                  setIsExtendDialogOpen(true);
-                }}
-                disabled={planTransition !== null}
-                className="inline-flex items-center gap-1.5 rounded-md bg-brand px-3.5 py-1.5 text-detail font-bold text-white shadow-sm hover:bg-brand-hover transition-colors cursor-pointer"
-              >
-                Utvid publisering
-              </button>
-            )}
+        {isAdmin && sortedDates.length > 1 && (
+          <div className="mx-6 my-3">
+            <PlanDayStrip
+              dates={sortedDates}
+              filledDates={publishedDayDates}
+              distributedThrough={distributedThrough}
+              onPublishThrough={
+                extendableDates.length > 0 && planTransition === null
+                  ? (date) => {
+                      setExtendThroughDate(date);
+                      setIsExtendDialogOpen(true);
+                    }
+                  : undefined
+              }
+              loading={planTransition !== null}
+            />
           </div>
         )}
 

@@ -38,6 +38,9 @@ describe("day scope bounds model", () => {
   it("lets a fresh plan scope down to a single day", () => {
     expect(bounds({}).minDayCount).to.equal(1);
     expect(bounds({}).draftDayExtent).to.equal(0);
+    // The publication cursor itself is 0 when nothing is published;
+    // minDayCount floors at 1 because a solve must cover at least one day.
+    expect(bounds({}).publishedDayCount).to.equal(0);
   });
 
   it("keeps an unpublished multi-day draft fully rescopable", () => {
@@ -55,6 +58,27 @@ describe("day scope bounds model", () => {
     expect(bounds({ distributedThrough: "2026-09-10" }).minDayCount).to.equal(
       5,
     );
+  });
+
+  it("counts the published prefix separately from the solve floor", () => {
+    // The period opens on 2026-09-06, so a boundary on the 7th covers two days.
+    expect(
+      bounds({ distributedThrough: "2026-09-07" }).publishedDayCount,
+    ).to.equal(2);
+    expect(
+      bounds({ distributedThrough: "2026-09-10" }).publishedDayCount,
+    ).to.equal(5);
+  });
+
+  it("clamps the published prefix to the days that exist", () => {
+    // A boundary past the period cannot mean more published days than there
+    // are days; one before it means none.
+    expect(
+      bounds({ distributedThrough: "2027-01-01" }).publishedDayCount,
+    ).to.equal(5);
+    expect(
+      bounds({ distributedThrough: "1999-01-01" }).publishedDayCount,
+    ).to.equal(0);
   });
 
   it("lets the published floor exceed the current draft extent", () => {

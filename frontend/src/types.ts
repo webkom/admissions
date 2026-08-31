@@ -131,6 +131,10 @@ export interface Candidate {
   name: string;
   gender?: string;
   user_id?: string;
+  /** This committee's søknadstekst. Only present when explicitly requested
+   *  (the CSV export) and only for interview admins - never the priority
+   *  text, which spans every committee the person applied to. */
+  application_text?: string;
 }
 
 export type ExperienceLevel = "unknown" | "inexperienced" | "experienced";

@@ -71,7 +71,7 @@ const WorkflowStepper: React.FC<WorkflowStepperProps> = ({
                 )}
               </span>
               <span className="min-w-0">
-                <span className="block text-sm font-semibold leading-tight">
+                <span className="block text-ui font-semibold leading-tight">
                   {idx + 1}. {step.title}
                 </span>
                 <span
@@ -80,7 +80,7 @@ const WorkflowStepper: React.FC<WorkflowStepperProps> = ({
                     active
                       ? "text-text-muted"
                       : step.tone === "warning"
-                        ? "text-amber-700"
+                        ? "text-warning-text"
                         : "text-text-subtle",
                   )}
                 >

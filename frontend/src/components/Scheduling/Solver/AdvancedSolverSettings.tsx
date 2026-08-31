@@ -120,7 +120,7 @@ const AdvancedSolverSettings = ({
           ref={headingRef}
           id="advanced-generation-settings-heading"
           tabIndex={-1}
-          className="m-0 text-base font-semibold text-text-primary focus:outline-none"
+          className="m-0 text-title font-semibold text-text-primary focus:outline-none"
         >
           Tilpass oppsett
         </h3>

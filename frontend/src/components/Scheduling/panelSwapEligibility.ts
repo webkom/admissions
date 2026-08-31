@@ -11,18 +11,32 @@ import type { PanelChipOption } from "./ui";
  *  - `on_panel`     – already sitting on this panel / block panel.
  *  - `inhabil`      – a registered inhabilitet against *any* candidate in the
  *                     block (a block shares one panel, so one clash is enough).
+ *  - `not_participating` – opted out of interviewing entirely ("Jeg deltar
+ *                     ikke"). Checked before `unavailable`, because opting out
+ *                     also means no submitted availability: without this the
+ *                     refusal would arrive from the server instead, since
+ *                     `canonicalize_schedule` rejects non-participating panel
+ *                     members.
  *  - `unavailable`  – submitted availability that does not cover the slot(s)
  *                     being changed. An interviewer who has not submitted any
  *                     availability is *not* blocked on this ground — they may
  *                     still be a legitimate panel member (e.g. an admin group).
  *
+ * "Helst ikke" (`discouraged`) stays selectable: it is a preference the solver
+ * prices as a penalty, not a constraint it refuses.
+ *
  * The seat's current occupant is always selectable (re-picking them is a no-op).
  */
-export type PanelSwapBlockReason = "on_panel" | "inhabil" | "unavailable";
+export type PanelSwapBlockReason =
+  | "on_panel"
+  | "inhabil"
+  | "not_participating"
+  | "unavailable";
 
 export const panelSwapBlockLabel: Record<PanelSwapBlockReason, string> = {
   on_panel: "Allerede i panelet",
   inhabil: "Inhabil i blokken",
+  not_participating: "Deltar ikke",
   unavailable: "Ikke tilgjengelig",
 };
 
@@ -68,6 +82,9 @@ export const panelSwapBlockReason = (
     )
   ) {
     return "inhabil";
+  }
+  if (interviewer.participation === "not_participating") {
+    return "not_participating";
   }
   if (
     ctx.availabilityStatusFor(interviewer) === "outside_submitted_availability"

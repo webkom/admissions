@@ -44,6 +44,8 @@ class SolveJobSerializer(serializers.ModelSerializer):
             "status",
             "request_fingerprint",
             "result",
+            "preview_result",
+            "preview_updated_at",
             "error",
             "created_at",
             "started_at",

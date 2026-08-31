@@ -3,6 +3,7 @@ from urllib.parse import urlparse
 import sentry_sdk
 from sentry_sdk.integrations.django import DjangoIntegration
 
+from admissions.utils.csp import connect_src_origin
 from admissions.utils.sentry import remove_sensitive_data
 
 from .base import *  # noqa
@@ -60,11 +61,9 @@ sentry_sdk.init(
 
 connect_origins = {"'self'"}
 for external_url in (SENTRY_DSN, API_URL):
-    parsed_external_url = urlparse(external_url)
-    if parsed_external_url.scheme in ("http", "https") and parsed_external_url.netloc:
-        connect_origins.add(
-            f"{parsed_external_url.scheme}://{parsed_external_url.netloc}"
-        )
+    external_origin = connect_src_origin(external_url)
+    if external_origin:
+        connect_origins.add(external_origin)
 CONTENT_SECURITY_POLICY = "; ".join(
     (
         "default-src 'self'",

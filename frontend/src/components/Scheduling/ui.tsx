@@ -239,8 +239,6 @@ export const SchedulingActionBar: React.FC<SchedulingActionBarProps> = ({
   </SchedulePanelFooter>
 );
 
-export type SchedulingWorkspaceMode = "preview" | "editing";
-
 export interface PanelChipOption {
   id?: string;
   name: string;
@@ -249,7 +247,7 @@ export interface PanelChipOption {
   /** Machine-readable block reason so consumers don't have to match on the
    *  Norwegian display string. Present whenever `disabled` is true and the
    *  option was built by `toPanelSwapOption`. */
-  disabledKind?: "on_panel" | "inhabil" | "unavailable";
+  disabledKind?: "on_panel" | "inhabil" | "not_participating" | "unavailable";
 }
 
 interface EditablePanelChipProps {
@@ -433,10 +431,10 @@ export const EditablePanelChip: React.FC<EditablePanelChipProps> = ({
         aria-haspopup={editable ? "listbox" : undefined}
         aria-expanded={editable ? open : undefined}
         className={cn(
-          "group/chip inline-flex items-center gap-1 text-xs font-semibold",
+          "group/chip inline-flex items-center gap-1 text-label font-semibold",
           variant === "chip"
             ? "rounded-full border px-2 py-1"
-            : "rounded-md text-sm",
+            : "rounded-md text-ui",
           editable &&
             "cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-ring",
           editable &&
@@ -517,7 +515,7 @@ export const EditablePanelChip: React.FC<EditablePanelChipProps> = ({
                 onKeyDown={handleInputKeyDown}
                 placeholder={searchPlaceholder}
                 aria-label={searchPlaceholder}
-                className="w-full rounded-md border border-border-soft bg-surface-base px-2.5 py-1.5 text-sm font-semibold text-text-primary placeholder:font-normal placeholder:text-text-faded focus:border-brand-input focus:outline-none focus:ring-2 focus:ring-brand-ringSoft"
+                className="w-full rounded-md border border-border-soft bg-surface-base px-2.5 py-1.5 text-ui font-semibold text-text-primary placeholder:font-normal placeholder:text-text-faded focus:border-brand-input focus:outline-none focus:ring-2 focus:ring-brand-ringSoft"
               />
             </div>
             <ul id={listboxId} role="listbox" className="m-0 p-1.5">
@@ -546,7 +544,7 @@ export const EditablePanelChip: React.FC<EditablePanelChipProps> = ({
                           if (!opt.disabled) setHighlightedIndex(index);
                         }}
                         className={cn(
-                          "flex w-full items-center justify-between gap-2 rounded-md px-2.5 py-2 text-left text-sm font-semibold transition-colors",
+                          "flex w-full items-center justify-between gap-2 rounded-md px-2.5 py-2 text-left text-ui font-semibold transition-colors",
                           opt.disabled
                             ? "cursor-not-allowed text-text-faded"
                             : isCurrent
@@ -663,7 +661,7 @@ const TimeSegmentField: React.FC<TimeSegmentFieldProps> = ({
       value={text}
       onChange={handleChange}
       onBlur={handleBlur}
-      className="w-8 border-none bg-transparent p-0 text-center text-sm font-bold tabular-nums text-text-primary [-moz-appearance:textfield] focus:outline-none [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+      className="w-8 border-none bg-transparent p-0 text-center text-ui font-bold tabular-nums text-text-primary [-moz-appearance:textfield] focus:outline-none [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
       aria-label={ariaLabel}
     />
   );
@@ -702,7 +700,7 @@ export const TimeSegmentInput: React.FC<TimeSegmentInputProps> = ({
         onCommit={(h) => onChange({ h, m: h === 24 ? 0 : value.m })}
         aria-label={`${ariaLabel}, time`}
       />
-      <span className="select-none text-sm font-bold text-text-subtle">:</span>
+      <span className="select-none text-ui font-bold text-text-subtle">:</span>
       <TimeSegmentField
         max={isEndOfDay ? 0 : 59}
         committed={value.m}

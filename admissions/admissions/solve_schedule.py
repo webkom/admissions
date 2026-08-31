@@ -1211,8 +1211,14 @@ def solve_schedule(
     *,
     include_metrics: bool = False,
     model_version: str | None = None,
+    on_incumbent=None,
 ) -> Dict[str, Any]:
-    """Dispatch to the rollback-safe solver engine selected by configuration."""
+    """Dispatch to the rollback-safe solver engine selected by configuration.
+
+    `on_incumbent` streams validated intermediate plans out of the v2 engine;
+    see `solve_schedule_v2`. The v1 rollback engine has no such hook, so a
+    caller that depends on live previews must not force `model_version="v1"`.
+    """
 
     def annotate_filled_days(result: Dict[str, Any]) -> Dict[str, Any]:
         if result.get("status") in {"SUCCESS", "PARTIAL"}:
@@ -1330,5 +1336,6 @@ def solve_schedule(
             block_metadata_data=block_metadata_data,
             previous_schedule_data=previous_schedule_data,
             include_metrics=include_metrics,
+            on_incumbent=on_incumbent,
         )
     )
