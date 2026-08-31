@@ -864,6 +864,14 @@ class InterviewAvailabilityView(SchedulerFeatureGateMixin, APIView):
             # the interviewer cannot act on. A filler token and a real id are
             # dropped identically, so the response still says nothing about
             # which entries were decoys.
+            #
+            # Note this drops ids the *incoming* lists no longer recognise. An
+            # id already persisted on this row is a separate question and is
+            # answered further down: next_conflicts starts from
+            # existing_conflicts, and the prune there keeps anything naming a
+            # real application. So a previously-declared inhabilitet that has
+            # since fallen out of scope survives - it is never re-submitted,
+            # it simply stays.
             for field in ("conflicts", "reviewed_candidate_ids"):
                 allowed_ids = (
                     valid_conflict_ids if field == "conflicts" else valid_reviewed_ids

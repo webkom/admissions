@@ -59,6 +59,28 @@ describe("distributed plan export disclosure", () => {
     expect(visible).to.contain("Svært Hemmelig");
   });
 
+  it("gives one anonymised label per person, not per row", () => {
+    const twice = [
+      { item: privateSchedule[0], scheduleIndex: 0 },
+      {
+        item: { ...privateSchedule[0], time: 600 },
+        scheduleIndex: 1,
+      },
+    ];
+
+    const csv = buildVisibleScheduleCsv({
+      entries: twice,
+      fields: fields({ showNames: false }),
+      formatTimeLabel: (time) => `Mandag ${time}`,
+    });
+
+    // The same candidate on two rows is one "Kandidat 1" both times - a
+    // per-row counter would invent a second person in the scrubbed plan.
+    expect(csv).to.contain('"Mandag 540","Kandidat 1"');
+    expect(csv).to.contain('"Mandag 600","Kandidat 1"');
+    expect(csv).not.to.contain("Kandidat 2");
+  });
+
   it("drops the panel and status columns when they are not picked", () => {
     const csv = buildVisibleScheduleCsv({
       entries: [{ item: privateSchedule[0], scheduleIndex: 0 }],

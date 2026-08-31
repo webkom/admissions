@@ -135,10 +135,26 @@ export const buildVisibleScheduleCsv = ({
       ...(withText ? ["Søknadstekst"] : []),
     ],
   ];
-  entries.forEach(({ item }, index) => {
+  // Anonymised labels number the *people*, not the rows: a candidate who
+  // appears twice must read as one "Kandidat N" both times, or the scrubbed
+  // plan invents a second person. Numbered by first appearance, so the label
+  // still follows the order the reader sees.
+  const anonymousLabels = new Map<string, string>();
+  if (!fields.showNames) {
+    entries.forEach(({ item }) => {
+      const key = item.candidate_id ?? item.candidate;
+      if (!anonymousLabels.has(key)) {
+        anonymousLabels.set(key, `Kandidat ${anonymousLabels.size + 1}`);
+      }
+    });
+  }
+  entries.forEach(({ item }) => {
     rows.push([
       formatTimeLabel(item.time),
-      fields.showNames ? item.candidate : `Kandidat ${index + 1}`,
+      fields.showNames
+        ? item.candidate
+        : (anonymousLabels.get(item.candidate_id ?? item.candidate) ??
+          "Kandidat"),
       ...(fields.panel
         ? [item.panel.map((member) => member.name).join("; ")]
         : []),

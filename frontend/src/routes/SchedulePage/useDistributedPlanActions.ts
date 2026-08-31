@@ -37,6 +37,27 @@ const extractScheduleFieldError = (error: unknown): string | null => {
   return typeof first === "string" ? first : null;
 };
 
+/** The publish was refused only because the kandidatkontroll is outstanding.
+ *  Prefers the backend's error code; the wording match is a fallback for a
+ *  server that predates it, since getting this wrong turns a routine gate back
+ *  into a red error toast. */
+export const isConflictReviewRefusal = (
+  error: unknown,
+  message?: string | null,
+): boolean => {
+  if (isAxiosError(error)) {
+    const data = error.response?.data;
+    if (
+      data &&
+      typeof data === "object" &&
+      (data as Record<string, unknown>).code === "conflict_review_required"
+    ) {
+      return true;
+    }
+  }
+  return /må kontrollere/i.test(message ?? "");
+};
+
 interface DistributedPlanActionsParams {
   admissionSlug: string;
   groupId: string;
@@ -70,6 +91,10 @@ export const useDistributedPlanActions = ({
   // planTransitionError so the gate can render it as the actual reason
   // (e.g. "3 intervjuere må kontrollere ...") instead of a generic toast.
   const [scheduleFieldError, setScheduleFieldError] = useState("");
+  // Whether the field error above is the kandidatkontroll gate specifically.
+  // Decided here, where the axios error (and its `code`) is still in hand, so
+  // the gate never has to re-derive it by matching Norwegian prose.
+  const [reviewRefusalActive, setReviewRefusalActive] = useState(false);
   const reportAccessFailure = (purged: boolean) => {
     if (purged) {
       notify(
@@ -221,6 +246,7 @@ export const useDistributedPlanActions = ({
     setPlanTransition("publishing");
     setPlanTransitionError("");
     setScheduleFieldError("");
+    setReviewRefusalActive(false);
     try {
       await saveSchedule.mutateAsync({
         ...(distributedThrough
@@ -240,6 +266,7 @@ export const useDistributedPlanActions = ({
       });
       if (areSensitiveAdmissionCacheWritesBlocked(scope)) return false;
       setScheduleFieldError("");
+      setReviewRefusalActive(false);
       notify(
         distributedThrough
           ? "Intervjuplanen er delvis publisert for komiteen."
@@ -254,6 +281,7 @@ export const useDistributedPlanActions = ({
         if (reconciliation === "published") {
           setPlanTransitionError("");
           setScheduleFieldError("");
+          setReviewRefusalActive(false);
           notify("Intervjuplanen er publisert for komiteen.");
           return true;
         }
@@ -271,8 +299,9 @@ export const useDistributedPlanActions = ({
       // publish panel turns it into the "publiser uten kandidatkontroll"
       // prompt. Surfacing it as a red error toast + banner made every
       // first publish attempt look broken.
-      if (structured && /må kontrollere/i.test(structured)) {
+      if (structured && isConflictReviewRefusal(error, structured)) {
         setScheduleFieldError(structured);
+        setReviewRefusalActive(true);
         setPlanTransitionError("");
         return false;
       }
@@ -284,6 +313,7 @@ export const useDistributedPlanActions = ({
           );
       setPlanTransitionError(message);
       if (structured) setScheduleFieldError(structured);
+      setReviewRefusalActive(false);
       notify(message, "error");
       return false;
     } finally {
@@ -295,6 +325,11 @@ export const useDistributedPlanActions = ({
     if (!savedSchedule) return false;
     setPlanTransition("publishing");
     setPlanTransitionError("");
+    // Clear the field error too: a leftover kandidatkontroll refusal from an
+    // earlier publish keeps reading as "this is the review gate", which
+    // suppresses this action's own error banner in the publish panel.
+    setScheduleFieldError("");
+    setReviewRefusalActive(false);
     try {
       // Extending the publish boundary is the explicit "delplan" action
       // we agreed on: the user is moving the published prefix forward
@@ -332,6 +367,8 @@ export const useDistributedPlanActions = ({
     if (!savedSchedule) return false;
     setPlanTransition("unlocking");
     setPlanTransitionError("");
+    setScheduleFieldError("");
+    setReviewRefusalActive(false);
     try {
       await saveSchedule.mutateAsync({
         is_distributed: false,
@@ -541,6 +578,7 @@ export const useDistributedPlanActions = ({
     planTransition,
     planTransitionError,
     scheduleFieldError,
+    reviewRefusalActive,
     clearUnpublishedDraft,
     setNameVisibility,
     replacePanelMember,

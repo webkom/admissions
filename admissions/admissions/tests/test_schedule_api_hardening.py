@@ -906,6 +906,11 @@ class SavedSchedulePublishSemanticsTestCase(APITestCase):
         self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertIn("schedule", res.data)
         self.assertIn("kontrollere", res.data["schedule"][0])
+        # The client renders this refusal as the "publiser uten
+        # kandidatkontroll" prompt rather than an error, and picks it out by
+        # this code - reword the sentence above and the code must still say
+        # what kind of refusal this is.
+        self.assertEqual(res.data["code"], "conflict_review_required")
         self.assertFalse(
             SavedSchedule.objects.get(admission=self.admission).is_distributed
         )
@@ -2568,7 +2573,10 @@ class InterviewAvailabilityHardeningTestCase(APITestCase):
     def test_member_can_review_own_scope_but_not_outside_it(self):
         """A member confirms their own review (their review scope) but can
         never record anything against a candidate outside it - the candidate
-        pool stays empty and an out-of-scope id is dropped, not persisted."""
+        pool stays empty and an out-of-scope id is dropped, not persisted.
+
+        The boundary is unchanged from when this was a 400; only the mechanism
+        moved from rejecting the save to dropping the id from it."""
         other_group = Group.objects.create(name="Andre", lego_id=630)
         self.admission.groups.add(other_group)
         other_user = LegoUser.objects.create(username="other-review", lego_id=631)

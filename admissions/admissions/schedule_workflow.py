@@ -64,6 +64,12 @@ class ScheduleInputError(Exception):
         self.errors = errors
 
 
+# Publishing was refused only because some interviewers have not finished their
+# kandidatkontroll. Machine-readable because the client treats it as a prompt
+# (offer the waiver), not as an error.
+CONFLICT_REVIEW_REQUIRED_CODE = "conflict_review_required"
+
+
 @dataclass(frozen=True)
 class ScheduleUpdateResult:
     admission: Admission
@@ -867,11 +873,17 @@ def _ensure_conflict_review_ready_for_publish(admission, group, data, schedule):
     )
     raise ScheduleInputError(
         {
+            # The client turns this particular refusal into the "publiser uten
+            # kandidatkontroll" prompt rather than an error banner, so it needs
+            # to recognise it without parsing the Norwegian sentence below -
+            # reword that and a string match would silently start showing this
+            # routine gate as a failure again.
+            "code": CONFLICT_REVIEW_REQUIRED_CODE,
             "schedule": [
                 f"{incomplete_count} intervjuere må kontrollere "
                 f"{readiness['missing_pair_count']} foreslåtte "
                 f"kandidater før planen publiseres: {named}{suffix}."
-            ]
+            ],
         }
     )
 

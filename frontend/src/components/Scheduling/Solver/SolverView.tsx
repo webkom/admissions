@@ -237,6 +237,66 @@ export default function SolverView({
     () => new Set(completedDays),
     [completedDays],
   );
+  // The pending "Fullført" flush, so a burst of toggles collapses into one
+  // save and an unmount cannot leave a timer behind.
+  const completeFlushRef = useRef<number | null>(null);
+  useEffect(
+    () => () => {
+      if (completeFlushRef.current)
+        window.clearTimeout(completeFlushRef.current);
+    },
+    [],
+  );
+  // Every saved placement on a completed day, pinned. The backend withholds a
+  // completed day's *open* slots from the solve, so a run that does not also
+  // lock what already sits there would drop those interviews and be unable to
+  // put them back - the day empties out instead of staying done. The staged
+  // paths pin the whole saved plan anyway (savedScheduleLocks); this is the
+  // floor the free-form runs need so "fullført" means the same thing whichever
+  // button started the solve.
+  const completedDayLocks = useMemo(() => {
+    const saved = session.savedSchedule;
+    if (!saved || completedDatesSet.size === 0) return [];
+    const onCompletedDay = saved.schedule.filter((item) => {
+      if (!Number.isFinite(item.time)) return false;
+      const { dayIndex } = decodeScheduleTime(item.time, sessionDuration);
+      const date = dates[dayIndex];
+      return Boolean(date && completedDatesSet.has(date));
+    });
+    return buildLockedAssignments(onCompletedDay, candidates, interviewers, {
+      includeUnlockedItems: true,
+    });
+  }, [
+    candidates,
+    completedDatesSet,
+    dates,
+    interviewers,
+    session.savedSchedule,
+    sessionDuration,
+  ]);
+  // Completed-day pins win over the draft's own lock marks, by candidate and
+  // by time. Both have to go: the serializer rejects a locked list that names
+  // one candidate twice *or* puts two different panels on one slot, so a draft
+  // row the user moved onto a finished day would otherwise 400 the solve
+  // instead of deferring to what that day already holds.
+  const withCompletedDayLocks = useCallback(
+    (base: ReturnType<typeof buildLockedAssignments>) => {
+      if (completedDayLocks.length === 0) return base;
+      const pinnedCandidates = new Set(
+        completedDayLocks.map((lock) => lock.candidate_id ?? lock.candidate),
+      );
+      const pinnedTimes = new Set(completedDayLocks.map((lock) => lock.time));
+      return [
+        ...completedDayLocks,
+        ...base.filter(
+          (lock) =>
+            !pinnedCandidates.has(lock.candidate_id ?? lock.candidate) &&
+            !pinnedTimes.has(lock.time),
+        ),
+      ];
+    },
+    [completedDayLocks],
+  );
   const persistenceConfig = useMemo(
     () => ({
       admissionSlug,
@@ -428,7 +488,9 @@ export default function SolverView({
     // published boundary replaces the draft's own lock marks: released days
     // stay exactly as published, everything else is free to reschedule.
     const outcome = await session.solvePlan(
-      publishedDayLocks ?? draft.explicitLockedAssignments,
+      withCompletedDayLocks(
+        publishedDayLocks ?? draft.explicitLockedAssignments,
+      ),
     );
     // A fully-solved re-plan auto-applies inside useSolverSession — it has
     // already replaced the current draft, so leave the regeneration setup
@@ -504,12 +566,31 @@ export default function SolverView({
         : [...current, date].sort(),
     );
     // Persist right away - a "this day is done" mark should not sit as an
-    // unsaved local edit waiting for the manual save button.
-    window.setTimeout(() => void persistence.saveNow?.(), 0);
+    // unsaved local edit waiting for the manual save button. saveNow refuses
+    // while another save is in flight, so a single deferred call can drop the
+    // mark silently (the box stays ticked, the server never hears): retry
+    // until one is accepted, and collapse a burst of toggles into the one
+    // flush that carries the final state.
+    if (completeFlushRef.current) window.clearTimeout(completeFlushRef.current);
+    const flush = (attempt: number) => {
+      completeFlushRef.current = window.setTimeout(
+        () => {
+          completeFlushRef.current = null;
+          void (async () => {
+            const saved = await persistence.saveNow?.();
+            if (saved === false && attempt < 10) flush(attempt + 1);
+          })();
+        },
+        attempt === 0 ? 0 : 250,
+      );
+    };
+    flush(0);
   };
   const retryWithAvailabilityDeviation = () => {
     void session.solvePlan(
-      publishedDayLocks ?? draft.explicitLockedAssignments,
+      withCompletedDayLocks(
+        publishedDayLocks ?? draft.explicitLockedAssignments,
+      ),
       {
         availabilityFallback: "propose",
       },

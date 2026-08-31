@@ -53,6 +53,11 @@ interface PublicationGateProps {
    * generic toast message.
    */
   scheduleFieldError?: string;
+  /** True when `scheduleFieldError` is the kandidatkontroll gate. Decided by
+   *  the caller from the server's error code, so this panel never has to match
+   *  the Norwegian wording; the match below is only a fallback for a server
+   *  that predates the code. */
+  reviewRefusalActive?: boolean;
   stage: PublicationStagePresentation;
   dates: string[];
   onOpenDraft: () => void;
@@ -115,6 +120,7 @@ const PublicationGate = ({
   planTransition,
   planTransitionError,
   scheduleFieldError = "",
+  reviewRefusalActive,
   stage,
   dates,
   onOpenDraft,
@@ -167,7 +173,8 @@ const PublicationGate = ({
   // confirm is one click - the gate is showing the actual blocker,
   // approval is implicit.
   const [waiveReview, setWaiveReview] = useState(false);
-  const serverReviewRefusal = /må kontrollere/i.test(scheduleFieldError);
+  const serverReviewRefusal =
+    reviewRefusalActive ?? /må kontrollere/i.test(scheduleFieldError);
   useEffect(() => {
     if (serverReviewRefusal) setWaiveReview(true);
   }, [serverReviewRefusal]);
@@ -250,13 +257,44 @@ const PublicationGate = ({
       ...partial,
     ];
   }, [savedSchedule?.schedule, savedSchedule?.session_duration, sortedDates]);
-  // Anything that is not a genuine partial boundary in the list reads as the
-  // whole plan - e.g. picking the last planned day while later days sit empty.
-  const revealValue =
-    partialThroughDateOrNull &&
-    revealOptions.some((option) => option.value === partialThroughDateOrNull)
-      ? partialThroughDateOrNull
-      : "full";
+  // The dropdown must agree with the confirm button underneath it, and the
+  // button reads `partialThroughDateOrNull`. A boundary the list did not think
+  // worth offering (a day that adds no interviews, say) is still a real
+  // partial publish once it is selected, so give it an entry rather than
+  // showing "hele planen" over a button that says "til og med 3. sept".
+  const revealValueOptions = useMemo(() => {
+    if (
+      !partialThroughDateOrNull ||
+      revealOptions.some((option) => option.value === partialThroughDateOrNull)
+    ) {
+      return revealOptions;
+    }
+    const total = savedSchedule?.schedule?.length ?? 0;
+    const covered = (savedSchedule?.schedule ?? []).filter((item) => {
+      if (!Number.isFinite(item.time)) return false;
+      const { dayIndex } = decodeScheduleTime(
+        item.time,
+        savedSchedule?.session_duration ?? 60,
+      );
+      const date = sortedDates[dayIndex];
+      return Boolean(date && date <= partialThroughDateOrNull);
+    }).length;
+    return [
+      revealOptions[0],
+      {
+        value: partialThroughDateOrNull,
+        label: `T.o.m. ${formatAccessibleDate(partialThroughDateOrNull)} — ${covered} av ${total} intervjuer`,
+      },
+      ...revealOptions.slice(1),
+    ];
+  }, [
+    partialThroughDateOrNull,
+    revealOptions,
+    savedSchedule?.schedule,
+    savedSchedule?.session_duration,
+    sortedDates,
+  ]);
+  const revealValue = partialThroughDateOrNull ?? "full";
 
   const unplacedCount = Math.max(
     0,
@@ -530,7 +568,7 @@ const PublicationGate = ({
               {sortedDates.length > 1 && (
                 <aside className="rounded-xl bg-surface-subtle p-4">
                   <p className={sectionLabelClass}>Publiseringsomfang</p>
-                  {revealOptions.length > 1 && (
+                  {revealValueOptions.length > 1 && (
                     <div className="mt-2">
                       <CustomSelect
                         compact
@@ -539,7 +577,7 @@ const PublicationGate = ({
                         onChange={(value) =>
                           setPartialThroughDate(value === "full" ? null : value)
                         }
-                        options={revealOptions}
+                        options={revealValueOptions}
                       />
                     </div>
                   )}

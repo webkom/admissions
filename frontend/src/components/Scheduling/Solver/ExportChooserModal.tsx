@@ -90,7 +90,17 @@ const ExportChooserModal = ({
 
   const fieldOptions = useMemo(
     () => [
-      { value: "showNames", label: "Kandidatnavn" },
+      // Scrubbing down is always allowed; naming up is not. When the plan is
+      // set to hide candidate names, the export honours that - otherwise the
+      // picker would quietly become a way around the plan-wide setting, and
+      // "navn skjult" would mean nothing the moment someone opened this modal.
+      {
+        value: "showNames",
+        label: namesShownByDefault
+          ? "Kandidatnavn"
+          : "Kandidatnavn (skjult på planen)",
+        disabled: !namesShownByDefault,
+      },
       { value: "panel", label: "Panel" },
       { value: "status", label: "Intervjustatus" },
       ...(csvTextAvailable
@@ -103,7 +113,7 @@ const ExportChooserModal = ({
           ]
         : []),
     ],
-    [csvTextAvailable, csvTextLoading],
+    [csvTextAvailable, csvTextLoading, namesShownByDefault],
   );
 
   const fields: ScheduleCsvFields = {
