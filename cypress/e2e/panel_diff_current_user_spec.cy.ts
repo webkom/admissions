@@ -28,6 +28,8 @@ describe("finding yourself in the published panel column", () => {
 
     expect(result.kind).to.equal("standard");
     expect(result.isCurrentUser).to.equal(true);
+    if (result.kind !== "standard") throw new Error("expected standard");
+    expect(result.currentUserName).to.equal("Anna Berg");
   });
 
   it("stays quiet on a standard panel that is not yours", () => {
@@ -35,6 +37,8 @@ describe("finding yourself in the published panel column", () => {
 
     expect(result.kind).to.equal("standard");
     expect(result.isCurrentUser).to.equal(false);
+    if (result.kind !== "standard") throw new Error("expected standard");
+    expect(result.currentUserName).to.equal(null);
   });
 
   it("marks only your chip when the full panel is listed", () => {

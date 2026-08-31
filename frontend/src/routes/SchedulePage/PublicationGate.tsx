@@ -10,6 +10,7 @@ import {
 
 import ConfirmDialog from "src/components/Scheduling/ConfirmDialog";
 import {
+  CustomSelect,
   SegmentedControl,
   SchedulePanel,
   SchedulePanelBody,
@@ -204,6 +205,57 @@ const PublicationGate = ({
     });
     return filled;
   }, [savedSchedule?.schedule, savedSchedule?.session_duration, sortedDates]);
+
+  // The day strip shows "1 2 3 4 5" without saying what each covers, so the
+  // scope is also offered as a list that spells out how many interviews each
+  // boundary would reveal. Only days that add interviews and still leave later
+  // ones hidden are worth listing as a partial boundary; the first entry is
+  // always the whole plan.
+  const revealOptions = useMemo(() => {
+    const duration = savedSchedule?.session_duration ?? 60;
+    const total = savedSchedule?.schedule?.length ?? 0;
+    const countByDate = new Map<string, number>();
+    (savedSchedule?.schedule ?? []).forEach((item) => {
+      if (!Number.isFinite(item.time)) return;
+      const { dayIndex } = decodeScheduleTime(item.time, duration);
+      const date = sortedDates[dayIndex];
+      if (date) countByDate.set(date, (countByDate.get(date) ?? 0) + 1);
+    });
+    const plannedDates = sortedDates.filter((date) => countByDate.get(date));
+    const lastPlanned = plannedDates[plannedDates.length - 1];
+    let cumulative = 0;
+    const partial: Array<{ value: string; label: string }> = [];
+    sortedDates.forEach((date, index) => {
+      const onThisDay = countByDate.get(date) ?? 0;
+      cumulative += onThisDay;
+      if (
+        onThisDay > 0 &&
+        index < sortedDates.length - 1 &&
+        cumulative < total
+      ) {
+        partial.push({
+          value: date,
+          label: `T.o.m. ${formatAccessibleDate(date)} — ${cumulative} av ${total} intervjuer`,
+        });
+      }
+    });
+    return [
+      {
+        value: "full",
+        label: lastPlanned
+          ? `T.o.m. ${formatAccessibleDate(lastPlanned)} — alle ${total} intervjuene`
+          : `Alle ${total} intervjuene`,
+      },
+      ...partial,
+    ];
+  }, [savedSchedule?.schedule, savedSchedule?.session_duration, sortedDates]);
+  // Anything that is not a genuine partial boundary in the list reads as the
+  // whole plan - e.g. picking the last planned day while later days sit empty.
+  const revealValue =
+    partialThroughDateOrNull &&
+    revealOptions.some((option) => option.value === partialThroughDateOrNull)
+      ? partialThroughDateOrNull
+      : "full";
 
   const unplacedCount = Math.max(
     0,
@@ -447,6 +499,19 @@ const PublicationGate = ({
               {sortedDates.length > 1 && (
                 <aside className="rounded-xl bg-surface-subtle p-4">
                   <p className={sectionLabelClass}>Publiseringsomfang</p>
+                  {revealOptions.length > 1 && (
+                    <div className="mt-2">
+                      <CustomSelect
+                        compact
+                        aria-label="Hvor mye av planen som publiseres"
+                        value={revealValue}
+                        onChange={(value) =>
+                          setPartialThroughDate(value === "full" ? null : value)
+                        }
+                        options={revealOptions}
+                      />
+                    </div>
+                  )}
                   <div className="mt-2">
                     <PlanDayStrip
                       dates={sortedDates}

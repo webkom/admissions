@@ -27,7 +27,13 @@ export type PanelDiffView =
       isCurrentUser: boolean;
     }
   /** The slot matches the block's standard panel. */
-  | { kind: "standard"; memberNames: string[]; isCurrentUser: boolean }
+  | {
+      kind: "standard";
+      memberNames: string[];
+      isCurrentUser: boolean;
+      /** The reader's own name, when they sit in this panel. */
+      currentUserName: string | null;
+    }
   /** The slot deviates: one compact tag naming the difference. */
   | {
       kind: "deviation";
@@ -66,6 +72,7 @@ export const derivePanelDiffView = ({
       kind: "standard",
       memberNames: panel.map((member) => member.name),
       isCurrentUser: panel.some(mine),
+      currentUserName: panel.find(mine)?.name ?? null,
     };
   }
 
