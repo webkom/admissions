@@ -167,17 +167,18 @@ const PublicationGate = ({
   // confirm is one click - the gate is showing the actual blocker,
   // approval is implicit.
   const [waiveReview, setWaiveReview] = useState(false);
-  const serverReviewRefusal = scheduleFieldError.includes("kontrollere");
+  const serverReviewRefusal = /må kontrollere/i.test(scheduleFieldError);
   useEffect(() => {
     if (serverReviewRefusal) setWaiveReview(true);
   }, [serverReviewRefusal]);
-  // A committee recruiter only ever sees their own review row (the other
-  // interviewers' proposed candidates are admin-only), so `readiness` can
-  // read "resolved" while the backend still counts unfinished reviewers.
-  // Once the server has actually refused on that basis, ticking the box
-  // must send `publish_without_full_review` regardless of local readiness.
-  const reviewWaiveActive =
-    waiveReview && (!readiness.reviewResolved || serverReviewRefusal);
+  // The waiver is a standing option, not a reaction to a failed publish: an
+  // admin cannot always see every interviewer's outstanding rows (the other
+  // committees' proposed candidates are admin-only), so `readiness` can read
+  // "resolved" while the backend still counts unfinished reviewers. Ticking
+  // the box always sends `publish_without_full_review`; the server records a
+  // bypass only if one actually happened, so ticking it when the check is in
+  // fact complete is a harmless no-op.
+  const reviewWaiveActive = waiveReview;
   // Name the reviewers when the local readiness knows them; on a bare
   // server refusal (committee recruiter - can't see the other rows) fall
   // back to a count, then to a generic phrase.
@@ -335,7 +336,9 @@ const PublicationGate = ({
             title={stage.title}
             description={stage.description}
           />
-          {planTransitionError && (
+          {/* The kandidatkontroll refusal is not an error - it is the prompt
+              to use the waiver, which the panel on the right now carries. */}
+          {planTransitionError && !serverReviewRefusal && (
             <div
               role="alert"
               className="border-b border-danger-border bg-danger-bg px-5 py-3 text-ui font-semibold text-danger"
@@ -343,15 +346,17 @@ const PublicationGate = ({
               {planTransitionError}
             </div>
           )}
-          {scheduleFieldError && !planTransitionError && (
-            <div
-              role="alert"
-              data-cy="publish-schedule-field-error"
-              className="border-b border-warning-border bg-warning-bg px-5 py-3 text-ui text-warning-text"
-            >
-              {scheduleFieldError}
-            </div>
-          )}
+          {scheduleFieldError &&
+            !planTransitionError &&
+            !serverReviewRefusal && (
+              <div
+                role="alert"
+                data-cy="publish-schedule-field-error"
+                className="border-b border-warning-border bg-warning-bg px-5 py-3 text-ui text-warning-text"
+              >
+                {scheduleFieldError}
+              </div>
+            )}
           {savedSchedule?.published_without_review_by &&
             savedSchedule.published_without_review_by.length > 0 && (
               <div
@@ -465,36 +470,62 @@ const PublicationGate = ({
                 </p>
               </aside>
 
-              {(!readiness.reviewResolved &&
-                readiness.incompleteReviewerCount > 0) ||
-              serverReviewRefusal ? (
-                <aside
-                  className="rounded-xl border border-warning-border bg-warning-bg p-4"
-                  data-cy="waive-review-panel"
-                >
-                  <p className={sectionLabelClass}>
-                    Kandidatkontroll ikke fullført
-                  </p>
-                  <label
-                    className="flex cursor-pointer items-start gap-2 text-ui text-warning-text"
-                    data-cy="waive-review-label"
+              {(() => {
+                const known =
+                  serverReviewRefusal ||
+                  (!readiness.reviewResolved &&
+                    readiness.incompleteReviewerCount > 0);
+                return (
+                  <aside
+                    className={cn(
+                      "rounded-xl border p-4",
+                      known
+                        ? "border-warning-border bg-warning-bg"
+                        : "border-border-soft bg-surface-subtle",
+                    )}
+                    data-cy="waive-review-panel"
                   >
-                    <input
-                      type="checkbox"
-                      checked={waiveReview}
-                      onChange={(event) => setWaiveReview(event.target.checked)}
-                      data-cy="waive-review"
-                      className="mt-0.5 h-4 w-4 flex-none rounded border-border-muted text-primary focus:ring-primary"
-                    />
-                    <span>{waiveReviewButtonLabel}</span>
-                  </label>
-                  <p className="m-0 mt-3 text-detail leading-relaxed text-warning-text">
-                    Beslutningen loggføres på deg og vises på den publiserte
-                    planen, slik at komiteen ser hvilke paringer som gikk ut
-                    uten at noen sjekket for inhabilitet.
-                  </p>
-                </aside>
-              ) : null}
+                    <p className={sectionLabelClass}>
+                      {known
+                        ? "Kandidatkontroll ikke fullført"
+                        : "Kandidatkontroll"}
+                    </p>
+                    <label
+                      className={cn(
+                        "flex cursor-pointer items-start gap-2 text-ui",
+                        known ? "text-warning-text" : "text-text-primary",
+                      )}
+                      data-cy="waive-review-label"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={waiveReview}
+                        onChange={(event) =>
+                          setWaiveReview(event.target.checked)
+                        }
+                        data-cy="waive-review"
+                        className="mt-0.5 h-4 w-4 flex-none rounded border-border-muted text-primary focus:ring-primary"
+                      />
+                      <span>{waiveReviewButtonLabel}</span>
+                    </label>
+                    <p
+                      className={cn(
+                        "m-0 mt-3 text-detail leading-relaxed",
+                        known ? "text-warning-text" : "text-text-muted",
+                      )}
+                    >
+                      {known && scheduleFieldError
+                        ? scheduleFieldError
+                        : known
+                          ? "Noen intervjuere har ikke bekreftet kandidatkontrollen sin ennå."
+                          : "Kryss av her hvis planen skal kunne publiseres selv om ikke alle intervjuere rekker kandidatkontrollen."}{" "}
+                      Beslutningen loggføres på deg og vises på den publiserte
+                      planen, slik at komiteen ser hvilke paringer som gikk ut
+                      uten at noen sjekket for inhabilitet.
+                    </p>
+                  </aside>
+                );
+              })()}
 
               {sortedDates.length > 1 && (
                 <aside className="rounded-xl bg-surface-subtle p-4">

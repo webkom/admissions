@@ -266,6 +266,16 @@ export const useDistributedPlanActions = ({
           return false;
         }
       }
+      const structured = extractScheduleFieldError(error);
+      // The kandidatkontroll refusal is a routine gate, not a failure: the
+      // publish panel turns it into the "publiser uten kandidatkontroll"
+      // prompt. Surfacing it as a red error toast + banner made every
+      // first publish attempt look broken.
+      if (structured && /må kontrollere/i.test(structured)) {
+        setScheduleFieldError(structured);
+        setPlanTransitionError("");
+        return false;
+      }
       const message = isConflictError(error)
         ? CONFLICT_MESSAGE
         : scheduleSaveErrorMessage(
@@ -273,7 +283,6 @@ export const useDistributedPlanActions = ({
             "Kunne ikke publisere intervjuplanen. Prøv igjen.",
           );
       setPlanTransitionError(message);
-      const structured = extractScheduleFieldError(error);
       if (structured) setScheduleFieldError(structured);
       notify(message, "error");
       return false;
