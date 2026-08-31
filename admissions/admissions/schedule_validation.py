@@ -324,16 +324,17 @@ def canonicalize_solver_payload(admission, saved, data, request_user):
         for candidate_id in requested_candidate_ids
     ]
     derived_conflicts = get_declared_conflict_candidate_ids(admission, group)
-    # A repair (an existing plan is being partly preserved, so some
-    # assignments arrive locked) must never place a candidate onto an
-    # interviewer's panel who was outside their own+swap review scope for the
-    # plan being repaired - otherwise the repaired plan contains a pairing
-    # nobody ever reviewed. Not applied to a fresh solve: nothing has been
-    # reviewed yet, so there is no scope to enforce.
-    # Also checked directly (not just via an empty ConflictReviewList
-    # queryset): rows generated before a flag-flip must not keep constraining
-    # repairs after it's switched off.
-    is_repair = bool(data.get("locked_assignments")) and conflict_review_v2_enabled()
+    # A repair (an existing plan is being adjusted to resolve conflicts, so
+    # repair_mode is set) must never place a candidate onto an interviewer's
+    # panel who was outside their own+swap review scope for the plan being
+    # repaired - otherwise the repaired plan contains a pairing nobody ever
+    # reviewed. Not applied to a regular solve or progressive day-extension
+    # (which pass locked_assignments to preserve earlier days without being a repair):
+    # fresh solves and extensions generate new review lists upon save.
+    is_repair = (
+        bool((data.get("options") or {}).get("repair_mode"))
+        and conflict_review_v2_enabled()
+    )
     review_scope_by_interviewer = (
         {
             str(row.interviewer_id): set(row.own_candidate_ids)
@@ -342,6 +343,9 @@ def canonicalize_solver_payload(admission, saved, data, request_user):
         }
         if is_repair
         else {}
+    )
+    reviewed_candidate_ids = (
+        set().union(*review_scope_by_interviewer.values()) if is_repair else set()
     )
     interviewers = []
     for interviewer_id in requested_interviewer_ids:
@@ -401,8 +405,10 @@ def canonicalize_solver_payload(admission, saved, data, request_user):
                             if str(value) in candidate_ids
                         }
                         | (
-                            candidate_ids
-                            - review_scope_by_interviewer.get(interviewer_id, set())
+                            (
+                                reviewed_candidate_ids
+                                - review_scope_by_interviewer.get(interviewer_id, set())
+                            )
                             if is_repair
                             else set()
                         )
@@ -491,6 +497,9 @@ def canonicalize_schedule(
     resolved_blocks=None,
     availability_generation=1,
     legacy_submission_without_generation=False,
+    # Whether this save is choosing the panel size (a first plan, or an
+    # explicit change) rather than merely editing rows under an existing one.
+    enforce_panel_capacity=True,
 ):
     if not panel_size:
         raise ScheduleValidationError("panel_size", "Panelstørrelse må være satt.")
@@ -519,7 +528,15 @@ def canonicalize_schedule(
         for user_id, state in get_interviewer_participation(admission, group).items()
         if state == InterviewAvailability.PARTICIPATION_PARTICIPATING
     }
-    if panel_size > len(participating_user_ids):
+    # Capacity is a question about *choosing* a panel size, not about every
+    # later edit. An existing plan is itself the proof that panels of this
+    # size were staffable when it was built; re-litigating that on a lock
+    # toggle or a time change traps the whole plan the moment someone opts
+    # out, and does so under a field the editor never touched. What actually
+    # matters after the fact - a row whose panel now holds someone who is not
+    # participating - is caught per row below, where the message can name
+    # them and the fix is obvious.
+    if enforce_panel_capacity and panel_size > len(participating_user_ids):
         raise ScheduleValidationError(
             "panel_size",
             "Panelstørrelsen kan ikke være større enn intervjuergruppen.",
@@ -573,18 +590,31 @@ def canonicalize_schedule(
             )
 
         panel = item.get("panel") or []
+        candidate_label = application.user.get_full_name() or application.user.username
         if len(panel) != panel_size:
             raise ScheduleValidationError(
-                "schedule", "Alle intervjuer må ha riktig panelstørrelse."
+                "schedule",
+                f"Intervjuet med {candidate_label} har {len(panel)} "
+                f"intervjuer{'e' if len(panel) != 1 else ''}, men "
+                f"panelstørrelsen er {panel_size}. Rett opp panelet, eller "
+                "endre panelstørrelsen i oppsettet.",
             )
         panel_ids = [str(member.get("id") or "") for member in panel]
         if len(panel_ids) != len(set(panel_ids)):
             raise ScheduleValidationError(
-                "schedule", "Et panel kan ikke inneholde samme person flere ganger."
+                "schedule",
+                f"Samme person står flere ganger i panelet til "
+                f"{candidate_label}. Et panel kan bare inneholde hver person "
+                "én gang.",
             )
         if str(application.user_id) in panel_ids:
             raise ScheduleValidationError(
-                "schedule", "En kandidat kan ikke intervjue seg selv."
+                "schedule",
+                # The saver is always an interview admin, who already sees
+                # candidate names - naming them here discloses nothing new.
+                f"{application.user.get_full_name() or application.user.username} "
+                "står i sitt eget panel og kan ikke intervjue seg selv. "
+                "Bytt ut personen i panelet.",
             )
         panel_key = frozenset(panel_ids)
         shared_panel = panel_by_time.get(interview_time)
@@ -595,16 +625,40 @@ def canonicalize_schedule(
             )
 
         canonical_panel = []
+        panel_names_by_id = {
+            str(member.get("id") or ""): str(member.get("name") or "")
+            for member in panel
+        }
         for interviewer_id in panel_ids:
             interviewer = user_map.get(interviewer_id)
             if interviewer is None:
+                # Name them from the row itself: they are unknown precisely
+                # because they are no longer an eligible interviewer here, so
+                # there is no user record left to look the name up in - and
+                # "an unknown interviewer" gives the editor nothing to act on.
+                unknown_name = panel_names_by_id.get(interviewer_id) or ""
                 raise ScheduleValidationError(
-                    "schedule", "Planen inneholder en ukjent intervjuer."
+                    "schedule",
+                    (
+                        (
+                            f"{unknown_name} er ikke lenger intervjuer i denne "
+                            "komiteen, og kan ikke stå i et panel. Bytt personen "
+                            "ut i de berørte intervjuene."
+                        )
+                        if unknown_name
+                        else (
+                            "Planen inneholder en intervjuer som ikke lenger "
+                            "finnes i komiteen. Bytt personen ut i de berørte "
+                            "intervjuene."
+                        )
+                    ),
                 )
             if interviewer.pk not in participating_user_ids:
                 raise ScheduleValidationError(
                     "schedule",
-                    "Planen inneholder en intervjuer som ikke deltar.",
+                    f"{interviewer.get_full_name() or interviewer.username} "
+                    "deltar ikke i intervjuene, og kan ikke stå i et panel. "
+                    "Bytt personen ut, eller be dem melde seg på igjen.",
                 )
             saved_availability = availability.get(interviewer_id)
             # Declared conflicts, plus the ones derived from fadderbarn
