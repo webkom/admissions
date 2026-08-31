@@ -95,6 +95,11 @@ class SaveScheduleInputSerializer(serializers.Serializer):
         required=False,
         max_length=constants.MAX_SCHEDULE_SLOTS,
     )
+    completed_days = serializers.ListField(
+        child=serializers.DateField(),
+        required=False,
+        max_length=constants.MAX_SCHEDULE_DAYS,
+    )
     panel_size = serializers.IntegerField(
         min_value=1, max_value=10, required=False, allow_null=True
     )
@@ -455,6 +460,7 @@ class SavedScheduleSerializer(serializers.ModelSerializer):
             "manual_blocks",
             "layout_version",
             "slot_overrides",
+            "completed_days",
             "availability_generation",
             "layout_capabilities",
             "deviation_review",

@@ -282,6 +282,9 @@ export interface SavedSchedule {
   manual_blocks: ManualScheduleBlock[];
   layout_version: number;
   slot_overrides: SlotOverride[];
+  /** Framework days ("YYYY-MM-DD") the admin marked finished: their placed
+   *  interviews stay, their open slots are withheld from every later solve. */
+  completed_days: string[];
   availability_generation: number;
   layout_capabilities: ScheduleLayoutCapabilities;
   panel_size?: number | null;

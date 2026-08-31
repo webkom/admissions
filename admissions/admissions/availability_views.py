@@ -819,17 +819,6 @@ class InterviewAvailabilityView(SchedulerFeatureGateMixin, APIView):
             )
             .first()
         )
-        existing_persisted_ids = set()
-        if existing is not None:
-            for attr in (
-                "conflicts",
-                "reviewed_candidate_ids",
-                "decoy_conflicts",
-                "decoy_reviewed_ids",
-            ):
-                val = getattr(existing, attr, None)
-                if isinstance(val, list):
-                    existing_persisted_ids.update(val)
 
         if review_fields_present:
             if not (is_admin or is_recruiter):
@@ -862,47 +851,41 @@ class InterviewAvailabilityView(SchedulerFeatureGateMixin, APIView):
 
             valid_conflict_ids = all_group_candidate_ids | own_decoy_scope
 
-            for field in (
-                "conflicts",
-                "reviewed_candidate_ids",
-            ):
+            # An id the current lists no longer recognise is dropped, never
+            # rejected. The review scope, the committee's candidate pool and the
+            # (legacy) decoy roster are all snapshots that shift while an
+            # interviewer has the form open - the plan re-solves itself the
+            # moment the last outstanding review lands - so the browser can echo
+            # back an id that was valid when the page loaded and is stale by the
+            # time it POSTs. The persistence path below already prunes exactly
+            # these ids from the stored set (a declared inhabilitet against an
+            # application that still exists is the one thing it keeps), so a 400
+            # here would only wedge the whole review behind a "Ukjent kandidat"
+            # the interviewer cannot act on. A filler token and a real id are
+            # dropped identically, so the response still says nothing about
+            # which entries were decoys.
+            #
+            # Note this drops ids the *incoming* lists no longer recognise. An
+            # id already persisted on this row is a separate question and is
+            # answered further down: next_conflicts starts from
+            # existing_conflicts, and the prune there keeps anything naming a
+            # real application. So a previously-declared inhabilitet that has
+            # since fallen out of scope survives - it is never re-submitted,
+            # it simply stays.
+            for field in ("conflicts", "reviewed_candidate_ids"):
                 allowed_ids = (
                     valid_conflict_ids if field == "conflicts" else valid_reviewed_ids
                 )
-                stale_unknown = set()
-                for candidate_id in serializer.validated_data.get(field, []):
-                    if candidate_id in allowed_ids:
-                        continue
-                    if (
-                        # A real candidate in this committee that is merely
-                        # outside the current review scope. That scope is a
-                        # snapshot which is regenerated whenever the plan
-                        # changes (_refresh_conflict_review_lists), and the
-                        # plan re-solves by itself when the last review lands
-                        # - so an interviewer with the form open can have
-                        # their scope shift underneath them and submit ids
-                        # that were in scope when the page was read. Those
-                        # ids were never persisted, so no other escape hatch
-                        # catches them, and a hard 400 would wedge the whole
-                        # review behind "Ukjent kandidat" on a routine save.
-                        # Drop them: the attestation simply does not apply to
-                        # a pairing that no longer exists.
-                        candidate_id in valid_conflict_ids
-                        or candidate_id in existing_persisted_ids
-                        or candidate_id == "00000000-0000-0000-0000-000000000000"
-                    ):
-                        stale_unknown.add(candidate_id)
-                    else:
-                        return Response(
-                            {field: [f"Ukjent kandidat: {candidate_id}"]},
-                            status=status.HTTP_400_BAD_REQUEST,
-                        )
-                if stale_unknown:
-                    serializer.validated_data[field] = [
-                        candidate_id
-                        for candidate_id in serializer.validated_data[field]
-                        if candidate_id not in stale_unknown
-                    ]
+                submitted = serializer.validated_data.get(field)
+                if submitted is None:
+                    continue
+                kept = [
+                    candidate_id
+                    for candidate_id in submitted
+                    if candidate_id in allowed_ids
+                ]
+                if len(kept) != len(submitted):
+                    serializer.validated_data[field] = kept
             if (
                 conflict_replace_scope is None
                 and "reviewed_candidate_ids" in serializer.validated_data

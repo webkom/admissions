@@ -10,6 +10,7 @@ import {
 
 import ConfirmDialog from "src/components/Scheduling/ConfirmDialog";
 import {
+  CustomSelect,
   SegmentedControl,
   SchedulePanel,
   SchedulePanelBody,
@@ -52,6 +53,11 @@ interface PublicationGateProps {
    * generic toast message.
    */
   scheduleFieldError?: string;
+  /** True when `scheduleFieldError` is the kandidatkontroll gate. Decided by
+   *  the caller from the server's error code, so this panel never has to match
+   *  the Norwegian wording; the match below is only a fallback for a server
+   *  that predates the code. */
+  reviewRefusalActive?: boolean;
   stage: PublicationStagePresentation;
   dates: string[];
   onOpenDraft: () => void;
@@ -114,6 +120,7 @@ const PublicationGate = ({
   planTransition,
   planTransitionError,
   scheduleFieldError = "",
+  reviewRefusalActive,
   stage,
   dates,
   onOpenDraft,
@@ -166,17 +173,19 @@ const PublicationGate = ({
   // confirm is one click - the gate is showing the actual blocker,
   // approval is implicit.
   const [waiveReview, setWaiveReview] = useState(false);
-  const serverReviewRefusal = scheduleFieldError.includes("kontrollere");
+  const serverReviewRefusal =
+    reviewRefusalActive ?? /må kontrollere/i.test(scheduleFieldError);
   useEffect(() => {
     if (serverReviewRefusal) setWaiveReview(true);
   }, [serverReviewRefusal]);
-  // A committee recruiter only ever sees their own review row (the other
-  // interviewers' proposed candidates are admin-only), so `readiness` can
-  // read "resolved" while the backend still counts unfinished reviewers.
-  // Once the server has actually refused on that basis, ticking the box
-  // must send `publish_without_full_review` regardless of local readiness.
-  const reviewWaiveActive =
-    waiveReview && (!readiness.reviewResolved || serverReviewRefusal);
+  // The waiver is a standing option, not a reaction to a failed publish: an
+  // admin cannot always see every interviewer's outstanding rows (the other
+  // committees' proposed candidates are admin-only), so `readiness` can read
+  // "resolved" while the backend still counts unfinished reviewers. Ticking
+  // the box always sends `publish_without_full_review`; the server records a
+  // bypass only if one actually happened, so ticking it when the check is in
+  // fact complete is a harmless no-op.
+  const reviewWaiveActive = waiveReview;
   // Name the reviewers when the local readiness knows them; on a bare
   // server refusal (committee recruiter - can't see the other rows) fall
   // back to a count, then to a generic phrase.
@@ -204,6 +213,88 @@ const PublicationGate = ({
     });
     return filled;
   }, [savedSchedule?.schedule, savedSchedule?.session_duration, sortedDates]);
+
+  // The day strip shows "1 2 3 4 5" without saying what each covers, so the
+  // scope is also offered as a list that spells out how many interviews each
+  // boundary would reveal. Only days that add interviews and still leave later
+  // ones hidden are worth listing as a partial boundary; the first entry is
+  // always the whole plan.
+  const revealOptions = useMemo(() => {
+    const duration = savedSchedule?.session_duration ?? 60;
+    const total = savedSchedule?.schedule?.length ?? 0;
+    const countByDate = new Map<string, number>();
+    (savedSchedule?.schedule ?? []).forEach((item) => {
+      if (!Number.isFinite(item.time)) return;
+      const { dayIndex } = decodeScheduleTime(item.time, duration);
+      const date = sortedDates[dayIndex];
+      if (date) countByDate.set(date, (countByDate.get(date) ?? 0) + 1);
+    });
+    const plannedDates = sortedDates.filter((date) => countByDate.get(date));
+    const lastPlanned = plannedDates[plannedDates.length - 1];
+    let cumulative = 0;
+    const partial: Array<{ value: string; label: string }> = [];
+    sortedDates.forEach((date, index) => {
+      const onThisDay = countByDate.get(date) ?? 0;
+      cumulative += onThisDay;
+      if (
+        onThisDay > 0 &&
+        index < sortedDates.length - 1 &&
+        cumulative < total
+      ) {
+        partial.push({
+          value: date,
+          label: `T.o.m. ${formatAccessibleDate(date)} — ${cumulative} av ${total} intervjuer`,
+        });
+      }
+    });
+    return [
+      {
+        value: "full",
+        label: lastPlanned
+          ? `T.o.m. ${formatAccessibleDate(lastPlanned)} — alle ${total} intervjuene`
+          : `Alle ${total} intervjuene`,
+      },
+      ...partial,
+    ];
+  }, [savedSchedule?.schedule, savedSchedule?.session_duration, sortedDates]);
+  // The dropdown must agree with the confirm button underneath it, and the
+  // button reads `partialThroughDateOrNull`. A boundary the list did not think
+  // worth offering (a day that adds no interviews, say) is still a real
+  // partial publish once it is selected, so give it an entry rather than
+  // showing "hele planen" over a button that says "til og med 3. sept".
+  const revealValueOptions = useMemo(() => {
+    if (
+      !partialThroughDateOrNull ||
+      revealOptions.some((option) => option.value === partialThroughDateOrNull)
+    ) {
+      return revealOptions;
+    }
+    const total = savedSchedule?.schedule?.length ?? 0;
+    const covered = (savedSchedule?.schedule ?? []).filter((item) => {
+      if (!Number.isFinite(item.time)) return false;
+      const { dayIndex } = decodeScheduleTime(
+        item.time,
+        savedSchedule?.session_duration ?? 60,
+      );
+      const date = sortedDates[dayIndex];
+      return Boolean(date && date <= partialThroughDateOrNull);
+    }).length;
+    return [
+      revealOptions[0],
+      {
+        value: partialThroughDateOrNull,
+        label: `T.o.m. ${formatAccessibleDate(partialThroughDateOrNull)} — ${covered} av ${total} intervjuer`,
+      },
+      ...revealOptions.slice(1),
+    ];
+  }, [
+    partialThroughDateOrNull,
+    revealOptions,
+    savedSchedule?.schedule,
+    savedSchedule?.session_duration,
+    sortedDates,
+  ]);
+  const revealValue = partialThroughDateOrNull ?? "full";
 
   const unplacedCount = Math.max(
     0,
@@ -283,7 +374,9 @@ const PublicationGate = ({
             title={stage.title}
             description={stage.description}
           />
-          {planTransitionError && (
+          {/* The kandidatkontroll refusal is not an error - it is the prompt
+              to use the waiver, which the panel on the right now carries. */}
+          {planTransitionError && !serverReviewRefusal && (
             <div
               role="alert"
               className="border-b border-danger-border bg-danger-bg px-5 py-3 text-ui font-semibold text-danger"
@@ -291,15 +384,17 @@ const PublicationGate = ({
               {planTransitionError}
             </div>
           )}
-          {scheduleFieldError && !planTransitionError && (
-            <div
-              role="alert"
-              data-cy="publish-schedule-field-error"
-              className="border-b border-warning-border bg-warning-bg px-5 py-3 text-ui text-warning-text"
-            >
-              {scheduleFieldError}
-            </div>
-          )}
+          {scheduleFieldError &&
+            !planTransitionError &&
+            !serverReviewRefusal && (
+              <div
+                role="alert"
+                data-cy="publish-schedule-field-error"
+                className="border-b border-warning-border bg-warning-bg px-5 py-3 text-ui text-warning-text"
+              >
+                {scheduleFieldError}
+              </div>
+            )}
           {savedSchedule?.published_without_review_by &&
             savedSchedule.published_without_review_by.length > 0 && (
               <div
@@ -413,40 +508,79 @@ const PublicationGate = ({
                 </p>
               </aside>
 
-              {(!readiness.reviewResolved &&
-                readiness.incompleteReviewerCount > 0) ||
-              serverReviewRefusal ? (
-                <aside
-                  className="rounded-xl border border-warning-border bg-warning-bg p-4"
-                  data-cy="waive-review-panel"
-                >
-                  <p className={sectionLabelClass}>
-                    Kandidatkontroll ikke fullført
-                  </p>
-                  <label
-                    className="flex cursor-pointer items-start gap-2 text-ui text-warning-text"
-                    data-cy="waive-review-label"
+              {(() => {
+                const known =
+                  serverReviewRefusal ||
+                  (!readiness.reviewResolved &&
+                    readiness.incompleteReviewerCount > 0);
+                return (
+                  <aside
+                    className={cn(
+                      "rounded-xl border p-4",
+                      known
+                        ? "border-warning-border bg-warning-bg"
+                        : "border-border-soft bg-surface-subtle",
+                    )}
+                    data-cy="waive-review-panel"
                   >
-                    <input
-                      type="checkbox"
-                      checked={waiveReview}
-                      onChange={(event) => setWaiveReview(event.target.checked)}
-                      data-cy="waive-review"
-                      className="mt-0.5 h-4 w-4 flex-none rounded border-border-muted text-primary focus:ring-primary"
-                    />
-                    <span>{waiveReviewButtonLabel}</span>
-                  </label>
-                  <p className="m-0 mt-3 text-detail leading-relaxed text-warning-text">
-                    Beslutningen loggføres på deg og vises på den publiserte
-                    planen, slik at komiteen ser hvilke paringer som gikk ut
-                    uten at noen sjekket for inhabilitet.
-                  </p>
-                </aside>
-              ) : null}
+                    <p className={sectionLabelClass}>
+                      {known
+                        ? "Kandidatkontroll ikke fullført"
+                        : "Kandidatkontroll"}
+                    </p>
+                    <label
+                      className={cn(
+                        "flex cursor-pointer items-start gap-2 text-ui",
+                        known ? "text-warning-text" : "text-text-primary",
+                      )}
+                      data-cy="waive-review-label"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={waiveReview}
+                        onChange={(event) =>
+                          setWaiveReview(event.target.checked)
+                        }
+                        data-cy="waive-review"
+                        className="mt-0.5 h-4 w-4 flex-none rounded border-border-muted text-primary focus:ring-primary"
+                      />
+                      <span>{waiveReviewButtonLabel}</span>
+                    </label>
+                    <p
+                      className={cn(
+                        "m-0 mt-3 text-detail leading-relaxed",
+                        known ? "text-warning-text" : "text-text-muted",
+                      )}
+                    >
+                      {known && scheduleFieldError
+                        ? scheduleFieldError
+                        : known
+                          ? "Noen intervjuere har ikke bekreftet kandidatkontrollen sin ennå."
+                          : "Kryss av her hvis planen skal kunne publiseres selv om ikke alle intervjuere rekker kandidatkontrollen."}{" "}
+                      Beslutningen loggføres på deg og vises på den publiserte
+                      planen, slik at komiteen ser hvilke paringer som gikk ut
+                      uten at noen sjekket for inhabilitet.
+                    </p>
+                  </aside>
+                );
+              })()}
 
               {sortedDates.length > 1 && (
                 <aside className="rounded-xl bg-surface-subtle p-4">
                   <p className={sectionLabelClass}>Publiseringsomfang</p>
+                  {revealValueOptions.length > 1 && (
+                    <div className="mt-2">
+                      <CustomSelect
+                        compact
+                        aria-label="Hvor mye av planen som publiseres"
+                        value={revealValue}
+                        onChange={(value) =>
+                          setPartialThroughDate(value === "full" ? null : value)
+                        }
+                        options={revealValueOptions}
+                      />
+                    </div>
+                  )}
                   <div className="mt-2">
                     <PlanDayStrip
                       dates={sortedDates}

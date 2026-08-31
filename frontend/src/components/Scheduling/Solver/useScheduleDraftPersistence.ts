@@ -45,6 +45,9 @@ interface DraftPersistenceConfig {
   blockMode: ScheduleBlockMode;
   manualBlocks: ManualScheduleBlock[];
   slotOverrides: SlotOverride[];
+  /** Framework days marked finished - persisted so a later solve withholds
+   *  their open slots. */
+  completedDays: string[];
   panelSize: number;
   solverOptions: SolverOptions;
 }
@@ -63,6 +66,7 @@ interface PendingDraft {
     chunk_size: number;
     chunk_break_minutes: number;
     slot_overrides: SlotOverride[];
+    completed_days: string[];
     panel_size: number;
     solver_options: SolverOptions;
     is_distributed: false;
@@ -243,6 +247,7 @@ export const useScheduleDraftPersistence = ({
     blockMode: config.blockMode,
     manualBlocks: config.manualBlocks,
     slotOverrides: config.slotOverrides,
+    completedDays: config.completedDays,
     panelSize: config.panelSize,
     solverOptions: config.solverOptions,
   });
@@ -340,6 +345,7 @@ export const useScheduleDraftPersistence = ({
         chunk_size: config.chunkSize,
         chunk_break_minutes: config.chunkBreakMinutes,
         slot_overrides: config.slotOverrides,
+        completed_days: config.completedDays,
         panel_size: config.panelSize,
         solver_options: config.solverOptions,
         is_distributed: false,

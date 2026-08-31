@@ -1,5 +1,5 @@
 import React, { useMemo } from "react";
-import { Lock } from "lucide-react";
+import { Check, Lock } from "lucide-react";
 import cn from "src/utils/cn";
 import { formatAccessibleDate } from "src/components/Scheduling/scheduleUtils";
 import { iconSizes } from "src/styles/designTokens";
@@ -36,6 +36,11 @@ export interface PlanDayStripProps {
   onPlanThrough?: (date: string) => void;
   /** Move the publication boundary to this date. */
   onPublishThrough?: (date: string) => void;
+  /** Framework days the admin has marked finished. Their open slots are
+   *  withheld from later solves. */
+  completedDates?: ReadonlySet<string>;
+  /** Toggle a planned day's "finished" mark. Only wired in the draft view. */
+  onToggleComplete?: (date: string) => void;
   loading?: boolean;
   compact?: boolean;
   /** Suppresses the follow-on publish suggestion while the draft has unsaved
@@ -75,6 +80,8 @@ const PlanDayStrip: React.FC<PlanDayStripProps> = ({
   previewThrough = null,
   onPlanThrough,
   onPublishThrough,
+  completedDates,
+  onToggleComplete,
   loading = false,
   compact = false,
   publishSuggestionReady = true,
@@ -141,13 +148,19 @@ const PlanDayStrip: React.FC<PlanDayStripProps> = ({
           {model.cells.map((cell) => {
             const isPreview = cell.index <= model.previewThroughIndex;
             const isActionable = cell.canPublishThrough || cell.canPlanThrough;
+            const isCompleted = Boolean(completedDates?.has(cell.date));
             const className = cn(
               "flex h-7 w-full min-w-0 items-center justify-center rounded-md border text-tiny font-semibold tabular-nums transition-colors",
               cellToneClass(cell, isPreview, isActionable),
+              isCompleted &&
+                cell.state !== "published" &&
+                "border-success-border bg-success-bg text-success",
             );
             const content =
               cell.state === "published" ? (
                 <Lock size={iconSizes.tiny} aria-hidden="true" />
+              ) : isCompleted ? (
+                <Check size={iconSizes.tiny} aria-hidden="true" />
               ) : (
                 <span>{cell.index + 1}</span>
               );
@@ -253,6 +266,42 @@ const PlanDayStrip: React.FC<PlanDayStripProps> = ({
                 model.cells[model.plannedThroughIndex].date,
               )}
             </button>
+          </div>
+        )}
+
+      {/* Marking a day finished keeps its interviews but withholds its open
+          slots from every later solve - so "plan the rest" never backfills a
+          day that is done, even one that lost an interview to a removal. */}
+      {onToggleComplete &&
+        model.cells.some((cell) => cell.state === "planned") && (
+          <div
+            className="mt-2.5 flex flex-wrap items-center gap-1.5"
+            data-cy="plan-day-strip-complete"
+          >
+            <span className="mr-1 text-detail text-text-muted">Fullført:</span>
+            {model.cells
+              .filter((cell) => cell.state === "planned")
+              .map((cell) => {
+                const done = Boolean(completedDates?.has(cell.date));
+                return (
+                  <button
+                    key={cell.date}
+                    type="button"
+                    disabled={loading}
+                    onClick={() => onToggleComplete(cell.date)}
+                    aria-pressed={done}
+                    className={cn(
+                      "inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-detail font-semibold transition-colors disabled:cursor-not-allowed",
+                      done
+                        ? "border-success-border bg-success-bg text-success"
+                        : "border-border-soft bg-surface-base text-text-muted hover:border-border-quiet",
+                    )}
+                  >
+                    {done && <Check size={iconSizes.tiny} aria-hidden="true" />}
+                    {formatAccessibleDate(cell.date)}
+                  </button>
+                );
+              })}
           </div>
         )}
     </div>

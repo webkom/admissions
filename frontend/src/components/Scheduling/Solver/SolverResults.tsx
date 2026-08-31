@@ -142,6 +142,87 @@ interface SolverResultsProps {
   }) => void;
 }
 
+interface UnplacedCandidate {
+  candidate_id?: string;
+  candidate: string;
+  reason?: string;
+}
+
+/**
+ * The candidates the solver could not place. Collapsed by default - on a hard
+ * committee it can be a long list, and it should not push the plan itself
+ * below the fold. The header line always shows the count.
+ */
+const UnplacedTray = ({
+  candidates,
+  onPick,
+}: {
+  candidates: UnplacedCandidate[];
+  onPick: (candidate: UnplacedCandidate) => void;
+}) => {
+  const [open, setOpen] = useState(false);
+  const count = candidates.length;
+  return (
+    <section
+      data-cy="unplaced-tray"
+      aria-label={`${count} kandidater venter på plassering`}
+      className="mb-4 overflow-hidden rounded-lg border border-warning-border bg-warning-bg text-ui"
+    >
+      <button
+        type="button"
+        onClick={() => setOpen((value) => !value)}
+        aria-expanded={open}
+        data-cy="unplaced-tray-toggle"
+        className="flex w-full items-center justify-between gap-2 px-4 py-3 text-left hover:bg-warning-bgStrong focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-warning-border"
+      >
+        <span className="text-detail font-bold uppercase tracking-wide text-warning-text">
+          {count} {count === 1 ? "kandidat venter" : "kandidater venter"} på
+          plassering
+        </span>
+        <ChevronDown
+          size={iconSizes.small}
+          aria-hidden="true"
+          className={cn(
+            "flex-none text-warning-text transition-transform",
+            open && "rotate-180",
+          )}
+        />
+      </button>
+      {open && (
+        <ul className="m-0 grid gap-2 border-t border-warning-border px-4 py-3 p-0">
+          {candidates.map((candidate) => (
+            <li
+              key={candidate.candidate_id ?? candidate.candidate}
+              className="flex list-none flex-wrap items-center justify-between gap-2"
+            >
+              <span className="text-ui font-semibold text-text-primary">
+                {candidate.candidate}
+                {candidate.reason && (
+                  <span className="ml-2 text-detail font-normal text-text-muted">
+                    – {candidate.reason}
+                  </span>
+                )}
+              </span>
+              <button
+                type="button"
+                onClick={() => onPick(candidate)}
+                data-cy="unplaced-tray-place"
+                className={cn(
+                  actionButtonBase,
+                  actionButtonNeutral,
+                  "border-warning-border bg-surface-base text-warning-text hover:bg-warning-bgStrong",
+                )}
+              >
+                Plasser i ledig luke
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
+  );
+};
+
 const SolverResults = ({
   result,
   planRevealed,
@@ -1184,49 +1265,10 @@ const SolverResults = ({
                 />
               )}
               {unplaceableCount > 0 && !isDayScoped && onPickUnplacedSlot && (
-                <section
-                  data-cy="unplaced-tray"
-                  role="status"
-                  aria-label={`${unplaceableCount} kandidater venter på plassering`}
-                  className="mb-4 rounded-lg border border-warning-border bg-warning-bg px-4 py-3 text-ui"
-                >
-                  <p className="m-0 text-detail font-bold uppercase tracking-wide text-warning-text">
-                    {unplaceableCount}{" "}
-                    {unplaceableCount === 1
-                      ? "kandidat venter"
-                      : "kandidater venter"}{" "}
-                    på plassering
-                  </p>
-                  <ul className="m-0 mt-2 grid gap-2 p-0">
-                    {presentation.unplaceableCandidates.map((candidate) => (
-                      <li
-                        key={candidate.candidate_id ?? candidate.candidate}
-                        className="flex flex-wrap items-center justify-between gap-2 list-none"
-                      >
-                        <span className="text-ui font-semibold text-text-primary">
-                          {candidate.candidate}
-                          {candidate.reason && (
-                            <span className="ml-2 text-detail font-normal text-text-muted">
-                              – {candidate.reason}
-                            </span>
-                          )}
-                        </span>
-                        <button
-                          type="button"
-                          onClick={() => onPickUnplacedSlot(candidate)}
-                          data-cy="unplaced-tray-place"
-                          className={cn(
-                            actionButtonBase,
-                            actionButtonNeutral,
-                            "border-warning-border bg-surface-base text-warning-text hover:bg-warning-bgStrong",
-                          )}
-                        >
-                          Plasser i ledig luke
-                        </button>
-                      </li>
-                    ))}
-                  </ul>
-                </section>
+                <UnplacedTray
+                  candidates={presentation.unplaceableCandidates}
+                  onPick={onPickUnplacedSlot}
+                />
               )}
               {canEditDraft && hasLocalDraft && (
                 <div

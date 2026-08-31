@@ -109,7 +109,10 @@ class DecoyConflictRoundTripTestCase(APITestCase):
         self.assertIn(self.decoy_token, mine["reviewed_candidate_ids"])
         self.assertIn(self.decoy_token, mine["proposed_candidate_ids"])
 
-    def test_an_unknown_decoy_token_gets_the_same_error_as_an_unknown_candidate(self):
+    def test_an_unknown_decoy_token_is_dropped_like_an_unknown_candidate(self):
+        """Both an unrecognised filler token and an unrecognised real id are
+        dropped from the save, not rejected - identically, so the response
+        still says nothing about which entries were fillers."""
         bogus_token = f"d:{uuid.uuid4()}"
         bogus_candidate_id = str(uuid.uuid4())
 
@@ -124,16 +127,17 @@ class DecoyConflictRoundTripTestCase(APITestCase):
             format="json",
         )
 
-        self.assertEqual(token_res.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertEqual(candidate_res.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(token_res.status_code, status.HTTP_200_OK, token_res.data)
         self.assertEqual(
-            token_res.data["reviewed_candidate_ids"][0],
-            f"Ukjent kandidat: {bogus_token}",
+            candidate_res.status_code, status.HTTP_200_OK, candidate_res.data
         )
-        self.assertEqual(
-            candidate_res.data["reviewed_candidate_ids"][0],
-            f"Ukjent kandidat: {bogus_candidate_id}",
+        self.assertEqual(token_res.data["reviewed_candidate_ids"], [])
+        self.assertEqual(candidate_res.data["reviewed_candidate_ids"], [])
+        row = InterviewAvailability.objects.get(
+            admission=self.admission, group=self.group, user=self.interviewer
         )
+        self.assertEqual(row.reviewed_candidate_ids, [])
+        self.assertEqual(row.decoy_reviewed_ids, [])
 
     def test_admin_never_sees_the_decoy_token(self):
         admin_group = Group.objects.create(name="AdminGroup", lego_id=16)

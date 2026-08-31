@@ -239,6 +239,42 @@ def canonicalize_solver_payload(admission, saved, data, request_user):
         raise ScheduleValidationError(
             "all_slots", "Tidsoppsettet må ha minst én åpen tidsluke."
         )
+
+    # A day the admin marked finished contributes only the times that already
+    # hold a locked interview - its still-open slots drop out, so a solve that
+    # extends the plan onto later days can never backfill a completed day
+    # (e.g. after someone was removed from it and left a hole).
+    def _to_date(value):
+        if isinstance(value, date):
+            return value
+        try:
+            return date.fromisoformat(str(value))
+        except ValueError:
+            return None
+
+    completed_offsets = set()
+    start_date = _to_date(saved.start_date)
+    if start_date is not None:
+        for value in saved.completed_days or []:
+            day = _to_date(value)
+            if day is not None:
+                completed_offsets.add((day - start_date).days)
+    if completed_offsets:
+        locked_times = {
+            item["time"]
+            for item in data.get("locked_assignments", [])
+            if isinstance(item.get("time"), int)
+        }
+        all_slots = [
+            slot
+            for slot in all_slots
+            if slot // MINUTES_PER_DAY not in completed_offsets or slot in locked_times
+        ]
+        if not all_slots:
+            raise ScheduleValidationError(
+                "all_slots",
+                "Alle planlagte dager er markert som fullført.",
+            )
     solver_blocks = _solver_blocks(saved, all_slots)
 
     applications = list(
