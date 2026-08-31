@@ -993,6 +993,16 @@ def _canonicalize_schedule(
                     layout["layout_version"] == 1
                     or layout.get("legacy_compatibility", False)
                 ),
+                # Only a save that actually picks a panel size has to prove
+                # the committee can staff it. Row edits under an existing
+                # plan must not be blocked because the roster shrank since.
+                enforce_panel_capacity=(
+                    existing is None
+                    or (
+                        "panel_size" in data
+                        and data["panel_size"] != existing.panel_size
+                    )
+                ),
             )
         except ScheduleValidationError as exc:
             raise ScheduleInputError({exc.field: [exc.message]}) from exc

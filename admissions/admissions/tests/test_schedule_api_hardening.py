@@ -125,6 +125,178 @@ class SavedSchedulePublishSemanticsTestCase(APITestCase):
             reviewed_candidate_ids=[str(application.pk) for application in applications]
         )
 
+    def test_row_edit_survives_a_roster_that_shrank_under_the_plan(self):
+        """Editing a row must not be blocked because fewer people are
+        participating than the plan's panel size.
+
+        The regression: capacity was re-checked on *every* save, so the moment
+        someone opted out - or a framework change reset everyone's submitted
+        availability - every subsequent edit died on
+        "Panelstørrelsen kan ikke være større enn intervjuergruppen", a field
+        the editor never touched. The plan is itself the proof those panels
+        were staffable; what matters afterwards is caught per row.
+        """
+        second = LegoUser.objects.create(username="hardening-second", lego_id=6031)
+        Membership.objects.create(user=second, role=RECRUITING, group=self.admin_group)
+        InterviewAvailability.objects.create(
+            admission=self.admission,
+            group=self.admin_group,
+            user=second,
+            slots=["2026-04-20|540", "2026-04-20|600"],
+        )
+        panel = [
+            {"id": str(self.admin_user.pk), "name": self.admin_user.username},
+            {"id": str(second.pk), "name": second.username},
+        ]
+        self._create_saved(
+            panel_size=2, schedule=self._schedule(panel=panel), is_distributed=False
+        )
+        # The second interviewer steps back after the plan exists.
+        InterviewAvailability.objects.filter(
+            admission=self.admission, group=self.admin_group, user=second
+        ).update(participation=InterviewAvailability.PARTICIPATION_NOT_PARTICIPATING)
+
+        # A row edit that leaves the panel alone still has to go through -
+        # the offending row is a separate, better-named problem.
+        res = self.client.post(
+            self.url,
+            {"schedule": self._schedule(time=600, panel=panel)},
+            format="json",
+        )
+
+        self.assertNotIn("panel_size", res.data)
+
+    def test_choosing_a_panel_size_the_committee_cannot_staff_is_refused(self):
+        """The capacity rule still applies where it belongs: to the save that
+        actually picks the number."""
+        self._create_saved(is_distributed=False)
+
+        res = self.client.post(
+            self.url,
+            {"panel_size": 5, "schedule": self._schedule()},
+            format="json",
+        )
+
+        self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("panel_size", res.data)
+
+    def test_self_interview_names_the_candidate(self):
+        """ "Det gikk ikke" is not a reason. Every refusal here names the
+        person the editor has to act on."""
+        self.candidate_user.first_name = "Kari"
+        self.candidate_user.last_name = "Nordmann"
+        self.candidate_user.save(update_fields=["first_name", "last_name"])
+        application = UserApplication.objects.create(
+            admission=self.admission, user=self.admin_user, phone_number="1"
+        )
+        GroupApplication.objects.create(
+            application=application, group=self.admin_group, text="x"
+        )
+        self._create_saved(is_distributed=False)
+
+        res = self.client.post(
+            self.url,
+            {
+                "schedule": self._schedule(
+                    candidate_id=str(application.pk),
+                    panel=[
+                        {
+                            "id": str(self.admin_user.pk),
+                            "name": self.admin_user.username,
+                        }
+                    ],
+                )
+            },
+            format="json",
+        )
+
+        self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("intervjue seg selv", str(res.data))
+        self.assertIn(self.admin_user.username, str(res.data))
+
+    def test_a_panel_member_who_left_the_committee_is_named(self):
+        gone = LegoUser.objects.create(username="hardening-gone", lego_id=6032)
+        self.assertFalse(
+            Membership.objects.filter(user=gone, group=self.admin_group).exists()
+        )
+        self._create_saved(is_distributed=False)
+
+        res = self.client.post(
+            self.url,
+            {
+                "schedule": self._schedule(
+                    panel=[{"id": str(gone.pk), "name": "Maja Nilsen"}]
+                )
+            },
+            format="json",
+        )
+
+        self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
+        # The name comes off the submitted row: there is no eligible-user
+        # record left to look it up in, which is exactly why it is rejected.
+        self.assertIn("Maja Nilsen", str(res.data))
+
+    def test_a_panel_member_who_opted_out_is_named(self):
+        second = LegoUser.objects.create(username="hardening-out", lego_id=6033)
+        second.first_name = "Ola"
+        second.last_name = "Hansen"
+        second.save(update_fields=["first_name", "last_name"])
+        Membership.objects.create(user=second, role=RECRUITING, group=self.admin_group)
+        InterviewAvailability.objects.create(
+            admission=self.admission,
+            group=self.admin_group,
+            user=second,
+            slots=["2026-04-20|540"],
+            participation=InterviewAvailability.PARTICIPATION_NOT_PARTICIPATING,
+        )
+        self._create_saved(is_distributed=False)
+
+        res = self.client.post(
+            self.url,
+            {
+                "schedule": self._schedule(
+                    panel=[{"id": str(second.pk), "name": second.username}]
+                )
+            },
+            format="json",
+        )
+
+        self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("Ola Hansen", str(res.data))
+        self.assertIn("deltar ikke", str(res.data))
+
+    def test_a_wrong_sized_panel_names_the_interview_and_the_expectation(self):
+        """The old text - "Alle intervjuer må ha riktig panelstørrelse" - named
+        neither the offending interview nor what "riktig" was, which on a
+        40-row plan is not a reason, it is a search."""
+        self._create_saved(panel_size=1, is_distributed=False)
+
+        res = self.client.post(
+            self.url,
+            {"schedule": self._schedule(panel=[])},
+            format="json",
+        )
+
+        self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
+        message = str(res.data)
+        self.assertIn(self.candidate_user.username, message)
+        self.assertIn("0 intervjuer", message)
+        self.assertIn("panelstørrelsen er 1", message)
+
+    def test_a_duplicated_panel_member_names_the_interview(self):
+        self._create_saved(panel_size=2, is_distributed=False)
+        twice = [
+            {"id": str(self.admin_user.pk), "name": self.admin_user.username},
+            {"id": str(self.admin_user.pk), "name": self.admin_user.username},
+        ]
+
+        res = self.client.post(
+            self.url, {"schedule": self._schedule(panel=twice)}, format="json"
+        )
+
+        self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn(self.candidate_user.username, str(res.data))
+
     def test_changed_schedule_without_flag_unpublishes(self):
         self._create_saved()
 
@@ -5122,6 +5294,84 @@ class CanonicalSolverInputTestCase(APITestCase):
             group=self.admin_group,
             text="Canonical application 2",
         )
+        second_interviewer = LegoUser.objects.create(
+            username="canonical-interviewer-2", lego_id=967, gender="male"
+        )
+        Membership.objects.create(
+            user=second_interviewer, group=self.admin_group, role=MEMBER
+        )
+        InterviewAvailability.objects.create(
+            admission=self.admission,
+            group=self.admin_group,
+            user=second_interviewer,
+            participation=InterviewAvailability.PARTICIPATION_PARTICIPATING,
+            slots=["2026-04-20|540"],
+        )
+        saved_schedule = SavedSchedule.objects.get(admission=self.admission)
+        revision = uuid.uuid4()
+        ConflictReviewList.objects.create(
+            saved_schedule=saved_schedule,
+            revision=revision,
+            interviewer_id=self.admin.pk,
+            own_candidate_ids=[str(self.application.pk)],
+            swap_candidate_ids=[],
+            decoys=[],
+        )
+        ConflictReviewList.objects.create(
+            saved_schedule=saved_schedule,
+            revision=revision,
+            interviewer_id=second_interviewer.pk,
+            own_candidate_ids=[str(second_application.pk)],
+            swap_candidate_ids=[],
+            decoys=[],
+        )
+
+        payload = canonicalize_solver_payload(
+            self.admission,
+            saved_schedule,
+            {
+                "candidates": [
+                    {"id": str(self.application.pk)},
+                    {"id": str(second_application.pk)},
+                ],
+                "interviewers": [
+                    {"id": str(self.admin.pk)},
+                    {"id": str(second_interviewer.pk)},
+                ],
+                "panel_size": 1,
+                "options": {"repair_mode": True},
+                "locked_assignments": [
+                    {
+                        "candidate_id": str(self.application.pk),
+                        "time": 540,
+                        "panel": [{"id": str(self.admin.pk), "name": "x"}],
+                    }
+                ],
+            },
+            self.admin,
+        )
+
+        biased = set(payload["interviewers"][0]["biased"])
+        self.assertIn(str(second_application.pk), biased)
+        self.assertNotIn(str(self.application.pk), biased)
+
+    def test_progressive_plan_with_locked_assignments_does_not_exclude_unplaced_candidates(
+        self,
+    ):
+        """Extending a delplan passes locked_assignments to preserve earlier
+        days, but is not a repair - unplaced candidates must not be marked
+        as biased against every interviewer."""
+        second_user = LegoUser.objects.create(
+            username="canonical-candidate-3", lego_id=966, gender="male"
+        )
+        second_application = UserApplication.objects.create(
+            admission=self.admission, user=second_user, phone_number="87654321"
+        )
+        GroupApplication.objects.create(
+            application=second_application,
+            group=self.admin_group,
+            text="Canonical application 3",
+        )
         saved_schedule = SavedSchedule.objects.get(admission=self.admission)
         ConflictReviewList.objects.create(
             saved_schedule=saved_schedule,
@@ -5142,7 +5392,7 @@ class CanonicalSolverInputTestCase(APITestCase):
                 ],
                 "interviewers": [{"id": str(self.admin.pk)}],
                 "panel_size": 1,
-                "options": {},
+                "options": {"repair_mode": False},
                 "locked_assignments": [
                     {
                         "candidate_id": str(self.application.pk),
@@ -5154,15 +5404,13 @@ class CanonicalSolverInputTestCase(APITestCase):
             self.admin,
         )
 
-        biased = set(payload["interviewers"][0]["biased"])
-        self.assertIn(str(second_application.pk), biased)
-        self.assertNotIn(str(self.application.pk), biased)
+        self.assertEqual(payload["interviewers"][0]["biased"], [])
 
     def test_review_scope_is_not_enforced_without_locked_assignments(self):
         """A fresh solve has nothing reviewed yet, so the review-scope
         exclusion (which only makes sense for a repair) must not apply."""
         second_user = LegoUser.objects.create(
-            username="canonical-candidate-3", lego_id=966, gender="male"
+            username="canonical-candidate-4", lego_id=968, gender="male"
         )
         second_application = UserApplication.objects.create(
             admission=self.admission, user=second_user, phone_number="87654321"
@@ -5170,7 +5418,7 @@ class CanonicalSolverInputTestCase(APITestCase):
         GroupApplication.objects.create(
             application=second_application,
             group=self.admin_group,
-            text="Canonical application 3",
+            text="Canonical application 4",
         )
         saved_schedule = SavedSchedule.objects.get(admission=self.admission)
         ConflictReviewList.objects.create(
