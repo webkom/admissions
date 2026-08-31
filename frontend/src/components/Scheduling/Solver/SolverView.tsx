@@ -5,7 +5,6 @@ import React, {
   useRef,
   useState,
 } from "react";
-import { Lock } from "lucide-react";
 
 import type {
   Candidate,
@@ -21,12 +20,10 @@ import {
   buildLockedAssignments,
   buildPublishedDayLocks,
   buildSolveBlocks,
-  formatAccessibleDate,
+  decodeScheduleTime,
   manualBlocksToSolverBlocks,
   slotsToSolverAvailability,
 } from "../scheduleUtils";
-import { actionButtonNeutral, actionButtonBase } from "../ui";
-import cn from "../../../utils/cn";
 import { deriveAssignmentConflictSummary } from "./assignmentConflicts";
 import { hasSchedule } from "./solverHelpers";
 import RepairScenarioPanel from "./RepairScenarioPanel";
@@ -46,8 +43,9 @@ import {
 import { useSolverSession } from "./useSolverSession";
 import { derivePlanDraftWorkflowState } from "./planDraftWorkflow";
 import { useInterviewAvailability } from "src/query/hooks";
-import PublishBoundaryTimeline from "src/routes/SchedulePage/PublishBoundaryTimeline";
-import { iconSizes } from "src/styles/designTokens";
+import PlanDayStrip from "./PlanDayStrip";
+import { actionButtonBase, actionButtonNeutral } from "../ui";
+import cn from "../../../utils/cn";
 import DraftTaskLayout from "./DraftTaskLayout";
 import ProposalDecisionPanel from "./ProposalDecisionPanel";
 import PublishedPlanNotice from "./PublishedPlanNotice";
@@ -96,6 +94,9 @@ interface Props {
   ) => Promise<void>;
   onOpenAvailability: () => void;
   onOpenFramework: () => void;
+  /** Move the publication boundary to this date, or open the publish step
+   *  primed with it when nothing is published yet. */
+  onPublishThrough?: (date: string) => void;
   onOpenConflictReview: () => void;
   conflictReviewReachable: boolean;
   onOpenPlan: () => void;
@@ -141,6 +142,7 @@ export default function SolverView({
   onExperienceLevelChange,
   onOpenAvailability,
   onOpenFramework,
+  onPublishThrough,
   onOpenConflictReview,
   conflictReviewReachable,
   onOpenPlan,
@@ -452,12 +454,15 @@ export default function SolverView({
   }, [effectiveDayCount, minDayCount, setDayCount]);
   const canExtendDay =
     session.effectiveDayCount < session.plannableDates.length;
-  const nextScopeDate = canExtendDay
-    ? session.plannableDates[session.effectiveDayCount]
-    : null;
-  const extendDay = () => {
+  /**
+   * Solve through `dayCount` plannable days, keeping everything already
+   * planned. One entry point for every "plan more" affordance: the day strip
+   * passes a date, the next-step menu passes "one more" or "all of them".
+   * The published prefix stays hard-locked either way.
+   */
+  const planThroughDayCount = (dayCount: number) => {
     const next = Math.min(
-      session.effectiveDayCount + 1,
+      Math.max(dayCount, session.minDayCount),
       session.plannableDates.length,
     );
     if (next === session.effectiveDayCount) return;
@@ -469,23 +474,14 @@ export default function SolverView({
       { dayCount: next },
     );
   };
-  // Extend the scope to every remaining enabled day at once, instead
-  // of clicking "Planlegg neste dag" once per day. The published
-  // prefix stays locked; the solver fills the still-draft tail in a
-  // single pass so the user lands on a complete draft rather than
-  // clicking through 5+ days individually. Disabled when there's
-  // nothing left to extend into.
-  const fillRemainingDays = () => {
-    const total = session.plannableDates.length;
-    if (total <= session.effectiveDayCount) return;
-    session.setDayCount(total);
-    void session.solvePlan(
-      savedScheduleLocks ??
-        publishedDayLocks ??
-        draft.explicitLockedAssignments,
-      { dayCount: total },
-    );
+  const planThrough = (date: string) => {
+    const index = session.plannableDates.indexOf(date);
+    if (index === -1) return;
+    planThroughDayCount(index + 1);
   };
+  const extendDay = () => planThroughDayCount(session.effectiveDayCount + 1);
+  const fillRemainingDays = () =>
+    planThroughDayCount(session.plannableDates.length);
   const retryWithAvailabilityDeviation = () => {
     void session.solvePlan(
       publishedDayLocks ?? draft.explicitLockedAssignments,
@@ -881,6 +877,7 @@ export default function SolverView({
       clearableDraftCount={clearableDraftCount}
       publishedDraftCount={publishedDraftCount}
       onOpenPlan={onOpenPlan}
+      onOpenFramework={onOpenFramework}
       onPreviewWithAvailabilityDeviation={retryWithAvailabilityDeviation}
       previewLoading={session.loading}
       backgroundMode={backgroundMode}
@@ -932,6 +929,7 @@ export default function SolverView({
             hasExpired={pendingProposalHasExpired}
             detailsOpen={proposalDetailsOpen}
             actionLoading={session.proposalActionLoading}
+            hasUnsavedDraftEdits={session.hasLocalDraft}
             headingRef={proposalHeadingRef}
             comparisonTriggerRef={proposalComparisonTriggerRef}
             comparisonHeadingRef={proposalComparisonHeadingRef}
@@ -1060,47 +1058,64 @@ export default function SolverView({
     return renderDraftCanvas();
   };
 
-  const partialPublishBanner =
-    isPartiallyDistributed && distributedThroughDate ? (
-      <div
-        data-cy="partial-publish-banner"
-        className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border bg-surface-subtle px-4 py-3"
-      >
-        <div className="min-w-0 flex-1">
-          <PublishBoundaryTimeline
-            dates={dates}
-            distributedThrough={distributedThroughDate}
-            onExtendDay={canExtendDay ? extendDay : undefined}
-            onFillRemainingDays={
-              canExtendDay &&
-              session.plannableDates.length > session.effectiveDayCount + 1
-                ? fillRemainingDays
-                : undefined
-            }
-            loading={session.loading}
-          />
-          {unplannedCandidateCount !== null && (
-            <p className="m-0 mt-2 text-detail leading-relaxed text-text-muted">
+  // Days the draft actually places someone on - what separates "planned" from
+  // "still open" on the strip.
+  const filledDates = useMemo(() => {
+    const filled = new Set<string>();
+    draft.presentation.sortedSchedule.forEach((item) => {
+      if (!Number.isFinite(item.time)) return;
+      const { dayIndex } = decodeScheduleTime(item.time, sessionDuration);
+      const date = dates[dayIndex];
+      if (date) filled.add(date);
+    });
+    return filled;
+  }, [dates, draft.presentation.sortedSchedule, sessionDuration]);
+
+  // The one picture of the period, shown in every state rather than only after
+  // a partial publish: it is the map of where planning and publication have
+  // reached, and both cursors move from here.
+  const planDayStrip = backgroundMode ? null : (
+    <div className="flex flex-col gap-2">
+      <PlanDayStrip
+        dates={dates}
+        plannableDates={session.plannableDates}
+        filledDates={filledDates}
+        distributedThrough={distributedThroughDate}
+        onPlanThrough={canExtendDay ? planThrough : undefined}
+        onPublishThrough={onPublishThrough}
+        publishSuggestionReady={persistence.isSaved && !persistence.isSaving}
+        loading={session.loading}
+      />
+      {isPartiallyDistributed && (
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          {unplannedCandidateCount !== null ? (
+            <p className="m-0 text-detail leading-relaxed text-text-muted">
               {unplannedCandidateCount === 1
                 ? "1 kandidat venter på intervju."
                 : `${unplannedCandidateCount} kandidater venter på intervju.`}{" "}
               De publiserte dagene holdes uendret.
             </p>
+          ) : (
+            <span />
           )}
+          {/* With only part of the period released, the stepper still points
+              at the draft, so this is the way through to what the committee
+              can actually see. */}
+          <button
+            type="button"
+            onClick={onOpenPlan}
+            className={cn(actionButtonBase, actionButtonNeutral)}
+          >
+            Se publisert plan
+          </button>
         </div>
-        <button
-          type="button"
-          onClick={onOpenPlan}
-          className={cn(actionButtonBase, actionButtonNeutral)}
-        >
-          Se publisert plan
-        </button>
-      </div>
-    ) : null;
+      )}
+    </div>
+  );
 
   return (
     <div className="flex flex-col gap-3">
-      {partialPublishBanner}
+      {planDayStrip}
       {renderWorkspace()}
       {unplacedPickerTarget && (
         <UnplacedSlotPicker

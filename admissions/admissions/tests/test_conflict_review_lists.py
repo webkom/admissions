@@ -1,8 +1,9 @@
-from uuid import UUID
+from uuid import uuid4
 
 from django.test import TestCase, override_settings
 
 from admissions.admissions.models import (
+    ConflictReviewList,
     DirectoryEntry,
     Group,
     GroupApplication,
@@ -14,6 +15,7 @@ from admissions.admissions.models import (
 )
 from admissions.admissions.scheduling_utils import (
     build_conflict_review_lists,
+    conflict_review_offered_scope,
     conflict_review_scope,
     get_conflict_review_readiness,
 )
@@ -45,6 +47,25 @@ class ConflictReviewListTestCase(TestCase):
             application=application, group=self.group, text="søknad"
         )
         return application
+
+    def _persist_lists(self, saved):
+        """Mirrors _refresh_conflict_review_lists: the builder returns rows,
+        the workflow is what stores them."""
+        revision = uuid4()
+        ConflictReviewList.objects.bulk_create(
+            [
+                ConflictReviewList(
+                    saved_schedule=saved,
+                    revision=revision,
+                    interviewer_id=interviewer_id,
+                    own_candidate_ids=entry["own_candidate_ids"],
+                    swap_candidate_ids=entry["swap_candidate_ids"],
+                    pool_candidate_ids=entry.get("pool_candidate_ids", []),
+                    decoys=entry["decoys"],
+                )
+                for interviewer_id, entry in build_conflict_review_lists(saved).items()
+            ]
+        )
 
     def _plan(self, rows, my_slots):
         InterviewAvailability.objects.create(
@@ -124,7 +145,17 @@ class ConflictReviewListTestCase(TestCase):
 
         self.assertEqual([], lists[str(self.mine.id)]["decoys"])
 
-    def test_decoys_are_drawn_from_a_synced_roster(self):
+    def test_no_fillers_are_issued_once_the_list_is_complete(self):
+        """Fillers padded a list that was a *sample* of the plan: with only
+        your own pairings plus a handful of likely swap partners, the set you
+        held was itself a signal, so it had to be diluted with people who had
+        not applied.
+
+        The list is now the whole placed draft - the same set for everyone -
+        so there is nothing left to infer from holding it, and a fake name in
+        it would be strictly harmful: a person the interviewer cannot flag and
+        who does not exist.
+        """
         DirectoryEntry.objects.create(
             lego_user_id=9001, username="filler1", full_name="Filler One"
         )
@@ -138,80 +169,14 @@ class ConflictReviewListTestCase(TestCase):
 
         lists = build_conflict_review_lists(saved)
 
-        decoys = lists[str(self.mine.id)]["decoys"]
-        self.assertEqual(2, len(decoys))
-        names = {decoy["name"] for decoy in decoys}
-        self.assertEqual({"Filler One", "Filler Two"}, names)
-        for decoy in decoys:
-            # Indistinguishable from a real candidate id: a bare uuid4, with
-            # no format marker a viewer could filter on.
-            self.assertEqual(decoy["token"], str(UUID(decoy["token"])))
-        # Each generation mints fresh tokens - never a real candidate pk.
-        real_ids = {str(ours.pk)}
-        self.assertFalse(real_ids & {decoy["token"] for decoy in decoys})
+        self.assertEqual([], lists[str(self.mine.id)]["decoys"])
 
-    def test_a_real_applicant_is_never_offered_as_their_own_decoy(self):
-        """If a first-year is both in the roster and an applicant, using them
-        as a filler would tell the interviewer they definitely applied."""
-        ours = self._candidate("ada", 8001)
-        DirectoryEntry.objects.create(
-            lego_user_id=8001, username="ada", full_name="Ada Applicant"
-        )
-        DirectoryEntry.objects.create(
-            lego_user_id=9003, username="filler3", full_name="Filler Three"
-        )
-        saved = self._plan(
-            [self._row(ours, 540, self.mine)], my_slots=["2026-04-21:540"]
-        )
-
-        lists = build_conflict_review_lists(saved)
-
-        names = {decoy["name"] for decoy in lists[str(self.mine.id)]["decoys"]}
-        self.assertEqual({"Filler Three"}, names)
-
-    def test_committee_members_are_never_offered_as_decoys(self):
-        """Committee members must never show up as fillers in their own
-        committee's conflict review lists."""
-        DirectoryEntry.objects.create(
-            lego_user_id=self.mine.lego_id,
-            username=self.mine.username,
-            full_name=self.mine.get_full_name() or "My Committee Member",
-        )
-        DirectoryEntry.objects.create(
-            lego_user_id=self.other.lego_id,
-            username=self.other.username,
-            full_name=self.other.get_full_name() or "Other Committee Member",
-        )
-        DirectoryEntry.objects.create(
-            lego_user_id=9004, username="filler4", full_name="Filler Four"
-        )
-        ours = self._candidate("ada", 8001)
-        saved = self._plan(
-            [self._row(ours, 540, self.mine)], my_slots=["2026-04-21:540"]
-        )
-
-        lists = build_conflict_review_lists(saved)
-
-        names = {decoy["name"] for decoy in lists[str(self.mine.id)]["decoys"]}
-        self.assertIn("Filler Four", names)
-        self.assertNotIn(self.mine.get_full_name() or "My Committee Member", names)
-        self.assertNotIn(self.other.get_full_name() or "Other Committee Member", names)
-
-    def test_the_filler_cohort_is_bounded_by_the_real_candidate_pool(self):
-        """Drawing each list straight out of the full student directory is
-        what would give the game away. With thousands of names to draw from,
-        two interviewers comparing lists would find that every name they both
-        hold is a real applicant, and every name only one of them holds is a
-        filler. A cohort about the size of the real pool makes fillers recur
-        at roughly the rate real candidates do, so the comparison says
-        nothing."""
-
-        for lego_id in range(9100, 9200):
-            DirectoryEntry.objects.create(
-                lego_user_id=lego_id,
-                username=f"filler{lego_id}",
-                full_name=f"Filler {lego_id}",
-            )
+    def test_every_placed_candidate_is_offered_for_flagging(self):
+        """An interviewer may declare inhabilitet against anyone this
+        iteration places, not merely against the pairings that already exist.
+        Declaring one early is how the solver *avoids* a bad pairing instead
+        of having it rejected after the fact.
+        """
         ours = self._candidate("ada", 8001)
         theirs = self._candidate("eirik", 8002)
         saved = self._plan(
@@ -219,7 +184,7 @@ class ConflictReviewListTestCase(TestCase):
                 self._row(ours, 540, self.mine),
                 self._row(theirs, 600, self.other),
             ],
-            my_slots=["2026-04-21:540", "2026-04-21:600"],
+            my_slots=["2026-04-21:540"],
         )
         InterviewAvailability.objects.create(
             admission=self.admission,
@@ -228,15 +193,42 @@ class ConflictReviewListTestCase(TestCase):
             slots=["2026-04-21:540", "2026-04-21:600"],
         )
 
-        lists = build_conflict_review_lists(saved)
+        self._persist_lists(saved)
+        row = ConflictReviewList.objects.filter(interviewer=self.mine).first()
 
-        cohort = {
-            decoy["name"] for entry in lists.values() for decoy in entry["decoys"]
-        }
-        # Two interviewers drawing five fillers each: if the draw were
-        # unbounded they would share almost nothing out of a hundred names.
-        self.assertLessEqual(len(cohort), 5)
-        self.assertEqual(5, len(lists[str(self.mine.id)]["decoys"]))
+        # `theirs` sits on the other interviewer's panel at a time `mine` is
+        # not even free for, so it is neither an own pairing nor a swap
+        # partner - but it is still offered.
+        self.assertIn(str(theirs.pk), row.offered_candidate_ids)
+        self.assertNotIn(str(theirs.pk), row.review_candidate_ids)
+
+    def test_widening_the_offered_list_does_not_widen_the_publish_gate(self):
+        """The whole point of keeping the two sets apart: extending the plan
+        must never block a publish behind someone re-confirming candidates
+        they were never assigned. Publication waits on own + swap only.
+        """
+        ours = self._candidate("ada", 8001)
+        theirs = self._candidate("eirik", 8002)
+        saved = self._plan(
+            [
+                self._row(ours, 540, self.mine),
+                self._row(theirs, 600, self.other),
+            ],
+            my_slots=["2026-04-21:540"],
+        )
+        InterviewAvailability.objects.create(
+            admission=self.admission,
+            group=self.group,
+            user=self.other,
+            slots=["2026-04-21:540", "2026-04-21:600"],
+        )
+        self._persist_lists(saved)
+
+        gate_scope = conflict_review_scope(saved, self.mine.id)
+        offered = conflict_review_offered_scope(saved, self.mine.id)
+
+        self.assertTrue(gate_scope.issubset(offered))
+        self.assertIn(str(theirs.pk), offered - gate_scope)
 
     def test_the_filler_cohort_is_stable_across_rebuilds(self):
         """Re-saving a draft must not rotate a fresh cast of fillers through

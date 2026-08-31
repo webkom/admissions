@@ -231,6 +231,18 @@
   --color-danger-bg: var(--color-red-1);
   --color-danger-border: var(--color-red-6);
 
+  /* Caution: a state the recruiter must acknowledge but that is not an error -
+     an unfinished kandidatkontroll, a candidate still waiting for a slot, an
+     availability deviation. Seeded from the amber values these surfaces
+     already used by hand. The four near-identical text ambers that were in
+     use (700/800/900/950, drifting between otherwise identical panels) are
+     deliberately collapsed into one. */
+  --color-warning-text: #78350f;
+  --color-warning-bg: #fffbeb;
+  --color-warning-bg-strong: #fef3c7;
+  --color-warning-border: #fde68a;
+  --color-warning-solid: #f59e0b;
+
   --color-overlay: color-mix(in srgb, var(--lego-font-color) 45%, transparent);
   --color-surface-base: var(--lego-card-color);
   --color-surface-page: var(--lego-background-color);

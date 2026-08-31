@@ -27,11 +27,11 @@ export const scheduleDividerRow =
 
 /** "Tidspunkt" cell - a slim, muted, tabular time. */
 export const scheduleTimeCell =
-  "w-36 whitespace-nowrap px-4 py-3 text-sm tabular-nums font-medium text-text-muted align-middle";
+  "w-36 whitespace-nowrap px-4 py-3 text-ui tabular-nums font-medium text-text-muted align-middle";
 
 /** "Kandidat" column width, shared so the two tables line up. */
 export const scheduleCandidateColumn = "w-60";
 
 /** Small pill showing a block's time span, e.g. "09:00 – 10:30". */
 export const scheduleTimeRangePill =
-  "inline-flex items-center rounded-md border border-border-soft bg-surface-base px-2 py-0.5 text-xs font-semibold tabular-nums text-text-muted shadow-xs";
+  "inline-flex items-center rounded-md border border-border-soft bg-surface-base px-2 py-0.5 text-label font-semibold tabular-nums text-text-muted shadow-xs";

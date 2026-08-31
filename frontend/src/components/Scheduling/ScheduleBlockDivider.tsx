@@ -44,19 +44,21 @@ export const ScheduleBlockDivider: React.FC<ScheduleBlockDividerProps> = ({
     <td colSpan={colSpan} className="px-4 py-3">
       <div className="flex flex-col gap-2">
         <div className="flex flex-wrap items-center gap-2.5">
-          <span className="text-sm font-bold text-text-primary">{title}</span>
+          <span className="text-ui font-bold text-text-primary">{title}</span>
           {timeRange && (
             <span className={scheduleTimeRangePill} title="Blokkens tidsrom">
               {timeRange}
             </span>
           )}
           {meta && (
-            <span className="text-xs font-medium text-text-muted">{meta}</span>
+            <span className="text-label font-medium text-text-muted">
+              {meta}
+            </span>
           )}
         </div>
         {panel && (
           <div className="flex flex-wrap items-center gap-1.5">
-            <span className="text-xs font-semibold text-text-muted">
+            <span className="text-label font-semibold text-text-muted">
               Panel:
             </span>
             {panel}

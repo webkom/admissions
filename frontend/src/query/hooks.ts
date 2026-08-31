@@ -216,6 +216,39 @@ export const useInterviewCandidates = (slug: string, groupId: string) => {
   return hideDataAfterSensitiveQueryFailure(query);
 };
 
+/**
+ * Candidates with this committee's søknadstekst attached.
+ *
+ * Deliberately a separate, disabled-by-default query rather than a field on
+ * `useInterviewCandidates`: the texts are the bulkiest and most sensitive
+ * thing this page can hold, and only the CSV export ever wants them. Enabling
+ * it is what pulls them into the browser.
+ */
+export const useInterviewCandidateTexts = (
+  slug: string,
+  groupId: string,
+  enabled: boolean,
+) => {
+  const scope = admissionGroupScope(slug, groupId);
+  const path = `/admin/admission/${slug}/group/${groupId}/candidates/`;
+  const query = useQuery<Candidate[], AxiosError>({
+    // A key of its own so the text-bearing response never overwrites the
+    // plain candidate cache the rest of the page reads.
+    queryKey: [path, "with-application-text"],
+    queryFn: async () =>
+      (await apiClient.get(path, { params: { include_application_text: "1" } }))
+        .data,
+    enabled:
+      enabled &&
+      Boolean(slug) &&
+      Boolean(groupId) &&
+      !areSensitiveAdmissionCacheWritesBlocked(scope),
+    ...useSensitiveQueryOptions(scope),
+    meta: admissionSensitiveQueryMeta(scope, true),
+  });
+  return hideDataAfterSensitiveQueryFailure(query);
+};
+
 export const useSavedSchedule = (slug: string, groupId: string) => {
   const scope = admissionGroupScope(slug, groupId);
   const query = useQuery<SavedSchedule, AxiosError>({

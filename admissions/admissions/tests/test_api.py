@@ -1190,6 +1190,63 @@ class InterviewCandidatesViewTestCase(APITestCase):
         )
         self.client.force_authenticate(user=self.user)
 
+    def test_application_text_is_opt_in_and_scoped_to_this_committee(self):
+        """The CSV export can carry søknadstekst, so the endpoint can return
+        it - but only when asked, only for a recruiter, and only the text
+        written to *this* committee.
+        """
+        recruiter = LegoUser.objects.create(username="tekst-rec", lego_id=5031)
+        Membership.objects.create(user=recruiter, role=RECRUITING, group=self.group)
+        other_group = Group.objects.create(name="Annen", lego_id=5032)
+        self.admission.groups.add(other_group)
+        GroupApplication.objects.create(
+            application=self.application,
+            group=other_group,
+            text="Text meant for the other committee",
+        )
+        self.application.text = "Priority and comments, admission-admin material"
+        self.application.save(update_fields=["text"])
+        self.client.force_authenticate(user=recruiter)
+
+        without = self.client.get(self.url)
+        self.assertEqual(without.status_code, status.HTTP_200_OK)
+        # Not shipped unless requested: the schedule page loads this endpoint
+        # on every visit and never needs the text.
+        self.assertNotIn("application_text", without.data[0])
+
+        with_text = self.client.get(self.url, {"include_application_text": "1"})
+
+        self.assertEqual(with_text.status_code, status.HTTP_200_OK)
+        self.assertEqual(
+            "Intervjukomite application", with_text.data[0]["application_text"]
+        )
+        # Never the other committee's text, and never the priority text.
+        body = str(with_text.data)
+        self.assertNotIn("other committee", body)
+        self.assertNotIn("Priority and comments", body)
+
+    def test_members_cannot_request_application_text(self):
+        """A revealed name lets a member greet the candidate at the door; it
+        does not let them read what the candidate wrote."""
+        SavedSchedule.objects.create(
+            admission=self.admission,
+            group=self.group,
+            schedule=[],
+            start_date="2026-04-21",
+            distributed_through="2026-04-22",
+            name_visibility=SavedSchedule.NAME_VISIBILITY_COMMITTEE,
+        )
+        self.client.force_authenticate(user=self.user)
+
+        visible = self.client.get(self.url)
+        self.assertEqual(visible.status_code, status.HTTP_200_OK)
+        self.assertTrue(visible.data)
+        self.assertNotIn("application_text", visible.data[0])
+
+        refused = self.client.get(self.url, {"include_application_text": "1"})
+
+        self.assertEqual(refused.status_code, status.HTTP_403_FORBIDDEN)
+
     def test_candidate_names_hidden_from_committee_by_default(self):
         res = self.client.get(self.url)
 

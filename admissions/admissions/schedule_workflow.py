@@ -1265,6 +1265,7 @@ def _refresh_conflict_review_lists(saved, schedule_changed):
                 interviewer_id=interviewer_id,
                 own_candidate_ids=entry["own_candidate_ids"],
                 swap_candidate_ids=entry["swap_candidate_ids"],
+                pool_candidate_ids=entry.get("pool_candidate_ids", []),
                 decoys=entry["decoys"],
             )
             for interviewer_id, entry in build_conflict_review_lists(saved).items()

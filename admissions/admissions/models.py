@@ -809,11 +809,22 @@ class ConflictReviewList(models.Model):
     the GET, the POST, the completeness check and the audit log. A list that
     shifts between reads cannot be attested to.
 
-    It is deliberately wider than the interviewer's own panel: it also carries
-    candidates a repair could plausibly move onto their panel, so a repaired
-    plan only ever contains pairs that were actually reviewed. Padding the list
-    with people who did not apply is a further step that needs a real roster to
-    draw from; `decoys` exists for that and stays empty until then.
+    Three widening rings, and the difference between them is what may be
+    *declared* versus what must be *confirmed*:
+
+    - `own_candidate_ids` - this interviewer's proposed pairings.
+    - `swap_candidate_ids` - candidates a repair could plausibly move onto
+      their panel, so a repaired plan only ever contains reviewed pairs.
+    - `pool_candidate_ids` - every candidate placed in the draft.
+
+    `review_candidate_ids` (own + swap) is what publication waits for.
+    `offered_candidate_ids` (all three) is what the interviewer is shown and
+    may declare inhabilitet against. Keeping them apart is the point: the
+    solver gets constraints over the whole iteration, while one unresponsive
+    person still only blocks a publish over pairings that concern them.
+
+    `decoys` padded a list that used to be a sample; a list that is the
+    complete placed set has nothing to hide and carries none.
     """
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
@@ -832,6 +843,7 @@ class ConflictReviewList(models.Model):
     )
     own_candidate_ids = models.JSONField(default=list, blank=True)
     swap_candidate_ids = models.JSONField(default=list, blank=True)
+    pool_candidate_ids = models.JSONField(default=list, blank=True)
     decoys = models.JSONField(default=list, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
@@ -845,11 +857,31 @@ class ConflictReviewList(models.Model):
 
     @property
     def review_candidate_ids(self):
-        """Everything this interviewer must check, real candidates only."""
+        """Everything this interviewer must check, real candidates only.
+
+        Publication waits on exactly this set - deliberately not the wider
+        offered list, so extending the plan never blocks a publish behind
+        someone re-confirming candidates they were never assigned.
+        """
         return list(
             dict.fromkeys(
                 [str(value) for value in self.own_candidate_ids or []]
                 + [str(value) for value in self.swap_candidate_ids or []]
+            )
+        )
+
+    @property
+    def offered_candidate_ids(self):
+        """Everything this interviewer is shown and may flag, real only.
+
+        The whole placed draft. Declaring inhabilitet here is what lets the
+        solver avoid a bad pairing before it makes one, rather than having it
+        rejected after the fact.
+        """
+        return list(
+            dict.fromkeys(
+                self.review_candidate_ids
+                + [str(value) for value in self.pool_candidate_ids or []]
             )
         )
 
@@ -924,7 +956,7 @@ class DirectoryEntry(models.Model):
 class GodUser(models.Model):
     """LEGO id of a user granted admission-wide org leadership.
 
-    Replaces the hardcoded ``constants.GOD_LEGO_IDS`` list. Only Webkom
+    The sole source of truth for god access. Only Webkom
     members can add or remove rows. The runtime check
     ``user_is_org_leadership(user)`` reads from this table.
     """

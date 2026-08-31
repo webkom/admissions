@@ -82,7 +82,7 @@ const STATUS_FILTERS: {
   dotClass: string;
 }[] = [
   { key: "confirmed", label: "Tid bekreftet", dotClass: "bg-success" },
-  { key: "invited", label: "Kalt inn", dotClass: "bg-amber-500" },
+  { key: "invited", label: "Kalt inn", dotClass: "bg-warning-solid" },
   { key: "not_invited", label: "Ikke kalt inn", dotClass: "bg-text-subtle" },
   { key: "declined", label: "Avslått", dotClass: "bg-danger" },
   { key: "completed", label: "Fullført", dotClass: "bg-success" },

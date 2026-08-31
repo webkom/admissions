@@ -1,7 +1,8 @@
 import React from "react";
 import type { SchedulePanelMember } from "../../types";
 import { Chip } from "src/components/ui";
-import { getBlockPanelDiff } from "./Solver/blockBaseline";
+import cn from "src/utils/cn";
+import { derivePanelDiffView } from "./panelDiffModel";
 
 interface PanelDiffProps {
   /** The block's modal panel, or `null` when the block has no repeating
@@ -11,10 +12,15 @@ interface PanelDiffProps {
   /** Panel-member names to flag (inhabilitet / bias). Only rendered when the
    *  full panel is shown inline. */
   flaggedNames?: ReadonlySet<string>;
+  /** Marks the reader's own seat. Interviewers scan the published plan for
+   *  the rows that are theirs, and the compact branches below name nobody at
+   *  all - "Standardpanel" would otherwise hide the one fact they came for.
+   *  Applies whether or not the "Mine" filter is on. */
+  isCurrentUser?: (member: SchedulePanelMember) => boolean;
 }
 
 const diffPillClass =
-  "inline-flex max-w-full items-center whitespace-nowrap rounded-full border border-border-soft bg-surface-subtle px-2.5 py-0.5 text-xs font-semibold text-text-primary shadow-xs";
+  "inline-flex max-w-full items-center whitespace-nowrap rounded-full border px-2.5 py-0.5 text-label font-semibold shadow-xs";
 
 /**
  * The Panel column, shared by the draft and published schedule tables:
@@ -24,57 +30,77 @@ const diffPillClass =
  *  - this slot deviates from the block panel -> one compact "+A −B" /
  *    "A ⇄ B" tag;
  *  - the block has no repeating panel -> the slot's full panel as chips.
+ *
+ * Which of the three applies, and whether the reader is named in it, is
+ * decided in `derivePanelDiffView`.
  */
 export const PanelDiff: React.FC<PanelDiffProps> = ({
   baseline,
   panel,
   flaggedNames,
+  isCurrentUser,
 }) => {
-  const diff = getBlockPanelDiff(baseline, panel);
+  const view = derivePanelDiffView({ baseline, panel, isCurrentUser });
 
-  if (diff.kind === "fallback") {
+  if (view.kind === "roster") {
     return (
       <div className="flex flex-wrap items-center gap-1.5">
-        {panel.map((member, index) => (
+        {view.members.map(({ member, isCurrentUser: isMine }, index) => (
           <Chip
             key={`${member.name}-${index}`}
-            tone={flaggedNames?.has(member.name) ? "danger" : "muted"}
+            tone={
+              flaggedNames?.has(member.name)
+                ? "danger"
+                : isMine
+                  ? "brand"
+                  : "muted"
+            }
+            className={cn(isMine && "font-bold")}
           >
             {member.name}
+            {isMine && <span className="sr-only"> (deg)</span>}
           </Chip>
         ))}
       </div>
     );
   }
 
-  if (diff.kind === "exact") {
+  if (view.kind === "standard") {
     return (
       <span
-        title={`Standardpanel: ${panel.map((member) => member.name).join(", ")}`}
-        className="text-sm text-text-muted"
+        title={`Standardpanel: ${view.memberNames.join(", ")}`}
+        className={cn(
+          "text-ui",
+          view.isCurrentUser ? "font-semibold text-brand" : "text-text-muted",
+        )}
       >
         Standardpanel
+        {view.isCurrentUser && " · deg"}
       </span>
     );
   }
 
-  const added = diff.added.map((member) => member.name);
-  const removed = diff.removed.map((member) => member.name);
-  const isSwap =
-    diff.kind === "swap" || (added.length === 1 && removed.length === 1);
-  const label = isSwap
-    ? `${added[0]} ⇄ ${removed[0]}`
-    : [
-        ...added.map((name) => `+${name}`),
-        ...removed.map((name) => `−${name}`),
-      ].join(" ");
-
   return (
     <span
-      title={`Avviker fra blokkens standardpanel: ${label}`}
-      className={diffPillClass}
+      title={`Avviker fra blokkens standardpanel: ${view.label}`}
+      className={cn(
+        diffPillClass,
+        view.isCurrentUser
+          ? "border-brand-border bg-brand-soft text-brand"
+          : "border-border-soft bg-surface-subtle text-text-primary",
+      )}
     >
-      <span className="truncate">{label}</span>
+      <span className="truncate">
+        {view.segments.map((segment, index) =>
+          segment.isCurrentUser ? (
+            <strong key={index} className="font-bold">
+              {segment.text}
+            </strong>
+          ) : (
+            <React.Fragment key={index}>{segment.text}</React.Fragment>
+          ),
+        )}
+      </span>
     </span>
   );
 };

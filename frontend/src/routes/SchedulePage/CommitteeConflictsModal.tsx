@@ -251,7 +251,7 @@ const CommitteeConflictsModal: React.FC<CommitteeConflictsModalProps> = ({
               </span>
               <h2
                 id="committee-conflicts-title"
-                className="text-lg font-bold text-text-primary"
+                className="text-body-lg font-bold text-text-primary"
               >
                 Inhabiliteter i komiteen
               </h2>

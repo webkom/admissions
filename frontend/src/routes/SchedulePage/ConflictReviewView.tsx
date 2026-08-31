@@ -16,6 +16,7 @@ import {
   actionButtonBase,
   actionButtonNeutral,
   actionButtonPrimary,
+  keyboardFocusRingClass,
 } from "src/components/Scheduling/ui";
 import { iconSizes } from "src/styles/designTokens";
 import type { Candidate, InterviewAvailabilityParticipant } from "src/types";
@@ -79,13 +80,8 @@ const ConflictReviewView: React.FC<ConflictReviewViewProps> = ({
     ],
   );
   const reviewCandidateIds = useMemo(() => {
-    if (isAdmin && candidates && candidates.length > 0) {
-      const ids = new Set(currentParticipant?.proposed_candidate_ids ?? []);
-      candidates.forEach((candidate) => ids.add(candidate.id));
-      return ids;
-    }
     return new Set(currentParticipant?.proposed_candidate_ids ?? []);
-  }, [isAdmin, candidates, currentParticipant?.proposed_candidate_ids]);
+  }, [currentParticipant?.proposed_candidate_ids]);
   const scopedServerConflicts = useMemo(
     () =>
       (currentParticipant?.conflicts ?? []).filter((candidateId) =>
@@ -150,6 +146,22 @@ const ConflictReviewView: React.FC<ConflictReviewViewProps> = ({
     [candidateById, reviewCandidateIds],
   );
 
+  // Attestations are append-only, so a candidate confirmed in an earlier
+  // round stays confirmed when the plan grows. Extending the period should
+  // therefore ask about the people it just added, not replay the whole list -
+  // otherwise every extension re-reads as a fresh chore and the new names are
+  // the easiest ones to miss.
+  const alreadyReviewedIds = useMemo(
+    () =>
+      new Set(
+        (currentParticipant?.reviewed_candidate_ids ?? []).filter(
+          (candidateId) => reviewCandidateIds.has(candidateId),
+        ),
+      ),
+    [currentParticipant?.reviewed_candidate_ids, reviewCandidateIds],
+  );
+  const [showReviewedCandidates, setShowReviewedCandidates] = useState(false);
+
   const filteredCandidates = useMemo(() => {
     const query = candidateSearchQuery.trim().toLowerCase();
     if (!query) return reviewCandidates;
@@ -157,6 +169,27 @@ const ConflictReviewView: React.FC<ConflictReviewViewProps> = ({
       candidate.name.toLowerCase().includes(query),
     );
   }, [reviewCandidates, candidateSearchQuery]);
+  const pendingCandidates = useMemo(
+    () =>
+      filteredCandidates.filter(
+        (candidate) => !alreadyReviewedIds.has(candidate.id),
+      ),
+    [alreadyReviewedIds, filteredCandidates],
+  );
+  const reviewedCandidates = useMemo(
+    () =>
+      filteredCandidates.filter((candidate) =>
+        alreadyReviewedIds.has(candidate.id),
+      ),
+    [alreadyReviewedIds, filteredCandidates],
+  );
+  // A previously confirmed answer is still changeable - it is just folded
+  // away, and a search always opens the fold so nothing is unfindable.
+  const searching = candidateSearchQuery.trim().length > 0;
+  const reviewedVisible = showReviewedCandidates || searching;
+  const visibleCandidates = reviewedVisible
+    ? [...pendingCandidates, ...reviewedCandidates]
+    : pendingCandidates;
 
   const reviewIsCurrent = Boolean(currentParticipant?.conflict_review_complete);
   const proposalNamesLoading =
@@ -227,7 +260,7 @@ const ConflictReviewView: React.FC<ConflictReviewViewProps> = ({
     ? `${reviewProgress.complete} av ${reviewProgress.total} intervjuere har bekreftet`
     : reviewIsCurrent
       ? "Du har bekreftet inhabilitetssjekken"
-      : `${reviewCandidateIds.size} kandidater må kontrolleres`;
+      : `${pendingCandidates.length} av ${reviewCandidateIds.size} kandidater gjenstår`;
 
   return (
     <div
@@ -247,7 +280,7 @@ const ConflictReviewView: React.FC<ConflictReviewViewProps> = ({
           <SchedulePanelBody className="flex flex-wrap items-center justify-between gap-4 px-5 py-4">
             <div className="min-w-0">
               <div className="flex flex-wrap items-center gap-2">
-                <h2 className="m-0 text-sm font-bold text-text-primary">
+                <h2 className="m-0 text-ui font-bold text-text-primary">
                   Inhabilitetssjekk
                 </h2>
                 <Chip tone={reviewIsCurrent ? "success" : "warning"}>
@@ -349,16 +382,14 @@ const ConflictReviewView: React.FC<ConflictReviewViewProps> = ({
                 <div className="space-y-4">
                   <div className="flex flex-wrap items-center justify-between gap-3">
                     <div>
-                      <h3 className="m-0 text-base font-bold text-text-primary">
+                      <h3 className="m-0 text-title font-bold text-text-primary">
                         Velg kandidatene du er inhabil for
                       </h3>
-                      {isAdmin && (
-                        <p className="m-0 mt-0.5 text-detail text-text-muted">
-                          Som administrator har du alle{" "}
-                          {reviewCandidates.length} kandidatene tilgjengelig for
-                          å sikre at eventuelle bytter er håndtert.
-                        </p>
-                      )}
+                      <p className="m-0 mt-0.5 text-detail text-text-muted">
+                        {pendingCandidates.length > 0
+                          ? `Alle ${reviewCandidates.length} kandidatene i planen står her. Meld fra om alle du er inhabil for — da unngår planleggingen dem i stedet for å måtte rette opp etterpå.`
+                          : "Du har kontrollert alle kandidatene i planen. Nye kandidater dukker opp her når flere dager planlegges."}
+                      </p>
                     </div>
 
                     {reviewCandidates.length > 6 && (
@@ -382,14 +413,18 @@ const ConflictReviewView: React.FC<ConflictReviewViewProps> = ({
                   </div>
 
                   <ul className="m-0 divide-y divide-border-faint overflow-hidden rounded-lg border border-border-soft p-0">
-                    {filteredCandidates.length === 0 ? (
+                    {visibleCandidates.length === 0 ? (
                       <li className="p-4 text-center text-detail text-text-muted">
-                        Ingen kandidater matcher &laquo;{candidateSearchQuery}
-                        &raquo;.
+                        {searching
+                          ? `Ingen kandidater matcher «${candidateSearchQuery}».`
+                          : "Du har kontrollert alle kandidatene i planen."}
                       </li>
                     ) : (
-                      filteredCandidates.map((candidate) => {
+                      visibleCandidates.map((candidate) => {
                         const selected = selectedConflictIds.has(candidate.id);
+                        const alreadyReviewed = alreadyReviewedIds.has(
+                          candidate.id,
+                        );
                         return (
                           <li key={candidate.id}>
                             <label
@@ -410,17 +445,39 @@ const ConflictReviewView: React.FC<ConflictReviewViewProps> = ({
                               <span className="min-w-0 flex-1 truncate text-ui font-semibold text-text-primary">
                                 {candidate.name}
                               </span>
-                              {selected && (
+                              {selected ? (
                                 <span className="text-detail font-semibold text-danger">
                                   Inhabil
                                 </span>
-                              )}
+                              ) : alreadyReviewed ? (
+                                <span className="text-detail text-text-muted">
+                                  Kontrollert
+                                </span>
+                              ) : null}
                             </label>
                           </li>
                         );
                       })
                     )}
                   </ul>
+                  {reviewedCandidates.length > 0 && !searching && (
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setShowReviewedCandidates((shown) => !shown)
+                      }
+                      data-cy="toggle-reviewed-candidates"
+                      aria-expanded={reviewedVisible}
+                      className={cn(
+                        "text-detail font-semibold text-text-muted hover:text-text-primary hover:underline",
+                        keyboardFocusRingClass,
+                      )}
+                    >
+                      {reviewedVisible
+                        ? "Skjul kandidatene du alt har kontrollert"
+                        : `Vis ${reviewedCandidates.length} du alt har kontrollert`}
+                    </button>
+                  )}
                 </div>
               )}
             </SchedulePanelBody>

@@ -61,7 +61,7 @@ const DevelopmentDataPanel: React.FC<DevelopmentDataPanelProps> = ({
     <div className="absolute right-0 top-full z-40 mt-2 w-[min(34rem,calc(100vw-2rem))] rounded-xl border border-border bg-surface-base px-5 py-4 shadow-xl">
       <div className="flex flex-wrap items-end gap-6">
         <div className="flex items-center gap-3">
-          <label className="flex cursor-pointer items-center gap-2 text-sm font-semibold text-text-muted">
+          <label className="flex cursor-pointer items-center gap-2 text-ui font-semibold text-text-muted">
             <input
               type="checkbox"
               checked={useMockData}
@@ -71,7 +71,7 @@ const DevelopmentDataPanel: React.FC<DevelopmentDataPanelProps> = ({
             Simuler testdata
           </label>
           {useMockData && (
-            <label className="flex cursor-pointer items-center gap-2 text-sm font-semibold text-text-muted">
+            <label className="flex cursor-pointer items-center gap-2 text-ui font-semibold text-text-muted">
               <input
                 type="checkbox"
                 checked={appendMockToReal}
@@ -98,7 +98,7 @@ const DevelopmentDataPanel: React.FC<DevelopmentDataPanelProps> = ({
                 max="200"
                 value={candidateInput}
                 onChange={(event) => onCandidateInputChange(event.target.value)}
-                className="w-24 rounded-md border border-border-muted bg-surface-base px-2.5 py-2 text-sm font-bold text-text-primary transition-[border-color,box-shadow] duration-150 focus:border-brand-input focus:outline-none focus:ring-3 focus:ring-brand-ringSoft"
+                className="w-24 rounded-md border border-border-muted bg-surface-base px-2.5 py-2 text-ui font-bold text-text-primary transition-[border-color,box-shadow] duration-150 focus:border-brand-input focus:outline-none focus:ring-3 focus:ring-brand-ringSoft"
               />
             </div>
             <div className="flex flex-col gap-1">
@@ -117,7 +117,7 @@ const DevelopmentDataPanel: React.FC<DevelopmentDataPanelProps> = ({
                 onChange={(event) =>
                   onInterviewerInputChange(event.target.value)
                 }
-                className="w-24 rounded-md border border-border-muted bg-surface-base px-2.5 py-2 text-sm font-bold text-text-primary transition-[border-color,box-shadow] duration-150 focus:border-brand-input focus:outline-none focus:ring-3 focus:ring-brand-ringSoft"
+                className="w-24 rounded-md border border-border-muted bg-surface-base px-2.5 py-2 text-ui font-bold text-text-primary transition-[border-color,box-shadow] duration-150 focus:border-brand-input focus:outline-none focus:ring-3 focus:ring-brand-ringSoft"
               />
             </div>
           </>

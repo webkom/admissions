@@ -12,7 +12,7 @@ export const EmptyDistributedPlan: React.FC<{ isAdmin: boolean }> = ({
       <span className="mb-2 inline-flex h-10 w-10 items-center justify-center rounded-full bg-brand-soft text-brand ring-1 ring-brand-ringSoft">
         <CalendarCheck size={iconSizes.standard} />
       </span>
-      <h3 className="mb-1 mt-2 text-sm font-bold text-text-primary">
+      <h3 className="mb-1 mt-2 text-ui font-bold text-text-primary">
         Ingen plan publisert ennå
       </h3>
       <p className="m-0 mx-auto max-w-md text-ui leading-relaxed text-text-muted">
@@ -59,7 +59,7 @@ export const DistributedPlanNotices: React.FC<{
           {conflictImpacts.slice(0, 3).map((impact) => (
             <div
               key={`${impact.item.time}-${impact.scheduleIndex}`}
-              className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-brand-border bg-brand-muted px-3 py-2 text-sm"
+              className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-brand-border bg-brand-muted px-3 py-2 text-ui"
             >
               <span className="font-semibold text-text-primary">
                 {formatTimeLabel(impact.item.time)} —{" "}

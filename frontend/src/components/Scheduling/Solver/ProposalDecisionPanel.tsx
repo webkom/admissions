@@ -38,6 +38,9 @@ interface ProposalDecisionPanelProps {
   hasExpired: boolean;
   detailsOpen: boolean;
   actionLoading: boolean;
+  /** The draft beside this panel stays editable while a proposal is pending,
+   *  so adopting one can throw away work in progress. Say so before it does. */
+  hasUnsavedDraftEdits?: boolean;
   headingRef: React.RefObject<HTMLHeadingElement>;
   comparisonTriggerRef: React.RefObject<HTMLButtonElement>;
   comparisonHeadingRef: React.RefObject<HTMLHeadingElement>;
@@ -146,6 +149,7 @@ const ProposalDecisionPanel: React.FC<ProposalDecisionPanelProps> = ({
   hasExpired,
   detailsOpen,
   actionLoading,
+  hasUnsavedDraftEdits = false,
   headingRef,
   comparisonTriggerRef,
   comparisonHeadingRef,
@@ -350,9 +354,19 @@ const ProposalDecisionPanel: React.FC<ProposalDecisionPanelProps> = ({
         )}
       </SchedulePanelBody>
       <SchedulePanelFooter className="sticky bottom-0 z-10 bg-surface-base">
-        <span className="text-detail font-semibold text-text-muted">
-          Det gjeldende utkastet er ikke endret.
-        </span>
+        {hasUnsavedDraftEdits ? (
+          <span
+            data-cy="proposal-replaces-edits"
+            className="text-detail font-semibold text-warning-text"
+          >
+            Du har ulagrede endringer i utkastet. De erstattes hvis du bruker
+            forslaget.
+          </span>
+        ) : (
+          <span className="text-detail font-semibold text-text-muted">
+            Det gjeldende utkastet er ikke endret.
+          </span>
+        )}
         <div className="flex flex-wrap items-center justify-end gap-2">
           <button
             type="button"

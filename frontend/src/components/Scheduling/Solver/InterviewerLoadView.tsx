@@ -145,7 +145,7 @@ const InterviewerLoadView = ({
                   className={cn(
                     "text-right font-semibold tabular-nums",
                     availabilityDeviationCount > 0
-                      ? "text-amber-800"
+                      ? "text-warning-text"
                       : "text-text-muted",
                   )}
                   title={`${interviewer.outsideAvailabilityCount} utenfor tilgjengelighet, ${interviewer.unverifiedCount} kan ikke verifiseres`}
@@ -174,7 +174,7 @@ const InterviewerLoadView = ({
       </div>
 
       {!selectedInterviewer ? (
-        <div className="rounded-lg border border-border bg-surface-base p-4 text-center text-sm font-semibold text-text-muted">
+        <div className="rounded-lg border border-border bg-surface-base p-4 text-center text-ui font-semibold text-text-muted">
           Velg en intervjuer for å se intervjuene.
         </div>
       ) : (
@@ -229,7 +229,7 @@ const InterviewerLoadView = ({
             </div>
           </div>
           {rows.length === 0 ? (
-            <div className="rounded-lg border border-border bg-surface-base p-4 text-center text-sm font-semibold text-text-muted">
+            <div className="rounded-lg border border-border bg-surface-base p-4 text-center text-ui font-semibold text-text-muted">
               {selected?.name ?? "Intervjueren"} har ingen tildelte intervjuer.
             </div>
           ) : (
@@ -254,13 +254,13 @@ const InterviewerLoadView = ({
                       key={scheduleIndex}
                       className="group [&:not(:last-child)>td]:border-b [&:not(:last-child)>td]:border-b-border-faint hover:[&>td]:bg-surface-soft"
                     >
-                      <td className="w-schedule-label whitespace-nowrap px-4 py-3 text-sm font-semibold text-text-muted">
+                      <td className="w-schedule-label whitespace-nowrap px-4 py-3 text-ui font-semibold text-text-muted">
                         {formatSlotTime(item.time)}
                       </td>
-                      <td className="px-4 py-3 text-sm font-semibold text-text-primary">
+                      <td className="px-4 py-3 text-ui font-semibold text-text-primary">
                         {displayCandidate(item)}
                       </td>
-                      <td className="px-4 py-3 text-sm">
+                      <td className="px-4 py-3 text-ui">
                         <div className="flex flex-wrap gap-1.5">
                           {item.panel.map((p, i) => {
                             const availabilityStatus = availabilityStatusFor(
