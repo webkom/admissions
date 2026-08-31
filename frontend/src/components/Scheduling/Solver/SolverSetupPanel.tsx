@@ -18,7 +18,6 @@ import {
   SchedulePanelFooter,
   SchedulePanelHeader,
   SegmentedControl,
-  Stepper,
   actionButtonBase,
   actionButtonNeutral,
   actionButtonPrimary,
@@ -389,7 +388,6 @@ const SolverSetupPanel = ({
   plannableDates,
   effectiveDayCount,
   onDayCountChange,
-  minDayCount,
   draftDayExtent,
   loading,
   error,
@@ -678,79 +676,17 @@ const SolverSetupPanel = ({
                 </p>
               )}
 
-              {dayScopeAvailable && (
-                <section
-                  data-cy="day-scope"
-                  className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center"
+              {dayScopeAvailable && effectiveDayCount < draftDayExtent && (
+                <p
+                  data-cy="day-scope-shrink-warning"
+                  className="m-0 rounded-md border border-warning-border bg-warning-bg px-3 py-2 text-detail font-medium text-warning-text"
                 >
-                  <div>
-                    <p className="m-0 text-ui font-semibold text-text-primary">
-                      Planlegg i etapper
-                    </p>
-                    <p className="m-0 mt-1 text-detail text-text-muted">
-                      Ta de første dagene nå og resten i en senere etappe hvis
-                      du vil. Nå: {scopeDateLabel}.
-                    </p>
-                    {minDayCount > 1 &&
-                      Number.isFinite(
-                        Date.parse(plannableDates[minDayCount - 1] ?? ""),
-                      ) && (
-                        <p
-                          data-cy="day-scope-min-explainer"
-                          className="m-0 mt-1 text-detail text-text-muted"
-                        >
-                          Minst {minDayCount}{" "}
-                          {minDayCount === 1 ? "dag" : "dager"} fordi planen alt
-                          er publisert til og med{" "}
-                          {formatAccessibleDate(
-                            plannableDates[minDayCount - 1],
-                          )}
-                          . Publiserte dager kan ikke tas ut av planen igjen.
-                        </p>
-                      )}
-                    {effectiveDayCount < draftDayExtent &&
-                      Number.isFinite(
-                        Date.parse(plannableDates[draftDayExtent - 1] ?? ""),
-                      ) && (
-                        <p
-                          data-cy="day-scope-shrink-warning"
-                          className="m-0 mt-1 text-detail font-medium text-amber-700"
-                        >
-                          Utkastet har intervjuer til og med{" "}
-                          {formatAccessibleDate(
-                            plannableDates[draftDayExtent - 1],
-                          )}
-                          . Et kortere forslag erstatter disse dagene:
-                          intervjuene flyttes inn i de valgte dagene, eller
-                          planlegges i en senere etappe hvis det ikke er plass.
-                          Du får se forslaget før du velger.
-                        </p>
-                      )}
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <div data-cy="day-count">
-                      <Stepper
-                        value={effectiveDayCount}
-                        min={minDayCount}
-                        max={totalPlannableDays}
-                        onStep={onDayCountChange}
-                        aria-label="Antall dager som planlegges nå"
-                      />
-                    </div>
-                    {!scopeCoversAllDays && (
-                      <button
-                        type="button"
-                        onClick={() => onDayCountChange(null)}
-                        className={cn(
-                          "text-detail font-semibold text-brand hover:underline",
-                          keyboardFocusRingClass,
-                        )}
-                      >
-                        Alle dager
-                      </button>
-                    )}
-                  </div>
-                </section>
+                  Utkastet har intervjuer til og med{" "}
+                  {formatAccessibleDate(plannableDates[draftDayExtent - 1])}. Et
+                  kortere forslag erstatter disse dagene: intervjuene flyttes
+                  inn i de valgte dagene, eller planlegges senere hvis det ikke
+                  er plass. Du får se forslaget før du velger.
+                </p>
               )}
 
               <section className="flex flex-wrap items-center justify-between gap-4 border-y border-border-soft py-4">
@@ -758,7 +694,7 @@ const SolverSetupPanel = ({
                   <p className="m-0 text-label font-bold uppercase tracking-wide text-text-subtle">
                     Valgt oppsett
                   </p>
-                  <h3 className="m-0 mt-1 text-base font-semibold text-text-primary">
+                  <h3 className="m-0 mt-1 text-title font-semibold text-text-primary">
                     {panelSize} intervjuer{panelSize === 1 ? "" : "e"} per
                     intervju
                     {solverOptions.candidates_per_session > 1
@@ -853,9 +789,9 @@ const SolverSetupPanel = ({
                 ) : generationBlocked ? (
                   <div
                     role="alert"
-                    className="flex flex-wrap items-center justify-between gap-3 rounded-lg bg-amber-50 px-4 py-3"
+                    className="flex flex-wrap items-center justify-between gap-3 rounded-lg bg-warning-bg px-4 py-3"
                   >
-                    <p className="m-0 flex items-start gap-2 text-ui font-semibold text-amber-900">
+                    <p className="m-0 flex items-start gap-2 text-ui font-semibold text-warning-text">
                       <AlertTriangle
                         size={iconSizes.small}
                         className="mt-0.5 flex-none"

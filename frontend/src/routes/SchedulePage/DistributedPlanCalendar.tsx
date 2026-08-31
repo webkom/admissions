@@ -212,7 +212,7 @@ const DistributedPlanCalendar: React.FC<{
               className="flex min-w-0 flex-col gap-1 rounded border border-border-soft border-l-2 border-l-border-quiet bg-surface-base px-2.5 py-2"
             >
               <div className="flex items-center justify-between gap-2">
-                <div className="truncate whitespace-nowrap text-xs font-bold text-text-primary">
+                <div className="truncate whitespace-nowrap text-label font-bold text-text-primary">
                   {isAdmin && candidateNamesVisible && onSwapCandidates ? (
                     <CandidateSwapChip
                       item={item}

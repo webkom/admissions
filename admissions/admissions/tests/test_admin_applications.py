@@ -344,7 +344,7 @@ class GroupLeadershipGrantsNothingTestCase(APITestCase):
     """No group membership confers org-wide admin.
 
     Not Hovedstyret, not Abakus-leder - not even their leader or co-leader.
-    The only way in is a god-listed LEGO id (constants.GOD_LEGO_IDS); see
+    The only way in is a god-listed LEGO id (a GodUser row); see
     GodUserAccessTestCase. A user who holds a leadership role in a group
     that is not part of the opptak must get no admission-wide privilege from
     it, and must not reach the applicants.

@@ -20,8 +20,11 @@ import {
   actionButtonPrimary,
   sectionLabelClass,
 } from "src/components/Scheduling/ui";
-import { formatAccessibleDate } from "src/components/Scheduling/scheduleUtils";
-import PublishBoundaryTimeline from "./PublishBoundaryTimeline";
+import {
+  decodeScheduleTime,
+  formatAccessibleDate,
+} from "src/components/Scheduling/scheduleUtils";
+import PlanDayStrip from "src/components/Scheduling/Solver/PlanDayStrip";
 import { iconSizes, iconStrokeWidths } from "src/styles/designTokens";
 import type { NameVisibility, SavedSchedule } from "src/types";
 import cn from "src/utils/cn";
@@ -61,8 +64,11 @@ interface PublicationGateProps {
     deferUnplacedCandidates?: boolean,
     publishWithoutFullReview?: boolean,
   ) => Promise<boolean>;
-  deferUnplacedIntent?: boolean;
-  onConsumeDeferUnplacedIntent?: () => void;
+  /** Boundary chosen on the day strip before the gate opened. The strip is
+   *  the only place publication scope is picked, so the gate reflects that
+   *  choice instead of asking again. */
+  publishThroughIntent?: string | null;
+  onConsumePublishThroughIntent?: () => void;
 }
 
 interface ReadinessRowProps {
@@ -79,7 +85,7 @@ const ReadinessRow = ({ complete, title, description }: ReadinessRowProps) => (
           "mt-0.5 flex h-6 w-6 flex-none items-center justify-center rounded-full border",
           complete
             ? "border-success-border bg-success-bg text-success"
-            : "border-amber-200 bg-amber-50 text-amber-800",
+            : "border-warning-border bg-warning-bg text-warning-text",
         )}
       >
         {complete ? (
@@ -114,19 +120,36 @@ const PublicationGate = ({
   onOpenOwnReview,
   onOpenConflictsOverview,
   onPublish,
-  deferUnplacedIntent,
-  onConsumeDeferUnplacedIntent,
+  publishThroughIntent = null,
+  onConsumePublishThroughIntent,
 }: PublicationGateProps) => {
   const [publishVisibility, setPublishVisibility] = useState<NameVisibility>(
     savedSchedule?.name_visibility ?? "hidden",
   );
   const [confirmOpen, setConfirmOpen] = useState(false);
-  const [publishScope, setPublishScope] = useState<"full" | "partial">("full");
   const sortedDates = useMemo(() => [...dates].sort(), [dates]);
-  const [partialThroughDate, setPartialThroughDate] = useState<string>("");
-  const selectedThroughDate = sortedDates.includes(partialThroughDate)
-    ? partialThroughDate
-    : (sortedDates[0] ?? "");
+  // Scope is decided on the day strip. Absent an explicit boundary the publish
+  // covers the whole plan, which is what most rounds do.
+  const [partialThroughDate, setPartialThroughDate] = useState<string | null>(
+    null,
+  );
+  useEffect(() => {
+    if (!publishThroughIntent) return;
+    setPartialThroughDate(publishThroughIntent);
+    onConsumePublishThroughIntent?.();
+  }, [publishThroughIntent, onConsumePublishThroughIntent]);
+  const selectedThroughDate =
+    partialThroughDate && sortedDates.includes(partialThroughDate)
+      ? partialThroughDate
+      : null;
+  // Publishing through the last day is a full publish, not a partial one.
+  const partialThroughDateOrNull =
+    selectedThroughDate && selectedThroughDate < (sortedDates.at(-1) ?? "")
+      ? selectedThroughDate
+      : null;
+  const publishScope: "full" | "partial" = partialThroughDateOrNull
+    ? "partial"
+    : "full";
   const deviationReview = savedSchedule?.deviation_review;
   const deviationApprovalPending = Boolean(
     deviationReview?.requires_approval && !deviationReview.approved,
@@ -167,23 +190,33 @@ const PublicationGate = ({
     ? `Publiser uten kontrollen til ${waiveReviewTarget}`
     : "Publiser uten kandidatkontroll";
 
+  // Days holding interviews. Without this the strip would offer to release
+  // empty days, which tells the committee nothing and spends a boundary that
+  // cannot be moved back.
+  const filledDates = useMemo(() => {
+    const filled = new Set<string>();
+    const duration = savedSchedule?.session_duration ?? 60;
+    (savedSchedule?.schedule ?? []).forEach((item) => {
+      if (!Number.isFinite(item.time)) return;
+      const { dayIndex } = decodeScheduleTime(item.time, duration);
+      const date = sortedDates[dayIndex];
+      if (date) filled.add(date);
+    });
+    return filled;
+  }, [savedSchedule?.schedule, savedSchedule?.session_duration, sortedDates]);
+
   const unplacedCount = Math.max(
     0,
     readiness.candidateCount - readiness.scheduledCandidateCount,
   );
-  const [deferUnplaced, setDeferUnplaced] = useState(false);
-
-  useEffect(() => {
-    if (deferUnplacedIntent) {
-      setDeferUnplaced(true);
-      onConsumeDeferUnplacedIntent?.();
-    }
-  }, [deferUnplacedIntent, onConsumeDeferUnplacedIntent]);
-  // Strict readiness demands every candidate placed. A delplan - an
-  // acknowledged partial plan under progressive publishing - may publish
-  // with candidates waiting for days that open later.
-  const unplacedResolved =
-    readiness.allCandidatesScheduled || (unplacedCount > 0 && deferUnplaced);
+  // Strict readiness demands every candidate placed. Publishing part of the
+  // period is a legitimate state, not an exception to tick past: the
+  // candidates who are still waiting get planned when later days open. The
+  // acknowledgement belongs in the publish confirmation, which the user reads
+  // once, rather than in a checkbox that repeats a choice already made in the
+  // draft.
+  const deferUnplaced = unplacedCount > 0;
+  const unplacedResolved = readiness.allCandidatesScheduled || deferUnplaced;
   const reviewResolved = readiness.reviewResolved || waiveReview;
   const publishable =
     readiness.ready ||
@@ -226,7 +259,7 @@ const PublicationGate = ({
       deviationReview?.requires_approval
         ? deviationReview.deviation_fingerprint
         : undefined,
-      publishScope === "partial" ? selectedThroughDate : undefined,
+      partialThroughDateOrNull ?? undefined,
       deferUnplaced && unplacedCount > 0,
       reviewWaiveActive,
     );
@@ -262,7 +295,7 @@ const PublicationGate = ({
             <div
               role="alert"
               data-cy="publish-schedule-field-error"
-              className="border-b border-amber-200 bg-amber-50 px-5 py-3 text-ui text-amber-950"
+              className="border-b border-warning-border bg-warning-bg px-5 py-3 text-ui text-warning-text"
             >
               {scheduleFieldError}
             </div>
@@ -271,13 +304,13 @@ const PublicationGate = ({
             savedSchedule.published_without_review_by.length > 0 && (
               <div
                 data-cy="previously-bypassed-banner"
-                className="border-b border-amber-200 bg-amber-50 px-5 py-3 text-ui text-amber-950"
+                className="border-b border-warning-border bg-warning-bg px-5 py-3 text-ui text-warning-text"
               >
                 <strong className="block">
                   Forrige publisering ble gjort uten kontroll fra{" "}
                   {savedSchedule.published_without_review_by.join(", ")}
                 </strong>
-                <p className="m-0 mt-1 text-xs leading-relaxed">
+                <p className="m-0 mt-1 text-label leading-relaxed">
                   En ny publisering uten alle svar vil bli loggført på nytt.
                 </p>
               </div>
@@ -286,7 +319,7 @@ const PublicationGate = ({
             <section aria-labelledby="publication-checks-heading">
               <h3
                 id="publication-checks-heading"
-                className="m-0 text-base font-bold text-text-primary"
+                className="m-0 text-title font-bold text-text-primary"
               >
                 Publiseringskrav
               </h3>
@@ -311,12 +344,16 @@ const PublicationGate = ({
                 />
                 <ReadinessRow
                   complete={unplacedResolved}
-                  title="Alle kandidater har et intervju"
+                  title={
+                    deferUnplaced
+                      ? "Kandidatene er fordelt på planlagte dager"
+                      : "Alle kandidater har et intervju"
+                  }
                   description={
                     !readiness.candidateScopeResolved
                       ? "Venter på at kandidatlisten skal bli ferdig lastet."
-                      : deferUnplaced && unplacedCount > 0
-                        ? `${readiness.scheduledCandidateCount} av ${readiness.candidateCount} kandidater er plassert. De siste ${unplacedCount} planlegges senere (bekreftet).`
+                      : deferUnplaced
+                        ? `${readiness.scheduledCandidateCount} av ${readiness.candidateCount} kandidater er plassert. De siste ${unplacedCount} planlegges når flere dager åpnes.`
                         : `${readiness.scheduledCandidateCount} av ${readiness.candidateCount} kandidater er plassert.`
                   }
                 />
@@ -376,47 +413,18 @@ const PublicationGate = ({
                 </p>
               </aside>
 
-              {unplacedCount > 0 && (
-                <aside className="rounded-xl bg-surface-subtle p-4">
-                  <p className={sectionLabelClass}>Resterende kandidater</p>
-                  <label
-                    className="flex cursor-pointer items-start gap-2 text-ui text-text-primary"
-                    data-cy="defer-unplaced-candidates-label"
-                  >
-                    <input
-                      type="checkbox"
-                      checked={deferUnplaced}
-                      onChange={(event) =>
-                        setDeferUnplaced(event.target.checked)
-                      }
-                      data-cy="defer-unplaced-candidates"
-                      className="mt-0.5 h-4 w-4 flex-none rounded border-border-muted text-primary focus:ring-primary"
-                    />
-                    <span>
-                      {unplacedCount} kandidat{unplacedCount === 1 ? "" : "er"}{" "}
-                      venter på plassering — de planlegges når flere dager åpnes
-                    </span>
-                  </label>
-                  <p className="m-0 mt-3 text-detail leading-relaxed text-text-muted">
-                    Delplanen publiseres uten dem. Bekreftelsen gjelder denne
-                    publiseringen; senere dager planlegges rundt det som alt er
-                    publisert, og utkastet viser fortsatt hvem som venter.
-                  </p>
-                </aside>
-              )}
-
               {(!readiness.reviewResolved &&
                 readiness.incompleteReviewerCount > 0) ||
               serverReviewRefusal ? (
                 <aside
-                  className="rounded-xl border border-amber-200 bg-amber-50 p-4"
+                  className="rounded-xl border border-warning-border bg-warning-bg p-4"
                   data-cy="waive-review-panel"
                 >
                   <p className={sectionLabelClass}>
                     Kandidatkontroll ikke fullført
                   </p>
                   <label
-                    className="flex cursor-pointer items-start gap-2 text-ui text-amber-950"
+                    className="flex cursor-pointer items-start gap-2 text-ui text-warning-text"
                     data-cy="waive-review-label"
                   >
                     <input
@@ -428,7 +436,7 @@ const PublicationGate = ({
                     />
                     <span>{waiveReviewButtonLabel}</span>
                   </label>
-                  <p className="m-0 mt-3 text-detail leading-relaxed text-amber-900">
+                  <p className="m-0 mt-3 text-detail leading-relaxed text-warning-text">
                     Beslutningen loggføres på deg og vises på den publiserte
                     planen, slik at komiteen ser hvilke paringer som gikk ut
                     uten at noen sjekket for inhabilitet.
@@ -439,57 +447,27 @@ const PublicationGate = ({
               {sortedDates.length > 1 && (
                 <aside className="rounded-xl bg-surface-subtle p-4">
                   <p className={sectionLabelClass}>Publiseringsomfang</p>
-                  <SegmentedControl<"full" | "partial">
-                    aria-label="Hvor mye av planen som skal publiseres"
-                    value={publishScope}
-                    onChange={setPublishScope}
-                    items={[
-                      { key: "full", label: "Hele planen" },
-                      { key: "partial", label: "Til og med en dato" },
-                    ]}
-                  />
-                  {publishScope === "partial" && (
-                    <div className="mt-3">
-                      <label
-                        htmlFor="publish-through-date"
-                        className="m-0 block text-detail font-semibold text-text-primary"
-                      >
-                        Publiser til og med
-                      </label>
-                      <select
-                        id="publish-through-date"
-                        value={selectedThroughDate}
-                        onChange={(event) =>
-                          setPartialThroughDate(event.target.value)
-                        }
-                        className="mt-1 w-full rounded-md border border-border bg-surface-base px-2 py-1.5 text-ui text-text-primary"
-                      >
-                        {sortedDates.map((date) => (
-                          <option key={date} value={date}>
-                            {formatAccessibleDate(date)}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                  )}
-                  <div className="mt-3">
-                    <PublishBoundaryTimeline
+                  <div className="mt-2">
+                    <PlanDayStrip
                       dates={sortedDates}
+                      filledDates={filledDates}
                       distributedThrough={
                         savedSchedule?.is_distributed
                           ? (savedSchedule.distributed_through ?? null)
                           : null
                       }
-                      previewThrough={
-                        publishScope === "partial" ? selectedThroughDate : null
-                      }
+                      previewThrough={selectedThroughDate}
+                      onPublishThrough={setPartialThroughDate}
+                      // The gate has its own publish button; a second
+                      // suggestion here would compete with it.
+                      publishSuggestionReady={false}
                       compact
                     />
                   </div>
                   <p className="m-0 mt-3 text-detail leading-relaxed text-text-muted">
                     {publishScope === "full"
                       ? "Alle intervjuer i planen blir synlige med det samme."
-                      : "Intervjuer etter valgt dato holdes skjult for komiteen. Du kan utvide planen senere."}
+                      : "Intervjuer etter valgt dato holdes skjult for komiteen. Du kan publisere flere dager senere."}
                   </p>
                 </aside>
               )}
@@ -500,13 +478,13 @@ const PublicationGate = ({
               {blocker ? (
                 <p
                   data-cy="publish-blocked-reason"
-                  className="m-0 flex items-center gap-2 text-ui font-semibold text-amber-800"
+                  className="m-0 flex items-center gap-2 text-ui font-semibold text-warning-text"
                 >
                   <AlertTriangle size={iconSizes.small} aria-hidden="true" />
                   {blocker}
                 </p>
               ) : deviationApprovalPending ? (
-                <p className="m-0 flex items-center gap-2 text-ui font-semibold text-amber-800">
+                <p className="m-0 flex items-center gap-2 text-ui font-semibold text-warning-text">
                   <AlertTriangle size={iconSizes.small} aria-hidden="true" />
                   Avvik fra tilgjengelighet godkjennes i neste steg.
                 </p>
@@ -547,10 +525,10 @@ const PublicationGate = ({
                   >
                     {planTransition === "publishing"
                       ? "Publiserer…"
-                      : publishScope === "partial"
-                        ? `Publiser til og med ${formatAccessibleDate(selectedThroughDate)}`
+                      : partialThroughDateOrNull
+                        ? `Publiser til og med ${formatAccessibleDate(partialThroughDateOrNull)}`
                         : deferUnplaced && unplacedCount > 0
-                          ? `Publiser delplan (${unplacedCount} senere)`
+                          ? `Publiser det som er klart (${unplacedCount} senere)`
                           : reviewWaiveActive
                             ? waiveReviewButtonLabel
                             : "Publiser intervjuplan"}
@@ -591,8 +569,8 @@ const PublicationGate = ({
           confirmLabel={
             planTransition === "publishing"
               ? "Publiserer…"
-              : publishScope === "partial"
-                ? `Publiser til og med ${formatAccessibleDate(selectedThroughDate)}`
+              : partialThroughDateOrNull
+                ? `Publiser til og med ${formatAccessibleDate(partialThroughDateOrNull)}`
                 : reviewWaiveActive
                   ? "Publiser uten kandidatkontroll"
                   : "Publiser intervjuplan"
@@ -603,8 +581,8 @@ const PublicationGate = ({
           tone={publishVisibility === "committee" ? "danger" : undefined}
         >
           <p className="m-0">
-            {publishScope === "partial"
-              ? `Intervjuer til og med ${formatAccessibleDate(selectedThroughDate)} blir synlige for komiteen. Resten av planen holdes skjult inntil du utvider den.`
+            {partialThroughDateOrNull
+              ? `Intervjuer til og med ${formatAccessibleDate(partialThroughDateOrNull)} blir synlige for komiteen. Resten av planen publiserer du når du er klar.`
               : "Hele planen blir synlig for komiteen."}{" "}
             {publishVisibility === "hidden"
               ? "Kandidatnavn forblir skjult."
@@ -615,7 +593,7 @@ const PublicationGate = ({
           {reviewWaiveActive && (
             <div
               data-cy="waive-review-confirmation"
-              className="mt-4 rounded-md border border-amber-200 bg-amber-50 px-3 py-3 text-ui text-amber-950"
+              className="mt-4 rounded-md border border-warning-border bg-warning-bg px-3 py-3 text-ui text-warning-text"
             >
               <strong className="block">
                 {waiveReviewTarget
@@ -628,8 +606,23 @@ const PublicationGate = ({
               </p>
             </div>
           )}
+          {deferUnplaced && (
+            <div
+              data-cy="defer-unplaced-confirmation"
+              className="mt-4 rounded-md border border-warning-border bg-warning-bg px-3 py-3 text-ui text-warning-text"
+            >
+              <strong className="block">
+                {unplacedCount} kandidat{unplacedCount === 1 ? "" : "er"} står
+                fortsatt uten intervju
+              </strong>
+              <p className="m-0 mt-1 text-detail leading-relaxed">
+                De planlegges når flere dager åpnes. Planutkastet viser hele
+                tiden hvem som venter.
+              </p>
+            </div>
+          )}
           {deviationReview?.requires_approval && (
-            <div className="mt-4 rounded-md border border-amber-200 bg-amber-50 px-3 py-3 text-ui text-amber-950">
+            <div className="mt-4 rounded-md border border-warning-border bg-warning-bg px-3 py-3 text-ui text-warning-text">
               <strong className="block">
                 Godkjenn {deviationReview.deviation_count} avvik fra oppgitt
                 tilgjengelighet

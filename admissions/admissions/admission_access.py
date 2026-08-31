@@ -32,7 +32,7 @@ def user_is_org_leadership(user):
 
 
 def user_is_admission_admin(admission, user):
-    """Any active member of an admin group, plus God users (constants.GOD_LEGO_IDS).
+    """Any active member of an admin group, plus God users (the GodUser table).
 
     All active members of an admin group are completely equal: they see all
     applications for the admission in admin_full mode, including priority_text.

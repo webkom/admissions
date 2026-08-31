@@ -132,7 +132,7 @@ const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
             </span>
           )}
           <div className="min-w-0 flex-1">
-            <h4 className="m-0 text-base font-bold text-text-primary">
+            <h4 className="m-0 text-title font-bold text-text-primary">
               {title}
             </h4>
             {children && (

@@ -5,11 +5,11 @@
 - **Admission**: one recruitment period. It defines the participating committees
   (`groups`) and the overseeing bodies (`admin_groups`). All active members of an
   admin group leaders and recruiters are admission administrators (they read
-  all applications and priority text). In addition, God users
-  (`constants.GOD_LEGO_IDS`) are
+  all applications and priority text). In addition, God users (rows in the
+  `GodUser` table) are
   admission-wide administrators for every admission.
 - **Roles in an admission**:
-  1. **God Users (`constants.GOD_LEGO_IDS`)**: Central org leadership. Admin for
+  1. **God Users (`GodUser` table)**: Central org leadership. Admin for
      all applications across all admissions (including priority text). Never operates
      committee interview schedules unless holding a committee recruiter role.
   2. **Admin Group Members (`admission.admin_groups`)**: All active members are
@@ -47,8 +47,9 @@
 ## Invariants
 
 - Admission-wide administration requires an active leader/recruiter membership
-  in one of the admission's admin groups, or a God-listed LEGO id
-  (`constants.GOD_LEGO_IDS`). Admin
+  in one of the admission's admin groups, or a God-listed LEGO id (a `GodUser`
+  row, managed by Webkom through `/api/manage/god-user/` - there is no
+  hardcoded allowlist). Admin
   groups do not manage committee interview schedules.
 - An OAuth membership refresh replaces the local membership snapshot atomically.
   Missing, malformed, or unknown membership data must fail closed rather than
@@ -59,11 +60,22 @@
 - Only someone the app has actually seen sign in can be required to answer.
   Publication waits on their availability or opt-out; a mirrored member who has
   never signed in is shown as awaiting but cannot hold the plan hostage.
-- Conflict-review filler names are drawn from a pool at least as wide as the
-  real applicant population, and from a cohort bounded to roughly the size of
-  the real candidate pool so fillers recur at the rate real candidates do. A
-  narrower pool identifies real applicants by elimination; an unbounded one
-  identifies them to any two interviewers who compare lists.
+- The conflict-review list is the complete set of candidates placed in the
+  draft, identical for every interviewer, and carries no filler names. Fillers
+  existed to disguise a sampled list, where holding a name was itself a signal;
+  a complete list has nothing to infer from, and a fake entry in one would be a
+  person who cannot be flagged and does not exist.
+- What an interviewer is *shown* and what publication *waits for* are separate
+  sets. Anyone may declare inhabilitet against any placed candidate, so the
+  solver can avoid a bad pairing rather than have it rejected afterwards; but a
+  publish is blocked only by an interviewer's own pairings and the swap
+  partners a repair could move onto them. Widening the first must never widen
+  the second, or extending the plan would hold a publish hostage to people
+  re-confirming candidates they were never assigned.
+- A declared inhabilitet is never silently deleted. Review saves may drop ids
+  that name nothing (a withdrawn application); they may not drop one that names
+  a real person, because the result is an inhabil interviewer quietly back on a
+  panel.
 - Committee access is the union of represented committees and ordinary active
   memberships whose candidate identities have been revealed.
 - Schedule responses omit rows outside the caller's scope entirely: rows past

@@ -30,7 +30,7 @@ const PublishedPlanNotice: React.FC<PublishedPlanNoticeProps> = ({
           <CalendarCheck size={iconSizes.feature} aria-hidden="true" />
         </span>
         <div>
-          <h2 className="m-0 text-sm font-bold text-text-primary">{title}</h2>
+          <h2 className="m-0 text-ui font-bold text-text-primary">{title}</h2>
           <p className="m-0 mt-0.5 text-ui text-text-muted">{description}</p>
         </div>
       </div>

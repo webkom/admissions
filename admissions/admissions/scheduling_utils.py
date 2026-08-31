@@ -343,8 +343,31 @@ def publication_withholds_rows(saved_schedule):
     return False
 
 
+def conflict_review_offered_scope(saved_schedule, user_id):
+    """The candidate ids one interviewer is shown and may flag.
+
+    The whole placed draft, so inhabilitet can be declared against anyone this
+    iteration might pair them with - the solver can then avoid the pairing
+    instead of having it rejected afterwards. Wider than
+    `conflict_review_scope`, which is what publication actually waits for.
+    """
+
+    from admissions.admissions.models import ConflictReviewList
+
+    row = (
+        ConflictReviewList.objects.filter(
+            saved_schedule=saved_schedule, interviewer_id=user_id
+        )
+        .order_by("-created_at")
+        .first()
+    )
+    if row is None:
+        return conflict_review_scope(saved_schedule, user_id)
+    return set(row.offered_candidate_ids)
+
+
 def conflict_review_scope(saved_schedule, user_id):
-    """The candidate ids one interviewer is asked to check.
+    """The candidate ids one interviewer must confirm before publication.
 
     Single definition on purpose: the names shown, the payload, the writable
     scope and the completeness check must all agree, or an interviewer is asked
@@ -495,51 +518,10 @@ def build_conflict_review_lists(saved_schedule, swap_size=5):
         )
     }
     block_by_minute = _block_index_by_minute(saved_schedule)
-    # A shared pool, not a fresh draw per interviewer: fillers recurring
-    # across different interviewers' lists is what makes them look like real
-    # candidate recurrence rather than a giveaway. Empty until a roster sync
-    # has actually populated DirectoryEntry (see the sync_directory_entries
-    # command) - no synthesised names, those would pad the count without
-    # providing any real cover.
-    # Deliberately admission-wide, not scoped to saved_schedule.group: a
-    # decoy must not be a real applicant to *any* committee in the
-    # admission, not just this one, or the padding gives away real
-    # recurrence patterns. Also exclude anyone in this committee (from both
-    # Membership and CommitteeRosterEntry) so members never see their own
-    # committee colleagues as fillers.
-    applicant_lego_ids = set(
-        UserApplication.objects.filter(admission=saved_schedule.admission)
-        .exclude(user__lego_id__isnull=True)
-        .values_list("user__lego_id", flat=True)
-    )
-    committee_users = LegoUser.objects.filter(
-        id__in=get_committee_interviewer_ids(saved_schedule.group)
-    )
-    committee_lego_ids = set(
-        committee_users.exclude(lego_id__isnull=True).values_list("lego_id", flat=True)
-    )
-    committee_usernames = set(
-        committee_users.exclude(username="").values_list("username", flat=True)
-    )
-    decoy_query = DirectoryEntry.objects.exclude(
-        lego_user_id__in=applicant_lego_ids | committee_lego_ids
-    )
-    if committee_usernames:
-        decoy_query = decoy_query.exclude(username__in=committee_usernames)
-
-    # Drawn once, then shared by every interviewer in this build. Sampling
-    # each list straight out of the full directory would defeat the point:
-    # with thousands of students to draw from, two interviewers comparing
-    # notes would find that every name they *both* hold is a real applicant
-    # and every name only one of them holds is a filler. Bounding the cohort
-    # to roughly the size of the real candidate pool makes fillers recur at
-    # about the rate real candidates do, so that comparison says nothing.
-    decoy_cohort = _decoy_cohort(
-        decoy_query,
-        max(swap_size, len(time_by_candidate)),
-        saved_schedule,
-    )
-
+    # No filler cohort is drawn any more: every interviewer is shown the whole
+    # placed draft, so there is no sampled list left to disguise. The
+    # `_decoy_cohort` helper and the `decoys` column stay in place, unused, so
+    # the mechanism can be reinstated if the list is ever narrowed again.
     admin_user_ids = set(
         Membership.objects.filter(
             group=saved_schedule.group,
@@ -566,10 +548,10 @@ def build_conflict_review_lists(saved_schedule, swap_size=5):
         own = {str(value) for value in own_ids}
 
         if interviewer_id in admin_user_id_strings:
-            # Admins manage panel swaps, replacements, and cover across the
-            # whole committee schedule. Give them all other scheduled candidates
-            # to review so manual swaps are always pre-checked for inhabilitet,
-            # with no decoy fillers needed.
+            # Admins manage panel swaps, replacements and cover across the
+            # whole schedule, so every placed candidate is a pairing they
+            # could create by hand - which makes the whole set theirs to
+            # *confirm*, not merely to be shown.
             swap = [
                 candidate_id
                 for candidate_id in time_by_candidate
@@ -628,24 +610,24 @@ def build_conflict_review_lists(saved_schedule, swap_size=5):
 
             candidates.sort()
             swap = [candidate_id for _, candidate_id in candidates[:swap_size]]
-            decoy_count = min(swap_size, len(decoy_cohort))
-            # A bare uuid4, the same shape as a real UserApplication pk - fillers
-            # are told apart by membership in this row's stored decoys, never by
-            # a visible format marker.
-            decoys = (
-                [
-                    {
-                        "token": str(uuid.uuid4()),
-                        "name": entry.full_name or entry.username,
-                    }
-                    for entry in random.sample(decoy_cohort, decoy_count)
-                ]
-                if decoy_count
-                else []
-            )
+            # No fillers. Everyone is now shown the whole placed draft
+            # (`pool_candidate_ids` below), and a complete, real list has
+            # nothing for padding to hide - a fake name in it would just be a
+            # person who cannot be flagged and does not exist.
+            decoys = []
+        # Every candidate placed in the draft, so inhabilitet can be declared
+        # against anyone this iteration might pair them with rather than only
+        # against the pairings that already happen to exist. Kept apart from
+        # own/swap because publication waits on those two alone.
+        pool = [
+            candidate_id
+            for candidate_id in time_by_candidate
+            if candidate_id not in own and candidate_id not in set(swap)
+        ]
         lists[interviewer_id] = {
             "own_candidate_ids": sorted(own),
             "swap_candidate_ids": swap,
+            "pool_candidate_ids": sorted(pool),
             "decoys": decoys,
         }
     return lists

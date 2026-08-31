@@ -245,7 +245,7 @@ const SlotPanelOverrideMenu: React.FC<SlotPanelOverrideMenuProps> = ({
         aria-expanded={open}
         title="Bytt intervjuer for dette tidspunktet"
         className={cn(
-          "group/btn inline-flex items-center gap-1.5 rounded px-2 py-1 text-sm font-medium transition-colors cursor-pointer",
+          "group/btn inline-flex items-center gap-1.5 rounded px-2 py-1 text-ui font-medium transition-colors cursor-pointer",
           open
             ? "bg-brand-soft text-brand ring-1 ring-brand-ring"
             : "text-text-muted/70 hover:bg-surface-subtle hover:text-text-primary",
@@ -273,7 +273,7 @@ const SlotPanelOverrideMenu: React.FC<SlotPanelOverrideMenuProps> = ({
           >
             {step === "select-member" ? (
               <div className="flex flex-col">
-                <div className="border-b border-border-soft bg-surface-subtle px-3 py-2 text-xs font-semibold text-text-muted">
+                <div className="border-b border-border-soft bg-surface-subtle px-3 py-2 text-label font-semibold text-text-muted">
                   Hvem skal byttes ut?
                 </div>
                 <ul
@@ -300,7 +300,7 @@ const SlotPanelOverrideMenu: React.FC<SlotPanelOverrideMenuProps> = ({
                           type="button"
                           role="option"
                           onClick={() => handleSelectMember(idx)}
-                          className="flex w-full cursor-pointer items-center justify-between gap-2 rounded-md px-2.5 py-2 text-left text-sm font-semibold text-text-primary transition-colors hover:bg-surface-subtle hover:text-brand"
+                          className="flex w-full cursor-pointer items-center justify-between gap-2 rounded-md px-2.5 py-2 text-left text-ui font-semibold text-text-primary transition-colors hover:bg-surface-subtle hover:text-brand"
                         >
                           <div className="flex min-w-0 items-center gap-1.5">
                             <span className="truncate">{member.name}</span>
@@ -310,7 +310,7 @@ const SlotPanelOverrideMenu: React.FC<SlotPanelOverrideMenuProps> = ({
                               </span>
                             )}
                             {hasAvailabilityIssue && !isConflicted && (
-                              <span className="flex-none rounded bg-amber-100 px-1.5 py-0.5 text-nano font-bold text-amber-900">
+                              <span className="flex-none rounded bg-warning-bgStrong px-1.5 py-0.5 text-nano font-bold text-warning-text">
                                 Utenfor tid
                               </span>
                             )}
@@ -338,14 +338,14 @@ const SlotPanelOverrideMenu: React.FC<SlotPanelOverrideMenuProps> = ({
                           setSelectedMemberIndex(null);
                           setQuery("");
                         }}
-                        className="inline-flex cursor-pointer items-center gap-0.5 rounded px-1.5 py-0.5 text-xs font-semibold text-text-muted transition-colors hover:bg-surface-base hover:text-text-primary"
+                        className="inline-flex cursor-pointer items-center gap-0.5 rounded px-1.5 py-0.5 text-label font-semibold text-text-muted transition-colors hover:bg-surface-base hover:text-text-primary"
                         title="Tilbake til panelmedlemmer"
                       >
                         <ArrowLeft size={iconSizes.tiny} aria-hidden="true" />
                         <span>Tilbake</span>
                       </button>
                     )}
-                    <span className="truncate text-xs font-semibold text-text-muted">
+                    <span className="truncate text-label font-semibold text-text-muted">
                       {selectedMember
                         ? `Bytt ${shortName(selectedMember.name)}:`
                         : "Velg erstatter:"}
@@ -377,7 +377,7 @@ const SlotPanelOverrideMenu: React.FC<SlotPanelOverrideMenuProps> = ({
                     onKeyDown={handleInputKeyDown}
                     placeholder="Søk erstatter…"
                     aria-label="Søk erstatter"
-                    className="w-full rounded-md border border-border-soft bg-surface-base px-2.5 py-1.5 text-sm font-semibold text-text-primary placeholder:font-normal placeholder:text-text-faded focus:border-brand-input focus:outline-none focus:ring-2 focus:ring-brand-ringSoft"
+                    className="w-full rounded-md border border-border-soft bg-surface-base px-2.5 py-1.5 text-ui font-semibold text-text-primary placeholder:font-normal placeholder:text-text-faded focus:border-brand-input focus:outline-none focus:ring-2 focus:ring-brand-ringSoft"
                   />
                 </div>
 
@@ -388,7 +388,7 @@ const SlotPanelOverrideMenu: React.FC<SlotPanelOverrideMenuProps> = ({
                 >
                   {filteredOptions.length === 0 ? (
                     <li role="none">
-                      <p className="m-0 px-2 py-3 text-center text-xs text-text-muted">
+                      <p className="m-0 px-2 py-3 text-center text-label text-text-muted">
                         Ingen treff
                       </p>
                     </li>
@@ -424,7 +424,7 @@ const SlotPanelOverrideMenu: React.FC<SlotPanelOverrideMenuProps> = ({
                               if (!option.disabled) setHighlightedIndex(index);
                             }}
                             className={cn(
-                              "flex w-full items-center justify-between gap-2 rounded-md px-2.5 py-2 text-left text-sm font-semibold transition-colors",
+                              "flex w-full items-center justify-between gap-2 rounded-md px-2.5 py-2 text-left text-ui font-semibold transition-colors",
                               option.disabled
                                 ? "cursor-not-allowed text-text-faded"
                                 : cn(

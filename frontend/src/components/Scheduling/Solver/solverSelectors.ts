@@ -539,6 +539,10 @@ export const deriveAvailableTimeOptions = (
 };
 
 export interface DayScopeBounds {
+  /** How many plannable days the committee has already been shown. 0 when
+   *  nothing is published. This is the publication cursor; `minDayCount`
+   *  below is the same fact expressed as a floor for the solver scope. */
+  publishedDayCount: number;
   /** Lowest day scope the solver may run at. The published prefix is a
    *  promise to the committee (those days are visible, invitations have gone
    *  out), so a re-solve can never pull the scope back past the last
@@ -583,6 +587,7 @@ export const deriveDayScopeBounds = ({
   });
 
   return {
+    publishedDayCount,
     minDayCount: Math.max(1, publishedDayCount),
     draftDayExtent,
   };

@@ -83,7 +83,7 @@ const PlanHealthModal = ({
         data-cy="plan-health-modal"
         className="max-h-modal w-full max-w-lg overflow-y-auto rounded-panel border border-border bg-surface-base p-5 shadow-modal focus:outline-none animate-fade-in"
       >
-        <h4 id={titleId} className="m-0 text-base font-bold text-text-primary">
+        <h4 id={titleId} className="m-0 text-title font-bold text-text-primary">
           {title}
         </h4>
         <p className="m-0 mt-2 text-ui text-text-muted">{intro}</p>
@@ -140,7 +140,7 @@ const PlanHealthModal = ({
           <button
             type="button"
             onClick={onClose}
-            className={`text-sm font-semibold text-text-muted hover:text-text-primary ${keyboardFocusRingClass}`}
+            className={`text-ui font-semibold text-text-muted hover:text-text-primary ${keyboardFocusRingClass}`}
           >
             Lukk
           </button>

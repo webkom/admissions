@@ -184,9 +184,10 @@ export const derivePlanDraftWorkflowState = ({
     };
   }
   if (unplaceableCount > 0) {
-    // A delplan is a legitimate state, not a blocker: under progressive
-    // publishing the remaining candidates are planned when more days open,
-    // and the partial plan can be published as it is.
+    // Not a blocker: the remaining candidates are planned when more days
+    // open, and what exists can be published as it stands. When days are
+    // still available, finishing the plan leads - publishing cannot be
+    // undone, so it should not be the path of least resistance.
     const filledPrefix =
       typeof filledDayCount === "number" && filledDayCount > 0
         ? `${filledDayCount} ${
@@ -196,10 +197,10 @@ export const derivePlanDraftWorkflowState = ({
     return {
       kind: "placements_missing",
       tone: "neutral",
-      title: `Delplan klar — ${candidateLabel(unplaceableCount)} planlegges senere`,
+      title: `${candidateLabel(unplaceableCount)} venter på plassering`,
       description: extendDayAvailable
-        ? `${filledPrefix}Publiser delplanen som den er, eller planlegg neste dag for å plassere resten.`
-        : `${filledPrefix}Alle planlagte dager er brukt. Publiser delplanen som den er, plasser de siste manuelt, eller utvid rammene med flere dager.`,
+        ? `${filledPrefix}Planlegg resten av dagene, eller publiser det som er klart nå.`
+        : `${filledPrefix}Alle planlagte dager er brukt. Publiser det som er klart, plasser de siste manuelt, eller åpne flere dager i Grunnlag.`,
     };
   }
   if (!publicationReady) {

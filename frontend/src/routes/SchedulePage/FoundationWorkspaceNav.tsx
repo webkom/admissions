@@ -115,7 +115,7 @@ const FoundationWorkspaceNav: React.FC<FoundationWorkspaceNavProps> = ({
             onKeyDown={handleKeyDown}
             data-cy={`foundation-tab-${item.key}`}
             className={cn(
-              "relative inline-flex h-10 shrink-0 items-center gap-1.5 border-b-2 border-transparent pb-2 text-sm font-semibold transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-focus",
+              "relative inline-flex h-10 shrink-0 items-center gap-1.5 border-b-2 border-transparent pb-2 text-ui font-semibold transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-focus",
               current
                 ? "border-brand text-brand"
                 : "text-text-muted hover:text-text-primary",
@@ -137,7 +137,7 @@ const FoundationWorkspaceNav: React.FC<FoundationWorkspaceNavProps> = ({
                   "rounded px-1.5 py-0.5 text-label font-semibold",
                   frameworkWarning === "Ugyldig"
                     ? "bg-danger-bg text-danger"
-                    : "bg-amber-100 text-amber-900",
+                    : "bg-warning-bgStrong text-warning-text",
                 )}
               >
                 {frameworkWarning}

@@ -126,7 +126,7 @@ ADMISSION_GROUP_CATEGORIES = (
         # group, and backup - which LEGO does type as a komite - does not
         # belong in a list of komite-opptak. Hovedstyret is deliberately not
         # here: its members hold no admission access, and central god access
-        # is handled by GOD_LEGO_IDS instead.
+        # is handled by the GodUser table instead.
         GROUP_CATEGORY_OTHER,
         ("Abakus-leder", "backup"),
     ),
@@ -189,11 +189,6 @@ def group_category(name):
 STAFF_LEADER_GROUPS = ["backup", "Abakus-leder", "RevyStyret"]
 """ Members of these groups with role leader attain the is_staff attribute and can manage admissions. Matched against the LEGO login payload's group names - no local Group row is needed. """
 
-# DEPRECATED: god-list is now DB-backed (admissions.admissions.models.GodUser).
-# The constant remains as the seed list for migration 0047_goduser and as
-# a test fixture. The runtime checks in admission_access.user_is_org_leadership
-# and oauth.update_custom_user_details consult the DB only.
-GOD_LEGO_IDS = [8810]
 WEBKOM_GROUPNAME = "Webkom"
 """ Group name of Webkom """
 

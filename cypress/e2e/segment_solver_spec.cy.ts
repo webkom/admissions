@@ -77,9 +77,13 @@ describe("segmented solving status", () => {
     });
     expect(extendable.kind).to.equal("placements_missing");
     expect(extendable.description).to.include("2 hele dager er planlagt");
-    expect(extendable.description).to.include(
-      "planlegg neste dag for å plassere resten",
+    // With days still to plan, finishing the plan leads the copy: publishing
+    // cannot be undone, so it must not read as the default.
+    expect(extendable.description).to.include("Planlegg resten av dagene");
+    expect(extendable.description.indexOf("Planlegg resten")).to.be.lessThan(
+      extendable.description.indexOf("publiser"),
     );
+    expect(extendable.title).to.not.include("Delplan");
   });
 
   it("switches to manual placement copy when the day scope is exhausted", () => {
@@ -90,6 +94,7 @@ describe("segmented solving status", () => {
     });
     expect(exhausted.kind).to.equal("placements_missing");
     expect(exhausted.description).to.include("plasser de siste manuelt");
+    expect(exhausted.description).to.include("Publiser det som er klart");
     // Without a filled-day count the copy omits the prefix entirely.
     expect(state({ unplaceableCount: 2 }).description).to.not.include(
       "er planlagt",

@@ -79,9 +79,9 @@ const renderTemplateWithTokens = (
 };
 
 const overlayTextClass =
-  "pointer-events-none absolute inset-0 z-0 m-0 overflow-hidden rounded-lg border border-border bg-surface-base px-3 py-2 font-mono text-sm leading-relaxed text-text-primary whitespace-pre-wrap break-words";
+  "pointer-events-none absolute inset-0 z-0 m-0 overflow-hidden rounded-lg border border-border bg-surface-base px-3 py-2 font-mono text-ui leading-relaxed text-text-primary whitespace-pre-wrap break-words";
 const textareaTextClass =
-  "relative z-10 box-border w-full resize-y rounded-lg border border-transparent bg-transparent px-3 py-2 font-mono text-sm leading-relaxed text-transparent caret-text-primary shadow-none focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-brand-ringSoft";
+  "relative z-10 box-border w-full resize-y rounded-lg border border-transparent bg-transparent px-3 py-2 font-mono text-ui leading-relaxed text-transparent caret-text-primary shadow-none focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-brand-ringSoft";
 
 const VariablePalette: React.FC<{
   onInsert: (token: string) => void;
@@ -211,7 +211,7 @@ const InterviewOutreachTemplateEditor: React.FC<{
       >
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-3">
-            <span className="text-sm font-semibold text-text-primary">
+            <span className="text-ui font-semibold text-text-primary">
               Meldingsmal
             </span>
             <span
@@ -304,7 +304,7 @@ const InterviewOutreachTemplateEditor: React.FC<{
           aria-label="Forhåndsvisning av SMS"
           className="flex flex-col items-stretch self-start pt-9 lg:pt-[60px]"
         >
-          <div className="rounded-2xl rounded-bl-sm bg-brand px-4 py-3 text-sm leading-relaxed text-white whitespace-pre-wrap">
+          <div className="rounded-2xl rounded-bl-sm bg-brand px-4 py-3 text-ui leading-relaxed text-white whitespace-pre-wrap">
             {renderedSmsBody}
           </div>
         </div>

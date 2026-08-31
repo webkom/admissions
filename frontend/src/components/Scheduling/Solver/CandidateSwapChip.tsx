@@ -56,11 +56,11 @@ const CandidateSwapChip = ({
   // highlights by default.
   const options = onUnassign
     ? [
-        ...swapOptions,
         {
           id: UNASSIGN_OPTION_ID,
-          name: `✕ Gjør luken ledig — ${item.candidate} venter på ny tid`,
+          name: `—`,
         },
+        ...swapOptions,
       ]
     : swapOptions;
 

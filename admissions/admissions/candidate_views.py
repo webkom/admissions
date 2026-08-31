@@ -1,3 +1,4 @@
+from django.db.models import Prefetch
 from django.shortcuts import get_object_or_404
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
@@ -14,6 +15,7 @@ from admissions.admissions.admission_access import (
 from admissions.admissions.authentication import SessionAuthentication
 from admissions.admissions.models import (
     Admission,
+    GroupApplication,
     NameVisibilityAuditEvent,
     SavedSchedule,
     UserApplication,
@@ -89,6 +91,28 @@ class InterviewCandidatesView(SchedulerFeatureGateMixin, APIView):
         applications = applications.select_related("user").order_by(
             "user__first_name", "user__last_name", "user__username"
         )
+        # Søknadstekst is opt-in rather than part of every response: it is the
+        # bulkiest and most sensitive field here, and the schedule page loads
+        # this endpoint on every visit while only the CSV export ever needs
+        # the text. Off by default, so nothing carries it into a browser that
+        # did not ask.
+        include_application_text = (
+            request.query_params.get("include_application_text") == "1"
+        )
+        if include_application_text and not is_interview_admin:
+            # Ordinary members never read application texts, published plan or
+            # not - a revealed name lets them greet the candidate, not read
+            # what they wrote.
+            return Response(status=status.HTTP_403_FORBIDDEN)
+        if include_application_text:
+            applications = applications.prefetch_related(
+                Prefetch(
+                    "group_applications",
+                    queryset=GroupApplication.objects.filter(group=group),
+                    to_attr="scoped_group_applications",
+                )
+            )
+
         if hide_identity:
             payload = []
         else:
@@ -97,11 +121,32 @@ class InterviewCandidatesView(SchedulerFeatureGateMixin, APIView):
                     "id": str(application.pk),
                     "name": application.user.get_full_name()
                     or application.user.username,
+                    **(
+                        {"application_text": self._scoped_application_text(application)}
+                        if include_application_text
+                        else {}
+                    ),
                 }
                 for application in applications
             ]
 
         return Response(payload, status=status.HTTP_200_OK)
+
+    @staticmethod
+    def _scoped_application_text(application):
+        """This committee's søknadstekst for one applicant.
+
+        Deliberately `GroupApplication.text` and never `UserApplication.text`:
+        the latter is the priority/comments text, which spans every committee
+        the person applied to and is admission-admin material. A committee
+        recruiter reading it would learn who else the candidate wants.
+        """
+        scoped = getattr(application, "scoped_group_applications", [])
+        return "\n\n".join(
+            group_application.text
+            for group_application in scoped
+            if group_application.text
+        )
 
 
 class NameVisibilityAuditView(SchedulerFeatureGateMixin, APIView):
