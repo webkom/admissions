@@ -306,6 +306,25 @@ const DistributedPlanView: React.FC<DistributedPlanViewProps> = ({
         : [],
     [dates, enabledSlots, savedSchedule],
   );
+  // Søknadstekst is fetched only once the export chooser is open, and only for
+  // someone who runs this committee - it is the heaviest and most sensitive
+  // thing this page can hold, and the plain CSV never needs it. Declared here,
+  // above the "no saved schedule" early return below, so the hook count does
+  // not change between renders (React #300).
+  const candidateTexts = useInterviewCandidateTexts(
+    admissionSlug,
+    groupId,
+    isAdmin && isExportChooserOpen,
+  );
+  const applicationTextById = useMemo(() => {
+    const byId = new Map<string, string>();
+    (candidateTexts.data ?? []).forEach((candidate) => {
+      if (candidate.application_text) {
+        byId.set(candidate.id, candidate.application_text);
+      }
+    });
+    return byId;
+  }, [candidateTexts.data]);
   const namesVisible = Boolean(
     savedSchedule &&
       candidateNamesAreVisible(savedSchedule, canToggleCandidateNames),
@@ -404,24 +423,6 @@ const DistributedPlanView: React.FC<DistributedPlanViewProps> = ({
       formatTimeLabel,
     });
   };
-
-  // Søknadstekst is fetched only once the export chooser is open, and only
-  // for someone who runs this committee - it is the heaviest and most
-  // sensitive thing this page can hold, and the plain CSV never needs it.
-  const candidateTexts = useInterviewCandidateTexts(
-    admissionSlug,
-    groupId,
-    isAdmin && isExportChooserOpen,
-  );
-  const applicationTextById = useMemo(() => {
-    const byId = new Map<string, string>();
-    (candidateTexts.data ?? []).forEach((candidate) => {
-      if (candidate.application_text) {
-        byId.set(candidate.id, candidate.application_text);
-      }
-    });
-    return byId;
-  }, [candidateTexts.data]);
 
   const handleExportCsvWithText = () => {
     exportVisibleScheduleCsv({

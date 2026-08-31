@@ -812,6 +812,20 @@ export default function SolverView({
     () => setDraftFocusRequestKey((request) => request + 1),
     [],
   );
+  // Days the draft actually places someone on - what separates "planned" from
+  // "still open" on the strip. Declared here, above the published-plan early
+  // return below, so publishing does not change the hook count between renders
+  // (React #300).
+  const filledDates = useMemo(() => {
+    const filled = new Set<string>();
+    draft.presentation.sortedSchedule.forEach((item) => {
+      if (!Number.isFinite(item.time)) return;
+      const { dayIndex } = decodeScheduleTime(item.time, sessionDuration);
+      const date = dates[dayIndex];
+      if (date) filled.add(date);
+    });
+    return filled;
+  }, [dates, draft.presentation.sortedSchedule, sessionDuration]);
   const closeRegeneration = () => {
     setRegenerationOpen(false);
     focusDraftHeading();
@@ -1057,19 +1071,6 @@ export default function SolverView({
 
     return renderDraftCanvas();
   };
-
-  // Days the draft actually places someone on - what separates "planned" from
-  // "still open" on the strip.
-  const filledDates = useMemo(() => {
-    const filled = new Set<string>();
-    draft.presentation.sortedSchedule.forEach((item) => {
-      if (!Number.isFinite(item.time)) return;
-      const { dayIndex } = decodeScheduleTime(item.time, sessionDuration);
-      const date = dates[dayIndex];
-      if (date) filled.add(date);
-    });
-    return filled;
-  }, [dates, draft.presentation.sortedSchedule, sessionDuration]);
 
   // The one picture of the period, shown in every state rather than only after
   // a partial publish: it is the map of where planning and publication have
