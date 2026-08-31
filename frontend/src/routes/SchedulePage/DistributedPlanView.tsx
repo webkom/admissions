@@ -43,6 +43,7 @@ import {
 import {
   exportAnonymizedScheduleIcs,
   exportVisibleScheduleCsv,
+  type ScheduleCsvFields,
 } from "./distributedPlanExports";
 import InterviewOutreachTemplateEditor from "./InterviewOutreachTemplateEditor";
 import {
@@ -416,20 +417,14 @@ const DistributedPlanView: React.FC<DistributedPlanViewProps> = ({
     });
   };
 
-  const handleExportCsv = () => {
+  const handleExportCsv = (fields: ScheduleCsvFields) => {
     exportVisibleScheduleCsv({
       entries: displayEntries,
-      candidateNamesVisible: namesVisible,
+      fields,
       formatTimeLabel,
-    });
-  };
-
-  const handleExportCsvWithText = () => {
-    exportVisibleScheduleCsv({
-      entries: displayEntries,
-      candidateNamesVisible: namesVisible,
-      formatTimeLabel,
-      applicationTextById,
+      applicationTextById: fields.applicationText
+        ? applicationTextById
+        : undefined,
     });
   };
 
@@ -583,12 +578,9 @@ const DistributedPlanView: React.FC<DistributedPlanViewProps> = ({
             showCsv={isAdmin}
             onExportIcs={handleExportIcs}
             onExportCsv={handleExportCsv}
-            onExportCsvWithText={
-              isAdmin && !candidateTexts.isError
-                ? handleExportCsvWithText
-                : undefined
-            }
-            csvWithTextLoading={candidateTexts.isLoading}
+            csvTextAvailable={isAdmin && !candidateTexts.isError}
+            csvTextLoading={candidateTexts.isLoading}
+            namesShownByDefault={namesVisible}
             onClose={() => setIsExportChooserOpen(false)}
           />
         )}

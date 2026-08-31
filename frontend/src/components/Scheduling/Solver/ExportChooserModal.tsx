@@ -1,16 +1,33 @@
-import React, { useEffect, useRef } from "react";
-import { Calendar, CalendarDays, FileSpreadsheet } from "lucide-react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
+import {
+  Calendar,
+  CalendarDays,
+  Download,
+  FileSpreadsheet,
+} from "lucide-react";
 import { useFocusTrap } from "../ConfirmDialog";
 import { iconSizes } from "src/styles/designTokens";
-import { keyboardFocusRingClass } from "../ui";
+import {
+  actionButtonBase,
+  actionButtonPrimary,
+  keyboardFocusRingClass,
+} from "../ui";
+import { MultiSelect } from "src/components/ui";
+import cn from "src/utils/cn";
+import type { ScheduleCsvFields } from "src/routes/SchedulePage/distributedPlanExports";
 
 interface ExportChooserModalProps {
   onExportIcs: (target: "apple" | "google") => void;
-  onExportCsv: () => void;
-  /** CSV plus this committee's søknadstekst. Undefined where it is not
-   *  offered (member view, or the texts could not be loaded). */
-  onExportCsvWithText?: () => void;
-  csvWithTextLoading?: boolean;
+  /** Download the CSV with the chosen columns. */
+  onExportCsv: (fields: ScheduleCsvFields) => void;
+  /** True where this committee's søknadstekst can be included (opptaksansvarlig,
+   *  full plan). Off hides that column entirely. */
+  csvTextAvailable?: boolean;
+  /** The texts are still being fetched; the column is offered but disabled. */
+  csvTextLoading?: boolean;
+  /** Whether candidate names are shown on the plan - the name column defaults
+   *  to matching that. */
+  namesShownByDefault?: boolean;
   onClose: () => void;
   showCsv?: boolean;
   /**
@@ -44,11 +61,19 @@ const ExportOption = ({ icon, title, hint, onClick }: ExportOptionProps) => (
   </button>
 );
 
+const CSV_FIELD_KEYS = [
+  "showNames",
+  "panel",
+  "status",
+  "applicationText",
+] as const;
+
 const ExportChooserModal = ({
   onExportIcs,
   onExportCsv,
-  onExportCsvWithText,
-  csvWithTextLoading = false,
+  csvTextAvailable = false,
+  csvTextLoading = false,
+  namesShownByDefault = false,
   onClose,
   showCsv = true,
   restrictToMyInterviews = false,
@@ -56,6 +81,37 @@ const ExportChooserModal = ({
   const dialogRef = useRef<HTMLDivElement>(null);
 
   useFocusTrap(dialogRef, true);
+
+  const [selectedFields, setSelectedFields] = useState<string[]>(() => [
+    ...(namesShownByDefault ? ["showNames"] : []),
+    "panel",
+    "status",
+  ]);
+
+  const fieldOptions = useMemo(
+    () => [
+      { value: "showNames", label: "Kandidatnavn" },
+      { value: "panel", label: "Panel" },
+      { value: "status", label: "Intervjustatus" },
+      ...(csvTextAvailable
+        ? [
+            {
+              value: "applicationText",
+              label: csvTextLoading ? "Søknadstekst (hentes…)" : "Søknadstekst",
+              disabled: csvTextLoading,
+            },
+          ]
+        : []),
+    ],
+    [csvTextAvailable, csvTextLoading],
+  );
+
+  const fields: ScheduleCsvFields = {
+    showNames: selectedFields.includes("showNames"),
+    panel: selectedFields.includes("panel"),
+    status: selectedFields.includes("status"),
+    applicationText: selectedFields.includes("applicationText"),
+  };
 
   useEffect(() => {
     const handleKey = (event: KeyboardEvent) => {
@@ -109,77 +165,92 @@ const ExportChooserModal = ({
           </p>
         )}
         <div className="mt-4 grid gap-2">
-          {restrictToMyInterviews ? (
+          <ExportOption
+            icon={<Calendar size={iconSizes.standard} />}
+            title="Apple Calendar / Outlook"
+            hint={
+              restrictToMyInterviews
+                ? "Åpner .ics-filen med dine intervjuer"
+                : "Åpner .ics-filen direkte"
+            }
+            onClick={() => {
+              onExportIcs("apple");
+              onClose();
+            }}
+          />
+          <ExportOption
+            icon={<CalendarDays size={iconSizes.standard} />}
+            title="Google Calendar"
+            hint={
+              restrictToMyInterviews
+                ? "Importer dine intervjuer via innstillinger"
+                : "Importer .ics-filen via innstillinger"
+            }
+            onClick={() => {
+              onExportIcs("google");
+              onClose();
+            }}
+          />
+
+          {showCsv && !restrictToMyInterviews && (
             <>
-              <ExportOption
-                icon={<Calendar size={iconSizes.standard} />}
-                title="Apple Calendar / Outlook"
-                hint="Åpner .ics-filen med dine intervjuer"
-                onClick={() => {
-                  onExportIcs("apple");
-                  onClose();
-                }}
-              />
-              <ExportOption
-                icon={<CalendarDays size={iconSizes.standard} />}
-                title="Google Calendar"
-                hint="Importer dine intervjuer via innstillinger"
-                onClick={() => {
-                  onExportIcs("google");
-                  onClose();
-                }}
-              />
-            </>
-          ) : (
-            <>
-              <ExportOption
-                icon={<Calendar size={iconSizes.standard} />}
-                title="Apple Calendar / Outlook"
-                hint="Åpner .ics-filen direkte"
-                onClick={() => {
-                  onExportIcs("apple");
-                  onClose();
-                }}
-              />
-              <ExportOption
-                icon={<CalendarDays size={iconSizes.standard} />}
-                title="Google Calendar"
-                hint="Importer .ics-filen via innstillinger"
-                onClick={() => {
-                  onExportIcs("google");
-                  onClose();
-                }}
-              />
-              {showCsv && (
-                <>
-                  <div className="my-1 h-px bg-border-faint" />
-                  <ExportOption
-                    icon={<FileSpreadsheet size={iconSizes.standard} />}
-                    title="CSV-fil"
-                    hint="For Excel eller Google Sheets"
-                    onClick={() => {
-                      onExportCsv();
-                      onClose();
-                    }}
-                  />
-                  {onExportCsvWithText && (
-                    <ExportOption
-                      icon={<FileSpreadsheet size={iconSizes.standard} />}
-                      title="CSV-fil med søknadstekst"
-                      hint={
-                        csvWithTextLoading
-                          ? "Henter søknadstekstene…"
-                          : "Hele søknaden til denne komiteen, én rad per intervju"
-                      }
-                      onClick={() => {
-                        if (csvWithTextLoading) return;
-                        onExportCsvWithText();
-                        onClose();
-                      }}
-                    />
+              <div className="my-1 h-px bg-border-faint" />
+              <div className="rounded-lg border border-border-soft bg-surface-base px-4 py-3">
+                <div className="flex items-center gap-3">
+                  <span className="flex h-9 w-9 flex-none items-center justify-center rounded-lg bg-surface-muted text-text-muted">
+                    <FileSpreadsheet size={iconSizes.standard} />
+                  </span>
+                  <span className="min-w-0">
+                    <span className="block text-ui font-bold text-text-primary">
+                      CSV-fil
+                    </span>
+                    <span className="block text-detail text-text-muted">
+                      For Excel eller Google Sheets
+                    </span>
+                  </span>
+                </div>
+                <label className="mt-3 block text-detail font-semibold text-text-subtle">
+                  Kolonner
+                </label>
+                <MultiSelect
+                  className="mt-1"
+                  values={selectedFields}
+                  onChange={(next) =>
+                    setSelectedFields(
+                      CSV_FIELD_KEYS.filter((key) => next.includes(key)),
+                    )
+                  }
+                  options={fieldOptions}
+                  getSelectionLabel={(selected) =>
+                    selected.length === 0
+                      ? "Bare tidspunkt og kandidat"
+                      : selected.map((option) => option.label).join(", ")
+                  }
+                  selectAllLabel="Velg alle"
+                  clearAllLabel="Fjern alle"
+                  aria-label="Velg kolonner for CSV"
+                />
+                <p className="m-0 mt-2 text-detail leading-relaxed text-text-muted">
+                  {fields.showNames
+                    ? "Kandidatnavn tas med."
+                    : "Kandidatene anonymiseres som «Kandidat 1», «Kandidat 2» …"}
+                </p>
+                <button
+                  type="button"
+                  onClick={() => {
+                    onExportCsv(fields);
+                    onClose();
+                  }}
+                  className={cn(
+                    actionButtonBase,
+                    actionButtonPrimary,
+                    "mt-3 w-full justify-center",
                   )}
-                </>
-              )}
+                >
+                  <Download size={iconSizes.small} aria-hidden="true" />
+                  Last ned CSV
+                </button>
+              </div>
             </>
           )}
           <button

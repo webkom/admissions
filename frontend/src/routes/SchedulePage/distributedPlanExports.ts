@@ -77,27 +77,37 @@ export const buildAnonymizedScheduleIcs = ({
   );
 };
 
+/** Which optional columns a schedule CSV export should carry. `Tidspunkt` and
+ *  `Kandidat` are always present; `showNames` decides whether the candidate
+ *  column holds real names or anonymised "Kandidat N" labels. */
+export interface ScheduleCsvFields {
+  showNames: boolean;
+  panel: boolean;
+  status: boolean;
+  applicationText: boolean;
+}
+
 export const exportVisibleScheduleCsv = ({
   entries,
-  candidateNamesVisible,
+  fields,
   formatTimeLabel,
   applicationTextById,
 }: {
   entries: DistributedScheduleEntry[];
-  candidateNamesVisible: boolean;
+  fields: ScheduleCsvFields;
   formatTimeLabel: (time: number) => string;
   applicationTextById?: ReadonlyMap<string, string>;
 }) => {
   const csv = buildVisibleScheduleCsv({
     entries,
-    candidateNamesVisible,
+    fields,
     formatTimeLabel,
     applicationTextById,
   });
   download(
     ["\ufeff" + csv],
     "text/csv;charset=utf-8",
-    applicationTextById
+    fields.applicationText
       ? "intervjuplan-med-soknadstekst.csv"
       : "intervjuplan.csv",
   );
@@ -105,35 +115,40 @@ export const exportVisibleScheduleCsv = ({
 
 export const buildVisibleScheduleCsv = ({
   entries,
-  candidateNamesVisible,
+  fields,
   formatTimeLabel,
   applicationTextById,
 }: {
   entries: DistributedScheduleEntry[];
-  candidateNamesVisible: boolean;
+  fields: ScheduleCsvFields;
   formatTimeLabel: (time: number) => string;
-  /** Søknadstekst per candidate id. Present only for the with-text export;
-   *  passing it adds the column. */
+  /** Søknadstekst per candidate id, for the `applicationText` column. */
   applicationTextById?: ReadonlyMap<string, string>;
 }) => {
-  const withText = applicationTextById !== undefined;
+  const withText = fields.applicationText && applicationTextById !== undefined;
   const rows: string[][] = [
     [
       "Tidspunkt",
       "Kandidat",
-      "Panel",
-      "Intervjustatus",
+      ...(fields.panel ? ["Panel"] : []),
+      ...(fields.status ? ["Intervjustatus"] : []),
       ...(withText ? ["Søknadstekst"] : []),
     ],
   ];
-  entries.forEach(({ item }) => {
+  entries.forEach(({ item }, index) => {
     rows.push([
       formatTimeLabel(item.time),
-      candidateNamesVisible ? item.candidate : "—",
-      item.panel.map((member) => member.name).join("; "),
-      item.interview_status
-        ? getInterviewStatusLabel(item.interview_status)
-        : "Ikke registrert",
+      fields.showNames ? item.candidate : `Kandidat ${index + 1}`,
+      ...(fields.panel
+        ? [item.panel.map((member) => member.name).join("; ")]
+        : []),
+      ...(fields.status
+        ? [
+            item.interview_status
+              ? getInterviewStatusLabel(item.interview_status)
+              : "Ikke registrert",
+          ]
+        : []),
       ...(withText
         ? [
             (item.candidate_id &&
