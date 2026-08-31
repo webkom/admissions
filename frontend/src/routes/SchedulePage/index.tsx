@@ -637,6 +637,7 @@ const LoadedScheduleView: React.FC<LoadedScheduleViewProps> = ({
     planTransition,
     planTransitionError,
     scheduleFieldError,
+    reviewRefusalActive,
     setNameVisibility: handleSetNameVisibility,
     replacePanelMember: handleReplacePanelMember,
     updateOutreachTemplates: handleUpdateOutreachTemplates,
@@ -1232,6 +1233,7 @@ const LoadedScheduleView: React.FC<LoadedScheduleViewProps> = ({
               planTransition={planTransition}
               planTransitionError={planTransitionError}
               scheduleFieldError={scheduleFieldError}
+              reviewRefusalActive={reviewRefusalActive}
               onOpenDraft={() => handleSectionChange("solver")}
               onOpenOwnReview={openConflictReview}
               onOpenConflictsOverview={() => setConflictsOverviewOpen(true)}

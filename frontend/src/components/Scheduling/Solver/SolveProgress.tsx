@@ -53,15 +53,18 @@ const SolveProgress = ({
       : internalElapsedMs;
   const waitingForWorker = jobStatus === "PENDING";
   const estimatedMs = estimatedSeconds * 1000;
-  const progressTargetMs = estimatedMs * 1.35;
+  // The bar eases along a decelerating curve instead of a straight ramp: the
+  // solver reaches a usable plan in the first few seconds and then spends the
+  // rest of its budget improving it - a real run averages ~2 minutes - so a
+  // bar that sprints to "almost done" and then sits there reads as a frozen
+  // solve. This approaches, but never reaches, ~96% no matter how long the
+  // run takes, so it is always visibly creeping forward. The time constant is
+  // floored at 70s so it is still mid-climb at the two-minute mark and only
+  // nears the top if the solve runs its full budget.
+  const progressTimeConstantMs = Math.max(estimatedMs, 70_000);
   const progressPercent = waitingForWorker
     ? 12
-    : Math.min(
-        97,
-        elapsedMs <= progressTargetMs
-          ? (elapsedMs / Math.max(progressTargetMs, 1)) * 92
-          : 92 + Math.min(5, ((elapsedMs - progressTargetMs) / 1000) * 0.08),
-      );
+    : 8 + 88 * (1 - Math.exp(-elapsedMs / progressTimeConstantMs));
   const previewPlaced = preview?.schedule.length ?? 0;
   const previewUnplaced = preview?.unplaceable?.length ?? 0;
   const progressMessage = waitingForWorker

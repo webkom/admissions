@@ -1126,7 +1126,7 @@ class InterviewAvailabilityViewTestCase(APITestCase):
         )
         self.assertEqual(on_behalf.status_code, status.HTTP_403_FORBIDDEN)
 
-    def test_an_unknown_conflict_id_is_rejected_without_writing(self):
+    def test_an_unknown_conflict_id_is_dropped_not_written(self):
         self.client.force_authenticate(user=self.user)
 
         res = self.client.post(
@@ -1135,13 +1135,15 @@ class InterviewAvailabilityViewTestCase(APITestCase):
             format="json",
         )
 
-        self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertIn("conflicts", res.data)
+        self.assertEqual(res.status_code, status.HTTP_200_OK, res.data)
+        self.assertEqual(res.data["conflicts"], [])
         self.assertFalse(
             InterviewAvailability.objects.filter(
                 admission=self.admission,
                 user=self.user,
-            ).exists()
+            )
+            .exclude(conflicts=[])
+            .exists()
         )
 
     def test_get_returns_saved_conflicts_for_participant(self):

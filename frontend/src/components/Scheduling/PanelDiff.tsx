@@ -66,16 +66,29 @@ export const PanelDiff: React.FC<PanelDiffProps> = ({
   }
 
   if (view.kind === "standard") {
+    // When the reader sits in the block's standard panel, the one fact they
+    // came for is "I'm on this one" - so highlight their own name as a pill
+    // rather than burying it under a "Standardpanel · deg" note.
+    if (view.isCurrentUser && view.currentUserName) {
+      return (
+        <span
+          title={`Standardpanel: ${view.memberNames.join(", ")}`}
+          className={cn(
+            diffPillClass,
+            "border-brand-border bg-brand-soft font-bold text-brand",
+          )}
+        >
+          {view.currentUserName}
+          <span className="sr-only"> (deg) – standardpanel</span>
+        </span>
+      );
+    }
     return (
       <span
         title={`Standardpanel: ${view.memberNames.join(", ")}`}
-        className={cn(
-          "text-ui",
-          view.isCurrentUser ? "font-semibold text-brand" : "text-text-muted",
-        )}
+        className="text-ui text-text-muted"
       >
         Standardpanel
-        {view.isCurrentUser && " · deg"}
       </span>
     );
   }

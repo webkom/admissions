@@ -51,6 +51,7 @@
     "cypress": "15.18.1",
     "eslint": "^8.57.0",
     "eslint-plugin-react": "^7.35.0",
+    "eslint-plugin-react-hooks": "^4.6.2",
     "knip": "5.88.1",
     "postcss": "8.5.18",
     "prettier": "3.3.3",

@@ -43,6 +43,7 @@ import {
 import {
   exportAnonymizedScheduleIcs,
   exportVisibleScheduleCsv,
+  type ScheduleCsvFields,
 } from "./distributedPlanExports";
 import InterviewOutreachTemplateEditor from "./InterviewOutreachTemplateEditor";
 import {
@@ -306,6 +307,25 @@ const DistributedPlanView: React.FC<DistributedPlanViewProps> = ({
         : [],
     [dates, enabledSlots, savedSchedule],
   );
+  // Søknadstekst is fetched only once the export chooser is open, and only for
+  // someone who runs this committee - it is the heaviest and most sensitive
+  // thing this page can hold, and the plain CSV never needs it. Declared here,
+  // above the "no saved schedule" early return below, so the hook count does
+  // not change between renders (React #300).
+  const candidateTexts = useInterviewCandidateTexts(
+    admissionSlug,
+    groupId,
+    isAdmin && isExportChooserOpen,
+  );
+  const applicationTextById = useMemo(() => {
+    const byId = new Map<string, string>();
+    (candidateTexts.data ?? []).forEach((candidate) => {
+      if (candidate.application_text) {
+        byId.set(candidate.id, candidate.application_text);
+      }
+    });
+    return byId;
+  }, [candidateTexts.data]);
   const namesVisible = Boolean(
     savedSchedule &&
       candidateNamesAreVisible(savedSchedule, canToggleCandidateNames),
@@ -397,38 +417,14 @@ const DistributedPlanView: React.FC<DistributedPlanViewProps> = ({
     });
   };
 
-  const handleExportCsv = () => {
+  const handleExportCsv = (fields: ScheduleCsvFields) => {
     exportVisibleScheduleCsv({
       entries: displayEntries,
-      candidateNamesVisible: namesVisible,
+      fields,
       formatTimeLabel,
-    });
-  };
-
-  // Søknadstekst is fetched only once the export chooser is open, and only
-  // for someone who runs this committee - it is the heaviest and most
-  // sensitive thing this page can hold, and the plain CSV never needs it.
-  const candidateTexts = useInterviewCandidateTexts(
-    admissionSlug,
-    groupId,
-    isAdmin && isExportChooserOpen,
-  );
-  const applicationTextById = useMemo(() => {
-    const byId = new Map<string, string>();
-    (candidateTexts.data ?? []).forEach((candidate) => {
-      if (candidate.application_text) {
-        byId.set(candidate.id, candidate.application_text);
-      }
-    });
-    return byId;
-  }, [candidateTexts.data]);
-
-  const handleExportCsvWithText = () => {
-    exportVisibleScheduleCsv({
-      entries: displayEntries,
-      candidateNamesVisible: namesVisible,
-      formatTimeLabel,
-      applicationTextById,
+      applicationTextById: fields.applicationText
+        ? applicationTextById
+        : undefined,
     });
   };
 
@@ -582,12 +578,9 @@ const DistributedPlanView: React.FC<DistributedPlanViewProps> = ({
             showCsv={isAdmin}
             onExportIcs={handleExportIcs}
             onExportCsv={handleExportCsv}
-            onExportCsvWithText={
-              isAdmin && !candidateTexts.isError
-                ? handleExportCsvWithText
-                : undefined
-            }
-            csvWithTextLoading={candidateTexts.isLoading}
+            csvTextAvailable={isAdmin && !candidateTexts.isError}
+            csvTextLoading={candidateTexts.isLoading}
+            namesShownByDefault={namesVisible}
             onClose={() => setIsExportChooserOpen(false)}
           />
         )}

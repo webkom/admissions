@@ -333,10 +333,13 @@ export const progressMessageFor = (
   elapsedMs: number,
   estimateMs: number,
 ): string => {
-  if (elapsedMs > estimateMs) {
+  // "Taking longer than expected" needs a real elapsed threshold behind it -
+  // a normal run is two minutes and can use the full budget, so this only
+  // fires when the solve is genuinely near its ceiling.
+  if (elapsedMs > Math.max(estimateMs * 1.5, 200_000)) {
     return "Tar lengre tid enn ventet — solveren prøver fortsatt…";
   }
-  const step = Math.max(1500, estimateMs / PROGRESS_MESSAGES.length);
+  const step = Math.max(15_000, estimateMs / PROGRESS_MESSAGES.length);
   const index = Math.min(
     PROGRESS_MESSAGES.length - 1,
     Math.floor(elapsedMs / step),
@@ -352,13 +355,17 @@ export const estimateSolverSeconds = (
   prioritizeContinuity: boolean,
   hardCap: number,
 ): number => {
-  if (candidates === 0 || interviewers === 0 || slots === 0) return 2;
+  if (candidates === 0 || interviewers === 0 || slots === 0) return 30;
   const vars = candidates * interviewers * slots;
-  const baseSeconds = Math.max(1, vars / 3500);
+  const baseSeconds = Math.max(1, vars / 2200);
   const continuityMult = prioritizeContinuity ? 1.6 : 1;
   const panelMult = 1 + Math.max(0, panelSize - 3) * 0.25;
   const estimate = baseSeconds * continuityMult * panelMult;
-  return Math.min(hardCap, Math.max(2, Math.round(estimate * 1.4) * 2));
+  // Floor at 30s: a real run averages ~2 minutes because the solver keeps
+  // improving a plan long past the point it first has one, so even a small
+  // instance is nowhere near "done" in a few seconds - a low estimate is
+  // what made the progress bar look broken.
+  return Math.min(hardCap, Math.max(30, Math.round(estimate * 1.4) * 2));
 };
 
 /**

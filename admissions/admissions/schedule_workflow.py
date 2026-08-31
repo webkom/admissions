@@ -64,6 +64,12 @@ class ScheduleInputError(Exception):
         self.errors = errors
 
 
+# Publishing was refused only because some interviewers have not finished their
+# kandidatkontroll. Machine-readable because the client treats it as a prompt
+# (offer the waiver), not as an error.
+CONFLICT_REVIEW_REQUIRED_CODE = "conflict_review_required"
+
+
 @dataclass(frozen=True)
 class ScheduleUpdateResult:
     admission: Admission
@@ -780,6 +786,35 @@ def _resolve_schedule_state(
         data.get("is_distributed") is True or bool(data.get("distributed_through"))
     ) and bool(schedule)
 
+    # Days marked finished. A day only stays "completed" while it is still a
+    # framework day and still holds an interview - a day that lost its last
+    # interview (or fell outside a shrunk period) is no longer meaningfully
+    # done, and keeping it would silently freeze slots the admin can no
+    # longer see. Not a framework change: it never touches
+    # availability_generation or clears the plan.
+    if "completed_days" in data:
+        requested_completed = {
+            value.isoformat() if hasattr(value, "isoformat") else str(value)
+            for value in data["completed_days"]
+        }
+    else:
+        requested_completed = {
+            str(value) for value in (existing.completed_days if existing else [])
+        }
+    scheduled_days = {
+        (
+            configuration["start_date"] + timedelta(days=int(item["time"]) // (24 * 60))
+        ).isoformat()
+        for item in schedule
+        if isinstance(item, dict) and isinstance(item.get("time"), int)
+    }
+    framework_days = set()
+    current_day = configuration["start_date"]
+    while current_day <= configuration["effective_end_date"]:
+        framework_days.add(current_day.isoformat())
+        current_day += timedelta(days=1)
+    completed_days = sorted(requested_completed & scheduled_days & framework_days)
+
     return {
         "grid_changed": grid_changed,
         "added_slots": added_slots,
@@ -788,6 +823,7 @@ def _resolve_schedule_state(
         "availability_generation": availability_generation,
         "should_clear_plan": should_clear_plan,
         "schedule": schedule,
+        "completed_days": completed_days,
         "is_distributed": is_distributed,
         "distributed_through": distributed_through,
         "conflict_review_open": conflict_review_open,
@@ -837,11 +873,17 @@ def _ensure_conflict_review_ready_for_publish(admission, group, data, schedule):
     )
     raise ScheduleInputError(
         {
+            # The client turns this particular refusal into the "publiser uten
+            # kandidatkontroll" prompt rather than an error banner, so it needs
+            # to recognise it without parsing the Norwegian sentence below -
+            # reword that and a string match would silently start showing this
+            # routine gate as a failure again.
+            "code": CONFLICT_REVIEW_REQUIRED_CODE,
             "schedule": [
                 f"{incomplete_count} intervjuere må kontrollere "
                 f"{readiness['missing_pair_count']} foreslåtte "
                 f"kandidater før planen publiseres: {named}{suffix}."
-            ]
+            ],
         }
     )
 
@@ -1138,6 +1180,7 @@ def _persist_schedule(
             "resolved_blocks": layout["resolved_blocks"],
             "layout_version": layout["layout_version"],
             "slot_overrides": layout["slot_overrides"],
+            "completed_days": state["completed_days"],
             "availability_generation": state["availability_generation"],
             "panel_size": panel_size,
             "solver_options": solver_options,

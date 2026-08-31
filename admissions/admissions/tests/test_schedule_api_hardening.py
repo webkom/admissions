@@ -125,6 +125,42 @@ class SavedSchedulePublishSemanticsTestCase(APITestCase):
             reviewed_candidate_ids=[str(application.pk) for application in applications]
         )
 
+    def test_completed_days_round_trip_and_never_touch_availability(self):
+        saved = self._create_saved(
+            is_distributed=False,
+            enabled_slots=["2026-04-20|540", "2026-04-21|540"],
+        )
+        generation_before = saved.availability_generation
+
+        res = self.client.post(
+            self.url,
+            {"completed_days": ["2026-04-20"]},
+            format="json",
+        )
+
+        self.assertEqual(res.status_code, status.HTTP_200_OK, res.data)
+        saved.refresh_from_db()
+        self.assertEqual(saved.completed_days, ["2026-04-20"])
+        # Marking a day finished is not a framework change.
+        self.assertEqual(saved.availability_generation, generation_before)
+
+    def test_completed_day_without_an_interview_is_dropped(self):
+        saved = self._create_saved(
+            is_distributed=False,
+            enabled_slots=["2026-04-20|540", "2026-04-21|540"],
+        )
+
+        # 2026-04-21 has no interview in the schedule, so it cannot be "done".
+        res = self.client.post(
+            self.url,
+            {"completed_days": ["2026-04-20", "2026-04-21"]},
+            format="json",
+        )
+
+        self.assertEqual(res.status_code, status.HTTP_200_OK, res.data)
+        saved.refresh_from_db()
+        self.assertEqual(saved.completed_days, ["2026-04-20"])
+
     def test_row_edit_survives_a_roster_that_shrank_under_the_plan(self):
         """Editing a row must not be blocked because fewer people are
         participating than the plan's panel size.
@@ -870,6 +906,11 @@ class SavedSchedulePublishSemanticsTestCase(APITestCase):
         self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertIn("schedule", res.data)
         self.assertIn("kontrollere", res.data["schedule"][0])
+        # The client renders this refusal as the "publiser uten
+        # kandidatkontroll" prompt rather than an error, and picks it out by
+        # this code - reword the sentence above and the code must still say
+        # what kind of refusal this is.
+        self.assertEqual(res.data["code"], "conflict_review_required")
         self.assertFalse(
             SavedSchedule.objects.get(admission=self.admission).is_distributed
         )
@@ -2346,6 +2387,41 @@ class InterviewAvailabilityHardeningTestCase(APITestCase):
         availability.refresh_from_db()
         self.assertEqual(availability.conflicts, [str(self.application.pk)])
 
+    def test_a_phantom_id_never_seen_before_does_not_wedge_the_review(self):
+        """The reported bug: the browser cached the availability GET, the plan
+        re-solved and regenerated the review lists, and the cached
+        proposed_candidate_ids still carried a candidate id that is now in no
+        list at all. Submitted in both `conflicts` and `reviewed_candidate_ids`
+        alongside a real attestation, it must not 400 the whole save with
+        "Ukjent kandidat" - it is dropped, and the real data lands."""
+        self._open_conflict_review()
+        InterviewAvailability.objects.create(
+            admission=self.admission,
+            group=self.committee_group,
+            user=self.member,
+            slots=["2026-04-21|540"],
+        )
+        self.client.force_authenticate(user=self.member)
+        phantom = "0aac87c4-6207-4aaa-9e3b-858890212899"
+
+        res = self.client.post(
+            self.url,
+            {
+                "conflicts": [phantom],
+                "reviewed_candidate_ids": [str(self.application.pk), phantom],
+            },
+            format="json",
+        )
+
+        self.assertEqual(res.status_code, status.HTTP_200_OK, res.data)
+        self.assertNotIn("Ukjent kandidat", str(res.data))
+        stored = InterviewAvailability.objects.get(
+            admission=self.admission, group=self.committee_group, user=self.member
+        )
+        self.assertEqual(stored.reviewed_candidate_ids, [str(self.application.pk)])
+        self.assertNotIn(phantom, stored.conflicts)
+        self.assertNotIn(phantom, stored.reviewed_candidate_ids)
+
     def test_stale_reviewed_id_is_pruned_on_next_save(self):
         """A name the user once checked must stay checked, but the pool can
         shrink - and once it does, an old attestation would block every
@@ -2496,8 +2572,11 @@ class InterviewAvailabilityHardeningTestCase(APITestCase):
 
     def test_member_can_review_own_scope_but_not_outside_it(self):
         """A member confirms their own review (their review scope) but can
-        never reference candidates outside it - the candidate pool stays
-        empty and an out-of-scope id is rejected as unknown."""
+        never record anything against a candidate outside it - the candidate
+        pool stays empty and an out-of-scope id is dropped, not persisted.
+
+        The boundary is unchanged from when this was a 400; only the mechanism
+        moved from rejecting the save to dropping the id from it."""
         other_group = Group.objects.create(name="Andre", lego_id=630)
         self.admission.groups.add(other_group)
         other_user = LegoUser.objects.create(username="other-review", lego_id=631)
@@ -2562,13 +2641,15 @@ class InterviewAvailabilityHardeningTestCase(APITestCase):
         self.assertEqual(candidates_res.status_code, status.HTTP_200_OK)
         self.assertEqual(candidates_res.data, [])
         self.assertEqual(own_review.status_code, status.HTTP_200_OK)
-        self.assertEqual(outside_review.status_code, status.HTTP_400_BAD_REQUEST)
-        # The out-of-scope candidate is rejected as unknown (the conflicts
-        # field is validated first, so that is where it lands).
-        error_text = str(outside_review.data)
-        self.assertTrue(
-            "reviewed_candidate_ids" in error_text or "conflicts" in error_text
+        # The out-of-scope references are dropped, not rejected - the save goes
+        # through and the in-scope attestation sticks.
+        self.assertEqual(outside_review.status_code, status.HTTP_200_OK)
+        stored = InterviewAvailability.objects.get(
+            admission=self.admission, group=self.committee_group, user=self.member
         )
+        self.assertNotIn(str(other_application.pk), stored.conflicts)
+        self.assertNotIn(str(other_application.pk), stored.reviewed_candidate_ids)
+        self.assertIn(str(self.application.pk), stored.reviewed_candidate_ids)
         self.assertEqual(on_behalf.status_code, status.HTTP_403_FORBIDDEN)
 
     def test_draft_review_preserves_conflicts_outside_the_proposal_scope(self):
@@ -2674,7 +2755,15 @@ class InterviewAvailabilityHardeningTestCase(APITestCase):
         self.assertEqual(me["proposed_candidate_ids"], [])
         self.assertEqual(me["affected_assignment_count"], 0)
         self.assertFalse(me["conflict_review_complete"])
-        self.assertEqual(review_res.status_code, status.HTTP_400_BAD_REQUEST)
+        # The out-of-scope candidate is dropped rather than 400-ing the save;
+        # the in-scope committee candidate still lands.
+        self.assertEqual(review_res.status_code, status.HTTP_200_OK, review_res.data)
+        stored = InterviewAvailability.objects.get(
+            admission=self.admission,
+            group=self.committee_group,
+            user=self.recruiter,
+        )
+        self.assertNotIn(str(other_application.pk), stored.reviewed_candidate_ids)
 
     def test_unassigned_new_candidate_does_not_invalidate_proposal_review(self):
         self._open_conflict_review()
@@ -2731,7 +2820,10 @@ class InterviewAvailabilityHardeningTestCase(APITestCase):
             {str(self.application.pk), str(new_application.pk)},
         )
 
-    def test_legacy_real_candidate_conflict_id_is_rejected(self):
+    def test_legacy_real_candidate_conflict_id_is_dropped(self):
+        """A malformed legacy id (not a UUID, not a real application) is
+        dropped, not rejected - the persistence path would prune it anyway,
+        and a 400 only wedges the review."""
         self._create_saved_schedule(name_visibility="committee")
         self.client.force_authenticate(user=self.recruiter)
 
@@ -2741,8 +2833,8 @@ class InterviewAvailabilityHardeningTestCase(APITestCase):
             format="json",
         )
 
-        self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertIn("conflicts", res.data)
+        self.assertEqual(res.status_code, status.HTTP_200_OK, res.data)
+        self.assertEqual(res.data["conflicts"], [])
 
     def test_admin_cannot_save_conflicts_for_unrepresented_committee(self):
         """Admin group members do not operate committee availability: an admin
@@ -2769,7 +2861,10 @@ class InterviewAvailabilityHardeningTestCase(APITestCase):
         self.assertEqual(res.status_code, status.HTTP_200_OK)
         self.assertEqual(res.data["conflicts"], [str(self.application.pk)])
 
-    def test_recruiter_cannot_save_conflict_for_an_unrepresented_candidate(self):
+    def test_recruiter_conflict_for_an_unrepresented_candidate_is_not_recorded(self):
+        """A recruiter for this committee cannot record an inhabilitet against
+        a candidate who only applied elsewhere - the id is dropped, so the
+        save succeeds but nothing crosses the committee boundary."""
         other_group = Group.objects.create(name="Annen komite", lego_id=626)
         self.admission.groups.add(other_group)
         other_candidate = LegoUser.objects.create(
@@ -2791,8 +2886,16 @@ class InterviewAvailabilityHardeningTestCase(APITestCase):
             format="json",
         )
 
-        self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertIn("conflicts", res.data)
+        self.assertEqual(res.status_code, status.HTTP_200_OK, res.data)
+        self.assertEqual(res.data["conflicts"], [])
+        self.assertFalse(
+            InterviewAvailability.objects.filter(
+                admission=self.admission,
+                group=self.committee_group,
+                user=self.recruiter,
+                conflicts__contains=[str(other_application.pk)],
+            ).exists()
+        )
 
     def test_recruiter_sees_only_represented_group_availability(self):
         other_group = Group.objects.create(name="Annen komite", lego_id=628)
@@ -5405,6 +5508,46 @@ class CanonicalSolverInputTestCase(APITestCase):
         )
 
         self.assertEqual(payload["interviewers"][0]["biased"], [])
+
+    def test_a_completed_day_only_contributes_its_locked_slot_times(self):
+        """A day marked finished keeps its locked interviews but withholds its
+        open slots, so a later solve cannot backfill it after a removal."""
+        SavedSchedule.objects.filter(admission=self.admission).update(
+            start_date="2026-04-20",
+            end_date="2026-04-21",
+            enabled_slots=[
+                "2026-04-20|540",
+                "2026-04-20|600",
+                "2026-04-21|540",
+                "2026-04-21|600",
+            ],
+            resolved_blocks=[],
+            completed_days=["2026-04-20"],
+        )
+        saved_schedule = SavedSchedule.objects.get(admission=self.admission)
+
+        payload = canonicalize_solver_payload(
+            self.admission,
+            saved_schedule,
+            {
+                "candidates": [{"id": str(self.application.pk)}],
+                "interviewers": [{"id": str(self.admin.pk)}],
+                "panel_size": 1,
+                "options": {},
+                "locked_assignments": [
+                    {
+                        "candidate_id": str(self.application.pk),
+                        "time": 540,
+                        "panel": [{"id": str(self.admin.pk), "name": "x"}],
+                    }
+                ],
+            },
+            self.admin,
+        )
+
+        # 540 survives (a locked interview sits there); 600 on the completed
+        # day is gone; both of the next day's slots stay.
+        self.assertEqual(payload["all_slots"], [540, 1980, 2040])
 
     def test_review_scope_is_not_enforced_without_locked_assignments(self):
         """A fresh solve has nothing reviewed yet, so the review-scope

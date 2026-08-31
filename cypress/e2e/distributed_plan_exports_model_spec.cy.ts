@@ -1,6 +1,7 @@
 import {
   buildAnonymizedScheduleIcs,
   buildVisibleScheduleCsv,
+  type ScheduleCsvFields,
 } from "../../frontend/src/routes/SchedulePage/distributedPlanExports";
 import type { ScheduleItem } from "../../frontend/src/types";
 
@@ -16,6 +17,16 @@ const privateSchedule: ScheduleItem[] = [
   },
 ];
 
+const fields = (
+  overrides: Partial<ScheduleCsvFields> = {},
+): ScheduleCsvFields => ({
+  showNames: true,
+  panel: true,
+  status: true,
+  applicationText: false,
+  ...overrides,
+});
+
 describe("distributed plan export disclosure", () => {
   it("keeps candidate identity and contact data out of calendar exports", () => {
     const ics = buildAnonymizedScheduleIcs({
@@ -30,34 +41,67 @@ describe("distributed plan export disclosure", () => {
     expect(ics).not.to.contain("+47 400 00 000");
   });
 
-  it("includes candidate names in CSV only when disclosure is enabled", () => {
+  it("includes candidate names in CSV only when the name column is picked", () => {
     const entries = [{ item: privateSchedule[0], scheduleIndex: 0 }];
     const hidden = buildVisibleScheduleCsv({
       entries,
-      candidateNamesVisible: false,
+      fields: fields({ showNames: false }),
       formatTimeLabel: () => "Mandag 09:00",
     });
     const visible = buildVisibleScheduleCsv({
       entries,
-      candidateNamesVisible: true,
+      fields: fields({ showNames: true }),
       formatTimeLabel: () => "Mandag 09:00",
     });
 
-    expect(hidden).to.contain('"Mandag 09:00","—"');
+    expect(hidden).to.contain('"Mandag 09:00","Kandidat 1"');
     expect(hidden).not.to.contain("Svært Hemmelig");
     expect(visible).to.contain("Svært Hemmelig");
   });
 
-  it("adds søknadstekst only when the with-text export asks for it", () => {
+  it("gives one anonymised label per person, not per row", () => {
+    const twice = [
+      { item: privateSchedule[0], scheduleIndex: 0 },
+      {
+        item: { ...privateSchedule[0], time: 600 },
+        scheduleIndex: 1,
+      },
+    ];
+
+    const csv = buildVisibleScheduleCsv({
+      entries: twice,
+      fields: fields({ showNames: false }),
+      formatTimeLabel: (time) => `Mandag ${time}`,
+    });
+
+    // The same candidate on two rows is one "Kandidat 1" both times - a
+    // per-row counter would invent a second person in the scrubbed plan.
+    expect(csv).to.contain('"Mandag 540","Kandidat 1"');
+    expect(csv).to.contain('"Mandag 600","Kandidat 1"');
+    expect(csv).not.to.contain("Kandidat 2");
+  });
+
+  it("drops the panel and status columns when they are not picked", () => {
+    const csv = buildVisibleScheduleCsv({
+      entries: [{ item: privateSchedule[0], scheduleIndex: 0 }],
+      fields: fields({ panel: false, status: false }),
+      formatTimeLabel: () => "Mandag 09:00",
+    });
+
+    expect(csv.split("\n")[0]).to.equal('"Tidspunkt","Kandidat"');
+    expect(csv).not.to.contain("Ada Intervjuer");
+  });
+
+  it("adds søknadstekst only when the column is picked and a map is supplied", () => {
     const entries = [{ item: privateSchedule[0], scheduleIndex: 0 }];
     const plain = buildVisibleScheduleCsv({
       entries,
-      candidateNamesVisible: true,
+      fields: fields(),
       formatTimeLabel: () => "Mandag 09:00",
     });
     const withText = buildVisibleScheduleCsv({
       entries,
-      candidateNamesVisible: true,
+      fields: fields({ applicationText: true }),
       formatTimeLabel: () => "Mandag 09:00",
       applicationTextById: new Map([
         ["candidate-secret-id", "Jeg vil gjerne bli med fordi…"],
@@ -76,7 +120,7 @@ describe("distributed plan export disclosure", () => {
     // A withheld or absent text must not shift the columns underneath it.
     const csv = buildVisibleScheduleCsv({
       entries: [{ item: privateSchedule[0], scheduleIndex: 0 }],
-      candidateNamesVisible: true,
+      fields: fields({ applicationText: true }),
       formatTimeLabel: () => "Mandag 09:00",
       applicationTextById: new Map(),
     });
@@ -90,7 +134,7 @@ describe("distributed plan export disclosure", () => {
     // input: a leading = or + must not execute on open.
     const csv = buildVisibleScheduleCsv({
       entries: [{ item: privateSchedule[0], scheduleIndex: 0 }],
-      candidateNamesVisible: true,
+      fields: fields({ applicationText: true }),
       formatTimeLabel: () => "Mandag 09:00",
       applicationTextById: new Map([
         ["candidate-secret-id", '=HYPERLINK("http://evil","click")'],
@@ -103,7 +147,7 @@ describe("distributed plan export disclosure", () => {
   it("omits the internal booking type from the CSV", () => {
     const csv = buildVisibleScheduleCsv({
       entries: [{ item: privateSchedule[0], scheduleIndex: 0 }],
-      candidateNamesVisible: true,
+      fields: fields(),
       formatTimeLabel: () => "Mandag 09:00",
     });
 
