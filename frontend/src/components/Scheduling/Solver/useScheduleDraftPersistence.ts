@@ -69,7 +69,8 @@ interface PendingDraft {
     completed_days: string[];
     panel_size: number;
     solver_options: SolverOptions;
-    is_distributed: false;
+    is_distributed?: false;
+    distributed_through?: string;
   };
 }
 
@@ -272,11 +273,16 @@ export const useScheduleDraftPersistence = ({
       }
       return;
     }
+    // A published plan is drafted on, not blocked: the working copy and the
+    // committee's copy are separate now (SavedSchedule.published_schedule),
+    // so autosaving a draft over a published plan no longer changes what
+    // anyone else sees. It stays that way only because the payload below
+    // preserves distributed_through and never sends
+    // commit_published_snapshot - the commit is the explicit "Lagre".
     const persistenceUnavailable =
       !hasLocalDraft ||
       loading ||
       remoteRevisionChanged ||
-      savedSchedule?.is_distributed ||
       schedule.length === 0;
     if (persistenceUnavailable) {
       pendingRef.current = null;
@@ -348,7 +354,13 @@ export const useScheduleDraftPersistence = ({
         completed_days: config.completedDays,
         panel_size: config.panelSize,
         solver_options: config.solverOptions,
-        is_distributed: false,
+        // Never `is_distributed: false` on a published plan - a draft save
+        // must not withdraw the plan from the committee. Echoing the current
+        // boundary keeps it exactly where it is; with no boundary there is
+        // nothing published and the old literal is still correct.
+        ...(savedSchedule?.distributed_through
+          ? { distributed_through: savedSchedule.distributed_through }
+          : { is_distributed: false as const }),
       },
     };
     failedRef.current = null;
@@ -379,7 +391,7 @@ export const useScheduleDraftPersistence = ({
     loading,
     remoteRevisionChanged,
     savePendingDrafts,
-    savedSchedule?.is_distributed,
+    savedSchedule?.distributed_through,
     schedule,
     solveTick,
     syntheticInput,

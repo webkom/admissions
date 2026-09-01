@@ -640,6 +640,7 @@ const LoadedScheduleView: React.FC<LoadedScheduleViewProps> = ({
     planTransitionError,
     scheduleFieldError,
     reviewRefusalActive,
+    commitPublishedSnapshot: handleCommitPublishedSnapshot,
     setNameVisibility: handleSetNameVisibility,
     replacePanelMember: handleReplacePanelMember,
     updateOutreachTemplates: handleUpdateOutreachTemplates,
@@ -1146,6 +1147,9 @@ const LoadedScheduleView: React.FC<LoadedScheduleViewProps> = ({
                 onOpenConflictReview={openConflictReview}
                 conflictReviewReachable={conflictReviewReachable}
                 onOpenPlan={() => handleSectionChange("plan")}
+                onCommitPublishedSnapshot={
+                  canManageSchedule ? handleCommitPublishedSnapshot : undefined
+                }
                 onPublishThrough={
                   canManageSchedule
                     ? (date) => {
@@ -1212,6 +1216,7 @@ const LoadedScheduleView: React.FC<LoadedScheduleViewProps> = ({
               onToggleLock={handleToggleLock}
               onSetBookingSource={handleSetBookingSource}
               onUnlock={handleUnlockSchedule}
+              onCommitPublishedSnapshot={handleCommitPublishedSnapshot}
               onUnlocked={openProposalForEditing}
               onExtendDistributedThrough={handleExtendDistributedThrough}
               planTransition={planTransition}

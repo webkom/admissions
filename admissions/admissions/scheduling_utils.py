@@ -300,6 +300,12 @@ def published_candidate_ids(saved_schedule):
 
     Must agree with the row filter (SavedScheduleSerializer's
     publication_boundary): withheld rows mean withheld identities.
+
+    Read from the committed snapshot, never the admin's working copy, and
+    deliberately with no fallback to it: this answers "whose name may this
+    member see", so reading a draft would disclose a candidate the admin has
+    only provisionally placed. A published plan always has a snapshot -
+    publishing commits one, and migration 0056 seeded the existing ones.
     """
 
     if saved_schedule is None or saved_schedule.distributed_through is None:
@@ -309,7 +315,7 @@ def published_candidate_ids(saved_schedule):
     if start_date is None:
         return set()
     published = set()
-    for entry in saved_schedule.schedule or []:
+    for entry in saved_schedule.published_schedule or []:
         if not isinstance(entry, dict):
             continue
         time_value = entry.get("time")
@@ -326,7 +332,10 @@ def publication_withholds_rows(saved_schedule):
     """Whether distributed_through leaves scheduled rows unpublished.
 
     Decided by the schedule's content, not by comparing boundaries: an empty
-    or legacy plan has no full boundary to compare against.
+    or legacy plan has no full boundary to compare against. Reads the
+    committed snapshot for the same reason published_candidate_ids does -
+    the two decide one member's scope together and must agree on which copy
+    of the plan they are describing.
     """
 
     if saved_schedule is None or saved_schedule.distributed_through is None:
@@ -335,7 +344,7 @@ def publication_withholds_rows(saved_schedule):
     boundary = _as_date(saved_schedule.distributed_through)
     if start_date is None:
         return False
-    for entry in saved_schedule.schedule or []:
+    for entry in saved_schedule.published_schedule or []:
         if not isinstance(entry, dict) or not isinstance(entry.get("time"), int):
             continue
         if start_date + timedelta(days=entry["time"] // (24 * 60)) > boundary:

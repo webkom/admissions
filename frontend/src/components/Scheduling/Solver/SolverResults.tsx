@@ -35,7 +35,6 @@ import ConfirmDialog from "../ConfirmDialog";
 import type {
   Candidate,
   Interviewer,
-  ScheduleItem,
   SchedulePanelMember,
   SavedSchedule,
 } from "../types";
@@ -299,34 +298,19 @@ const SolverResults = ({
   // The recruiter's draft is always editable - there is no preview mode to
   // leave first, and no side-by-side panel that makes it read-only.
   // `backgroundMode` governs chrome (autofocus, header actions, save footer),
-  // not permission. The only immutable rows are the ones the committee has
-  // already been shown: a published interview is a commitment - it is visible
-  // to the committee and the candidate has usually been invited - so it holds
-  // until the whole plan is unlocked.
+  // not permission. Released rows are editable too: the committee reads the
+  // committed `published_schedule` snapshot, not this working copy, so an
+  // edit here changes nothing they see until "Lagre" commits it - and that
+  // commit runs its own inhabilitetssjekk gate. Freezing released rows (the
+  // pre-snapshot behaviour) made "Rediger" on a fully published plan a
+  // read-only table - the exact flow the snapshot split exists to enable.
   const canEditDraft = true;
-  const distributedThrough = savedSchedule?.is_distributed
-    ? (savedSchedule.distributed_through ?? null)
-    : null;
-  const isPublishedTime = useCallback(
-    (time: number) => {
-      if (!distributedThrough || !Number.isFinite(time)) return false;
-      const { dayIndex } = decodeScheduleTime(time, sessionDuration);
-      const date = dates[dayIndex];
-      return Boolean(date && date <= distributedThrough);
-    },
-    [dates, distributedThrough, sessionDuration],
-  );
-  const isPublishedRow = useCallback(
-    (item: ScheduleItem) => isPublishedTime(item.time),
-    [isPublishedTime],
-  );
-  /** Row-level gate for the handlers, which address rows by index. */
+  /** Row-level gate for the handlers, which address rows by index: the row
+   *  must still exist. */
   const canEditRowAt = useCallback(
-    (scheduleIndex: number) => {
-      const item = presentation.sortedEntries[scheduleIndex]?.item;
-      return item !== undefined && !isPublishedRow(item);
-    },
-    [isPublishedRow, presentation.sortedEntries],
+    (scheduleIndex: number) =>
+      presentation.sortedEntries[scheduleIndex] !== undefined,
+    [presentation.sortedEntries],
   );
   // Times hosting more than one candidate are joint interviews (one shared
   // panel meeting two candidates).
@@ -603,11 +587,7 @@ const SolverResults = ({
     time: number,
     event: React.DragEvent<HTMLElement>,
   ) => {
-    if (
-      !canEditDraft ||
-      isPublishedTime(time) ||
-      draggedListScheduleIndex === null
-    ) {
+    if (!canEditDraft || draggedListScheduleIndex === null) {
       return;
     }
     event.preventDefault();
@@ -629,7 +609,7 @@ const SolverResults = ({
     time: number,
     event: React.DragEvent<HTMLElement>,
   ) => {
-    if (!canEditDraft || isPublishedTime(time)) return;
+    if (!canEditDraft) return;
     event.preventDefault();
     const parsedIndex = Number(event.dataTransfer.getData("text/plain"));
     const sourceIndex = Number.isInteger(parsedIndex)
@@ -650,7 +630,6 @@ const SolverResults = ({
   const handleEmptySlotClick = (time: number) => {
     if (
       !canEditDraft ||
-      isPublishedTime(time) ||
       selectedListScheduleIndex === null ||
       !canEditRowAt(selectedListScheduleIndex)
     ) {
@@ -683,7 +662,7 @@ const SolverResults = ({
     candidateName: string;
     time: number;
   }) => {
-    if (!canEditDraft || isPublishedTime(args.time)) return;
+    if (!canEditDraft) return;
     draft.assignUnplacedCandidate(args);
   };
 
@@ -1471,7 +1450,6 @@ const SolverResults = ({
                   sessionDuration={sessionDuration}
                   panelSize={panelSize}
                   canEditDraft={canEditDraft}
-                  isPublishedRow={isPublishedRow}
                   currentUserName={currentUserName}
                   jointTimes={jointTimes}
                   selectedDayFilter={selectedDayFilter}

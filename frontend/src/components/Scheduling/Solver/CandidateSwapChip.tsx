@@ -39,10 +39,11 @@ const CandidateSwapChip = ({
   conflict,
 }: CandidateSwapChipProps) => {
   const swapOptions = targets.map((target) => {
-    const prefix = target.isConflictFree ? "✓ " : "⚠️ ";
+    // Enabled/disabled styling carries the conflict state on its own - the
+    // old ✓/⚠️ prefixes duplicated it in every label.
     const statusNote = target.status === "confirmed" ? " (Bekreftet)" : "";
     const dayNote = target.isSameDay ? " (i dag)" : "";
-    const label = `${prefix}${target.name} — ${formatTimeLabel(target.time)}${statusNote || dayNote}`;
+    const label = `${target.name} — ${formatTimeLabel(target.time)}${statusNote || dayNote}`;
     return {
       id: String(target.scheduleIndex),
       name: label,

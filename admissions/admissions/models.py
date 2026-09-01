@@ -321,6 +321,19 @@ class SavedSchedule(models.Model):
     availability_generation = models.PositiveIntegerField(default=1)
     panel_size = models.PositiveSmallIntegerField(null=True, blank=True)
     solver_options = models.JSONField(null=True, blank=True)
+    # What the committee actually reads: a snapshot of `schedule` taken the
+    # last time the admin committed one, NOT the live working copy above.
+    #
+    # The two are separate so an admin can unlock a published plan and
+    # re-solve it without the committee either losing the plan or watching a
+    # half-finished draft churn underneath them - they keep seeing the last
+    # committed state until the admin saves. `schedule` is the admin's
+    # working copy; everything member-facing reads this.
+    #
+    # Kept in step by _persist_schedule: a publish, a boundary move, or an
+    # explicit commit (`commit_published_snapshot`) copies `schedule` here.
+    # An ordinary draft save deliberately does not.
+    published_schedule = models.JSONField(default=list, blank=True)
     # null = nothing published. A date = rows on or before that day are
     # published; the whole plan is the special case where this lands on (or
     # past) the last scheduled day. Write here, never to is_distributed

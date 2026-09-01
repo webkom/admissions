@@ -192,7 +192,17 @@ export const deriveSchedulePresentation = (
   };
 };
 
-const buildInterviewerDistribution = (
+/**
+ * Interviews per person, plus the block/rest and availability-deviation
+ * counts the Belastning view reports on.
+ *
+ * Exported because the published plan needs the same numbers as the draft:
+ * it has a saved schedule rather than a SolveResponse, so it cannot go
+ * through `deriveSchedulePresentation`, but the workload it shows must be
+ * computed identically or the two views would disagree about how loaded
+ * the same person is.
+ */
+export const buildInterviewerDistribution = (
   interviewers: Interviewer[],
   schedule: ScheduleItem[],
   availabilityStatusFor: (

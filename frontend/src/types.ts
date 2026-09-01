@@ -285,6 +285,12 @@ export interface SavedSchedule {
   /** Framework days ("YYYY-MM-DD") the admin marked finished: their placed
    *  interviews stay, their open slots are withheld from every later solve. */
   completed_days: string[];
+  /** What the committee currently reads - the last committed snapshot, not
+   *  this object's `schedule`, which is the admin's working copy. The two
+   *  differ exactly while an admin has unsaved edits to a published plan.
+   *  Served only to interview admins; everyone else receives the snapshot
+   *  as their `schedule` and never sees both. */
+  published_schedule?: ScheduleItem[];
   availability_generation: number;
   layout_capabilities: ScheduleLayoutCapabilities;
   panel_size?: number | null;
