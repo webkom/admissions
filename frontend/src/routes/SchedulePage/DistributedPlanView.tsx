@@ -27,6 +27,7 @@ import {
   Interviewer,
   NameVisibility,
   SavedSchedule,
+  ScheduleItem,
 } from "../../types";
 import {
   decodeScheduleTime,
@@ -441,7 +442,9 @@ const DistributedPlanView: React.FC<DistributedPlanViewProps> = ({
   // the committee does not need a re-commit for. Only plan content counts:
   // which candidate sits where, at what time, with which panel members.
   const hasUnsavedPlanChanges = useMemo(
-    () => planContentDiffers(savedSchedule),
+    () =>
+      Boolean(savedSchedule?.distributed_through) &&
+      planContentDiffers(savedSchedule?.schedule, savedSchedule?.published_schedule),
     [savedSchedule],
   );
 
