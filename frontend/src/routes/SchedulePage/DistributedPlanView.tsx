@@ -5,7 +5,9 @@ import {
   Download,
   Pencil,
   Save,
+  Search,
   Unlock,
+  X,
 } from "lucide-react";
 import {
   Chip,
@@ -21,7 +23,6 @@ import {
 import ConfirmDialog from "src/components/Scheduling/ConfirmDialog";
 import ExportChooserModal from "src/components/Scheduling/Solver/ExportChooserModal";
 import { useInterviewCandidateTexts } from "src/query/hooks";
-import PlanDayStrip from "src/components/Scheduling/Solver/PlanDayStrip";
 import {
   Candidate,
   Interviewer,
@@ -196,6 +197,7 @@ const DistributedPlanView: React.FC<DistributedPlanViewProps> = ({
   const [selectedStatusFilter, setSelectedStatusFilter] = useState<
     string | null
   >(null);
+  const [planSearch, setPlanSearch] = useState("");
   const [isUpdatingNames, setIsUpdatingNames] = useState(false);
   const [isExportChooserOpen, setIsExportChooserOpen] = useState(false);
   const [isConfirmingShowNames, setIsConfirmingShowNames] = useState(false);
@@ -287,6 +289,12 @@ const DistributedPlanView: React.FC<DistributedPlanViewProps> = ({
     () => selectConflictImpacts(sortedEntries, conflictSet, lookups),
     [conflictSet, lookups, sortedEntries],
   );
+  // Declared before the search-filtered memo below: the search matches
+  // candidate names only while they are visible to this reader.
+  const namesVisible = Boolean(
+    savedSchedule &&
+      candidateNamesAreVisible(savedSchedule, canToggleCandidateNames),
+  );
   // Belastning on the published plan. Computed over the whole saved schedule,
   // never the filtered view: "how loaded is this person" is a fact about the
   // plan, and answering it from whatever the date/mine filters happen to show
@@ -349,6 +357,7 @@ const DistributedPlanView: React.FC<DistributedPlanViewProps> = ({
     return counts;
   }, [isAdmin, sortedEntries]);
 
+  const planSearchQuery = planSearch.trim().toLowerCase();
   const filteredDisplayEntries = useMemo(() => {
     return displayEntries.filter((entry) => {
       if (selectedDateFilter) {
@@ -362,6 +371,20 @@ const DistributedPlanView: React.FC<DistributedPlanViewProps> = ({
         const s = entry.item.interview_status ?? "not_invited";
         if (s !== selectedStatusFilter) return false;
       }
+      if (planSearchQuery) {
+        // Panel (interviewer) names are always searchable - they are
+        // committee members. Candidate names only count while they are
+        // visible to this reader: a plan with hidden names must not become
+        // searchable by name, or the search bar would leak exactly what
+        // the visibility setting is hiding.
+        const panelHit = entry.item.panel.some((member) =>
+          member.name.toLowerCase().includes(planSearchQuery),
+        );
+        const candidateHit =
+          namesVisible &&
+          entry.item.candidate.toLowerCase().includes(planSearchQuery);
+        if (!panelHit && !candidateHit) return false;
+      }
       return true;
     });
   }, [
@@ -370,6 +393,8 @@ const DistributedPlanView: React.FC<DistributedPlanViewProps> = ({
     selectedStatusFilter,
     dates,
     savedSchedule?.session_duration,
+    planSearchQuery,
+    namesVisible,
   ]);
 
   const calendarDates = useMemo(() => {
@@ -406,10 +431,6 @@ const DistributedPlanView: React.FC<DistributedPlanViewProps> = ({
     });
     return byId;
   }, [candidateTexts.data]);
-  const namesVisible = Boolean(
-    savedSchedule &&
-      candidateNamesAreVisible(savedSchedule, canToggleCandidateNames),
-  );
   const sortedDates = useMemo(() => [...dates].sort(), [dates]);
   const lastConfiguredDate = sortedDates[sortedDates.length - 1];
   const distributedThrough = savedSchedule?.distributed_through ?? null;
@@ -420,13 +441,6 @@ const DistributedPlanView: React.FC<DistributedPlanViewProps> = ({
   );
   const extendableDates = sortedDates.filter(
     (date) => !distributedThrough || date > distributedThrough,
-  );
-  // Days holding interviews. Only these are worth releasing: publishing an
-  // empty day tells the committee nothing and spends a boundary that can
-  // never be moved back.
-  const publishedDayDates = useMemo(
-    () => new Set(dateCounts.keys()),
-    [dateCounts],
   );
   const waivedReviewers = savedSchedule?.published_without_review_by ?? [];
   // The admin's working copy has drifted from what the committee reads, i.e.
@@ -708,6 +722,46 @@ const DistributedPlanView: React.FC<DistributedPlanViewProps> = ({
         onSelectStatusFilter={isAdmin ? setSelectedStatusFilter : undefined}
       />
 
+      {/* Search across the whole plan - by interviewer (always) or candidate
+          (only while names are visible to this reader). Stacks on top of the
+          date/status/mine filters above. */}
+      <div className="flex items-center gap-2 border-b border-border-soft px-6 py-2.5">
+        <Search
+          size={iconSizes.small}
+          aria-hidden="true"
+          className="shrink-0 text-text-muted"
+        />
+        <input
+          type="search"
+          value={planSearch}
+          onChange={(event) => setPlanSearch(event.target.value)}
+          placeholder="Søk etter kandidat eller intervjuer…"
+          data-cy="plan-search"
+          aria-label="Søk i intervjuplanen etter kandidat eller intervjuer"
+          className="h-7 w-full max-w-xs rounded-md border border-border bg-surface-base px-2.5 text-ui text-text-primary placeholder:text-text-muted focus:outline-none focus:ring-1 focus:ring-ring"
+        />
+        {planSearch.trim() && (
+          <span className="text-detail text-text-muted" aria-live="polite">
+            {filteredDisplayEntries.length} treff
+          </span>
+        )}
+        {planSearch && (
+          <button
+            type="button"
+            onClick={() => setPlanSearch("")}
+            aria-label="Tøm søk"
+            className={cn(
+              actionButtonBase,
+              actionButtonNeutral,
+              "ml-auto inline-flex items-center gap-1 px-2 py-1",
+            )}
+          >
+            <X size={iconSizes.small} aria-hidden="true" />
+            Tøm
+          </button>
+        )}
+      </div>
+
       <SchedulePanelBody noPadding>
         {isExportChooserOpen && (
           <ExportChooserModal
@@ -721,27 +775,32 @@ const DistributedPlanView: React.FC<DistributedPlanViewProps> = ({
           />
         )}
 
-        {/* Only while there is still something to release. The strip is the
-            control for moving the publication boundary; once the whole plan
-            is out there is no boundary left to move, every cell is an
-            identical lock, and its summary line just repeats the "Publisert"
-            chip in the header above. */}
+        {/* Only while there is still something to release. The day strip was
+            the publish control in the draft; here the only move left is
+            extending the boundary, which the compact row below does through
+            the existing dialog - the full strip just repeated the "Publisert
+            t.o.m." chip already sitting in the header above. */}
         {isAdmin && sortedDates.length > 1 && extendableDates.length > 0 && (
-          <div className="mx-6 my-3">
-            <PlanDayStrip
-              dates={sortedDates}
-              filledDates={publishedDayDates}
-              distributedThrough={distributedThrough}
-              onPublishThrough={
-                extendableDates.length > 0 && planTransition === null
-                  ? (date) => {
-                      setExtendThroughDate(date);
-                      setIsExtendDialogOpen(true);
-                    }
-                  : undefined
-              }
-              loading={planTransition !== null}
-            />
+          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border-soft px-6 py-2.5">
+            <span className="text-detail text-text-muted">
+              Publisert t.o.m.{" "}
+              {distributedThrough
+                ? formatAccessibleDate(distributedThrough)
+                : "—"}
+            </span>
+            <button
+              type="button"
+              onClick={() => setIsExtendDialogOpen(true)}
+              disabled={planTransition !== null}
+              data-cy="extend-published-plan"
+              className={cn(
+                actionButtonBase,
+                actionButtonNeutral,
+                "inline-flex items-center gap-1.5",
+              )}
+            >
+              Utvid publisering
+            </button>
           </div>
         )}
 
@@ -763,7 +822,11 @@ const DistributedPlanView: React.FC<DistributedPlanViewProps> = ({
           />
         )}
 
-        {planViewMode === "calendar" ? (
+        {planSearch.trim() && filteredDisplayEntries.length === 0 ? (
+          <div className="px-6 py-12 text-center text-ui text-text-muted">
+            Ingen treff for «{planSearch.trim()}»
+          </div>
+        ) : planViewMode === "calendar" ? (
           <DistributedPlanCalendar
             entries={filteredDisplayEntries}
             admissionSlug={admissionSlug}
