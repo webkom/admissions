@@ -444,7 +444,10 @@ const DistributedPlanView: React.FC<DistributedPlanViewProps> = ({
   const hasUnsavedPlanChanges = useMemo(
     () =>
       Boolean(savedSchedule?.distributed_through) &&
-      planContentDiffers(savedSchedule?.schedule, savedSchedule?.published_schedule),
+      planContentDiffers(
+        savedSchedule?.schedule,
+        savedSchedule?.published_schedule,
+      ),
     [savedSchedule],
   );
 
