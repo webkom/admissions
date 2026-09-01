@@ -65,7 +65,7 @@ class ScheduleInputError(Exception):
 
 
 # Publishing was refused only because some interviewers have not finished their
-# kandidatkontroll. Machine-readable because the client treats it as a prompt
+# inhabilitetssjekk. Machine-readable because the client treats it as a prompt
 # (offer the waiver), not as an error.
 CONFLICT_REVIEW_REQUIRED_CODE = "conflict_review_required"
 
@@ -833,7 +833,7 @@ def _resolve_schedule_state(
 
 
 def _ensure_conflict_review_ready_for_publish(admission, group, data, schedule):
-    """Gate publish on a finished kandidatkontroll.
+    """Gate publish on a finished inhabilitetssjekk.
 
     Returns the ids of the interviewers whose check was outstanding and got
     published past anyway - empty in the normal case, and empty when nothing
@@ -874,7 +874,7 @@ def _ensure_conflict_review_ready_for_publish(admission, group, data, schedule):
     raise ScheduleInputError(
         {
             # The client turns this particular refusal into the "publiser uten
-            # kandidatkontroll" prompt rather than an error banner, so it needs
+            # inhabilitetssjekk" prompt rather than an error banner, so it needs
             # to recognise it without parsing the Norwegian sentence below -
             # reword that and a string match would silently start showing this
             # routine gate as a failure again.
@@ -912,7 +912,7 @@ def _missing_reviewer_names(user_ids):
 
 
 def _record_conflict_review_bypass(admission, saved, user, skipped_user_ids):
-    """Write the audit trail for a publish that skipped the kandidatkontroll.
+    """Write the audit trail for a publish that skipped the inhabilitetssjekk.
 
     One event per skipped person, so the log answers "was my check waived, by
     whom, when" per interviewer rather than only per plan.

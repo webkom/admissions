@@ -1,7 +1,10 @@
 import React, { useMemo } from "react";
 import { Check, Lock } from "lucide-react";
 import cn from "src/utils/cn";
-import { formatAccessibleDate } from "src/components/Scheduling/scheduleUtils";
+import {
+  formatAccessibleDate,
+  todayIsoDate,
+} from "src/components/Scheduling/scheduleUtils";
 import { iconSizes } from "src/styles/designTokens";
 import {
   actionButtonBase,
@@ -114,9 +117,19 @@ const PlanDayStrip: React.FC<PlanDayStripProps> = ({
 
   if (model.cells.length === 0) return null;
 
-  const summary = distributedThrough
-    ? `Publisert t.o.m. ${formatAccessibleDate(distributedThrough)}`
+  // A full publish is stored one day past the last scheduled interview (see
+  // distributed_through's own docstring) so the "is this day published?"
+  // comparison above always covers it - showing that padding literally would
+  // claim a day past the framework's own last day. Clamp to the last real
+  // framework day for display.
+  const displayedThrough =
+    distributedThrough && model.lastDate && distributedThrough > model.lastDate
+      ? model.lastDate
+      : distributedThrough;
+  const summary = displayedThrough
+    ? `Publisert t.o.m. ${formatAccessibleDate(displayedThrough)}`
     : "Ikke publisert";
+  const today = todayIsoDate();
 
   return (
     <div
@@ -149,12 +162,20 @@ const PlanDayStrip: React.FC<PlanDayStripProps> = ({
             const isPreview = cell.index <= model.previewThroughIndex;
             const isActionable = cell.canPublishThrough || cell.canPlanThrough;
             const isCompleted = Boolean(completedDates?.has(cell.date));
+            const isToday = cell.date === today;
+            const isPast = cell.date < today;
             const className = cn(
               "flex h-7 w-full min-w-0 items-center justify-center rounded-md border text-tiny font-semibold tabular-nums transition-colors",
               cellToneClass(cell, isPreview, isActionable),
               isCompleted &&
                 cell.state !== "published" &&
                 "border-success-border bg-success-bg text-success",
+              // Layered on top of the state colouring, never replacing it: a
+              // published day that is also in the past still reads as
+              // published, just quieter, and today stands out regardless of
+              // its state.
+              isPast && !isToday && "opacity-50",
+              isToday && "ring-2 ring-brand-ring ring-offset-1",
             );
             const content =
               cell.state === "published" ? (

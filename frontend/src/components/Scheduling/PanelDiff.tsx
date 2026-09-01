@@ -9,8 +9,10 @@ interface PanelDiffProps {
    *  panel - then the slot's full panel is shown inline. */
   baseline: SchedulePanelMember[] | null;
   panel: SchedulePanelMember[];
-  /** Panel-member names to flag (inhabilitet / bias). Only rendered when the
-   *  full panel is shown inline. */
+  /** Panel-member names to flag (inhabilitet / bias). A flagged name always
+   *  gets a visible, named chip - "Standardpanel" or a compact diff tag would
+   *  otherwise bury the one name opptaksansvarlig actually needs to swap out,
+   *  which is the whole point of surfacing this at all. */
   flaggedNames?: ReadonlySet<string>;
   /** Marks the reader's own seat. Interviewers scan the published plan for
    *  the rows that are theirs, and the compact branches below name nobody at
@@ -66,6 +68,33 @@ export const PanelDiff: React.FC<PanelDiffProps> = ({
   }
 
   if (view.kind === "standard") {
+    // The block's standard panel is the same for every row it covers, but a
+    // flag is not - it names an inhabilitet against *this row's* candidate,
+    // which can differ slot to slot even though the seated panel does not.
+    // "Standardpanel" would bury exactly the name opptaksansvarlig needs to
+    // swap out, so a flagged row breaks out into the same named chips the
+    // no-repeating-panel case already uses, red on the flagged seat.
+    const flagged = panel.filter((member) => flaggedNames?.has(member.name));
+    if (flagged.length > 0) {
+      return (
+        <div className="flex flex-wrap items-center gap-1.5">
+          {panel.map((member, index) => {
+            const isMine = Boolean(isCurrentUser?.(member));
+            const isFlagged = flaggedNames?.has(member.name);
+            return (
+              <Chip
+                key={`${member.name}-${index}`}
+                tone={isFlagged ? "danger" : isMine ? "brand" : "muted"}
+                className={cn(isMine && "font-bold")}
+              >
+                {member.name}
+                {isMine && <span className="sr-only"> (deg)</span>}
+              </Chip>
+            );
+          })}
+        </div>
+      );
+    }
     return (
       <span
         title={`Standardpanel: ${view.memberNames.join(", ")}`}
@@ -76,26 +105,40 @@ export const PanelDiff: React.FC<PanelDiffProps> = ({
     );
   }
 
+  const flaggedSegment = view.segments.find(
+    (segment) => segment.member && flaggedNames?.has(segment.member.name),
+  );
   return (
     <span
-      title={`Avviker fra blokkens standardpanel: ${view.label}`}
+      title={
+        flaggedSegment
+          ? `${flaggedSegment.member?.name} er inhabil for denne kandidaten`
+          : `Avviker fra blokkens standardpanel: ${view.label}`
+      }
       className={cn(
         diffPillClass,
-        view.isCurrentUser
-          ? "border-brand-border bg-brand-soft text-brand"
-          : "border-border-soft bg-surface-subtle text-text-primary",
+        flaggedSegment
+          ? "border-danger-border bg-danger-bg text-danger"
+          : view.isCurrentUser
+            ? "border-brand-border bg-brand-soft text-brand"
+            : "border-border-soft bg-surface-subtle text-text-primary",
       )}
     >
       <span className="truncate">
-        {view.segments.map((segment, index) =>
-          segment.isCurrentUser ? (
-            <strong key={index} className="font-bold">
-              {segment.text}
-            </strong>
-          ) : (
-            <React.Fragment key={index}>{segment.text}</React.Fragment>
-          ),
-        )}
+        {view.segments.map((segment, index) => {
+          const isFlagged = Boolean(
+            segment.member && flaggedNames?.has(segment.member.name),
+          );
+          const text =
+            segment.isCurrentUser || isFlagged ? (
+              <strong className={cn("font-bold", isFlagged && "text-danger")}>
+                {segment.text}
+              </strong>
+            ) : (
+              segment.text
+            );
+          return <React.Fragment key={index}>{text}</React.Fragment>;
+        })}
       </span>
     </span>
   );

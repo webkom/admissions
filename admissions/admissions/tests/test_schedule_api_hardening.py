@@ -907,7 +907,7 @@ class SavedSchedulePublishSemanticsTestCase(APITestCase):
         self.assertIn("schedule", res.data)
         self.assertIn("kontrollere", res.data["schedule"][0])
         # The client renders this refusal as the "publiser uten
-        # kandidatkontroll" prompt rather than an error, and picks it out by
+        # inhabilitetssjekk" prompt rather than an error, and picks it out by
         # this code - reword the sentence above and the code must still say
         # what kind of refusal this is.
         self.assertEqual(res.data["code"], "conflict_review_required")
@@ -1072,7 +1072,7 @@ class SavedSchedulePublishSemanticsTestCase(APITestCase):
         """The two override paths are meant to compose: an admin who has
         chased a missing reviewer records their answer on their behalf via
         the availability endpoint's `user_id` field, which makes the
-        kandidatkontroll complete and removes the need for
+        inhabilitetssjekk complete and removes the need for
         `publish_without_full_review` at all. This locks in that the
         precise path is enough on its own: no bypass flag, no audit
         event, no `published_without_review_by` note."""
@@ -2948,9 +2948,12 @@ class InterviewAvailabilityHardeningTestCase(APITestCase):
             ).exists()
         )
 
-    def test_member_cannot_edit_conflicts_from_published_schedule(self):
-        """A published plan closes the conflict review, so a member's attempt
-        to touch inhabilitet afterwards is rejected and nothing is changed."""
+    def test_member_can_self_declare_a_conflict_on_a_published_schedule(self):
+        """A published plan closes the normal review window, but a bare,
+        self-only conflicts declaration is the safety valve that stays open
+        regardless - see is_self_only_conflict_declaration. Existing slots
+        and an empty conflicts history are untouched by anything but the
+        new declaration."""
         self._create_saved_schedule(
             enabled_slots=["2026-04-21|540"],
             is_distributed=True,
@@ -2971,15 +2974,13 @@ class InterviewAvailabilityHardeningTestCase(APITestCase):
             format="json",
         )
 
-        self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertIn("Inhabilitet", str(res.data))
-        self.assertEqual(
-            InterviewAvailability.objects.get(
-                admission=self.admission,
-                user=self.member,
-            ).conflicts,
-            [],
+        self.assertEqual(res.status_code, status.HTTP_200_OK, res.data)
+        row = InterviewAvailability.objects.get(
+            admission=self.admission,
+            user=self.member,
         )
+        self.assertEqual(row.conflicts, [str(self.application.pk)])
+        self.assertEqual(row.slots, ["2026-04-21|540"])
 
     def test_partial_slots_update_preserves_conflicts(self):
         self._create_saved_schedule(enabled_slots=["2026-04-22|600"])
@@ -3192,6 +3193,194 @@ class InterviewAvailabilityHardeningTestCase(APITestCase):
         )
 
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def _publish(self, **overrides):
+        """A fully published schedule: conflict_review_open is false for
+        everyone from here on (see _conflict_review_is_open_for_user), which
+        is exactly the state the self-declare safety valve exists for."""
+        defaults = {
+            "enabled_slots": ["2026-04-21|540"],
+            "distributed_through": "2026-04-21",
+            "schedule": [
+                {
+                    "candidate_id": str(self.application.pk),
+                    "candidate": self.applicant.username,
+                    "time": 540,
+                    "panel": [
+                        {"id": str(self.member.pk), "name": self.member.username}
+                    ],
+                }
+            ],
+        }
+        defaults.update(overrides)
+        return self._create_saved_schedule(**defaults)
+
+    def test_member_can_self_declare_a_conflict_after_publish(self):
+        """The last line of defence: a member who realises post-publish that
+        they are inhabil for a candidate must be able to say so, even though
+        the review window closed the moment the plan went out."""
+        self._publish()
+        self.client.force_authenticate(user=self.member)
+
+        res = self.client.post(
+            self.url,
+            {"conflicts": [str(self.application.pk)]},
+            format="json",
+        )
+
+        self.assertEqual(res.status_code, status.HTTP_200_OK, res.data)
+        row = InterviewAvailability.objects.get(
+            admission=self.admission, group=self.committee_group, user=self.member
+        )
+        self.assertEqual(row.conflicts, [str(self.application.pk)])
+
+    def test_self_declare_after_publish_writes_an_audit_event(self):
+        """A post-publish self-declaration is a write to the inhabilitet
+        system, so it must leave a ConflictReviewAuditEvent - the
+        ACTION_SUBMITTED event that fires for a normal review submission
+        is keyed on reviewed_candidate_ids being in the payload, which a
+        bare conflicts-only self-declare never includes, so without an
+        explicit event this write would be invisible in the audit trail."""
+        self._publish()
+        self.client.force_authenticate(user=self.member)
+
+        res = self.client.post(
+            self.url,
+            {"conflicts": [str(self.application.pk)]},
+            format="json",
+        )
+
+        self.assertEqual(res.status_code, status.HTTP_200_OK, res.data)
+        event = ConflictReviewAuditEvent.objects.filter(
+            admission=self.admission,
+            actor=self.member,
+            action=ConflictReviewAuditEvent.ACTION_SUBMITTED,
+            phase=ConflictReviewAuditEvent.PHASE_DERIVED,
+        ).first()
+        self.assertIsNotNone(event)
+        self.assertEqual(event.conflict_candidate_ids, [str(self.application.pk)])
+        self.assertEqual(event.reviewed_candidate_ids, [])
+
+    def test_self_declare_after_publish_is_append_only(self):
+        """A second self-declare call adds to what is already there - it
+        never replaces the row's existing conflicts, unlike the full-scope
+        replace an admin or recruiter's write performs."""
+        self._publish()
+        other_application = UserApplication.objects.create(
+            user=LegoUser.objects.create(username="other-candidate", lego_id=6250),
+            admission=self.admission,
+        )
+        GroupApplication.objects.create(
+            application=other_application, group=self.committee_group
+        )
+        InterviewAvailability.objects.create(
+            admission=self.admission,
+            group=self.committee_group,
+            user=self.member,
+            conflicts=[str(other_application.pk)],
+        )
+        self.client.force_authenticate(user=self.member)
+
+        res = self.client.post(
+            self.url,
+            {"conflicts": [str(self.application.pk)]},
+            format="json",
+        )
+
+        self.assertEqual(res.status_code, status.HTTP_200_OK, res.data)
+        row = InterviewAvailability.objects.get(
+            admission=self.admission, group=self.committee_group, user=self.member
+        )
+        self.assertCountEqual(
+            row.conflicts,
+            [str(self.application.pk), str(other_application.pk)],
+        )
+
+    def test_self_declare_after_publish_never_touches_review_completion(self):
+        """A standalone conflicts-only submission is not a review: it must
+        not silently mark reviewed_candidate_ids or read as a completed
+        check."""
+        self._publish()
+        self.client.force_authenticate(user=self.member)
+
+        res = self.client.post(
+            self.url,
+            {"conflicts": [str(self.application.pk)]},
+            format="json",
+        )
+
+        self.assertEqual(res.status_code, status.HTTP_200_OK, res.data)
+        row = InterviewAvailability.objects.get(
+            admission=self.admission, group=self.committee_group, user=self.member
+        )
+        self.assertEqual(row.reviewed_candidate_ids, [])
+
+    def test_member_still_cannot_complete_a_review_after_publish(self):
+        """The safety valve is narrow: submitting reviewed_candidate_ids
+        alongside conflicts is a review completion, not a bare declaration,
+        and that still needs the window open - the 400 this whole gate exists
+        for must still fire for that shape."""
+        self._publish()
+        self.client.force_authenticate(user=self.member)
+
+        res = self.client.post(
+            self.url,
+            {
+                "conflicts": [str(self.application.pk)],
+                "reviewed_candidate_ids": [str(self.application.pk)],
+            },
+            format="json",
+        )
+
+        self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_member_still_cannot_declare_a_conflict_on_someone_elses_row(self):
+        """The safety valve is self-only. Writing another interviewer's row
+        at all is already refused before the review-window check ever runs -
+        this locks in that the new path did not loosen that boundary."""
+        self._publish()
+        other_member = LegoUser.objects.create(
+            username="hardening-other-member", lego_id=6251
+        )
+        Membership.objects.create(
+            user=other_member, role=MEMBER, group=self.committee_group
+        )
+        self.client.force_authenticate(user=self.member)
+
+        res = self.client.post(
+            self.url,
+            {
+                "user_id": str(other_member.pk),
+                "conflicts": [str(self.application.pk)],
+            },
+            format="json",
+        )
+
+        self.assertEqual(res.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_recruiter_conflict_writes_after_publish_are_unaffected(self):
+        """A recruiter's write was never blocked by the review window in the
+        first place - it still takes the full-replace path (the whole pool,
+        not an append-only scope), unchanged by the new self-only carve-out."""
+        self._publish()
+        InterviewAvailability.objects.create(
+            admission=self.admission,
+            group=self.committee_group,
+            user=self.recruiter,
+            conflicts=[str(self.application.pk)],
+        )
+        self.client.force_authenticate(user=self.recruiter)
+
+        res = self.client.post(self.url, {"conflicts": []}, format="json")
+
+        self.assertEqual(res.status_code, status.HTTP_200_OK, res.data)
+        row = InterviewAvailability.objects.get(
+            admission=self.admission,
+            group=self.committee_group,
+            user=self.recruiter,
+        )
+        # Full replace, not append-only: an explicit empty list clears it.
+        self.assertEqual(row.conflicts, [])
 
 
 class SavedScheduleVisibilityTestCase(APITestCase):

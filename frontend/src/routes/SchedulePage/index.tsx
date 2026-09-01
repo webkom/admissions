@@ -30,6 +30,7 @@ import DistributedPlanView from "./DistributedPlanView";
 import ConflictReviewView from "./ConflictReviewView";
 import CommitteeConflictsModal from "./CommitteeConflictsModal";
 import PublicationGate from "./PublicationGate";
+import DraftPreview from "./DraftPreview";
 import { useAvailabilityEditor } from "./useAvailabilityEditor";
 import { useDistributedPlanActions } from "./useDistributedPlanActions";
 import { splitScheduleAtPublicationBoundary } from "src/components/Scheduling/Solver/solverSelectors";
@@ -596,6 +597,7 @@ const LoadedScheduleView: React.FC<LoadedScheduleViewProps> = ({
     currentParticipant: myAvailabilityParticipant,
     saveAvailability,
     saveConflictReview,
+    declareOwnConflicts,
     setParticipation,
     setExperienceLevel,
   } = availability;
@@ -1216,6 +1218,8 @@ const LoadedScheduleView: React.FC<LoadedScheduleViewProps> = ({
               planTransitionError={planTransitionError}
               myConflicts={myAvailabilityParticipant?.conflicts ?? []}
               realCandidates={realCandidates}
+              selfDeclareCandidates={interviewCandidates ?? []}
+              onDeclareOwnConflict={declareOwnConflicts}
               interviewers={interviewers}
               enabledSlots={enabledSlots}
               onOpenConflictsOverview={() => setConflictsOverviewOpen(true)}
@@ -1241,6 +1245,19 @@ const LoadedScheduleView: React.FC<LoadedScheduleViewProps> = ({
               publishThroughIntent={publishThroughIntent}
               onConsumePublishThroughIntent={() =>
                 setPublishThroughIntent(null)
+              }
+              draftPreview={
+                savedSchedule?.schedule?.length ? (
+                  <DraftPreview
+                    savedSchedule={savedSchedule}
+                    candidates={realCandidates}
+                    interviewers={interviewers}
+                    currentUserName={currentUserName}
+                    currentUserId={myAvailabilityParticipant?.user_id}
+                    enabledSlots={enabledSlots}
+                    dates={dates}
+                  />
+                ) : undefined
               }
             />
           ) : (

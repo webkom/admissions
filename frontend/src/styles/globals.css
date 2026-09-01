@@ -232,7 +232,7 @@
   --color-danger-border: var(--color-red-6);
 
   /* Caution: a state the recruiter must acknowledge but that is not an error -
-     an unfinished kandidatkontroll, a candidate still waiting for a slot, an
+     an unfinished inhabilitetssjekk, a candidate still waiting for a slot, an
      availability deviation. Seeded from the amber values these surfaces
      already used by hand. The four near-identical text ambers that were in
      use (700/800/900/950, drifting between otherwise identical panels) are

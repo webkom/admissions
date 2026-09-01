@@ -799,6 +799,30 @@ class InterviewAvailabilityView(SchedulerFeatureGateMixin, APIView):
                 "reviewed_candidate_ids",
             )
         )
+        # The safety valve promised elsewhere in this flow ("a committee
+        # member who is inhabil in one of these pairings is the last line
+        # of defence when nobody ran the check"): declaring a new
+        # inhabilitet against yourself must work even once the review
+        # window has closed because the plan is published - that is
+        # exactly when someone notices they should have been excluded.
+        # Narrow on purpose: only a self-only "conflicts" submission
+        # qualifies, never one that also touches reviewed_candidate_ids
+        # (that finishes/reopens a review, which still needs the window
+        # open); target_user == user is already the only shape a
+        # non-admin, non-recruiter caller can reach here with - the
+        # on-behalf checks above return 403 first for anyone else's row -
+        # checked explicitly anyway so this holds even if that routing
+        # ever changes. And it only ever applies once a plan has actually
+        # been published: with no saved schedule (or one never
+        # distributed) there is nothing to have missed yet, and the
+        # ordinary review-window rule below is the only path.
+        is_self_only_conflict_declaration = (
+            "conflicts" in serializer.validated_data
+            and "reviewed_candidate_ids" not in serializer.validated_data
+            and target_user.id == user.id
+            and saved_schedule is not None
+            and saved_schedule.is_distributed
+        )
         conflict_replace_scope = None
         # Belongs to target_user regardless of who is submitting (an admin
         # can edit on someone's behalf): the filler list is whoever's row
@@ -822,7 +846,7 @@ class InterviewAvailabilityView(SchedulerFeatureGateMixin, APIView):
 
         if review_fields_present:
             if not (is_admin or is_recruiter):
-                if not conflict_review_open:
+                if not conflict_review_open and not is_self_only_conflict_declaration:
                     return Response(
                         {
                             "conflicts": [
@@ -897,6 +921,15 @@ class InterviewAvailabilityView(SchedulerFeatureGateMixin, APIView):
                 )
             elif conflict_replace_scope is None and (is_admin or is_recruiter):
                 conflict_replace_scope = set(valid_conflict_ids)
+            elif conflict_replace_scope is None and is_self_only_conflict_declaration:
+                # An empty scope makes the merge below (existing_conflicts -
+                # scope) | submitted purely additive: this narrow path can
+                # only ever grow the conflicts list, never shrink it. Nothing
+                # already declared - by this person or anyone else who wrote
+                # this row - is ever silently dropped by it. Retracting a
+                # declared inhabilitet stays an admin decision, made through
+                # a different path than this safety valve.
+                conflict_replace_scope = set()
             elif conflict_replace_scope is None and (
                 "conflicts" in serializer.validated_data
             ):
@@ -1134,6 +1167,29 @@ class InterviewAvailabilityView(SchedulerFeatureGateMixin, APIView):
                 actor_username=user.username,
                 action=ConflictReviewAuditEvent.ACTION_SUBMITTED,
                 reviewed_candidate_ids=saved.reviewed_candidate_ids,
+                conflict_candidate_ids=saved.conflicts,
+            )
+        elif is_self_only_conflict_declaration:
+            # The self-declare safety valve happens outside the normal
+            # review window (the plan is already published), so the
+            # ACTION_SUBMITTED event above - keyed on
+            # reviewed_candidate_ids being in the payload - never fires
+            # for it. But this is still a write to the inhabilitet
+            # system, and "who declared this conflict, when, against
+            # which candidate" should be answerable for every such write
+            # - not only the ones that also completed a review. The
+            # PHASE_DERIVED phase marks it as a post-collection
+            # declaration, distinct from the normal collection-window
+            # submissions above.
+            ConflictReviewAuditEvent.objects.create(
+                admission=admission,
+                saved_schedule=saved_schedule,
+                actor=user,
+                actor_username=user.username,
+                subject_user=user,
+                subject_username=user.username,
+                phase=ConflictReviewAuditEvent.PHASE_DERIVED,
+                action=ConflictReviewAuditEvent.ACTION_SUBMITTED,
                 conflict_candidate_ids=saved.conflicts,
             )
         proposed_candidate_ids = get_proposed_candidate_ids_by_interviewer(

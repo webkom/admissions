@@ -5,7 +5,9 @@ import {
   ScheduleItem,
 } from "../../types";
 import {
+  buildSolveBlocks,
   encodeScheduleTime,
+  manualBlocksToSolverBlocks,
   parseSlotKey,
 } from "src/components/Scheduling/scheduleUtils";
 import {
@@ -184,3 +186,60 @@ export const candidateNamesAreVisible = (
 ) =>
   savedSchedule.name_visibility === "committee" ||
   (savedSchedule.name_visibility === "admin_only" && canToggleCandidateNames);
+
+/**
+ * Every interview that shares a block (a chunk covered by one repeating
+ * panel), keyed by schedule index, so a per-slot panel swap can be blocked
+ * when the replacement is inhabil against anyone else in that block.
+ *
+ * The canonical blocks are built exactly as the solver does - from the saved
+ * layout config for standard mode, or the manual block list for manual mode -
+ * so a published plan's block grouping never diverges from what the solver
+ * produced. Shared by the calendar and table views of the published plan, so
+ * a panel swap is blocked on the same grounds regardless of which one an
+ * admin happens to be looking at.
+ *
+ * `fullDates` must be the framework's complete date list, not a
+ * date-filtered view - block membership is computed once from the whole
+ * schedule and then looked up per row, so a filtered `dates` would silently
+ * drop blocks that still need to be checked.
+ */
+export const buildBlockCandidateIdsByScheduleIndex = (
+  savedSchedule: SavedSchedule,
+  fullDates: string[],
+  candidateIdFor: (item: ScheduleItem) => string | undefined,
+): Map<number, ReadonlySet<string>> => {
+  const canonicalBlocks =
+    savedSchedule.block_mode === "manual"
+      ? manualBlocksToSolverBlocks(
+          savedSchedule.manual_blocks,
+          fullDates,
+          savedSchedule.session_duration,
+        )
+      : buildSolveBlocks({
+          dates: fullDates,
+          dayStartMinute: savedSchedule.day_start_minute,
+          dayEndMinute: savedSchedule.day_end_minute,
+          sessionDuration: savedSchedule.session_duration,
+          chunkSize: savedSchedule.chunk_size,
+          chunkBreakMinutes: savedSchedule.chunk_break_minutes,
+        });
+
+  const blockByTime = new Map<number, Set<string>>();
+  canonicalBlocks.forEach((block) => {
+    const candidateIds = new Set<string>();
+    block.forEach((time) => blockByTime.set(time, candidateIds));
+    savedSchedule.schedule.forEach((item) => {
+      if (!block.includes(item.time)) return;
+      const candidateId = candidateIdFor(item);
+      if (candidateId) candidateIds.add(candidateId);
+    });
+  });
+
+  const byScheduleIndex = new Map<number, ReadonlySet<string>>();
+  savedSchedule.schedule.forEach((item, scheduleIndex) => {
+    const ids = blockByTime.get(item.time);
+    if (ids) byScheduleIndex.set(scheduleIndex, ids);
+  });
+  return byScheduleIndex;
+};

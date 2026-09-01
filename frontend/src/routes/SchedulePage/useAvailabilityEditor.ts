@@ -247,6 +247,37 @@ export const useAvailabilityEditor = ({
     }
   };
 
+  // The self-declare safety valve: works at any time, including after
+  // publication, unlike saveConflictReview above (which needs the review
+  // window open). Deliberately narrow - only `conflicts`, never
+  // `reviewed_candidate_ids` - so the backend accepts it outside the window;
+  // see the matching comment in availability_views.py. Sends only the newly
+  // realised ids: the backend merges them into whatever this row already
+  // has, so there is nothing to fetch or merge here first, and nothing
+  // already declared can be dropped by a stale local view of the list.
+  const declareOwnConflicts = async (newConflictIds: string[]) => {
+    if (newConflictIds.length === 0) return;
+    try {
+      await saveInterviewAvailability.mutateAsync({
+        conflicts: newConflictIds,
+      });
+    } catch (error) {
+      if (isSensitiveAuthorityChangedError(error)) throw error;
+      const response = (
+        error as { response?: { status?: number; data?: unknown } }
+      ).response;
+      notify(
+        `Kunne ikke melde inhabilitet${
+          firstApiErrorMessage(response?.data)
+            ? `: ${firstApiErrorMessage(response?.data)}`
+            : ""
+        }`,
+        "error",
+      );
+      throw error;
+    }
+  };
+
   // Admin on-behalf inhabilitet editing: replaces the target interviewer's
   // declared conflicts (candidate ids only - the admin's scope is the whole
   // candidate pool, so no review declaration is needed) without touching
@@ -332,6 +363,7 @@ export const useAvailabilityEditor = ({
     currentParticipant,
     saveAvailability,
     saveConflictReview,
+    declareOwnConflicts,
     saveConflictReviewFor,
     setParticipation,
     setExperienceLevel,
