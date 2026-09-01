@@ -21,13 +21,13 @@ import {
 // helper, the SMS template is a sentence and reads better with full day
 // names rather than the abbreviated "Tor" / "Fre" form.
 const FULL_WEEKDAYS_NB = [
-  "Søndag",
-  "Mandag",
-  "Tirsdag",
-  "Onsdag",
-  "Torsdag",
-  "Fredag",
-  "Lørdag",
+  "søndag",
+  "mandag",
+  "tirsdag",
+  "onsdag",
+  "torsdag",
+  "fredag",
+  "lørdag",
 ];
 const EXAMPLE_DATE = "2026-07-16";
 const EXAMPLE_START_MINUTE = 14 * 60; // 14:00

@@ -161,7 +161,7 @@ class Command(BaseCommand):
             action="store_true",
             default=False,
             help="Do not re-seed anything: just mark every participating "
-            "interviewer's kandidatkontroll (inhabilitetssjekk) as done for the "
+            "interviewer's inhabilitetssjekk as done for the "
             "committee's current saved plan, so publication stops waiting on "
             "the fake interviewers. Each interviewer's reviewed candidates are "
             "set to the candidates proposed for their panels (existing "
@@ -666,7 +666,7 @@ class Command(BaseCommand):
         )
 
     def _complete_reviews(self, admission, group):
-        """Mark every participating interviewer's kandidatkontroll as done for
+        """Mark every participating interviewer's inhabilitetssjekk as done for
         the committee's current saved plan.
 
         Mirrors ``get_conflict_review_readiness``: an interviewer's target is
@@ -745,7 +745,7 @@ class Command(BaseCommand):
         )
         self.stdout.write(
             self.style.SUCCESS(
-                f"Marked kandidatkontroll done for {completed} interviewer(s) "
+                f"Marked inhabilitetssjekk done for {completed} interviewer(s) "
                 f"in {group.name} / {admission.slug}."
             )
         )

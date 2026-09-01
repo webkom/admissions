@@ -145,6 +145,22 @@ describe("the plan day strip", () => {
     ).to.deep.equal([DATES[0]]);
   });
 
+  it("exposes the last framework day, for clamping a padded publish boundary", () => {
+    // A full publish stores distributed_through one day past the last
+    // scheduled interview (see the field's own docstring), so every framework
+    // day counts as published even when nothing was placed on the very last
+    // one. `lastDate` is how a caller displaying the boundary as a calendar
+    // date avoids showing that padding literally - e.g. Saturday for a plan
+    // that only ever ran Monday through Friday.
+    const model = strip({
+      filledDates: new Set(DATES),
+      distributedThrough: "2026-09-12", // one day past DATES[4] (2026-09-11)
+    });
+
+    expect(model.lastDate).to.equal("2026-09-11");
+    expect(model.publishedCount).to.equal(5);
+  });
+
   it("survives a period with no days at all", () => {
     const model = derivePlanDayStrip({
       dates: [],
@@ -155,5 +171,6 @@ describe("the plan day strip", () => {
 
     expect(model.cells).to.have.length(0);
     expect(model.publishableCount).to.equal(0);
+    expect(model.lastDate).to.equal(null);
   });
 });

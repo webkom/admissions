@@ -28,6 +28,7 @@ import cn from "src/utils/cn";
 import PlanFilterBar from "./PlanFilterBar";
 import DistributedPlanCalendar from "./DistributedPlanCalendar";
 import PublishedScheduleTable from "./PublishedScheduleTable";
+import SelfDeclareConflictPanel from "./SelfDeclareConflictPanel";
 import {
   DistributedPlanNotices,
   EmptyDistributedPlan,
@@ -87,6 +88,15 @@ interface DistributedPlanViewProps {
   planTransitionError: string;
   myConflicts: string[];
   realCandidates: Candidate[];
+  /** The candidate pool this reader is actually allowed to see (mirrors the
+   *  candidates/ endpoint's own visibility scoping) - backs the self-declare
+   *  picker below. Empty whenever `namesVisible` is false, so the picker
+   *  simply has nothing to show rather than needing a separate check. */
+  selfDeclareCandidates: Candidate[];
+  /** Add one or more candidates to this reader's own declared conflicts.
+   *  Works at any time, published or not - see availability_views.py's
+   *  is_self_only_conflict_declaration. */
+  onDeclareOwnConflict: (candidateIds: string[]) => Promise<void>;
   interviewers: Interviewer[];
   enabledSlots: Set<string>;
   onOpenConflictsOverview?: () => void;
@@ -124,6 +134,8 @@ const DistributedPlanView: React.FC<DistributedPlanViewProps> = ({
   planTransitionError,
   myConflicts,
   realCandidates,
+  selfDeclareCandidates,
+  onDeclareOwnConflict,
   interviewers,
   enabledSlots,
   onOpenConflictsOverview,
@@ -527,18 +539,20 @@ const DistributedPlanView: React.FC<DistributedPlanViewProps> = ({
 
       {/* Shown to everyone who can see the plan, not just the admin who
           decided it: a committee member who is inhabil in one of these
-          pairings is the last line of defence when nobody ran the check. */}
-      {waivedReviewers.length > 0 && (
-        <div
-          data-cy="published-without-review-banner"
-          className="border-b border-warning-border bg-warning-bg px-6 py-3 text-ui text-warning-text"
-        >
-          <span className="font-semibold">
-            Publisert uten fullført kandidatkontroll
-          </span>{" "}
-          fra {waivedReviewers.join(", ")}. Si fra til opptaksansvarlig hvis du
-          er inhabil i et av intervjuene under.
-        </div>
+          pairings is the last line of defence when nobody ran the check. A
+          list of who *else* didn't check is not actionable for that reader -
+          this is the actual action, standing and available whether or not
+          anyone was ever waived, not only a reaction to that one event.
+          `selfDeclareCandidates` is already scoped to what this reader may
+          see, so it is simply empty (and the panel renders nothing) when
+          names are not visible to them - there is nothing to pick from. */}
+      {selfDeclareCandidates.length > 0 && (
+        <SelfDeclareConflictPanel
+          candidates={selfDeclareCandidates}
+          alreadyDeclared={new Set(myConflicts)}
+          onDeclare={onDeclareOwnConflict}
+          waivedReviewerNames={isAdmin ? waivedReviewers : []}
+        />
       )}
 
       <PlanFilterBar
@@ -665,6 +679,7 @@ const DistributedPlanView: React.FC<DistributedPlanViewProps> = ({
             outreachTemplates={outreachTemplates}
             conflictIds={conflictSet}
             lookups={lookups}
+            onReplacePanelMember={onReplacePanelMember}
           />
         )}
       </SchedulePanelBody>

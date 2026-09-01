@@ -32,6 +32,10 @@ export const addDays = (date: string | Date, days: number): string => {
   return toIsoDate(next);
 };
 
+/** Today, as the same "YYYY-MM-DD" (local) key every framework day uses -
+ *  so a day cell can be compared against it with plain string comparison. */
+export const todayIsoDate = (): string => toIsoDate(new Date());
+
 export const nextMonday = (from: Date = new Date()): string => {
   const d = new Date(from.getFullYear(), from.getMonth(), from.getDate());
   const day = d.getDay();

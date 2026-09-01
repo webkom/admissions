@@ -121,7 +121,7 @@ class SaveScheduleInputSerializer(serializers.Serializer):
     defer_unplaced_candidates = serializers.BooleanField(
         required=False, write_only=True
     )
-    # Explicit override of the kandidatkontroll gate: when True, the
+    # Explicit override of the inhabilitetssjekk gate: when True, the
     # publish is allowed to go through with one or more reviewers still
     # owing their check. Skipped reviewers are recorded against the plan
     # (published_without_review_by) and against each person (one

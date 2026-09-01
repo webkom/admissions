@@ -1,7 +1,8 @@
 import React, { useMemo, useState } from "react";
-import type {
-  DistributedPlanLookups,
-  DistributedScheduleEntry,
+import {
+  buildBlockCandidateIdsByScheduleIndex,
+  type DistributedPlanLookups,
+  type DistributedScheduleEntry,
 } from "./distributedPlanSelectors";
 import {
   buildBlockTimeChunks,
@@ -57,7 +58,10 @@ interface PublishedBlockMeta {
 /**
  * Compact operations view of the published plan: fixed slim rows, panel
  * diffs against the block baseline, status badges and invitation actions.
- * All structural editing lives in the draft view (unlock the plan to edit).
+ * Structural editing (moving a time, adding a candidate) lives in the draft
+ * view (unlock the plan to edit) - but swapping out a flagged panel member is
+ * not structural, it is the one fix this view exists to make easy, so it
+ * stays available here too, same as in the calendar view.
  */
 const PublishedScheduleTable: React.FC<{
   entries: DistributedScheduleEntry[];
@@ -66,6 +70,8 @@ const PublishedScheduleTable: React.FC<{
   admissionTitle: string;
   committeeName: string;
   savedSchedule: SavedSchedule;
+  /** The framework's complete date list, not date-filtered - block
+   *  membership for the swap-eligibility check needs the whole schedule. */
   dates: string[];
   enabledSlots: Set<string>;
   candidateNamesVisible: boolean;
@@ -74,6 +80,11 @@ const PublishedScheduleTable: React.FC<{
   outreachTemplates: InterviewOutreachTemplates;
   conflictIds: ReadonlySet<string>;
   lookups: DistributedPlanLookups;
+  onReplacePanelMember: (
+    scheduleIndex: number,
+    panelMemberIndex: number,
+    replacement: { id?: string; name: string },
+  ) => Promise<boolean>;
 }> = ({
   entries,
   admissionSlug,
@@ -89,10 +100,29 @@ const PublishedScheduleTable: React.FC<{
   outreachTemplates,
   conflictIds,
   lookups,
+  onReplacePanelMember,
 }) => {
   const [showEmptySlots, setShowEmptySlots] = useState(false);
   const showBlockGroups =
     savedSchedule.chunk_size > 1 || savedSchedule.chunk_break_minutes > 0;
+  // Same computation the calendar view's swap picker uses, so a replacement
+  // is blocked on the same grounds (inhabil against anyone else sharing this
+  // block) no matter which view an admin swaps from.
+  const blockCandidateIdsByScheduleIndex = useMemo(
+    () =>
+      buildBlockCandidateIdsByScheduleIndex(
+        savedSchedule,
+        dates,
+        lookups.candidateIdFor,
+      ),
+    [dates, lookups, savedSchedule],
+  );
+  const EMPTY_CANDIDATE_IDS: ReadonlySet<string> = useMemo(() => new Set(), []);
+  // Tidspunkt, Kandidat, Panel always show; Status and Neste handling are
+  // workflow columns for whoever can act on them - hidden entirely, not just
+  // emptied, for anyone without canManageInterviewWorkflow, so the header row
+  // and every colSpan below still agree with what's actually rendered.
+  const columnCount = canManageInterviewWorkflow ? 5 : 3;
 
   const slots = useMemo<PlanSlotRow[]>(() => {
     const chunks = buildBlockTimeChunks({
@@ -249,10 +279,14 @@ const PublishedScheduleTable: React.FC<{
                   Kandidat
                 </th>
                 <th className={scheduleHeaderCell}>Panel</th>
-                <th className={cn(scheduleHeaderCell, "w-48")}>Status</th>
-                <th className={cn(scheduleHeaderCell, "w-52")}>
-                  Neste handling
-                </th>
+                {canManageInterviewWorkflow && (
+                  <>
+                    <th className={cn(scheduleHeaderCell, "w-48")}>Status</th>
+                    <th className={cn(scheduleHeaderCell, "w-52")}>
+                      Neste handling
+                    </th>
+                  </>
+                )}
               </tr>
             </thead>
             <tbody>
@@ -288,6 +322,7 @@ const PublishedScheduleTable: React.FC<{
                           blockMeta={blockMeta}
                           sessionDuration={savedSchedule.session_duration}
                           isCurrentUser={lookups.isCurrentUser}
+                          columnCount={columnCount}
                         />
                       )}
                       <tr className="border-b border-border-soft bg-surface-base">
@@ -295,7 +330,7 @@ const PublishedScheduleTable: React.FC<{
                           {formatMinutes(slot.minute)}
                         </td>
                         <td
-                          colSpan={4}
+                          colSpan={columnCount - 1}
                           title={
                             slot.enabled && !slot.occupied
                               ? "Ledig tidsluke"
@@ -336,6 +371,7 @@ const PublishedScheduleTable: React.FC<{
                         blockMeta={blockMeta}
                         sessionDuration={savedSchedule.session_duration}
                         isCurrentUser={lookups.isCurrentUser}
+                        columnCount={columnCount}
                       />
                     )}
                     {slotEntries.map((entry, entryIndex) => {
@@ -373,6 +409,14 @@ const PublishedScheduleTable: React.FC<{
                           }
                           outreachTemplates={outreachTemplates}
                           lookups={lookups}
+                          isAdmin={isAdmin}
+                          scheduleIndex={entry.scheduleIndex}
+                          blockCandidateIds={
+                            blockCandidateIdsByScheduleIndex.get(
+                              entry.scheduleIndex,
+                            ) ?? EMPTY_CANDIDATE_IDS
+                          }
+                          onReplacePanelMember={onReplacePanelMember}
                         />
                       );
                     })}
@@ -393,7 +437,15 @@ const PublishedBlockHeader: React.FC<{
   blockMeta?: PublishedBlockMeta;
   sessionDuration: number;
   isCurrentUser?: (member: SchedulePanelMember) => boolean;
-}> = ({ dateLabel, blockIndex, blockMeta, sessionDuration, isCurrentUser }) => {
+  columnCount: number;
+}> = ({
+  dateLabel,
+  blockIndex,
+  blockMeta,
+  sessionDuration,
+  isCurrentUser,
+  columnCount,
+}) => {
   const timeSpan =
     blockMeta?.minuteStart !== null &&
     blockMeta?.minuteStart !== undefined &&
@@ -408,7 +460,7 @@ const PublishedBlockHeader: React.FC<{
 
   return (
     <ScheduleBlockDivider
-      colSpan={5}
+      colSpan={columnCount}
       title={
         dateLabel +
         (blockIndex !== null

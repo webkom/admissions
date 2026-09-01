@@ -2,6 +2,8 @@ import React from "react";
 import type { ScheduleItem, SchedulePanelMember } from "../../types";
 import { Chip } from "src/components/ui";
 import { PanelDiff } from "src/components/Scheduling/PanelDiff";
+import { PanelMemberList } from "./DistributedPlanEntryControls";
+import type { DistributedPlanLookups } from "./distributedPlanSelectors";
 import {
   scheduleCandidateColumn,
   scheduleCell,
@@ -48,7 +50,17 @@ const PublishedSlotRow: React.FC<{
   blockBaseline: SchedulePanelMember[] | null;
   canManageInterviewWorkflow: boolean;
   outreachTemplates: InterviewOutreachTemplates;
-  lookups: PublishedSlotRowLookups;
+  lookups: DistributedPlanLookups;
+  isAdmin: boolean;
+  scheduleIndex: number;
+  /** Candidate ids of every interview sharing this row's block - a
+   *  replacement inhabil against any of them can't be swapped in. */
+  blockCandidateIds: ReadonlySet<string>;
+  onReplacePanelMember: (
+    scheduleIndex: number,
+    panelMemberIndex: number,
+    replacement: { id?: string; name: string },
+  ) => Promise<boolean>;
 }> = ({
   admissionSlug,
   groupId,
@@ -65,6 +77,10 @@ const PublishedSlotRow: React.FC<{
   canManageInterviewWorkflow,
   outreachTemplates,
   lookups,
+  isAdmin,
+  scheduleIndex,
+  blockCandidateIds,
+  onReplacePanelMember,
 }) => {
   const statusMutation = useAdminUpdateInterviewStatusMutation(
     admissionSlug,
@@ -76,6 +92,17 @@ const PublishedSlotRow: React.FC<{
   const candidateId = item.candidate_id;
   const workflowReady = Boolean(candidateNamesVisible && candidateId);
   const canAct = Boolean(workflowReady && canManageInterviewWorkflow);
+  const flaggedNames = new Set(
+    item.panel
+      .filter((member) => lookups.biasedFor(member)?.has(candidateId ?? ""))
+      .map((member) => member.name),
+  );
+  // Only an admin gets the swap picker on a flagged panel - it is exactly
+  // the same interactive chip the calendar view already uses, so a flagged
+  // seat is fixable from either view without switching. Everyone else, and
+  // every unflagged row, keeps the compact read-only PanelDiff exactly as it
+  // renders today.
+  const canSwapFlagged = isAdmin && flaggedNames.size > 0;
 
   const handleOutreachSend = () => {
     if (
@@ -153,20 +180,26 @@ const PublishedSlotRow: React.FC<{
         )}
       </td>
       <td className={cn(scheduleCell, "min-w-0")}>
-        <PanelDiff
-          baseline={blockBaseline}
-          panel={item.panel}
-          flaggedNames={
-            new Set(
-              item.panel
-                .filter((member) =>
-                  lookups.biasedFor(member)?.has(item.candidate_id ?? ""),
-                )
-                .map((member) => member.name),
-            )
-          }
-          isCurrentUser={lookups.isCurrentUser}
-        />
+        {canSwapFlagged ? (
+          <PanelMemberList
+            item={item}
+            scheduleIndex={scheduleIndex}
+            candidateId={candidateId}
+            isAdmin={isAdmin}
+            isEditableDraft={false}
+            compact
+            lookups={lookups}
+            blockCandidateIds={blockCandidateIds}
+            onReplacePanelMember={onReplacePanelMember}
+          />
+        ) : (
+          <PanelDiff
+            baseline={blockBaseline}
+            panel={item.panel}
+            flaggedNames={flaggedNames}
+            isCurrentUser={lookups.isCurrentUser}
+          />
+        )}
       </td>
       {canManageInterviewWorkflow && (
         <td className={cn(scheduleCell, "w-48")}>
@@ -192,39 +225,35 @@ const PublishedSlotRow: React.FC<{
           )}
         </td>
       )}
-      <td className={cn(scheduleCell, "w-52")}>
-        {canAct && nextOutreachAction ? (
-          <InterviewOutreachActions
-            candidateName={item.candidate}
-            candidatePhone={item.candidate_phone}
-            message={renderedSmsBody}
-            actionLabel={interviewNextActionLabels[nextOutreachAction]}
-            canShare={candidateNamesVisible}
-            onSend={handleOutreachSend}
-          />
-        ) : (
-          <span className="text-text-faded" aria-label="Ingen neste handling">
-            —
-          </span>
-        )}
-        {statusMutation.isError &&
-          !isSensitiveAuthorityChangedError(statusMutation.error) && (
-            <span role="alert" className="mt-1 block text-detail text-danger">
-              {getApiErrorMessage(
-                statusMutation.error,
-                "Kunne ikke lagre statusen. Den forrige statusen er gjenopprettet.",
-              )}
+      {canManageInterviewWorkflow && (
+        <td className={cn(scheduleCell, "w-52")}>
+          {canAct && nextOutreachAction ? (
+            <InterviewOutreachActions
+              candidateName={item.candidate}
+              candidatePhone={item.candidate_phone}
+              message={renderedSmsBody}
+              actionLabel={interviewNextActionLabels[nextOutreachAction]}
+              canShare={candidateNamesVisible}
+              onSend={handleOutreachSend}
+            />
+          ) : (
+            <span className="text-text-faded" aria-label="Ingen neste handling">
+              —
             </span>
           )}
-      </td>
+          {statusMutation.isError &&
+            !isSensitiveAuthorityChangedError(statusMutation.error) && (
+              <span role="alert" className="mt-1 block text-detail text-danger">
+                {getApiErrorMessage(
+                  statusMutation.error,
+                  "Kunne ikke lagre statusen. Den forrige statusen er gjenopprettet.",
+                )}
+              </span>
+            )}
+        </td>
+      )}
     </tr>
   );
 };
-
-interface PublishedSlotRowLookups {
-  biasedFor: (member: { id?: string; name: string }) => Set<string> | undefined;
-  /** Marks the reader's own seat in the Panel column. */
-  isCurrentUser?: (member: { id?: string; name: string }) => boolean;
-}
 
 export default PublishedSlotRow;

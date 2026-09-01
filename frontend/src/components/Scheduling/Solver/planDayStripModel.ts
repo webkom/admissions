@@ -32,6 +32,12 @@ export interface PlanDayCell {
 
 export interface PlanDayStripModel {
   cells: PlanDayCell[];
+  /** The last framework day, or null when there are none. `distributedThrough`
+   *  can land past this (see its own docstring: a full publish is padded one
+   *  day past the last scheduled interview so the comparison above always
+   *  covers it) - callers displaying the boundary as a calendar date should
+   *  clamp to this instead of showing the padding literally. */
+  lastDate: string | null;
   /** Index of the last published day, or -1 when nothing is published. */
   publishedThroughIndex: number;
   /** Index of the last day inside a previewed boundary, or -1. Distinct from
@@ -115,6 +121,7 @@ export const derivePlanDayStrip = ({
   const publishedCount = publishedThroughIndex + 1;
   return {
     cells,
+    lastDate: sorted.length > 0 ? sorted[sorted.length - 1] : null,
     publishedThroughIndex,
     previewThroughIndex,
     plannedThroughIndex,

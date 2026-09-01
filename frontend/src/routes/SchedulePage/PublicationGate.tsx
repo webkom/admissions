@@ -53,7 +53,7 @@ interface PublicationGateProps {
    * generic toast message.
    */
   scheduleFieldError?: string;
-  /** True when `scheduleFieldError` is the kandidatkontroll gate. Decided by
+  /** True when `scheduleFieldError` is the inhabilitetssjekk gate. Decided by
    *  the caller from the server's error code, so this panel never has to match
    *  the Norwegian wording; the match below is only a fallback for a server
    *  that predates the code. */
@@ -75,6 +75,12 @@ interface PublicationGateProps {
    *  choice instead of asking again. */
   publishThroughIntent?: string | null;
   onConsumePublishThroughIntent?: () => void;
+  /** A read-only preview of the draft plan rows, shown inside the gate so the
+   *  admin can see what they are about to publish without leaving the plan
+   *  section for the solver. Built by the caller (index.tsx) from the same
+   *  PublishedScheduleTable the published plan uses, so the draft and the
+   *  published view never diverge in layout. */
+  draftPreview?: React.ReactNode;
 }
 
 interface ReadinessRowProps {
@@ -129,6 +135,7 @@ const PublicationGate = ({
   onPublish,
   publishThroughIntent = null,
   onConsumePublishThroughIntent,
+  draftPreview,
 }: PublicationGateProps) => {
   const [publishVisibility, setPublishVisibility] = useState<NameVisibility>(
     savedSchedule?.name_visibility ?? "hidden",
@@ -166,10 +173,10 @@ const PublicationGate = ({
     setPublishVisibility(savedSchedule?.name_visibility ?? "hidden");
   }, [savedSchedule?.name_visibility]);
 
-  // The waiver on the kandidatkontroll gate is per-publish, not a setting:
+  // The waiver on the inhabilitetssjekk gate is per-publish, not a setting:
   // the admin re-decides for every publish. A fresh republish is
   // intentionally not sticky. If the server just refused with the
-  // kandidatkontroll message, auto-tick the override for the admin so
+  // inhabilitetssjekk message, auto-tick the override for the admin so
   // confirm is one click - the gate is showing the actual blocker,
   // approval is implicit.
   const [waiveReview, setWaiveReview] = useState(false);
@@ -196,8 +203,8 @@ const PublicationGate = ({
         ? `${readiness.incompleteReviewerCount} intervjuere`
         : null;
   const waiveReviewButtonLabel = waiveReviewTarget
-    ? `Publiser uten kontrollen til ${waiveReviewTarget}`
-    : "Publiser uten kandidatkontroll";
+    ? `Publiser uten inhabilitetssjekk fra ${waiveReviewTarget}`
+    : "Publiser uten inhabilitetssjekk";
 
   // Days holding interviews. Without this the strip would offer to release
   // empty days, which tells the committee nothing and spends a boundary that
@@ -374,7 +381,7 @@ const PublicationGate = ({
             title={stage.title}
             description={stage.description}
           />
-          {/* The kandidatkontroll refusal is not an error - it is the prompt
+          {/* The inhabilitetssjekk refusal is not an error - it is the prompt
               to use the waiver, which the panel on the right now carries. */}
           {planTransitionError && !serverReviewRefusal && (
             <div
@@ -482,6 +489,7 @@ const PublicationGate = ({
                   }
                 />
               </ul>
+              {draftPreview}
             </section>
 
             <div className="grid gap-4">
@@ -525,8 +533,8 @@ const PublicationGate = ({
                   >
                     <p className={sectionLabelClass}>
                       {known
-                        ? "Kandidatkontroll ikke fullført"
-                        : "Kandidatkontroll"}
+                        ? "Inhabilitetssjekk ikke fullført"
+                        : "Inhabilitetssjekk"}
                     </p>
                     <label
                       className={cn(
@@ -555,8 +563,8 @@ const PublicationGate = ({
                       {known && scheduleFieldError
                         ? scheduleFieldError
                         : known
-                          ? "Noen intervjuere har ikke bekreftet kandidatkontrollen sin ennå."
-                          : "Kryss av her hvis planen skal kunne publiseres selv om ikke alle intervjuere rekker kandidatkontrollen."}{" "}
+                          ? "Noen intervjuere har ikke bekreftet inhabilitetssjekken sin ennå."
+                          : "Kryss av her hvis planen skal kunne publiseres selv om ikke alle intervjuere rekker inhabilitetssjekken."}{" "}
                       Beslutningen loggføres på deg og vises på den publiserte
                       planen, slik at komiteen ser hvilke paringer som gikk ut
                       uten at noen sjekket for inhabilitet.
@@ -706,7 +714,7 @@ const PublicationGate = ({
               : partialThroughDateOrNull
                 ? `Publiser til og med ${formatAccessibleDate(partialThroughDateOrNull)}`
                 : reviewWaiveActive
-                  ? "Publiser uten kandidatkontroll"
+                  ? "Publiser uten inhabilitetssjekk"
                   : "Publiser intervjuplan"
           }
           onConfirm={confirmPublish}
@@ -731,8 +739,8 @@ const PublicationGate = ({
             >
               <strong className="block">
                 {waiveReviewTarget
-                  ? `Publiseres uten kandidatkontroll fra ${waiveReviewTarget}`
-                  : "Publiseres uten fullført kandidatkontroll"}
+                  ? `Publiseres uten inhabilitetssjekk fra ${waiveReviewTarget}`
+                  : "Publiseres uten fullført inhabilitetssjekk"}
               </strong>
               <p className="m-0 mt-1 text-detail leading-relaxed">
                 Noen paringer går ut uten at det er sjekket for inhabilitet.

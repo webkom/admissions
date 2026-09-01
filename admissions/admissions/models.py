@@ -342,7 +342,7 @@ class SavedSchedule(models.Model):
         db_persist=True,
     )
     conflict_review_open = models.BooleanField(default=False)
-    # Names (not ids) of reviewers whose kandidatkontroll was outstanding at
+    # Names (not ids) of reviewers whose inhabilitetssjekk was outstanding at
     # the moment the plan was published and the publish was allowed to go
     # through anyway via `publish_without_full_review`. The denormalized
     # display form is deliberate: this field exists to be read off the
@@ -487,7 +487,7 @@ class ConflictReviewAuditEvent(models.Model):
     ACTION_VIEWED = "viewed"
     ACTION_SUBMITTED = "submitted"
     ACTION_FROZEN = "frozen"
-    # The publish was allowed through with this reviewer's kandidatkontroll
+    # The publish was allowed through with this reviewer's inhabilitetssjekk
     # still incomplete - the recruiter explicitly waived it via
     # `publish_without_full_review`. The pairing shows up on the published
     # plan's "published_without_review_by" list, and one event is recorded

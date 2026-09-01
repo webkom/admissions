@@ -147,7 +147,13 @@ const Admission: React.FC<AdmissionProps> = ({ admission }) => {
                     icon={
                       <Calendar size={iconSizes.standard} aria-hidden="true" />
                     }
-                    label="Velg intervjutider"
+                    // This one link covers the whole lifecycle of the page it
+                    // opens - submitting your own availability before a plan
+                    // exists, watching it get built, and (for most members)
+                    // just seeing the published result. "Velg intervjutider"
+                    // only describes the first of those and reads as stale or
+                    // wrong once a plan is underway or already out.
+                    label="Intervjuoversikt"
                   />
                 </LinkButton>
               )}

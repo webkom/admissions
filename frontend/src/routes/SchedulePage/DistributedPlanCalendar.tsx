@@ -2,6 +2,7 @@ import React, { useMemo } from "react";
 import GridCalendarView from "src/components/Scheduling/Calendar/GridCalendarView";
 import { SavedSchedule } from "../../types";
 import {
+  buildBlockCandidateIdsByScheduleIndex,
   DistributedPlanLookups,
   DistributedScheduleEntry,
 } from "./distributedPlanSelectors";
@@ -13,11 +14,7 @@ import {
 } from "./DistributedPlanEntryControls";
 import { CustomSelect } from "src/components/Scheduling/ui";
 import ScheduleInterviewWorkflow from "./ScheduleInterviewWorkflow";
-import {
-  buildSolveBlocks,
-  formatSlotLabel,
-  manualBlocksToSolverBlocks,
-} from "src/components/Scheduling/scheduleUtils";
+import { formatSlotLabel } from "src/components/Scheduling/scheduleUtils";
 import type { InterviewOutreachTemplates } from "./interviewOutreach";
 import CandidateSwapChip, {
   CandidateSwapTarget,
@@ -99,57 +96,17 @@ const DistributedPlanCalendar: React.FC<{
   // panel), keyed by schedule index, so a per-slot panel swap can be blocked
   // when the replacement is inhabil against anyone else in that block. Built
   // from the full schedule, not the filtered view, so the set stays complete.
-  //
-  // The canonical blocks are built exactly as the solver does — from the
-  // saved layout config for standard mode, or the manual block list for
-  // manual mode — so a published plan's block grouping never diverges from
-  // what the solver produced.
-  const blockCandidateIdsByScheduleIndex = useMemo(() => {
-    const canonicalBlocks =
-      savedSchedule.block_mode === "manual"
-        ? manualBlocksToSolverBlocks(
-            savedSchedule.manual_blocks,
-            fullDates,
-            savedSchedule.session_duration,
-          )
-        : buildSolveBlocks({
-            dates: fullDates,
-            dayStartMinute: savedSchedule.day_start_minute,
-            dayEndMinute: savedSchedule.day_end_minute,
-            sessionDuration: savedSchedule.session_duration,
-            chunkSize: savedSchedule.chunk_size,
-            chunkBreakMinutes: savedSchedule.chunk_break_minutes,
-          });
-
-    const blockByTime = new Map<number, Set<string>>();
-    canonicalBlocks.forEach((block) => {
-      const candidateIds = new Set<string>();
-      block.forEach((time) => blockByTime.set(time, candidateIds));
-      savedSchedule.schedule.forEach((item) => {
-        if (!block.includes(item.time)) return;
-        const candidateId = lookups.candidateIdFor(item);
-        if (candidateId) candidateIds.add(candidateId);
-      });
-    });
-
-    const byScheduleIndex = new Map<number, ReadonlySet<string>>();
-    savedSchedule.schedule.forEach((item, scheduleIndex) => {
-      const ids = blockByTime.get(item.time);
-      if (ids) byScheduleIndex.set(scheduleIndex, ids);
-    });
-    return byScheduleIndex;
-  }, [
-    fullDates,
-    lookups,
-    savedSchedule.block_mode,
-    savedSchedule.chunk_break_minutes,
-    savedSchedule.chunk_size,
-    savedSchedule.day_end_minute,
-    savedSchedule.day_start_minute,
-    savedSchedule.manual_blocks,
-    savedSchedule.schedule,
-    savedSchedule.session_duration,
-  ]);
+  // Shared with the table view so a swap is blocked on the same grounds
+  // regardless of which one an admin is looking at.
+  const blockCandidateIdsByScheduleIndex = useMemo(
+    () =>
+      buildBlockCandidateIdsByScheduleIndex(
+        savedSchedule,
+        fullDates,
+        lookups.candidateIdFor,
+      ),
+    [fullDates, lookups, savedSchedule],
+  );
   const EMPTY_CANDIDATE_IDS: ReadonlySet<string> = useMemo(() => new Set(), []);
 
   const swapTargetsByScheduleIndex = useMemo(() => {
