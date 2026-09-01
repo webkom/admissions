@@ -204,26 +204,38 @@ export const candidateNamesAreVisible = (
  * schedule and then looked up per row, so a filtered `dates` would silently
  * drop blocks that still need to be checked.
  */
+/**
+ * The solver's canonical blocks for a saved plan - from the saved layout
+ * config in standard mode, or the manual block list in manual mode, exactly
+ * as the solver builds them. `fullDates` must be the framework's complete
+ * date list, never a filtered view, or day indices shift underneath the
+ * block times.
+ */
+export const buildCanonicalBlocks = (
+  savedSchedule: SavedSchedule,
+  fullDates: string[],
+): number[][] =>
+  savedSchedule.block_mode === "manual"
+    ? manualBlocksToSolverBlocks(
+        savedSchedule.manual_blocks,
+        fullDates,
+        savedSchedule.session_duration,
+      )
+    : buildSolveBlocks({
+        dates: fullDates,
+        dayStartMinute: savedSchedule.day_start_minute,
+        dayEndMinute: savedSchedule.day_end_minute,
+        sessionDuration: savedSchedule.session_duration,
+        chunkSize: savedSchedule.chunk_size,
+        chunkBreakMinutes: savedSchedule.chunk_break_minutes,
+      });
+
 export const buildBlockCandidateIdsByScheduleIndex = (
   savedSchedule: SavedSchedule,
   fullDates: string[],
   candidateIdFor: (item: ScheduleItem) => string | undefined,
 ): Map<number, ReadonlySet<string>> => {
-  const canonicalBlocks =
-    savedSchedule.block_mode === "manual"
-      ? manualBlocksToSolverBlocks(
-          savedSchedule.manual_blocks,
-          fullDates,
-          savedSchedule.session_duration,
-        )
-      : buildSolveBlocks({
-          dates: fullDates,
-          dayStartMinute: savedSchedule.day_start_minute,
-          dayEndMinute: savedSchedule.day_end_minute,
-          sessionDuration: savedSchedule.session_duration,
-          chunkSize: savedSchedule.chunk_size,
-          chunkBreakMinutes: savedSchedule.chunk_break_minutes,
-        });
+  const canonicalBlocks = buildCanonicalBlocks(savedSchedule, fullDates);
 
   const blockByTime = new Map<number, Set<string>>();
   canonicalBlocks.forEach((block) => {

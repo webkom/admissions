@@ -191,6 +191,13 @@ def schedule_response_context(
         "contact_candidate_ids": contact_candidate_ids,
         "effective_name_visibility": effective_name_visibility,
         "include_deviation_review": is_interview_admin,
+        # Which copy of the plan this reader gets. An interview admin works
+        # against the live `schedule`; everyone else reads the committed
+        # `published_schedule` snapshot, so an admin mid-edit never leaks a
+        # half-finished plan. Explicit rather than inferred from
+        # publication_boundary, which is also None for a member on an
+        # unpublished plan (that case is caught by hide_schedule above).
+        "serve_published_snapshot": not is_interview_admin,
         "publication_boundary": publication_boundary,
         # Members see the interview status (the value) but not the recruiter
         # metadata (who last changed it, when) - those are workflow fields,

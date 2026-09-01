@@ -121,6 +121,16 @@ class SaveScheduleInputSerializer(serializers.Serializer):
     defer_unplaced_candidates = serializers.BooleanField(
         required=False, write_only=True
     )
+    # Commit the current schedule to `published_schedule` - what the committee
+    # reads. Sent by the "Lagre" button and by the published-plan row edits
+    # that were always live; deliberately NOT sent by the solver's draft
+    # autosave, which is what lets an admin re-solve without the committee
+    # seeing it. A publish or a boundary move commits regardless (see
+    # _persist_schedule), so this is only about saves that keep the boundary
+    # exactly where it is.
+    commit_published_snapshot = serializers.BooleanField(
+        required=False, write_only=True
+    )
     # Explicit override of the inhabilitetssjekk gate: when True, the
     # publish is allowed to go through with one or more reviewers still
     # owing their check. Skipped reviewers are recorded against the plan
@@ -468,6 +478,7 @@ class SavedScheduleSerializer(serializers.ModelSerializer):
             "solver_options",
             "is_distributed",
             "distributed_through",
+            "published_schedule",
             "conflict_review_open",
             "published_without_review_by",
             "name_visibility",
@@ -486,6 +497,18 @@ class SavedScheduleSerializer(serializers.ModelSerializer):
             return data
         hide_candidate_identity = self.context.get("hide_candidate_identity")
         visible_candidate_ids = self.context.get("visible_candidate_ids")
+
+        # Everyone but an interview admin reads the committed snapshot, not
+        # the admin's working copy - that is what lets an admin unlock a
+        # published plan and re-solve it without the committee seeing the
+        # draft. Substituted before the boundary filter below so a withheld
+        # row is withheld from the snapshot, not from the live plan.
+        if self.context.get("serve_published_snapshot"):
+            data["schedule"] = instance.published_schedule or []
+            # They already have it, as `schedule`. Sending both would hand a
+            # member the working copy under a second key - the exact leak
+            # this split exists to prevent.
+            data.pop("published_schedule", None)
 
         raw_schedule = data.get("schedule")
         if not isinstance(raw_schedule, list):

@@ -42,6 +42,23 @@ from admissions.oauth import update_custom_user_details
 from admissions.utils.management.commands.run_solver_worker import Command
 
 
+def create_saved_schedule(**fields):
+    """SavedSchedule.objects.create with the published snapshot seeded the
+    way a real publish seeds it.
+
+    Publishing goes through _persist_schedule, which commits `schedule` to
+    `published_schedule` - the copy the committee actually reads. A fixture
+    that sets a boundary directly bypasses that, so without this it would
+    model a state the application cannot produce: published, but with
+    nothing for a member to read. Tests that want the two to differ (an
+    admin mid-edit) pass `published_schedule` explicitly.
+    """
+    is_published = fields.get("is_distributed") or fields.get("distributed_through")
+    if is_published and "published_schedule" not in fields:
+        fields["published_schedule"] = fields.get("schedule") or []
+    return SavedSchedule.objects.create(**fields)
+
+
 class SavedSchedulePublishSemanticsTestCase(APITestCase):
     client_class = ScheduleRevisionAPIClient
 
@@ -114,7 +131,7 @@ class SavedSchedulePublishSemanticsTestCase(APITestCase):
             "is_distributed": True,
         }
         defaults.update(overrides)
-        return SavedSchedule.objects.create(**defaults)
+        return create_saved_schedule(**defaults)
 
     def _mark_reviewed(self, *applications):
         InterviewAvailability.objects.filter(
@@ -124,6 +141,121 @@ class SavedSchedulePublishSemanticsTestCase(APITestCase):
         ).update(
             reviewed_candidate_ids=[str(application.pk) for application in applications]
         )
+
+    def test_draft_save_on_a_published_plan_leaves_the_snapshot_alone(self):
+        """The point of the split: an admin can edit (or re-solve) a
+        published plan and the committee keeps reading the last committed
+        state until the admin saves."""
+        saved = self._create_saved(is_distributed=True)
+        committed = list(saved.published_schedule)
+
+        # Same boundary the fixture published at (is_distributed=True maps to
+        # last scheduled day + 1), so this is an edit, not a wider publish.
+        res = self.client.post(
+            self.url,
+            {
+                "schedule": self._schedule(time=600),
+                "distributed_through": "2026-04-21",
+            },
+            format="json",
+        )
+
+        self.assertEqual(res.status_code, status.HTTP_200_OK, res.data)
+        saved.refresh_from_db()
+        # Working copy moved...
+        self.assertEqual(saved.schedule[0]["time"], 600)
+        # ...the committee's copy did not.
+        self.assertEqual(saved.published_schedule, committed)
+
+    def test_commit_flag_publishes_the_working_copy(self):
+        """ "Lagre": one call, no gate, and the committee sees the edit."""
+        saved = self._create_saved(is_distributed=True)
+
+        self.client.post(
+            self.url,
+            {
+                "schedule": self._schedule(time=600),
+                "distributed_through": "2026-04-21",
+            },
+            format="json",
+        )
+        res = self.client.post(
+            self.url,
+            {
+                "distributed_through": "2026-04-21",
+                "commit_published_snapshot": True,
+            },
+            format="json",
+        )
+
+        self.assertEqual(res.status_code, status.HTTP_200_OK, res.data)
+        saved.refresh_from_db()
+        self.assertEqual(saved.published_schedule, saved.schedule)
+        self.assertEqual(saved.published_schedule[0]["time"], 600)
+
+    def test_resave_that_seats_someone_new_still_needs_the_check(self):
+        """The gate is about consent, not disclosure. Re-solving a published
+        plan adds no visible rows, but it can seat an interviewer with a
+        candidate nobody has been asked about - that still has to clear the
+        inhabilitetssjekk."""
+        self._create_saved(is_distributed=True)
+        other = LegoUser.objects.create(username="hardening-swap", lego_id=1601)
+        Membership.objects.create(user=other, role=RECRUITING, group=self.admin_group)
+        # Participating, so the swap clears the roster checks and the
+        # inhabilitetssjekk gate is what it actually runs into.
+        InterviewAvailability.objects.create(
+            admission=self.admission,
+            group=self.admin_group,
+            user=other,
+            slots=["2026-04-20|540", "2026-04-20|600"],
+        )
+
+        res = self.client.post(
+            self.url,
+            {
+                "schedule": self._schedule(
+                    panel=[{"id": str(other.pk), "name": other.username}]
+                ),
+                "distributed_through": "2026-04-21",
+                "commit_published_snapshot": True,
+            },
+            format="json",
+        )
+
+        self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST, res.data)
+        self.assertEqual(res.data["code"], "conflict_review_required")
+
+    def test_resave_with_no_new_pairing_saves_in_one_click(self):
+        """The flip side: a change that seats nobody new asks nothing of
+        anyone and must not re-run the publish flow."""
+        saved = self._create_saved(is_distributed=True)
+
+        res = self.client.post(
+            self.url,
+            {
+                # Same pairing, different time.
+                "schedule": self._schedule(time=600),
+                "distributed_through": "2026-04-21",
+                "commit_published_snapshot": True,
+            },
+            format="json",
+        )
+
+        self.assertEqual(res.status_code, status.HTTP_200_OK, res.data)
+        saved.refresh_from_db()
+        self.assertEqual(saved.published_schedule[0]["time"], 600)
+
+    def test_unpublishing_clears_the_snapshot(self):
+        """A stale snapshot would mean a later republish silently released
+        the *old* rows."""
+        saved = self._create_saved(is_distributed=True)
+        self.assertTrue(saved.published_schedule)
+
+        res = self.client.post(self.url, {"is_distributed": False}, format="json")
+
+        self.assertEqual(res.status_code, status.HTTP_200_OK, res.data)
+        saved.refresh_from_db()
+        self.assertEqual(saved.published_schedule, [])
 
     def test_completed_days_round_trip_and_never_touch_availability(self):
         saved = self._create_saved(
@@ -1996,7 +2128,7 @@ class InterviewAvailabilityHardeningTestCase(APITestCase):
             "session_duration": 60,
         }
         defaults.update(overrides)
-        return SavedSchedule.objects.create(**defaults)
+        return create_saved_schedule(**defaults)
 
     def _open_conflict_review(self):
         return self._create_saved_schedule(
@@ -3448,7 +3580,7 @@ class SavedScheduleVisibilityTestCase(APITestCase):
             "name_visibility": "hidden",
         }
         defaults.update(overrides)
-        return SavedSchedule.objects.create(**defaults)
+        return create_saved_schedule(**defaults)
 
     def _other_committee_recruiter(self):
         other_group = Group.objects.create(name="Bedkom", lego_id=705)
@@ -3475,6 +3607,53 @@ class SavedScheduleVisibilityTestCase(APITestCase):
             "time": time,
             "panel": [],
         }
+
+    def test_member_reads_the_snapshot_not_the_admins_working_copy(self):
+        """The privacy half of the draft/published split: while an admin has
+        unsaved edits to a published plan, a member must still receive the
+        committed rows - never the working copy, and never both."""
+        saved = self._create_saved(name_visibility="committee")
+        # The admin edits without committing: working copy diverges.
+        saved.schedule = [
+            {
+                "candidate": "Ada",
+                "candidate_id": str(self.application.pk),
+                "time": 9,
+                "panel": [],
+            }
+        ]
+        saved.save(update_fields=["schedule"])
+
+        self.client.force_authenticate(user=self.member_user)
+        res = self.client.get(self.url)
+
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        # The committed row, not the drafted one.
+        self.assertEqual([row["time"] for row in res.data["schedule"]], [8])
+        # And the working copy is not handed over under a second key.
+        self.assertNotIn("published_schedule", res.data)
+
+    def test_admin_reads_the_working_copy_and_can_see_both(self):
+        """The admin's own view is the working copy - otherwise they could
+        not see the edit they just made - plus the snapshot, so the client
+        can tell there is something unsaved."""
+        saved = self._create_saved(name_visibility="committee")
+        saved.schedule = [
+            {
+                "candidate": "Ada",
+                "candidate_id": str(self.application.pk),
+                "time": 9,
+                "panel": [],
+            }
+        ]
+        saved.save(update_fields=["schedule"])
+
+        self.client.force_authenticate(user=self.admin_user)
+        res = self.client.get(self.url)
+
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.assertEqual([row["time"] for row in res.data["schedule"]], [9])
+        self.assertEqual([row["time"] for row in res.data["published_schedule"]], [8])
 
     def test_placeholder_names_survive_publishing_another_day(self):
         """A member who notes down "Kandidat 3, tirsdag 10:00" must still find
@@ -6000,7 +6179,7 @@ class RollingPrefixPublishTestCase(APITestCase):
             "conflict_review_open": True,
         }
         defaults.update(overrides)
-        return SavedSchedule.objects.create(**defaults)
+        return create_saved_schedule(**defaults)
 
     def _mark_reviewed(self, *applications):
         InterviewAvailability.objects.filter(

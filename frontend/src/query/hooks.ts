@@ -42,6 +42,14 @@ type SaveSchedulePayload = Partial<Omit<SavedSchedule, "id" | "updated_at">> & {
    */
   publish_without_full_review?: boolean;
   defer_unplaced_candidates?: boolean;
+  /**
+   * Write-only: commit the working copy to `published_schedule`, what the
+   * committee actually reads. Sent by "Lagre" and by the published-plan row
+   * edits that were always live; deliberately not sent by the solver's draft
+   * autosave, which is what lets an admin re-solve a published plan without
+   * the committee seeing the draft.
+   */
+  commit_published_snapshot?: boolean;
 };
 
 interface SaveScheduleOptions {

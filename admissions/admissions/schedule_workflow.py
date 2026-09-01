@@ -832,7 +832,83 @@ def _resolve_schedule_state(
     }
 
 
-def _ensure_conflict_review_ready_for_publish(admission, group, data, schedule):
+# How open a name_visibility is. Only an increase discloses anything, so the
+# gate below compares ranks rather than equality - going from committee back
+# to hidden reveals nothing and must not re-ask for the inhabilitetssjekk.
+_NAME_VISIBILITY_RANK = {
+    SavedSchedule.NAME_VISIBILITY_HIDDEN: 0,
+    SavedSchedule.NAME_VISIBILITY_ADMIN_ONLY: 1,
+    SavedSchedule.NAME_VISIBILITY_COMMITTEE: 2,
+}
+
+
+def _as_boundary_date(value):
+    if isinstance(value, date):
+        return value
+    try:
+        return date.fromisoformat(str(value))
+    except (TypeError, ValueError):
+        return None
+
+
+def _panel_pairings(schedule):
+    """Every (candidate, interviewer) pairing in a schedule.
+
+    The unit the inhabilitetssjekk is actually about: an interviewer
+    confirms they are not inhabil for the candidates they are seated with.
+    """
+    pairings = set()
+    for entry in schedule or []:
+        if not isinstance(entry, dict):
+            continue
+        candidate_id = entry.get("candidate_id")
+        if candidate_id is None:
+            continue
+        for member in entry.get("panel") or []:
+            if isinstance(member, dict) and member.get("id"):
+                pairings.add((str(candidate_id), str(member["id"])))
+    return pairings
+
+
+def _publish_needs_review_gate(existing, state, schedule):
+    """Whether this save has to clear the inhabilitetssjekk gate.
+
+    Three things put a save through the gate:
+
+    - a first publish, or a boundary moved forward - rows the committee
+      could not see before now go out;
+    - name visibility opening up;
+    - any pairing that is not already in the published snapshot. This is the
+      one that matters most and the easiest to get wrong: re-solving a
+      published plan discloses no *additional rows* while still seating
+      people together that nobody has been asked about. "Reveals nothing
+      new" is about disclosure; the gate is about consent, and a new pairing
+      needs consent even when the row it sits on was already visible.
+
+    What is left - a time change, a lock toggle, a re-save of an unchanged
+    plan - genuinely asks nothing of anyone, and saves in one click.
+    """
+    if existing is None or existing.distributed_through is None:
+        return True
+    previous_boundary = _as_boundary_date(existing.distributed_through)
+    next_boundary = _as_boundary_date(state.get("distributed_through"))
+    if next_boundary is None:
+        # Withdrawing the plan. Nothing goes out.
+        return False
+    if previous_boundary is None or next_boundary > previous_boundary:
+        return True
+    previous_rank = _NAME_VISIBILITY_RANK.get(existing.name_visibility, 0)
+    next_rank = _NAME_VISIBILITY_RANK.get(state.get("name_visibility"), 0)
+    if next_rank > previous_rank:
+        return True
+    return not _panel_pairings(schedule).issubset(
+        _panel_pairings(existing.published_schedule)
+    )
+
+
+def _ensure_conflict_review_ready_for_publish(
+    admission, group, data, schedule, existing, state
+):
     """Gate publish on a finished inhabilitetssjekk.
 
     Returns the ids of the interviewers whose check was outstanding and got
@@ -844,6 +920,10 @@ def _ensure_conflict_review_ready_for_publish(admission, group, data, schedule):
         data.get("distributed_through")
     )
     if not is_publishing or not schedule:
+        return []
+    # A re-save that asks nothing of anyone is not a publish for gating
+    # purposes - see _publish_needs_review_gate.
+    if not _publish_needs_review_gate(existing, state, schedule):
         return []
 
     readiness = get_conflict_review_readiness(admission, group, schedule=schedule)
@@ -1188,6 +1268,33 @@ def _persist_schedule(
             "conflict_review_open": state["conflict_review_open"],
             "name_visibility": state["name_visibility"],
         }
+        # What the committee reads. The snapshot only moves when the admin
+        # actually commits one, so unlocking a published plan and re-solving
+        # it leaves the committee on the last committed state instead of
+        # either losing the plan or watching a draft churn.
+        #
+        # Committed by: any save that sets or moves the publish boundary (a
+        # first publish, an extension), and any save that explicitly asks
+        # (`commit_published_snapshot` - the "Lagre" button, and the row
+        # edits that were always live). A plain draft save is what does not
+        # commit, which is the whole point.
+        #
+        # Unpublishing clears it: with no boundary there is no published
+        # plan, and leaving a stale snapshot behind would mean re-publishing
+        # later silently republished the *old* rows.
+        previous_boundary = (
+            existing.distributed_through if existing is not None else None
+        )
+        next_boundary = state["distributed_through"]
+        if next_boundary is None:
+            desired_fields["published_schedule"] = []
+        elif (
+            next_boundary != previous_boundary
+            or data.get("commit_published_snapshot") is True
+        ):
+            desired_fields["published_schedule"] = schedule
+        elif existing is not None:
+            desired_fields["published_schedule"] = existing.published_schedule
         # Three-way rule for the bypass note:
         # - taking the plan back to draft (publish_request is false) clears it,
         #   there is no published plan to mark;
@@ -1421,7 +1528,7 @@ def update_saved_schedule(
         layout,
     )
     skipped_reviewer_ids = _ensure_conflict_review_ready_for_publish(
-        admission, group, data, schedule
+        admission, group, data, schedule, existing, state
     )
     deviation_review = _deviation_review_for_publish(
         data,

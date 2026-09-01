@@ -44,11 +44,14 @@ import { useSolverSession } from "./useSolverSession";
 import { derivePlanDraftWorkflowState } from "./planDraftWorkflow";
 import { useInterviewAvailability } from "src/query/hooks";
 import PlanDayStrip from "./PlanDayStrip";
-import { actionButtonBase, actionButtonNeutral } from "../ui";
+import {
+  actionButtonBase,
+  actionButtonNeutral,
+  actionButtonPrimary,
+} from "../ui";
 import cn from "../../../utils/cn";
 import DraftTaskLayout from "./DraftTaskLayout";
 import ProposalDecisionPanel from "./ProposalDecisionPanel";
-import PublishedPlanNotice from "./PublishedPlanNotice";
 import UnplacedSlotPicker, {
   buildUnplacedSlotOptions,
   type UnplacedSlotOption,
@@ -97,6 +100,9 @@ interface Props {
   /** Move the publication boundary to this date, or open the publish step
    *  primed with it when nothing is published yet. */
   onPublishThrough?: (date: string) => void;
+  /** Commit the working copy to what the committee reads. Present only for a
+   *  published plan being edited - the "Lagre" that ends an edit session. */
+  onCommitPublishedSnapshot?: () => Promise<boolean>;
   onOpenConflictReview: () => void;
   conflictReviewReachable: boolean;
   onOpenPlan: () => void;
@@ -143,6 +149,7 @@ export default function SolverView({
   onOpenAvailability,
   onOpenFramework,
   onPublishThrough,
+  onCommitPublishedSnapshot,
   onOpenConflictReview,
   conflictReviewReachable,
   onOpenPlan,
@@ -226,6 +233,16 @@ export default function SolverView({
   });
   // Days the admin marked finished. Seeded from the server and kept in sync
   // with it, but locally toggleable - the toggle persists immediately.
+  // The committee's copy has drifted from the admin's working copy: there
+  // are edits in this draft that have not been released yet. Only an
+  // interview admin is served `published_schedule` at all, so this is simply
+  // absent (and the affordance hidden) for anyone else.
+  const hasUncommittedPublishedEdits = Boolean(
+    session.savedSchedule?.distributed_through &&
+      session.savedSchedule.published_schedule !== undefined &&
+      JSON.stringify(session.savedSchedule.published_schedule) !==
+        JSON.stringify(session.savedSchedule.schedule),
+  );
   const savedCompletedDays = session.savedSchedule?.completed_days;
   const [completedDays, setCompletedDays] = useState<string[]>(
     () => savedCompletedDays ?? [],
@@ -1006,20 +1023,20 @@ export default function SolverView({
     />
   );
 
-  if (savedScheduleIsDistributed && !isPartiallyDistributed) {
-    return (
-      <PublishedPlanNotice
-        stage={planDraftStage.kind}
-        title={planDraftStage.title}
-        description={planDraftStage.description}
-        onOpenPlan={onOpenPlan}
-      />
-    );
-  }
-
-  // A partially published plan keeps the full planning workspace available:
-  // the released days are locked (see publishedDayLocks) and the rest can be
-  // planned and released later without touching them.
+  // A published plan keeps the full planning workspace, partial or not.
+  //
+  // This used to dead-end on PublishedPlanNotice, because there was one
+  // schedule field: drafting over a published plan *was* editing what the
+  // committee could see, so the only safe answer was to send the admin away
+  // (or make them unpublish first). The working copy and the committee's
+  // copy are separate now - SavedSchedule.published_schedule - so editing,
+  // and re-solving, a published plan changes nothing for anyone else until
+  // the admin commits it with "Lagre". The notice still renders as the
+  // stage banner inside the workspace; it is no longer a wall in front of
+  // it.
+  //
+  // A partially published plan additionally locks its released days (see
+  // publishedDayLocks) so the rest can be planned without touching them.
   const renderWorkspace = () => {
     if (backgroundMode) {
       return hasProposal ? renderDraftCanvas(true) : null;
@@ -1183,6 +1200,36 @@ export default function SolverView({
   // reached, and both cursors move from here.
   const planDayStrip = backgroundMode ? null : (
     <div className="flex flex-col gap-2">
+      {/* The other half of "Rediger": an edit session on a published plan
+          ends here rather than with a trip back to the plan view. A re-solve
+          that seats someone new still clears the inhabilitetssjekk gate (see
+          _publish_needs_review_gate) and the waiver panel takes over; an edit
+          that seats nobody new saves in one click. Either way the committee
+          stays on the last committed snapshot until this lands. */}
+      {onCommitPublishedSnapshot && hasUncommittedPublishedEdits && (
+        <div
+          data-cy="solver-commit-published"
+          className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border bg-surface-subtle px-4 py-3"
+        >
+          <span className="text-ui text-text-muted">
+            Komiteen ser fortsatt forrige lagrede versjon av planen.
+          </span>
+          <button
+            type="button"
+            disabled={session.loading || !persistence.isSaved}
+            onClick={() => void onCommitPublishedSnapshot()}
+            className={cn(actionButtonBase, actionButtonPrimary, "flex-none")}
+            title={
+              persistence.isSaved
+                ? undefined
+                : "Vent til utkastet er lagret før du publiserer endringene."
+            }
+          >
+            Lagre for komiteen
+          </button>
+        </div>
+      )}
+
       <PlanDayStrip
         dates={dates}
         plannableDates={session.plannableDates}

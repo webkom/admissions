@@ -160,10 +160,20 @@ export const useDistributedPlanActions = ({
     try {
       // The exact current boundary, not the is_distributed echo: a row edit
       // means "keep the publish state as it is", never "publish everything".
+      //
+      // Committed to the snapshot as well: a row edit on a published plan
+      // (swapping a panel member, moving a time) was always immediately
+      // visible to the committee, and staging it behind a separate save
+      // would be a regression - these are corrections to a live plan, not
+      // draft work. Staging is for the solver's draft autosave, which does
+      // not send this flag.
       await saveSchedule.mutateAsync({
         schedule,
         ...(savedSchedule.distributed_through
-          ? { distributed_through: savedSchedule.distributed_through }
+          ? {
+              distributed_through: savedSchedule.distributed_through,
+              commit_published_snapshot: true,
+            }
           : { is_distributed: false }),
         expected_updated_at: savedSchedule.updated_at,
       });
@@ -354,6 +364,58 @@ export const useDistributedPlanActions = ({
         : scheduleSaveErrorMessage(
             error,
             "Kunne ikke utvide publiseringsgrensen. Prøv igjen.",
+          );
+      setPlanTransitionError(message);
+      notify(message, "error");
+      return false;
+    } finally {
+      setPlanTransition(null);
+    }
+  };
+
+  /** Commit the working copy to what the committee reads - the "Lagre"
+   *  button. Keeps the boundary and the name visibility exactly where they
+   *  are, so a save that seats nobody new clears the server's gate in one
+   *  click. A save that *does* seat someone new is still gated on the
+   *  inhabilitetssjekk and comes back with `conflict_review_required` (see
+   *  _publish_needs_review_gate) - the waiver panel then takes over, as on
+   *  any other publish. The schedule itself is already persisted by the
+   *  draft autosave; this only moves the snapshot. */
+  const commitPublishedSnapshot = async () => {
+    if (!savedSchedule) return false;
+    if (!savedSchedule.distributed_through) return false;
+    setPlanTransition("publishing");
+    setPlanTransitionError("");
+    setScheduleFieldError("");
+    setReviewRefusalActive(false);
+    try {
+      await saveSchedule.mutateAsync({
+        distributed_through: savedSchedule.distributed_through,
+        commit_published_snapshot: true,
+        expected_updated_at: savedSchedule.updated_at,
+      });
+      if (areSensitiveAdmissionCacheWritesBlocked(scope)) return false;
+      notify("Endringene er lagret og synlige for komiteen.");
+      return true;
+    } catch (error) {
+      if (isSensitiveAuthorityChangedError(error)) return false;
+      if (handleAuthorizationFailure(error)) return false;
+      // A save that seats someone new is still gated on the
+      // inhabilitetssjekk. Route it to the waiver panel exactly as a publish
+      // does, rather than a red "could not save" - it is a prompt, not a
+      // failure, and the admin's next step is the same either way.
+      const structured = extractScheduleFieldError(error);
+      if (structured && isConflictReviewRefusal(error, structured)) {
+        setScheduleFieldError(structured);
+        setReviewRefusalActive(true);
+        setPlanTransitionError("");
+        return false;
+      }
+      const message = isConflictError(error)
+        ? CONFLICT_MESSAGE
+        : scheduleSaveErrorMessage(
+            error,
+            "Kunne ikke lagre endringene. Prøv igjen.",
           );
       setPlanTransitionError(message);
       notify(message, "error");
@@ -579,6 +641,7 @@ export const useDistributedPlanActions = ({
     planTransitionError,
     scheduleFieldError,
     reviewRefusalActive,
+    commitPublishedSnapshot,
     clearUnpublishedDraft,
     setNameVisibility,
     replacePanelMember,

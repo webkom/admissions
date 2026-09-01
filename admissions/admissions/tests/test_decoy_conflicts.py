@@ -401,6 +401,10 @@ class PartialPublishIdentityTestCase(APITestCase):
             admission=self.admission,
             group=self.group,
             schedule=self.schedule,
+            # A real publish commits this snapshot (see _persist_schedule);
+            # it is what a member reads, so a fixture that sets the boundary
+            # directly has to seed it too.
+            published_schedule=self.schedule,
             start_date="2026-04-21",
             session_duration=60,
             distributed_through=distributed_through,
