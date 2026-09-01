@@ -13,7 +13,11 @@ import {
   makeSlotKey,
 } from "src/components/Scheduling/scheduleUtils";
 import { calculateBlockBaseline } from "src/components/Scheduling/Solver/blockBaseline";
-import type { ScheduleItem, SavedSchedule } from "../../types";
+import type {
+  ScheduleItem,
+  SchedulePanelMember,
+  SavedSchedule,
+} from "../../types";
 import { Chip } from "src/components/ui";
 import cn from "src/utils/cn";
 import { ScheduleBlockDivider } from "src/components/Scheduling/ScheduleBlockDivider";
@@ -283,6 +287,7 @@ const PublishedScheduleTable: React.FC<{
                           blockIndex={showBlockGroups ? slot.blockIndex : null}
                           blockMeta={blockMeta}
                           sessionDuration={savedSchedule.session_duration}
+                          isCurrentUser={lookups.isCurrentUser}
                         />
                       )}
                       <tr className="border-b border-border-soft bg-surface-base">
@@ -330,6 +335,7 @@ const PublishedScheduleTable: React.FC<{
                         blockIndex={showBlockGroups ? slot.blockIndex : null}
                         blockMeta={blockMeta}
                         sessionDuration={savedSchedule.session_duration}
+                        isCurrentUser={lookups.isCurrentUser}
                       />
                     )}
                     {slotEntries.map((entry, entryIndex) => {
@@ -386,7 +392,8 @@ const PublishedBlockHeader: React.FC<{
   blockIndex: number | null;
   blockMeta?: PublishedBlockMeta;
   sessionDuration: number;
-}> = ({ dateLabel, blockIndex, blockMeta, sessionDuration }) => {
+  isCurrentUser?: (member: SchedulePanelMember) => boolean;
+}> = ({ dateLabel, blockIndex, blockMeta, sessionDuration, isCurrentUser }) => {
   const timeSpan =
     blockMeta?.minuteStart !== null &&
     blockMeta?.minuteStart !== undefined &&
@@ -412,11 +419,19 @@ const PublishedBlockHeader: React.FC<{
       meta={isBlock ? `${sessionDuration} min per intervju` : undefined}
       panel={
         panelMembers.length > 0
-          ? panelMembers.map((member, index) => (
-              <Chip key={`${member.name}-${index}`} tone="muted">
-                {member.name}
-              </Chip>
-            ))
+          ? panelMembers.map((member, index) => {
+              const isMine = Boolean(isCurrentUser?.(member));
+              return (
+                <Chip
+                  key={`${member.name}-${index}`}
+                  tone={isMine ? "brand" : "muted"}
+                  className={cn(isMine && "font-bold")}
+                >
+                  {member.name}
+                  {isMine && <span className="sr-only"> (deg)</span>}
+                </Chip>
+              );
+            })
           : undefined
       }
     />
