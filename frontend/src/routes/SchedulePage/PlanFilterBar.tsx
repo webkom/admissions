@@ -29,14 +29,13 @@ export interface PlanFilterBarProps {
     invited: number;
     confirmed: number;
     completed: number;
-    declined?: number;
     cancelled?: number;
   };
   selectedStatusFilter?: string | null;
   onSelectStatusFilter?: (status: string | null) => void;
   /**
    * Status chips reveal the committee's outreach progress (who has been
-   * invited, who declined, who confirmed). That is a recruiting-side
+   * invited, who cancelled, who confirmed). That is a recruiting-side
    * concern; ordinary members must not be able to surface it.
    */
   canFilterByStatus?: boolean;
@@ -72,7 +71,6 @@ type StatusFilterKey =
   | "confirmed"
   | "invited"
   | "not_invited"
-  | "declined"
   | "completed"
   | "cancelled";
 
@@ -81,12 +79,11 @@ const STATUS_FILTERS: {
   label: string;
   dotClass: string;
 }[] = [
-  { key: "confirmed", label: "Tid bekreftet", dotClass: "bg-success" },
-  { key: "invited", label: "Kalt inn", dotClass: "bg-warning-solid" },
   { key: "not_invited", label: "Ikke kalt inn", dotClass: "bg-text-subtle" },
-  { key: "declined", label: "Avslått", dotClass: "bg-danger" },
+  { key: "invited", label: "Kalt inn", dotClass: "bg-warning-solid" },
+  { key: "confirmed", label: "Tid bekreftet", dotClass: "bg-success" },
   { key: "completed", label: "Fullført", dotClass: "bg-success" },
-  { key: "cancelled", label: "Kansellert", dotClass: "bg-danger" },
+  { key: "cancelled", label: "Trukket / Avlyst", dotClass: "bg-danger" },
 ];
 
 const PlanFilterBar: React.FC<PlanFilterBarProps> = ({

@@ -8,9 +8,12 @@ from rest_framework.views import APIView
 
 from admissions.admissions import constants
 from admissions.admissions.admission_access import (
+    get_representing_groups,
     user_is_admission_admin,
     user_is_group_member,
+    user_is_in_competing_admin_group,
     user_is_interview_admin,
+    user_is_org_leadership,
 )
 from admissions.admissions.authentication import SessionAuthentication
 from admissions.admissions.models import (
@@ -19,13 +22,17 @@ from admissions.admissions.models import (
     NameVisibilityAuditEvent,
     SavedSchedule,
     UserApplication,
+    WithdrawalAuditEvent,
 )
 from admissions.admissions.scheduler_feature import SchedulerFeatureGateMixin
 from admissions.admissions.scheduling_utils import (
     publication_withholds_rows,
     published_candidate_ids,
 )
-from admissions.admissions.serializers import NameVisibilityAuditEventSerializer
+from admissions.admissions.serializers import (
+    NameVisibilityAuditEventSerializer,
+    WithdrawalAuditEventSerializer,
+)
 
 
 class InterviewCandidatesView(SchedulerFeatureGateMixin, APIView):
@@ -164,4 +171,66 @@ class NameVisibilityAuditView(SchedulerFeatureGateMixin, APIView):
             admission=admission, saved_schedule__group=group
         ).select_related("group", "actor")[: constants.MAX_NAME_VISIBILITY_AUDIT_EVENTS]
         serializer = NameVisibilityAuditEventSerializer(events, many=True)
+        return Response(serializer.data)
+
+
+class WithdrawalAuditView(SchedulerFeatureGateMixin, APIView):
+    """Who withdrew, from which committee, and when.
+
+    Withdrawal is a hard delete, so this read-only log is the only place the
+    answer lives. Recruiters and leaders of a committee see that committee's
+    withdrawals; admission admins see the whole admission. Ordinary members
+    get nothing - a withdrawal list is a recruiting-workflow tool, not plan
+    material.
+
+    The exception is an admin group that also competes in this admission: it
+    is confined to its own committees, the same rule applications follow. Its
+    recruiters are rivals for the same applicants, and "who withdrew from
+    Bedkom" is exactly the kind of thing a rival must not learn.
+    """
+
+    authentication_classes = [SessionAuthentication]
+    permission_classes = [IsAuthenticated]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = "candidate_read"
+
+    def get(self, request, admission_slug, group_id=None):
+        try:
+            admission = Admission.objects.get(slug=admission_slug)
+        except Admission.DoesNotExist:
+            return Response(status=status.HTTP_404_NOT_FOUND)
+
+        user = request.user
+        # Which committees may this reader see? None means the whole
+        # admission; a queryset means "these and no others".
+        if user_is_org_leadership(user) or (
+            user_is_admission_admin(admission, user)
+            and not user_is_in_competing_admin_group(admission, user)
+        ):
+            allowed_groups = None
+        else:
+            allowed_groups = get_representing_groups(admission, user)
+            if not allowed_groups.exists():
+                return Response(status=status.HTTP_403_FORBIDDEN)
+
+        events = WithdrawalAuditEvent.objects.filter(admission=admission)
+        if group_id is not None:
+            # The group-scoped URL names one committee, so it must answer for
+            # that committee only - including for a full admin, who would
+            # otherwise get the whole admission back from a URL that says
+            # otherwise.
+            group = get_object_or_404(admission.groups, pk=group_id)
+            if (
+                allowed_groups is not None
+                and not allowed_groups.filter(pk=group.pk).exists()
+            ):
+                return Response(status=status.HTTP_403_FORBIDDEN)
+            events = events.filter(group=group)
+        elif allowed_groups is not None:
+            events = events.filter(group__in=allowed_groups)
+
+        events = events.select_related("group", "actor")[
+            : constants.MAX_NAME_VISIBILITY_AUDIT_EVENTS
+        ]
+        serializer = WithdrawalAuditEventSerializer(events, many=True)
         return Response(serializer.data)

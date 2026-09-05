@@ -37,6 +37,7 @@ import { useApplicationsCsvExport } from "./useApplicationsCsvExport";
 import CandidatePrivacyPreview from "./components/CandidatePrivacyPreview";
 import CSVExportHandler from "./components/CSVExportHandler";
 import TerminateCommitteeZone from "./components/TerminateCommitteeZone";
+import WithdrawnCandidates from "./components/WithdrawnCandidates";
 import {
   PageWrapper,
   ErrorState,
@@ -436,6 +437,14 @@ const ViewApplications = () => {
             </SaveRow>
           </CollapseBody>
         </CollapsibleSection>
+      )}
+      {showCandidates && (
+        <WithdrawnCandidates
+          admissionSlug={admissionSlug ?? ""}
+          scopedGroupId={scopedGroup?.pk}
+          selectedGroupIds={selectedGroupIds}
+          searchTerm={searchTerm}
+        />
       )}
       {showCandidates && (
         <TerminateCommitteeZone

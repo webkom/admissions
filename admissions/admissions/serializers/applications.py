@@ -34,8 +34,10 @@ from admissions.admissions.models import (
     LegoUser,
     Membership,
     UserApplication,
+    WithdrawalAuditEvent,
 )
 from admissions.admissions.serializers.groups import ShortGroupApplicationSerializer
+from admissions.admissions.withdrawal_audit import record_withdrawal
 from admissions.utils.email import MESSAGE_KIND_WITHDRAWN, send_message
 
 log = get_logger()
@@ -355,6 +357,19 @@ class ApplicationCreateUpdateSerializer(serializers.HyperlinkedModelSerializer):
                 application=user_application
             ).exclude(group__in=kept_groups)
             removed_groups = [application.group for application in removed_applications]
+            # Snapshot before the delete - the rows are the only record of
+            # who these people were once this transaction commits.
+            for group_application in removed_applications.select_related(
+                "application__user"
+            ):
+                record_withdrawal(
+                    admission=admission,
+                    group=group_application.group,
+                    candidate=user_application,
+                    candidate_id=user_application.pk,
+                    kind=WithdrawalAuditEvent.KIND_PARTIAL,
+                    actor=user,
+                )
             removed_applications.delete()
 
             for group_name, group_text in applications.items():

@@ -125,9 +125,11 @@ effort: a mail failure must never roll back the user's application change.
 
 The admission-wide `interview_status` values are:
 
-`not_invited` → `invited` → `confirmed` / `declined` → `completed` or
-`cancelled` as operationally appropriate. The code treats these as editable
-states rather than enforcing a narrow transition graph.
+`not_invited` → `invited` → `confirmed` → `completed` or `cancelled` as
+operationally appropriate. (`declined` was retired in migration 0059 — the
+candidate saying no before the interview is just `cancelled`.) The code
+treats these as editable states rather than enforcing a narrow transition
+graph.
 
 Changing status uses optimistic concurrency through
 `expected_interview_status_updated_at`, locks the row in a transaction, updates

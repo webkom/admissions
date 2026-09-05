@@ -30,21 +30,15 @@ const interviewStatusConfig = {
     tone: "success",
     nextAction: null,
   },
-  declined: {
-    label: "Takket nei",
-    sortOrder: 3,
-    tone: "danger",
-    nextAction: null,
-  },
   completed: {
     label: "Intervju gjennomført",
-    sortOrder: 4,
+    sortOrder: 3,
     tone: "success",
     nextAction: null,
   },
   cancelled: {
     label: "Trukket seg / Avlyst",
-    sortOrder: 5,
+    sortOrder: 4,
     tone: "danger",
     nextAction: null,
   },

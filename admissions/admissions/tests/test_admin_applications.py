@@ -882,41 +882,37 @@ class ListApplicationsTestCase(APITestCase):
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(admission_response.status_code, status.HTTP_200_OK)
-        # Being in admin_groups grants ADMIN_FULL across all committees.
+        # is_admin stays true - the grant is real - but a competing admin
+        # group is still confined to its own committee's applicants.
         self.assertTrue(admission_response.data["userdata"]["is_admin"])
         self.assertEqual(
             admission_response.data["userdata"]["application_view_mode"],
-            "admin_full",
+            "committee_minimal",
         )
         self.assertEqual(len(response.data), 1)
         self.assertEqual(
             response.data[0]["application_view_mode"],
-            "admin_full",
-        )
-        self.assertEqual(response.data[0]["phone_number"], "00000000")
-        # Sees group applications for all committees (Webkom and Bedkom)
-        self.assertEqual(len(response.data[0]["group_applications"]), 2)
-
-        # But a recruiter of Bedkom (NOT in admin_groups) is narrowed to committee_minimal
-        self.client.force_authenticate(user=self.bedkom_rec)
-        bk_response = self.client.get(
-            reverse(
-                "admin-userapplication-list",
-                kwargs={"admission_slug": self.admission_slug},
-            )
-        )
-        self.assertEqual(bk_response.status_code, status.HTTP_200_OK)
-        self.assertEqual(
-            bk_response.data[0]["application_view_mode"],
             "committee_minimal",
         )
-        self.assertEqual(len(bk_response.data[0]["group_applications"]), 1)
+        self.assertEqual(response.data[0]["phone_number"], "00000000")
+        # The rival committee's application is absent entirely, not blanked.
+        # Asserted field by field rather than against a whole dict, so a new
+        # serializer field cannot turn this into a comparison that stops
+        # checking isolation.
+        group_applications = response.data[0]["group_applications"]
+        self.assertEqual(len(group_applications), 1)
+        self.assertEqual(group_applications[0]["group"]["name"], self.webkom.name)
+        self.assertEqual(group_applications[0]["text"], "private Webkom application")
         self.assertEqual(
-            bk_response.data[0]["group_applications"][0]["group"]["name"],
-            "Bedkom",
+            group_applications[0]["header_fields_response"],
+            {"private": "webkom answer"},
         )
-        self.assertNotIn("private central comment", str(bk_response.data))
-        self.assertIn("private central comment", str(response.data))
+        self.assertNotIn("priority_text", response.data[0])
+        self.assertNotIn("email", response.data[0]["user"])
+        self.assertNotIn("username", response.data[0]["user"])
+        self.assertNotIn("private Bedkom application", str(response.data))
+        self.assertNotIn("bedkom answer", str(response.data))
+        self.assertNotIn("private central comment", str(response.data))
 
     def test_admission_admin_can_see_private_priority_comment(self):
         application = UserApplication.objects.create(
@@ -992,7 +988,9 @@ class ListApplicationsTestCase(APITestCase):
         self.assertEqual(event.previous_status, "not_invited")
         self.assertEqual(event.new_status, "confirmed")
 
-    def test_interview_status_supports_declined_and_cancelled(self):
+    def test_interview_status_supports_cancelled_and_rejects_declined(self):
+        """'declined' was retired in favour of 'cancelled' (0059): the PATCH
+        must reject it now, and a valid transition still audits cleanly."""
         group_application = self._group_application()
         application = group_application.application
         self.client.force_authenticate(user=self.webkom_rec)
@@ -1009,14 +1007,12 @@ class ListApplicationsTestCase(APITestCase):
             self.interview_status_url(application),
             {
                 "interview_status": "cancelled",
-                "expected_interview_status_updated_at": declined.data[
-                    "interview_status_updated_at"
-                ],
+                "expected_interview_status_updated_at": group_application.interview_status_updated_at.isoformat(),
             },
             format="json",
         )
 
-        self.assertEqual(declined.status_code, status.HTTP_200_OK)
+        self.assertEqual(declined.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertEqual(cancelled.status_code, status.HTTP_200_OK)
         self.assertEqual(cancelled.data["interview_status"], "cancelled")
         self.assertEqual(
@@ -1025,7 +1021,7 @@ class ListApplicationsTestCase(APITestCase):
                     group_application=group_application
                 ).values_list("previous_status", "new_status")
             ),
-            [("declined", "cancelled"), ("not_invited", "declined")],
+            [("not_invited", "cancelled")],
         )
 
     def test_repeating_interview_status_does_not_create_audit_noise(self):
@@ -1549,7 +1545,7 @@ class DeleteGroupApplicationsTestCase(APITestCase):
             GroupApplication.objects.filter(application=application).exists()
         )
 
-    def test_admin_user_can_delete_whole_and_group_applications(self):
+    def test_competing_admin_confined_but_pure_admin_can_delete(self):
         application = UserApplication.objects.create(
             user=self.pleb,
             admission=self.admission,
@@ -1571,13 +1567,28 @@ class DeleteGroupApplicationsTestCase(APITestCase):
         )
         self.client.force_authenticate(user=self.webkom_leader)
 
-        # webkom_leader is in admin_group, so they can delete group applications and whole application
-        group_response = self.client.delete(f"{url}?groupId={self.arrkom.pk}")
-        self.assertEqual(group_response.status_code, status.HTTP_204_NO_CONTENT)
-        self.assertFalse(
+        # webkom_leader administers this admission but also leads a committee
+        # competing in it, so they are confined to Webkom (COMMITTEE_MINIMAL):
+        # deleting a rival committee's application - or the whole application,
+        # which would remove that rival's applicant too - is not theirs to do.
+        rival_response = self.client.delete(f"{url}?groupId={self.arrkom.pk}")
+        self.assertEqual(rival_response.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertTrue(
             GroupApplication.objects.filter(pk=arrkom_application.pk).exists()
         )
 
+        whole_response = self.client.delete(url)
+        self.assertEqual(whole_response.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertTrue(UserApplication.objects.filter(pk=application.pk).exists())
+
+        # Their own committee's application is still theirs to remove.
+        own_response = self.client.delete(f"{url}?groupId={self.webkom.pk}")
+        self.assertEqual(own_response.status_code, status.HTTP_204_NO_CONTENT)
+
+        # A non-competing admin - admin_group only - keeps the full grant.
+        pure_admin = LegoUser.objects.create(username="pure-admin", lego_id=9)
+        Membership.objects.create(user=pure_admin, role=LEADER, group=self.admin_group)
+        self.client.force_authenticate(user=pure_admin)
         whole_response = self.client.delete(url)
         self.assertEqual(whole_response.status_code, status.HTTP_204_NO_CONTENT)
         self.assertFalse(UserApplication.objects.filter(pk=application.pk).exists())

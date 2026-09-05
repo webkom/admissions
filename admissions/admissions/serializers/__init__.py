@@ -27,7 +27,10 @@ from admissions.admissions.serializers.applications import (
     ShortUserSerializer,
     UserApplicationSerializer,
 )
-from admissions.admissions.serializers.audit import NameVisibilityAuditEventSerializer
+from admissions.admissions.serializers.audit import (
+    NameVisibilityAuditEventSerializer,
+    WithdrawalAuditEventSerializer,
+)
 from admissions.admissions.serializers.availability import (
     InterviewAvailabilityParticipantSerializer,
     SaveInterviewAvailabilitySerializer,
@@ -106,5 +109,6 @@ __all__ = [
     "SolveOptionsSerializer",
     "UserApplicationSerializer",
     "UserSerializer",
+    "WithdrawalAuditEventSerializer",
     "send_message",
 ]

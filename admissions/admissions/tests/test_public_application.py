@@ -661,10 +661,11 @@ class CreateApplicationTestCase(APITestCase):
         self.assertEqual([], saved.schedule)
 
     def test_partial_withdrawal_uses_its_own_message(self):
-        """Unticking one committee must not read as leaving the admission.
+        """Unticking one committee notifies that committee - and nothing more.
 
-        Both paths used the same anonymous template, so recruiters could not
-        tell a partial withdrawal from a full one.
+        The mail is anonymous and says nothing about whether the applicant
+        still applies elsewhere: whether someone withdrew from everything or
+        just from us is their business, not the recruiter's.
         """
         self.client.force_authenticate(user=self.pleb_anna)
         url = reverse(
@@ -698,7 +699,10 @@ class CreateApplicationTestCase(APITestCase):
         sent = mail.outbox[0]
         self.assertIn("trukket", sent.subject)
         self.assertIn(self.koskom.name, sent.subject)
-        self.assertIn("fortsatt en aktiv søknad", sent.body)
+        # The old mail said "fortsatt en aktiv søknad til andre komiteer" -
+        # that leaked the applicant's other choices. It must stay out.
+        self.assertNotIn("fortsatt en aktiv søknad", sent.body)
+        self.assertNotIn("andre komiteer", sent.body)
         # Anonymous by design: the recruiter learns what happened, not who.
         # (Guarded: assertNotIn("") is vacuously true, and this fixture user
         # has no name or email set.)

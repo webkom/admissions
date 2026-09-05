@@ -355,7 +355,7 @@ class InterviewStatusPerCommitteeMigrationTestCase(MigrationTestCase):
             actor=user,
             actor_username=user.username,
             previous_status="not_invited",
-            new_status="declined",
+            new_status="cancelled",
         )
 
     def test_status_and_audit_events_move_to_group_applications(self):

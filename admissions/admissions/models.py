@@ -198,14 +198,12 @@ class GroupApplication(TimeStampModel):
     INTERVIEW_STATUS_NOT_INVITED = "not_invited"
     INTERVIEW_STATUS_INVITED = "invited"
     INTERVIEW_STATUS_CONFIRMED = "confirmed"
-    INTERVIEW_STATUS_DECLINED = "declined"
     INTERVIEW_STATUS_COMPLETED = "completed"
     INTERVIEW_STATUS_CANCELLED = "cancelled"
     INTERVIEW_STATUS_CHOICES = [
         (INTERVIEW_STATUS_NOT_INVITED, "Not invited"),
         (INTERVIEW_STATUS_INVITED, "Invited"),
         (INTERVIEW_STATUS_CONFIRMED, "Confirmed"),
-        (INTERVIEW_STATUS_DECLINED, "Declined"),
         (INTERVIEW_STATUS_COMPLETED, "Completed"),
         (INTERVIEW_STATUS_CANCELLED, "Cancelled"),
     ]
@@ -969,6 +967,80 @@ class DirectoryEntry(models.Model):
 
     def __str__(self):
         return self.full_name or self.username or str(self.lego_user_id)
+
+
+class WithdrawalAuditEvent(models.Model):
+    """Record of one application (or one committee choice) being withdrawn.
+
+    Withdrawal is a hard delete: the applicant's rows are removed and every
+    schedule, review list and availability record is purged of them (see
+    signals.purge_withdrawn_candidate). That is deliberate - publication
+    gating, readiness and privacy all lean on withdrawn ids naming nothing.
+    The price is that "who withdrew, and from which committee?" was
+    unanswerable the moment the delete committed.
+
+    This table answers that question without ever reintroducing the deleted
+    rows: a name snapshot plus where/when/what, written inside the same
+    transaction as the delete. It is display material for recruiters and
+    admins only - never a join source, and nothing reads it for permissions
+    or scheduling.
+    """
+
+    KIND_FULL = "full"
+    KIND_PARTIAL = "partial"
+    KIND_CHOICES = [
+        (KIND_FULL, "Full withdrawal"),
+        (KIND_PARTIAL, "Single committee"),
+    ]
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    admission = models.ForeignKey(
+        Admission,
+        on_delete=models.CASCADE,
+        related_name="withdrawal_events",
+    )
+    # Nullable: the whole UserApplication (and often the user's link to this
+    # admission) is gone the moment this row is written.
+    group = models.ForeignKey(Group, null=True, on_delete=models.SET_NULL)
+    group_name = models.CharField(max_length=80)
+    candidate_username = models.CharField(max_length=150, blank=True, default="")
+    candidate_full_name = models.CharField(max_length=255, blank=True, default="")
+    # Kept as plain text (not FK): the application row is being deleted.
+    candidate_id = models.CharField(max_length=64, blank=True, default="")
+    kind = models.CharField(max_length=16, choices=KIND_CHOICES)
+    # Did they leave, or were they removed? `kind` only says how much was
+    # withdrawn, so without this the list cannot tell a candidate pulling out
+    # from a recruiter deleting them - and would assert the former for both,
+    # which is worse than saying nothing. Stored rather than derived from
+    # `actor`: actor goes null when the user is deleted, and the candidate's
+    # own user is deliberately not kept (only a name snapshot), so there is
+    # nothing left to compare at read time.
+    withdrawn_by_candidate = models.BooleanField(default=False)
+    actor = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        on_delete=models.SET_NULL,
+        related_name="withdrawal_events",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        indexes = [
+            models.Index(
+                fields=["admission", "-created_at"],
+                name="withdrawal_adm_time_idx",
+            ),
+            models.Index(
+                fields=["group", "-created_at"],
+                name="withdrawal_group_time_idx",
+            ),
+        ]
+
+    def __str__(self):
+        who = self.candidate_full_name or self.candidate_username
+        verb = "withdrew from" if self.withdrawn_by_candidate else "was removed from"
+        return f"{who} {verb} {self.group_name} ({self.kind})"
 
 
 class GodUser(models.Model):

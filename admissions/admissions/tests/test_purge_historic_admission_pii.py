@@ -14,6 +14,7 @@ from admissions.admissions.models import (
     LegoUser,
     SavedSchedule,
     UserApplication,
+    WithdrawalAuditEvent,
 )
 
 
@@ -75,6 +76,27 @@ class PurgeHistoricAdmissionPIITestCase(TestCase):
             name_visibility=SavedSchedule.NAME_VISIBILITY_COMMITTEE,
         )
 
+        # A withdrawal from the old admission: the applicant's rows are long
+        # gone, so this snapshot is the only place their name survives.
+        self.old_withdrawal = WithdrawalAuditEvent.objects.create(
+            admission=self.old_admission,
+            group=self.webkom,
+            group_name="Webkom",
+            candidate_username="withdrawn-applicant",
+            candidate_full_name="Withdrawn Applicant",
+            candidate_id="00000000-0000-0000-0000-000000000001",
+            kind=WithdrawalAuditEvent.KIND_FULL,
+        )
+        self.active_withdrawal = WithdrawalAuditEvent.objects.create(
+            admission=self.active_admission,
+            group=self.webkom,
+            group_name="Webkom",
+            candidate_username="active-withdrawn",
+            candidate_full_name="Active Withdrawn",
+            candidate_id="00000000-0000-0000-0000-000000000002",
+            kind=WithdrawalAuditEvent.KIND_FULL,
+        )
+
         # Active application with PII that must NOT be touched
         self.active_user_app = UserApplication.objects.create(
             admission=self.active_admission,
@@ -115,6 +137,8 @@ class PurgeHistoricAdmissionPIITestCase(TestCase):
         self.assertTrue(
             FadderbarnDeclaration.objects.filter(pk=self.old_fadderbarn.pk).exists()
         )
+        self.old_withdrawal.refresh_from_db()
+        self.assertEqual(self.old_withdrawal.candidate_full_name, "Withdrawn Applicant")
 
     def test_purge_scrubs_old_admission_pii(self):
         out = StringIO()
@@ -154,3 +178,20 @@ class PurgeHistoricAdmissionPIITestCase(TestCase):
         self.assertEqual(self.active_user_app.text, "Active priority text")
         self.active_group_app.refresh_from_db()
         self.assertEqual(self.active_group_app.text, "Active motivation")
+
+    def test_purge_deletes_withdrawal_events(self):
+        """The event exists only to name who left, so it goes with the rest of
+        the personal data rather than lingering as a nameless shell."""
+        out = StringIO()
+        call_command(
+            "purge_historic_admission_pii",
+            admission="old-admission",
+            stdout=out,
+        )
+
+        self.assertFalse(
+            WithdrawalAuditEvent.objects.filter(pk=self.old_withdrawal.pk).exists()
+        )
+        # An admission still running keeps its withdrawal log intact.
+        self.active_withdrawal.refresh_from_db()
+        self.assertEqual(self.active_withdrawal.candidate_full_name, "Active Withdrawn")

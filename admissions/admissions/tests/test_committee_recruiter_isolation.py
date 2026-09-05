@@ -14,7 +14,6 @@ committees' answers.
 from django.test import TestCase
 
 from admissions.admissions.admission_access import (
-    APPLICATION_VIEW_MODE_ADMIN_FULL,
     APPLICATION_VIEW_MODE_COMMITTEE_MINIMAL,
     get_application_view_mode,
 )
@@ -58,21 +57,21 @@ class RecruiterSeesOwnCommitteeTestCase(TestCase):
         mode = get_application_view_mode(self.admission, leader)
         self.assertEqual(mode, APPLICATION_VIEW_MODE_COMMITTEE_MINIMAL)
 
-    def test_bedkom_recruiter_with_bedkom_in_admin_groups_gets_admin_full(self):
+    def test_bedkom_recruiter_with_bedkom_in_admin_groups_still_narrowed(self):
         """Bedkom recruiter, Bedkom IS in admin_groups. The recruiter
-        is an admission admin and gets ADMIN_FULL."""
+        must still see only Bedkom applicants, not Webkom's."""
         self.admission.admin_groups.add(self.bedkom)
         rec = self._make_recruiter(self.bedkom, RECRUITING, 102)
         mode = get_application_view_mode(self.admission, rec)
-        self.assertEqual(mode, APPLICATION_VIEW_MODE_ADMIN_FULL)
+        self.assertEqual(mode, APPLICATION_VIEW_MODE_COMMITTEE_MINIMAL)
 
     def test_queryset_filters_to_recruiter_own_committee(self):
-        """End-to-end: a non-admin recruiter API response must only contain
-        their own committee's group application."""
+        """End-to-end: the API response must only contain applicants
+        who applied to Bedkom."""
         from django.test import Client
         from rest_framework.test import APIClient
 
-        # Bedkom is NOT in admin_groups
+        self.admission.admin_groups.add(self.bedkom)
         rec = self._make_recruiter(self.bedkom, RECRUITING, 103)
         candidate = LegoUser.objects.create(username="candidate", lego_id=200)
         candidate_user_app = UserApplication.objects.create(
@@ -122,43 +121,3 @@ class RecruiterSeesOwnCommitteeTestCase(TestCase):
         self.assertNotIn("webkom answer", text_blob)
         # And the global priority text is also not exposed.
         self.assertNotIn("global private note", text_blob)
-
-    def test_admin_group_recruiter_sees_all_committees(self):
-        """When Bedkom IS in admin_groups, its recruiter sees all committees."""
-        from rest_framework.test import APIClient
-
-        self.admission.admin_groups.add(self.bedkom)
-        rec = self._make_recruiter(self.bedkom, RECRUITING, 104)
-        candidate = LegoUser.objects.create(username="candidate2", lego_id=201)
-        candidate_user_app = UserApplication.objects.create(
-            admission=self.admission,
-            user=candidate,
-            phone_number="00000000",
-            text="global private note",
-        )
-        GroupApplication.objects.create(
-            application=candidate_user_app,
-            group=self.bedkom,
-            text="bedkom application text",
-            header_fields_response={"k": "bedkom answer"},
-        )
-        GroupApplication.objects.create(
-            application=candidate_user_app,
-            group=self.webkom,
-            text="webkom application text",
-            header_fields_response={"k": "webkom answer"},
-        )
-
-        client = APIClient()
-        client.force_authenticate(user=rec)
-        from django.urls import reverse
-
-        res = client.get(
-            reverse(
-                "admin-userapplication-list",
-                kwargs={"admission_slug": self.admission.slug},
-            )
-        )
-        self.assertEqual(res.status_code, 200)
-        self.assertEqual(len(res.data), 1)
-        self.assertEqual(len(res.data[0]["group_applications"]), 2)

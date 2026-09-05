@@ -16,6 +16,7 @@ import {
   InterviewAvailabilityParticipant,
   ExperienceLevel,
   SavedSchedule,
+  WithdrawalAuditEvent,
 } from "src/types";
 import { apiClient } from "src/utils/callApi";
 import { useIsWindowIdle } from "src/utils/useIsWindowIdle";
@@ -488,6 +489,30 @@ interface AdmissionGroupContent {
   application_guidance: string | null;
   interview_description: string | null;
 }
+
+/**
+ * Who withdrew from the admission (or one committee), and when. Withdrawal is
+ * a hard delete, so this read-only audit log is the only remaining record.
+ * Recruiters see their own committee's events; admins see every committee's.
+ */
+export const useWithdrawalAudit = (slug: string, groupId?: string) => {
+  // Committee-scoped reads key on the committee; the admin's admission-wide
+  // read keys on the bare slug, exactly like every other admission-wide
+  // query. admissionGroupScope(slug, "") would invent a third key that no
+  // sibling query shares, so an admission-level block would leave this one
+  // query still enabled and refetching on its own.
+  const scope = groupId ? admissionGroupScope(slug, groupId) : slug;
+  const path = groupId
+    ? `/admin/admission/${slug}/group/${groupId}/withdrawals/`
+    : `/admin/admission/${slug}/withdrawals/`;
+  const query = useQuery<WithdrawalAuditEvent[], AxiosError>({
+    queryKey: [path],
+    enabled: Boolean(slug) && !areSensitiveAdmissionCacheWritesBlocked(scope),
+    ...useSensitiveQueryOptions(scope),
+    meta: admissionSensitiveQueryMeta(scope, false),
+  });
+  return hideDataAfterSensitiveQueryFailure(query);
+};
 
 export const useAdmissionGroupContent = (slug: string, groupId: string) => {
   const scope = admissionGroupScope(slug, groupId);

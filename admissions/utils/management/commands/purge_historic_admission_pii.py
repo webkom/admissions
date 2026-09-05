@@ -2,8 +2,12 @@
 
 Complies with GDPR Article 5(1)(e) (Storage Limitation) by stripping candidate
 personal information (phone numbers, priority texts, committee application
-essays, header answers, and conflict relationship declarations) from admissions
-that are closed and past their appeal/retention window.
+essays, header answers, and conflict relationship declarations) from
+admissions that are closed and past their appeal/retention window.
+
+Applications are scrubbed in place - the row survives, the personal data does
+not. Declarations and withdrawal audit events are deleted outright: both exist
+only to name a person, so an anonymised one has nothing left to say.
 """
 
 from datetime import timedelta
@@ -20,6 +24,7 @@ from admissions.admissions.models import (
     GroupApplication,
     SavedSchedule,
     UserApplication,
+    WithdrawalAuditEvent,
 )
 
 log = get_logger()
@@ -90,6 +95,7 @@ class Command(BaseCommand):
         total_group_apps_scrubbed = 0
         total_fadderbarn_deleted = 0
         total_schedules_scrubbed = 0
+        total_withdrawals_deleted = 0
 
         for admission in admissions:
             user_apps = UserApplication.objects.filter(admission=admission)
@@ -98,16 +104,23 @@ class Command(BaseCommand):
             )
             fadderbarn_qs = FadderbarnDeclaration.objects.filter(admission=admission)
             schedules = SavedSchedule.objects.filter(admission=admission)
+            # Withdrawal is a hard delete, so these snapshots are the only
+            # place a withdrawn applicant's name still lives. Without this
+            # pass the people who left would keep their names long after the
+            # people who stayed had theirs scrubbed.
+            withdrawals = WithdrawalAuditEvent.objects.filter(admission=admission)
 
             app_count = user_apps.count()
             group_app_count = group_apps.count()
             fadderbarn_count = fadderbarn_qs.count()
             schedule_count = schedules.count()
+            withdrawal_count = withdrawals.count()
 
             self.stdout.write(
                 f" - {admission.slug} (closed {admission.closed_from}): "
                 f"{app_count} applications, {group_app_count} group applications, "
-                f"{fadderbarn_count} declarations, {schedule_count} schedules."
+                f"{fadderbarn_count} declarations, {schedule_count} schedules, "
+                f"{withdrawal_count} withdrawal events."
             )
 
             if not dry_run:
@@ -115,6 +128,9 @@ class Command(BaseCommand):
                     user_apps.update(phone_number="", text="")
                     group_apps.update(text="", header_fields_response={})
                     fadderbarn_qs.delete()
+                    # Deleted, not blanked: the whole point of the event is
+                    # to name who left, so a nameless one is dead weight.
+                    withdrawals.delete()
 
                     for schedule_obj in schedules:
                         raw_items = schedule_obj.schedule or []
@@ -136,6 +152,7 @@ class Command(BaseCommand):
             total_group_apps_scrubbed += group_app_count
             total_fadderbarn_deleted += fadderbarn_count
             total_schedules_scrubbed += schedule_count
+            total_withdrawals_deleted += withdrawal_count
 
         log.info(
             "historic_admission_pii_purged",
@@ -144,6 +161,7 @@ class Command(BaseCommand):
             group_applications_scrubbed=total_group_apps_scrubbed,
             fadderbarn_deleted=total_fadderbarn_deleted,
             schedules_scrubbed=total_schedules_scrubbed,
+            withdrawal_events_deleted=total_withdrawals_deleted,
             dry_run=dry_run,
         )
 
@@ -155,6 +173,8 @@ class Command(BaseCommand):
                 f"{status_prefix}{total_apps_scrubbed} candidate application(s), "
                 f"{total_group_apps_scrubbed} committee application(s), "
                 f"{total_fadderbarn_deleted} relationship declaration(s), "
-                f"{total_schedules_scrubbed} saved schedule(s) across {total_admissions} admission(s)."
+                f"{total_schedules_scrubbed} saved schedule(s), "
+                f"{total_withdrawals_deleted} withdrawal event(s) "
+                f"across {total_admissions} admission(s)."
             )
         )

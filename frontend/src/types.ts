@@ -55,7 +55,6 @@ export type InterviewStatus =
   | "not_invited"
   | "invited"
   | "confirmed"
-  | "declined"
   | "completed"
   | "cancelled";
 
@@ -263,6 +262,23 @@ export interface ScheduleLayoutCapabilities {
   slot_overrides: boolean;
   availability_projection: boolean;
   opened_pause_semantics: "separate_block";
+}
+
+/** One recorded withdrawal - the applicant's rows are hard-deleted, so this
+ *  audit snapshot is the only remaining record of who left and when. The
+ *  server deliberately does not say whether they withdrew from everything or
+ *  just this committee. */
+export interface WithdrawalAuditEvent {
+  id: string;
+  group: string | null;
+  group_name: string;
+  candidate_username: string;
+  candidate_full_name: string;
+  /** True when the applicant withdrew themselves, false when a recruiter or
+   *  admin removed them. The panel heading says "trukket seg", so a removal
+   *  has to be marked or the list asserts something untrue about them. */
+  withdrawn_by_candidate: boolean;
+  created_at: string;
 }
 
 export interface SavedSchedule {

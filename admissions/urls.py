@@ -22,6 +22,7 @@ from admissions.admissions.availability_views import InterviewAvailabilityView
 from admissions.admissions.candidate_views import (
     InterviewCandidatesView,
     NameVisibilityAuditView,
+    WithdrawalAuditView,
 )
 from admissions.admissions.directory_views import MemberSearchView
 from admissions.admissions.schedule_views import SavedScheduleView
@@ -121,6 +122,16 @@ urlpatterns = [
         "api/admin/admission/<slug:admission_slug>/group/<uuid:group_id>/name-visibility-audit/",
         NameVisibilityAuditView.as_view(),
         name="name-visibility-audit",
+    ),
+    path(
+        "api/admin/admission/<slug:admission_slug>/withdrawals/",
+        WithdrawalAuditView.as_view(),
+        name="withdrawal-audit",
+    ),
+    path(
+        "api/admin/admission/<slug:admission_slug>/group/<uuid:group_id>/withdrawals/",
+        WithdrawalAuditView.as_view(),
+        name="withdrawal-audit-group",
     ),
     path(
         "api/admin/admission/<slug:admission_slug>/group/<uuid:group_id>/terminate/",

@@ -342,7 +342,6 @@ const DistributedPlanView: React.FC<DistributedPlanViewProps> = ({
       invited: 0,
       confirmed: 0,
       completed: 0,
-      declined: 0,
       cancelled: 0,
     };
     sortedEntries.forEach(({ item }) => {
@@ -351,7 +350,6 @@ const DistributedPlanView: React.FC<DistributedPlanViewProps> = ({
       else if (s === "invited") counts.invited++;
       else if (s === "completed") counts.completed++;
       else if (s === "not_invited") counts.not_invited++;
-      else if (s === "declined") counts.declined++;
       else if (s === "cancelled") counts.cancelled++;
     });
     return counts;

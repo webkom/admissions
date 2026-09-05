@@ -427,7 +427,7 @@ const handleOutreachSend = () => {
 - `expectedInterviewStatusUpdatedAt` is optimistic concurrency; the backend
   writes an `InterviewStatusAuditEvent` (recruiter, candidate, timestamp).
 - The chip becomes **Kalt inn**. When the candidate replies, the recruiter sets
-  the status control to **Tid bekreftet** / **Takket nei** manually.
+  the status control to **Tid bekreftet** / **Trukket seg / Avlyst** manually.
 
 ### 5.5 Status vocabulary
 
@@ -439,7 +439,6 @@ stable; the label is what the UI shows.
 | `not_invited` | Ikke kalt inn | neutral | Send innkalling |
 | `invited` | Kalt inn | info | Send påminnelse |
 | `confirmed` | Tid bekreftet | success | — |
-| `declined` | Takket nei | danger | — |
 | `completed` | Intervju gjennomført | success | — |
 | `cancelled` | Trukket seg / Avlyst | danger | — |
 

@@ -8,18 +8,14 @@ from structlog import get_logger
 log = get_logger()
 
 
-# A full withdrawal and a single committee being unticked used to send the same
-# anonymous mail, so recruiters could not tell "left us but still applying
-# elsewhere" from "withdrew from the admission entirely".
-MESSAGE_KIND_DELETED = "deleted"
+# One mail for every withdrawal shape, deliberately: whether the applicant
+# dropped this committee or withdrew from the admission entirely is nobody's
+# business but their own. The recruiter learns "someone withdrew from us" -
+# never whether the person still applies elsewhere. (They briefly could:
+# full and partial withdrawals used to send different templates.)
 MESSAGE_KIND_WITHDRAWN = "withdrawn"
 
 _MESSAGE_KINDS = {
-    MESSAGE_KIND_DELETED: {
-        "template": "deleted_application",
-        "title": "Søknad slettet",
-        "subject": "Søknad til opptak slettet",
-    },
     MESSAGE_KIND_WITHDRAWN: {
         "template": "withdrawn_application",
         "title": "Søknad trukket",
@@ -28,13 +24,13 @@ _MESSAGE_KINDS = {
 }
 
 
-def send_message(admission_title, group, recipients, kind=MESSAGE_KIND_DELETED):
+def send_message(admission_title, group, recipients, kind=MESSAGE_KIND_WITHDRAWN):
     """
     Send a message to members with role "recruiting" when users delete or
     withdraw applications.
     """
 
-    variant = _MESSAGE_KINDS.get(kind, _MESSAGE_KINDS[MESSAGE_KIND_DELETED])
+    variant = _MESSAGE_KINDS[kind]
 
     connection = mail.get_connection()
     connection.open()

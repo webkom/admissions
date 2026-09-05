@@ -43,6 +43,7 @@ from admissions.admissions.models import (
     LegoUser,
     Membership,
     UserApplication,
+    WithdrawalAuditEvent,
 )
 from admissions.admissions.scheduling_utils import panel_gender_code
 from admissions.admissions.serializers import (
@@ -63,6 +64,7 @@ from admissions.admissions.serializers import (
     UserApplicationSerializer,
 )
 from admissions.admissions.session_renewal import renew_session, session_expires_at
+from admissions.admissions.withdrawal_audit import record_withdrawal
 from admissions.utils.email import send_message
 
 from .authentication import SessionAuthentication
@@ -270,9 +272,25 @@ class PublicApplicationViewSet(mixins.CreateModelMixin, viewsets.GenericViewSet)
 
                 admission = get_object_or_404(Admission, slug=admission_slug)
                 admission_title = admission.title
-                # Delete first: the user must be able to withdraw even when mail
-                # is down. Recruiter notifications are best-effort.
-                instance.delete()
+                # Audit and delete commit together: the snapshot has to be
+                # taken while the rows still exist, but a delete that fails
+                # must not leave a phantom "withdrew" row behind.
+                withdrawn_by = request.user
+                with transaction.atomic():
+                    for group_application in GroupApplication.objects.filter(
+                        application=instance
+                    ).select_related("group", "application__user"):
+                        record_withdrawal(
+                            admission=admission,
+                            group=group_application.group,
+                            candidate=instance,
+                            candidate_id=instance.pk,
+                            kind=WithdrawalAuditEvent.KIND_FULL,
+                            actor=withdrawn_by,
+                        )
+                    # Delete before mailing: the user must be able to withdraw
+                    # even when mail is down. Notifications are best-effort.
+                    instance.delete()
                 for group, group_recruiters in recruiters.items():
                     try:
                         send_message(admission_title, group, group_recruiters)
@@ -357,11 +375,11 @@ class AdminApplicationViewSet(
         user = self.request.user
         if user.is_anonymous:
             return UserApplication.objects.none()
-        # Check membership in admin groups
-        if (
-            user_is_admission_admin(admission, user)
-            or view_mode == APPLICATION_VIEW_MODE_ADMIN_FULL
-        ):
+        # View mode, not raw admin standing: a group that administers this
+        # admission while also competing in it resolves to COMMITTEE_MINIMAL,
+        # and testing admin standing here would hand it the unfiltered
+        # queryset anyway - see get_application_view_mode.
+        if view_mode == APPLICATION_VIEW_MODE_ADMIN_FULL:
             return (
                 super()
                 .get_queryset()
@@ -450,8 +468,12 @@ class AdminApplicationViewSet(
                 status=status.HTTP_400_BAD_REQUEST,
             )
         group = get_object_or_404(admission.groups, pk=group_id)
+        # View mode, not raw admin standing: an admin group that also competes
+        # here resolves to COMMITTEE_MINIMAL and must fall through to the
+        # represents-this-committee check, or it could set interview status on
+        # a rival's applicant - a write to a record it may not even read.
         if not (
-            user_is_admission_admin(admission, request.user)
+            view_mode == APPLICATION_VIEW_MODE_ADMIN_FULL
             or user_represents_group(admission, group, request.user)
         ):
             return Response(status=status.HTTP_403_FORBIDDEN)
@@ -494,7 +516,23 @@ class AdminApplicationViewSet(
         # Only admins can delete UserApplication objects
         if group_id is None:
             if user_is_admin and not is_committee_minimal:
-                return super().destroy(request, *args, **kwargs)
+                # Snapshot every committee choice before the cascade: this is
+                # the widest withdrawal there is, and the audit log is the
+                # only thing that survives it.
+                user_application = self.get_object()
+                with transaction.atomic():
+                    for group_application in GroupApplication.objects.filter(
+                        application=user_application.pk
+                    ).select_related("group", "application__user"):
+                        record_withdrawal(
+                            admission=admission,
+                            group=group_application.group,
+                            candidate=user_application,
+                            candidate_id=user_application.pk,
+                            kind=WithdrawalAuditEvent.KIND_FULL,
+                            actor=request.user,
+                        )
+                    return super().destroy(request, *args, **kwargs)
             else:
                 return Response(status=status.HTTP_403_FORBIDDEN)
 
@@ -522,13 +560,31 @@ class AdminApplicationViewSet(
             application=user_application.pk,
             group=group_id,
         )
-        group_application.delete()
+        dropping_last = (
+            not GroupApplication.objects.filter(application=user_application.pk)
+            .exclude(pk=group_application.pk)
+            .exists()
+        )
+        with transaction.atomic():
+            record_withdrawal(
+                admission=admission,
+                group=group_application.group,
+                candidate=user_application,
+                candidate_id=user_application.pk,
+                kind=(
+                    WithdrawalAuditEvent.KIND_FULL
+                    if dropping_last
+                    else WithdrawalAuditEvent.KIND_PARTIAL
+                ),
+                actor=request.user,
+            )
+            group_application.delete()
 
-        # Delete the UserApplication if all GroupApplications are deleted
-        if not GroupApplication.objects.filter(
-            application=user_application.pk
-        ).exists():
-            self.perform_destroy(user_application)
+            # Delete the UserApplication if all GroupApplications are deleted
+            if not GroupApplication.objects.filter(
+                application=user_application.pk
+            ).exists():
+                self.perform_destroy(user_application)
 
         return Response(status=status.HTTP_204_NO_CONTENT)
 
@@ -595,6 +651,19 @@ class TerminateCommitteeApplicationsView(APIView):
                     pk__in=application_ids
                 )
             )
+            # Snapshot before the delete: the rows (and often the users'
+            # last link to this admission) are gone once this block runs.
+            for group_application in GroupApplication.objects.filter(
+                application_id__in=application_ids, group=group
+            ).select_related("application__user"):
+                record_withdrawal(
+                    admission=admission,
+                    group=group,
+                    candidate=group_application.application,
+                    candidate_id=group_application.application_id,
+                    kind=WithdrawalAuditEvent.KIND_PARTIAL,
+                    actor=request.user,
+                )
             GroupApplication.objects.filter(
                 application_id__in=application_ids, group=group
             ).delete()
